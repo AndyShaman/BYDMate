@@ -25,11 +25,14 @@ data class BydTripRecord(
  * Reads BYD trip history from the energydata directory.
  *
  * /storage/emulated/0/energydata is a DIRECTORY containing .db files.
- * We find the newest .db file, copy it to app-local storage (to avoid
- * locking BYD's database), then read EnergyConsumption table.
+ * On DiLink, the main file is typically EC_database.db.
  *
- * Throws descriptive exceptions when data is unavailable — callers
- * (HistoryImporter) catch and surface the message to the user.
+ * Strategy:
+ * 1. Try listFiles() to find .db files
+ * 2. If listFiles() returns null (permission issue on Android 11+),
+ *    try known filenames directly (EC_database.db)
+ * 3. Copy to app-local storage to avoid locking BYD's database
+ * 4. Read EnergyConsumption table from the local copy
  */
 @Singleton
 class EnergyDataReader @Inject constructor(
@@ -40,63 +43,98 @@ class EnergyDataReader @Inject constructor(
         private const val TAG = "EnergyDataReader"
         private const val ENERGY_DIR_PATH = "/storage/emulated/0/energydata"
         private const val LOCAL_DB_NAME = "vehicle_ec.db"
+        // Known BYD energy database filenames
+        private val KNOWN_DB_NAMES = listOf(
+            "EC_database.db",
+            "energydata.db",
+            "energy.db",
+            "EnergyConsumption.db"
+        )
     }
 
-    /**
-     * Find newest .db file in energydata dir, copy locally, read trips.
-     * Throws [EnergyDataException] when the directory or DB files are missing,
-     * or when reading fails.
-     */
     suspend fun readTrips(): List<BydTripRecord> = withContext(Dispatchers.IO) {
         Log.d(TAG, "readTrips() started, looking for: $ENERGY_DIR_PATH")
 
         val energyDir = File(ENERGY_DIR_PATH)
-        if (!energyDir.exists() || !energyDir.isDirectory) {
-            val msg = "energydata directory not found at $ENERGY_DIR_PATH. " +
-                "Make sure READ_EXTERNAL_STORAGE permission is granted and " +
-                "the BYD energy database exists on this device."
+        if (!energyDir.exists()) {
+            val msg = "Директория energydata не найдена: $ENERGY_DIR_PATH. " +
+                "Убедитесь, что разрешение READ_EXTERNAL_STORAGE выдано."
             Log.w(TAG, msg)
             throw EnergyDataException(msg)
         }
         Log.d(TAG, "energydata directory exists: ${energyDir.absolutePath}")
 
-        // List everything in the directory for diagnostics
-        val allFiles = energyDir.listFiles()
-        val allNames = allFiles?.map { "${it.name} (${it.length()} bytes, dir=${it.isDirectory})" }
-            ?: emptyList()
-        Log.d(TAG, "Directory contents (${allNames.size} entries): $allNames")
+        // Strategy 1: Try listFiles() to find .db files
+        val sourceDb = findDbViaListFiles(energyDir)
+            // Strategy 2: If listing failed, try known filenames directly
+            ?: findDbViaKnownNames(energyDir)
+            ?: throw EnergyDataException(
+                "Не найдены файлы БД в $ENERGY_DIR_PATH. " +
+                "listFiles() вернул null (нет доступа к директории). " +
+                "Проверьте разрешения приложения."
+            )
 
-        // Find all .db/.sqlite files, pick the newest
-        val dbFiles = allFiles?.filter { file ->
-            file.isFile && (file.name.endsWith(".db", ignoreCase = true) ||
-                file.name.endsWith(".sqlite", ignoreCase = true))
-        } ?: emptyList()
-
-        if (dbFiles.isEmpty()) {
-            val msg = "No .db/.sqlite files in $ENERGY_DIR_PATH. " +
-                "Directory contains: ${allNames.joinToString(", ").ifEmpty { "(empty)" }}"
-            Log.w(TAG, msg)
-            throw EnergyDataException(msg)
-        }
-        Log.d(TAG, "Found ${dbFiles.size} DB file(s): ${dbFiles.map { it.name }}")
-
-        val newest = dbFiles.maxByOrNull { it.lastModified() }!!
-        Log.d(TAG, "Using source DB: ${newest.absolutePath} " +
-            "(${newest.length()} bytes, modified=${newest.lastModified()})")
+        Log.d(TAG, "Source DB: ${sourceDb.absolutePath} (${sourceDb.length()} bytes)")
 
         // Copy to app-local storage to avoid locking BYD's database
-        val localDb = copyToLocal(newest)
+        val localDb = copyToLocal(sourceDb)
         Log.d(TAG, "Copied to local: ${localDb.absolutePath} (${localDb.length()} bytes)")
 
-        // Read trips from local copy
         val trips = readTripsFromDb(localDb)
         Log.d(TAG, "readTrips() completed: ${trips.size} trips")
         trips
     }
 
+    /**
+     * Try to find .db files via listFiles(). Returns newest .db file or null
+     * if listFiles() returns null (common on Android 11+ without MANAGE_EXTERNAL_STORAGE).
+     */
+    private fun findDbViaListFiles(dir: File): File? {
+        val allFiles = dir.listFiles()
+        if (allFiles == null) {
+            Log.w(TAG, "listFiles() returned null — no permission to list directory")
+            return null
+        }
+        Log.d(TAG, "Directory has ${allFiles.size} files: ${allFiles.map { it.name }}")
+
+        val dbFiles = allFiles.filter { file ->
+            file.isFile && (file.name.endsWith(".db", ignoreCase = true) ||
+                file.name.endsWith(".sqlite", ignoreCase = true))
+        }
+
+        if (dbFiles.isEmpty()) {
+            Log.w(TAG, "No .db/.sqlite files found via listFiles()")
+            return null
+        }
+
+        val newest = dbFiles.maxByOrNull { it.lastModified() }!!
+        Log.d(TAG, "Found via listFiles(): ${newest.name}")
+        return newest
+    }
+
+    /**
+     * Fallback: try opening known BYD database filenames directly.
+     * On Android 11+ with scoped storage, listFiles() fails but
+     * opening a specific file by path may still work.
+     */
+    private fun findDbViaKnownNames(dir: File): File? {
+        Log.d(TAG, "Trying known DB filenames as fallback...")
+        for (name in KNOWN_DB_NAMES) {
+            val file = File(dir, name)
+            if (file.exists() && file.length() > 0) {
+                Log.d(TAG, "Found via known name: $name (${file.length()} bytes)")
+                return file
+            } else {
+                Log.d(TAG, "Tried $name — ${if (file.exists()) "exists but empty" else "not found"}")
+            }
+        }
+        Log.w(TAG, "No known DB filenames found in ${dir.absolutePath}")
+        return null
+    }
+
     private fun copyToLocal(source: File): File {
         val extDir = context.getExternalFilesDir(null)
-            ?: throw EnergyDataException("ExternalFilesDir not available — cannot copy DB locally")
+            ?: throw EnergyDataException("ExternalFilesDir не доступен")
         val localFile = File(extDir, LOCAL_DB_NAME)
 
         Log.d(TAG, "Copying ${source.absolutePath} -> ${localFile.absolutePath}")

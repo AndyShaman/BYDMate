@@ -85,34 +85,85 @@ class UpdateChecker @Inject constructor(
         )
     }
 
-    fun downloadAndInstall(context: Context, update: UpdateInfo) {
+    /**
+     * Download APK and report progress via [onProgress] callback.
+     * Calls [onProgress] with status strings like "Скачивание: 45%".
+     * When done, triggers the install dialog.
+     */
+    suspend fun downloadAndInstall(
+        context: Context,
+        update: UpdateInfo,
+        onProgress: (String) -> Unit = {}
+    ) = withContext(Dispatchers.IO) {
         val downloadManager = context.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
+
+        // Delete old file if exists
+        val destFile = File(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            "BYDMate-${update.version}.apk"
+        )
+        if (destFile.exists()) destFile.delete()
+
         val request = DownloadManager.Request(Uri.parse(update.downloadUrl))
             .setTitle("BYDMate ${update.version}")
-            .setDescription("Downloading update...")
+            .setDescription("Обновление BYDMate")
             .setDestinationInExternalPublicDir(
                 Environment.DIRECTORY_DOWNLOADS,
                 "BYDMate-${update.version}.apk"
             )
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
 
         val downloadId = downloadManager.enqueue(request)
+        onProgress("Скачивание: 0%")
 
-        // Listen for download completion
-        val receiver = object : BroadcastReceiver() {
-            override fun onReceive(ctx: Context, intent: Intent) {
-                val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-                if (id == downloadId) {
-                    ctx.unregisterReceiver(this)
-                    installApk(ctx, update.version)
+        // Poll download progress
+        var finished = false
+        while (!finished) {
+            val query = DownloadManager.Query().setFilterById(downloadId)
+            val cursor = downloadManager.query(query)
+            if (cursor != null && cursor.moveToFirst()) {
+                val status = cursor.getInt(
+                    cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
+                )
+                when (status) {
+                    DownloadManager.STATUS_RUNNING -> {
+                        val total = cursor.getLong(
+                            cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_TOTAL_SIZE_BYTES)
+                        )
+                        val downloaded = cursor.getLong(
+                            cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                        )
+                        if (total > 0) {
+                            val pct = (downloaded * 100 / total).toInt()
+                            onProgress("Скачивание: $pct%")
+                        }
+                    }
+                    DownloadManager.STATUS_SUCCESSFUL -> {
+                        finished = true
+                        onProgress("Скачано. Установка...")
+                    }
+                    DownloadManager.STATUS_FAILED -> {
+                        finished = true
+                        val reason = cursor.getInt(
+                            cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON)
+                        )
+                        throw Exception("Ошибка скачивания (код $reason)")
+                    }
+                    DownloadManager.STATUS_PAUSED -> {
+                        onProgress("Пауза...")
+                    }
                 }
+                cursor.close()
+            }
+            if (!finished) {
+                kotlinx.coroutines.delay(500)
             }
         }
-        context.registerReceiver(
-            receiver,
-            IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
-            Context.RECEIVER_NOT_EXPORTED
-        )
+
+        // Trigger install
+        withContext(Dispatchers.Main) {
+            installApk(context, update.version)
+        }
     }
 
     private fun installApk(context: Context, version: String) {

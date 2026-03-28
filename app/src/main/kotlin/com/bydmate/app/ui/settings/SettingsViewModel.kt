@@ -234,7 +234,9 @@ class SettingsViewModel @Inject constructor(
                     _uiState.update {
                         it.copy(updateStatus = "Доступна v${update.version}. Скачивание...")
                     }
-                    updateChecker.downloadAndInstall(appContext, update)
+                    updateChecker.downloadAndInstall(appContext, update) { progress ->
+                        _uiState.update { it.copy(updateStatus = progress) }
+                    }
                 } else {
                     _uiState.update {
                         it.copy(updateStatus = "Установлена последняя версия")
