@@ -289,20 +289,29 @@ class SettingsViewModel @Inject constructor(
                 sb.appendLine("ОШИБКА: ${e.message}")
             }
 
-            // 4. DiPlus API
+            // 4. DiPlus API — raw HTTP request for detailed diagnostics
             sb.appendLine("\n=== DiPlus API ===")
+            sb.appendLine("URL: http://localhost:8988/api/getDiPars")
             try {
-                val data = diParsClient.fetch()
-                if (data != null) {
-                    sb.appendLine("Ответ: SOC=${data.soc}, speed=${data.speed}, " +
-                        "mileage=${data.mileage}, power=${data.power}")
-                    sb.appendLine("chargeGun=${data.chargeGunState}, " +
-                        "batTemp=${data.avgBatTemp}, charging=${data.chargingStatus}")
-                } else {
-                    sb.appendLine("Ответ: null (DiPlus недоступен)")
+                val testUrl = "http://localhost:8988/api/getDiPars?text=SOC:{电量百分比}|Speed:{车速}"
+                val req = okhttp3.Request.Builder().url(testUrl).build()
+                val resp = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                    .newCall(req).execute()
+                val body = resp.body?.string() ?: "(пустое тело)"
+                sb.appendLine("HTTP ${resp.code}: $body")
+                if (resp.code == 409) {
+                    sb.appendLine("⚠ Требуется авторизация (auth header)")
                 }
+            } catch (e: java.net.ConnectException) {
+                sb.appendLine("ОШИБКА: Соединение отклонено")
+                sb.appendLine("DiPlus не запущен на порту 8988")
+            } catch (e: java.net.SocketTimeoutException) {
+                sb.appendLine("ОШИБКА: Таймаут соединения")
             } catch (e: Exception) {
-                sb.appendLine("ОШИБКА: ${e.message}")
+                sb.appendLine("ОШИБКА: ${e.javaClass.simpleName}: ${e.message}")
             }
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }

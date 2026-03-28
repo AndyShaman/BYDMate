@@ -2,8 +2,9 @@ package com.bydmate.app.data.local
 
 import android.content.Context
 import android.util.Log
+import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
-import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -15,137 +16,145 @@ class HistoryImporter @Inject constructor(
     @ApplicationContext private val context: Context,
     private val energyDataReader: EnergyDataReader,
     private val tripRepository: TripRepository,
-    private val settingsRepository: SettingsRepository
+    private val idleDrainDao: IdleDrainDao
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
-        private const val KEY_IMPORT_DONE = "history_import_done"
+        private const val MIN_TRIP_KM = 0.1
+        private const val MIN_TRIP_DURATION_SEC = 30L
     }
 
     /**
-     * Import BYD trip history on first launch.
-     * Reads /storage/emulated/0/energydata and converts to TripEntity records.
-     * BYD stores trip distance and its own kWh estimate — we recalculate
-     * kWh/100km from those values (BYD estimate, not delta SOC — no SOC data
-     * available in the history DB).
+     * Sync BYD energydata with our database. Called on every app launch.
+     * Imports new trips and idle drain sessions, skips duplicates by startTs.
      */
-    suspend fun importIfNeeded(): ImportResult {
-        val alreadyDone = settingsRepository.getString(KEY_IMPORT_DONE, "false")
-        if (alreadyDone == "true") {
-            Log.d(TAG, "importIfNeeded(): already done, skipping")
-            return ImportResult(count = 0, skipped = true, error = null)
-        }
+    suspend fun sync(): ImportResult {
         return try {
             doImport()
         } catch (e: EnergyDataException) {
-            Log.w(TAG, "importIfNeeded() failed: ${e.message}", e)
-            // Do NOT set KEY_IMPORT_DONE — will retry on next launch
-            ImportResult(count = 0, skipped = false, error = e.message)
+            Log.w(TAG, "sync() failed: ${e.message}", e)
+            ImportResult(trips = 0, idleDrains = 0, error = e.message)
         } catch (e: Exception) {
-            Log.e(TAG, "importIfNeeded() unexpected error", e)
-            ImportResult(count = 0, skipped = false, error = e.message ?: e.toString())
+            Log.e(TAG, "sync() unexpected error", e)
+            ImportResult(trips = 0, idleDrains = 0, error = e.message ?: e.toString())
         }
     }
 
-    /** Force re-import (from Settings button). Skips duplicates by startTs. */
-    suspend fun forceImport(): ImportResult {
-        return try {
-            doImport()
-        } catch (e: EnergyDataException) {
-            Log.w(TAG, "forceImport() failed: ${e.message}", e)
-            ImportResult(count = 0, skipped = false, error = e.message)
-        } catch (e: Exception) {
-            Log.e(TAG, "forceImport() unexpected error", e)
-            ImportResult(count = 0, skipped = false, error = e.message ?: e.toString())
-        }
-    }
+    /** Force re-import (from Settings button). Same as sync but always called manually. */
+    suspend fun forceImport(): ImportResult = sync()
 
     private suspend fun doImport(): ImportResult {
         Log.d(TAG, "doImport() started")
 
-        val bydTrips = energyDataReader.readTrips()
-        Log.d(TAG, "Read ${bydTrips.size} BYD trips from energydata DB")
+        val bydRecords = energyDataReader.readTrips()
+        Log.d(TAG, "Read ${bydRecords.size} BYD records from energydata DB")
 
-        if (bydTrips.isEmpty()) {
-            settingsRepository.setString(KEY_IMPORT_DONE, "true")
+        if (bydRecords.isEmpty()) {
             return ImportResult(
-                count = 0, skipped = false, error = null,
-                details = "В базе BYD 0 поездок"
+                trips = 0, idleDrains = 0, error = null,
+                details = "В базе BYD 0 записей"
             )
         }
 
-        // Load existing trips to skip duplicates (by startTs)
-        // BYD timestamps are in seconds, our DB stores milliseconds
+        // Load existing data to skip duplicates (by startTs in milliseconds)
         val existingTrips = tripRepository.getAllTrips().first()
-        val existingStartTsSet = existingTrips.map { it.startTs }.toHashSet()
-        Log.d(TAG, "Existing trips in DB: ${existingTrips.size}, " +
-            "unique startTs values: ${existingStartTsSet.size}")
+        val existingTripStartTs = existingTrips.map { it.startTs }.toHashSet()
 
-        var imported = 0
-        var skippedShort = 0
+        // For idle drains, check existing too
+        val existingDrainStartTs = mutableSetOf<Long>()
+        // We don't have getAllIdleDrains, so just track what we insert this round
+
+        var tripsImported = 0
+        var idleDrainsImported = 0
         var skippedDuplicate = 0
-        for (byd in bydTrips) {
-            // Skip very short "trips" (< 0.1 km or < 30 sec)
-            if (byd.tripKm < 0.1 || byd.duration < 30) {
-                skippedShort++
-                continue
-            }
+        var skippedTooShort = 0
 
+        for (byd in bydRecords) {
             // BYD stores timestamps in epoch seconds, convert to milliseconds
             val startTsMs = byd.startTimestamp * 1000L
             val endTsMs = byd.endTimestamp * 1000L
 
-            // Skip duplicates by startTs (in milliseconds)
-            if (startTsMs in existingStartTsSet) {
-                skippedDuplicate++
-                continue
-            }
+            // Determine if this is an idle drain (0.0 km) or a real trip
+            val isIdleDrain = byd.tripKm < MIN_TRIP_KM
 
-            val kwhPer100km = if (byd.tripKm > 0) {
-                byd.electricityKwh / byd.tripKm * 100.0
-            } else null
+            if (isIdleDrain) {
+                // Skip very short idle sessions (< 30 sec)
+                if (byd.duration < MIN_TRIP_DURATION_SEC) {
+                    skippedTooShort++
+                    continue
+                }
 
-            val avgSpeed = if (byd.duration > 0) {
-                byd.tripKm / (byd.duration / 3600.0)
-            } else null
+                // Skip if already in trip DB as duplicate
+                if (startTsMs in existingTripStartTs || startTsMs in existingDrainStartTs) {
+                    skippedDuplicate++
+                    continue
+                }
 
-            tripRepository.insertTrip(
-                TripEntity(
-                    startTs = startTsMs,
-                    endTs = endTsMs,
-                    distanceKm = byd.tripKm,
-                    kwhConsumed = byd.electricityKwh,
-                    kwhPer100km = kwhPer100km,
-                    avgSpeedKmh = avgSpeed
-                    // No SOC or temp data in BYD's history DB
+                idleDrainDao.insert(
+                    IdleDrainEntity(
+                        startTs = startTsMs,
+                        endTs = endTsMs,
+                        kwhConsumed = byd.electricityKwh
+                        // No SOC data in BYD's history DB
+                    )
                 )
-            )
-            existingStartTsSet.add(startTsMs)
-            imported++
+                existingDrainStartTs.add(startTsMs)
+                idleDrainsImported++
+            } else {
+                // Real trip — skip very short ones
+                if (byd.duration < MIN_TRIP_DURATION_SEC) {
+                    skippedTooShort++
+                    continue
+                }
+
+                // Skip duplicates
+                if (startTsMs in existingTripStartTs) {
+                    skippedDuplicate++
+                    continue
+                }
+
+                val kwhPer100km = if (byd.tripKm > 0) {
+                    byd.electricityKwh / byd.tripKm * 100.0
+                } else null
+
+                val avgSpeed = if (byd.duration > 0) {
+                    byd.tripKm / (byd.duration / 3600.0)
+                } else null
+
+                tripRepository.insertTrip(
+                    TripEntity(
+                        startTs = startTsMs,
+                        endTs = endTsMs,
+                        distanceKm = byd.tripKm,
+                        kwhConsumed = byd.electricityKwh,
+                        kwhPer100km = kwhPer100km,
+                        avgSpeedKmh = avgSpeed
+                    )
+                )
+                existingTripStartTs.add(startTsMs)
+                tripsImported++
+            }
         }
 
-        Log.d(TAG, "Import done: $imported imported, " +
-            "$skippedShort skipped (too short), " +
-            "$skippedDuplicate skipped (duplicate)")
+        Log.d(TAG, "Import done: $tripsImported trips, $idleDrainsImported idle drains, " +
+            "$skippedDuplicate duplicates, $skippedTooShort too short")
 
-        settingsRepository.setString(KEY_IMPORT_DONE, "true")
-        val details = "Найдено ${bydTrips.size} в БД BYD, " +
-            "импортировано $imported, " +
-            "пропущено: $skippedShort коротких, $skippedDuplicate дубликатов"
+        val details = "Найдено ${bydRecords.size} в БД BYD: " +
+            "+$tripsImported поездок, +$idleDrainsImported стоянок, " +
+            "пропущено $skippedDuplicate дублей, $skippedTooShort коротких"
         return ImportResult(
-            count = imported, skipped = false, error = null,
-            details = details
+            trips = tripsImported, idleDrains = idleDrainsImported,
+            error = null, details = details
         )
     }
 
     data class ImportResult(
-        val count: Int,
-        val skipped: Boolean,
-        /** Non-null if import failed; contains a human-readable error message. */
+        val trips: Int,
+        val idleDrains: Int = 0,
         val error: String? = null,
-        /** Detailed status for user display. */
         val details: String? = null
     ) {
         val isError: Boolean get() = error != null
+        val count: Int get() = trips + idleDrains
     }
 }

@@ -19,7 +19,7 @@ class BYDMateApp : Application() {
     override fun onCreate() {
         super.onCreate()
         appScope.launch {
-            historyImporter.importIfNeeded()
+            historyImporter.sync()
         }
     }
 }
