@@ -296,7 +296,7 @@ class SettingsViewModel @Inject constructor(
                 sb.appendLine("ОШИБКА: ${e.message}")
             }
 
-            // 4. DiPlus API — test both localhost and 127.0.0.1
+            // 4. DiPlus API — test with proper URL encoding
             sb.appendLine("\n=== DiPlus API ===")
             val testClient = okhttp3.OkHttpClient.Builder()
                 .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
@@ -304,10 +304,15 @@ class SettingsViewModel @Inject constructor(
                 .build()
             val testTemplate = "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}"
             for (host in listOf("127.0.0.1", "localhost")) {
-                val testUrl = "http://$host:8988/api/getDiPars?text=$testTemplate"
                 sb.append("$host:8988 → ")
                 try {
-                    val req = okhttp3.Request.Builder().url(testUrl).build()
+                    // Use HttpUrl.Builder for proper encoding of Chinese chars, {}, |
+                    val httpUrl = okhttp3.HttpUrl.Builder()
+                        .scheme("http").host(host).port(8988)
+                        .addPathSegments("api/getDiPars")
+                        .addQueryParameter("text", testTemplate)
+                        .build()
+                    val req = okhttp3.Request.Builder().url(httpUrl).build()
                     val resp = testClient.newCall(req).execute()
                     val body = resp.body?.string() ?: "(пустое тело)"
                     sb.appendLine("HTTP ${resp.code}")
@@ -323,8 +328,6 @@ class SettingsViewModel @Inject constructor(
                     sb.appendLine("${e.javaClass.simpleName}: ${e.message}")
                 }
             }
-            // Hint: how to start DiPlus service
-            sb.appendLine("Запуск: com.van.diplus/.activity.StartMainServiceActivity")
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }
         }

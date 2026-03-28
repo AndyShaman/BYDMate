@@ -3,6 +3,8 @@ package com.bydmate.app.data.remote
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -41,12 +43,15 @@ class DiParsClient @Inject constructor(
 
     suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
         try {
-            val url = "$BASE_URL?text=$TEMPLATE"
+            // Use HttpUrl.Builder to properly encode Chinese chars, {}, | in query
+            val httpUrl = BASE_URL.toHttpUrl().newBuilder()
+                .addQueryParameter("text", TEMPLATE)
+                .build()
             if (firstCall) {
-                Log.d(TAG, "First DiPars request URL: $url")
+                Log.d(TAG, "First DiPars request URL: $httpUrl")
                 firstCall = false
             }
-            val request = Request.Builder().url(url).build()
+            val request = Request.Builder().url(httpUrl).build()
             val response = httpClient.newCall(request).execute()
             val body = response.body?.string()
             Log.d(TAG, "Response code=${response.code}, bodyLength=${body?.length ?: 0}")
