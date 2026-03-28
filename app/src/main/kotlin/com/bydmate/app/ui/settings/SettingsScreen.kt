@@ -369,6 +369,56 @@ fun SettingsScreen(
             }
         }
 
+        // -- Diagnostics section --
+        Spacer(modifier = Modifier.height(24.dp))
+        SectionHeader(text = "Диагностика")
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Проверка доступа к БД BYD, DiPlus API, разрешений и данных в нашей базе",
+                    color = SecondaryTextColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Button(
+                    onClick = { viewModel.runDiagnostics() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF9C27B0),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Запустить диагностику",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                if (state.diagnosticLog != null) {
+                    Text(
+                        text = state.diagnosticLog!!,
+                        color = Color(0xFFE0E0E0),
+                        fontSize = 11.sp,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                        lineHeight = 15.sp
+                    )
+                }
+            }
+        }
+
         // Bottom padding for navigation bar clearance
         Spacer(modifier = Modifier.height(32.dp))
     }

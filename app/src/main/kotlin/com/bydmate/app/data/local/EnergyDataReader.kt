@@ -52,6 +52,130 @@ class EnergyDataReader @Inject constructor(
         )
     }
 
+    /**
+     * Run full diagnostics and return a human-readable report.
+     * Shows directory access, DB files, table structure, row counts, sample data.
+     */
+    suspend fun diagnose(): String = withContext(Dispatchers.IO) {
+        val sb = StringBuilder()
+        sb.appendLine("=== Хранилище BYD ===")
+
+        val energyDir = File(ENERGY_DIR_PATH)
+        sb.appendLine("Путь: $ENERGY_DIR_PATH")
+        sb.appendLine("Существует: ${energyDir.exists()}")
+        sb.appendLine("isDirectory: ${energyDir.isDirectory}")
+
+        if (!energyDir.exists()) {
+            sb.appendLine("ОШИБКА: директория не найдена!")
+            return@withContext sb.toString()
+        }
+
+        // Try listFiles
+        val allFiles = energyDir.listFiles()
+        if (allFiles == null) {
+            sb.appendLine("listFiles(): null (нет доступа)")
+        } else {
+            sb.appendLine("listFiles(): ${allFiles.size} файлов")
+            allFiles.forEach { f ->
+                sb.appendLine("  ${f.name} (${f.length()} bytes, ${if (f.isFile) "file" else "dir"})")
+            }
+        }
+
+        // Try known names
+        sb.appendLine("\nПроверка известных имён:")
+        for (name in KNOWN_DB_NAMES) {
+            val f = File(energyDir, name)
+            val status = when {
+                !f.exists() -> "не найден"
+                f.length() == 0L -> "пустой"
+                else -> "${f.length()} bytes, canRead=${f.canRead()}"
+            }
+            sb.appendLine("  $name: $status")
+        }
+
+        // Try to find and read the DB
+        val sourceDb = findDbViaListFiles(energyDir) ?: findDbViaKnownNames(energyDir)
+        if (sourceDb == null) {
+            sb.appendLine("\nОШИБКА: не удалось найти БД!")
+            return@withContext sb.toString()
+        }
+
+        sb.appendLine("\nИсточник: ${sourceDb.name} (${sourceDb.length()} bytes)")
+
+        try {
+            val localDb = copyToLocal(sourceDb)
+            sb.appendLine("Копия: ${localDb.absolutePath} (${localDb.length()} bytes)")
+
+            val db = SQLiteDatabase.openDatabase(
+                localDb.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+            )
+            db.use { database ->
+                // Tables
+                val tables = mutableListOf<String>()
+                database.rawQuery(
+                    "SELECT name FROM sqlite_master WHERE type='table'", null
+                ).use { c -> while (c.moveToNext()) tables.add(c.getString(0)) }
+                sb.appendLine("\n=== Таблицы в БД ===")
+                sb.appendLine(tables.joinToString(", "))
+
+                if (!tables.contains("EnergyConsumption")) {
+                    sb.appendLine("ОШИБКА: таблица EnergyConsumption не найдена!")
+                    return@withContext sb.toString()
+                }
+
+                // Columns
+                database.rawQuery("PRAGMA table_info(EnergyConsumption)", null).use { c ->
+                    sb.appendLine("\n=== Колонки EnergyConsumption ===")
+                    while (c.moveToNext()) {
+                        sb.appendLine("  ${c.getString(1)} (${c.getString(2)})")
+                    }
+                }
+
+                // Counts
+                val totalCount = database.rawQuery(
+                    "SELECT COUNT(*) FROM EnergyConsumption", null
+                ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+                val activeCount = database.rawQuery(
+                    "SELECT COUNT(*) FROM EnergyConsumption WHERE is_deleted = 0", null
+                ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+                sb.appendLine("\n=== Строки ===")
+                sb.appendLine("Всего: $totalCount")
+                sb.appendLine("Активных (is_deleted=0): $activeCount")
+                sb.appendLine("Удалённых: ${totalCount - activeCount}")
+
+                // Sample data (first 5)
+                sb.appendLine("\n=== Примеры данных (первые 5) ===")
+                database.rawQuery(
+                    """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity, is_deleted
+                       FROM EnergyConsumption
+                       ORDER BY start_timestamp DESC
+                       LIMIT 5""", null
+                ).use { c ->
+                    while (c.moveToNext()) {
+                        val id = c.getLong(0)
+                        val startTs = c.getLong(1)
+                        val endTs = c.getLong(2)
+                        val dur = c.getLong(3)
+                        val km = c.getDouble(4)
+                        val kwh = c.getDouble(5)
+                        val deleted = c.getInt(6)
+                        // Format timestamp for readability
+                        val startFmt = try {
+                            java.text.SimpleDateFormat("dd.MM.yy HH:mm", java.util.Locale.US)
+                                .format(java.util.Date(startTs * 1000L))
+                        } catch (_: Exception) { "?" }
+                        sb.appendLine("#$id: $startFmt, ${dur}s, %.1f km, %.2f kWh, del=$deleted".format(km, kwh))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            sb.appendLine("ОШИБКА при чтении БД: ${e.message}")
+        }
+
+        sb.toString()
+    }
+
     suspend fun readTrips(): List<BydTripRecord> = withContext(Dispatchers.IO) {
         Log.d(TAG, "readTrips() started, looking for: $ENERGY_DIR_PATH")
 

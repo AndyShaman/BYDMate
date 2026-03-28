@@ -1,10 +1,15 @@
 package com.bydmate.app.ui.settings
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Environment
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
+import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -14,6 +19,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -38,7 +44,8 @@ data class SettingsUiState(
     val exportStatus: String? = null,
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
-    val updateStatus: String? = null
+    val updateStatus: String? = null,
+    val diagnosticLog: String? = null
 )
 
 @HiltViewModel
@@ -48,7 +55,9 @@ class SettingsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val chargeRepository: ChargeRepository,
     private val updateChecker: UpdateChecker,
-    private val historyImporter: HistoryImporter
+    private val historyImporter: HistoryImporter,
+    private val energyDataReader: EnergyDataReader,
+    private val diParsClient: DiParsClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -221,6 +230,82 @@ class SettingsViewModel @Inject constructor(
                     ?: "Импортировано ${result.count} поездок из BYD"
                 _uiState.update { it.copy(importStatus = status) }
             }
+        }
+    }
+
+    /** Run full diagnostics: BYD storage, our DB, DiPlus API, permissions. */
+    fun runDiagnostics() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(diagnosticLog = "Диагностика...") }
+
+            val sb = StringBuilder()
+            val sdf = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
+
+            // 1. Permissions
+            sb.appendLine("=== Разрешения ===")
+            val perms = listOf(
+                Manifest.permission.READ_EXTERNAL_STORAGE,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.ACCESS_BACKGROUND_LOCATION
+            )
+            for (perm in perms) {
+                val granted = ContextCompat.checkSelfPermission(appContext, perm) ==
+                    PackageManager.PERMISSION_GRANTED
+                val name = perm.substringAfterLast(".")
+                sb.appendLine("$name: ${if (granted) "✓" else "✗"}")
+            }
+
+            // 2. BYD energydata
+            try {
+                val bydReport = energyDataReader.diagnose()
+                sb.appendLine()
+                sb.append(bydReport)
+            } catch (e: Exception) {
+                sb.appendLine("\nОШИБКА BYD: ${e.message}")
+            }
+
+            // 3. Our database
+            sb.appendLine("\n=== Наша база данных ===")
+            try {
+                val trips = tripRepository.getAllTrips().first()
+                val charges = chargeRepository.getAllCharges().first()
+                sb.appendLine("Поездок: ${trips.size}")
+                sb.appendLine("Зарядок: ${charges.size}")
+
+                if (trips.isNotEmpty()) {
+                    sb.appendLine("\nПоследние 5 поездок:")
+                    trips.take(5).forEach { t ->
+                        val startFmt = sdf.format(Date(t.startTs))
+                        val endFmt = t.endTs?.let { sdf.format(Date(it)) } ?: "null"
+                        sb.appendLine("#${t.id}: $startFmt – $endFmt")
+                        sb.appendLine("  km=${t.distanceKm ?: "-"}, kwh=${t.kwhConsumed ?: "-"}, " +
+                            "soc=${t.socStart ?: "-"}→${t.socEnd ?: "-"}, " +
+                            "speed=${t.avgSpeedKmh?.let { "%.0f".format(it) } ?: "-"}")
+                        sb.appendLine("  raw: start=${t.startTs}, end=${t.endTs ?: "null"}")
+                    }
+                }
+            } catch (e: Exception) {
+                sb.appendLine("ОШИБКА: ${e.message}")
+            }
+
+            // 4. DiPlus API
+            sb.appendLine("\n=== DiPlus API ===")
+            try {
+                val data = diParsClient.fetch()
+                if (data != null) {
+                    sb.appendLine("Ответ: SOC=${data.soc}, speed=${data.speed}, " +
+                        "mileage=${data.mileage}, power=${data.power}")
+                    sb.appendLine("chargeGun=${data.chargeGunState}, " +
+                        "batTemp=${data.avgBatTemp}, charging=${data.chargingStatus}")
+                } else {
+                    sb.appendLine("Ответ: null (DiPlus недоступен)")
+                }
+            } catch (e: Exception) {
+                sb.appendLine("ОШИБКА: ${e.message}")
+            }
+
+            _uiState.update { it.copy(diagnosticLog = sb.toString()) }
         }
     }
 
