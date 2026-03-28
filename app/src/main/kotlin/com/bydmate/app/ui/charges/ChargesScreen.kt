@@ -91,7 +91,8 @@ fun ChargesScreen(
         ChargeSummaryRow(
             sessionCount = state.sessionCount,
             totalKwh = state.totalKwh,
-            totalCost = state.totalCost
+            totalCost = state.totalCost,
+            currencySymbol = state.currencySymbol
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -133,7 +134,8 @@ fun ChargesScreen(
                     Column {
                         ChargeCard(
                             charge = charge,
-                            onClick = { viewModel.toggleExpanded(charge.id) }
+                            onClick = { viewModel.toggleExpanded(charge.id) },
+                            currencySymbol = state.currencySymbol
                         )
 
                         // Expanded power curve chart
@@ -249,7 +251,8 @@ private fun PeriodAndFilterRow(
 private fun ChargeSummaryRow(
     sessionCount: Int,
     totalKwh: Double,
-    totalCost: Double
+    totalCost: Double,
+    currencySymbol: String = "Br"
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -268,7 +271,7 @@ private fun ChargeSummaryRow(
         )
         SummaryBox(
             value = "%.0f".format(totalCost),
-            unit = "¥",
+            unit = currencySymbol,
             label = "Стоимость",
             modifier = Modifier.weight(1f)
         )

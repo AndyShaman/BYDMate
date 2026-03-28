@@ -335,7 +335,8 @@ fun TripCard(
 fun ChargeCard(
     charge: ChargeEntity,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currencySymbol: String = "Br"
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -468,7 +469,7 @@ fun ChargeCard(
                 }
 
                 // Cost
-                val costText = charge.cost?.let { "¥%.2f".format(it) } ?: ""
+                val costText = charge.cost?.let { "$currencySymbol%.2f".format(it) } ?: ""
                 if (costText.isNotEmpty()) {
                     Text(
                         text = costText,

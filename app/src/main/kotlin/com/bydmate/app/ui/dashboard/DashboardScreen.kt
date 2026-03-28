@@ -96,7 +96,8 @@ fun DashboardScreen(
         if (state.lastCharge != null) {
             ChargeCard(
                 charge = state.lastCharge!!,
-                onClick = { /* TODO: navigate to charge detail */ }
+                onClick = { /* TODO: navigate to charge detail */ },
+                currencySymbol = state.currencySymbol
             )
         } else {
             PlaceholderText(text = "Зарядок пока нет")

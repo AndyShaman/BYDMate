@@ -32,7 +32,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.data.repository.SettingsRepository
 
 private val BackgroundColor = Color(0xFF0D0D0D)
 private val CardBackground = Color(0xFF1E1E1E)
@@ -90,7 +92,7 @@ fun SettingsScreen(
 
                 // Home (AC) tariff
                 SettingsTextField(
-                    label = "Тариф дома (¥/кВт·ч)",
+                    label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
                     value = state.homeTariff,
                     onValueChange = { viewModel.saveHomeTariff(it) },
                     keyboardType = KeyboardType.Decimal
@@ -98,7 +100,7 @@ fun SettingsScreen(
 
                 // DC fast-charge tariff
                 SettingsTextField(
-                    label = "Тариф DC (¥/кВт·ч)",
+                    label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
                     value = state.dcTariff,
                     onValueChange = { viewModel.saveDcTariff(it) },
                     keyboardType = KeyboardType.Decimal
@@ -140,6 +142,33 @@ fun SettingsScreen(
                         selected = state.units == "miles",
                         onClick = { viewModel.saveUnits("miles") }
                     )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // -- Currency section --
+        SectionHeader(text = "Валюта")
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                ) {
+                    SettingsRepository.CURRENCIES.forEach { currency ->
+                        UnitChip(
+                            label = "${currency.symbol} ${currency.label}",
+                            selected = state.currency == currency.code,
+                            onClick = { viewModel.saveCurrency(currency.code) }
+                        )
+                    }
                 }
             }
         }

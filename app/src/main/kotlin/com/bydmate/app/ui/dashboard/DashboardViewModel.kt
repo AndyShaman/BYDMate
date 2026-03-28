@@ -31,7 +31,8 @@ data class DashboardUiState(
     val avgConsumption: Double = 0.0,
     val lastTrip: TripEntity? = null,
     val lastCharge: ChargeEntity? = null,
-    val isServiceRunning: Boolean = false
+    val isServiceRunning: Boolean = false,
+    val currencySymbol: String = "Br"
 )
 
 @HiltViewModel
@@ -48,6 +49,7 @@ class DashboardViewModel @Inject constructor(
         observeLiveData()
         observeLastTrip()
         observeLastCharge()
+        loadCurrency()
         loadTodaySummary()
     }
 
@@ -96,6 +98,13 @@ class DashboardViewModel @Inject constructor(
      * Load today's trip summary (total km, total kWh, trip count)
      * using Calendar to compute start/end of the current day in millis.
      */
+    private fun loadCurrency() {
+        viewModelScope.launch {
+            val symbol = settingsRepository.getCurrencySymbol()
+            _uiState.update { it.copy(currencySymbol = symbol) }
+        }
+    }
+
     private fun loadTodaySummary() {
         viewModelScope.launch {
             val (dayStart, dayEnd) = todayRange()
