@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -29,6 +30,7 @@ data class DashboardUiState(
     val totalKmToday: Double = 0.0,
     val totalKwhToday: Double = 0.0,
     val avgConsumption: Double = 0.0,
+    val idleDrainKwhToday: Double = 0.0,
     val lastTrip: TripEntity? = null,
     val lastCharge: ChargeEntity? = null,
     val isServiceRunning: Boolean = false,
@@ -39,7 +41,8 @@ data class DashboardUiState(
 class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val chargeRepository: ChargeRepository,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val idleDrainDao: IdleDrainDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -109,6 +112,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             val (dayStart, dayEnd) = todayRange()
             val summary = tripRepository.getTodaySummary(dayStart, dayEnd)
+            val idleDrain = idleDrainDao.getTodayDrainKwh(dayStart, dayEnd)
             val avg = if (summary.totalKm > 0) {
                 summary.totalKwh / summary.totalKm * 100.0
             } else {
@@ -118,7 +122,8 @@ class DashboardViewModel @Inject constructor(
                 it.copy(
                     totalKmToday = summary.totalKm,
                     totalKwhToday = summary.totalKwh,
-                    avgConsumption = avg
+                    avgConsumption = avg,
+                    idleDrainKwhToday = idleDrain
                 )
             }
         }

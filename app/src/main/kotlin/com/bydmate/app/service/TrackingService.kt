@@ -21,6 +21,9 @@ import com.bydmate.app.MainActivity
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.domain.tracker.ChargeTracker
+import com.bydmate.app.domain.tracker.IdleDrainTracker
+import com.bydmate.app.domain.tracker.TripState
+import com.bydmate.app.domain.tracker.ChargeState
 import com.bydmate.app.domain.tracker.TripTracker
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -42,6 +45,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var diParsClient: DiParsClient
     @Inject lateinit var tripTracker: TripTracker
     @Inject lateinit var chargeTracker: ChargeTracker
+    @Inject lateinit var idleDrainTracker: IdleDrainTracker
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var pollingJob: Job? = null
@@ -137,6 +141,11 @@ class TrackingService : Service(), LocationListener {
                         val loc = lastLocation
                         tripTracker.onData(data, loc)
                         chargeTracker.onData(data, loc)
+                        idleDrainTracker.onData(
+                            data,
+                            isMoving = tripTracker.state.value == TripState.DRIVING,
+                            isCharging = chargeTracker.state.value == ChargeState.CHARGING
+                        )
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++

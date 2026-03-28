@@ -7,14 +7,15 @@ import javax.inject.Singleton
 @Singleton
 class ConsumptionCalculator @Inject constructor() {
 
-    // Real kWh from delta SOC
+    // Real kWh from delta SOC (always non-negative for trips)
     fun realKwh(socStart: Int, socEnd: Int, batteryCapacityKwh: Double): Double {
-        return (socStart - socEnd) / 100.0 * batteryCapacityKwh
+        val kwh = (socStart - socEnd) / 100.0 * batteryCapacityKwh
+        return kwh.coerceAtLeast(0.0)
     }
 
-    // Consumption per 100 km
-    fun kwhPer100km(kwh: Double, distanceKm: Double): Double {
-        if (distanceKm <= 0) return 0.0
+    // Consumption per 100 km (null if distance too small)
+    fun kwhPer100km(kwh: Double, distanceKm: Double): Double? {
+        if (distanceKm < 0.1) return null
         return kwh / distanceKm * 100.0
     }
 

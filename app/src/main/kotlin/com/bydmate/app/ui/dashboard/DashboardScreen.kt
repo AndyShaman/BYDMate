@@ -76,6 +76,18 @@ fun DashboardScreen(
             avgKwhPer100km = state.avgConsumption
         )
 
+        // -- Idle drain (parking consumption) --
+        if (state.idleDrainKwhToday > 0.01) {
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = "Расход на стоянке: ${"%.2f".format(state.idleDrainKwhToday)} кВт·ч",
+                color = Color(0xFFFF9800),
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+
         // -- Last trip section --
         Spacer(modifier = Modifier.height(24.dp))
         SectionHeader(text = "Последняя поездка")

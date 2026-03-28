@@ -45,7 +45,7 @@ class UpdateChecker @Inject constructor(
 
         val request = Request.Builder()
             .url(GITHUB_API)
-            .header("Accept", "application/vnd.github.v3+json")
+            .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "BYDMate-UpdateCheck")
             .build()
         val response = httpClient.newCall(request).execute()
