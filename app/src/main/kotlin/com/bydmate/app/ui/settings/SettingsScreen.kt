@@ -228,6 +228,60 @@ fun SettingsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(24.dp))
+
+        // -- About & update section --
+        SectionHeader(text = "О приложении")
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "BYDMate v${state.appVersion}",
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Button(
+                    onClick = { viewModel.checkForUpdate() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFF2196F3),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Проверить обновления",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                if (state.updateStatus != null) {
+                    Text(
+                        text = state.updateStatus!!,
+                        color = if (state.updateStatus!!.startsWith("Ошибка")) {
+                            Color(0xFFF44336)
+                        } else {
+                            PrimaryColor
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
         // Bottom padding for navigation bar clearance
         Spacer(modifier = Modifier.height(32.dp))
     }

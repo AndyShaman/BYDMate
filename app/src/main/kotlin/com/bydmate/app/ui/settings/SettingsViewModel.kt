@@ -1,12 +1,15 @@
 package com.bydmate.app.ui.settings
 
+import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.service.UpdateChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,18 +34,28 @@ data class SettingsUiState(
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "Br",
-    val exportStatus: String? = null
+    val exportStatus: String? = null,
+    val appVersion: String = "0.0.0",
+    val updateStatus: String? = null
 )
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val tripRepository: TripRepository,
-    private val chargeRepository: ChargeRepository
+    private val chargeRepository: ChargeRepository,
+    private val updateChecker: UpdateChecker
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(SettingsUiState())
+    private val _uiState = MutableStateFlow(SettingsUiState(
+        appVersion = getVersion()
+    ))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private fun getVersion(): String = try {
+        appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "?"
+    } catch (_: Exception) { "?" }
 
     init {
         loadSettings()
@@ -189,5 +202,29 @@ class SettingsViewModel @Inject constructor(
     /** Clear the export status message. */
     fun clearExportStatus() {
         _uiState.update { it.copy(exportStatus = null) }
+    }
+
+    /** Check for app updates on GitHub. */
+    fun checkForUpdate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(updateStatus = "Проверка...") }
+            try {
+                val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
+                if (update != null) {
+                    _uiState.update {
+                        it.copy(updateStatus = "Доступна v${update.version}. Скачивание...")
+                    }
+                    updateChecker.downloadAndInstall(appContext, update)
+                } else {
+                    _uiState.update {
+                        it.copy(updateStatus = "Установлена последняя версия")
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(updateStatus = "Ошибка: ${e.message}")
+                }
+            }
+        }
     }
 }

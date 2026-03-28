@@ -34,12 +34,12 @@ class UpdateChecker @Inject constructor(
         val releaseNotes: String
     )
 
-    suspend fun checkForUpdate(context: Context): UpdateInfo? = withContext(Dispatchers.IO) {
+    suspend fun checkForUpdate(context: Context, forceCheck: Boolean = false): UpdateInfo? = withContext(Dispatchers.IO) {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val lastCheck = prefs.getLong(KEY_LAST_CHECK, 0)
         val now = System.currentTimeMillis()
 
-        if (now - lastCheck < CHECK_INTERVAL_MS) return@withContext null
+        if (!forceCheck && now - lastCheck < CHECK_INTERVAL_MS) return@withContext null
 
         prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
 
