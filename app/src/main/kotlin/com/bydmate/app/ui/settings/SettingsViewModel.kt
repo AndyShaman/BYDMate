@@ -296,30 +296,35 @@ class SettingsViewModel @Inject constructor(
                 sb.appendLine("ОШИБКА: ${e.message}")
             }
 
-            // 4. DiPlus API — raw HTTP request for detailed diagnostics
+            // 4. DiPlus API — test both localhost and 127.0.0.1
             sb.appendLine("\n=== DiPlus API ===")
-            sb.appendLine("URL: http://localhost:8988/api/getDiPars")
-            try {
-                val testUrl = "http://localhost:8988/api/getDiPars?text=SOC:{电量百分比}|Speed:{车速}"
-                val req = okhttp3.Request.Builder().url(testUrl).build()
-                val resp = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                    .newCall(req).execute()
-                val body = resp.body?.string() ?: "(пустое тело)"
-                sb.appendLine("HTTP ${resp.code}: $body")
-                if (resp.code == 409) {
-                    sb.appendLine("⚠ Требуется авторизация (auth header)")
+            val testClient = okhttp3.OkHttpClient.Builder()
+                .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                .build()
+            val testTemplate = "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}"
+            for (host in listOf("127.0.0.1", "localhost")) {
+                val testUrl = "http://$host:8988/api/getDiPars?text=$testTemplate"
+                sb.append("$host:8988 → ")
+                try {
+                    val req = okhttp3.Request.Builder().url(testUrl).build()
+                    val resp = testClient.newCall(req).execute()
+                    val body = resp.body?.string() ?: "(пустое тело)"
+                    sb.appendLine("HTTP ${resp.code}")
+                    sb.appendLine("  $body")
+                    if (resp.code == 409) {
+                        sb.appendLine("  ⚠ auth required")
+                    }
+                } catch (e: java.net.ConnectException) {
+                    sb.appendLine("отклонено (не слушает)")
+                } catch (e: java.net.SocketTimeoutException) {
+                    sb.appendLine("таймаут")
+                } catch (e: Exception) {
+                    sb.appendLine("${e.javaClass.simpleName}: ${e.message}")
                 }
-            } catch (e: java.net.ConnectException) {
-                sb.appendLine("ОШИБКА: Соединение отклонено")
-                sb.appendLine("DiPlus не запущен на порту 8988")
-            } catch (e: java.net.SocketTimeoutException) {
-                sb.appendLine("ОШИБКА: Таймаут соединения")
-            } catch (e: Exception) {
-                sb.appendLine("ОШИБКА: ${e.javaClass.simpleName}: ${e.message}")
             }
+            // Hint: how to start DiPlus service
+            sb.appendLine("Запуск: com.van.diplus/.activity.StartMainServiceActivity")
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }
         }

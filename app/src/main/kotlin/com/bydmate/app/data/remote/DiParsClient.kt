@@ -27,7 +27,8 @@ class DiParsClient @Inject constructor(
 ) {
     companion object {
         private const val TAG = "DiParsClient"
-        private const val BASE_URL = "http://localhost:8988/api/getDiPars"
+        // BydConnect uses 127.0.0.1, not localhost — localhost may not resolve on DiLink
+        private const val BASE_URL = "http://127.0.0.1:8988/api/getDiPars"
         private const val TEMPLATE =
             "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}|Power:{发动机功率}" +
             "|ChargeGun:{充电枪插枪状态}|MaxBatTemp:{最高电池温度}" +
