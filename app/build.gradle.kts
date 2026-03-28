@@ -13,9 +13,12 @@ android {
     defaultConfig {
         applicationId = "com.bydmate.app"
         minSdk = 29
-        targetSdk = 32
-        versionCode = 11
-        versionName = "1.0.1"
+        // targetSdk 29 matches TripInfo — grants full legacy file access
+        // on DiLink Android 12 (requestLegacyExternalStorage works).
+        // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
+        targetSdk = 29
+        versionCode = 12
+        versionName = "1.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
