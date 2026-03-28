@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
+import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -22,7 +23,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -57,7 +60,8 @@ class SettingsViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val historyImporter: HistoryImporter,
     private val energyDataReader: EnergyDataReader,
-    private val diParsClient: DiParsClient
+    private val diParsClient: DiParsClient,
+    private val idleDrainDao: IdleDrainDao
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -235,7 +239,7 @@ class SettingsViewModel @Inject constructor(
 
     /** Run full diagnostics: BYD storage, our DB, DiPlus API, permissions. */
     fun runDiagnostics() {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(diagnosticLog = "Диагностика...") }
 
             val sb = StringBuilder()
@@ -270,8 +274,11 @@ class SettingsViewModel @Inject constructor(
             try {
                 val trips = tripRepository.getAllTrips().first()
                 val charges = chargeRepository.getAllCharges().first()
+                val drainCount = idleDrainDao.getCount()
+                val drainKwh = idleDrainDao.getTotalKwh()
                 sb.appendLine("Поездок: ${trips.size}")
                 sb.appendLine("Зарядок: ${charges.size}")
+                sb.appendLine("Стоянок (idle drain): $drainCount (%.2f кВт·ч)".format(drainKwh))
 
                 if (trips.isNotEmpty()) {
                     sb.appendLine("\nПоследние 5 поездок:")

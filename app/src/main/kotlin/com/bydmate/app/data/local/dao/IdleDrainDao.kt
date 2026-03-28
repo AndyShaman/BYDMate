@@ -24,4 +24,10 @@ interface IdleDrainDao {
         WHERE start_ts >= :dayStart AND start_ts <= :dayEnd
     """)
     suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double
+
+    @Query("SELECT COUNT(*) FROM idle_drains")
+    suspend fun getCount(): Int
+
+    @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains")
+    suspend fun getTotalKwh(): Double
 }
