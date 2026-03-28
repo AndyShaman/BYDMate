@@ -1,19 +1,16 @@
 package com.bydmate.app.data.local
 
-import android.content.Context
 import android.util.Log
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.TripRepository
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
 class HistoryImporter @Inject constructor(
-    @ApplicationContext private val context: Context,
     private val energyDataReader: EnergyDataReader,
     private val tripRepository: TripRepository,
     private val idleDrainDao: IdleDrainDao
@@ -44,10 +41,7 @@ class HistoryImporter @Inject constructor(
     suspend fun forceImport(): ImportResult = sync()
 
     private suspend fun doImport(): ImportResult {
-        Log.d(TAG, "doImport() started")
-
         val bydRecords = energyDataReader.readTrips()
-        Log.d(TAG, "Read ${bydRecords.size} BYD records from energydata DB")
 
         if (bydRecords.isEmpty()) {
             return ImportResult(

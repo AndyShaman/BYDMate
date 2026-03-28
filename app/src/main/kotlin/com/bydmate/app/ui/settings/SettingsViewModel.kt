@@ -296,37 +296,30 @@ class SettingsViewModel @Inject constructor(
                 sb.appendLine("ОШИБКА: ${e.message}")
             }
 
-            // 4. DiPlus API — test with proper URL encoding
+            // 4. DiPlus API
             sb.appendLine("\n=== DiPlus API ===")
-            val testClient = okhttp3.OkHttpClient.Builder()
-                .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                .build()
-            val testTemplate = "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}"
-            for (host in listOf("127.0.0.1", "localhost")) {
-                sb.append("$host:8988 → ")
-                try {
-                    // Use HttpUrl.Builder for proper encoding of Chinese chars, {}, |
-                    val httpUrl = okhttp3.HttpUrl.Builder()
-                        .scheme("http").host(host).port(8988)
-                        .addPathSegments("api/getDiPars")
-                        .addQueryParameter("text", testTemplate)
-                        .build()
-                    val req = okhttp3.Request.Builder().url(httpUrl).build()
-                    val resp = testClient.newCall(req).execute()
-                    val body = resp.body?.string() ?: "(пустое тело)"
-                    sb.appendLine("HTTP ${resp.code}")
-                    sb.appendLine("  $body")
-                    if (resp.code == 409) {
-                        sb.appendLine("  ⚠ auth required")
-                    }
-                } catch (e: java.net.ConnectException) {
-                    sb.appendLine("отклонено (не слушает)")
-                } catch (e: java.net.SocketTimeoutException) {
-                    sb.appendLine("таймаут")
-                } catch (e: Exception) {
-                    sb.appendLine("${e.javaClass.simpleName}: ${e.message}")
-                }
+            try {
+                val testTemplate = "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}"
+                val httpUrl = okhttp3.HttpUrl.Builder()
+                    .scheme("http").host("127.0.0.1").port(8988)
+                    .addPathSegments("api/getDiPars")
+                    .addQueryParameter("text", testTemplate)
+                    .build()
+                val testClient = okhttp3.OkHttpClient.Builder()
+                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
+                    .build()
+                val resp = testClient.newCall(
+                    okhttp3.Request.Builder().url(httpUrl).build()
+                ).execute()
+                val body = resp.body?.string() ?: "(пустое тело)"
+                sb.appendLine("HTTP ${resp.code}: $body")
+            } catch (e: java.net.ConnectException) {
+                sb.appendLine("Соединение отклонено — DiPlus не запущен")
+            } catch (e: java.net.SocketTimeoutException) {
+                sb.appendLine("Таймаут соединения")
+            } catch (e: Exception) {
+                sb.appendLine("${e.javaClass.simpleName}: ${e.message}")
             }
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }

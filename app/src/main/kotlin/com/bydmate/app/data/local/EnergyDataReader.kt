@@ -2,7 +2,6 @@ package com.bydmate.app.data.local
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -177,91 +176,36 @@ class EnergyDataReader @Inject constructor(
     }
 
     suspend fun readTrips(): List<BydTripRecord> = withContext(Dispatchers.IO) {
-        Log.d(TAG, "readTrips() started, looking for: $ENERGY_DIR_PATH")
-
         val energyDir = File(ENERGY_DIR_PATH)
         if (!energyDir.exists()) {
-            val msg = "Директория energydata не найдена: $ENERGY_DIR_PATH. " +
-                "Убедитесь, что разрешение READ_EXTERNAL_STORAGE выдано."
-            Log.w(TAG, msg)
-            throw EnergyDataException(msg)
+            throw EnergyDataException("Директория energydata не найдена: $ENERGY_DIR_PATH")
         }
-        Log.d(TAG, "energydata directory exists: ${energyDir.absolutePath}")
 
-        // Strategy 1: Try listFiles() to find .db files
         val sourceDb = findDbViaListFiles(energyDir)
-            // Strategy 2: If listing failed, try known filenames directly
             ?: findDbViaKnownNames(energyDir)
-            ?: throw EnergyDataException(
-                "Не найдены файлы БД в $ENERGY_DIR_PATH. " +
-                "listFiles() вернул null (нет доступа к директории). " +
-                "Проверьте разрешения приложения."
-            )
+            ?: throw EnergyDataException("Не найдены файлы БД в $ENERGY_DIR_PATH")
 
-        Log.d(TAG, "Source DB: ${sourceDb.absolutePath} (${sourceDb.length()} bytes)")
-
-        // Copy to app-local storage to avoid locking BYD's database
         val localDb = copyToLocal(sourceDb)
-        Log.d(TAG, "Copied to local: ${localDb.absolutePath} (${localDb.length()} bytes)")
-
-        val trips = readTripsFromDb(localDb)
-        Log.d(TAG, "readTrips() completed: ${trips.size} trips")
-        trips
+        readTripsFromDb(localDb)
     }
 
-    /**
-     * Try to find .db files via listFiles(). Returns newest .db file or null
-     * if listFiles() returns null (common on Android 11+ without MANAGE_EXTERNAL_STORAGE).
-     */
     private fun findDbViaListFiles(dir: File): File? {
-        val allFiles = dir.listFiles()
-        if (allFiles == null) {
-            Log.w(TAG, "listFiles() returned null — no permission to list directory")
-            return null
-        }
-        Log.d(TAG, "Directory has ${allFiles.size} files: ${allFiles.map { it.name }}")
-
-        val dbFiles = allFiles.filter { file ->
-            file.isFile && (file.name.endsWith(".db", ignoreCase = true) ||
-                file.name.endsWith(".sqlite", ignoreCase = true))
-        }
-
-        if (dbFiles.isEmpty()) {
-            Log.w(TAG, "No .db/.sqlite files found via listFiles()")
-            return null
-        }
-
-        val newest = dbFiles.maxByOrNull { it.lastModified() }!!
-        Log.d(TAG, "Found via listFiles(): ${newest.name}")
-        return newest
+        val allFiles = dir.listFiles() ?: return null
+        return allFiles
+            .filter { it.isFile && (it.name.endsWith(".db", true) || it.name.endsWith(".sqlite", true)) }
+            .maxByOrNull { it.lastModified() }
     }
 
-    /**
-     * Fallback: try opening known BYD database filenames directly.
-     * On Android 11+ with scoped storage, listFiles() fails but
-     * opening a specific file by path may still work.
-     */
     private fun findDbViaKnownNames(dir: File): File? {
-        Log.d(TAG, "Trying known DB filenames as fallback...")
-        for (name in KNOWN_DB_NAMES) {
-            val file = File(dir, name)
-            if (file.exists() && file.length() > 0) {
-                Log.d(TAG, "Found via known name: $name (${file.length()} bytes)")
-                return file
-            } else {
-                Log.d(TAG, "Tried $name — ${if (file.exists()) "exists but empty" else "not found"}")
-            }
-        }
-        Log.w(TAG, "No known DB filenames found in ${dir.absolutePath}")
-        return null
+        return KNOWN_DB_NAMES
+            .map { File(dir, it) }
+            .firstOrNull { it.exists() && it.length() > 0 }
     }
 
     private fun copyToLocal(source: File): File {
         val extDir = context.getExternalFilesDir(null)
             ?: throw EnergyDataException("ExternalFilesDir не доступен")
         val localFile = File(extDir, LOCAL_DB_NAME)
-
-        Log.d(TAG, "Copying ${source.absolutePath} -> ${localFile.absolutePath}")
         FileInputStream(source).use { input ->
             FileOutputStream(localFile).use { output ->
                 input.copyTo(output)
@@ -271,37 +215,10 @@ class EnergyDataReader @Inject constructor(
     }
 
     private fun readTripsFromDb(dbFile: File): List<BydTripRecord> {
-        Log.d(TAG, "Opening local DB: ${dbFile.absolutePath}")
         val db = SQLiteDatabase.openDatabase(
             dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
         )
         return db.use { database ->
-            // Log all tables in the database for diagnostics
-            val tablesCursor = database.rawQuery(
-                "SELECT name FROM sqlite_master WHERE type='table'", null
-            )
-            val tables = mutableListOf<String>()
-            tablesCursor.use { tc ->
-                while (tc.moveToNext()) tables.add(tc.getString(0))
-            }
-            Log.d(TAG, "Tables in DB: $tables")
-
-            if (!tables.contains("EnergyConsumption")) {
-                Log.w(TAG, "EnergyConsumption table NOT FOUND in DB! Available tables: $tables")
-                return@use emptyList()
-            }
-
-            // Count total rows vs non-deleted rows
-            val totalCount = database.rawQuery(
-                "SELECT COUNT(*) FROM EnergyConsumption", null
-            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-
-            val activeCount = database.rawQuery(
-                "SELECT COUNT(*) FROM EnergyConsumption WHERE is_deleted = 0", null
-            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
-
-            Log.d(TAG, "EnergyConsumption: total=$totalCount, active(is_deleted=0)=$activeCount")
-
             val cursor = database.rawQuery(
                 """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity
                    FROM EnergyConsumption
@@ -311,9 +228,6 @@ class EnergyDataReader @Inject constructor(
             )
             val results = mutableListOf<BydTripRecord>()
             cursor.use { c ->
-                Log.d(TAG, "Cursor columns: ${(0 until c.columnCount).map { c.getColumnName(it) }}")
-                Log.d(TAG, "Cursor row count: ${c.count}")
-
                 val colId = c.getColumnIndexOrThrow("_id")
                 val colStart = c.getColumnIndexOrThrow("start_timestamp")
                 val colEnd = c.getColumnIndexOrThrow("end_timestamp")
@@ -322,24 +236,18 @@ class EnergyDataReader @Inject constructor(
                 val colElectricity = c.getColumnIndexOrThrow("electricity")
 
                 while (c.moveToNext()) {
-                    val record = BydTripRecord(
-                        id = c.getLong(colId),
-                        startTimestamp = c.getLong(colStart),
-                        endTimestamp = c.getLong(colEnd),
-                        duration = c.getLong(colDuration),
-                        tripKm = c.getDouble(colTrip),
-                        electricityKwh = c.getDouble(colElectricity)
+                    results.add(
+                        BydTripRecord(
+                            id = c.getLong(colId),
+                            startTimestamp = c.getLong(colStart),
+                            endTimestamp = c.getLong(colEnd),
+                            duration = c.getLong(colDuration),
+                            tripKm = c.getDouble(colTrip),
+                            electricityKwh = c.getDouble(colElectricity)
+                        )
                     )
-                    results.add(record)
-                    // Log first 3 records for diagnostics
-                    if (results.size <= 3) {
-                        Log.d(TAG, "Sample record: id=${record.id}, " +
-                            "start=${record.startTimestamp}, end=${record.endTimestamp}, " +
-                            "dur=${record.duration}, km=${record.tripKm}, kwh=${record.electricityKwh}")
-                    }
                 }
             }
-            Log.d(TAG, "Read ${results.size} trips from EnergyConsumption")
             results
         }
     }

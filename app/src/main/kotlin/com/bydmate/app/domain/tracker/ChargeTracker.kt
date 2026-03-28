@@ -46,8 +46,6 @@ class ChargeTracker @Inject constructor(
 
         val isCharging = chargeGun == 2 && power < -1.0
 
-        Log.d(TAG, "onData: state=${_state.value}, chargeGun=$chargeGun, power=$power, soc=${data.soc}, isCharging=$isCharging")
-
         when (_state.value) {
             ChargeState.IDLE -> {
                 if (isCharging) {
@@ -211,7 +209,6 @@ class ChargeTracker @Inject constructor(
             snapshot = ArrayList(pendingPoints)
             pendingPoints.clear()
         }
-        Log.d(TAG, "Flushing ${snapshot.size} charge points")
         chargeRepository.insertChargePoints(snapshot)
     }
 }
