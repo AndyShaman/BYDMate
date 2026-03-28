@@ -1,6 +1,9 @@
 package com.bydmate.app.ui.settings
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,8 +31,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
@@ -294,6 +299,7 @@ fun SettingsScreen(
             colors = CardDefaults.cardColors(containerColor = CardBackground),
             modifier = Modifier.fillMaxWidth()
         ) {
+            val context = LocalContext.current
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -303,6 +309,32 @@ fun SettingsScreen(
                     color = Color.White,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
+                )
+
+                Text(
+                    text = "\u00A9 2026 AndyShaman",
+                    color = SecondaryTextColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Text(
+                    text = "github.com/AndyShaman/BYDMate",
+                    color = Color(0xFF2196F3),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    textDecoration = TextDecoration.Underline,
+                    modifier = Modifier.clickable {
+                        val intent = Intent(Intent.ACTION_VIEW,
+                            Uri.parse("https://github.com/AndyShaman/BYDMate"))
+                        context.startActivity(intent)
+                    }
+                )
+
+                Text(
+                    text = "GPLv3 License",
+                    color = SecondaryTextColor,
+                    fontSize = 12.sp
                 )
 
                 Button(

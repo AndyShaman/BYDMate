@@ -14,8 +14,8 @@ android {
         applicationId = "com.bydmate.app"
         minSdk = 29
         targetSdk = 32
-        versionCode = 7
-        versionName = "0.1.6"
+        versionCode = 10
+        versionName = "1.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
