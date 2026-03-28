@@ -1,5 +1,6 @@
 package com.bydmate.app.data.remote
 
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -25,6 +26,7 @@ class DiParsClient @Inject constructor(
     private val httpClient: OkHttpClient
 ) {
     companion object {
+        private const val TAG = "DiParsClient"
         private const val BASE_URL = "http://localhost:8988/api/getDiPars"
         private const val TEMPLATE =
             "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}|Power:{发动机功率}" +
@@ -33,19 +35,41 @@ class DiParsClient @Inject constructor(
             "|ChargingStatus:{充电状态}"
     }
 
+    @Volatile
+    private var firstCall = true
+
     suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
         try {
             val url = "$BASE_URL?text=$TEMPLATE"
+            if (firstCall) {
+                Log.d(TAG, "First DiPars request URL: $url")
+                firstCall = false
+            }
             val request = Request.Builder().url(url).build()
             val response = httpClient.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
+            val body = response.body?.string()
+            Log.d(TAG, "Response code=${response.code}, bodyLength=${body?.length ?: 0}")
+
+            if (body == null) {
+                Log.w(TAG, "Response body is null")
+                return@withContext null
+            }
 
             val json = JSONObject(body)
-            if (!json.optBoolean("success", false)) return@withContext null
+            if (!json.optBoolean("success", false)) {
+                Log.w(TAG, "DiPars response success=false, body=$body")
+                return@withContext null
+            }
 
             val valStr = json.optString("val", "")
-            parse(valStr)
+            val data = parse(valStr)
+            Log.d(TAG, "Parsed: soc=${data.soc} speed=${data.speed} mileage=${data.mileage} " +
+                "power=${data.power} chargeGun=${data.chargeGunState} " +
+                "batTemp=${data.minBatTemp}/${data.avgBatTemp}/${data.maxBatTemp} " +
+                "chargingStatus=${data.chargingStatus}")
+            data
         } catch (e: Exception) {
+            Log.e(TAG, "DiPars fetch failed: ${e.message}", e)
             null
         }
     }

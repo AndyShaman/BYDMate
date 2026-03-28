@@ -43,42 +43,46 @@ class UpdateChecker @Inject constructor(
 
         prefs.edit().putLong(KEY_LAST_CHECK, now).apply()
 
-        try {
-            val request = Request.Builder()
-                .url(GITHUB_API)
-                .header("Accept", "application/vnd.github.v3+json")
-                .build()
-            val response = httpClient.newCall(request).execute()
-            val body = response.body?.string() ?: return@withContext null
-
-            val json = JSONObject(body)
-            val tagName = json.optString("tag_name", "").removePrefix("v")
-            val currentVersion = getAppVersion(context)
-
-            if (tagName.isEmpty() || tagName == currentVersion) return@withContext null
-            if (!isNewer(tagName, currentVersion)) return@withContext null
-
-            val assets = json.optJSONArray("assets") ?: return@withContext null
-            var apkUrl: String? = null
-            for (i in 0 until assets.length()) {
-                val asset = assets.getJSONObject(i)
-                val name = asset.optString("name", "")
-                if (name.endsWith(".apk")) {
-                    apkUrl = asset.optString("browser_download_url")
-                    break
-                }
-            }
-
-            if (apkUrl == null) return@withContext null
-
-            UpdateInfo(
-                version = tagName,
-                downloadUrl = apkUrl,
-                releaseNotes = json.optString("body", "")
-            )
-        } catch (e: Exception) {
-            null
+        val request = Request.Builder()
+            .url(GITHUB_API)
+            .header("Accept", "application/vnd.github.v3+json")
+            .header("User-Agent", "BYDMate-UpdateCheck")
+            .build()
+        val response = httpClient.newCall(request).execute()
+        if (!response.isSuccessful) {
+            throw Exception("GitHub API: HTTP ${response.code}")
         }
+        val body = response.body?.string()
+            ?: throw Exception("Пустой ответ от GitHub")
+
+        val json = JSONObject(body)
+        val tagName = json.optString("tag_name", "").removePrefix("v")
+        val currentVersion = getAppVersion(context)
+
+        if (tagName.isEmpty()) throw Exception("Нет tag_name в ответе GitHub")
+        if (tagName == currentVersion || !isNewer(tagName, currentVersion)) {
+            return@withContext null // genuinely up to date
+        }
+
+        val assets = json.optJSONArray("assets")
+            ?: throw Exception("Нет assets в релизе $tagName")
+        var apkUrl: String? = null
+        for (i in 0 until assets.length()) {
+            val asset = assets.getJSONObject(i)
+            val name = asset.optString("name", "")
+            if (name.endsWith(".apk")) {
+                apkUrl = asset.optString("browser_download_url")
+                break
+            }
+        }
+
+        if (apkUrl == null) throw Exception("Нет APK в релизе $tagName")
+
+        UpdateInfo(
+            version = tagName,
+            downloadUrl = apkUrl,
+            releaseNotes = json.optString("body", "")
+        )
     }
 
     fun downloadAndInstall(context: Context, update: UpdateInfo) {

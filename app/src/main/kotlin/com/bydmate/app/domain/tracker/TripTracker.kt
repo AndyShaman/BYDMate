@@ -1,6 +1,7 @@
 package com.bydmate.app.domain.tracker
 
 import android.location.Location
+import android.util.Log
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.DiParsData
@@ -10,6 +11,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.calculator.ConsumptionCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,11 +33,12 @@ class TripTracker @Inject constructor(
     private var mileageStart: Double? = null
     private var speedAboveThresholdSince: Long? = null
     private var speedZeroSince: Long? = null
-    private val pendingPoints = mutableListOf<TripPointEntity>()
+    private val pendingPoints = Collections.synchronizedList(mutableListOf<TripPointEntity>())
 
     companion object {
+        private const val TAG = "TripTracker"
         private const val SPEED_THRESHOLD = 3    // km/h
-        private const val START_DELAY_MS = 10_000L  // 10 seconds above threshold
+        private const val START_DELAY_MS = 5_000L   // 5 seconds above threshold
         private const val STOP_DELAY_MS = 180_000L  // 3 minutes at zero
         private const val POINT_BATCH_SIZE = 30
     }
@@ -44,11 +47,14 @@ class TripTracker @Inject constructor(
         val speed = data.speed ?: 0
         val now = System.currentTimeMillis()
 
+        Log.d(TAG, "onData: state=${_state.value}, speed=$speed, soc=${data.soc}, mileage=${data.mileage}")
+
         when (_state.value) {
             TripState.IDLE -> {
                 if (speed > SPEED_THRESHOLD) {
                     if (speedAboveThresholdSince == null) {
                         speedAboveThresholdSince = now
+                        Log.d(TAG, "Speed above threshold, starting delay timer")
                     } else if (now - speedAboveThresholdSince!! >= START_DELAY_MS) {
                         startTrip(data, location, now)
                     }
@@ -78,6 +84,7 @@ class TripTracker @Inject constructor(
                 if (speed == 0) {
                     if (speedZeroSince == null) {
                         speedZeroSince = now
+                        Log.d(TAG, "Speed dropped to zero, starting stop timer")
                     } else if (now - speedZeroSince!! >= STOP_DELAY_MS) {
                         endTrip(data, location, now)
                     }
@@ -92,7 +99,9 @@ class TripTracker @Inject constructor(
         socStart = data.soc
         mileageStart = data.mileage
         tripStartTs = now
-        pendingPoints.clear()
+        synchronized(pendingPoints) {
+            pendingPoints.clear()
+        }
 
         val tripId = tripRepository.insertTrip(
             TripEntity(
@@ -104,6 +113,8 @@ class TripTracker @Inject constructor(
         _state.value = TripState.DRIVING
         speedZeroSince = null
         speedAboveThresholdSince = null
+
+        Log.d(TAG, "Trip started: id=$tripId, soc=${data.soc}, mileage=${data.mileage}")
 
         // Record first point
         if (location != null) {
@@ -120,9 +131,14 @@ class TripTracker @Inject constructor(
     }
 
     private suspend fun endTrip(data: DiParsData, location: Location?, now: Long) {
+        val tripId = currentTripId
+        if (tripId == null) {
+            Log.d(TAG, "endTrip called but currentTripId is null, ignoring")
+            return
+        }
+
         flushPoints()
 
-        val tripId = currentTripId ?: return
         val socEnd = data.soc
         val mileageEnd = data.mileage
         val batteryCapacity = settingsRepository.getBatteryCapacity()
@@ -164,6 +180,8 @@ class TripTracker @Inject constructor(
             )
         )
 
+        Log.d(TAG, "Trip ended: id=$tripId, distance=$distanceKm km, kwh=$kwhConsumed")
+
         // Reset
         _state.value = TripState.IDLE
         currentTripId = null
@@ -171,13 +189,19 @@ class TripTracker @Inject constructor(
         mileageStart = null
         speedZeroSince = null
         speedAboveThresholdSince = null
-        pendingPoints.clear()
+        synchronized(pendingPoints) {
+            pendingPoints.clear()
+        }
     }
 
     private suspend fun flushPoints() {
-        if (pendingPoints.isNotEmpty()) {
-            tripRepository.insertTripPoints(ArrayList(pendingPoints))
+        val snapshot: List<TripPointEntity>
+        synchronized(pendingPoints) {
+            if (pendingPoints.isEmpty()) return
+            snapshot = ArrayList(pendingPoints)
             pendingPoints.clear()
         }
+        Log.d(TAG, "Flushing ${snapshot.size} trip points")
+        tripRepository.insertTripPoints(snapshot)
     }
 }

@@ -14,6 +14,7 @@ import android.location.LocationListener
 import android.location.LocationManager
 import android.os.IBinder
 import android.os.PowerManager
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
@@ -31,6 +32,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -44,11 +47,15 @@ class TrackingService : Service(), LocationListener {
     private var pollingJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var lastLocation: Location? = null
+    private var locationManager: LocationManager? = null
+    private var consecutiveNullCount = 0
 
     companion object {
+        private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "bydmate_tracking"
         private const val POLL_INTERVAL_MS = 9000L // ~9 seconds
+        private const val NULL_WARNING_THRESHOLD = 5
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -68,6 +75,7 @@ class TrackingService : Service(), LocationListener {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(TAG, "onCreate: starting TrackingService")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Starting..."))
         acquireWakeLock()
@@ -81,8 +89,31 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onDestroy() {
+        Log.i(TAG, "onDestroy: stopping TrackingService")
         pollingJob?.cancel()
+
+        // Wait for pending trip/charge writes to finish before cancelling scope
+        try {
+            runBlocking(Dispatchers.IO) {
+                withTimeout(3000L) {
+                    // Let any in-flight coroutines in serviceScope finish
+                    serviceScope.coroutineContext[Job]?.children?.forEach { it.join() }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Timeout waiting for pending writes: ${e.message}")
+        }
+
         serviceScope.cancel()
+
+        // Remove GPS listener to prevent leak
+        try {
+            locationManager?.removeUpdates(this)
+            Log.d(TAG, "Location updates removed")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to remove location updates: ${e.message}")
+        }
+
         wakeLock?.let { if (it.isHeld) it.release() }
         _isRunning.value = false
         super.onDestroy()
@@ -95,18 +126,27 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun startPolling() {
+        Log.i(TAG, "Starting polling with interval=${POLL_INTERVAL_MS}ms")
         pollingJob = serviceScope.launch {
             while (true) {
                 try {
                     val data = diParsClient.fetch()
                     if (data != null) {
+                        consecutiveNullCount = 0
                         _lastData.value = data
                         val loc = lastLocation
                         tripTracker.onData(data, loc)
                         chargeTracker.onData(data, loc)
                         updateNotification(data)
+                    } else {
+                        consecutiveNullCount++
+                        Log.d(TAG, "DiPlus returned null data (consecutiveNulls=$consecutiveNullCount)")
+                        if (consecutiveNullCount == NULL_WARNING_THRESHOLD) {
+                            Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls)")
+                        }
                     }
                 } catch (e: Exception) {
+                    Log.e(TAG, "Polling error: ${e.message}", e)
                     // Continue polling on error
                 }
                 delay(POLL_INTERVAL_MS)
@@ -117,25 +157,29 @@ class TrackingService : Service(), LocationListener {
     private fun startLocationUpdates() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
             != PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            Log.w(TAG, "ACCESS_FINE_LOCATION not granted, skipping location updates")
+            return
+        }
 
-        val locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
         try {
-            locationManager.requestLocationUpdates(
+            locationManager?.requestLocationUpdates(
                 LocationManager.GPS_PROVIDER,
                 5000L, // 5 sec
                 5f,    // 5 meters
                 this
             )
             // Also try network for initial fix
-            locationManager.requestLocationUpdates(
+            locationManager?.requestLocationUpdates(
                 LocationManager.NETWORK_PROVIDER,
                 10000L,
                 50f,
                 this
             )
+            Log.d(TAG, "Location updates started (GPS + Network)")
         } catch (e: Exception) {
-            // GPS provider may not be available
+            Log.e(TAG, "Failed to start location updates: ${e.message}", e)
         }
     }
 

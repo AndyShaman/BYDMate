@@ -1,6 +1,7 @@
 package com.bydmate.app.domain.tracker
 
 import android.location.Location
+import android.util.Log
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.remote.DiParsData
@@ -9,6 +10,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.calculator.ConsumptionCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import java.util.Collections
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -28,10 +30,11 @@ class ChargeTracker @Inject constructor(
     private var socStart: Int? = null
     private var maxPowerKw: Double = 0.0
     private var startLocation: Location? = null
-    private val pendingPoints = mutableListOf<ChargePointEntity>()
+    private val pendingPoints = Collections.synchronizedList(mutableListOf<ChargePointEntity>())
     private var lastPointTs: Long = 0
 
     companion object {
+        private const val TAG = "ChargeTracker"
         private const val POINT_INTERVAL_MS = 30_000L // 30 seconds
         private const val DC_POWER_THRESHOLD = 50.0   // kW
     }
@@ -42,6 +45,8 @@ class ChargeTracker @Inject constructor(
         val now = System.currentTimeMillis()
 
         val isCharging = chargeGun == 2 && power < -1.0
+
+        Log.d(TAG, "onData: state=${_state.value}, chargeGun=$chargeGun, power=$power, soc=${data.soc}, isCharging=$isCharging")
 
         when (_state.value) {
             ChargeState.IDLE -> {
@@ -86,7 +91,9 @@ class ChargeTracker @Inject constructor(
         chargeStartTs = now
         maxPowerKw = kotlin.math.abs(data.power ?: 0.0)
         startLocation = location
-        pendingPoints.clear()
+        synchronized(pendingPoints) {
+            pendingPoints.clear()
+        }
         lastPointTs = now
 
         val chargeId = chargeRepository.insertCharge(
@@ -100,6 +107,8 @@ class ChargeTracker @Inject constructor(
         currentChargeId = chargeId
         _state.value = ChargeState.CHARGING
 
+        Log.d(TAG, "Charge started: id=$chargeId, soc=${data.soc}, power=${data.power}, type=pending")
+
         // Record first point
         pendingPoints.add(
             ChargePointEntity(
@@ -112,8 +121,13 @@ class ChargeTracker @Inject constructor(
     }
 
     private suspend fun endCharging(data: DiParsData, now: Long) {
+        val chargeId = currentChargeId
+        if (chargeId == null) {
+            Log.d(TAG, "endCharging called but currentChargeId is null, ignoring")
+            return
+        }
+
         // Record final point
-        val chargeId = currentChargeId ?: return
         pendingPoints.add(
             ChargePointEntity(
                 chargeId = chargeId,
@@ -163,19 +177,27 @@ class ChargeTracker @Inject constructor(
             )
         )
 
+        Log.d(TAG, "Charge ended: id=$chargeId, socStart=$socStart, socEnd=$socEnd, kwh=$kwh, maxPower=$maxPowerKw kW, type=$chargeType")
+
         // Reset
         _state.value = ChargeState.IDLE
         currentChargeId = null
         socStart = null
         maxPowerKw = 0.0
         startLocation = null
-        pendingPoints.clear()
+        synchronized(pendingPoints) {
+            pendingPoints.clear()
+        }
     }
 
     private suspend fun flushPoints() {
-        if (pendingPoints.isNotEmpty()) {
-            chargeRepository.insertChargePoints(ArrayList(pendingPoints))
+        val snapshot: List<ChargePointEntity>
+        synchronized(pendingPoints) {
+            if (pendingPoints.isEmpty()) return
+            snapshot = ArrayList(pendingPoints)
             pendingPoints.clear()
         }
+        Log.d(TAG, "Flushing ${snapshot.size} charge points")
+        chargeRepository.insertChargePoints(snapshot)
     }
 }

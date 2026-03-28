@@ -211,14 +211,14 @@ class SettingsViewModel @Inject constructor(
     fun importBydHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(importStatus = "Импорт...") }
-            try {
-                val result = historyImporter.forceImport()
+            val result = historyImporter.forceImport()
+            if (result.isError) {
+                _uiState.update {
+                    it.copy(importStatus = "Ошибка: ${result.error}")
+                }
+            } else {
                 _uiState.update {
                     it.copy(importStatus = "Импортировано ${result.count} поездок из BYD")
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(importStatus = "Ошибка: ${e.message}")
                 }
             }
         }
