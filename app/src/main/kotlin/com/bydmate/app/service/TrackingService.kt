@@ -96,16 +96,20 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         pollingJob?.cancel()
 
-        // Wait for pending trip/charge writes to finish before cancelling scope
+        // Force-end active trip/charge sessions before shutdown
         try {
             runBlocking(Dispatchers.IO) {
-                withTimeout(3000L) {
+                withTimeout(5000L) {
+                    val lastData = _lastData.value
+                    val lastLoc = lastLocation
+                    tripTracker.forceEnd(lastData, lastLoc)
+                    chargeTracker.forceEnd(lastData)
                     // Let any in-flight coroutines in serviceScope finish
                     serviceScope.coroutineContext[Job]?.children?.forEach { it.join() }
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Timeout waiting for pending writes: ${e.message}")
+            Log.w(TAG, "Timeout during graceful shutdown: ${e.message}")
         }
 
         serviceScope.cancel()

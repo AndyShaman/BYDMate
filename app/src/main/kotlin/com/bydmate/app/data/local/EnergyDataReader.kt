@@ -152,6 +152,32 @@ class EnergyDataReader @Inject constructor(
             dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
         )
         return db.use { database ->
+            // Log all tables in the database for diagnostics
+            val tablesCursor = database.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table'", null
+            )
+            val tables = mutableListOf<String>()
+            tablesCursor.use { tc ->
+                while (tc.moveToNext()) tables.add(tc.getString(0))
+            }
+            Log.d(TAG, "Tables in DB: $tables")
+
+            if (!tables.contains("EnergyConsumption")) {
+                Log.w(TAG, "EnergyConsumption table NOT FOUND in DB! Available tables: $tables")
+                return@use emptyList()
+            }
+
+            // Count total rows vs non-deleted rows
+            val totalCount = database.rawQuery(
+                "SELECT COUNT(*) FROM EnergyConsumption", null
+            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+            val activeCount = database.rawQuery(
+                "SELECT COUNT(*) FROM EnergyConsumption WHERE is_deleted = 0", null
+            ).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
+
+            Log.d(TAG, "EnergyConsumption: total=$totalCount, active(is_deleted=0)=$activeCount")
+
             val cursor = database.rawQuery(
                 """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity
                    FROM EnergyConsumption
@@ -172,16 +198,21 @@ class EnergyDataReader @Inject constructor(
                 val colElectricity = c.getColumnIndexOrThrow("electricity")
 
                 while (c.moveToNext()) {
-                    results.add(
-                        BydTripRecord(
-                            id = c.getLong(colId),
-                            startTimestamp = c.getLong(colStart),
-                            endTimestamp = c.getLong(colEnd),
-                            duration = c.getLong(colDuration),
-                            tripKm = c.getDouble(colTrip),
-                            electricityKwh = c.getDouble(colElectricity)
-                        )
+                    val record = BydTripRecord(
+                        id = c.getLong(colId),
+                        startTimestamp = c.getLong(colStart),
+                        endTimestamp = c.getLong(colEnd),
+                        duration = c.getLong(colDuration),
+                        tripKm = c.getDouble(colTrip),
+                        electricityKwh = c.getDouble(colElectricity)
                     )
+                    results.add(record)
+                    // Log first 3 records for diagnostics
+                    if (results.size <= 3) {
+                        Log.d(TAG, "Sample record: id=${record.id}, " +
+                            "start=${record.startTimestamp}, end=${record.endTimestamp}, " +
+                            "dur=${record.duration}, km=${record.tripKm}, kwh=${record.electricityKwh}")
+                    }
                 }
             }
             Log.d(TAG, "Read ${results.size} trips from EnergyConsumption")

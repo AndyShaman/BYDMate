@@ -48,6 +48,11 @@ class MainActivity : ComponentActivity() {
         ) {
             permissions.add(Manifest.permission.READ_EXTERNAL_STORAGE)
         }
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissions.add(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+        }
 
         if (permissions.isNotEmpty()) {
             Log.d(TAG, "Requesting permissions: $permissions")

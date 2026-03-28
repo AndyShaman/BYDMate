@@ -68,10 +68,14 @@ class HistoryImporter @Inject constructor(
 
         if (bydTrips.isEmpty()) {
             settingsRepository.setString(KEY_IMPORT_DONE, "true")
-            return ImportResult(count = 0, skipped = false, error = null)
+            return ImportResult(
+                count = 0, skipped = false, error = null,
+                details = "В базе BYD 0 поездок"
+            )
         }
 
         // Load existing trips to skip duplicates (by startTs)
+        // BYD timestamps are in seconds, our DB stores milliseconds
         val existingTrips = tripRepository.getAllTrips().first()
         val existingStartTsSet = existingTrips.map { it.startTs }.toHashSet()
         Log.d(TAG, "Existing trips in DB: ${existingTrips.size}, " +
@@ -87,8 +91,12 @@ class HistoryImporter @Inject constructor(
                 continue
             }
 
-            // Skip duplicates by startTs
-            if (byd.startTimestamp in existingStartTsSet) {
+            // BYD stores timestamps in epoch seconds, convert to milliseconds
+            val startTsMs = byd.startTimestamp * 1000L
+            val endTsMs = byd.endTimestamp * 1000L
+
+            // Skip duplicates by startTs (in milliseconds)
+            if (startTsMs in existingStartTsSet) {
                 skippedDuplicate++
                 continue
             }
@@ -103,8 +111,8 @@ class HistoryImporter @Inject constructor(
 
             tripRepository.insertTrip(
                 TripEntity(
-                    startTs = byd.startTimestamp,
-                    endTs = byd.endTimestamp,
+                    startTs = startTsMs,
+                    endTs = endTsMs,
                     distanceKm = byd.tripKm,
                     kwhConsumed = byd.electricityKwh,
                     kwhPer100km = kwhPer100km,
@@ -112,7 +120,7 @@ class HistoryImporter @Inject constructor(
                     // No SOC or temp data in BYD's history DB
                 )
             )
-            existingStartTsSet.add(byd.startTimestamp)
+            existingStartTsSet.add(startTsMs)
             imported++
         }
 
@@ -121,14 +129,22 @@ class HistoryImporter @Inject constructor(
             "$skippedDuplicate skipped (duplicate)")
 
         settingsRepository.setString(KEY_IMPORT_DONE, "true")
-        return ImportResult(count = imported, skipped = false, error = null)
+        val details = "Найдено ${bydTrips.size} в БД BYD, " +
+            "импортировано $imported, " +
+            "пропущено: $skippedShort коротких, $skippedDuplicate дубликатов"
+        return ImportResult(
+            count = imported, skipped = false, error = null,
+            details = details
+        )
     }
 
     data class ImportResult(
         val count: Int,
         val skipped: Boolean,
         /** Non-null if import failed; contains a human-readable error message. */
-        val error: String? = null
+        val error: String? = null,
+        /** Detailed status for user display. */
+        val details: String? = null
     ) {
         val isError: Boolean get() = error != null
     }

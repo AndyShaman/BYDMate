@@ -217,9 +217,9 @@ class SettingsViewModel @Inject constructor(
                     it.copy(importStatus = "Ошибка: ${result.error}")
                 }
             } else {
-                _uiState.update {
-                    it.copy(importStatus = "Импортировано ${result.count} поездок из BYD")
-                }
+                val status = result.details
+                    ?: "Импортировано ${result.count} поездок из BYD"
+                _uiState.update { it.copy(importStatus = status) }
             }
         }
     }

@@ -194,6 +194,21 @@ class TripTracker @Inject constructor(
         }
     }
 
+    /**
+     * Force-end the current trip on service shutdown.
+     * Uses the last available data to finalize the trip.
+     */
+    suspend fun forceEnd(lastData: DiParsData?, lastLocation: Location?) {
+        if (_state.value != TripState.DRIVING || currentTripId == null) return
+        Log.w(TAG, "forceEnd: ending active trip id=$currentTripId on service shutdown")
+        val data = lastData ?: DiParsData(
+            soc = null, speed = 0, mileage = null, power = null,
+            chargeGunState = null, maxBatTemp = null, avgBatTemp = null,
+            minBatTemp = null, chargingStatus = null
+        )
+        endTrip(data, lastLocation, System.currentTimeMillis())
+    }
+
     private suspend fun flushPoints() {
         val snapshot: List<TripPointEntity>
         synchronized(pendingPoints) {

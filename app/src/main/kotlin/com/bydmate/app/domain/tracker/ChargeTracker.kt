@@ -190,6 +190,20 @@ class ChargeTracker @Inject constructor(
         }
     }
 
+    /**
+     * Force-end the current charge session on service shutdown.
+     */
+    suspend fun forceEnd(lastData: DiParsData?) {
+        if (_state.value != ChargeState.CHARGING || currentChargeId == null) return
+        Log.w(TAG, "forceEnd: ending active charge id=$currentChargeId on service shutdown")
+        val data = lastData ?: DiParsData(
+            soc = null, speed = 0, mileage = null, power = null,
+            chargeGunState = null, maxBatTemp = null, avgBatTemp = null,
+            minBatTemp = null, chargingStatus = null
+        )
+        endCharging(data, System.currentTimeMillis())
+    }
+
     private suspend fun flushPoints() {
         val snapshot: List<ChargePointEntity>
         synchronized(pendingPoints) {
