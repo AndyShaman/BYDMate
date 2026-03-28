@@ -3,7 +3,6 @@ package com.bydmate.app.data.remote
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -12,14 +11,14 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 data class DiParsData(
-    val soc: Int?,           // Battery SOC %
-    val speed: Int?,         // km/h
-    val mileage: Double?,    // km (raw value / 10)
-    val power: Double?,      // kW (negative = charging)
-    val chargeGunState: Int?, // 2 = connected
-    val maxBatTemp: Int?,    // C
-    val avgBatTemp: Int?,    // C
-    val minBatTemp: Int?,    // C
+    val soc: Int?,
+    val speed: Int?,
+    val mileage: Double?,
+    val power: Double?,
+    val chargeGunState: Int?,
+    val maxBatTemp: Int?,
+    val avgBatTemp: Int?,
+    val minBatTemp: Int?,
     val chargingStatus: Int?
 )
 
@@ -29,7 +28,6 @@ class DiParsClient @Inject constructor(
 ) {
     companion object {
         private const val TAG = "DiParsClient"
-        // BydConnect uses 127.0.0.1, not localhost — localhost may not resolve on DiLink
         private const val BASE_URL = "http://127.0.0.1:8988/api/getDiPars"
         private const val TEMPLATE =
             "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}|Power:{发动机功率}" +
@@ -38,23 +36,14 @@ class DiParsClient @Inject constructor(
             "|ChargingStatus:{充电状态}"
     }
 
-    @Volatile
-    private var firstCall = true
-
     suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
         try {
-            // Use HttpUrl.Builder to properly encode Chinese chars, {}, | in query
             val httpUrl = BASE_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("text", TEMPLATE)
                 .build()
-            if (firstCall) {
-                Log.d(TAG, "First DiPars request URL: $httpUrl")
-                firstCall = false
-            }
             val request = Request.Builder().url(httpUrl).build()
             val response = httpClient.newCall(request).execute()
             val body = response.body?.string()
-            Log.d(TAG, "Response code=${response.code}, bodyLength=${body?.length ?: 0}")
 
             if (body == null) {
                 Log.w(TAG, "Response body is null")
@@ -63,19 +52,13 @@ class DiParsClient @Inject constructor(
 
             val json = JSONObject(body)
             if (!json.optBoolean("success", false)) {
-                Log.w(TAG, "DiPars response success=false, body=$body")
+                Log.w(TAG, "success=false: $body")
                 return@withContext null
             }
 
-            val valStr = json.optString("val", "")
-            val data = parse(valStr)
-            Log.d(TAG, "Parsed: soc=${data.soc} speed=${data.speed} mileage=${data.mileage} " +
-                "power=${data.power} chargeGun=${data.chargeGunState} " +
-                "batTemp=${data.minBatTemp}/${data.avgBatTemp}/${data.maxBatTemp} " +
-                "chargingStatus=${data.chargingStatus}")
-            data
+            parse(json.optString("val", ""))
         } catch (e: Exception) {
-            Log.e(TAG, "DiPars fetch failed: ${e.message}", e)
+            Log.e(TAG, "fetch failed: ${e.message}")
             null
         }
     }

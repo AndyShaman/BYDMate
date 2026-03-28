@@ -153,7 +153,6 @@ class TrackingService : Service(), LocationListener {
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++
-                        Log.d(TAG, "DiPlus returned null data (consecutiveNulls=$consecutiveNullCount)")
                         if (consecutiveNullCount == NULL_WARNING_THRESHOLD) {
                             Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls)")
                         }

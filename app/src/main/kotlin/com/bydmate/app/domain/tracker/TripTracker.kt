@@ -47,8 +47,6 @@ class TripTracker @Inject constructor(
         val speed = data.speed ?: 0
         val now = System.currentTimeMillis()
 
-        Log.d(TAG, "onData: state=${_state.value}, speed=$speed, soc=${data.soc}, mileage=${data.mileage}")
-
         when (_state.value) {
             TripState.IDLE -> {
                 if (speed > SPEED_THRESHOLD) {
@@ -216,7 +214,6 @@ class TripTracker @Inject constructor(
             snapshot = ArrayList(pendingPoints)
             pendingPoints.clear()
         }
-        Log.d(TAG, "Flushing ${snapshot.size} trip points")
         tripRepository.insertTripPoints(snapshot)
     }
 }
