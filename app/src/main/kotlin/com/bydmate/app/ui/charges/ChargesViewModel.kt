@@ -6,6 +6,7 @@ import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -26,6 +27,7 @@ data class ChargesUiState(
     val sessionCount: Int = 0,
     val totalKwh: Double = 0.0,
     val totalCost: Double = 0.0,
+    val currencySymbol: String = "Br",
     val typeFilter: String? = null,
     val expandedChargeId: Long? = null,
     val expandedChargePoints: List<ChargePointEntity> = emptyList()
@@ -37,7 +39,8 @@ enum class Period { WEEK, MONTH }
 @HiltViewModel
 class ChargesViewModel @Inject constructor(
     private val chargeRepository: ChargeRepository,
-    private val chargePointDao: ChargePointDao
+    private val chargePointDao: ChargePointDao,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChargesUiState())
@@ -48,6 +51,14 @@ class ChargesViewModel @Inject constructor(
 
     init {
         loadCharges()
+        loadCurrency()
+    }
+
+    private fun loadCurrency() {
+        viewModelScope.launch {
+            val symbol = settingsRepository.getCurrencySymbol()
+            _uiState.update { it.copy(currencySymbol = symbol) }
+        }
     }
 
     /** Switch between WEEK and MONTH period. */

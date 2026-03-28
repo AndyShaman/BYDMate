@@ -84,7 +84,7 @@ speed = 0 for 3 min        -->  trip STOP  (record SOC, GPS, timestamp)
 real_kwh = (soc_start - soc_end) / 100 * battery_capacity_kwh
 real_kwh_per_100km = real_kwh / distance_km * 100
 ```
-- `battery_capacity_kwh` configured in settings (Leopard 3: 71.8 kWh usable)
+- `battery_capacity_kwh` configured in settings (Leopard 3: 72.9 kWh usable)
 - SOC from getDiPars ID 33 (integer %, accuracy ~0.72 kWh per 1%)
 - Distance from odometer delta (getDiPars ID 3)
 

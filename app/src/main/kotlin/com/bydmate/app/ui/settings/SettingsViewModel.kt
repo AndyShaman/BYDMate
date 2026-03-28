@@ -29,6 +29,8 @@ data class SettingsUiState(
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
     val units: String = SettingsRepository.DEFAULT_UNITS,
+    val currency: String = SettingsRepository.DEFAULT_CURRENCY,
+    val currencySymbol: String = "Br",
     val exportStatus: String? = null
 )
 
@@ -65,13 +67,16 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.KEY_UNITS,
                 SettingsRepository.DEFAULT_UNITS
             )
+            val currency = settingsRepository.getCurrency()
 
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
-                    units = units
+                    units = units,
+                    currency = currency.code,
+                    currencySymbol = currency.symbol
                 )
             }
         }
@@ -106,6 +111,16 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(units = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_UNITS, value)
+        }
+    }
+
+    /** Save currency preference. */
+    fun saveCurrency(code: String) {
+        val currency = SettingsRepository.CURRENCIES.find { it.code == code }
+            ?: SettingsRepository.CURRENCIES.first()
+        _uiState.update { it.copy(currency = currency.code, currencySymbol = currency.symbol) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_CURRENCY, code)
         }
     }
 
