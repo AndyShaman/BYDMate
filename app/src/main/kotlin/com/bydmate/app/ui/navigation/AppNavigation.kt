@@ -1,6 +1,12 @@
 package com.bydmate.app.ui.navigation
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Map
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -10,8 +16,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -22,14 +27,15 @@ import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.map.MapScreen
 import com.bydmate.app.ui.settings.SettingsScreen
+import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 
-enum class Screen(val route: String, val label: String, val icon: Int) {
-    Dashboard("dashboard", "Home", android.R.drawable.ic_menu_today),
-    Trips("trips", "Trips", android.R.drawable.ic_menu_directions),
-    Charges("charges", "Charges", android.R.drawable.ic_lock_power_off),
-    Map("map", "Map", android.R.drawable.ic_menu_mapmode),
-    Settings("settings", "Settings", android.R.drawable.ic_menu_preferences)
+enum class Screen(val route: String, val label: String, val icon: ImageVector) {
+    Dashboard("dashboard", "Home", Icons.Outlined.Home),
+    Trips("trips", "Trips", Icons.Outlined.DirectionsCar),
+    Charges("charges", "Charges", Icons.Outlined.BatteryChargingFull),
+    Map("map", "Map", Icons.Outlined.Map),
+    Settings("settings", "Settings", Icons.Outlined.Settings)
 }
 
 @Composable
@@ -39,16 +45,16 @@ fun AppNavigation() {
     val currentDestination = navBackStackEntry?.destination
 
     Scaffold(
-        containerColor = Color(0xFF0D0D0D),
+        containerColor = NavyDark,
         bottomBar = {
             NavigationBar(
-                containerColor = Color(0xFF1A1A1A)
+                containerColor = NavBarBackground
             ) {
                 Screen.entries.forEach { screen ->
                     NavigationBarItem(
                         icon = {
                             Icon(
-                                painter = painterResource(screen.icon),
+                                imageVector = screen.icon,
                                 contentDescription = screen.label
                             )
                         },
@@ -64,11 +70,11 @@ fun AppNavigation() {
                             }
                         },
                         colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = Color(0xFF4CAF50),
-                            selectedTextColor = Color(0xFF4CAF50),
-                            unselectedIconColor = Color(0xFF9E9E9E),
-                            unselectedTextColor = Color(0xFF9E9E9E),
-                            indicatorColor = Color(0xFF2C2C2C)
+                            selectedIconColor = AccentGreen,
+                            selectedTextColor = AccentGreen,
+                            unselectedIconColor = TextMuted,
+                            unselectedTextColor = TextMuted,
+                            indicatorColor = NavIndicator
                         )
                     )
                 }

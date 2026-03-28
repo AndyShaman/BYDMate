@@ -39,6 +39,23 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // TripEntity: battery temp + cost
+            db.execSQL("ALTER TABLE trips ADD COLUMN bat_temp_avg REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN bat_temp_max REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN bat_temp_min REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN cost REAL")
+            // ChargeEntity: battery temp + avg power
+            db.execSQL("ALTER TABLE charges ADD COLUMN bat_temp_avg REAL")
+            db.execSQL("ALTER TABLE charges ADD COLUMN bat_temp_max REAL")
+            db.execSQL("ALTER TABLE charges ADD COLUMN bat_temp_min REAL")
+            db.execSQL("ALTER TABLE charges ADD COLUMN avg_power_kw REAL")
+            // ChargePointEntity: battery temp per sample
+            db.execSQL("ALTER TABLE charge_points ADD COLUMN bat_temp INTEGER")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -47,7 +64,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
             .fallbackToDestructiveMigration()
             .build()
     }

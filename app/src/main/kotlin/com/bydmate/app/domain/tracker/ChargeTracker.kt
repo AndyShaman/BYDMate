@@ -32,6 +32,9 @@ class ChargeTracker @Inject constructor(
     private var startLocation: Location? = null
     private val pendingPoints = Collections.synchronizedList(mutableListOf<ChargePointEntity>())
     private var lastPointTs: Long = 0
+    private val batTempSamples = mutableListOf<Int>()
+    private var totalPowerKw: Double = 0.0
+    private var powerSampleCount: Int = 0
 
     companion object {
         private const val TAG = "ChargeTracker"
@@ -64,15 +67,21 @@ class ChargeTracker @Inject constructor(
                                 chargeId = chargeId,
                                 timestamp = now,
                                 powerKw = power,
-                                soc = data.soc
+                                soc = data.soc,
+                                batTemp = data.avgBatTemp
                             )
                         )
                         lastPointTs = now
+
+                        // Accumulate battery temp
+                        data.avgBatTemp?.let { batTempSamples.add(it) }
 
                         val absPower = kotlin.math.abs(power)
                         if (absPower > maxPowerKw) {
                             maxPowerKw = absPower
                         }
+                        totalPowerKw += absPower
+                        powerSampleCount++
 
                         // Flush in batches
                         if (pendingPoints.size >= 20) {
@@ -92,6 +101,10 @@ class ChargeTracker @Inject constructor(
         synchronized(pendingPoints) {
             pendingPoints.clear()
         }
+        batTempSamples.clear()
+        totalPowerKw = 0.0
+        powerSampleCount = 0
+        data.avgBatTemp?.let { batTempSamples.add(it) }
         lastPointTs = now
 
         val chargeId = chargeRepository.insertCharge(
@@ -113,7 +126,8 @@ class ChargeTracker @Inject constructor(
                 chargeId = chargeId,
                 timestamp = now,
                 powerKw = data.power,
-                soc = data.soc
+                soc = data.soc,
+                batTemp = data.avgBatTemp
             )
         )
     }
@@ -131,7 +145,8 @@ class ChargeTracker @Inject constructor(
                 chargeId = chargeId,
                 timestamp = now,
                 powerKw = data.power,
-                soc = data.soc
+                soc = data.soc,
+                batTemp = data.avgBatTemp
             )
         )
         flushPoints()
@@ -158,6 +173,12 @@ class ChargeTracker @Inject constructor(
         val kwh = if (kwhByPower > 0) kwhByPower else (kwhBySoc ?: 0.0)
         val cost = kwh * tariff
 
+        // Battery temperature stats
+        val batAvg = if (batTempSamples.isNotEmpty()) batTempSamples.average() else null
+        val batMax = batTempSamples.maxOrNull()?.toDouble()
+        val batMin = batTempSamples.minOrNull()?.toDouble()
+        val avgPower = if (powerSampleCount > 0) totalPowerKw / powerSampleCount else null
+
         chargeRepository.updateCharge(
             ChargeEntity(
                 id = chargeId,
@@ -171,11 +192,15 @@ class ChargeTracker @Inject constructor(
                 type = chargeType,
                 cost = cost,
                 lat = startLocation?.latitude,
-                lon = startLocation?.longitude
+                lon = startLocation?.longitude,
+                batTempAvg = batAvg,
+                batTempMax = batMax,
+                batTempMin = batMin,
+                avgPowerKw = avgPower
             )
         )
 
-        Log.d(TAG, "Charge ended: id=$chargeId, socStart=$socStart, socEnd=$socEnd, kwh=$kwh, maxPower=$maxPowerKw kW, type=$chargeType")
+        Log.d(TAG, "Charge ended: id=$chargeId, socStart=$socStart, socEnd=$socEnd, kwh=$kwh, maxPower=$maxPowerKw kW, type=$chargeType, batTemp=$batAvg")
 
         // Reset
         _state.value = ChargeState.IDLE
@@ -183,6 +208,9 @@ class ChargeTracker @Inject constructor(
         socStart = null
         maxPowerKw = 0.0
         startLocation = null
+        batTempSamples.clear()
+        totalPowerKw = 0.0
+        powerSampleCount = 0
         synchronized(pendingPoints) {
             pendingPoints.clear()
         }

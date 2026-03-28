@@ -5,7 +5,6 @@ import android.util.Log
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.DiParsData
-import com.bydmate.app.data.remote.WeatherClient
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.calculator.ConsumptionCalculator
@@ -21,7 +20,6 @@ enum class TripState { IDLE, DRIVING }
 class TripTracker @Inject constructor(
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
-    private val weatherClient: WeatherClient,
     private val calculator: ConsumptionCalculator
 ) {
     private val _state = MutableStateFlow(TripState.IDLE)
@@ -34,6 +32,7 @@ class TripTracker @Inject constructor(
     private var speedAboveThresholdSince: Long? = null
     private var speedZeroSince: Long? = null
     private val pendingPoints = Collections.synchronizedList(mutableListOf<TripPointEntity>())
+    private val batTempSamples = mutableListOf<Int>()
 
     companion object {
         private const val TAG = "TripTracker"
@@ -61,6 +60,9 @@ class TripTracker @Inject constructor(
                 }
             }
             TripState.DRIVING -> {
+                // Accumulate battery temperature samples
+                data.avgBatTemp?.let { batTempSamples.add(it) }
+
                 // Record point
                 val tripId = currentTripId
                 if (tripId != null && location != null) {
@@ -100,6 +102,8 @@ class TripTracker @Inject constructor(
         synchronized(pendingPoints) {
             pendingPoints.clear()
         }
+        batTempSamples.clear()
+        data.avgBatTemp?.let { batTempSamples.add(it) }
 
         val tripId = tripRepository.insertTrip(
             TripEntity(
@@ -158,10 +162,14 @@ class TripTracker @Inject constructor(
             distanceKm / (durationMs / 3_600_000.0)
         } else null
 
-        // Fetch weather at trip end location
-        val temp = if (location != null) {
-            weatherClient.getTemperature(location.latitude, location.longitude)?.toDouble()
-        } else null
+        // Battery temperature from DiPlus sensors
+        val batAvg = if (batTempSamples.isNotEmpty()) batTempSamples.average() else null
+        val batMax = batTempSamples.maxOrNull()?.toDouble()
+        val batMin = batTempSamples.minOrNull()?.toDouble()
+
+        // Trip cost
+        val tripCostTariff = settingsRepository.getTripCostTariff()
+        val tripCost = kwhConsumed?.let { it * tripCostTariff }
 
         tripRepository.updateTrip(
             TripEntity(
@@ -173,12 +181,16 @@ class TripTracker @Inject constructor(
                 kwhPer100km = kwhPer100km,
                 socStart = socStart,
                 socEnd = socEnd,
-                tempAvgC = temp,
-                avgSpeedKmh = avgSpeed
+                tempAvgC = batAvg,
+                avgSpeedKmh = avgSpeed,
+                batTempAvg = batAvg,
+                batTempMax = batMax,
+                batTempMin = batMin,
+                cost = tripCost
             )
         )
 
-        Log.d(TAG, "Trip ended: id=$tripId, distance=$distanceKm km, kwh=$kwhConsumed")
+        Log.d(TAG, "Trip ended: id=$tripId, distance=$distanceKm km, kwh=$kwhConsumed, batTemp=$batAvg")
 
         // Reset
         _state.value = TripState.IDLE
@@ -187,6 +199,7 @@ class TripTracker @Inject constructor(
         mileageStart = null
         speedZeroSince = null
         speedAboveThresholdSince = null
+        batTempSamples.clear()
         synchronized(pendingPoints) {
             pendingPoints.clear()
         }

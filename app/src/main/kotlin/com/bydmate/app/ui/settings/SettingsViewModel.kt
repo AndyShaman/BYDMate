@@ -48,7 +48,8 @@ data class SettingsUiState(
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
-    val diagnosticLog: String? = null
+    val diagnosticLog: String? = null,
+    val tripCostTariff: String = "home"
 )
 
 @HiltViewModel
@@ -97,6 +98,7 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.DEFAULT_UNITS
             )
             val currency = settingsRepository.getCurrency()
+            val tripCostTariff = settingsRepository.getTripCostTariffKey()
 
             _uiState.update {
                 it.copy(
@@ -105,7 +107,8 @@ class SettingsViewModel @Inject constructor(
                     dcTariff = dcTariff,
                     units = units,
                     currency = currency.code,
-                    currencySymbol = currency.symbol
+                    currencySymbol = currency.symbol,
+                    tripCostTariff = tripCostTariff
                 )
             }
         }
@@ -143,6 +146,14 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** Save trip cost tariff preference. */
+    fun saveTripCostTariff(value: String) {
+        _uiState.update { it.copy(tripCostTariff = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_TRIP_COST_TARIFF, value)
+        }
+    }
+
     /** Save currency preference. */
     fun saveCurrency(code: String) {
         val currency = SettingsRepository.CURRENCIES.find { it.code == code }
@@ -175,13 +186,15 @@ class SettingsViewModel @Inject constructor(
                 val trips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
                 val tripsFile = File(downloadsDir, "bydmate_trips_$timestamp.csv")
                 FileWriter(tripsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh\n")
+                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost\n")
                     for (trip in trips) {
                         writer.append("${trip.id},${trip.startTs},${trip.endTs ?: ""},")
                         writer.append("${trip.distanceKm ?: ""},${trip.kwhConsumed ?: ""},")
                         writer.append("${trip.kwhPer100km ?: ""},${trip.socStart ?: ""},")
                         writer.append("${trip.socEnd ?: ""},${trip.tempAvgC ?: ""},")
-                        writer.append("${trip.avgSpeedKmh ?: ""}\n")
+                        writer.append("${trip.avgSpeedKmh ?: ""},${trip.batTempAvg ?: ""},")
+                        writer.append("${trip.batTempMax ?: ""},${trip.batTempMin ?: ""},")
+                        writer.append("${trip.cost ?: ""}\n")
                     }
                 }
 
@@ -189,14 +202,16 @@ class SettingsViewModel @Inject constructor(
                 val charges = chargeRepository.getAllCharges().firstOrNull() ?: emptyList()
                 val chargesFile = File(downloadsDir, "bydmate_charges_$timestamp.csv")
                 FileWriter(chargesFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon\n")
+                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw\n")
                     for (charge in charges) {
                         writer.append("${charge.id},${charge.startTs},${charge.endTs ?: ""},")
                         writer.append("${charge.socStart ?: ""},${charge.socEnd ?: ""},")
                         writer.append("${charge.kwhCharged ?: ""},${charge.kwhChargedSoc ?: ""},")
                         writer.append("${charge.maxPowerKw ?: ""},${charge.type ?: ""},")
                         writer.append("${charge.cost ?: ""},${charge.lat ?: ""},")
-                        writer.append("${charge.lon ?: ""}\n")
+                        writer.append("${charge.lon ?: ""},${charge.batTempAvg ?: ""},")
+                        writer.append("${charge.batTempMax ?: ""},${charge.batTempMin ?: ""},")
+                        writer.append("${charge.avgPowerKw ?: ""}\n")
                     }
                 }
 

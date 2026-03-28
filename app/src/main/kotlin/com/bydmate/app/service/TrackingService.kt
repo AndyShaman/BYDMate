@@ -230,7 +230,10 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun updateNotification(data: DiParsData) {
-        val text = "SOC: ${data.soc ?: "?"}% | ${data.speed ?: 0} km/h"
+        val text = buildString {
+            append("SOC: ${data.soc ?: "?"}% | ${data.speed ?: 0} km/h")
+            data.avgBatTemp?.let { append(" | bat ${it}°C") }
+        }
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(text))
     }

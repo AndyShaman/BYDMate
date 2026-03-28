@@ -23,5 +23,6 @@ data class ChargePointEntity(
     @ColumnInfo(name = "charge_id") val chargeId: Long,
     val timestamp: Long,
     @ColumnInfo(name = "power_kw") val powerKw: Double? = null,
-    val soc: Int? = null
+    val soc: Int? = null,
+    @ColumnInfo(name = "bat_temp") val batTemp: Int? = null
 )

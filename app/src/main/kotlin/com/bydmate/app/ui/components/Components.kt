@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -21,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -30,54 +32,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
 
-// -- Color constants matching design spec --
-
-private val CardBackground = Color(0xFF1E1E1E)
-private val CardBackgroundAlt = Color(0xFF2C2C2C)
-private val TextSecondary = Color(0xFF9E9E9E)
-private val SocGreen = Color(0xFF4CAF50)
-private val SocYellow = Color(0xFFFFC107)
-private val SocRed = Color(0xFFF44336)
-private val ConsumptionGreen = Color(0xFF4CAF50)
-private val ConsumptionYellow = Color(0xFFFFC107)
-private val ConsumptionRed = Color(0xFFF44336)
-private val ArcTrackColor = Color(0xFF2C2C2C)
-
 // -- Helper functions --
 
-/** Returns color based on SOC level: green >50%, yellow 20-50%, red <20% */
-private fun socColor(soc: Int): Color = when {
+fun socColor(soc: Int): Color = when {
     soc > 50 -> SocGreen
     soc >= 20 -> SocYellow
     else -> SocRed
 }
 
-/** Returns color based on consumption: green <15, yellow 15-22, red >22 kWh/100km */
-private fun consumptionColor(kwhPer100km: Double): Color = when {
-    kwhPer100km < 15.0 -> ConsumptionGreen
-    kwhPer100km <= 22.0 -> ConsumptionYellow
-    else -> ConsumptionRed
+fun consumptionColor(kwhPer100km: Double): Color = when {
+    kwhPer100km < 15.0 -> ConsumptionGood
+    kwhPer100km <= 22.0 -> ConsumptionMid
+    else -> ConsumptionBad
 }
 
-/** Formats a timestamp to HH:mm */
-private fun formatTime(ts: Long): String {
+fun formatTime(ts: Long): String {
     val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
     return sdf.format(Date(ts))
 }
 
-/** Formats a timestamp to dd.MM HH:mm */
-private fun formatDateTime(ts: Long): String {
+fun formatDateTime(ts: Long): String {
     val sdf = SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
     return sdf.format(Date(ts))
 }
 
-/** Formats duration between two timestamps as "Xч Yм" */
-private fun formatDuration(startTs: Long, endTs: Long): String {
+fun formatDuration(startTs: Long, endTs: Long): String {
     val durationMs = endTs - startTs
     val hours = TimeUnit.MILLISECONDS.toHours(durationMs)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
@@ -85,18 +70,9 @@ private fun formatDuration(startTs: Long, endTs: Long): String {
 }
 
 // ============================================================================
-// SocGauge - Circular arc gauge showing 0-100% SOC
+// SocGauge - Premium circular arc gauge with gradient and glow
 // ============================================================================
 
-/**
- * Circular arc gauge displaying State of Charge (0-100%).
- * Draws a background track arc and a colored foreground arc proportional to SOC.
- * Color-coded: green >50%, yellow 20-50%, red <20%.
- * SOC percentage number displayed in center.
- *
- * @param soc State of charge 0-100
- * @param modifier Modifier for sizing and layout
- */
 @Composable
 fun SocGauge(
     soc: Int,
@@ -104,11 +80,10 @@ fun SocGauge(
 ) {
     val clampedSoc = soc.coerceIn(0, 100)
     val color = socColor(clampedSoc)
-    // Arc spans 240 degrees (from 150° to 390°), leaving a gap at the bottom
     val startAngle = 150f
     val totalSweep = 240f
     val socSweep = totalSweep * (clampedSoc / 100f)
-    val strokeWidth = 12.dp
+    val strokeWidth = 14.dp
 
     Box(
         contentAlignment = Alignment.Center,
@@ -126,9 +101,23 @@ fun SocGauge(
             )
             val topLeft = Offset(padding, padding)
 
+            // Subtle glow behind arc
+            if (clampedSoc > 0) {
+                val glowStroke = Stroke(width = strokeWidth.toPx() * 2.5f, cap = StrokeCap.Round)
+                drawArc(
+                    color = color.copy(alpha = 0.1f),
+                    startAngle = startAngle,
+                    sweepAngle = socSweep,
+                    useCenter = false,
+                    topLeft = topLeft,
+                    size = arcSize,
+                    style = glowStroke
+                )
+            }
+
             // Background track arc
             drawArc(
-                color = ArcTrackColor,
+                color = CardBorder.copy(alpha = 0.4f),
                 startAngle = startAngle,
                 sweepAngle = totalSweep,
                 useCenter = false,
@@ -137,10 +126,13 @@ fun SocGauge(
                 style = stroke
             )
 
-            // Foreground SOC arc
+            // Foreground SOC arc with gradient
             if (clampedSoc > 0) {
                 drawArc(
-                    color = color,
+                    brush = Brush.sweepGradient(
+                        colors = listOf(color.copy(alpha = 0.6f), color),
+                        center = Offset(size.width / 2f, size.height / 2f)
+                    ),
                     startAngle = startAngle,
                     sweepAngle = socSweep,
                     useCenter = false,
@@ -151,19 +143,18 @@ fun SocGauge(
             }
         }
 
-        // Center text: SOC percentage
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Text(
                 text = "$clampedSoc",
-                color = Color.White,
+                color = TextPrimary,
                 fontSize = 32.sp,
-                fontWeight = FontWeight.Medium,
+                fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center
             )
             Text(
-                text = "%",
-                color = TextSecondary,
-                fontSize = 14.sp,
+                text = "SOC %",
+                color = TextMuted,
+                fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center
             )
@@ -172,25 +163,20 @@ fun SocGauge(
 }
 
 // ============================================================================
-// TripCard - Card showing trip summary
+// TripCard
 // ============================================================================
 
-/**
- * Card displaying a trip summary with time range, distance, consumption,
- * SOC change, average speed, and temperature.
- *
- * @param trip Trip entity data
- * @param onClick Callback when card is tapped
- */
 @Composable
 fun TripCard(
     trip: TripEntity,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currencySymbol: String = "Br"
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.3f)),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -212,12 +198,11 @@ fun TripCard(
                 }
                 Text(
                     text = timeRange,
-                    color = Color.White,
+                    color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Medium
                 )
 
-                // Duration badge
                 if (trip.endTs != null) {
                     Text(
                         text = formatDuration(trip.startTs, trip.endTs),
@@ -233,25 +218,12 @@ fun TripCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Distance
                 val distanceText = trip.distanceKm?.let { "%.1f км".format(it) } ?: "— км"
-                Text(
-                    text = distanceText,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = distanceText, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
 
-                // kWh consumed
                 val kwhText = trip.kwhConsumed?.let { "%.1f кВт·ч".format(it) } ?: "— кВт·ч"
-                Text(
-                    text = kwhText,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = kwhText, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
 
-                // kWh/100km with color coding
                 val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
                 val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
                 Text(
@@ -262,43 +234,28 @@ fun TripCard(
                 )
             }
 
-            // Bottom row: SOC change, temperature, average speed
+            // Bottom row: SOC change, battery temp, speed, cost
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // SOC start → end
+                // SOC start -> end
                 val socStartText = trip.socStart?.let { "$it%" } ?: "—"
                 val socEndText = trip.socEnd?.let { "$it%" } ?: "—"
                 val socStartClr = trip.socStart?.let { socColor(it) } ?: TextSecondary
                 val socEndClr = trip.socEnd?.let { socColor(it) } ?: TextSecondary
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = socStartText,
-                        color = socStartClr,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = " → ",
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = socEndText,
-                        color = socEndClr,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(text = socStartText, color = socStartClr, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(text = " → ", color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(text = socEndText, color = socEndClr, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
 
-                // Temperature
-                val tempText = trip.tempAvgC?.let { "%.0f°C".format(it) } ?: ""
-                if (tempText.isNotEmpty()) {
+                // Battery temperature
+                val batTemp = trip.batTempAvg ?: trip.tempAvgC
+                if (batTemp != null) {
                     Text(
-                        text = tempText,
+                        text = "bat %.0f°C".format(batTemp),
                         color = TextSecondary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
@@ -308,9 +265,14 @@ fun TripCard(
                 // Average speed
                 val speedText = trip.avgSpeedKmh?.let { "%.0f км/ч".format(it) } ?: ""
                 if (speedText.isNotEmpty()) {
+                    Text(text = speedText, color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+
+                // Trip cost
+                if (trip.cost != null) {
                     Text(
-                        text = speedText,
-                        color = TextSecondary,
+                        text = "$currencySymbol%.2f".format(trip.cost),
+                        color = AccentGreen,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
@@ -321,16 +283,9 @@ fun TripCard(
 }
 
 // ============================================================================
-// ChargeCard - Card showing charge session summary
+// ChargeCard
 // ============================================================================
 
-/**
- * Card displaying a charge session summary with time range, SOC change,
- * energy charged, max power, duration, cost, and AC/DC badge.
- *
- * @param charge Charge entity data
- * @param onClick Callback when card is tapped
- */
 @Composable
 fun ChargeCard(
     charge: ChargeEntity,
@@ -339,8 +294,9 @@ fun ChargeCard(
     currencySymbol: String = "Br"
 ) {
     Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardBackground),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.3f)),
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick)
@@ -355,24 +311,17 @@ fun ChargeCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Time range
                 val timeRange = buildString {
                     append(formatTime(charge.startTs))
                     append(" – ")
                     append(charge.endTs?.let { formatTime(it) } ?: "…")
                 }
-                Text(
-                    text = timeRange,
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = timeRange, color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Medium)
 
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Duration
                     if (charge.endTs != null) {
                         Text(
                             text = formatDuration(charge.startTs, charge.endTs),
@@ -382,28 +331,15 @@ fun ChargeCard(
                         )
                     }
 
-                    // AC/DC type badge
                     if (charge.type != null) {
-                        val badgeColor = if (charge.type == "DC") {
-                            Color(0xFFFF9800) // Orange for DC fast charge
-                        } else {
-                            Color(0xFF2196F3) // Blue for AC
-                        }
+                        val badgeColor = if (charge.type == "DC") AccentOrange else AccentBlue
                         Box(
                             contentAlignment = Alignment.Center,
                             modifier = Modifier
-                                .background(
-                                    color = badgeColor,
-                                    shape = RoundedCornerShape(6.dp)
-                                )
+                                .background(color = badgeColor, shape = RoundedCornerShape(6.dp))
                                 .padding(horizontal = 8.dp, vertical = 2.dp)
                         ) {
-                            Text(
-                                text = charge.type,
-                                color = Color.White,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold
-                            )
+                            Text(text = charge.type, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
                         }
                     }
                 }
@@ -415,68 +351,41 @@ fun ChargeCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // SOC start → end
                 val socStartText = charge.socStart?.let { "$it%" } ?: "—"
                 val socEndText = charge.socEnd?.let { "$it%" } ?: "—"
                 val socStartClr = charge.socStart?.let { socColor(it) } ?: TextSecondary
                 val socEndClr = charge.socEnd?.let { socColor(it) } ?: TextSecondary
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = socStartText,
-                        color = socStartClr,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = " → ",
-                        color = TextSecondary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = socEndText,
-                        color = socEndClr,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(text = socStartText, color = socStartClr, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(text = " → ", color = TextSecondary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                    Text(text = socEndText, color = socEndClr, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                 }
 
-                // kWh charged
                 val kwhText = charge.kwhCharged?.let { "%.1f кВт·ч".format(it) } ?: "— кВт·ч"
-                Text(
-                    text = kwhText,
-                    color = Color.White,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = kwhText, color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
             }
 
-            // Bottom row: max power and cost
+            // Bottom row: max/avg power, battery temp, cost
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Max power
-                val powerText = charge.maxPowerKw?.let { "⚡ %.1f кВт".format(it) } ?: ""
-                if (powerText.isNotEmpty()) {
-                    Text(
-                        text = powerText,
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                if (charge.maxPowerKw != null) {
+                    Text(text = "max %.1f кВт".format(charge.maxPowerKw), color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
 
-                // Cost
+                if (charge.avgPowerKw != null) {
+                    Text(text = "avg %.1f кВт".format(charge.avgPowerKw), color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+
+                if (charge.batTempAvg != null) {
+                    Text(text = "bat %.0f°C".format(charge.batTempAvg), color = TextSecondary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                }
+
                 val costText = charge.cost?.let { "$currencySymbol%.2f".format(it) } ?: ""
                 if (costText.isNotEmpty()) {
-                    Text(
-                        text = costText,
-                        color = TextSecondary,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium
-                    )
+                    Text(text = costText, color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 }
             }
         }
@@ -484,17 +393,9 @@ fun ChargeCard(
 }
 
 // ============================================================================
-// SummaryRow - Horizontal row with 3 summary stats
+// SummaryRow
 // ============================================================================
 
-/**
- * Horizontal row displaying three key summary statistics in rounded boxes:
- * total distance, total energy, and average consumption.
- *
- * @param totalKm Total distance in kilometers
- * @param totalKwh Total energy consumed in kWh
- * @param avgKwhPer100km Average consumption in kWh/100km
- */
 @Composable
 fun SummaryRow(
     totalKm: Double,
@@ -503,30 +404,23 @@ fun SummaryRow(
     modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp),
+        modifier = modifier.fillMaxWidth().padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Total distance
         SummaryStatBox(
             value = "%.1f".format(totalKm),
             unit = "км",
             label = "Пробег",
-            valueColor = Color.White,
+            valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
-
-        // Total energy
         SummaryStatBox(
             value = "%.1f".format(totalKwh),
             unit = "кВт·ч",
             label = "Энергия",
-            valueColor = Color.White,
+            valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
-
-        // Average consumption with color coding
         SummaryStatBox(
             value = "%.1f".format(avgKwhPer100km),
             unit = "кВт·ч/100км",
@@ -537,10 +431,6 @@ fun SummaryRow(
     }
 }
 
-/**
- * Single stat box used inside SummaryRow.
- * Displays a value with unit and label in a rounded container.
- */
 @Composable
 private fun SummaryStatBox(
     value: String,
@@ -552,28 +442,19 @@ private fun SummaryStatBox(
     Box(
         contentAlignment = Alignment.Center,
         modifier = modifier
-            .background(
-                color = CardBackground,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .height(76.dp) // Min 76dp touch target per design spec
+            .background(color = CardSurface, shape = RoundedCornerShape(16.dp))
+            .height(76.dp)
             .padding(horizontal = 12.dp, vertical = 8.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Value + unit on the same line
             Row(
                 verticalAlignment = Alignment.Bottom,
                 horizontalArrangement = Arrangement.Center
             ) {
-                Text(
-                    text = value,
-                    color = valueColor,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium
-                )
+                Text(text = value, color = valueColor, fontSize = 20.sp, fontWeight = FontWeight.Medium)
                 Text(
                     text = " $unit",
                     color = TextSecondary,
@@ -582,14 +463,7 @@ private fun SummaryStatBox(
                     modifier = Modifier.padding(bottom = 2.dp)
                 )
             }
-
-            // Label below
-            Text(
-                text = label,
-                color = TextSecondary,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Text(text = label, color = TextSecondary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
         }
     }
 }

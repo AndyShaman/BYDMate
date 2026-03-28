@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
@@ -38,18 +39,10 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.ui.components.ChargeCard
+import com.bydmate.app.ui.theme.*
 
-// -- Color constants matching dark theme --
-
-private val BackgroundColor = Color(0xFF0D0D0D)
-private val CardBackground = Color(0xFF1E1E1E)
-private val CardBackgroundAlt = Color(0xFF2C2C2C)
-private val TextSecondary = Color(0xFF9E9E9E)
-private val AccentGreen = Color(0xFF4CAF50)
-private val AccentBlue = Color(0xFF2196F3)
-private val AccentOrange = Color(0xFFFF9800)
-private val ChartLineColor = Color(0xFF4CAF50)
-private val ChartGridColor = Color(0xFF333333)
+private val ChartLineColor = ChartLine
+private val ChartGridColor = ChartGrid
 
 // Charges screen - list of charging sessions with energy/cost stats
 @Composable
@@ -61,7 +54,7 @@ fun ChargesScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundColor)
+            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp)
     ) {
         Spacer(modifier = Modifier.height(16.dp))
@@ -69,7 +62,7 @@ fun ChargesScreen(
         // -- Screen title --
         Text(
             text = "Зарядки",
-            color = Color.White,
+            color = TextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
@@ -186,7 +179,7 @@ private fun PeriodAndFilterRow(
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = AccentGreen,
                 selectedLabelColor = Color.White,
-                containerColor = CardBackgroundAlt,
+                containerColor = CardSurfaceElevated,
                 labelColor = TextSecondary
             ),
             shape = RoundedCornerShape(8.dp)
@@ -198,7 +191,7 @@ private fun PeriodAndFilterRow(
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = AccentGreen,
                 selectedLabelColor = Color.White,
-                containerColor = CardBackgroundAlt,
+                containerColor = CardSurfaceElevated,
                 labelColor = TextSecondary
             ),
             shape = RoundedCornerShape(8.dp)
@@ -214,7 +207,7 @@ private fun PeriodAndFilterRow(
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = AccentBlue,
                 selectedLabelColor = Color.White,
-                containerColor = CardBackgroundAlt,
+                containerColor = CardSurfaceElevated,
                 labelColor = TextSecondary
             ),
             shape = RoundedCornerShape(8.dp)
@@ -226,7 +219,7 @@ private fun PeriodAndFilterRow(
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = AccentBlue,
                 selectedLabelColor = Color.White,
-                containerColor = CardBackgroundAlt,
+                containerColor = CardSurfaceElevated,
                 labelColor = TextSecondary
             ),
             shape = RoundedCornerShape(8.dp)
@@ -238,7 +231,7 @@ private fun PeriodAndFilterRow(
             colors = FilterChipDefaults.filterChipColors(
                 selectedContainerColor = AccentOrange,
                 selectedLabelColor = Color.White,
-                containerColor = CardBackgroundAlt,
+                containerColor = CardSurfaceElevated,
                 labelColor = TextSecondary
             ),
             shape = RoundedCornerShape(8.dp)
@@ -290,7 +283,7 @@ private fun SummaryBox(
         contentAlignment = Alignment.Center,
         modifier = modifier
             .background(
-                color = CardBackground,
+                color = CardSurface,
                 shape = RoundedCornerShape(12.dp)
             )
             .height(76.dp)
@@ -306,7 +299,7 @@ private fun SummaryBox(
             ) {
                 Text(
                     text = value,
-                    color = Color.White,
+                    color = TextPrimary,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -331,30 +324,24 @@ private fun SummaryBox(
 }
 
 /**
- * Power curve line chart drawn on Canvas.
- * Shows power_kw over time from charge_points.
- * X-axis: time, Y-axis: power in kW.
+ * Dual-axis charge chart: Power (kW) + SOC (%) + Battery Temp.
+ * Green line = power, Blue line = SOC, Orange line = battery temp.
  */
 @Composable
 private fun PowerCurveChart(
     points: List<ChargePointEntity>,
     modifier: Modifier = Modifier
 ) {
-    // Need at least 2 points to draw a line
     if (points.size < 2) {
         Box(
             modifier = modifier
-                .background(
-                    color = CardBackground,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
                 .height(120.dp),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = if (points.isEmpty()) "Загрузка..." else "Недостаточно данных",
-                color = TextSecondary,
-                fontSize = 13.sp
+                color = TextSecondary, fontSize = 13.sp
             )
         }
         return
@@ -364,18 +351,11 @@ private fun PowerCurveChart(
     if (validPoints.size < 2) {
         Box(
             modifier = modifier
-                .background(
-                    color = CardBackground,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
                 .height(120.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text(
-                text = "Нет данных о мощности",
-                color = TextSecondary,
-                fontSize = 13.sp
-            )
+            Text(text = "Нет данных о мощности", color = TextSecondary, fontSize = 13.sp)
         }
         return
     }
@@ -383,99 +363,136 @@ private fun PowerCurveChart(
     val minTime = validPoints.first().timestamp
     val maxTime = validPoints.last().timestamp
     val timeRange = (maxTime - minTime).coerceAtLeast(1L).toFloat()
-    val maxPower = validPoints.maxOf { it.powerKw!! }.coerceAtLeast(1.0).toFloat()
+    val maxPower = validPoints.maxOf { kotlin.math.abs(it.powerKw!!) }.coerceAtLeast(1.0).toFloat()
+    val hasSoc = validPoints.any { it.soc != null }
+    val hasBatTemp = validPoints.any { it.batTemp != null }
 
     Column(
         modifier = modifier
-            .background(
-                color = CardBackground,
-                shape = RoundedCornerShape(12.dp)
-            )
+            .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
             .padding(12.dp)
     ) {
-        // Chart header
+        // Chart header with legend
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(
-                text = "Мощность зарядки",
-                color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(text = "Мощность", color = ChartLineColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (hasSoc) Text(text = "SOC", color = AccentBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                if (hasBatTemp) Text(text = "Темп.", color = AccentOrange, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+            }
             Text(
                 text = "макс. %.1f кВт".format(maxPower.toDouble()),
-                color = TextSecondary,
-                fontSize = 12.sp
+                color = TextSecondary, fontSize = 12.sp
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // Canvas line chart
         Canvas(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
+            modifier = Modifier.fillMaxWidth().height(140.dp)
         ) {
             val chartWidth = size.width
             val chartHeight = size.height
             val padding = 4.dp.toPx()
-
             val plotWidth = chartWidth - padding * 2
             val plotHeight = chartHeight - padding * 2
 
-            // Draw horizontal grid lines (4 lines)
+            // Grid lines
             for (i in 0..4) {
                 val y = padding + plotHeight * (1f - i / 4f)
-                drawLine(
-                    color = ChartGridColor,
-                    start = Offset(padding, y),
-                    end = Offset(chartWidth - padding, y),
-                    strokeWidth = 1f
-                )
+                drawLine(ChartGridColor, Offset(padding, y), Offset(chartWidth - padding, y), 1f)
             }
 
-            // Build the power curve path
-            val path = Path()
+            // Power curve (green)
+            val powerPath = Path()
             validPoints.forEachIndexed { index, point ->
                 val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
-                val y = padding + plotHeight * (1f - (point.powerKw!!.toFloat() / maxPower))
+                val y = padding + plotHeight * (1f - (kotlin.math.abs(point.powerKw!!).toFloat() / maxPower))
+                if (index == 0) powerPath.moveTo(x, y) else powerPath.lineTo(x, y)
+            }
+            drawPath(powerPath, ChartLineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
 
-                if (index == 0) {
-                    path.moveTo(x, y)
-                } else {
-                    path.lineTo(x, y)
+            // Fill under power curve
+            val fillPath = Path().apply {
+                addPath(powerPath)
+                val lastX = padding + ((validPoints.last().timestamp - minTime) / timeRange) * plotWidth
+                val firstX = padding + ((validPoints.first().timestamp - minTime) / timeRange) * plotWidth
+                lineTo(lastX, padding + plotHeight)
+                lineTo(firstX, padding + plotHeight)
+                close()
+            }
+            drawPath(fillPath, ChartLineColor.copy(alpha = 0.1f))
+
+            // SOC curve (blue, 0-100%)
+            if (hasSoc) {
+                val socPath = Path()
+                var first = true
+                validPoints.forEach { point ->
+                    val soc = point.soc ?: return@forEach
+                    val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
+                    val y = padding + plotHeight * (1f - soc / 100f)
+                    if (first) { socPath.moveTo(x, y); first = false } else socPath.lineTo(x, y)
                 }
+                drawPath(socPath, AccentBlue, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
 
-            // Draw the line
-            drawPath(
-                path = path,
-                color = ChartLineColor,
-                style = Stroke(
-                    width = 2.dp.toPx(),
-                    cap = StrokeCap.Round,
-                    join = StrokeJoin.Round
+            // Battery temp curve (orange)
+            if (hasBatTemp) {
+                val temps = validPoints.mapNotNull { it.batTemp }
+                if (temps.size >= 2) {
+                    val minTemp = (temps.min() - 5).coerceAtLeast(0).toFloat()
+                    val maxTemp = (temps.max() + 5).toFloat()
+                    val tempRange = (maxTemp - minTemp).coerceAtLeast(1f)
+                    val tempPath = Path()
+                    var first = true
+                    validPoints.forEach { point ->
+                        val temp = point.batTemp ?: return@forEach
+                        val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
+                        val y = padding + plotHeight * (1f - (temp - minTemp) / tempRange)
+                        if (first) { tempPath.moveTo(x, y); first = false } else tempPath.lineTo(x, y)
+                    }
+                    drawPath(tempPath, AccentOrange, style = Stroke(1.5f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                }
+            }
+        }
+
+        // Stats row below chart
+        Spacer(modifier = Modifier.height(8.dp))
+        val durationMs = maxTime - minTime
+        val durationMin = durationMs / 60_000
+        val socPoints = validPoints.mapNotNull { it.soc }
+        val socDelta = if (socPoints.size >= 2) socPoints.last() - socPoints.first() else null
+        val chargeSpeed = if (socDelta != null && durationMs > 0) socDelta / (durationMs / 3_600_000.0) else null
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SummaryBox(
+                value = "${durationMin}",
+                unit = "мин",
+                label = "Время",
+                modifier = Modifier.weight(1f)
+            )
+            if (chargeSpeed != null) {
+                SummaryBox(
+                    value = "%.0f".format(chargeSpeed),
+                    unit = "%/ч",
+                    label = "Скорость",
+                    modifier = Modifier.weight(1f)
                 )
-            )
-
-            // Draw filled area under the curve
-            val fillPath = Path()
-            fillPath.addPath(path)
-            // Close the path along the bottom
-            val lastPoint = validPoints.last()
-            val lastX = padding + ((lastPoint.timestamp - minTime) / timeRange) * plotWidth
-            val firstX = padding + ((validPoints.first().timestamp - minTime) / timeRange) * plotWidth
-            fillPath.lineTo(lastX, padding + plotHeight)
-            fillPath.lineTo(firstX, padding + plotHeight)
-            fillPath.close()
-
-            drawPath(
-                path = fillPath,
-                color = ChartLineColor.copy(alpha = 0.15f)
-            )
+            }
+            if (hasBatTemp) {
+                val avgTemp = validPoints.mapNotNull { it.batTemp }.average()
+                SummaryBox(
+                    value = "%.0f".format(avgTemp),
+                    unit = "°C",
+                    label = "Батарея",
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }

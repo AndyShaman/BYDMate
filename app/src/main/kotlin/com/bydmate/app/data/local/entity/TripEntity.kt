@@ -15,5 +15,9 @@ data class TripEntity(
     @ColumnInfo(name = "soc_start") val socStart: Int? = null,
     @ColumnInfo(name = "soc_end") val socEnd: Int? = null,
     @ColumnInfo(name = "temp_avg_c") val tempAvgC: Double? = null,
-    @ColumnInfo(name = "avg_speed_kmh") val avgSpeedKmh: Double? = null
+    @ColumnInfo(name = "avg_speed_kmh") val avgSpeedKmh: Double? = null,
+    @ColumnInfo(name = "bat_temp_avg") val batTempAvg: Double? = null,
+    @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
+    @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
+    val cost: Double? = null
 )

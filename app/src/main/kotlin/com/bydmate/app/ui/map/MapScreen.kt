@@ -1,6 +1,5 @@
 package com.bydmate.app.ui.map
 
-import android.graphics.drawable.BitmapDrawable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -22,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.ui.theme.*
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.GeoPoint
@@ -29,10 +29,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 
-private val BackgroundColor = Color(0xFF0D0D0D)
-private val PrimaryColor = Color(0xFF4CAF50)
-private val SecondaryTextColor = Color(0xFF9E9E9E)
-private val ChargeMarkerColor = Color(0xFF2196F3)
+private val PrimaryColor = AccentGreen
 
 // Map screen - GPS route display via osmdroid (no GMS)
 @Composable
@@ -48,7 +45,7 @@ fun MapScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundColor)
+            .background(NavyDark)
     ) {
         if (state.isLoading && state.tripPoints.isEmpty() && state.charges.isEmpty()) {
             // Loading indicator
@@ -66,7 +63,7 @@ fun MapScreen(
             ) {
                 Text(
                     text = "Нет данных за последнюю неделю",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )

@@ -16,6 +16,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_DC_TARIFF = "dc_tariff"
         const val KEY_UNITS = "units" // "km" or "miles"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
+        const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -59,4 +60,16 @@ class SettingsRepository @Inject constructor(
     }
 
     suspend fun getCurrencySymbol(): String = getCurrency().symbol
+
+    suspend fun getTripCostTariff(): Double {
+        val raw = getString(KEY_TRIP_COST_TARIFF, "home")
+        return when (raw) {
+            "home" -> getHomeTariff()
+            "dc" -> getDcTariff()
+            else -> raw.toDoubleOrNull() ?: getHomeTariff()
+        }
+    }
+
+    suspend fun getTripCostTariffKey(): String =
+        getString(KEY_TRIP_COST_TARIFF, "home")
 }

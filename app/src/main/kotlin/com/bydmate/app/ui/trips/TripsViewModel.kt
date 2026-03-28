@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -30,15 +31,25 @@ data class TripsUiState(
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
     val expandedTripId: Long? = null,
-    val expandedTripPoints: List<TripPointEntity> = emptyList()
+    val expandedTripPoints: List<TripPointEntity> = emptyList(),
+    val currencySymbol: String = "Br"
 )
 
 @OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
-    private val tripPointDao: TripPointDao
+    private val tripPointDao: TripPointDao,
+    private val settingsRepository: SettingsRepository
 ) : ViewModel() {
+
+    private var currencySymbol: String = "Br"
+
+    init {
+        viewModelScope.launch {
+            currencySymbol = settingsRepository.getCurrencySymbol()
+        }
+    }
 
     /** Currently selected period filter. */
     private val _period = MutableStateFlow(Period.WEEK)
@@ -69,7 +80,8 @@ class TripsViewModel @Inject constructor(
                 totalKwh = totalKwh,
                 avgConsumption = avgConsumption,
                 expandedTripId = expandedId,
-                expandedTripPoints = expandedPoints
+                expandedTripPoints = expandedPoints,
+                currencySymbol = currencySymbol
             )
         }
         .stateIn(

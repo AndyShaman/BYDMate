@@ -5,6 +5,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -18,7 +19,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
@@ -42,6 +43,7 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.ui.components.SummaryRow
 import com.bydmate.app.ui.components.TripCard
+import com.bydmate.app.ui.theme.*
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -51,14 +53,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-// -- Color constants for this screen --
-
-private val TextSecondary = Color(0xFF9E9E9E)
-private val AccentGreen = Color(0xFF4CAF50)
-private val BarColor = Color(0xFF2196F3)
-private val BarMaxColor = Color(0xFFF44336)
-private val ChipSelectedContainer = Color(0xFF2E7D32)
-private val ChipUnselectedContainer = Color(0xFF2C2C2C)
+private val BarColor = AccentBlue
+private val BarMaxColor = SocRed
 
 // ============================================================================
 // TripsScreen - Main composable for the Trips tab
@@ -79,6 +75,7 @@ fun TripsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // -- Period toggle chips --
@@ -140,7 +137,8 @@ fun TripsScreen(
 
                         TripCard(
                             trip = trip,
-                            onClick = { viewModel.toggleTripExpansion(trip.id) }
+                            onClick = { viewModel.toggleTripExpansion(trip.id) },
+                            currencySymbol = state.currencySymbol
                         )
 
                         // Expandable detail section: mini map + speed timeline
@@ -182,13 +180,13 @@ private fun PeriodToggle(
             label = {
                 Text(
                     text = "Неделя",
-                    color = Color.White,
+                    color = TextPrimary,
                     fontSize = 14.sp
                 )
             },
             colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = ChipSelectedContainer,
-                containerColor = ChipUnselectedContainer
+                selectedContainerColor = AccentGreenDark,
+                containerColor = CardSurfaceElevated
             )
         )
 
@@ -198,13 +196,13 @@ private fun PeriodToggle(
             label = {
                 Text(
                     text = "Месяц",
-                    color = Color.White,
+                    color = TextPrimary,
                     fontSize = 14.sp
                 )
             },
             colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = ChipSelectedContainer,
-                containerColor = ChipUnselectedContainer
+                selectedContainerColor = AccentGreenDark,
+                containerColor = CardSurfaceElevated
             )
         )
     }

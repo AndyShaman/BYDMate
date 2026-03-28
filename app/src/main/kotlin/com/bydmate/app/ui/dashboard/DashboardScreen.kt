@@ -21,7 +21,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -30,13 +30,8 @@ import com.bydmate.app.ui.components.ChargeCard
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.SummaryRow
 import com.bydmate.app.ui.components.TripCard
+import com.bydmate.app.ui.theme.*
 
-private val BackgroundColor = Color(0xFF0D0D0D)
-private val SecondaryTextColor = Color(0xFF9E9E9E)
-private val ServiceActiveColor = Color(0xFF4CAF50)
-private val ServiceInactiveColor = Color(0xFF616161)
-
-// Dashboard screen - main overview with SOC, recent trips, charging status
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel()
@@ -46,27 +41,23 @@ fun DashboardScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundColor)
+            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // -- Top bar: title + service status indicator --
         Spacer(modifier = Modifier.height(16.dp))
         TopBar(isServiceRunning = state.isServiceRunning)
 
-        // -- SOC Gauge (large, centered) --
         Spacer(modifier = Modifier.height(24.dp))
         SocGauge(
             soc = state.soc ?: 0,
-            modifier = Modifier.size(180.dp)
+            modifier = Modifier.size(200.dp)
         )
 
-        // -- Odometer below gauge --
         Spacer(modifier = Modifier.height(8.dp))
         OdometerText(odometer = state.odometer)
 
-        // -- Today's summary --
         Spacer(modifier = Modifier.height(24.dp))
         SectionHeader(text = "Сегодня")
         Spacer(modifier = Modifier.height(8.dp))
@@ -76,51 +67,47 @@ fun DashboardScreen(
             avgKwhPer100km = state.avgConsumption
         )
 
-        // -- Idle drain (parking consumption) --
         if (state.idleDrainKwhToday > 0.01) {
             Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "Расход на стоянке: ${"%.2f".format(state.idleDrainKwhToday)} кВт·ч",
-                color = Color(0xFFFF9800),
+                color = AccentOrange,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.fillMaxWidth()
             )
         }
 
-        // -- Last trip section --
         Spacer(modifier = Modifier.height(24.dp))
         SectionHeader(text = "Последняя поездка")
         Spacer(modifier = Modifier.height(8.dp))
         if (state.lastTrip != null) {
             TripCard(
                 trip = state.lastTrip!!,
-                onClick = { /* TODO: navigate to trip detail */ }
+                onClick = { },
+                currencySymbol = state.currencySymbol
             )
         } else {
             PlaceholderText(text = "Поездок пока нет")
         }
 
-        // -- Last charge section --
         Spacer(modifier = Modifier.height(24.dp))
         SectionHeader(text = "Последняя зарядка")
         Spacer(modifier = Modifier.height(8.dp))
         if (state.lastCharge != null) {
             ChargeCard(
                 charge = state.lastCharge!!,
-                onClick = { /* TODO: navigate to charge detail */ },
+                onClick = { },
                 currencySymbol = state.currencySymbol
             )
         } else {
             PlaceholderText(text = "Зарядок пока нет")
         }
 
-        // Bottom padding for navigation bar clearance
         Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-/** Top bar with app title and service running indicator. */
 @Composable
 private fun TopBar(isServiceRunning: Boolean) {
     Row(
@@ -130,12 +117,11 @@ private fun TopBar(isServiceRunning: Boolean) {
     ) {
         Text(
             text = "BYDMate",
-            color = Color.White,
-            fontSize = 24.sp,
+            color = TextPrimary,
+            fontSize = 28.sp,
             fontWeight = FontWeight.Bold
         )
 
-        // Green dot = service active, grey = inactive
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp)
@@ -144,48 +130,43 @@ private fun TopBar(isServiceRunning: Boolean) {
                 modifier = Modifier
                     .size(10.dp)
                     .clip(CircleShape)
-                    .background(
-                        if (isServiceRunning) ServiceActiveColor else ServiceInactiveColor
-                    )
+                    .background(if (isServiceRunning) AccentGreen else TextMuted)
             )
             Text(
                 text = if (isServiceRunning) "Online" else "Offline",
-                color = SecondaryTextColor,
+                color = TextSecondary,
                 fontSize = 13.sp
             )
         }
     }
 }
 
-/** Odometer display below the SOC gauge. */
 @Composable
 private fun OdometerText(odometer: Double?) {
     Text(
         text = if (odometer != null) "%.1f km".format(odometer) else "— km",
-        color = SecondaryTextColor,
+        color = TextSecondary,
         fontSize = 16.sp,
         fontWeight = FontWeight.Medium
     )
 }
 
-/** Section header text. */
 @Composable
 private fun SectionHeader(text: String) {
     Text(
         text = text,
-        color = Color.White,
-        fontSize = 18.sp,
+        color = TextPrimary,
+        fontSize = 20.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
 }
 
-/** Placeholder text shown when no data is available. */
 @Composable
 private fun PlaceholderText(text: String) {
     Text(
         text = text,
-        color = SecondaryTextColor,
+        color = TextSecondary,
         fontSize = 14.sp,
         modifier = Modifier
             .fillMaxWidth()

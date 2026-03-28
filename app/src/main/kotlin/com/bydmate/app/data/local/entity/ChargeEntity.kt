@@ -17,5 +17,9 @@ data class ChargeEntity(
     val type: String? = null, // "AC" or "DC"
     val cost: Double? = null,
     val lat: Double? = null,
-    val lon: Double? = null
+    val lon: Double? = null,
+    @ColumnInfo(name = "bat_temp_avg") val batTempAvg: Double? = null,
+    @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
+    @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
+    @ColumnInfo(name = "avg_power_kw") val avgPowerKw: Double? = null
 )

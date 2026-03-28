@@ -30,6 +30,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -40,13 +41,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.theme.*
 
-private val BackgroundColor = Color(0xFF0D0D0D)
-private val CardBackground = Color(0xFF1E1E1E)
-private val PrimaryColor = Color(0xFF4CAF50)
-private val SecondaryTextColor = Color(0xFF9E9E9E)
-private val TextFieldBorderColor = Color(0xFF3C3C3C)
-private val TextFieldFocusedBorderColor = Color(0xFF4CAF50)
+private val PrimaryColor = AccentGreen
 
 // Settings screen - battery capacity, tariffs, display preferences, CSV export
 @Composable
@@ -58,7 +55,7 @@ fun SettingsScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(BackgroundColor)
+            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp)
     ) {
@@ -67,7 +64,7 @@ fun SettingsScreen(
         // Screen title
         Text(
             text = "Настройки",
-            color = Color.White,
+            color = TextPrimary,
             fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
@@ -80,7 +77,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -110,6 +107,41 @@ fun SettingsScreen(
                     onValueChange = { viewModel.saveDcTariff(it) },
                     keyboardType = KeyboardType.Decimal
                 )
+
+                // Trip cost tariff selector
+                Text(
+                    text = "Тариф для стоимости поездок",
+                    color = TextSecondary,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+                Row(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    UnitChip(
+                        label = "Домашний (AC)",
+                        selected = state.tripCostTariff == "home",
+                        onClick = { viewModel.saveTripCostTariff("home") }
+                    )
+                    UnitChip(
+                        label = "DC",
+                        selected = state.tripCostTariff == "dc",
+                        onClick = { viewModel.saveTripCostTariff("dc") }
+                    )
+                    UnitChip(
+                        label = "Свой",
+                        selected = state.tripCostTariff != "home" && state.tripCostTariff != "dc",
+                        onClick = { viewModel.saveTripCostTariff(state.homeTariff) }
+                    )
+                }
+                if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                    SettingsTextField(
+                        label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
+                        value = state.tripCostTariff,
+                        onValueChange = { viewModel.saveTripCostTariff(it) },
+                        keyboardType = KeyboardType.Decimal
+                    )
+                }
             }
         }
 
@@ -121,13 +153,13 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
                 Text(
                     text = "Расстояние",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -159,7 +191,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
@@ -186,7 +218,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -196,7 +228,7 @@ fun SettingsScreen(
                 Text(
                     text = "Импорт поездок из встроенной базы BYD (energydata). " +
                         "Импортируются расстояние и расход по данным бортового компьютера.",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -206,7 +238,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFFFF9800),
+                        containerColor = AccentOrange,
                         contentColor = Color.White
                     )
                 ) {
@@ -222,7 +254,7 @@ fun SettingsScreen(
                     Text(
                         text = state.importStatus!!,
                         color = if (state.importStatus!!.startsWith("Ошибка")) {
-                            Color(0xFFF44336)
+                            SocRed
                         } else {
                             PrimaryColor
                         },
@@ -241,7 +273,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -250,7 +282,7 @@ fun SettingsScreen(
             ) {
                 Text(
                     text = "Экспорт всех поездок и зарядок в CSV файлы в папку Downloads",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -277,7 +309,7 @@ fun SettingsScreen(
                     Text(
                         text = state.exportStatus!!,
                         color = if (state.exportStatus!!.startsWith("Ошибка")) {
-                            Color(0xFFF44336)
+                            SocRed
                         } else {
                             PrimaryColor
                         },
@@ -296,7 +328,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             val context = LocalContext.current
@@ -306,21 +338,21 @@ fun SettingsScreen(
             ) {
                 Text(
                     text = "BYDMate v${state.appVersion}",
-                    color = Color.White,
+                    color = TextPrimary,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium
                 )
 
                 Text(
                     text = "\u00A9 2026 AndyShaman",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
 
                 Text(
                     text = "github.com/AndyShaman/BYDMate",
-                    color = Color(0xFF2196F3),
+                    color = AccentBlue,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     textDecoration = TextDecoration.Underline,
@@ -333,7 +365,7 @@ fun SettingsScreen(
 
                 Text(
                     text = "GPLv3 License",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 12.sp
                 )
 
@@ -342,7 +374,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF2196F3),
+                        containerColor = AccentBlue,
                         contentColor = Color.White
                     )
                 ) {
@@ -358,7 +390,7 @@ fun SettingsScreen(
                     Text(
                         text = state.updateStatus!!,
                         color = if (state.updateStatus!!.startsWith("Ошибка")) {
-                            Color(0xFFF44336)
+                            SocRed
                         } else {
                             PrimaryColor
                         },
@@ -376,7 +408,7 @@ fun SettingsScreen(
 
         Card(
             shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
@@ -385,7 +417,7 @@ fun SettingsScreen(
             ) {
                 Text(
                     text = "Проверка доступа к БД BYD, DiPlus API, разрешений и данных в нашей базе",
-                    color = SecondaryTextColor,
+                    color = TextSecondary,
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -395,7 +427,7 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = Color(0xFF9C27B0),
+                        containerColor = AccentPurple,
                         contentColor = Color.White
                     )
                 ) {
@@ -410,7 +442,7 @@ fun SettingsScreen(
                 if (state.diagnosticLog != null) {
                     Text(
                         text = state.diagnosticLog!!,
-                        color = Color(0xFFE0E0E0),
+                        color = TextPrimary,
                         fontSize = 11.sp,
                         fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
                         lineHeight = 15.sp
@@ -429,7 +461,7 @@ fun SettingsScreen(
 private fun SectionHeader(text: String) {
     Text(
         text = text,
-        color = Color.White,
+        color = TextPrimary,
         fontSize = 18.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
@@ -455,10 +487,10 @@ private fun SettingsTextField(
         colors = OutlinedTextFieldDefaults.colors(
             focusedTextColor = Color.White,
             unfocusedTextColor = Color.White,
-            focusedBorderColor = TextFieldFocusedBorderColor,
-            unfocusedBorderColor = TextFieldBorderColor,
+            focusedBorderColor = AccentGreen,
+            unfocusedBorderColor = CardBorder,
             focusedLabelColor = PrimaryColor,
-            unfocusedLabelColor = SecondaryTextColor,
+            unfocusedLabelColor = TextSecondary,
             cursorColor = PrimaryColor
         )
     )
@@ -485,8 +517,8 @@ private fun UnitChip(
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = PrimaryColor,
             selectedLabelColor = Color.White,
-            containerColor = Color(0xFF2C2C2C),
-            labelColor = SecondaryTextColor
+            containerColor = CardSurfaceElevated,
+            labelColor = TextSecondary
         ),
         border = FilterChipDefaults.filterChipBorder(
             borderColor = Color.Transparent,
