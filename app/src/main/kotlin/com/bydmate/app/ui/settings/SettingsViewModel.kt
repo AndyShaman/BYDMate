@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -35,6 +36,7 @@ data class SettingsUiState(
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "Br",
     val exportStatus: String? = null,
+    val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null
 )
@@ -45,7 +47,8 @@ class SettingsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val tripRepository: TripRepository,
     private val chargeRepository: ChargeRepository,
-    private val updateChecker: UpdateChecker
+    private val updateChecker: UpdateChecker,
+    private val historyImporter: HistoryImporter
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -202,6 +205,23 @@ class SettingsViewModel @Inject constructor(
     /** Clear the export status message. */
     fun clearExportStatus() {
         _uiState.update { it.copy(exportStatus = null) }
+    }
+
+    /** Import trip history from BYD energydata database. */
+    fun importBydHistory() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(importStatus = "Импорт...") }
+            try {
+                val result = historyImporter.forceImport()
+                _uiState.update {
+                    it.copy(importStatus = "Импортировано ${result.count} поездок из BYD")
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(importStatus = "Ошибка: ${e.message}")
+                }
+            }
+        }
     }
 
     /** Check for app updates on GitHub. */

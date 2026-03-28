@@ -175,6 +175,61 @@ fun SettingsScreen(
 
         Spacer(modifier = Modifier.height(24.dp))
 
+        // -- Import BYD history section --
+        SectionHeader(text = "История BYD")
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardBackground),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Text(
+                    text = "Импорт поездок из встроенной базы BYD (energydata). " +
+                        "Импортируются расстояние и расход по данным бортового компьютера.",
+                    color = SecondaryTextColor,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+
+                Button(
+                    onClick = { viewModel.importBydHistory() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color(0xFFFF9800),
+                        contentColor = Color.White
+                    )
+                ) {
+                    Text(
+                        text = "Импорт истории BYD",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+
+                if (state.importStatus != null) {
+                    Text(
+                        text = state.importStatus!!,
+                        color = if (state.importStatus!!.startsWith("Ошибка")) {
+                            Color(0xFFF44336)
+                        } else {
+                            PrimaryColor
+                        },
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(24.dp))
+
         // -- Export section --
         SectionHeader(text = "Экспорт данных")
         Spacer(modifier = Modifier.height(12.dp))
