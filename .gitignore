@@ -13,3 +13,5 @@
 *.dex
 *.class
 *.log
+*.jks
+*.keystore

@@ -30,6 +30,11 @@ android {
         }
     }
 
+    lint {
+        // Not targeting Google Play -- DiLink sideload only
+        disable += "ExpiredTargetSdkVersion"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
