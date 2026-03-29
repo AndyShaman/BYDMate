@@ -219,6 +219,14 @@ fun TripCard(
         val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
         Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+
+        // Cost
+        trip.cost?.let { cost ->
+            Text(
+                text = "$currencySymbol${"%.0f".format(cost)}",
+                color = AccentGreen, fontSize = 12.sp
+            )
+        }
     }
 }
 
