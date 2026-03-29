@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -394,6 +396,12 @@ class SettingsViewModel @Inject constructor(
 
     private var logProcess: Process? = null
     private var logFile: File? = null
+    private var logAutoStopJob: Job? = null
+
+    companion object {
+        private const val LOG_MAX_DURATION_MS = 2 * 60 * 60 * 1000L // 2 hours auto-stop
+        private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
+    }
 
     fun startLogRecording() {
         viewModelScope.launch(Dispatchers.IO) {
@@ -426,13 +434,19 @@ class SettingsViewModel @Inject constructor(
                     "HistoryImporter:*", "EnergyDataReader:*"
                 ))
 
-                // Background thread to pipe logcat to file
+                // Background thread to pipe logcat to file with size limit
                 Thread {
                     try {
                         logProcess?.inputStream?.bufferedReader()?.use { reader ->
                             logFile?.bufferedWriter()?.use { writer ->
                                 var line = reader.readLine()
                                 while (line != null) {
+                                    // Stop if file exceeds size limit
+                                    if ((logFile?.length() ?: 0) > LOG_MAX_SIZE_BYTES) {
+                                        writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
+                                        writer.newLine()
+                                        break
+                                    }
                                     writer.write(line)
                                     writer.newLine()
                                     writer.flush()
@@ -443,8 +457,14 @@ class SettingsViewModel @Inject constructor(
                     } catch (_: Exception) {}
                 }.start()
 
+                // Auto-stop after 2 hours
+                logAutoStopJob = viewModelScope.launch {
+                    delay(LOG_MAX_DURATION_MS)
+                    stopLogRecording()
+                }
+
                 _uiState.update {
-                    it.copy(isRecordingLogs = true, logSaveStatus = "Запись... → ${logFile?.absolutePath}")
+                    it.copy(isRecordingLogs = true, logSaveStatus = "Запись (авто-стоп через 2ч)... → ${logFile?.absolutePath}")
                 }
             } catch (e: Exception) {
                 _uiState.update { it.copy(logSaveStatus = "Ошибка: ${e.message}") }
@@ -453,18 +473,20 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun stopLogRecording() {
+        logAutoStopJob?.cancel()
+        logAutoStopJob = null
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 logProcess?.destroy()
                 logProcess = null
 
                 val file = logFile
-                val lineCount = file?.readLines()?.size ?: 0
+                val sizeKb = (file?.length() ?: 0) / 1024
 
                 _uiState.update {
                     it.copy(
                         isRecordingLogs = false,
-                        logSaveStatus = "Сохранено: ${file?.absolutePath} ($lineCount строк)"
+                        logSaveStatus = "Сохранено: ${file?.absolutePath} (${sizeKb} КБ)"
                     )
                 }
             } catch (e: Exception) {

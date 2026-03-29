@@ -61,7 +61,12 @@ fun MapScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
 
-    Configuration.getInstance().userAgentValue = "BYDMate/1.2"
+    Configuration.getInstance().apply {
+        userAgentValue = "BYDMate/1.0"
+        osmdroidBasePath = context.getExternalCacheDir()
+        tileFileSystemCacheMaxBytes = 100L * 1024 * 1024 // 100 MB max
+        tileFileSystemCacheTrimBytes = 80L * 1024 * 1024 // trim to 80 MB
+    }
 
     Box(
         modifier = Modifier
