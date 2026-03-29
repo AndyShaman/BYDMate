@@ -8,14 +8,14 @@ import androidx.compose.ui.unit.sp
 val BYDMateTypography = Typography(
     headlineLarge = TextStyle(
         fontWeight = FontWeight.Bold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
+        fontSize = 22.sp,
+        lineHeight = 28.sp,
         letterSpacing = (-0.5).sp
     ),
     titleLarge = TextStyle(
         fontWeight = FontWeight.SemiBold,
-        fontSize = 20.sp,
-        lineHeight = 28.sp
+        fontSize = 18.sp,
+        lineHeight = 24.sp
     ),
     titleMedium = TextStyle(
         fontWeight = FontWeight.Medium,
@@ -44,7 +44,7 @@ val BYDMateTypography = Typography(
     ),
     labelSmall = TextStyle(
         fontWeight = FontWeight.Medium,
-        fontSize = 11.sp,
-        lineHeight = 14.sp
+        fontSize = 13.sp,
+        lineHeight = 16.sp
     )
 )

@@ -186,7 +186,8 @@ class TripTracker @Inject constructor(
                 batTempAvg = batAvg,
                 batTempMax = batMax,
                 batTempMin = batMin,
-                cost = tripCost
+                cost = tripCost,
+                exteriorTemp = data.exteriorTemp
             )
         )
 
@@ -215,7 +216,10 @@ class TripTracker @Inject constructor(
         val data = lastData ?: DiParsData(
             soc = null, speed = 0, mileage = null, power = null,
             chargeGunState = null, maxBatTemp = null, avgBatTemp = null,
-            minBatTemp = null, chargingStatus = null
+            minBatTemp = null, chargingStatus = null,
+            batteryCapacityKwh = null, totalElecConsumption = null,
+            voltage12v = null, maxCellVoltage = null, minCellVoltage = null,
+            exteriorTemp = null
         )
         endTrip(data, lastLocation, System.currentTimeMillis())
     }

@@ -19,7 +19,13 @@ data class DiParsData(
     val maxBatTemp: Int?,
     val avgBatTemp: Int?,
     val minBatTemp: Int?,
-    val chargingStatus: Int?
+    val chargingStatus: Int?,
+    val batteryCapacityKwh: Double?,
+    val totalElecConsumption: Double?,
+    val voltage12v: Double?,
+    val maxCellVoltage: Double?,
+    val minCellVoltage: Double?,
+    val exteriorTemp: Int?
 )
 
 @Singleton
@@ -33,7 +39,10 @@ class DiParsClient @Inject constructor(
             "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}|Power:{发动机功率}" +
             "|ChargeGun:{充电枪插枪状态}|MaxBatTemp:{最高电池温度}" +
             "|AvgBatTemp:{平均电池温度}|MinBatTemp:{最低电池温度}" +
-            "|ChargingStatus:{充电状态}"
+            "|ChargingStatus:{充电状态}" +
+            "|BatCapacity:{电池容量}|TotalElecCon:{总电耗}" +
+            "|Voltage12V:{蓄电池电压}|MaxCellV:{最高电池电压}" +
+            "|MinCellV:{最低电池电压}|ExtTemp:{车外温度}"
     }
 
     suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
@@ -82,7 +91,13 @@ class DiParsClient @Inject constructor(
             maxBatTemp = map["MaxBatTemp"]?.toIntOrNull(),
             avgBatTemp = map["AvgBatTemp"]?.toIntOrNull(),
             minBatTemp = map["MinBatTemp"]?.toIntOrNull(),
-            chargingStatus = map["ChargingStatus"]?.toIntOrNull()
+            chargingStatus = map["ChargingStatus"]?.toIntOrNull(),
+            batteryCapacityKwh = map["BatCapacity"]?.toDoubleOrNull(),
+            totalElecConsumption = map["TotalElecCon"]?.toDoubleOrNull(),
+            voltage12v = map["Voltage12V"]?.toDoubleOrNull()?.let { it / 1000.0 },
+            maxCellVoltage = map["MaxCellV"]?.toDoubleOrNull()?.let { it / 1000.0 },
+            minCellVoltage = map["MinCellV"]?.toDoubleOrNull()?.let { it / 1000.0 },
+            exteriorTemp = map["ExtTemp"]?.toIntOrNull()
         )
     }
 }

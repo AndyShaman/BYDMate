@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.ChargeTracker
 import com.bydmate.app.domain.tracker.IdleDrainTracker
 import com.bydmate.app.domain.tracker.TripState
@@ -46,6 +47,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var tripTracker: TripTracker
     @Inject lateinit var chargeTracker: ChargeTracker
     @Inject lateinit var idleDrainTracker: IdleDrainTracker
+    @Inject lateinit var chargeRepository: ChargeRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var pollingJob: Job? = null
@@ -86,6 +88,20 @@ class TrackingService : Service(), LocationListener {
         startLocationUpdates()
         startPolling()
         _isRunning.value = true
+
+        // Finalize stale SUSPENDED charge sessions from previous runs
+        serviceScope.launch {
+            try {
+                val cutoff = System.currentTimeMillis() - 30 * 60 * 1000L
+                val stale = chargeRepository.getStaleSessions(cutoff)
+                stale.forEach { chargeTracker.finalizeSuspended(it) }
+                if (stale.isNotEmpty()) {
+                    Log.d(TAG, "Finalized ${stale.size} stale suspended charge sessions")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to finalize stale sessions: ${e.message}")
+            }
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -233,6 +249,7 @@ class TrackingService : Service(), LocationListener {
         val text = buildString {
             append("SOC: ${data.soc ?: "?"}% | ${data.speed ?: 0} km/h")
             data.avgBatTemp?.let { append(" | bat ${it}°C") }
+            data.voltage12v?.let { append(" | 12V: ${"%.1f".format(it)}V") }
         }
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(text))

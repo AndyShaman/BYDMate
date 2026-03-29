@@ -21,5 +21,11 @@ data class ChargeEntity(
     @ColumnInfo(name = "bat_temp_avg") val batTempAvg: Double? = null,
     @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
     @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
-    @ColumnInfo(name = "avg_power_kw") val avgPowerKw: Double? = null
+    @ColumnInfo(name = "avg_power_kw") val avgPowerKw: Double? = null,
+    val status: String = "COMPLETED",
+    @ColumnInfo(name = "cell_voltage_min") val cellVoltageMin: Double? = null,
+    @ColumnInfo(name = "cell_voltage_max") val cellVoltageMax: Double? = null,
+    @ColumnInfo(name = "voltage_12v") val voltage12v: Double? = null,
+    @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null,
+    @ColumnInfo(name = "merged_count") val mergedCount: Int = 0
 )

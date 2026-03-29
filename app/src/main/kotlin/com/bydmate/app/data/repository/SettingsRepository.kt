@@ -17,12 +17,16 @@ class SettingsRepository @Inject constructor(
         const val KEY_UNITS = "units" // "km" or "miles"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
         const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
+        const val KEY_CONSUMPTION_GOOD = "consumption_good_threshold"
+        const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
         const val DEFAULT_DC_TARIFF = "0.50"
         const val DEFAULT_UNITS = "km"
         const val DEFAULT_CURRENCY = "BYN"
+        const val DEFAULT_CONSUMPTION_GOOD = "20"
+        const val DEFAULT_CONSUMPTION_BAD = "30"
 
         val CURRENCIES = listOf(
             Currency("BYN", "Br", "Бел. руб."),
@@ -72,4 +76,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun getTripCostTariffKey(): String =
         getString(KEY_TRIP_COST_TARIFF, "home")
+
+    suspend fun getConsumptionGoodThreshold(): Double =
+        getString(KEY_CONSUMPTION_GOOD, DEFAULT_CONSUMPTION_GOOD).toDoubleOrNull() ?: 20.0
+
+    suspend fun getConsumptionBadThreshold(): Double =
+        getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).toDoubleOrNull() ?: 30.0
 }

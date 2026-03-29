@@ -23,6 +23,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.bydmate.app.ui.battery.BatteryHealthScreen
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.map.MapScreen
@@ -91,6 +92,7 @@ fun AppNavigation() {
             composable(Screen.Charges.route) { ChargesScreen() }
             composable(Screen.Map.route) { MapScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
+            composable("battery_health") { BatteryHealthScreen() }
         }
     }
 }
