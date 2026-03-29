@@ -49,6 +49,10 @@ data class DashboardUiState(
     val idleDrainRate: Double = 0.0,
     val idleDrainHours: Double = 0.0,
     val batteryHealthExpanded: Boolean = false,
+    val chargeExpanded: Boolean = false,
+    val idleDrainExpanded: Boolean = false,
+    val idleDrainKwhWeek: Double = 0.0,
+    val idleDrainHoursWeek: Double = 0.0,
     val estimatedRangeKm: Double? = null,
     val diPlusConnected: Boolean = true
 )
@@ -172,6 +176,12 @@ class DashboardViewModel @Inject constructor(
             }
             val idleDrainPercent = if (batteryCapacity > 0) idleDrain / batteryCapacity * 100.0 else 0.0
             val idleDrainRate = if (idleDrainHours > 0) idleDrain / idleDrainHours else 0.0
+
+            // Weekly idle drain stats
+            val weekStart = dayStart - 6 * 24 * 60 * 60 * 1000L
+            val idleDrainWeek = idleDrainDao.getTodayDrainKwh(weekStart, dayEnd)
+            val idleDrainHoursWeek = idleDrainDao.getTodayDrainHours(weekStart, dayEnd)
+
             _uiState.update {
                 it.copy(
                     totalKmToday = summary.totalKm,
@@ -180,7 +190,9 @@ class DashboardViewModel @Inject constructor(
                     idleDrainKwhToday = idleDrain,
                     idleDrainPercent = idleDrainPercent,
                     idleDrainRate = idleDrainRate,
-                    idleDrainHours = idleDrainHours
+                    idleDrainHours = idleDrainHours,
+                    idleDrainKwhWeek = idleDrainWeek,
+                    idleDrainHoursWeek = idleDrainHoursWeek
                 )
             }
         }
@@ -230,6 +242,14 @@ class DashboardViewModel @Inject constructor(
 
     fun toggleBatteryHealthExpanded() {
         _uiState.update { it.copy(batteryHealthExpanded = !it.batteryHealthExpanded) }
+    }
+
+    fun toggleChargeExpanded() {
+        _uiState.update { it.copy(chargeExpanded = !it.chargeExpanded) }
+    }
+
+    fun toggleIdleDrainExpanded() {
+        _uiState.update { it.copy(idleDrainExpanded = !it.idleDrainExpanded) }
     }
 
     private fun calculateBatteryStatus(

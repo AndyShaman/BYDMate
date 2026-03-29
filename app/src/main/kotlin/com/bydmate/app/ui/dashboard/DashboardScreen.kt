@@ -34,7 +34,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
-import com.bydmate.app.ui.components.ChargeCard
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.SummaryRow
 import com.bydmate.app.ui.components.TripCard
@@ -101,13 +100,13 @@ fun DashboardScreen(
                         Text("расчётный пробег", color = TextMuted, fontSize = 13.sp)
                     }
 
-                    // 3 compact cards: idle drain, charge, battery
+                    // 3 compact cards: charge, idle drain, battery
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        IdleDrainMiniCard(state)
-                        LastChargeCompact(state)
+                        ChargeCompactCard(state, onClick = { viewModel.toggleChargeExpanded() })
+                        IdleDrainCompactCard(state, onClick = { viewModel.toggleIdleDrainExpanded() })
                         BatteryHealthCard(state, onClick = { viewModel.toggleBatteryHealthExpanded() })
                     }
                 }
@@ -196,59 +195,98 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
     }
 }
 
+// ============================================================================
+// Shared card building blocks
+// ============================================================================
+
 @Composable
-private fun LastChargeCompact(state: DashboardUiState) {
-    if (state.lastCharge == null) {
-        Text("Зарядок пока нет", color = TextMuted, fontSize = 13.sp)
-        return
+private fun ValueDisplay(
+    value: String,
+    label: String,
+    color: androidx.compose.ui.graphics.Color
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+        Text(label, color = TextMuted, fontSize = 12.sp)
     }
-    val charge = state.lastCharge
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp)
+}
+
+@Composable
+private fun DetailRow(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            // Header: type badge + SOC range
+        Text(label, color = TextSecondary, fontSize = 13.sp)
+        Text(value, color = valueColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+    }
+}
+
+// ============================================================================
+// 1. Charge card
+// ============================================================================
+
+@Composable
+private fun ChargeCompactCard(state: DashboardUiState, onClick: () -> Unit) {
+    val charge = state.lastCharge
+    val borderColor = when {
+        charge == null -> TextMuted
+        charge.type == "DC" -> AccentOrange
+        else -> AccentBlue
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    if (charge.type != null) {
-                        val badgeColor = if (charge.type == "DC") AccentOrange else AccentBlue
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier
-                                .background(color = badgeColor, shape = RoundedCornerShape(6.dp))
-                                .padding(horizontal = 6.dp, vertical = 1.dp)
-                        ) {
-                            Text(charge.type, color = androidx.compose.ui.graphics.Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-                    Text(
-                        "${charge.socStart ?: "?"}% → ${charge.socEnd ?: "?"}%",
-                        color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Medium
-                    )
-                }
-                charge.kwhCharged?.let {
-                    Text("${"%.1f".format(it)} кВт·ч", color = TextPrimary, fontSize = 15.sp)
-                }
+                ValueDisplay(
+                    value = charge?.kwhCharged?.let { "%.1f".format(it) } ?: "—",
+                    label = "кВт·ч",
+                    color = if (charge != null) borderColor else TextMuted
+                )
+                ValueDisplay(
+                    value = charge?.type ?: "—",
+                    label = "зарядка",
+                    color = if (charge != null) borderColor else TextMuted
+                )
             }
-            // Date + duration
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(
-                    com.bydmate.app.ui.components.formatDateTime(charge.startTs),
-                    color = TextSecondary, fontSize = 13.sp
+
+            if (state.chargeExpanded && charge != null) {
+                DetailRow(
+                    label = "SOC",
+                    value = "${charge.socStart ?: "?"}% → ${charge.socEnd ?: "?"}%",
+                    valueColor = TextPrimary
+                )
+                DetailRow(
+                    label = "Время",
+                    value = com.bydmate.app.ui.components.formatDateTime(charge.startTs),
+                    valueColor = TextPrimary
                 )
                 if (charge.endTs != null) {
-                    Text(
-                        com.bydmate.app.ui.components.formatDuration(charge.startTs, charge.endTs),
-                        color = TextSecondary, fontSize = 13.sp
+                    DetailRow(
+                        label = "Длительность",
+                        value = com.bydmate.app.ui.components.formatDuration(charge.startTs, charge.endTs),
+                        valueColor = TextPrimary
+                    )
+                }
+                charge.cost?.let { cost ->
+                    DetailRow(
+                        label = "Стоимость",
+                        value = "${state.currencySymbol}${"%.1f".format(cost)}",
+                        valueColor = AccentGreen
                     )
                 }
             }
@@ -256,9 +294,86 @@ private fun LastChargeCompact(state: DashboardUiState) {
     }
 }
 
+// ============================================================================
+// 2. Idle drain card
+// ============================================================================
+
+@Composable
+private fun IdleDrainCompactCard(state: DashboardUiState, onClick: () -> Unit) {
+    val borderColor = when {
+        state.idleDrainPercent > 5.0 -> SocRed
+        state.idleDrainPercent > 2.0 -> SocYellow
+        else -> AccentGreen
+    }
+
+    Card(
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clickable { onClick() }
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                ValueDisplay(
+                    value = "%.1f".format(state.idleDrainKwhToday),
+                    label = "кВт·ч",
+                    color = borderColor
+                )
+                ValueDisplay(
+                    value = "%.0f".format(state.idleDrainHours) + "ч",
+                    label = "стоянка",
+                    color = borderColor
+                )
+            }
+
+            if (state.idleDrainExpanded) {
+                if (state.idleDrainRate > 0) {
+                    DetailRow(
+                        label = "Скорость",
+                        value = "${"%.2f".format(state.idleDrainRate)} кВт·ч/час",
+                        valueColor = borderColor
+                    )
+                }
+                if (state.idleDrainPercent > 0) {
+                    DetailRow(
+                        label = "Батарея",
+                        value = "${"%.1f".format(state.idleDrainPercent)}% израсходовано",
+                        valueColor = borderColor
+                    )
+                }
+                DetailRow(
+                    label = "За 7 дней",
+                    value = "${"%.1f".format(state.idleDrainKwhWeek)} кВт·ч",
+                    valueColor = TextPrimary
+                )
+                if (state.idleDrainHoursWeek > 0) {
+                    val avgPerDay = state.idleDrainKwhWeek / 7.0
+                    DetailRow(
+                        label = "Ср. в день",
+                        value = "${"%.1f".format(avgPerDay)} кВт·ч",
+                        valueColor = TextPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ============================================================================
+// 3. Battery health card
+// ============================================================================
+
 @Composable
 private fun BatteryHealthCard(state: DashboardUiState, onClick: () -> Unit) {
-    // Overall status color for the card border
     val worstStatus = when {
         state.batteryHealthStatus == "critical" || state.voltage12vStatus == "critical" -> "critical"
         state.batteryHealthStatus == "warning" || state.voltage12vStatus == "warning" -> "warning"
@@ -283,16 +398,32 @@ private fun BatteryHealthCard(state: DashboardUiState, onClick: () -> Unit) {
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Main row: bat temp + 12V — always visible
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
-                BatteryTempDisplay(state)
-                Voltage12vDisplay(state)
+                val tempColor = when (state.batteryHealthStatus) {
+                    "critical" -> SocRed
+                    "warning" -> SocYellow
+                    else -> AccentGreen
+                }
+                val v12Color = when (state.voltage12vStatus) {
+                    "critical" -> SocRed
+                    "warning" -> SocYellow
+                    else -> AccentGreen
+                }
+                ValueDisplay(
+                    value = state.avgBatTemp?.let { "${it}°C" } ?: "—",
+                    label = "батарея",
+                    color = if (state.avgBatTemp != null) tempColor else TextMuted
+                )
+                ValueDisplay(
+                    value = state.voltage12v?.let { "${"%.1f".format(it)}V" } ?: "—",
+                    label = "12V",
+                    color = if (state.voltage12v != null) v12Color else TextMuted
+                )
             }
 
-            // Expanded details — shown on click
             if (state.batteryHealthExpanded) {
                 state.cellVoltageDelta?.let { delta ->
                     DetailRow(
@@ -317,60 +448,9 @@ private fun BatteryHealthCard(state: DashboardUiState, onClick: () -> Unit) {
     }
 }
 
-@Composable
-private fun DetailRow(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(label, color = TextSecondary, fontSize = 15.sp)
-        Text(value, color = valueColor, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-@Composable
-private fun BatteryTempDisplay(state: DashboardUiState) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        val color = when (state.batteryHealthStatus) {
-            "critical" -> SocRed
-            "warning" -> SocYellow
-            else -> AccentGreen
-        }
-        Text(
-            text = state.avgBatTemp?.let { "${it}°C" } ?: "—",
-            color = if (state.avgBatTemp != null) color else TextMuted,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "батарея",
-            color = TextMuted,
-            fontSize = 12.sp
-        )
-    }
-}
-
-@Composable
-private fun Voltage12vDisplay(state: DashboardUiState) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        val color = when (state.voltage12vStatus) {
-            "critical" -> SocRed
-            "warning" -> SocYellow
-            else -> AccentGreen
-        }
-        Text(
-            text = state.voltage12v?.let { "${"%.1f".format(it)}V" } ?: "—",
-            color = if (state.voltage12v != null) color else TextMuted,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = "12V",
-            color = TextMuted,
-            fontSize = 12.sp
-        )
-    }
-}
+// ============================================================================
+// Shared UI components
+// ============================================================================
 
 @Composable
 private fun SectionHeader(text: String) {
@@ -394,31 +474,4 @@ private fun PlaceholderText(text: String) {
             .padding(vertical = 12.dp),
         fontWeight = FontWeight.Medium
     )
-}
-
-@Composable
-private fun IdleDrainMiniCard(state: DashboardUiState) {
-    val drainColor = when {
-        state.idleDrainPercent > 5.0 -> SocRed
-        state.idleDrainPercent > 2.0 -> SocYellow
-        else -> AccentGreen
-    }
-    Card(
-        shape = RoundedCornerShape(10.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = androidx.compose.foundation.BorderStroke(1.dp, drainColor.copy(alpha = 0.4f)),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text("P Стоянка", color = drainColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            Text(
-                "${"%.1f".format(state.idleDrainKwhToday)} кВт·ч · ${"%.0f".format(state.idleDrainHours)}ч",
-                color = TextSecondary, fontSize = 13.sp
-            )
-        }
-    }
 }
