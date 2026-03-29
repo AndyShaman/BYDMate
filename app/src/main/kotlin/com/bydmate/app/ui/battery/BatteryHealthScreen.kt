@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -41,6 +43,7 @@ fun BatteryHealthScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         Text("Здоровье батареи", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
@@ -107,6 +110,77 @@ fun BatteryHealthScreen(
                     formatLabel = { "%.1f".format(it) },
                     modifier = Modifier.fillMaxWidth().height(150.dp)
                 )
+            }
+
+            // Battery degradation section
+            if (state.snapshots.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text("Деградация батареи", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Current SOH display
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        state.currentSoh?.let {
+                            StatColumn("SOH", "%.1f%%".format(it))
+                        }
+                        state.currentCapacity?.let {
+                            StatColumn("Ёмкость", "%.1f кВт·ч".format(it))
+                        }
+                        StatColumn("Замеров", "${state.snapshots.size}")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // Capacity trend chart
+                Text("Ёмкость батареи (кВт·ч)", color = TextSecondary, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+
+                val capacityValues = state.snapshots.reversed()
+                    .mapNotNull { it.calculatedCapacityKwh }
+                if (capacityValues.size >= 2) {
+                    LineChart(
+                        values = capacityValues,
+                        lineColor = AccentBlue,
+                        warningThreshold = 65.0,
+                        criticalThreshold = 58.0,
+                        invertThresholds = true,
+                        formatLabel = { "%.1f".format(it) },
+                        modifier = Modifier.fillMaxWidth().height(150.dp)
+                    )
+                } else {
+                    Text(
+                        "Недостаточно данных для графика (минимум 2 зарядки с Δ SOC ≥ 10%)",
+                        color = TextMuted, fontSize = 12.sp
+                    )
+                }
+
+                // SOH trend chart
+                val sohValues = state.snapshots.reversed()
+                    .mapNotNull { it.sohPercent }
+                if (sohValues.size >= 2) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text("Здоровье батареи SOH (%)", color = TextSecondary, fontSize = 14.sp)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    LineChart(
+                        values = sohValues,
+                        lineColor = AccentGreen,
+                        warningThreshold = 90.0,
+                        criticalThreshold = 80.0,
+                        invertThresholds = true,
+                        formatLabel = { "%.1f".format(it) },
+                        modifier = Modifier.fillMaxWidth().height(150.dp)
+                    )
+                }
             }
         }
     }

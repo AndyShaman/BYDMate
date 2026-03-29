@@ -90,7 +90,9 @@ fun TripsScreen(
         SummaryRow(
             totalKm = state.totalKm,
             totalKwh = state.totalKwh,
-            avgKwhPer100km = state.avgConsumption
+            avgKwhPer100km = state.avgConsumption,
+            totalCost = state.totalCost,
+            currencySymbol = state.currencySymbol
         )
 
         Spacer(modifier = Modifier.height(12.dp))

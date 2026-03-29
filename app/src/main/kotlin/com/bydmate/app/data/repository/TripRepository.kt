@@ -44,4 +44,7 @@ class TripRepository @Inject constructor(
 
     suspend fun getTripPoints(tripId: Long): List<TripPointEntity> =
         tripPointDao.getByTripId(tripId)
+
+    suspend fun getTripPointsByTripIds(tripIds: List<Long>): Map<Long, List<TripPointEntity>> =
+        tripPointDao.getByTripIds(tripIds).groupBy { it.tripId }
 }

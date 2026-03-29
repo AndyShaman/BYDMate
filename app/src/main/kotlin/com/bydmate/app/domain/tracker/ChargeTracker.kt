@@ -5,6 +5,8 @@ import android.util.Log
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.local.entity.BatterySnapshotEntity
+import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.calculator.ConsumptionCalculator
@@ -20,7 +22,8 @@ enum class ChargeState { IDLE, CHARGING }
 class ChargeTracker @Inject constructor(
     private val chargeRepository: ChargeRepository,
     private val settingsRepository: SettingsRepository,
-    private val calculator: ConsumptionCalculator
+    private val calculator: ConsumptionCalculator,
+    private val batteryHealthRepository: BatteryHealthRepository
 ) {
     private val _state = MutableStateFlow(ChargeState.IDLE)
     val state: StateFlow<ChargeState> = _state
@@ -253,6 +256,35 @@ class ChargeTracker @Inject constructor(
         )
 
         Log.d(TAG, "Charge ended: id=$chargeId, socStart=$socStart, socEnd=$socEnd, kwh=$kwh, maxPower=$maxPowerKw kW, type=$chargeType, batTemp=$batAvg")
+
+        // Record battery snapshot for degradation tracking
+        try {
+            val socStartVal = socStart
+            if (socStartVal != null && socEnd != null && kwh > 0) {
+                val calculatedCapacity = batteryHealthRepository.calculateCapacity(kwh, socStartVal, socEnd)
+                val soh = calculatedCapacity?.let { batteryHealthRepository.calculateSoh(it) }
+                val cellDelta = if (data.maxCellVoltage != null && data.minCellVoltage != null)
+                    data.maxCellVoltage - data.minCellVoltage else null
+
+                batteryHealthRepository.insert(
+                    BatterySnapshotEntity(
+                        timestamp = now,
+                        odometerKm = data.mileage?.let { it / 10.0 },
+                        socStart = socStartVal,
+                        socEnd = socEnd,
+                        kwhCharged = kwh,
+                        calculatedCapacityKwh = calculatedCapacity,
+                        sohPercent = soh,
+                        cellDeltaV = cellDelta,
+                        batTempAvg = batAvg,
+                        chargeId = chargeId
+                    )
+                )
+                Log.i(TAG, "Battery snapshot: capacity=${calculatedCapacity?.let { "%.1f".format(it) }}kWh, SOH=${soh?.let { "%.1f".format(it) }}%")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to record battery snapshot: ${e.message}")
+        }
 
         // Reset
         _state.value = ChargeState.IDLE

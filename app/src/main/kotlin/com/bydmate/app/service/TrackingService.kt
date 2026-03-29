@@ -53,13 +53,14 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var diPlusDbReader: com.bydmate.app.data.remote.DiPlusDbReader
     @Inject lateinit var settingsRepository: com.bydmate.app.data.repository.SettingsRepository
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var lastLocation: Location? = null
     private var locationManager: LocationManager? = null
     private var consecutiveNullCount = 0
     private var firstDataReceived = false
+    private var currentPollIntervalMs = POLL_INTERVAL_MS
 
     companion object {
         private const val TAG = "TrackingService"
@@ -67,6 +68,7 @@ class TrackingService : Service(), LocationListener {
         private const val CHANNEL_ID = "bydmate_tracking"
         private const val POLL_INTERVAL_MS = 9000L // ~9 seconds
         private const val NULL_WARNING_THRESHOLD = 5
+        private const val MAX_POLL_INTERVAL_MS = 60_000L
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -136,20 +138,20 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         pollingJob?.cancel()
 
-        // Force-end active trip/charge sessions before shutdown
-        try {
-            runBlocking(Dispatchers.IO) {
-                withTimeout(5000L) {
+        // Force-end active trip/charge sessions asynchronously
+        // Android gives ~5 seconds after onDestroy before killing process
+        val shutdownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        shutdownScope.launch {
+            try {
+                withTimeout(4000L) {
                     val lastData = _lastData.value
                     val lastLoc = lastLocation
                     tripTracker.forceEnd(lastData, lastLoc)
                     chargeTracker.forceEnd(lastData)
-                    // Let any in-flight coroutines in serviceScope finish
-                    serviceScope.coroutineContext[Job]?.children?.forEach { it.join() }
                 }
+            } catch (e: Exception) {
+                Log.w(TAG, "Graceful shutdown: ${e.message}")
             }
-        } catch (e: Exception) {
-            Log.w(TAG, "Timeout during graceful shutdown: ${e.message}")
         }
 
         serviceScope.cancel()
@@ -181,6 +183,7 @@ class TrackingService : Service(), LocationListener {
                     val data = diParsClient.fetch()
                     if (data != null) {
                         consecutiveNullCount = 0
+                        currentPollIntervalMs = POLL_INTERVAL_MS
                         _diPlusConnected.value = true
                         _lastData.value = data
 
@@ -209,17 +212,18 @@ class TrackingService : Service(), LocationListener {
                         consecutiveNullCount++
                         if (consecutiveNullCount >= NULL_WARNING_THRESHOLD) {
                             _diPlusConnected.value = false
+                            currentPollIntervalMs = (currentPollIntervalMs * 1.5).toLong()
+                                .coerceAtMost(MAX_POLL_INTERVAL_MS)
                             if (consecutiveNullCount == NULL_WARNING_THRESHOLD) {
-                                Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls)")
+                                Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls), backoff to ${currentPollIntervalMs}ms")
                                 tryLaunchDiPlus()
                             }
                         }
                     }
                 } catch (e: Exception) {
                     Log.e(TAG, "Polling error: ${e.message}", e)
-                    // Continue polling on error
                 }
-                delay(POLL_INTERVAL_MS)
+                delay(currentPollIntervalMs)
             }
         }
     }
@@ -322,7 +326,7 @@ class TrackingService : Service(), LocationListener {
     private fun acquireWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bydmate:tracking")
-        wakeLock?.acquire()
+        wakeLock?.acquire(30 * 60 * 1000L) // 30 min max, auto-released
     }
 
     private fun createNotificationChannel() {

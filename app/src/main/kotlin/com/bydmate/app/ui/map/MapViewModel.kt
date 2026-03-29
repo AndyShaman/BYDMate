@@ -62,12 +62,11 @@ class MapViewModel @Inject constructor(
             val (start, end) = periodRange(_uiState.value.period)
 
             tripRepository.getTripsByDateRange(start, end).collect { trips ->
-                val allRoutes = mutableListOf<TripRoute>()
-                for (trip in trips) {
-                    val points = tripRepository.getTripPoints(trip.id)
-                    if (points.isNotEmpty()) {
-                        allRoutes.add(TripRoute(points, trip.kwhPer100km))
-                    }
+                val tripIds = trips.map { it.id }
+                val pointsByTrip = tripRepository.getTripPointsByTripIds(tripIds)
+                val allRoutes = trips.mapNotNull { trip ->
+                    val points = pointsByTrip[trip.id]
+                    if (!points.isNullOrEmpty()) TripRoute(points, trip.kwhPer100km) else null
                 }
                 val totalKm = trips.mapNotNull { it.distanceKm }.sum()
                 val totalKwh = trips.mapNotNull { it.kwhConsumed }.sum()

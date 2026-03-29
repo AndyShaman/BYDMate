@@ -2,9 +2,16 @@ package com.bydmate.app.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "charges")
+@Entity(
+    tableName = "charges",
+    indices = [
+        Index(value = ["start_ts"]),
+        Index(value = ["status"])
+    ]
+)
 data class ChargeEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     @ColumnInfo(name = "start_ts") val startTs: Long,

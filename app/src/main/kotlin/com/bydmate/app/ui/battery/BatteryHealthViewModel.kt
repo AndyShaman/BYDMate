@@ -2,7 +2,9 @@ package com.bydmate.app.ui.battery
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
+import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,16 +16,20 @@ import javax.inject.Inject
 
 data class BatteryHealthUiState(
     val charges: List<ChargeEntity> = emptyList(),
+    val snapshots: List<BatterySnapshotEntity> = emptyList(),
     val avgDelta: Double? = null,
     val minVoltage12v: Double? = null,
     val currentDelta: Double? = null,
     val currentVoltage12v: Double? = null,
+    val currentSoh: Double? = null,
+    val currentCapacity: Double? = null,
     val isLoading: Boolean = true
 )
 
 @HiltViewModel
 class BatteryHealthViewModel @Inject constructor(
-    private val chargeRepository: ChargeRepository
+    private val chargeRepository: ChargeRepository,
+    private val batteryHealthRepository: BatteryHealthRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BatteryHealthUiState())
@@ -49,9 +55,21 @@ class BatteryHealthViewModel @Inject constructor(
                     avgDelta = if (deltas.isNotEmpty()) deltas.average() else null,
                     minVoltage12v = voltages12v.minOrNull(),
                     currentDelta = deltas.firstOrNull(),
-                    currentVoltage12v = voltages12v.firstOrNull(),
-                    isLoading = false
+                    currentVoltage12v = voltages12v.firstOrNull()
                 )
+            }
+
+            // Load battery snapshots
+            batteryHealthRepository.getRecent(50).collect { snapshots ->
+                val lastSnapshot = snapshots.firstOrNull()
+                _uiState.update {
+                    it.copy(
+                        snapshots = snapshots,
+                        currentSoh = lastSnapshot?.sohPercent,
+                        currentCapacity = lastSnapshot?.calculatedCapacityKwh,
+                        isLoading = false
+                    )
+                }
             }
         }
     }

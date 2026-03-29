@@ -17,7 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -82,7 +86,12 @@ fun SocGauge(
     val color = socColor(clampedSoc)
     val startAngle = 150f
     val totalSweep = 240f
-    val socSweep = totalSweep * (clampedSoc / 100f)
+    val animatedSoc by animateFloatAsState(
+        targetValue = clampedSoc / 100f,
+        animationSpec = tween(durationMillis = 800, easing = FastOutSlowInEasing),
+        label = "socSweep"
+    )
+    val socSweep = totalSweep * animatedSoc
     val strokeWidth = 14.dp
 
     Box(
@@ -212,6 +221,14 @@ fun TripCard(
                 color = TextMuted, fontSize = 12.sp
             )
         }
+
+        // Cost
+        trip.cost?.let { cost ->
+            Text(
+                text = "$currencySymbol${"%.0f".format(cost)}",
+                color = AccentGreen, fontSize = 12.sp
+            )
+        }
     }
 }
 
@@ -309,6 +326,8 @@ fun SummaryRow(
     totalKm: Double,
     totalKwh: Double,
     avgKwhPer100km: Double,
+    totalCost: Double = 0.0,
+    currencySymbol: String = "",
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -336,6 +355,15 @@ fun SummaryRow(
             valueColor = consumptionColor(avgKwhPer100km),
             modifier = Modifier.weight(1f)
         )
+        if (totalCost > 0) {
+            SummaryStatBox(
+                value = "%.0f".format(totalCost),
+                unit = currencySymbol,
+                label = "Стоимость",
+                valueColor = AccentGreen,
+                modifier = Modifier.weight(1f)
+            )
+        }
     }
 }
 

@@ -30,6 +30,7 @@ data class TripsUiState(
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
+    val totalCost: Double = 0.0,
     val expandedTripId: Long? = null,
     val expandedTripPoints: List<TripPointEntity> = emptyList(),
     val currencySymbol: String = "Br"
@@ -71,6 +72,7 @@ class TripsViewModel @Inject constructor(
             val totalKm = trips.sumOf { it.distanceKm ?: 0.0 }
             val totalKwh = trips.sumOf { it.kwhConsumed ?: 0.0 }
             val avgConsumption = if (totalKm > 0.0) totalKwh / totalKm * 100.0 else 0.0
+            val totalCost = trips.sumOf { it.cost ?: 0.0 }
             val (expandedId, expandedPoints) = _expansion.value
 
             TripsUiState(
@@ -79,6 +81,7 @@ class TripsViewModel @Inject constructor(
                 totalKm = totalKm,
                 totalKwh = totalKwh,
                 avgConsumption = avgConsumption,
+                totalCost = totalCost,
                 expandedTripId = expandedId,
                 expandedTripPoints = expandedPoints,
                 currencySymbol = currencySymbol

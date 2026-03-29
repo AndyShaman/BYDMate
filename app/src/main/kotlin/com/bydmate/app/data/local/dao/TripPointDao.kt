@@ -12,4 +12,7 @@ interface TripPointDao {
 
     @Query("SELECT * FROM trip_points WHERE trip_id = :tripId ORDER BY timestamp ASC")
     suspend fun getByTripId(tripId: Long): List<TripPointEntity>
+
+    @Query("SELECT * FROM trip_points WHERE trip_id IN (:tripIds) ORDER BY trip_id, timestamp ASC")
+    suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity>
 }

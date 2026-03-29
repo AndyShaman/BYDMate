@@ -27,7 +27,8 @@ interface TripDao {
     @Query("""
         SELECT COALESCE(SUM(distance_km), 0.0) as totalKm,
                COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
-               COUNT(*) as tripCount
+               COUNT(*) as tripCount,
+               COALESCE(SUM(cost), 0.0) as totalCost
         FROM trips
         WHERE start_ts >= :dayStart AND start_ts <= :dayEnd
     """)
@@ -45,9 +46,10 @@ interface TripDao {
     @Query("""
         SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
                COALESCE(SUM(distance_km), 0.0) as totalKm,
-               COUNT(*) as tripCount
+               COUNT(*) as tripCount,
+               COALESCE(SUM(cost), 0.0) as totalCost
         FROM (
-            SELECT kwh_consumed, distance_km FROM trips
+            SELECT kwh_consumed, distance_km, cost FROM trips
             WHERE distance_km > 0 AND kwh_consumed > 0
             ORDER BY start_ts DESC LIMIT :maxTrips
         )
@@ -58,5 +60,6 @@ interface TripDao {
 data class TripSummary(
     val totalKm: Double,
     val totalKwh: Double,
-    val tripCount: Int = 0
+    val tripCount: Int = 0,
+    val totalCost: Double = 0.0
 )

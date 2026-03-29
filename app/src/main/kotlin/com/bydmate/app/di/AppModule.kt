@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
@@ -70,6 +71,32 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_4_5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Indices for faster queries
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_start_ts ON trips(start_ts)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_charges_start_ts ON charges(start_ts)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_charges_status ON charges(status)")
+            // Battery degradation tracking table
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS battery_snapshots (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    odometer_km REAL,
+                    soc_start INTEGER NOT NULL,
+                    soc_end INTEGER NOT NULL,
+                    kwh_charged REAL NOT NULL,
+                    calculated_capacity_kwh REAL,
+                    soh_percent REAL,
+                    cell_delta_v REAL,
+                    bat_temp_avg REAL,
+                    charge_id INTEGER
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_battery_snapshots_timestamp ON battery_snapshots(timestamp)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -78,8 +105,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-            .fallbackToDestructiveMigration()
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
             .build()
     }
 
@@ -89,6 +115,7 @@ object AppModule {
     @Provides fun provideChargePointDao(db: AppDatabase): ChargePointDao = db.chargePointDao()
     @Provides fun provideSettingsDao(db: AppDatabase): SettingsDao = db.settingsDao()
     @Provides fun provideIdleDrainDao(db: AppDatabase): IdleDrainDao = db.idleDrainDao()
+    @Provides fun provideBatterySnapshotDao(db: AppDatabase): BatterySnapshotDao = db.batterySnapshotDao()
 
     @Provides
     @Singleton
