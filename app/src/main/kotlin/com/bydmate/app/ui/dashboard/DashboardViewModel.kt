@@ -71,6 +71,7 @@ class DashboardViewModel @Inject constructor(
     private var recentAvgConsumption: Double = 0.0
 
     init {
+        cleanupBadIdleDrainData()
         observeLiveData()
         observeLastTrip()
         observeRecentTrips()
@@ -136,7 +137,7 @@ class DashboardViewModel @Inject constructor(
 
     private fun observeRecentTrips() {
         viewModelScope.launch {
-            tripRepository.getRecentTrips(8).collect { trips ->
+            tripRepository.getRecentTrips(7).collect { trips ->
                 _uiState.update { it.copy(recentTrips = trips) }
             }
         }
@@ -232,6 +233,17 @@ class DashboardViewModel @Inject constructor(
         if (soc == null || soc <= 0 || recentAvgConsumption <= 0) return fallback
         val availableKwh = soc / 100.0 * batteryCapacityKwh
         return availableKwh / recentAvgConsumption * 100.0
+    }
+
+    // One-time cleanup: BatCapacity method produced inflated values in v1.0.0–1.0.4
+    private fun cleanupBadIdleDrainData() {
+        viewModelScope.launch {
+            val count = idleDrainDao.getCount()
+            if (count > 0) {
+                idleDrainDao.deleteAll()
+                android.util.Log.i("DashboardVM", "Cleared $count bad idle drain records (BatCapacity bug)")
+            }
+        }
     }
 
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */

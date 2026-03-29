@@ -12,11 +12,8 @@ import javax.inject.Singleton
  * Tracks battery drain while the vehicle is stationary (parked with
  * ignition on — heating, A/C, infotainment, etc.).
  *
- * Logic:
- * - Vehicle is IDLE (speed == 0) and NOT charging
- * - SOC is dropping → accumulate drain
- * - When SOC drops by >= 1% since idle started, record a session
- * - When vehicle starts moving or charging, finalize the session
+ * Uses Power (kW) integration over time for precise measurement.
+ * Fallback: SOC delta method if Power is unavailable.
  */
 @Singleton
 class IdleDrainTracker @Inject constructor(
@@ -25,7 +22,7 @@ class IdleDrainTracker @Inject constructor(
 ) {
     companion object {
         private const val TAG = "IdleDrainTracker"
-        private const val MIN_SOC_DROP = 1 // minimum 1% drop to record
+        private const val MIN_KWH_TO_RECORD = 0.01
     }
 
     private var tracking = false
@@ -33,7 +30,8 @@ class IdleDrainTracker @Inject constructor(
     private var sessionStartTs: Long = 0
     private var socAtStart: Int? = null
     private var lastSoc: Int? = null
-    private var batCapacityAtStart: Double? = null
+    private var lastPollTs: Long = 0
+    private var accumulatedKwh: Double = 0.0
 
     /**
      * Called every polling cycle from TrackingService.
@@ -54,36 +52,33 @@ class IdleDrainTracker @Inject constructor(
                 sessionStartTs = now
                 socAtStart = soc
                 lastSoc = soc
-                batCapacityAtStart = data.batteryCapacityKwh
-                Log.d(TAG, "Idle tracking started: SOC=$soc%, batCap=${data.batteryCapacityKwh}")
+                lastPollTs = now
+                accumulatedKwh = 0.0
+                Log.d(TAG, "Idle tracking started: SOC=$soc%")
             } else {
                 lastSoc = soc
-                val socDrop = (socAtStart ?: soc) - soc
-                val batteryKwh = settingsRepository.getBatteryCapacity()
 
-                // Primary: use BatCapacity delta from DiPlus (more precise than SOC)
-                val batCapNow = data.batteryCapacityKwh
-                val kwhByBatCap = if (batCapNow != null && batCapacityAtStart != null && batCapNow > batCapacityAtStart!!) {
-                    batCapNow - batCapacityAtStart!!
-                } else null
+                // Integrate power over time: kWh += kW * hours
+                val powerKw = data.power
+                if (powerKw != null && powerKw > 0 && lastPollTs > 0) {
+                    val intervalHours = (now - lastPollTs) / 3_600_000.0
+                    accumulatedKwh += powerKw * intervalHours
+                }
+                lastPollTs = now
 
-                // Fallback: SOC delta
-                val kwhBySoc = if (socDrop >= MIN_SOC_DROP) socDrop / 100.0 * batteryKwh else null
-
-                val kwh = kwhByBatCap ?: kwhBySoc
-
-                if (kwh != null && kwh >= 0.05) {
+                // Save/update if meaningful drain accumulated
+                if (accumulatedKwh >= MIN_KWH_TO_RECORD) {
                     if (sessionId == null) {
                         sessionId = idleDrainDao.insert(
                             IdleDrainEntity(
                                 startTs = sessionStartTs,
                                 socStart = socAtStart,
                                 socEnd = soc,
-                                kwhConsumed = kwh
+                                kwhConsumed = accumulatedKwh
                             )
                         )
                         Log.d(TAG, "Idle drain recorded: id=$sessionId, " +
-                            "SOC ${socAtStart}→$soc, ${"%.2f".format(kwh)} kWh (batCap=$kwhByBatCap, soc=$kwhBySoc)")
+                            "SOC ${socAtStart}→$soc, ${"%.3f".format(accumulatedKwh)} kWh")
                     } else {
                         idleDrainDao.update(
                             IdleDrainEntity(
@@ -92,25 +87,30 @@ class IdleDrainTracker @Inject constructor(
                                 endTs = now,
                                 socStart = socAtStart,
                                 socEnd = soc,
-                                kwhConsumed = kwh
+                                kwhConsumed = accumulatedKwh
                             )
                         )
                     }
                 }
             }
         } else if (tracking) {
-            // Vehicle started moving or charging — finalize session
             finalize(now)
         }
     }
 
     private suspend fun finalize(now: Long) {
         val id = sessionId
-        val drop = (socAtStart ?: 0) - (lastSoc ?: 0)
 
-        if (id != null && drop >= MIN_SOC_DROP) {
-            val batteryKwh = settingsRepository.getBatteryCapacity()
-            val kwh = drop / 100.0 * batteryKwh
+        // If no Power data was available, fall back to SOC delta
+        if (accumulatedKwh < MIN_KWH_TO_RECORD) {
+            val drop = (socAtStart ?: 0) - (lastSoc ?: 0)
+            if (drop >= 1) {
+                val batteryKwh = settingsRepository.getBatteryCapacity()
+                accumulatedKwh = drop / 100.0 * batteryKwh
+            }
+        }
+
+        if (id != null && accumulatedKwh >= MIN_KWH_TO_RECORD) {
             idleDrainDao.update(
                 IdleDrainEntity(
                     id = id,
@@ -118,11 +118,11 @@ class IdleDrainTracker @Inject constructor(
                     endTs = now,
                     socStart = socAtStart,
                     socEnd = lastSoc,
-                    kwhConsumed = kwh
+                    kwhConsumed = accumulatedKwh
                 )
             )
             Log.d(TAG, "Idle session finalized: id=$id, " +
-                "SOC ${socAtStart}→$lastSoc, ${String.format("%.2f", kwh)} kWh")
+                "SOC ${socAtStart}→$lastSoc, ${"%.3f".format(accumulatedKwh)} kWh")
         }
 
         // Reset
@@ -130,6 +130,7 @@ class IdleDrainTracker @Inject constructor(
         sessionId = null
         socAtStart = null
         lastSoc = null
-        batCapacityAtStart = null
+        lastPollTs = 0
+        accumulatedKwh = 0.0
     }
 }

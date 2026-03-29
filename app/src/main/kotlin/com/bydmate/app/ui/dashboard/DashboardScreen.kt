@@ -186,13 +186,8 @@ fun DashboardScreen(
                             borderColor = color,
                             onDismiss = { viewModel.toggleIdleDrainExpanded() }
                         ) {
-                            DetailRow("Сегодня", "${"%.1f".format(state.idleDrainKwhToday)} кВт·ч", color)
-                            DetailRow("Время стоянки", "${"%.0f".format(state.idleDrainHours)}ч", TextPrimary)
                             if (state.idleDrainRate > 0) {
                                 DetailRow("Скорость", "${"%.2f".format(state.idleDrainRate)} кВт·ч/час", color)
-                            }
-                            if (state.idleDrainPercent > 0) {
-                                DetailRow("Батарея", "${"%.1f".format(state.idleDrainPercent)}%", color)
                             }
                             DetailRow("За 7 дней", "${"%.1f".format(state.idleDrainKwhWeek)} кВт·ч", TextPrimary)
                             if (state.idleDrainKwhWeek > 0) {

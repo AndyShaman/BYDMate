@@ -31,6 +31,9 @@ interface IdleDrainDao {
     @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains")
     suspend fun getTotalKwh(): Double
 
+    @Query("DELETE FROM idle_drains")
+    suspend fun deleteAll()
+
     @Query("""
         SELECT COALESCE(SUM(CAST(end_ts - start_ts AS REAL) / 3600000.0), 0.0)
         FROM idle_drains
