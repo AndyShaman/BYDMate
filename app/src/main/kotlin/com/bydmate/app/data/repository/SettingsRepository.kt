@@ -19,6 +19,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
         const val KEY_CONSUMPTION_GOOD = "consumption_good_threshold"
         const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
+        const val KEY_LAST_KNOWN_SOC = "last_known_soc"
+        const val KEY_LAST_SOC_TIMESTAMP = "last_soc_timestamp"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -82,4 +84,15 @@ class SettingsRepository @Inject constructor(
 
     suspend fun getConsumptionBadThreshold(): Double =
         getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).toDoubleOrNull() ?: 30.0
+
+    suspend fun saveLastKnownSoc(soc: Int) {
+        setString(KEY_LAST_KNOWN_SOC, soc.toString())
+        setString(KEY_LAST_SOC_TIMESTAMP, System.currentTimeMillis().toString())
+    }
+
+    suspend fun getLastKnownSoc(): Int? =
+        getString(KEY_LAST_KNOWN_SOC, "").toIntOrNull()
+
+    suspend fun getLastSocTimestamp(): Long =
+        getString(KEY_LAST_SOC_TIMESTAMP, "0").toLongOrNull() ?: 0L
 }

@@ -27,11 +27,13 @@ import javax.inject.Inject
 data class DashboardUiState(
     val soc: Int? = null,
     val odometer: Double? = null,
+    val speed: Int? = null,
     val totalKmToday: Double = 0.0,
     val totalKwhToday: Double = 0.0,
     val avgConsumption: Double = 0.0,
     val idleDrainKwhToday: Double = 0.0,
     val lastTrip: TripEntity? = null,
+    val recentTrips: List<TripEntity> = emptyList(),
     val lastCharge: ChargeEntity? = null,
     val isServiceRunning: Boolean = false,
     val currencySymbol: String = "Br",
@@ -46,7 +48,9 @@ data class DashboardUiState(
     val idleDrainPercent: Double = 0.0,
     val idleDrainRate: Double = 0.0,
     val idleDrainHours: Double = 0.0,
-    val batteryHealthExpanded: Boolean = false
+    val batteryHealthExpanded: Boolean = false,
+    val estimatedRangeKm: Double? = null,
+    val diPlusConnected: Boolean = true
 )
 
 @HiltViewModel
@@ -60,29 +64,44 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
+    private var recentAvgConsumption: Double = 0.0
+
     init {
         observeLiveData()
         observeLastTrip()
+        observeRecentTrips()
         observeLastCharge()
         loadCurrency()
         loadTodaySummary()
+        loadRecentAvgConsumption()
     }
 
     /**
      * Collect live DiPars data and service running status
      * from TrackingService companion StateFlows.
      */
+    private var pollCount = 0
+
     private fun observeLiveData() {
         viewModelScope.launch {
             combine(
                 TrackingService.lastData,
-                TrackingService.isRunning
-            ) { data, running ->
-                Pair(data, running)
-            }.collect { (data, running) ->
+                TrackingService.isRunning,
+                TrackingService.diPlusConnected
+            ) { data, running, connected ->
+                Triple(data, running, connected)
+            }.collect { (data, running, connected) ->
+                // Retry loading avg consumption if still 0 (auto-import may have finished)
+                pollCount++
+                if (recentAvgConsumption <= 0 && pollCount % 3 == 0) {
+                    loadRecentAvgConsumption()
+                }
+
                 _uiState.update { current ->
+                    val newSoc = data?.soc ?: current.soc
                     current.copy(
-                        soc = data?.soc ?: current.soc,
+                        soc = newSoc,
+                        speed = data?.speed ?: current.speed,
                         odometer = data?.mileage ?: current.odometer,
                         isServiceRunning = running,
                         avgBatTemp = data?.avgBatTemp ?: current.avgBatTemp,
@@ -93,7 +112,9 @@ class DashboardViewModel @Inject constructor(
                         voltage12v = data?.voltage12v ?: current.voltage12v,
                         exteriorTemp = data?.exteriorTemp ?: current.exteriorTemp,
                         batteryHealthStatus = calculateBatteryStatus(data, current),
-                        voltage12vStatus = calculate12vStatus(data?.voltage12v ?: current.voltage12v)
+                        voltage12vStatus = calculate12vStatus(data?.voltage12v ?: current.voltage12v),
+                        estimatedRangeKm = calculateRange(newSoc, current.estimatedRangeKm),
+                        diPlusConnected = connected
                     )
                 }
             }
@@ -105,6 +126,14 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             tripRepository.getLastTrip().collect { trip ->
                 _uiState.update { it.copy(lastTrip = trip) }
+            }
+        }
+    }
+
+    private fun observeRecentTrips() {
+        viewModelScope.launch {
+            tripRepository.getRecentTrips(8).collect { trips ->
+                _uiState.update { it.copy(recentTrips = trips) }
             }
         }
     }
@@ -175,9 +204,28 @@ class DashboardViewModel @Inject constructor(
         return Pair(dayStart, dayEnd)
     }
 
+    private var batteryCapacityKwh: Double = 38.0
+
+    private fun loadRecentAvgConsumption() {
+        viewModelScope.launch {
+            recentAvgConsumption = tripRepository.getRecentAvgConsumption()
+            batteryCapacityKwh = settingsRepository.getBatteryCapacity()
+            _uiState.update {
+                it.copy(estimatedRangeKm = calculateRange(it.soc, null))
+            }
+        }
+    }
+
+    private fun calculateRange(soc: Int?, fallback: Double?): Double? {
+        if (soc == null || soc <= 0 || recentAvgConsumption <= 0) return fallback
+        val availableKwh = soc / 100.0 * batteryCapacityKwh
+        return availableKwh / recentAvgConsumption * 100.0
+    }
+
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
         loadTodaySummary()
+        loadRecentAvgConsumption()
     }
 
     fun toggleBatteryHealthExpanded() {

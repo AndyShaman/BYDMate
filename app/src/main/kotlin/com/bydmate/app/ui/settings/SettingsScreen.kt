@@ -173,21 +173,30 @@ fun SettingsScreen(
                             )
                         }
 
+                        // Log recording start/stop
                         Button(
-                            onClick = { viewModel.runDiagnostics() },
+                            onClick = {
+                                if (state.isRecordingLogs) viewModel.stopLogRecording()
+                                else viewModel.startLogRecording()
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = Color.White)
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (state.isRecordingLogs) SocRed else AccentPurple,
+                                contentColor = Color.White
+                            )
                         ) {
-                            Text("Диагностика", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        if (state.diagnosticLog != null) {
                             Text(
-                                state.diagnosticLog!!,
-                                color = TextPrimary,
-                                fontSize = 11.sp,
-                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                                lineHeight = 14.sp
+                                if (state.isRecordingLogs) "⏺ Остановить запись" else "Запись логов",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (state.logSaveStatus != null) {
+                            Text(
+                                state.logSaveStatus!!,
+                                color = if (state.logSaveStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                                fontSize = 12.sp
                             )
                         }
                     }

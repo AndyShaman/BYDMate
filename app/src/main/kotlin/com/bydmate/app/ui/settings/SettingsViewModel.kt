@@ -50,6 +50,8 @@ data class SettingsUiState(
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
     val diagnosticLog: String? = null,
+    val logSaveStatus: String? = null,
+    val isRecordingLogs: Boolean = false,
     val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD
@@ -277,9 +279,12 @@ class SettingsViewModel @Inject constructor(
             if (result.isError) {
                 _uiState.update { it.copy(importStatus = "Ошибка: ${result.error}") }
             } else {
-                _uiState.update {
-                    it.copy(importStatus = "Импортировано ${result.imported} зарядок, пропущено ${result.skipped} дублей")
+                val msg = buildString {
+                    append("Импортировано ${result.imported} зарядок")
+                    if (result.skipped > 0) append(", пропущено ${result.skipped} дублей")
+                    append(" (всего в DiPlus: ${result.totalInDb})")
                 }
+                _uiState.update { it.copy(importStatus = msg) }
             }
         }
     }
@@ -384,6 +389,89 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(consumptionBad = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_CONSUMPTION_BAD, value)
+        }
+    }
+
+    private var logProcess: Process? = null
+    private var logFile: File? = null
+
+    fun startLogRecording() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+                val fileName = "bydmate_logs_$timestamp.txt"
+
+                val saveDir = listOf(
+                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                    File("/storage/emulated/0/Download"),
+                    appContext.getExternalFilesDir(null)
+                ).firstOrNull { dir ->
+                    dir != null && (dir.exists() || dir.mkdirs()) && dir.canWrite()
+                }
+
+                if (saveDir == null) {
+                    _uiState.update { it.copy(logSaveStatus = "Ошибка: нет доступа к файловой системе") }
+                    return@launch
+                }
+
+                logFile = File(saveDir, fileName)
+
+                // Clear logcat buffer and start continuous recording
+                Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
+
+                logProcess = Runtime.getRuntime().exec(arrayOf(
+                    "logcat", "-v", "time",
+                    "-s", "DiParsClient:*", "TrackingService:*", "TripTracker:*",
+                    "ChargeTracker:*", "IdleDrainTracker:*", "DiPlusDbReader:*",
+                    "HistoryImporter:*", "EnergyDataReader:*"
+                ))
+
+                // Background thread to pipe logcat to file
+                Thread {
+                    try {
+                        logProcess?.inputStream?.bufferedReader()?.use { reader ->
+                            logFile?.bufferedWriter()?.use { writer ->
+                                var line = reader.readLine()
+                                while (line != null) {
+                                    writer.write(line)
+                                    writer.newLine()
+                                    writer.flush()
+                                    line = reader.readLine()
+                                }
+                            }
+                        }
+                    } catch (_: Exception) {}
+                }.start()
+
+                _uiState.update {
+                    it.copy(isRecordingLogs = true, logSaveStatus = "Запись... → ${logFile?.absolutePath}")
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(logSaveStatus = "Ошибка: ${e.message}") }
+            }
+        }
+    }
+
+    fun stopLogRecording() {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                logProcess?.destroy()
+                logProcess = null
+
+                val file = logFile
+                val lineCount = file?.readLines()?.size ?: 0
+
+                _uiState.update {
+                    it.copy(
+                        isRecordingLogs = false,
+                        logSaveStatus = "Сохранено: ${file?.absolutePath} ($lineCount строк)"
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(isRecordingLogs = false, logSaveStatus = "Ошибка: ${e.message}")
+                }
+            }
         }
     }
 

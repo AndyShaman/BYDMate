@@ -50,7 +50,9 @@ class ChargeTracker @Inject constructor(
         val power = data.power ?: 0.0
         val now = System.currentTimeMillis()
 
-        val isCharging = chargeGun == 2 && power < -1.0
+        val chargingStatus = data.chargingStatus ?: 0
+        // Detect charging: AC (gun=2) or DC (gun=3), or chargingStatus=2 (Started)
+        val isCharging = (chargeGun in 2..3 && power < -0.5) || chargingStatus == 2
 
         when (_state.value) {
             ChargeState.IDLE -> {

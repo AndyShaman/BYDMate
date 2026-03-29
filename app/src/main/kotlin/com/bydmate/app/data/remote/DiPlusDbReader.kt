@@ -25,6 +25,7 @@ class DiPlusDbReader @Inject constructor(
     data class ImportResult(
         val imported: Int = 0,
         val skipped: Int = 0,
+        val totalInDb: Int = 0,
         val error: String? = null
     ) {
         val isError: Boolean get() = error != null
@@ -54,6 +55,7 @@ class DiPlusDbReader @Inject constructor(
         val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
         var imported = 0
         var skipped = 0
+        var rowCount = 0
 
         try {
             // Check if ChargingLog table exists
@@ -67,19 +69,56 @@ class DiPlusDbReader @Inject constructor(
             }
             tableCursor.close()
 
+            // Log all tables and ChargingLog row count for debugging
+            val tablesCursor = db.rawQuery(
+                "SELECT name FROM sqlite_master WHERE type='table'", null
+            )
+            val tables = mutableListOf<String>()
+            while (tablesCursor.moveToNext()) { tables.add(tablesCursor.getString(0)) }
+            tablesCursor.close()
+            Log.d(TAG, "DiPlus DB tables: $tables")
+
+            val countCursor = db.rawQuery("SELECT COUNT(*) FROM ChargingLog", null)
+            countCursor.moveToFirst()
+            rowCount = countCursor.getInt(0)
+            countCursor.close()
+            Log.d(TAG, "ChargingLog rows: $rowCount")
+
+            if (rowCount == 0) {
+                db.close()
+                return ImportResult(error = "Таблица ChargingLog пуста (0 записей)")
+            }
+
+            // Log first row for debugging
+            val sampleCursor = db.rawQuery(
+                "SELECT * FROM ChargingLog LIMIT 1", null
+            )
+            if (sampleCursor.moveToFirst()) {
+                val cols = sampleCursor.columnNames.joinToString(", ")
+                val vals = (0 until sampleCursor.columnCount).joinToString(", ") {
+                    sampleCursor.getString(it) ?: "null"
+                }
+                Log.d(TAG, "ChargingLog columns: $cols")
+                Log.d(TAG, "ChargingLog sample: $vals")
+            }
+            sampleCursor.close()
+
             val cursor = db.rawQuery(
                 """SELECT elecPer_start, elecPer_end, duration, chargingType,
-                          startTime, endTime
-                   FROM ChargingLog ORDER BY startTime DESC""", null
+                          time, preTime
+                   FROM ChargingLog ORDER BY time DESC""", null
             )
 
             while (cursor.moveToNext()) {
-                val socStart = cursor.getInt(0)
-                val socEnd = cursor.getInt(1)
+                val socStart = cursor.getDouble(0).toInt()
+                val socEnd = cursor.getDouble(1).toInt()
                 val durationSec = cursor.getLong(2)
                 val chargingType = cursor.getInt(3)
-                val startTime = cursor.getLong(4)
-                val endTime = cursor.getLong(5)
+                val endTime = cursor.getLong(4)   // time = record time (end of charge)
+                val preTime = cursor.getLong(5)   // preTime = start of charge
+
+                // Use preTime as start; fall back to endTime - duration
+                val startTime = if (preTime > 0) preTime else endTime - durationSec
 
                 // DiPlus stores timestamps in seconds
                 val startTsMs = startTime * 1000L
@@ -131,7 +170,7 @@ class DiPlusDbReader @Inject constructor(
             db.close()
         }
 
-        Log.d(TAG, "Import done: $imported imported, $skipped skipped")
-        return ImportResult(imported = imported, skipped = skipped)
+        Log.d(TAG, "Import done: $imported imported, $skipped skipped, $rowCount total in DB")
+        return ImportResult(imported = imported, skipped = skipped, totalInDb = rowCount)
     }
 }

@@ -48,6 +48,10 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var chargeTracker: ChargeTracker
     @Inject lateinit var idleDrainTracker: IdleDrainTracker
     @Inject lateinit var chargeRepository: ChargeRepository
+    @Inject lateinit var tripRepository: com.bydmate.app.data.repository.TripRepository
+    @Inject lateinit var historyImporter: com.bydmate.app.data.local.HistoryImporter
+    @Inject lateinit var diPlusDbReader: com.bydmate.app.data.remote.DiPlusDbReader
+    @Inject lateinit var settingsRepository: com.bydmate.app.data.repository.SettingsRepository
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private var pollingJob: Job? = null
@@ -55,6 +59,7 @@ class TrackingService : Service(), LocationListener {
     private var lastLocation: Location? = null
     private var locationManager: LocationManager? = null
     private var consecutiveNullCount = 0
+    private var firstDataReceived = false
 
     companion object {
         private const val TAG = "TrackingService"
@@ -68,6 +73,9 @@ class TrackingService : Service(), LocationListener {
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning
+
+        private val _diPlusConnected = MutableStateFlow(true)
+        val diPlusConnected: StateFlow<Boolean> = _diPlusConnected
 
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
@@ -100,6 +108,22 @@ class TrackingService : Service(), LocationListener {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Failed to finalize stale sessions: ${e.message}")
+            }
+        }
+
+        // Auto-import on first launch (empty DB)
+        serviceScope.launch {
+            try {
+                val tripCount = tripRepository.getTripCount()
+                if (tripCount == 0) {
+                    Log.i(TAG, "Empty DB detected, starting auto-import")
+                    val bydResult = historyImporter.forceImport()
+                    Log.i(TAG, "Auto-import BYD: ${bydResult.count} trips, error=${bydResult.error}")
+                    val diPlusResult = diPlusDbReader.importChargingLog()
+                    Log.i(TAG, "Auto-import DiPlus: ${diPlusResult.imported} charges, error=${diPlusResult.error}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Auto-import failed: ${e.message}")
             }
         }
     }
@@ -157,7 +181,21 @@ class TrackingService : Service(), LocationListener {
                     val data = diParsClient.fetch()
                     if (data != null) {
                         consecutiveNullCount = 0
+                        _diPlusConnected.value = true
                         _lastData.value = data
+
+                        // Save SOC for retrospective charge detection
+                        data.soc?.let { soc ->
+                            settingsRepository.saveLastKnownSoc(soc)
+                        }
+
+                        // On first data after startup: detect offline charging
+                        if (!firstDataReceived) {
+                            firstDataReceived = true
+                            data.soc?.let { currentSoc ->
+                                detectOfflineCharge(currentSoc)
+                            }
+                        }
                         val loc = lastLocation
                         tripTracker.onData(data, loc)
                         chargeTracker.onData(data, loc)
@@ -169,8 +207,12 @@ class TrackingService : Service(), LocationListener {
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++
-                        if (consecutiveNullCount == NULL_WARNING_THRESHOLD) {
-                            Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls)")
+                        if (consecutiveNullCount >= NULL_WARNING_THRESHOLD) {
+                            _diPlusConnected.value = false
+                            if (consecutiveNullCount == NULL_WARNING_THRESHOLD) {
+                                Log.w(TAG, "DiPlus API not responding ($NULL_WARNING_THRESHOLD consecutive nulls)")
+                                tryLaunchDiPlus()
+                            }
                         }
                     }
                 } catch (e: Exception) {
@@ -178,6 +220,72 @@ class TrackingService : Service(), LocationListener {
                     // Continue polling on error
                 }
                 delay(POLL_INTERVAL_MS)
+            }
+        }
+    }
+
+    private fun detectOfflineCharge(currentSoc: Int) {
+        serviceScope.launch {
+            try {
+                val lastSoc = settingsRepository.getLastKnownSoc() ?: return@launch
+                val lastTs = settingsRepository.getLastSocTimestamp()
+                val now = System.currentTimeMillis()
+
+                // SOC increased since last shutdown → charging happened offline
+                if (currentSoc > lastSoc) {
+                    val socDelta = currentSoc - lastSoc
+                    val batteryCapacity = settingsRepository.getBatteryCapacity()
+                    val kwhCharged = socDelta / 100.0 * batteryCapacity
+
+                    // Determine tariff (assume AC for home charging)
+                    val tariff = settingsRepository.getHomeTariff()
+                    val cost = kwhCharged * tariff
+
+                    val chargeId = chargeRepository.insertCharge(
+                        com.bydmate.app.data.local.entity.ChargeEntity(
+                            startTs = lastTs,
+                            endTs = now,
+                            socStart = lastSoc,
+                            socEnd = currentSoc,
+                            kwhCharged = kwhCharged,
+                            kwhChargedSoc = kwhCharged,
+                            type = "AC",
+                            cost = cost,
+                            status = "COMPLETED"
+                        )
+                    )
+
+                    Log.i(TAG, "Offline charge detected: SOC $lastSoc→$currentSoc (+$socDelta%), " +
+                        "${"%.1f".format(kwhCharged)} kWh, id=$chargeId")
+                } else {
+                    Log.d(TAG, "No offline charge: lastSoc=$lastSoc, currentSoc=$currentSoc")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "detectOfflineCharge failed: ${e.message}")
+            }
+        }
+    }
+
+    private fun tryLaunchDiPlus() {
+        try {
+            val intent = Intent().apply {
+                setClassName("com.van.diplus", "com.van.diplus.activity.StartMainServiceActivity")
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            startActivity(intent)
+            Log.i(TAG, "Launched DiPlus StartMainServiceActivity")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to launch DiPlus: ${e.message}")
+            // Try alternative: just launch the main app
+            try {
+                val launchIntent = packageManager.getLaunchIntentForPackage("com.van.diplus")
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(launchIntent)
+                    Log.i(TAG, "Launched DiPlus via package manager")
+                }
+            } catch (e2: Exception) {
+                Log.w(TAG, "Failed to launch DiPlus fallback: ${e2.message}")
             }
         }
     }

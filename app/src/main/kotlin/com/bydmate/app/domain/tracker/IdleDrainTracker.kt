@@ -33,6 +33,7 @@ class IdleDrainTracker @Inject constructor(
     private var sessionStartTs: Long = 0
     private var socAtStart: Int? = null
     private var lastSoc: Int? = null
+    private var batCapacityAtStart: Double? = null
 
     /**
      * Called every polling cycle from TrackingService.
@@ -49,43 +50,52 @@ class IdleDrainTracker @Inject constructor(
 
         if (shouldTrack) {
             if (!tracking) {
-                // Start idle tracking
                 tracking = true
                 sessionStartTs = now
                 socAtStart = soc
                 lastSoc = soc
-                Log.d(TAG, "Idle tracking started: SOC=$soc%")
+                batCapacityAtStart = data.batteryCapacityKwh
+                Log.d(TAG, "Idle tracking started: SOC=$soc%, batCap=${data.batteryCapacityKwh}")
             } else {
                 lastSoc = soc
-                val drop = (socAtStart ?: soc) - soc
-                if (drop >= MIN_SOC_DROP && sessionId == null) {
-                    // SOC dropped enough — create DB record
-                    val batteryKwh = settingsRepository.getBatteryCapacity()
-                    val kwh = drop / 100.0 * batteryKwh
-                    sessionId = idleDrainDao.insert(
-                        IdleDrainEntity(
-                            startTs = sessionStartTs,
-                            socStart = socAtStart,
-                            socEnd = soc,
-                            kwhConsumed = kwh
+                val socDrop = (socAtStart ?: soc) - soc
+                val batteryKwh = settingsRepository.getBatteryCapacity()
+
+                // Primary: use BatCapacity delta from DiPlus (more precise than SOC)
+                val batCapNow = data.batteryCapacityKwh
+                val kwhByBatCap = if (batCapNow != null && batCapacityAtStart != null && batCapNow > batCapacityAtStart!!) {
+                    batCapNow - batCapacityAtStart!!
+                } else null
+
+                // Fallback: SOC delta
+                val kwhBySoc = if (socDrop >= MIN_SOC_DROP) socDrop / 100.0 * batteryKwh else null
+
+                val kwh = kwhByBatCap ?: kwhBySoc
+
+                if (kwh != null && kwh >= 0.05) {
+                    if (sessionId == null) {
+                        sessionId = idleDrainDao.insert(
+                            IdleDrainEntity(
+                                startTs = sessionStartTs,
+                                socStart = socAtStart,
+                                socEnd = soc,
+                                kwhConsumed = kwh
+                            )
                         )
-                    )
-                    Log.d(TAG, "Idle drain recorded: id=$sessionId, " +
-                        "SOC ${socAtStart}→$soc (-${drop}%), ${String.format("%.2f", kwh)} kWh")
-                } else if (drop >= MIN_SOC_DROP && sessionId != null) {
-                    // Update existing session with latest SOC
-                    val batteryKwh = settingsRepository.getBatteryCapacity()
-                    val kwh = drop / 100.0 * batteryKwh
-                    idleDrainDao.update(
-                        IdleDrainEntity(
-                            id = sessionId!!,
-                            startTs = sessionStartTs,
-                            endTs = now,
-                            socStart = socAtStart,
-                            socEnd = soc,
-                            kwhConsumed = kwh
+                        Log.d(TAG, "Idle drain recorded: id=$sessionId, " +
+                            "SOC ${socAtStart}→$soc, ${"%.2f".format(kwh)} kWh (batCap=$kwhByBatCap, soc=$kwhBySoc)")
+                    } else {
+                        idleDrainDao.update(
+                            IdleDrainEntity(
+                                id = sessionId!!,
+                                startTs = sessionStartTs,
+                                endTs = now,
+                                socStart = socAtStart,
+                                socEnd = soc,
+                                kwhConsumed = kwh
+                            )
                         )
-                    )
+                    }
                 }
             }
         } else if (tracking) {
@@ -120,5 +130,6 @@ class IdleDrainTracker @Inject constructor(
         sessionId = null
         socAtStart = null
         lastSoc = null
+        batCapacityAtStart = null
     }
 }

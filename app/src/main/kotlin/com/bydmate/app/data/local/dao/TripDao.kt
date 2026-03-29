@@ -35,10 +35,28 @@ interface TripDao {
 
     @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT 1")
     fun getLastTrip(): Flow<TripEntity?>
+
+    @Query("SELECT * FROM trips ORDER BY start_ts DESC LIMIT :limit")
+    fun getRecent(limit: Int = 5): Flow<List<TripEntity>>
+
+    @Query("SELECT COUNT(*) FROM trips")
+    suspend fun getCount(): Int
+
+    @Query("""
+        SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
+               COALESCE(SUM(distance_km), 0.0) as totalKm,
+               COUNT(*) as tripCount
+        FROM (
+            SELECT kwh_consumed, distance_km FROM trips
+            WHERE distance_km > 0 AND kwh_consumed > 0
+            ORDER BY start_ts DESC LIMIT :maxTrips
+        )
+    """)
+    suspend fun getRecentSummary(maxTrips: Int = 30): TripSummary
 }
 
 data class TripSummary(
     val totalKm: Double,
     val totalKwh: Double,
-    val tripCount: Int
+    val tripCount: Int = 0
 )

@@ -82,6 +82,27 @@ class DiParsClient @Inject constructor(
                 map[key] = value
             }
         }
+
+        // Cell voltages: DiPlus already divides raw millivolts by 1000 → value is in volts
+        // Treat <= 0 as unavailable (DiPlus returns 0.0 when BMS hasn't reported)
+        val maxCellRaw = map["MaxCellV"]?.toDoubleOrNull()
+        val minCellRaw = map["MinCellV"]?.toDoubleOrNull()
+        val maxCell = maxCellRaw?.takeIf { it > 0.5 }
+        val minCell = minCellRaw?.takeIf { it > 0.5 }
+
+        // 12V: may come as millivolts (>100) or volts (<100); 0 = unavailable
+        val v12Raw = map["Voltage12V"]?.toDoubleOrNull()
+        val v12 = when {
+            v12Raw == null || v12Raw <= 0.0 -> null
+            v12Raw > 100.0 -> v12Raw / 1000.0  // millivolts → volts
+            else -> v12Raw                       // already in volts
+        }
+
+        Log.d(TAG, "Raw DiPlus: MaxCellV=${map["MaxCellV"]}, MinCellV=${map["MinCellV"]}, " +
+            "Voltage12V=${map["Voltage12V"]}, ExtTemp=${map["ExtTemp"]}, " +
+            "BatCapacity=${map["BatCapacity"]}, AvgBatTemp=${map["AvgBatTemp"]}")
+        Log.d(TAG, "Parsed: maxCell=$maxCell, minCell=$minCell, v12=$v12")
+
         return DiParsData(
             soc = map["SOC"]?.toIntOrNull(),
             speed = map["Speed"]?.toIntOrNull(),
@@ -94,9 +115,9 @@ class DiParsClient @Inject constructor(
             chargingStatus = map["ChargingStatus"]?.toIntOrNull(),
             batteryCapacityKwh = map["BatCapacity"]?.toDoubleOrNull(),
             totalElecConsumption = map["TotalElecCon"]?.toDoubleOrNull(),
-            voltage12v = map["Voltage12V"]?.toDoubleOrNull()?.let { it / 1000.0 },
-            maxCellVoltage = map["MaxCellV"]?.toDoubleOrNull()?.let { it / 1000.0 },
-            minCellVoltage = map["MinCellV"]?.toDoubleOrNull()?.let { it / 1000.0 },
+            voltage12v = v12,
+            maxCellVoltage = maxCell,
+            minCellVoltage = minCell,
             exteriorTemp = map["ExtTemp"]?.toIntOrNull()
         )
     }

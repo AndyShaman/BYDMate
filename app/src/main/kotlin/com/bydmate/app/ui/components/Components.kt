@@ -126,13 +126,10 @@ fun SocGauge(
                 style = stroke
             )
 
-            // Foreground SOC arc with gradient
+            // Foreground SOC arc
             if (clampedSoc > 0) {
                 drawArc(
-                    brush = Brush.sweepGradient(
-                        colors = listOf(color.copy(alpha = 0.6f), color),
-                        center = Offset(size.width / 2f, size.height / 2f)
-                    ),
+                    color = color,
                     startAngle = startAngle,
                     sweepAngle = socSweep,
                     useCenter = false,
@@ -173,66 +170,47 @@ fun TripCard(
     modifier: Modifier = Modifier,
     currencySymbol: String = "Br"
 ) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = BorderStroke(1.dp, CardBorder.copy(alpha = 0.3f)),
+    // Compact single-row trip card
+    Row(
         modifier = modifier
             .fillMaxWidth()
+            .background(CardSurface, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 7.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            // Line 1: time range, distance, duration
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                val timeRange = buildString {
-                    append(formatTime(trip.startTs))
-                    append("–")
-                    append(trip.endTs?.let { formatTime(it) } ?: "…")
-                }
-                Text(text = timeRange, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        // Time range
+        val timeRange = buildString {
+            append(formatTime(trip.startTs))
+            append("–")
+            append(trip.endTs?.let { formatTime(it) } ?: "…")
+        }
+        Text(text = timeRange, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
 
-                val distanceText = trip.distanceKm?.let { "%.1f км".format(it) } ?: "— км"
-                Text(text = distanceText, color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        // Distance
+        Text(
+            text = trip.distanceKm?.let { "%.1f".format(it) } ?: "—",
+            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium
+        )
 
-                if (trip.endTs != null) {
-                    Text(
-                        text = formatDuration(trip.startTs, trip.endTs),
-                        color = TextSecondary, fontSize = 14.sp
-                    )
-                }
-            }
+        // kWh
+        Text(
+            text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
+            color = TextSecondary, fontSize = 13.sp
+        )
 
-            // Line 2: kWh, consumption, bat temp, cost
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                val kwhText = trip.kwhConsumed?.let { "%.1f кВт·ч".format(it) } ?: "—"
-                Text(text = kwhText, color = TextPrimary, fontSize = 14.sp)
+        // Consumption — color-coded
+        val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
+        val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
+        Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold)
 
-                val consumptionText = trip.kwhPer100km?.let { "%.1f/100".format(it) } ?: "—"
-                val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
-                Text(text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-
-                val batTemp = trip.batTempAvg ?: trip.tempAvgC
-                if (batTemp != null) {
-                    Text(text = "bat %.0f°C".format(batTemp), color = TextSecondary, fontSize = 14.sp)
-                }
-
-                if (trip.cost != null) {
-                    Text(
-                        text = "$currencySymbol%.2f".format(trip.cost),
-                        color = AccentGreen, fontSize = 14.sp
-                    )
-                }
-            }
+        // Duration
+        if (trip.endTs != null) {
+            Text(
+                text = formatDuration(trip.startTs, trip.endTs),
+                color = TextMuted, fontSize = 12.sp
+            )
         }
     }
 }

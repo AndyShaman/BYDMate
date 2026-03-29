@@ -30,6 +30,15 @@ class TripRepository @Inject constructor(
 
     fun getLastTrip(): Flow<TripEntity?> = tripDao.getLastTrip()
 
+    fun getRecentTrips(limit: Int = 5): Flow<List<TripEntity>> = tripDao.getRecent(limit)
+
+    suspend fun getTripCount(): Int = tripDao.getCount()
+
+    suspend fun getRecentAvgConsumption(): Double {
+        val summary = tripDao.getRecentSummary()
+        return if (summary.totalKm > 0) summary.totalKwh / summary.totalKm * 100.0 else 0.0
+    }
+
     suspend fun insertTripPoints(points: List<TripPointEntity>) =
         tripPointDao.insertAll(points)
 
