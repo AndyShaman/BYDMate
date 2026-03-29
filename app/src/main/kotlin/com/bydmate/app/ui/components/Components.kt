@@ -203,6 +203,12 @@ fun TripCard(
             color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium
         )
 
+        // Duration
+        Text(
+            text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
+            color = TextMuted, fontSize = 12.sp
+        )
+
         // kWh
         Text(
             text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
@@ -213,22 +219,6 @@ fun TripCard(
         val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
         Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold)
-
-        // Duration
-        if (trip.endTs != null) {
-            Text(
-                text = formatDuration(trip.startTs, trip.endTs),
-                color = TextMuted, fontSize = 12.sp
-            )
-        }
-
-        // Cost
-        trip.cost?.let { cost ->
-            Text(
-                text = "$currencySymbol${"%.0f".format(cost)}",
-                color = AccentGreen, fontSize = 12.sp
-            )
-        }
     }
 }
 

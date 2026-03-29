@@ -248,9 +248,9 @@ fun DashboardScreen(
                 ) {
                     Text("Время", color = TextMuted, fontSize = 11.sp)
                     Text("км", color = TextMuted, fontSize = 11.sp)
+                    Text("длит.", color = TextMuted, fontSize = 11.sp)
                     Text("кВт·ч", color = TextMuted, fontSize = 11.sp)
                     Text("/100", color = TextMuted, fontSize = 11.sp)
-                    Text("", color = TextMuted, fontSize = 11.sp)
                 }
                 if (state.recentTrips.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
