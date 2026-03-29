@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.ui.components.SocGauge
@@ -368,18 +369,35 @@ private fun CardDetailDialog(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f))
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                ) { onDismiss() },
+            contentAlignment = Alignment.CenterStart
         ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
+                modifier = Modifier
+                    .padding(start = 22.dp, end = 16.dp)
+                    .fillMaxWidth(0.4f)
+                    .clickable { onDismiss() }
             ) {
-                Text(title, color = borderColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                content()
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(title, color = borderColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    content()
+                }
             }
         }
     }
