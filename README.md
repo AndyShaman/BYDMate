@@ -16,6 +16,10 @@
 
 [Возможности](#-возможности) | [Установка](#-установка) | [Как работает](#-как-работает) | [Сборка](#-сборка-из-исходников) | [Благодарности](#-благодарности)
 
+<img src="docs/screenshot_dashboard.jpg" alt="BYDMate Dashboard on DiLink 5.0" width="800">
+
+*Dashboard на BYD Leopard 3 — DiLink 5.0, 15.6"*
+
 </div>
 
 ---
@@ -144,6 +148,12 @@ Copyright (C) 2026 [AndyShaman](https://github.com/AndyShaman)
 
 <details>
 <summary><b>English version</b></summary>
+
+<div align="center">
+<img src="docs/screenshot_dashboard.jpg" alt="BYDMate Dashboard on DiLink 5.0" width="800">
+
+*Dashboard on BYD Leopard 3 — DiLink 5.0, 15.6"*
+</div>
 
 ## What is BYDMate?
 
