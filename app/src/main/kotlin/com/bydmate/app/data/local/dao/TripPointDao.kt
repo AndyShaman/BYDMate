@@ -15,4 +15,22 @@ interface TripPointDao {
 
     @Query("SELECT * FROM trip_points WHERE trip_id IN (:tripIds) ORDER BY trip_id, timestamp ASC")
     suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity>
+
+    @Query("SELECT COUNT(*) FROM trip_points")
+    suspend fun getCount(): Int
+
+    /**
+     * Delete old points keeping every Nth one per trip.
+     * Points older than [cutoff] are thinned to ~1 per [intervalMs].
+     */
+    @Query("""
+        DELETE FROM trip_points
+        WHERE timestamp < :cutoff
+        AND id NOT IN (
+            SELECT MIN(id) FROM trip_points
+            WHERE timestamp < :cutoff
+            GROUP BY trip_id, (timestamp / :intervalMs)
+        )
+    """)
+    suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int
 }

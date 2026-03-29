@@ -66,7 +66,7 @@ class TrackingService : Service(), LocationListener {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "bydmate_tracking"
-        private const val POLL_INTERVAL_MS = 9000L // ~9 seconds
+        private const val POLL_INTERVAL_MS = 3000L // 3 seconds for detailed GPS + charging curve
         private const val NULL_WARNING_THRESHOLD = 5
         private const val MAX_POLL_INTERVAL_MS = 60_000L
 
