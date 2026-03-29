@@ -241,15 +241,27 @@ class DashboardViewModel @Inject constructor(
     }
 
     fun toggleBatteryHealthExpanded() {
-        _uiState.update { it.copy(batteryHealthExpanded = !it.batteryHealthExpanded) }
+        _uiState.update { it.copy(
+            batteryHealthExpanded = !it.batteryHealthExpanded,
+            chargeExpanded = false,
+            idleDrainExpanded = false
+        ) }
     }
 
     fun toggleChargeExpanded() {
-        _uiState.update { it.copy(chargeExpanded = !it.chargeExpanded) }
+        _uiState.update { it.copy(
+            chargeExpanded = !it.chargeExpanded,
+            idleDrainExpanded = false,
+            batteryHealthExpanded = false
+        ) }
     }
 
     fun toggleIdleDrainExpanded() {
-        _uiState.update { it.copy(idleDrainExpanded = !it.idleDrainExpanded) }
+        _uiState.update { it.copy(
+            idleDrainExpanded = !it.idleDrainExpanded,
+            chargeExpanded = false,
+            batteryHealthExpanded = false
+        ) }
     }
 
     private fun calculateBatteryStatus(

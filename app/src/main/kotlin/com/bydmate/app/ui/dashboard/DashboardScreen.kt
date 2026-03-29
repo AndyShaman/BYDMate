@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,12 +27,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.ui.components.SocGauge
@@ -103,11 +106,128 @@ fun DashboardScreen(
                     // 3 compact cards: charge, idle drain, battery
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        ChargeCompactCard(state, onClick = { viewModel.toggleChargeExpanded() })
-                        IdleDrainCompactCard(state, onClick = { viewModel.toggleIdleDrainExpanded() })
-                        BatteryHealthCard(state, onClick = { viewModel.toggleBatteryHealthExpanded() })
+                        CompactCard(
+                            leftValue = state.lastCharge?.kwhCharged?.let { "%.1f".format(it) } ?: "—",
+                            leftLabel = "кВт·ч",
+                            rightValue = state.lastCharge?.type ?: "—",
+                            rightLabel = "зарядка",
+                            borderColor = when (state.lastCharge?.type) {
+                                null -> TextMuted
+                                "DC" -> AccentOrange
+                                else -> AccentBlue
+                            },
+                            hasData = state.lastCharge != null,
+                            onClick = { viewModel.toggleChargeExpanded() }
+                        )
+                        CompactCard(
+                            leftValue = "%.1f".format(state.idleDrainKwhToday),
+                            leftLabel = "кВт·ч",
+                            rightValue = "%.0f".format(state.idleDrainHours) + "ч",
+                            rightLabel = "стоянка",
+                            borderColor = when {
+                                state.idleDrainPercent > 5.0 -> SocRed
+                                state.idleDrainPercent > 2.0 -> SocYellow
+                                else -> AccentGreen
+                            },
+                            onClick = { viewModel.toggleIdleDrainExpanded() }
+                        )
+                        CompactCard(
+                            leftValue = state.avgBatTemp?.let { "${it}°C" } ?: "—",
+                            leftLabel = "батарея",
+                            rightValue = state.voltage12v?.let { "${"%.1f".format(it)}V" } ?: "—",
+                            rightLabel = "12V",
+                            borderColor = run {
+                                val worst = when {
+                                    state.batteryHealthStatus == "critical" || state.voltage12vStatus == "critical" -> "critical"
+                                    state.batteryHealthStatus == "warning" || state.voltage12vStatus == "warning" -> "warning"
+                                    else -> "ok"
+                                }
+                                when (worst) { "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen }
+                            },
+                            onClick = { viewModel.toggleBatteryHealthExpanded() }
+                        )
+                    }
+
+                    // Pop-up dialogs
+                    if (state.chargeExpanded) {
+                        state.lastCharge?.let { charge ->
+                            val color = if (charge.type == "DC") AccentOrange else AccentBlue
+                            CardDetailDialog(
+                                title = "Последняя зарядка",
+                                borderColor = color,
+                                onDismiss = { viewModel.toggleChargeExpanded() }
+                            ) {
+                                DetailRow("Тип", charge.type ?: "—", color)
+                                DetailRow("SOC", "${charge.socStart ?: "?"}% → ${charge.socEnd ?: "?"}%", TextPrimary)
+                                charge.kwhCharged?.let {
+                                    DetailRow("Энергия", "${"%.1f".format(it)} кВт·ч", TextPrimary)
+                                }
+                                DetailRow("Время", com.bydmate.app.ui.components.formatDateTime(charge.startTs), TextPrimary)
+                                if (charge.endTs != null) {
+                                    DetailRow("Длительность", com.bydmate.app.ui.components.formatDuration(charge.startTs, charge.endTs), TextPrimary)
+                                }
+                                charge.cost?.let { cost ->
+                                    DetailRow("Стоимость", "${state.currencySymbol}${"%.1f".format(cost)}", AccentGreen)
+                                }
+                            }
+                        }
+                    }
+                    if (state.idleDrainExpanded) {
+                        val color = when {
+                            state.idleDrainPercent > 5.0 -> SocRed
+                            state.idleDrainPercent > 2.0 -> SocYellow
+                            else -> AccentGreen
+                        }
+                        CardDetailDialog(
+                            title = "Расход на стоянке",
+                            borderColor = color,
+                            onDismiss = { viewModel.toggleIdleDrainExpanded() }
+                        ) {
+                            DetailRow("Сегодня", "${"%.1f".format(state.idleDrainKwhToday)} кВт·ч", color)
+                            DetailRow("Время стоянки", "${"%.0f".format(state.idleDrainHours)}ч", TextPrimary)
+                            if (state.idleDrainRate > 0) {
+                                DetailRow("Скорость", "${"%.2f".format(state.idleDrainRate)} кВт·ч/час", color)
+                            }
+                            if (state.idleDrainPercent > 0) {
+                                DetailRow("Батарея", "${"%.1f".format(state.idleDrainPercent)}%", color)
+                            }
+                            DetailRow("За 7 дней", "${"%.1f".format(state.idleDrainKwhWeek)} кВт·ч", TextPrimary)
+                            if (state.idleDrainKwhWeek > 0) {
+                                DetailRow("Ср. в день", "${"%.1f".format(state.idleDrainKwhWeek / 7.0)} кВт·ч", TextPrimary)
+                            }
+                        }
+                    }
+                    if (state.batteryHealthExpanded) {
+                        val color = when {
+                            state.batteryHealthStatus == "critical" -> SocRed
+                            state.batteryHealthStatus == "warning" -> SocYellow
+                            else -> AccentGreen
+                        }
+                        CardDetailDialog(
+                            title = "Здоровье батареи",
+                            borderColor = color,
+                            onDismiss = { viewModel.toggleBatteryHealthExpanded() }
+                        ) {
+                            state.avgBatTemp?.let {
+                                DetailRow("Температура", "${it}°C", color)
+                            }
+                            state.voltage12v?.let {
+                                val v12Color = when (state.voltage12vStatus) {
+                                    "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
+                                }
+                                DetailRow("12V батарея", "${"%.1f".format(it)}V", v12Color)
+                            }
+                            state.cellVoltageDelta?.let { delta ->
+                                DetailRow("Баланс ячеек", "${"%.3f".format(delta)}V", when {
+                                    delta > 0.10 -> SocRed; delta > 0.05 -> SocYellow; else -> AccentGreen
+                                })
+                            }
+                            if (state.cellVoltageMin != null && state.cellVoltageMax != null) {
+                                DetailRow("Ячейки", "${"%.3f".format(state.cellVoltageMin)}–${"%.3f".format(state.cellVoltageMax)}V", TextPrimary)
+                            }
+                        }
                     }
                 }
             }
@@ -196,255 +316,83 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
 }
 
 // ============================================================================
-// Shared card building blocks
+// Compact card — same look for all three
 // ============================================================================
 
 @Composable
-private fun ValueDisplay(
-    value: String,
-    label: String,
-    color: androidx.compose.ui.graphics.Color
+private fun CompactCard(
+    leftValue: String,
+    leftLabel: String,
+    rightValue: String,
+    rightLabel: String,
+    borderColor: Color,
+    hasData: Boolean = true,
+    onClick: () -> Unit
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(value, color = color, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-        Text(label, color = TextMuted, fontSize = 12.sp)
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(leftValue, color = if (hasData) borderColor else TextMuted,
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(leftLabel, color = TextMuted, fontSize = 11.sp)
+            }
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(rightValue, color = if (hasData) borderColor else TextMuted,
+                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(rightLabel, color = TextMuted, fontSize = 11.sp)
+            }
+        }
+    }
+}
+
+// ============================================================================
+// Pop-up dialog for card details
+// ============================================================================
+
+@Composable
+private fun CardDetailDialog(
+    title: String,
+    borderColor: Color,
+    onDismiss: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
+            border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f))
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(title, color = borderColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                content()
+            }
+        }
     }
 }
 
 @Composable
-private fun DetailRow(label: String, value: String, valueColor: androidx.compose.ui.graphics.Color) {
+private fun DetailRow(label: String, value: String, valueColor: Color) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Text(label, color = TextSecondary, fontSize = 13.sp)
-        Text(value, color = valueColor, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-// ============================================================================
-// 1. Charge card
-// ============================================================================
-
-@Composable
-private fun ChargeCompactCard(state: DashboardUiState, onClick: () -> Unit) {
-    val charge = state.lastCharge
-    val borderColor = when {
-        charge == null -> TextMuted
-        charge.type == "DC" -> AccentOrange
-        else -> AccentBlue
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clickable { onClick() }
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ValueDisplay(
-                    value = charge?.kwhCharged?.let { "%.1f".format(it) } ?: "—",
-                    label = "кВт·ч",
-                    color = if (charge != null) borderColor else TextMuted
-                )
-                ValueDisplay(
-                    value = charge?.type ?: "—",
-                    label = "зарядка",
-                    color = if (charge != null) borderColor else TextMuted
-                )
-            }
-
-            if (state.chargeExpanded && charge != null) {
-                DetailRow(
-                    label = "SOC",
-                    value = "${charge.socStart ?: "?"}% → ${charge.socEnd ?: "?"}%",
-                    valueColor = TextPrimary
-                )
-                DetailRow(
-                    label = "Время",
-                    value = com.bydmate.app.ui.components.formatDateTime(charge.startTs),
-                    valueColor = TextPrimary
-                )
-                if (charge.endTs != null) {
-                    DetailRow(
-                        label = "Длительность",
-                        value = com.bydmate.app.ui.components.formatDuration(charge.startTs, charge.endTs),
-                        valueColor = TextPrimary
-                    )
-                }
-                charge.cost?.let { cost ->
-                    DetailRow(
-                        label = "Стоимость",
-                        value = "${state.currencySymbol}${"%.1f".format(cost)}",
-                        valueColor = AccentGreen
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// 2. Idle drain card
-// ============================================================================
-
-@Composable
-private fun IdleDrainCompactCard(state: DashboardUiState, onClick: () -> Unit) {
-    val borderColor = when {
-        state.idleDrainPercent > 5.0 -> SocRed
-        state.idleDrainPercent > 2.0 -> SocYellow
-        else -> AccentGreen
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clickable { onClick() }
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                ValueDisplay(
-                    value = "%.1f".format(state.idleDrainKwhToday),
-                    label = "кВт·ч",
-                    color = borderColor
-                )
-                ValueDisplay(
-                    value = "%.0f".format(state.idleDrainHours) + "ч",
-                    label = "стоянка",
-                    color = borderColor
-                )
-            }
-
-            if (state.idleDrainExpanded) {
-                if (state.idleDrainRate > 0) {
-                    DetailRow(
-                        label = "Скорость",
-                        value = "${"%.2f".format(state.idleDrainRate)} кВт·ч/час",
-                        valueColor = borderColor
-                    )
-                }
-                if (state.idleDrainPercent > 0) {
-                    DetailRow(
-                        label = "Батарея",
-                        value = "${"%.1f".format(state.idleDrainPercent)}% израсходовано",
-                        valueColor = borderColor
-                    )
-                }
-                DetailRow(
-                    label = "За 7 дней",
-                    value = "${"%.1f".format(state.idleDrainKwhWeek)} кВт·ч",
-                    valueColor = TextPrimary
-                )
-                if (state.idleDrainHoursWeek > 0) {
-                    val avgPerDay = state.idleDrainKwhWeek / 7.0
-                    DetailRow(
-                        label = "Ср. в день",
-                        value = "${"%.1f".format(avgPerDay)} кВт·ч",
-                        valueColor = TextPrimary
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ============================================================================
-// 3. Battery health card
-// ============================================================================
-
-@Composable
-private fun BatteryHealthCard(state: DashboardUiState, onClick: () -> Unit) {
-    val worstStatus = when {
-        state.batteryHealthStatus == "critical" || state.voltage12vStatus == "critical" -> "critical"
-        state.batteryHealthStatus == "warning" || state.voltage12vStatus == "warning" -> "warning"
-        else -> "ok"
-    }
-    val borderColor = when (worstStatus) {
-        "critical" -> SocRed
-        "warning" -> SocYellow
-        else -> AccentGreen
-    }
-
-    Card(
-        shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 8.dp)
-            .clickable { onClick() }
-    ) {
-        Column(
-            modifier = Modifier.padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly
-            ) {
-                val tempColor = when (state.batteryHealthStatus) {
-                    "critical" -> SocRed
-                    "warning" -> SocYellow
-                    else -> AccentGreen
-                }
-                val v12Color = when (state.voltage12vStatus) {
-                    "critical" -> SocRed
-                    "warning" -> SocYellow
-                    else -> AccentGreen
-                }
-                ValueDisplay(
-                    value = state.avgBatTemp?.let { "${it}°C" } ?: "—",
-                    label = "батарея",
-                    color = if (state.avgBatTemp != null) tempColor else TextMuted
-                )
-                ValueDisplay(
-                    value = state.voltage12v?.let { "${"%.1f".format(it)}V" } ?: "—",
-                    label = "12V",
-                    color = if (state.voltage12v != null) v12Color else TextMuted
-                )
-            }
-
-            if (state.batteryHealthExpanded) {
-                state.cellVoltageDelta?.let { delta ->
-                    DetailRow(
-                        label = "Баланс ячеек",
-                        value = "${"%.3f".format(delta)}V",
-                        valueColor = when {
-                            delta > 0.10 -> SocRed
-                            delta > 0.05 -> SocYellow
-                            else -> AccentGreen
-                        }
-                    )
-                }
-                if (state.cellVoltageMin != null && state.cellVoltageMax != null) {
-                    DetailRow(
-                        label = "Ячейки",
-                        value = "${"%.3f".format(state.cellVoltageMin)}–${"%.3f".format(state.cellVoltageMax)}V",
-                        valueColor = TextPrimary
-                    )
-                }
-            }
-        }
+        Text(label, color = TextSecondary, fontSize = 14.sp)
+        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
     }
 }
 
