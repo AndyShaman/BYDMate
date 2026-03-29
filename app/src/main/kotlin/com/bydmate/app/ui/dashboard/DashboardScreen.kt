@@ -398,8 +398,6 @@ private fun PlaceholderText(text: String) {
 
 @Composable
 private fun IdleDrainMiniCard(state: DashboardUiState) {
-    if (state.idleDrainKwhToday < 0.01) return
-
     val drainColor = when {
         state.idleDrainPercent > 5.0 -> SocRed
         state.idleDrainPercent > 2.0 -> SocYellow

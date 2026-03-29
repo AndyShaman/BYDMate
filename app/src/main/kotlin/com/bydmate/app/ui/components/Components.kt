@@ -191,7 +191,7 @@ fun TripCard(
     ) {
         // Time range
         val timeRange = buildString {
-            append(formatTime(trip.startTs))
+            append(formatDateTime(trip.startTs))
             append("–")
             append(trip.endTs?.let { formatTime(it) } ?: "…")
         }
