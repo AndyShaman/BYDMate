@@ -79,11 +79,12 @@ DiPlus API (localhost:8988)  →  BYDMate Service  →  Room DB  →  Compose UI
 
 ## Установка
 
-1. Скачайте APK из [**Releases**](https://github.com/AndyShaman/BYDMate/releases)
-2. Перенесите на DiLink через USB-флешку или по сети
-3. Установите (разрешите установку из неизвестных источников)
-4. При первом запуске выдайте разрешения на локацию и хранилище
-5. Приложение автоматически запустит DiPlus если он не активен
+1. Убедитесь, что на головном устройстве установлен **[DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** (требуется ADB)
+2. Скачайте BYDMate APK из [**Releases**](https://github.com/AndyShaman/BYDMate/releases)
+3. Перенесите на DiLink через USB-флешку или по сети
+4. Установите (разрешите установку из неизвестных источников)
+5. При первом запуске выдайте разрешения на локацию и хранилище
+6. BYDMate автоматически запустит DiPlus если он не активен
 
 ---
 
@@ -107,17 +108,20 @@ cd BYDMate
 
 ---
 
-## Благодарности
+## Требования
 
-BYDMate создан благодаря работе и вдохновению следующих проектов:
+Для работы BYDMate необходимо приложение **DiPlus** (D+) на головном устройстве. DiPlus предоставляет локальный HTTP API для чтения данных автомобиля.
+
+- **[Скачать DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** — APK последней версии
+- Для установки DiPlus потребуется **ADB-доступ** к головному устройству. Инструкции по включению ADB на DiLink можно найти в интернете для вашей модели BYD.
+
+---
+
+## Благодарности
 
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** (`org.jayb.bydapp`) by jayb — оригинальное приложение для чтения energydata и отображения статистики поездок на DiLink. Именно оно вдохновило на создание BYDMate и послужило reference-реализацией для работы с BYD energydata.
 
 - **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — приложение-мост к данным автомобиля через локальный HTTP API. Без DiPlus работа BYDMate была бы невозможна.
-
-- **[BYD Trip Stats](https://github.com/angoikon/byd-trip-stats)** by [@angoikon](https://github.com/angoikon) — аналитический дашборд для BYD DiLink. Альтернативный подход через MQTT/Electro bridge.
-
-- **[TeslaMate](https://github.com/teslamate-org/teslamate)** — open-source трекер для Tesla, послуживший ориентиром по UX и функциональности (trip logging, idle drain, battery degradation).
 
 ---
 
@@ -180,12 +184,17 @@ cd BYDMate
 ./gradlew assembleDebug
 ```
 
+### Requirements
+
+BYDMate requires the **DiPlus** (D+) app installed on the head unit. DiPlus provides a local HTTP API for reading vehicle data.
+
+- **[Download DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** — latest APK
+- DiPlus installation requires **ADB access** to the head unit. Search online for ADB enable instructions for your BYD model.
+
 ### Credits
 
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** by jayb — original energydata reader for DiLink, the inspiration for BYDMate
 - **[DiPlus](https://www.dilink.cn/)** by Van Design — local vehicle data API bridge
-- **[BYD Trip Stats](https://github.com/angoikon/byd-trip-stats)** by @angoikon — alternative BYD analytics dashboard
-- **[TeslaMate](https://github.com/teslamate-org/teslamate)** — open-source Tesla tracker, UX reference
 
 ### License
 
