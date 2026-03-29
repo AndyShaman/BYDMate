@@ -19,5 +19,6 @@ data class TripEntity(
     @ColumnInfo(name = "bat_temp_avg") val batTempAvg: Double? = null,
     @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
     @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
-    val cost: Double? = null
+    val cost: Double? = null,
+    @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null
 )

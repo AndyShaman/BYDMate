@@ -34,7 +34,19 @@ data class DashboardUiState(
     val lastTrip: TripEntity? = null,
     val lastCharge: ChargeEntity? = null,
     val isServiceRunning: Boolean = false,
-    val currencySymbol: String = "Br"
+    val currencySymbol: String = "Br",
+    val avgBatTemp: Int? = null,
+    val cellVoltageMin: Double? = null,
+    val cellVoltageMax: Double? = null,
+    val cellVoltageDelta: Double? = null,
+    val voltage12v: Double? = null,
+    val exteriorTemp: Int? = null,
+    val batteryHealthStatus: String = "ok",
+    val voltage12vStatus: String = "ok",
+    val idleDrainPercent: Double = 0.0,
+    val idleDrainRate: Double = 0.0,
+    val idleDrainHours: Double = 0.0,
+    val batteryHealthExpanded: Boolean = false
 )
 
 @HiltViewModel
@@ -72,7 +84,16 @@ class DashboardViewModel @Inject constructor(
                     current.copy(
                         soc = data?.soc ?: current.soc,
                         odometer = data?.mileage ?: current.odometer,
-                        isServiceRunning = running
+                        isServiceRunning = running,
+                        avgBatTemp = data?.avgBatTemp ?: current.avgBatTemp,
+                        cellVoltageMin = data?.minCellVoltage ?: current.cellVoltageMin,
+                        cellVoltageMax = data?.maxCellVoltage ?: current.cellVoltageMax,
+                        cellVoltageDelta = if (data?.maxCellVoltage != null && data.minCellVoltage != null)
+                            data.maxCellVoltage - data.minCellVoltage else current.cellVoltageDelta,
+                        voltage12v = data?.voltage12v ?: current.voltage12v,
+                        exteriorTemp = data?.exteriorTemp ?: current.exteriorTemp,
+                        batteryHealthStatus = calculateBatteryStatus(data, current),
+                        voltage12vStatus = calculate12vStatus(data?.voltage12v ?: current.voltage12v)
                     )
                 }
             }
@@ -113,17 +134,24 @@ class DashboardViewModel @Inject constructor(
             val (dayStart, dayEnd) = todayRange()
             val summary = tripRepository.getTodaySummary(dayStart, dayEnd)
             val idleDrain = idleDrainDao.getTodayDrainKwh(dayStart, dayEnd)
+            val idleDrainHours = idleDrainDao.getTodayDrainHours(dayStart, dayEnd)
+            val batteryCapacity = settingsRepository.getBatteryCapacity()
             val avg = if (summary.totalKm > 0) {
                 summary.totalKwh / summary.totalKm * 100.0
             } else {
                 0.0
             }
+            val idleDrainPercent = if (batteryCapacity > 0) idleDrain / batteryCapacity * 100.0 else 0.0
+            val idleDrainRate = if (idleDrainHours > 0) idleDrain / idleDrainHours else 0.0
             _uiState.update {
                 it.copy(
                     totalKmToday = summary.totalKm,
                     totalKwhToday = summary.totalKwh,
                     avgConsumption = avg,
-                    idleDrainKwhToday = idleDrain
+                    idleDrainKwhToday = idleDrain,
+                    idleDrainPercent = idleDrainPercent,
+                    idleDrainRate = idleDrainRate,
+                    idleDrainHours = idleDrainHours
                 )
             }
         }
@@ -150,5 +178,34 @@ class DashboardViewModel @Inject constructor(
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
         loadTodaySummary()
+    }
+
+    fun toggleBatteryHealthExpanded() {
+        _uiState.update { it.copy(batteryHealthExpanded = !it.batteryHealthExpanded) }
+    }
+
+    private fun calculateBatteryStatus(
+        data: com.bydmate.app.data.remote.DiParsData?,
+        current: DashboardUiState
+    ): String {
+        val maxV = data?.maxCellVoltage ?: current.cellVoltageMax
+        val minV = data?.minCellVoltage ?: current.cellVoltageMin
+        val delta = if (maxV != null && minV != null) maxV - minV else null
+        val temp = data?.avgBatTemp ?: current.avgBatTemp
+        if (delta == null && temp == null) return current.batteryHealthStatus
+        return when {
+            (delta != null && delta > 0.10) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
+            (delta != null && delta > 0.05) || (temp != null && (temp < 10 || temp > 45)) -> "warning"
+            else -> "ok"
+        }
+    }
+
+    private fun calculate12vStatus(voltage: Double?): String {
+        if (voltage == null) return "ok"
+        return when {
+            voltage < 11.8 -> "critical"
+            voltage < 12.4 -> "warning"
+            else -> "ok"
+        }
     }
 }

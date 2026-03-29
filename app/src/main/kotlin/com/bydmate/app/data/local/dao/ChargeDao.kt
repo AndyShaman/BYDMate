@@ -35,6 +35,22 @@ interface ChargeDao {
 
     @Query("SELECT * FROM charges ORDER BY start_ts DESC LIMIT 1")
     fun getLastCharge(): Flow<ChargeEntity?>
+
+    @Query("SELECT * FROM charges WHERE status = 'SUSPENDED' ORDER BY start_ts DESC LIMIT 1")
+    suspend fun getLastSuspendedCharge(): ChargeEntity?
+
+    @Query("SELECT * FROM charges WHERE status != 'COMPLETED' AND start_ts < :cutoffTs")
+    suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity>
+
+    @Query("SELECT * FROM charges ORDER BY start_ts DESC LIMIT 1")
+    suspend fun getLastChargeSync(): ChargeEntity?
+
+    @Query("""
+        SELECT * FROM charges
+        WHERE status = 'COMPLETED' AND (cell_voltage_min IS NOT NULL OR voltage_12v IS NOT NULL)
+        ORDER BY start_ts DESC LIMIT 30
+    """)
+    suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity>
 }
 
 data class ChargeSummary(

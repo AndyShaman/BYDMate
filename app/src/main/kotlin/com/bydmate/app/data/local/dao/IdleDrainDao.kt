@@ -30,4 +30,11 @@ interface IdleDrainDao {
 
     @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains")
     suspend fun getTotalKwh(): Double
+
+    @Query("""
+        SELECT COALESCE(SUM(CAST(end_ts - start_ts AS REAL) / 3600000.0), 0.0)
+        FROM idle_drains
+        WHERE start_ts >= :dayStart AND start_ts <= :dayEnd AND end_ts IS NOT NULL
+    """)
+    suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double
 }

@@ -45,7 +45,6 @@ import com.bydmate.app.ui.theme.*
 
 private val PrimaryColor = AccentGreen
 
-// Settings screen - battery capacity, tariffs, display preferences, CSV export
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
@@ -56,419 +55,264 @@ fun SettingsScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Screen title
         Text(
             text = "Настройки",
             color = TextPrimary,
-            fontSize = 24.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- Battery & tariffs section --
-        SectionHeader(text = "Батарея и тарифы")
         Spacer(modifier = Modifier.height(12.dp))
 
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
+        // Two-column layout
+        Row(
+            modifier = Modifier.weight(1f).fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // LEFT COLUMN: Battery & tariffs + Data
             Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Battery capacity
-                SettingsTextField(
-                    label = "Ёмкость батареи (кВт·ч)",
-                    value = state.batteryCapacity,
-                    onValueChange = { viewModel.saveBatteryCapacity(it) },
-                    keyboardType = KeyboardType.Decimal
-                )
-
-                // Home (AC) tariff
-                SettingsTextField(
-                    label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
-                    value = state.homeTariff,
-                    onValueChange = { viewModel.saveHomeTariff(it) },
-                    keyboardType = KeyboardType.Decimal
-                )
-
-                // DC fast-charge tariff
-                SettingsTextField(
-                    label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
-                    value = state.dcTariff,
-                    onValueChange = { viewModel.saveDcTariff(it) },
-                    keyboardType = KeyboardType.Decimal
-                )
-
-                // Trip cost tariff selector
-                Text(
-                    text = "Тариф для стоимости поездок",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                SectionHeader(text = "Батарея и тарифы")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    UnitChip(
-                        label = "Домашний (AC)",
-                        selected = state.tripCostTariff == "home",
-                        onClick = { viewModel.saveTripCostTariff("home") }
-                    )
-                    UnitChip(
-                        label = "DC",
-                        selected = state.tripCostTariff == "dc",
-                        onClick = { viewModel.saveTripCostTariff("dc") }
-                    )
-                    UnitChip(
-                        label = "Свой",
-                        selected = state.tripCostTariff != "home" && state.tripCostTariff != "dc",
-                        onClick = { viewModel.saveTripCostTariff(state.homeTariff) }
-                    )
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        SettingsTextField(
+                            label = "Ёмкость батареи (кВт·ч)",
+                            value = state.batteryCapacity,
+                            onValueChange = { viewModel.saveBatteryCapacity(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                        SettingsTextField(
+                            label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
+                            value = state.homeTariff,
+                            onValueChange = { viewModel.saveHomeTariff(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                        SettingsTextField(
+                            label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
+                            value = state.dcTariff,
+                            onValueChange = { viewModel.saveDcTariff(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                        Text("Тариф поездок", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
+                            UnitChip("DC", state.tripCostTariff == "dc") { viewModel.saveTripCostTariff("dc") }
+                            UnitChip("Свой", state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                                viewModel.saveTripCostTariff(state.homeTariff)
+                            }
+                        }
+                        if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                            SettingsTextField(
+                                label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
+                                value = state.tripCostTariff,
+                                onValueChange = { viewModel.saveTripCostTariff(it) },
+                                keyboardType = KeyboardType.Decimal
+                            )
+                        }
+                    }
                 }
-                if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
-                    SettingsTextField(
-                        label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
-                        value = state.tripCostTariff,
-                        onValueChange = { viewModel.saveTripCostTariff(it) },
-                        keyboardType = KeyboardType.Decimal
-                    )
+
+                SectionHeader(text = "Данные")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { viewModel.importBydHistory() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange, contentColor = Color.White)
+                        ) {
+                            Text("Импорт поездок BYD", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        Button(
+                            onClick = { viewModel.importDiPlusCharges() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange, contentColor = Color.White)
+                        ) {
+                            Text("Импорт зарядок DiPlus", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        if (state.importStatus != null) {
+                            Text(
+                                state.importStatus!!,
+                                color = if (state.importStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.exportCsv() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = Color.White)
+                        ) {
+                            Text("Экспорт CSV", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        if (state.exportStatus != null) {
+                            Text(
+                                state.exportStatus!!,
+                                color = if (state.exportStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                                fontSize = 12.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = { viewModel.runDiagnostics() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = Color.White)
+                        ) {
+                            Text("Диагностика", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        if (state.diagnosticLog != null) {
+                            Text(
+                                state.diagnosticLog!!,
+                                color = TextPrimary,
+                                fontSize = 11.sp,
+                                fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                                lineHeight = 14.sp
+                            )
+                        }
+                    }
                 }
             }
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- Units section --
-        SectionHeader(text = "Единицы измерения")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = "Расстояние",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Unit selector using FilterChips (segmented button alternative)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+            // RIGHT COLUMN: Units & currency + Consumption thresholds + About
+            Column(
+                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                SectionHeader(text = "Единицы и валюта")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    UnitChip(
-                        label = "км",
-                        selected = state.units == "km",
-                        onClick = { viewModel.saveUnits("km") }
-                    )
-                    UnitChip(
-                        label = "мили",
-                        selected = state.units == "miles",
-                        onClick = { viewModel.saveUnits("miles") }
-                    )
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("Расстояние", color = TextSecondary, fontSize = 14.sp)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            UnitChip("км", state.units == "km") { viewModel.saveUnits("km") }
+                            UnitChip("мили", state.units == "miles") { viewModel.saveUnits("miles") }
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text("Валюта", color = TextSecondary, fontSize = 14.sp)
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.horizontalScroll(rememberScrollState())
+                        ) {
+                            SettingsRepository.CURRENCIES.forEach { currency ->
+                                UnitChip(
+                                    label = "${currency.symbol} ${currency.label}",
+                                    selected = state.currency == currency.code,
+                                    onClick = { viewModel.saveCurrency(currency.code) }
+                                )
+                            }
+                        }
+                    }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- Currency section --
-        SectionHeader(text = "Валюта")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                SectionHeader(text = "Пороги расхода")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    SettingsRepository.CURRENCIES.forEach { currency ->
-                        UnitChip(
-                            label = "${currency.symbol} ${currency.label}",
-                            selected = state.currency == currency.code,
-                            onClick = { viewModel.saveCurrency(currency.code) }
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsTextField(
+                            label = "Хороший < (кВт·ч/100км)",
+                            value = state.consumptionGood,
+                            onValueChange = { viewModel.saveConsumptionGood(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                        SettingsTextField(
+                            label = "Плохой > (кВт·ч/100км)",
+                            value = state.consumptionBad,
+                            onValueChange = { viewModel.saveConsumptionBad(it) },
+                            keyboardType = KeyboardType.Decimal
                         )
                     }
                 }
-            }
-        }
 
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- Import BYD history section --
-        SectionHeader(text = "История BYD")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Импорт поездок из встроенной базы BYD (energydata). " +
-                        "Импортируются расстояние и расход по данным бортового компьютера.",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Button(
-                    onClick = { viewModel.importBydHistory() },
-                    modifier = Modifier.fillMaxWidth(),
+                SectionHeader(text = "О приложении")
+                Card(
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentOrange,
-                        contentColor = Color.White
-                    )
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(
-                        text = "Импорт истории BYD",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
+                    val context = LocalContext.current
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text("BYDMate v${state.appVersion}", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
+                        Text("\u00A9 2026 AndyShaman", color = TextSecondary, fontSize = 14.sp)
+                        Text(
+                            text = "github.com/AndyShaman/BYDMate",
+                            color = AccentBlue,
+                            fontSize = 14.sp,
+                            textDecoration = TextDecoration.Underline,
+                            modifier = Modifier.clickable {
+                                context.startActivity(Intent(Intent.ACTION_VIEW,
+                                    Uri.parse("https://github.com/AndyShaman/BYDMate")))
+                            }
+                        )
 
-                if (state.importStatus != null) {
-                    Text(
-                        text = state.importStatus!!,
-                        color = if (state.importStatus!!.startsWith("Ошибка")) {
-                            SocRed
-                        } else {
-                            PrimaryColor
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- Export section --
-        SectionHeader(text = "Экспорт данных")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Экспорт всех поездок и зарядок в CSV файлы в папку Downloads",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Button(
-                    onClick = { viewModel.exportCsv() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = PrimaryColor,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(
-                        text = "Экспорт CSV",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
-
-                // Export status message
-                if (state.exportStatus != null) {
-                    Text(
-                        text = state.exportStatus!!,
-                        color = if (state.exportStatus!!.startsWith("Ошибка")) {
-                            SocRed
-                        } else {
-                            PrimaryColor
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // -- About & update section --
-        SectionHeader(text = "О приложении")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            val context = LocalContext.current
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "BYDMate v${state.appVersion}",
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Text(
-                    text = "\u00A9 2026 AndyShaman",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Text(
-                    text = "github.com/AndyShaman/BYDMate",
-                    color = AccentBlue,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    textDecoration = TextDecoration.Underline,
-                    modifier = Modifier.clickable {
-                        val intent = Intent(Intent.ACTION_VIEW,
-                            Uri.parse("https://github.com/AndyShaman/BYDMate"))
-                        context.startActivity(intent)
+                        Button(
+                            onClick = { viewModel.checkForUpdate() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
+                        ) {
+                            Text("Проверить обновления", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        if (state.updateStatus != null) {
+                            Text(
+                                state.updateStatus!!,
+                                color = if (state.updateStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
-                )
-
-                Text(
-                    text = "GPLv3 License",
-                    color = TextSecondary,
-                    fontSize = 12.sp
-                )
-
-                Button(
-                    onClick = { viewModel.checkForUpdate() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentBlue,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(
-                        text = "Проверить обновления",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
-
-                if (state.updateStatus != null) {
-                    Text(
-                        text = state.updateStatus!!,
-                        color = if (state.updateStatus!!.startsWith("Ошибка")) {
-                            SocRed
-                        } else {
-                            PrimaryColor
-                        },
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
                 }
             }
         }
-
-        // -- Diagnostics section --
-        Spacer(modifier = Modifier.height(24.dp))
-        SectionHeader(text = "Диагностика")
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Card(
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Column(
-                modifier = Modifier.padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Text(
-                    text = "Проверка доступа к БД BYD, DiPlus API, разрешений и данных в нашей базе",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-
-                Button(
-                    onClick = { viewModel.runDiagnostics() },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentPurple,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Text(
-                        text = "Запустить диагностику",
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
-
-                if (state.diagnosticLog != null) {
-                    Text(
-                        text = state.diagnosticLog!!,
-                        color = TextPrimary,
-                        fontSize = 11.sp,
-                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                        lineHeight = 15.sp
-                    )
-                }
-            }
-        }
-
-        // Bottom padding for navigation bar clearance
-        Spacer(modifier = Modifier.height(32.dp))
     }
 }
 
-/** Section header text. */
 @Composable
 private fun SectionHeader(text: String) {
     Text(
         text = text,
         color = TextPrimary,
-        fontSize = 18.sp,
+        fontSize = 16.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
 }
 
-/** Themed OutlinedTextField for settings values. */
 @Composable
 private fun SettingsTextField(
     label: String,
@@ -496,7 +340,6 @@ private fun SettingsTextField(
     )
 }
 
-/** FilterChip styled as a segment button for unit selection. */
 @Composable
 private fun UnitChip(
     label: String,
@@ -507,11 +350,7 @@ private fun UnitChip(
         selected = selected,
         onClick = onClick,
         label = {
-            Text(
-                text = label,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
-            )
+            Text(text = label, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         },
         shape = RoundedCornerShape(8.dp),
         colors = FilterChipDefaults.filterChipColors(

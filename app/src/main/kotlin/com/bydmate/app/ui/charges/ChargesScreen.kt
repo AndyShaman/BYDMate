@@ -57,17 +57,17 @@ fun ChargesScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp)
     ) {
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // -- Screen title --
         Text(
             text = "Зарядки",
             color = TextPrimary,
-            fontSize = 24.sp,
+            fontSize = 18.sp,
             fontWeight = FontWeight.Bold
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // -- Period toggle and type filter chips --
         PeriodAndFilterRow(
@@ -78,7 +78,7 @@ fun ChargesScreen(
             onTypeFilter = { viewModel.setTypeFilter(it) }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // -- Summary row: sessions, kWh, cost --
         ChargeSummaryRow(
@@ -88,7 +88,7 @@ fun ChargesScreen(
             currencySymbol = state.currencySymbol
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // -- Period label --
         Text(
@@ -117,7 +117,7 @@ fun ChargesScreen(
             }
         } else {
             LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(

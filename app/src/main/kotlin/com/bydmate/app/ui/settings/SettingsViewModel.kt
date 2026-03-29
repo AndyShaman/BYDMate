@@ -11,6 +11,7 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
+import com.bydmate.app.data.remote.DiPlusDbReader
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -49,7 +50,9 @@ data class SettingsUiState(
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
     val diagnosticLog: String? = null,
-    val tripCostTariff: String = "home"
+    val tripCostTariff: String = "home",
+    val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
+    val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD
 )
 
 @HiltViewModel
@@ -62,7 +65,8 @@ class SettingsViewModel @Inject constructor(
     private val historyImporter: HistoryImporter,
     private val energyDataReader: EnergyDataReader,
     private val diParsClient: DiParsClient,
-    private val idleDrainDao: IdleDrainDao
+    private val idleDrainDao: IdleDrainDao,
+    private val diPlusDbReader: DiPlusDbReader
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -99,6 +103,14 @@ class SettingsViewModel @Inject constructor(
             )
             val currency = settingsRepository.getCurrency()
             val tripCostTariff = settingsRepository.getTripCostTariffKey()
+            val consumptionGood = settingsRepository.getString(
+                SettingsRepository.KEY_CONSUMPTION_GOOD,
+                SettingsRepository.DEFAULT_CONSUMPTION_GOOD
+            )
+            val consumptionBad = settingsRepository.getString(
+                SettingsRepository.KEY_CONSUMPTION_BAD,
+                SettingsRepository.DEFAULT_CONSUMPTION_BAD
+            )
 
             _uiState.update {
                 it.copy(
@@ -108,7 +120,9 @@ class SettingsViewModel @Inject constructor(
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
-                    tripCostTariff = tripCostTariff
+                    tripCostTariff = tripCostTariff,
+                    consumptionGood = consumptionGood,
+                    consumptionBad = consumptionBad
                 )
             }
         }
@@ -186,7 +200,7 @@ class SettingsViewModel @Inject constructor(
                 val trips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
                 val tripsFile = File(downloadsDir, "bydmate_trips_$timestamp.csv")
                 FileWriter(tripsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost\n")
+                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost,exterior_temp\n")
                     for (trip in trips) {
                         writer.append("${trip.id},${trip.startTs},${trip.endTs ?: ""},")
                         writer.append("${trip.distanceKm ?: ""},${trip.kwhConsumed ?: ""},")
@@ -194,7 +208,7 @@ class SettingsViewModel @Inject constructor(
                         writer.append("${trip.socEnd ?: ""},${trip.tempAvgC ?: ""},")
                         writer.append("${trip.avgSpeedKmh ?: ""},${trip.batTempAvg ?: ""},")
                         writer.append("${trip.batTempMax ?: ""},${trip.batTempMin ?: ""},")
-                        writer.append("${trip.cost ?: ""}\n")
+                        writer.append("${trip.cost ?: ""},${trip.exteriorTemp ?: ""}\n")
                     }
                 }
 
@@ -202,7 +216,7 @@ class SettingsViewModel @Inject constructor(
                 val charges = chargeRepository.getAllCharges().firstOrNull() ?: emptyList()
                 val chargesFile = File(downloadsDir, "bydmate_charges_$timestamp.csv")
                 FileWriter(chargesFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw\n")
+                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw,status,cell_voltage_min,cell_voltage_max,voltage_12v,exterior_temp,merged_count\n")
                     for (charge in charges) {
                         writer.append("${charge.id},${charge.startTs},${charge.endTs ?: ""},")
                         writer.append("${charge.socStart ?: ""},${charge.socEnd ?: ""},")
@@ -211,7 +225,10 @@ class SettingsViewModel @Inject constructor(
                         writer.append("${charge.cost ?: ""},${charge.lat ?: ""},")
                         writer.append("${charge.lon ?: ""},${charge.batTempAvg ?: ""},")
                         writer.append("${charge.batTempMax ?: ""},${charge.batTempMin ?: ""},")
-                        writer.append("${charge.avgPowerKw ?: ""}\n")
+                        writer.append("${charge.avgPowerKw ?: ""},${charge.status},")
+                        writer.append("${charge.cellVoltageMin ?: ""},${charge.cellVoltageMax ?: ""},")
+                        writer.append("${charge.voltage12v ?: ""},${charge.exteriorTemp ?: ""},")
+                        writer.append("${charge.mergedCount}\n")
                     }
                 }
 
@@ -248,6 +265,21 @@ class SettingsViewModel @Inject constructor(
                 val status = result.details
                     ?: "Импортировано ${result.count} поездок из BYD"
                 _uiState.update { it.copy(importStatus = status) }
+            }
+        }
+    }
+
+    /** Import charging sessions from DiPlus ChargingLog database. */
+    fun importDiPlusCharges() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(importStatus = "Импорт DiPlus...") }
+            val result = diPlusDbReader.importChargingLog()
+            if (result.isError) {
+                _uiState.update { it.copy(importStatus = "Ошибка: ${result.error}") }
+            } else {
+                _uiState.update {
+                    it.copy(importStatus = "Импортировано ${result.imported} зарядок, пропущено ${result.skipped} дублей")
+                }
             }
         }
     }
@@ -338,6 +370,20 @@ class SettingsViewModel @Inject constructor(
             }
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }
+        }
+    }
+
+    fun saveConsumptionGood(value: String) {
+        _uiState.update { it.copy(consumptionGood = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_CONSUMPTION_GOOD, value)
+        }
+    }
+
+    fun saveConsumptionBad(value: String) {
+        _uiState.update { it.copy(consumptionBad = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_CONSUMPTION_BAD, value)
         }
     }
 

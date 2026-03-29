@@ -35,4 +35,12 @@ class ChargeRepository @Inject constructor(
 
     suspend fun getChargePoints(chargeId: Long): List<ChargePointEntity> =
         chargePointDao.getByChargeId(chargeId)
+
+    suspend fun getLastSuspendedCharge(): ChargeEntity? = chargeDao.getLastSuspendedCharge()
+
+    suspend fun getStaleSessions(cutoffTs: Long): List<ChargeEntity> =
+        chargeDao.getStaleSessions(cutoffTs)
+
+    suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> =
+        chargeDao.getRecentChargesWithBatteryData()
 }
