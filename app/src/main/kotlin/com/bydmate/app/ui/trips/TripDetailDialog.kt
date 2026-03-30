@@ -9,11 +9,15 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
@@ -22,6 +26,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -70,79 +75,100 @@ fun TripDetailDialog(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = CardSurface),
                 modifier = Modifier
-                    .fillMaxWidth(0.8f)
+                    .fillMaxWidth(0.92f)
+                    .fillMaxHeight(0.85f)
                     .clickable { /* absorb click */ }
             ) {
-                Column(
-                    modifier = Modifier.padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    // Header
-                    val isStop = (trip.distanceKm ?: 0.0) == 0.0
-                    Text(
-                        if (isStop) "Стоянка" else "Поездка",
-                        color = AccentGreen,
-                        fontSize = 18.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        "${formatTime(trip.startTs)}${trip.endTs?.let { " – ${formatTime(it)}" } ?: ""}",
-                        color = TextSecondary,
-                        fontSize = 14.sp
-                    )
+                val isStop = (trip.distanceKm ?: 0.0) == 0.0
 
-                    // Map (if GPS points available)
-                    if (points.size >= 2) {
-                        TripRouteMap(
-                            points = points,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(220.dp)
+                // Landscape: map left, stats right
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // LEFT: Map + speed histogram
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        // Header
+                        Text(
+                            if (isStop) "Стоянка" else "Поездка",
+                            color = AccentGreen,
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold
                         )
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(60.dp)
-                                .background(NavyDark, RoundedCornerShape(8.dp)),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text("GPS-данные недоступны", color = TextMuted, fontSize = 13.sp)
+                        Text(
+                            "${formatTime(trip.startTs)}${trip.endTs?.let { " – ${formatTime(it)}" } ?: ""}",
+                            color = TextSecondary,
+                            fontSize = 14.sp
+                        )
+
+                        // Map in its own clipped box
+                        if (points.size >= 2) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(8.dp))
+                            ) {
+                                TripRouteMap(
+                                    points = points,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .background(NavyDark, RoundedCornerShape(8.dp)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text("GPS-данные недоступны", color = TextMuted, fontSize = 13.sp)
+                            }
+                        }
+
+                        // Speed histogram
+                        if (points.size >= 4) {
+                            SpeedHistogram(
+                                points = points,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(60.dp)
+                            )
                         }
                     }
 
-                    // Stats
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    // RIGHT: Stats
+                    Column(
+                        modifier = Modifier
+                            .width(220.dp)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text("Статистика", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
                         trip.distanceKm?.let { DetailRow("Дистанция", "%.1f км".format(it)) }
                         if (trip.endTs != null) DetailRow("Длительность", formatDuration(trip.startTs, trip.endTs))
-                        trip.avgSpeedKmh?.let { DetailRow("Средняя скорость", "%.0f км/ч".format(it)) }
+                        trip.avgSpeedKmh?.let { DetailRow("Ср. скорость", "%.0f км/ч".format(it)) }
                         if (points.isNotEmpty()) {
                             val maxSpeed = points.maxOfOrNull { it.speedKmh ?: 0.0 } ?: 0.0
                             if (maxSpeed > 0) DetailRow("Макс. скорость", "%.0f км/ч".format(maxSpeed))
                         }
                         trip.kwhConsumed?.let {
-                            val consColor = trip.kwhPer100km?.let { c -> consumptionColor(c) } ?: TextPrimary
                             DetailRow("Потребление", "%.1f кВт·ч".format(it))
                             trip.kwhPer100km?.let { per100 ->
-                                DetailRow("Расход", "%.1f кВт·ч/100км".format(per100), consColor)
+                                DetailRow("Расход", "%.1f/100".format(per100), consumptionColor(per100))
                             }
                         }
                         if (trip.socStart != null && trip.socEnd != null) {
                             DetailRow("SOC", "${trip.socStart}% → ${trip.socEnd}%")
                         }
                         trip.cost?.let { DetailRow("Стоимость", "%.2f %s".format(it, currencySymbol), AccentGreen) }
-                        trip.exteriorTemp?.let { DetailRow("Температура", "${it}°C") }
-                    }
-
-                    // Speed histogram
-                    if (points.size >= 4) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        SpeedHistogram(
-                            points = points,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(80.dp)
-                        )
+                        trip.exteriorTemp?.let { DetailRow("Темп.", "${it}°C") }
                     }
                 }
             }
@@ -164,8 +190,6 @@ private fun DetailRow(label: String, value: String, valueColor: Color = TextPrim
 @Composable
 private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-
-    // osmdroid Configuration is initialized once in BYDMateApp.onCreate()
 
     val geoPoints = remember(points) {
         points.map { GeoPoint(it.lat, it.lon) }
@@ -211,7 +235,7 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
                     map.overlays.add(segment)
                 }
 
-                // Zoom to fit
+                // Zoom to fit route
                 try {
                     val bbox = BoundingBox.fromGeoPoints(geoPoints)
                     map.post { map.zoomToBoundingBox(bbox, true, 48) }
@@ -228,7 +252,6 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
 @Composable
 private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = Modifier) {
     val speeds = remember(points) {
-        // Sample to ~40 bars
         val step = (points.size / 40).coerceAtLeast(1)
         points.filterIndexed { i, _ -> i % step == 0 }.mapNotNull { it.speedKmh }
     }

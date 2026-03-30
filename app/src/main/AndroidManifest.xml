@@ -11,6 +11,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.START_ACTIVITIES_FROM_BACKGROUND" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
@@ -39,8 +40,8 @@
         <!-- Invisible Activity for boot-time service start on Android 12+ (like DiPlus) -->
         <activity
             android:name=".SilentStartActivity"
-            android:exported="false"
-            android:theme="@android:style/Theme.NoDisplay"
+            android:exported="true"
+            android:theme="@style/Theme.App.Translucent"
             android:excludeFromRecents="true" />
 
         <service
@@ -48,14 +49,16 @@
             android:foregroundServiceType="location"
             android:exported="false" />
 
+        <!-- BootReceiver: exact same config as DiPlus (the ONLY app that autostarts on DiLink) -->
         <receiver
             android:name=".service.BootReceiver"
-            android:exported="true"
-            android:directBootAware="true">
+            android:enabled="true"
+            android:exported="true">
             <intent-filter android:priority="9900">
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
-                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.HOME" />
             </intent-filter>
         </receiver>
 

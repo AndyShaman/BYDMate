@@ -3,16 +3,17 @@ package com.bydmate.app.service
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.os.Build
 import android.util.Log
-import com.bydmate.app.SilentStartActivity
 
 /**
- * Auto-start on boot — same approach as DiPlus (com.van.diplus).
+ * Auto-start on boot.
  *
- * Android 12+ (SDK 31+) restricts startForegroundService() from BroadcastReceiver.
- * DiPlus solves this by launching an invisible Activity first, which then starts the service.
- * We do the same: BootReceiver → SilentStartActivity → TrackingService.
+ * Uses startForegroundService() directly — same approach as TripInfo
+ * (which works on this DiLink device). BOOT_COMPLETED provides
+ * a temporary allowlist that permits foreground service starts.
+ *
+ * No Activity intermediary needed — START_ACTIVITIES_FROM_BACKGROUND
+ * is a signature permission that sideloaded apps cannot get.
  */
 class BootReceiver : BroadcastReceiver() {
 
@@ -28,17 +29,16 @@ class BootReceiver : BroadcastReceiver() {
         )
         if (intent.action !in validActions) return
 
-        Log.i(TAG, "Boot event: ${intent.action}, SDK=${Build.VERSION.SDK_INT}")
+        Log.i(TAG, "Boot event: ${intent.action}")
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            // SDK 31+ (Android 12+): start via invisible Activity (like DiPlus)
-            val activityIntent = Intent(context, SilentStartActivity::class.java).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            val serviceIntent = Intent(context, TrackingService::class.java).apply {
+                putExtra("onBoot", true)
             }
-            context.startActivity(activityIntent)
-        } else {
-            // SDK < 31: direct foreground service start is allowed
-            TrackingService.start(context)
+            context.startForegroundService(serviceIntent)
+            Log.i(TAG, "startForegroundService(TrackingService) OK")
+        } catch (e: Exception) {
+            Log.e(TAG, "startForegroundService failed: ${e.message}", e)
         }
     }
 }

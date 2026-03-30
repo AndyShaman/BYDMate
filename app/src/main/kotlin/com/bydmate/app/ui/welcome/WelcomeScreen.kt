@@ -1,8 +1,13 @@
 package com.bydmate.app.ui.welcome
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -221,11 +226,17 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 Spacer(modifier = Modifier.height(4.dp))
                 Text("Di+ → Predefined → Startup tasks", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(2.dp))
+                val dilinkCommand = "打开应用com.bydmate.app"
                 Text(
-                    "打开应用com.bydmate.app",
+                    dilinkCommand,
                     color = AccentGreen,
                     fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.clickable {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("DiLink+ command", dilinkCommand))
+                        Toast.makeText(context, "Скопировано!", Toast.LENGTH_SHORT).show()
+                    }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(

@@ -5,7 +5,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
-import androidx.compose.material.icons.outlined.Map
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -32,7 +31,6 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.battery.BatteryHealthScreen
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
-import com.bydmate.app.ui.map.MapScreen
 import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
@@ -42,7 +40,6 @@ enum class Screen(val route: String, val label: String, val icon: ImageVector) {
     Dashboard("dashboard", "Home", Icons.Outlined.Home),
     Trips("trips", "Trips", Icons.Outlined.DirectionsCar),
     Charges("charges", "Charges", Icons.Outlined.BatteryChargingFull),
-    Map("map", "Map", Icons.Outlined.Map),
     Settings("settings", "Settings", Icons.Outlined.Settings)
 }
 
@@ -120,7 +117,6 @@ fun AppNavigation(
             composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Charges.route) { ChargesScreen() }
-            composable(Screen.Map.route) { MapScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
             composable("battery_health") { BatteryHealthScreen() }
         }

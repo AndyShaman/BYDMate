@@ -104,6 +104,27 @@ object AppModule {
         }
     }
 
+    // Remove FOREIGN KEY from trip_points — tripId=0 (GPS before trip match) caused
+    // SQLITE_CONSTRAINT_FOREIGNKEY (code 787), losing all GPS points
+    private val MIGRATION_6_7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS trip_points_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    trip_id INTEGER NOT NULL,
+                    timestamp INTEGER NOT NULL,
+                    lat REAL NOT NULL,
+                    lon REAL NOT NULL,
+                    speed_kmh REAL
+                )
+            """)
+            db.execSQL("INSERT INTO trip_points_new SELECT * FROM trip_points")
+            db.execSQL("DROP TABLE trip_points")
+            db.execSQL("ALTER TABLE trip_points_new RENAME TO trip_points")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_trip_id ON trip_points(trip_id)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -112,7 +133,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
             .build()
     }
 
