@@ -40,14 +40,11 @@ import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatDuration
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.ui.theme.*
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
-import java.io.File
 
 @Composable
 fun TripDetailDialog(
@@ -168,19 +165,7 @@ private fun DetailRow(label: String, value: String, valueColor: Color = TextPrim
 private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Modifier) {
     val context = LocalContext.current
 
-    // Init osmdroid config (shared approach)
-    Configuration.getInstance().apply {
-        userAgentValue = context.packageName
-        val basePath = File(context.filesDir, "osmdroid")
-        basePath.mkdirs()
-        osmdroidBasePath = basePath
-        val tilePath = File(basePath, "tiles")
-        tilePath.mkdirs()
-        osmdroidTileCache = tilePath
-        tileFileSystemCacheMaxBytes = 100L * 1024 * 1024
-        tileFileSystemCacheTrimBytes = 80L * 1024 * 1024
-        load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
-    }
+    // osmdroid Configuration is initialized once in BYDMateApp.onCreate()
 
     val geoPoints = remember(points) {
         points.map { GeoPoint(it.lat, it.lon) }
@@ -197,7 +182,11 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
     }
 
     DisposableEffect(Unit) {
-        onDispose { mapView.onDetach() }
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
     }
 
     AndroidView(
@@ -221,24 +210,6 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
                     }
                     map.overlays.add(segment)
                 }
-
-                // Start marker (green)
-                val startMarker = Marker(map).apply {
-                    position = geoPoints.first()
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    title = "Старт"
-                    icon = null
-                }
-                map.overlays.add(startMarker)
-
-                // End marker (red)
-                val endMarker = Marker(map).apply {
-                    position = geoPoints.last()
-                    setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                    title = "Финиш"
-                    icon = null
-                }
-                map.overlays.add(endMarker)
 
                 // Zoom to fit
                 try {

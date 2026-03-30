@@ -179,14 +179,13 @@ fun TripCard(
     modifier: Modifier = Modifier,
     currencySymbol: String = "Br"
 ) {
-    // Compact single-row trip card
+    // Compact single-row trip card with weight-based columns
     Row(
         modifier = modifier
             .fillMaxWidth()
             .background(CardSurface, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Time range
@@ -195,38 +194,42 @@ fun TripCard(
             append("–")
             append(trip.endTs?.let { formatTime(it) } ?: "…")
         }
-        Text(text = timeRange, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        Text(text = timeRange, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(2.5f))
 
         // Distance
         Text(
             text = trip.distanceKm?.let { "%.1f".format(it) } ?: "—",
-            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium
+            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f)
         )
 
         // Duration
         Text(
             text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
-            color = TextMuted, fontSize = 12.sp
+            color = TextMuted, fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
         )
 
         // kWh
         Text(
             text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
-            color = TextSecondary, fontSize = 13.sp
+            color = TextSecondary, fontSize = 13.sp,
+            modifier = Modifier.weight(1f)
         )
 
         // Consumption — color-coded
         val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
-        Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+        Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold,
+            modifier = Modifier.weight(1f))
 
         // Cost
-        trip.cost?.let { cost ->
-            Text(
-                text = "$currencySymbol${"%.0f".format(cost)}",
-                color = AccentGreen, fontSize = 12.sp
-            )
-        }
+        Text(
+            text = trip.cost?.let { "$currencySymbol${"%.0f".format(it)}" } ?: "",
+            color = AccentGreen, fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 

@@ -46,7 +46,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.ui.theme.*
-import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -59,20 +58,8 @@ fun MapScreen(
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val context = LocalContext.current
 
-    Configuration.getInstance().apply {
-        userAgentValue = context.packageName
-        val basePath = java.io.File(context.filesDir, "osmdroid")
-        basePath.mkdirs()
-        osmdroidBasePath = basePath
-        val tilePath = java.io.File(basePath, "tiles")
-        tilePath.mkdirs()
-        osmdroidTileCache = tilePath
-        tileFileSystemCacheMaxBytes = 100L * 1024 * 1024
-        tileFileSystemCacheTrimBytes = 80L * 1024 * 1024
-        load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
-    }
+    // osmdroid Configuration is initialized once in BYDMateApp.onCreate()
 
     Box(
         modifier = Modifier
@@ -272,7 +259,11 @@ private fun OsmdroidMapView(state: MapUiState) {
     }
 
     DisposableEffect(Unit) {
-        onDispose { mapView.onDetach() }
+        mapView.onResume()
+        onDispose {
+            mapView.onPause()
+            mapView.onDetach()
+        }
     }
 
     AndroidView(

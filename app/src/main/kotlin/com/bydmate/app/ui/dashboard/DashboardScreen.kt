@@ -257,13 +257,14 @@ fun DashboardScreen(
                 SectionHeader(text = "Последние поездки")
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Время", color = TextMuted, fontSize = 11.sp)
-                    Text("км", color = TextMuted, fontSize = 11.sp)
-                    Text("длит.", color = TextMuted, fontSize = 11.sp)
-                    Text("кВт·ч", color = TextMuted, fontSize = 11.sp)
-                    Text("/100", color = TextMuted, fontSize = 11.sp)
+                    Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
+                    Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("/100", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
