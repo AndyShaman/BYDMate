@@ -190,27 +190,48 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
         ) {
             SectionCard("Автозапуск на DiLink") {
                 Text(
-                    "Для работы в фоне нужно разрешить автозапуск BYDMate в системных настройках DiLink:",
+                    "Чтобы BYDMate запускался автоматически при включении магнитолы:",
                     color = TextSecondary,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("1. Откройте настройки автозапуска", color = TextPrimary, fontSize = 13.sp)
-                Text("2. Найдите BYDMate в списке", color = TextPrimary, fontSize = 13.sp)
-                Text("3. Снимите ограничение (разрешите запуск)", color = TextPrimary, fontSize = 13.sp)
+                Text("1. Settings → Application management", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("2. Нажмите \"Disable self-start\"", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("3. Найдите BYDMate в списке", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("4. Переключатель должен быть ВЫКЛЮЧЕН (OFF)", color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "⚠ После каждого обновления APK настройки могут сброситься!",
+                    "OFF = автозапуск РАЗРЕШЁН. Это чёрный список: отключённые в нём приложения МОГУТ запускаться сами.",
+                    color = TextMuted,
+                    fontSize = 11.sp
+                )
+                Text(
+                    "⚠ После обновления APK проверьте эту настройку!",
                     color = SocYellow,
                     fontSize = 12.sp
                 )
             }
 
-            SectionCard("Альтернатива: через DiPlus") {
+            SectionCard("Альтернатива: через DiLink+ (Di+)") {
                 Text(
-                    "Можно добавить BYDMate в DiPlus → Задачи запуска. DiPlus автоматически запустит BYDMate при включении.",
+                    "Если автозапуск не сработал — добавьте в Di+:",
                     color = TextSecondary,
                     fontSize = 13.sp
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text("Di+ → Predefined → Startup tasks", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "打开应用com.bydmate.app",
+                    color = AccentGreen,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    "打开应用 = \"открыть приложение\" + имя пакета.\nДля двух приложений через точку с запятой:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app",
+                    color = TextMuted,
+                    fontSize = 10.sp
                 )
             }
         }

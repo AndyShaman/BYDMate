@@ -36,6 +36,13 @@
             </intent-filter>
         </activity>
 
+        <!-- Invisible Activity for boot-time service start on Android 12+ (like DiPlus) -->
+        <activity
+            android:name=".SilentStartActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoDisplay"
+            android:excludeFromRecents="true" />
+
         <service
             android:name=".service.TrackingService"
             android:foregroundServiceType="location"

@@ -65,6 +65,15 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE source = 'live'")
     suspend fun getLiveTrips(): List<TripEntity>
 
+    @Query("SELECT * FROM trips WHERE start_ts >= :minTs AND start_ts <= :maxTs LIMIT 1")
+    suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity?
+
+    @Query("SELECT * FROM trips ORDER BY start_ts")
+    suspend fun getAllSnapshot(): List<TripEntity>
+
+    @Query("DELETE FROM trips WHERE id = :id")
+    suspend fun deleteById(id: Long)
+
     @Query("""
         SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
                COALESCE(SUM(distance_km), 0.0) as totalKm,

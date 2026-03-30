@@ -12,6 +12,8 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -29,7 +31,10 @@ class HistoryImporter @Inject constructor(
     companion object {
         private const val TAG = "HistoryImporter"
         private const val MIN_TRIP_DURATION_SEC = 30L
+        private const val DEDUP_WINDOW_MS = 300_000L // ±5 min for time-based dedup
     }
+
+    private val syncMutex = Mutex()
 
     data class ImportResult(
         val trips: Int,
@@ -44,8 +49,13 @@ class HistoryImporter @Inject constructor(
     /**
      * Event-based sync: check if energydata changed, import new records.
      * Called on service start and app foreground.
+     * Protected by mutex to prevent concurrent duplicate imports.
      */
     suspend fun syncFromEnergyData(): ImportResult {
+        if (!syncMutex.tryLock()) {
+            Log.d(TAG, "syncFromEnergyData: already running, skipping")
+            return ImportResult(trips = 0, details = "Синхронизация уже идёт")
+        }
         return try {
             if (!energyDataReader.hasSourceChanged(context)) {
                 Log.d(TAG, "syncFromEnergyData: source unchanged, skipping")
@@ -58,6 +68,8 @@ class HistoryImporter @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "syncFromEnergyData unexpected error", e)
             ImportResult(trips = 0, error = e.message ?: e.toString())
+        } finally {
+            syncMutex.unlock()
         }
     }
 
@@ -85,8 +97,25 @@ class HistoryImporter @Inject constructor(
             if (byd.duration < MIN_TRIP_DURATION_SEC) continue
 
             // Check duplicate by byd_id
-            val existing = tripDao.getByBydId(byd.id)
-            if (existing != null) {
+            val existingById = tripDao.getByBydId(byd.id)
+            if (existingById != null) {
+                skippedDuplicate++
+                continue
+            }
+
+            // Check duplicate by time overlap (catches v1.x live trips without byd_id)
+            val existingByTime = tripDao.getByStartTsRange(
+                startTsMs - DEDUP_WINDOW_MS,
+                startTsMs + DEDUP_WINDOW_MS
+            )
+            if (existingByTime != null) {
+                // Update existing trip with byd_id so future syncs skip it instantly
+                tripRepository.updateTrip(existingByTime.copy(
+                    source = "energydata",
+                    bydId = byd.id,
+                    distanceKm = byd.tripKm,
+                    kwhConsumed = byd.electricityKwh
+                ))
                 skippedDuplicate++
                 continue
             }
@@ -274,6 +303,61 @@ class HistoryImporter @Inject constructor(
             Log.d(TAG, "deduplicateWithExisting: updated=$updated, inserted=$inserted")
         } catch (e: Exception) {
             Log.e(TAG, "deduplicateWithExisting failed", e)
+        }
+    }
+
+    /**
+     * One-time cleanup of duplicate trips already in DB.
+     * Finds trip pairs with startTs within ±5 min, keeps the best one (with bydId),
+     * deletes the rest. Runs once, sets dedup_cleanup_done flag.
+     */
+    suspend fun cleanupDuplicates(): Int {
+        if (settingsRepository.isDedupCleanupDone()) return 0
+
+        return try {
+            val allTrips = tripDao.getAllSnapshot() // sorted by start_ts
+            var deleted = 0
+
+            // Mark trips to delete: for each pair within ±5 min, keep the better one
+            val toDelete = mutableSetOf<Long>()
+
+            for (i in allTrips.indices) {
+                if (allTrips[i].id in toDelete) continue
+
+                for (j in i + 1 until allTrips.size) {
+                    if (allTrips[j].id in toDelete) continue
+
+                    val diff = allTrips[j].startTs - allTrips[i].startTs
+                    if (diff > DEDUP_WINDOW_MS) break // sorted, no more matches possible
+
+                    // Found a duplicate pair
+                    val a = allTrips[i]
+                    val b = allTrips[j]
+
+                    // Keep the one with bydId (energydata), delete the other
+                    val loser = when {
+                        a.bydId != null && b.bydId == null -> b
+                        b.bydId != null && a.bydId == null -> a
+                        a.source == "energydata" && b.source != "energydata" -> b
+                        b.source == "energydata" && a.source != "energydata" -> a
+                        // Both same quality — keep the first one
+                        else -> b
+                    }
+                    toDelete.add(loser.id)
+                }
+            }
+
+            for (id in toDelete) {
+                tripDao.deleteById(id)
+                deleted++
+            }
+
+            settingsRepository.setDedupCleanupDone()
+            Log.i(TAG, "cleanupDuplicates: deleted $deleted duplicates out of ${allTrips.size} total")
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "cleanupDuplicates failed", e)
+            0
         }
     }
 

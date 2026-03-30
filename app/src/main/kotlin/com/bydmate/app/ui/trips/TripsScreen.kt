@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Text
@@ -97,6 +98,10 @@ fun TripsScreen(
                             }
 
                             if (day.date in state.expandedDays) {
+                                // Column headers
+                                item(key = "header_${month.yearMonth}_${day.date}") {
+                                    ColumnHeaders(currencySymbol = state.currencySymbol)
+                                }
                                 for (trip in day.trips) {
                                     item(key = "trip_${trip.id}") {
                                         TripRow(
@@ -156,22 +161,43 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onClick() }
-            .padding(start = 20.dp, end = 12.dp, top = 4.dp, bottom = 4.dp),
+            .background(CardSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+            .padding(start = 20.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
         Row {
-            Text(if (expanded) "▼" else "▶", color = TextSecondary, fontSize = 11.sp)
-            Spacer(modifier = Modifier.width(4.dp))
-            Text("${day.date} (${day.dayOfWeek})", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(if (expanded) "▼" else "▶", color = AccentBlue, fontSize = 12.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("${day.date} (${day.dayOfWeek})", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
         Text(
             "%.1f км | %.1f кВт·ч | %.1f/100 | %.2f %s".format(
                 day.totalKm, day.totalKwh, day.avgConsumption, day.totalCost, currencySymbol
             ),
-            color = TextSecondary, fontSize = 11.sp
+            color = TextSecondary, fontSize = 12.sp
         )
     }
+}
+
+@Composable
+private fun ColumnHeaders(currencySymbol: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 36.dp, end = 12.dp, top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(80.dp))
+        Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(48.dp))
+        Text("Длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+        Text("/100", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
+        Text(currencySymbol, color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(60.dp))
+    }
+    HorizontalDivider(color = CardBorder.copy(alpha = 0.5f), thickness = 0.5.dp,
+        modifier = Modifier.padding(start = 36.dp, end = 12.dp))
 }
 
 @Composable
@@ -186,45 +212,51 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
     val cost = trip.cost?.let { "%.2f".format(it) } ?: "—"
     val consColor = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
 
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
-            .padding(start = 36.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Time range
-        Text(
-            "$time–$endTime",
-            color = if (isStop) TextMuted else TextSecondary,
-            fontSize = 12.sp,
-            modifier = Modifier.width(80.dp)
-        )
-        // Distance
-        Text(
-            if (isStop) "⏸ 0.0" else dist,
-            color = if (isStop) TextMuted else TextPrimary,
-            fontSize = 12.sp,
-            modifier = Modifier.width(48.dp)
-        )
-        // Duration
-        Text(dur, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-        // kWh
-        Text(kwh, color = TextSecondary, fontSize = 12.sp, modifier = Modifier.width(40.dp))
-        // /100
-        Text(
-            if (isStop) "—" else per100,
-            color = if (isStop) TextMuted else consColor,
-            fontSize = 12.sp,
-            modifier = Modifier.width(40.dp)
-        )
-        // Cost
-        Text(
-            "$cost $currencySymbol",
-            color = TextSecondary, fontSize = 12.sp,
-            modifier = Modifier.width(60.dp)
-        )
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onClick() }
+                .padding(start = 36.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Time range
+            Text(
+                "$time–$endTime",
+                color = if (isStop) TextMuted else TextSecondary,
+                fontSize = 13.sp,
+                modifier = Modifier.width(80.dp)
+            )
+            // Distance
+            Text(
+                if (isStop) "⏸ 0.0" else dist,
+                color = if (isStop) TextMuted else TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
+                modifier = Modifier.width(48.dp)
+            )
+            // Duration
+            Text(dur, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(40.dp))
+            // kWh
+            Text(kwh, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(40.dp))
+            // /100
+            Text(
+                if (isStop) "—" else per100,
+                color = if (isStop) TextMuted else consColor,
+                fontSize = 13.sp,
+                fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
+                modifier = Modifier.width(40.dp)
+            )
+            // Cost
+            Text(
+                "$cost $currencySymbol",
+                color = TextSecondary, fontSize = 13.sp,
+                modifier = Modifier.width(60.dp)
+            )
+        }
+        HorizontalDivider(color = CardBorder.copy(alpha = 0.3f), thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 36.dp, end = 12.dp))
     }
 }
 

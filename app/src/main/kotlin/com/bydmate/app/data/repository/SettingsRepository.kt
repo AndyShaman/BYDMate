@@ -23,6 +23,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_LAST_SOC_TIMESTAMP = "last_soc_timestamp"
         const val KEY_LAST_ENERGYDATA_IMPORT_TS = "last_energydata_import_ts"
         const val KEY_SETUP_COMPLETED = "setup_completed"
+        const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -109,4 +110,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setSetupCompleted() =
         setString(KEY_SETUP_COMPLETED, "true")
+
+    suspend fun isDedupCleanupDone(): Boolean =
+        getString(KEY_DEDUP_CLEANUP_DONE, "false") == "true"
+
+    suspend fun setDedupCleanupDone() =
+        setString(KEY_DEDUP_CLEANUP_DONE, "true")
 }
