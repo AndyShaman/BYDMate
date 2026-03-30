@@ -43,9 +43,12 @@
 
         <receiver
             android:name=".service.BootReceiver"
-            android:exported="false">
-            <intent-filter>
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter android:priority="9900">
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
 

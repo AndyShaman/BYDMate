@@ -113,19 +113,18 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
-        // Auto-import on first launch (empty DB)
+        // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
-                val tripCount = tripRepository.getTripCount()
-                if (tripCount == 0) {
-                    Log.i(TAG, "Empty DB detected, starting auto-import")
-                    val bydResult = historyImporter.forceImport()
-                    Log.i(TAG, "Auto-import BYD: ${bydResult.count} trips, error=${bydResult.error}")
-                    val diPlusResult = diPlusDbReader.importChargingLog()
-                    Log.i(TAG, "Auto-import DiPlus: ${diPlusResult.imported} charges, error=${diPlusResult.error}")
-                }
+                val result = historyImporter.syncFromEnergyData()
+                Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
+                historyImporter.enrichWithDiPlus()
+                historyImporter.calculateMissingCosts(settingsRepository.getTripCostTariff())
+                historyImporter.attachGpsPoints()
+                // Also import charging sessions
+                diPlusDbReader.importChargingLog()
             } catch (e: Exception) {
-                Log.w(TAG, "Auto-import failed: ${e.message}")
+                Log.w(TAG, "Sync failed: ${e.message}")
             }
         }
     }

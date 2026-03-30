@@ -175,6 +175,68 @@ class EnergyDataReader @Inject constructor(
         sb.toString()
     }
 
+    fun hasSourceChanged(context: Context): Boolean {
+        val prefs = context.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE)
+        val energyDir = File(ENERGY_DIR_PATH)
+        if (!energyDir.exists()) return false
+
+        val sourceDb = findDbViaListFiles(energyDir) ?: findDbViaKnownNames(energyDir) ?: return false
+
+        val storedModified = prefs.getLong("lastModified", 0L)
+        val storedSize = prefs.getLong("fileSize", 0L)
+        val storedPath = prefs.getString("filePath", "") ?: ""
+
+        val currentModified = sourceDb.lastModified()
+        val currentSize = sourceDb.length()
+        val currentPath = sourceDb.absolutePath
+
+        if (currentModified == storedModified && currentSize == storedSize && currentPath == storedPath) {
+            return false
+        }
+
+        prefs.edit()
+            .putLong("lastModified", currentModified)
+            .putLong("fileSize", currentSize)
+            .putString("filePath", currentPath)
+            .apply()
+        return true
+    }
+
+    suspend fun readTripsSince(sinceTimestampSec: Long): List<BydTripRecord> = withContext(Dispatchers.IO) {
+        val energyDir = File(ENERGY_DIR_PATH)
+        if (!energyDir.exists()) return@withContext emptyList()
+
+        val sourceDb = findDbViaListFiles(energyDir)
+            ?: findDbViaKnownNames(energyDir)
+            ?: return@withContext emptyList()
+
+        val localDb = copyToLocal(sourceDb)
+        val db = SQLiteDatabase.openDatabase(localDb.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        db.use { database ->
+            val cursor = database.rawQuery(
+                """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity
+                   FROM EnergyConsumption
+                   WHERE is_deleted = 0 AND start_timestamp > ?
+                   ORDER BY start_timestamp""",
+                arrayOf(sinceTimestampSec.toString())
+            )
+            val results = mutableListOf<BydTripRecord>()
+            cursor.use { c ->
+                while (c.moveToNext()) {
+                    results.add(BydTripRecord(
+                        id = c.getLong(0),
+                        startTimestamp = c.getLong(1),
+                        endTimestamp = c.getLong(2),
+                        duration = c.getLong(3),
+                        tripKm = c.getDouble(4),
+                        electricityKwh = c.getDouble(5)
+                    ))
+                }
+            }
+            results
+        }
+    }
+
     suspend fun readTrips(): List<BydTripRecord> = withContext(Dispatchers.IO) {
         val energyDir = File(ENERGY_DIR_PATH)
         if (!energyDir.exists()) {

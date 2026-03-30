@@ -51,6 +51,8 @@ data class SettingsUiState(
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
+    val updateDialogState: UpdateState = UpdateState.Idle,
+    val showUpdateDialog: Boolean = false,
     val diagnosticLog: String? = null,
     val logSaveStatus: String? = null,
     val isRecordingLogs: Boolean = false,
@@ -497,28 +499,61 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun showUpdateDialog() {
+        _uiState.update { it.copy(showUpdateDialog = true, updateDialogState = UpdateState.Idle) }
+    }
+
+    fun hideUpdateDialog() {
+        _uiState.update { it.copy(showUpdateDialog = false) }
+    }
+
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateStatus = "Проверка...") }
+            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = "Проверка...") }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
                     _uiState.update {
-                        it.copy(updateStatus = "Доступна v${update.version}. Скачивание...")
-                    }
-                    updateChecker.downloadAndInstall(appContext, update) { progress ->
-                        _uiState.update { it.copy(updateStatus = progress) }
+                        it.copy(
+                            updateDialogState = UpdateState.Available(
+                                version = update.version,
+                                notes = update.releaseNotes ?: ""
+                            ),
+                            updateStatus = "Доступна v${update.version}"
+                        )
                     }
                 } else {
                     _uiState.update {
-                        it.copy(updateStatus = "Установлена последняя версия")
+                        it.copy(
+                            updateDialogState = UpdateState.UpToDate,
+                            updateStatus = "Установлена последняя версия"
+                        )
                     }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(updateStatus = "Ошибка: ${e.message}")
+                    it.copy(
+                        updateDialogState = UpdateState.Error(e.message ?: "Unknown error"),
+                        updateStatus = "Ошибка: ${e.message}"
+                    )
                 }
+            }
+        }
+    }
+
+    fun downloadUpdate() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(updateDialogState = UpdateState.Downloading("Скачивание...")) }
+            try {
+                val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
+                if (update != null) {
+                    updateChecker.downloadAndInstall(appContext, update) { progress ->
+                        _uiState.update { it.copy(updateDialogState = UpdateState.Downloading(progress)) }
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { it.copy(updateDialogState = UpdateState.Error(e.message ?: "Download failed")) }
             }
         }
     }

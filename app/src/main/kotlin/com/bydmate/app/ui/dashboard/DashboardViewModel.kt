@@ -24,13 +24,21 @@ import javax.inject.Inject
  * Combines live vehicle data from TrackingService with
  * today's aggregated trip/charge statistics from the database.
  */
+enum class DashboardPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
+
 data class DashboardUiState(
     val soc: Int? = null,
     val odometer: Double? = null,
     val speed: Int? = null,
+    val period: DashboardPeriod = DashboardPeriod.TODAY,
+    val totalKm: Double = 0.0,
+    val totalKwh: Double = 0.0,
+    val avgConsumption: Double = 0.0,
+    val totalCost: Double = 0.0,
+    val tripCount: Int = 0,
+    // Legacy aliases for backward compat
     val totalKmToday: Double = 0.0,
     val totalKwhToday: Double = 0.0,
-    val avgConsumption: Double = 0.0,
     val idleDrainKwhToday: Double = 0.0,
     val lastTrip: TripEntity? = null,
     val recentTrips: List<TripEntity> = emptyList(),
@@ -77,8 +85,13 @@ class DashboardViewModel @Inject constructor(
         observeRecentTrips()
         observeLastCharge()
         loadCurrency()
-        loadTodaySummary()
+        loadPeriodSummary()
         loadRecentAvgConsumption()
+    }
+
+    fun setPeriod(period: DashboardPeriod) {
+        _uiState.update { it.copy(period = period) }
+        loadPeriodSummary()
     }
 
     /**
@@ -163,31 +176,34 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    private fun loadTodaySummary() {
+    private fun loadPeriodSummary() {
         viewModelScope.launch {
+            val period = _uiState.value.period
+            val (from, to) = periodRange(period)
+            val summary = tripRepository.getPeriodSummary(from, to)
+            val avg = if (summary.totalKm > 0) summary.totalKwh / summary.totalKm * 100.0 else 0.0
+
+            // Idle drain always uses today
             val (dayStart, dayEnd) = todayRange()
-            val summary = tripRepository.getTodaySummary(dayStart, dayEnd)
             val idleDrain = idleDrainDao.getTodayDrainKwh(dayStart, dayEnd)
             val idleDrainHours = idleDrainDao.getTodayDrainHours(dayStart, dayEnd)
             val batteryCapacity = settingsRepository.getBatteryCapacity()
-            val avg = if (summary.totalKm > 0) {
-                summary.totalKwh / summary.totalKm * 100.0
-            } else {
-                0.0
-            }
             val idleDrainPercent = if (batteryCapacity > 0) idleDrain / batteryCapacity * 100.0 else 0.0
             val idleDrainRate = if (idleDrainHours > 0) idleDrain / idleDrainHours else 0.0
 
-            // Weekly idle drain stats
             val weekStart = dayStart - 6 * 24 * 60 * 60 * 1000L
             val idleDrainWeek = idleDrainDao.getTodayDrainKwh(weekStart, dayEnd)
             val idleDrainHoursWeek = idleDrainDao.getTodayDrainHours(weekStart, dayEnd)
 
             _uiState.update {
                 it.copy(
-                    totalKmToday = summary.totalKm,
-                    totalKwhToday = summary.totalKwh,
+                    totalKm = summary.totalKm,
+                    totalKwh = summary.totalKwh,
                     avgConsumption = avg,
+                    totalCost = summary.totalCost,
+                    tripCount = summary.tripCount,
+                    totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,
+                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday,
                     idleDrainKwhToday = idleDrain,
                     idleDrainPercent = idleDrainPercent,
                     idleDrainRate = idleDrainRate,
@@ -196,6 +212,33 @@ class DashboardViewModel @Inject constructor(
                     idleDrainHoursWeek = idleDrainHoursWeek
                 )
             }
+        }
+    }
+
+    private fun periodRange(period: DashboardPeriod): Pair<Long, Long> {
+        val cal = Calendar.getInstance()
+        val now = cal.timeInMillis
+        return when (period) {
+            DashboardPeriod.TODAY -> todayRange()
+            DashboardPeriod.WEEK -> {
+                cal.add(Calendar.DAY_OF_YEAR, -7)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            DashboardPeriod.MONTH -> {
+                cal.add(Calendar.DAY_OF_YEAR, -30)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            DashboardPeriod.YEAR -> {
+                cal.add(Calendar.YEAR, -1)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            DashboardPeriod.ALL -> 0L to now
         }
     }
 
@@ -248,7 +291,7 @@ class DashboardViewModel @Inject constructor(
 
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
-        loadTodaySummary()
+        loadPeriodSummary()
         loadRecentAvgConsumption()
     }
 

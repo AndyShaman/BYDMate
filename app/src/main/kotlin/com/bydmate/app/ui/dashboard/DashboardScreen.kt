@@ -39,8 +39,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.ui.components.SocGauge
-import com.bydmate.app.ui.components.SummaryRow
 import com.bydmate.app.ui.components.TripCard
+import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.theme.*
 
 @Composable
@@ -228,20 +228,33 @@ fun DashboardScreen(
                 }
             }
 
-            // RIGHT COLUMN — summary + recent trips
+            // RIGHT COLUMN — period filter + 4 cards + recent trips
             Column(
                 modifier = Modifier.weight(0.6f),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                SectionHeader(text = "Сегодня")
-                SummaryRow(
-                    totalKm = state.totalKmToday,
-                    totalKwh = state.totalKwhToday,
-                    avgKwhPer100km = state.avgConsumption
-                )
+                // Period chips
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    DashboardPeriodChip("День", state.period == DashboardPeriod.TODAY) { viewModel.setPeriod(DashboardPeriod.TODAY) }
+                    DashboardPeriodChip("Нед", state.period == DashboardPeriod.WEEK) { viewModel.setPeriod(DashboardPeriod.WEEK) }
+                    DashboardPeriodChip("Мес", state.period == DashboardPeriod.MONTH) { viewModel.setPeriod(DashboardPeriod.MONTH) }
+                    DashboardPeriodChip("Год", state.period == DashboardPeriod.YEAR) { viewModel.setPeriod(DashboardPeriod.YEAR) }
+                    DashboardPeriodChip("Всё", state.period == DashboardPeriod.ALL) { viewModel.setPeriod(DashboardPeriod.ALL) }
+                }
+
+                // 4 stat cards
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    StatCard("Пробег", "%.1f км".format(state.totalKm), "${state.tripCount} поездок", AccentGreen, Modifier.weight(1f))
+                    StatCard("Энергия", "%.1f кВт·ч".format(state.totalKwh), null, AccentBlue, Modifier.weight(1f))
+                    val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
+                    StatCard("Расход", if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
+                    StatCard("Стоимость", "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
+                }
 
                 SectionHeader(text = "Последние поездки")
-                // Column headers
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -422,6 +435,48 @@ private fun SectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@Composable
+private fun DashboardPeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, fontSize = 12.sp) },
+        shape = RoundedCornerShape(8.dp),
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            selectedContainerColor = AccentGreen,
+            selectedLabelColor = Color.White,
+            containerColor = CardSurface,
+            labelColor = TextSecondary
+        ),
+        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+            borderColor = Color.Transparent,
+            selectedBorderColor = Color.Transparent,
+            enabled = true,
+            selected = selected
+        )
+    )
+}
+
+@Composable
+private fun StatCard(title: String, value: String, subtitle: String?, accentColor: Color, modifier: Modifier = Modifier) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        modifier = modifier
+    ) {
+        Column(
+            modifier = Modifier.padding(10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(title, color = TextSecondary, fontSize = 11.sp)
+            Text(value, color = accentColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            if (subtitle != null) {
+                Text(subtitle, color = TextMuted, fontSize = 11.sp)
+            }
+        }
+    }
 }
 
 @Composable

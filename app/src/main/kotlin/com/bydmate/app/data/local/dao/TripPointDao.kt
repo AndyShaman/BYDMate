@@ -33,4 +33,13 @@ interface TripPointDao {
         )
     """)
     suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int
+
+    @Query("SELECT * FROM trip_points WHERE timestamp BETWEEN :from AND :to ORDER BY timestamp ASC")
+    suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity>
+
+    @Query("UPDATE trip_points SET trip_id = :tripId WHERE timestamp BETWEEN :from AND :to AND trip_id = 0")
+    suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int
+
+    @Insert
+    suspend fun insert(point: TripPointEntity): Long
 }

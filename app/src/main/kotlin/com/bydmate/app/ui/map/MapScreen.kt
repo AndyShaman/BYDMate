@@ -47,7 +47,7 @@ import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.ui.theme.*
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.XYTileSource
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.MapView
@@ -62,10 +62,16 @@ fun MapScreen(
     val context = LocalContext.current
 
     Configuration.getInstance().apply {
-        userAgentValue = "BYDMate/1.0"
-        osmdroidBasePath = context.getExternalCacheDir()
-        tileFileSystemCacheMaxBytes = 100L * 1024 * 1024 // 100 MB max
-        tileFileSystemCacheTrimBytes = 80L * 1024 * 1024 // trim to 80 MB
+        userAgentValue = context.packageName
+        val basePath = java.io.File(context.filesDir, "osmdroid")
+        basePath.mkdirs()
+        osmdroidBasePath = basePath
+        val tilePath = java.io.File(basePath, "tiles")
+        tilePath.mkdirs()
+        osmdroidTileCache = tilePath
+        tileFileSystemCacheMaxBytes = 100L * 1024 * 1024
+        tileFileSystemCacheTrimBytes = 80L * 1024 * 1024
+        load(context, context.getSharedPreferences("osmdroid", android.content.Context.MODE_PRIVATE))
     }
 
     Box(
@@ -256,16 +262,9 @@ private fun OsmdroidMapView(state: MapUiState) {
     val defaultCenter = GeoPoint(22.5431, 114.0579)
     val center = lastPoint ?: defaultCenter
 
-    val darkTileSource = remember {
-        XYTileSource(
-            "CartoDB Dark", 0, 19, 256, ".png",
-            arrayOf("https://basemaps.cartocdn.com/dark_all/")
-        )
-    }
-
     val mapView = remember {
         MapView(context).apply {
-            setTileSource(darkTileSource)
+            setTileSource(TileSourceFactory.MAPNIK)
             setMultiTouchControls(true)
             controller.setZoom(13.0)
             controller.setCenter(center)

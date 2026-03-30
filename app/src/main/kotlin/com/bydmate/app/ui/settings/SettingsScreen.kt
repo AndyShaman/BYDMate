@@ -51,6 +51,21 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // Update dialog
+    if (state.showUpdateDialog) {
+        UpdateDialog(
+            currentVersion = state.appVersion,
+            state = state.updateDialogState,
+            onCheck = {
+                when (state.updateDialogState) {
+                    is UpdateState.Available -> viewModel.downloadUpdate()
+                    else -> viewModel.checkForUpdate()
+                }
+            },
+            onDismiss = { viewModel.hideUpdateDialog() }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -290,19 +305,12 @@ fun SettingsScreen(
                         )
 
                         Button(
-                            onClick = { viewModel.checkForUpdate() },
+                            onClick = { viewModel.showUpdateDialog() },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
                         ) {
                             Text("Проверить обновления", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        if (state.updateStatus != null) {
-                            Text(
-                                state.updateStatus!!,
-                                color = if (state.updateStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
-                                fontSize = 12.sp
-                            )
                         }
                     }
                 }

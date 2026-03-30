@@ -10,13 +10,17 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.navigation.AppNavigation
 import com.bydmate.app.ui.theme.BYDMateTheme
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var settingsRepository: SettingsRepository
 
     companion object {
         private const val TAG = "MainActivity"
@@ -31,7 +35,7 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             BYDMateTheme {
-                AppNavigation()
+                AppNavigation(settingsRepository = settingsRepository)
             }
         }
     }

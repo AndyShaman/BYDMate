@@ -24,5 +24,7 @@ data class TripEntity(
     @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
     @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
     val cost: Double? = null,
-    @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null
+    @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null,
+    @ColumnInfo(name = "source", defaultValue = "live") val source: String = "live",
+    @ColumnInfo(name = "byd_id") val bydId: Long? = null
 )

@@ -21,6 +21,8 @@ class SettingsRepository @Inject constructor(
         const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
         const val KEY_LAST_KNOWN_SOC = "last_known_soc"
         const val KEY_LAST_SOC_TIMESTAMP = "last_soc_timestamp"
+        const val KEY_LAST_ENERGYDATA_IMPORT_TS = "last_energydata_import_ts"
+        const val KEY_SETUP_COMPLETED = "setup_completed"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -95,4 +97,16 @@ class SettingsRepository @Inject constructor(
 
     suspend fun getLastSocTimestamp(): Long =
         getString(KEY_LAST_SOC_TIMESTAMP, "0").toLongOrNull() ?: 0L
+
+    suspend fun getLastEnergyImportTs(): Long =
+        getString(KEY_LAST_ENERGYDATA_IMPORT_TS, "0").toLongOrNull() ?: 0L
+
+    suspend fun setLastEnergyImportTs(ts: Long) =
+        setString(KEY_LAST_ENERGYDATA_IMPORT_TS, ts.toString())
+
+    suspend fun isSetupCompleted(): Boolean =
+        getString(KEY_SETUP_COMPLETED, "false") == "true"
+
+    suspend fun setSetupCompleted() =
+        setString(KEY_SETUP_COMPLETED, "true")
 }

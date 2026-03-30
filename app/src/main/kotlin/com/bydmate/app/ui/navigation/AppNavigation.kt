@@ -14,15 +14,21 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.battery.BatteryHealthScreen
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
@@ -30,6 +36,7 @@ import com.bydmate.app.ui.map.MapScreen
 import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
+import com.bydmate.app.ui.welcome.WelcomeScreen
 
 enum class Screen(val route: String, val label: String, val icon: ImageVector) {
     Dashboard("dashboard", "Home", Icons.Outlined.Home),
@@ -40,53 +47,76 @@ enum class Screen(val route: String, val label: String, val icon: ImageVector) {
 }
 
 @Composable
-fun AppNavigation() {
+fun AppNavigation(
+    settingsRepository: SettingsRepository
+) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
+    var startDestination by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(Unit) {
+        startDestination = if (settingsRepository.isSetupCompleted()) "dashboard" else "welcome"
+    }
+
+    if (startDestination == null) return // Loading
+
+    val isWelcome = currentDestination?.route == "welcome"
+
     Scaffold(
         containerColor = NavyDark,
         bottomBar = {
-            NavigationBar(
-                containerColor = NavBarBackground
-            ) {
-                Screen.entries.forEach { screen ->
-                    NavigationBarItem(
-                        icon = {
-                            Icon(
-                                imageVector = screen.icon,
-                                contentDescription = screen.label
-                            )
-                        },
-                        label = { Text(screen.label) },
-                        selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
-                        onClick = {
-                            navController.navigate(screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
+            if (!isWelcome) {
+                NavigationBar(
+                    containerColor = NavBarBackground
+                ) {
+                    Screen.entries.forEach { screen ->
+                        NavigationBarItem(
+                            icon = {
+                                Icon(
+                                    imageVector = screen.icon,
+                                    contentDescription = screen.label
+                                )
+                            },
+                            label = { Text(screen.label) },
+                            selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
+                            onClick = {
+                                navController.navigate(screen.route) {
+                                    popUpTo(navController.graph.findStartDestination().id) {
+                                        saveState = true
+                                    }
+                                    launchSingleTop = true
+                                    restoreState = true
                                 }
-                                launchSingleTop = true
-                                restoreState = true
-                            }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = AccentGreen,
-                            selectedTextColor = AccentGreen,
-                            unselectedIconColor = TextMuted,
-                            unselectedTextColor = TextMuted,
-                            indicatorColor = NavIndicator
+                            },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = AccentGreen,
+                                selectedTextColor = AccentGreen,
+                                unselectedIconColor = TextMuted,
+                                unselectedTextColor = TextMuted,
+                                indicatorColor = NavIndicator
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
     ) { paddingValues ->
         NavHost(
             navController = navController,
-            startDestination = Screen.Dashboard.route,
+            startDestination = startDestination!!,
             modifier = Modifier.padding(paddingValues)
         ) {
+            composable("welcome") {
+                WelcomeScreen(
+                    onComplete = {
+                        navController.navigate("dashboard") {
+                            popUpTo("welcome") { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Charges.route) { ChargesScreen() }

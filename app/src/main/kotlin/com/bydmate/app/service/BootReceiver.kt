@@ -6,7 +6,12 @@ import android.content.Intent
 
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
-        if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+        val validActions = setOf(
+            Intent.ACTION_BOOT_COMPLETED,
+            "android.intent.action.QUICKBOOT_POWERON",
+            "android.intent.action.LOCKED_BOOT_COMPLETED"
+        )
+        if (intent.action in validActions) {
             TrackingService.start(context)
         }
     }

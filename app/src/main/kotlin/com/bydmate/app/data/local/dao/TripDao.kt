@@ -43,6 +43,28 @@ interface TripDao {
     @Query("SELECT COUNT(*) FROM trips")
     suspend fun getCount(): Int
 
+    @Query("SELECT * FROM trips WHERE byd_id = :bydId LIMIT 1")
+    suspend fun getByBydId(bydId: Long): TripEntity?
+
+    @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
+    suspend fun getTripsWithoutSoc(): List<TripEntity>
+
+    @Query("SELECT * FROM trips WHERE cost IS NULL AND kwh_consumed IS NOT NULL")
+    suspend fun getTripsWithoutCost(): List<TripEntity>
+
+    @Query("""
+        SELECT COALESCE(SUM(distance_km), 0.0) as totalKm,
+               COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
+               COUNT(*) as tripCount,
+               COALESCE(SUM(cost), 0.0) as totalCost
+        FROM trips
+        WHERE start_ts >= :from AND start_ts <= :to
+    """)
+    suspend fun getPeriodSummary(from: Long, to: Long): TripSummary
+
+    @Query("SELECT * FROM trips WHERE source = 'live'")
+    suspend fun getLiveTrips(): List<TripEntity>
+
     @Query("""
         SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
                COALESCE(SUM(distance_km), 0.0) as totalKm,

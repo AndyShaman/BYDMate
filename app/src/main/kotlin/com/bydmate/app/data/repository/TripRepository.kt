@@ -47,4 +47,9 @@ class TripRepository @Inject constructor(
 
     suspend fun getTripPointsByTripIds(tripIds: List<Long>): Map<Long, List<TripPointEntity>> =
         tripPointDao.getByTripIds(tripIds).groupBy { it.tripId }
+
+    suspend fun getPeriodSummary(from: Long, to: Long) = tripDao.getPeriodSummary(from, to)
+
+    suspend fun getTripPointsByTimeRange(from: Long, to: Long): List<TripPointEntity> =
+        tripPointDao.getByTimeRange(from, to)
 }

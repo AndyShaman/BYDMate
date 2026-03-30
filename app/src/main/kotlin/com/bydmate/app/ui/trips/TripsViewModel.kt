@@ -8,35 +8,60 @@ import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
-/** Period filter for the trips list. */
-enum class Period { WEEK, MONTH }
+enum class TripPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
+enum class TripFilter { ALL, TRIPS_ONLY, STOPS_ONLY }
 
-/** UI state exposed to the Trips screen. */
+data class MonthGroup(
+    val yearMonth: String,     // "2026-03"
+    val label: String,         // "Март 2026"
+    val totalKm: Double,
+    val totalKwh: Double,
+    val avgConsumption: Double,
+    val totalCost: Double,
+    val days: List<DayGroup>
+)
+
+data class DayGroup(
+    val date: String,          // "30.03"
+    val dayOfWeek: String,     // "Пн"
+    val totalKm: Double,
+    val totalKwh: Double,
+    val avgConsumption: Double,
+    val totalCost: Double,
+    val trips: List<TripEntity>
+)
+
 data class TripsUiState(
+    val period: TripPeriod = TripPeriod.WEEK,
+    val filter: TripFilter = TripFilter.ALL,
+    val months: List<MonthGroup> = emptyList(),
+    val expandedMonths: Set<String> = emptySet(),
+    val expandedDays: Set<String> = emptySet(),
+    val selectedTrip: TripEntity? = null,
+    val selectedTripPoints: List<TripPointEntity> = emptyList(),
+    val currencySymbol: String = "Br",
+    // Legacy compat
     val trips: List<TripEntity> = emptyList(),
-    val periodLabel: String = "",
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
     val totalCost: Double = 0.0,
+    val periodLabel: String = "",
     val expandedTripId: Long? = null,
-    val expandedTripPoints: List<TripPointEntity> = emptyList(),
-    val currencySymbol: String = "Br"
+    val expandedTripPoints: List<TripPointEntity> = emptyList()
 )
 
-@OptIn(ExperimentalCoroutinesApi::class)
 @HiltViewModel
 class TripsViewModel @Inject constructor(
     private val tripRepository: TripRepository,
@@ -44,106 +69,190 @@ class TripsViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository
 ) : ViewModel() {
 
-    private var currencySymbol: String = "Br"
+    private val _uiState = MutableStateFlow(TripsUiState())
+    val uiState: StateFlow<TripsUiState> = _uiState.asStateFlow()
 
     init {
         viewModelScope.launch {
-            currencySymbol = settingsRepository.getCurrencySymbol()
+            val symbol = settingsRepository.getCurrencySymbol()
+            _uiState.update { it.copy(currencySymbol = symbol) }
+        }
+        loadTrips()
+    }
+
+    fun setPeriod(period: TripPeriod) {
+        _uiState.update { it.copy(period = period) }
+        loadTrips()
+    }
+
+    @Suppress("UNUSED_PARAMETER")
+    fun setPeriod(period: Period) {
+        // Legacy compat
+        setPeriod(when (period) {
+            Period.WEEK -> TripPeriod.WEEK
+            Period.MONTH -> TripPeriod.MONTH
+        })
+    }
+
+    fun setFilter(filter: TripFilter) {
+        _uiState.update { it.copy(filter = filter) }
+        loadTrips()
+    }
+
+    fun toggleMonth(yearMonth: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedMonths.toMutableSet()
+            if (yearMonth in expanded) expanded.remove(yearMonth) else expanded.add(yearMonth)
+            state.copy(expandedMonths = expanded)
         }
     }
 
-    /** Currently selected period filter. */
-    private val _period = MutableStateFlow(Period.WEEK)
+    fun toggleDay(date: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedDays.toMutableSet()
+            if (date in expanded) expanded.remove(date) else expanded.add(date)
+            state.copy(expandedDays = expanded)
+        }
+    }
 
-    /** Mutable state holding expansion info (managed separately from reactive trips flow). */
-    private val _expansion = MutableStateFlow<Pair<Long?, List<TripPointEntity>>>(null to emptyList())
-
-    /** Main UI state derived from period selection + trips flow + expansion state. */
-    val uiState: StateFlow<TripsUiState> = _period
-        .flatMapLatest { period ->
-            val (from, to) = dateRangeFor(period)
-            val label = periodLabel(period)
-            tripRepository.getTripsByDateRange(from, to).map { trips ->
-                Triple(trips, label, period)
+    fun selectTrip(trip: TripEntity) {
+        _uiState.update { it.copy(selectedTrip = trip, selectedTripPoints = emptyList()) }
+        viewModelScope.launch {
+            val points = tripPointDao.getByTripId(trip.id)
+            _uiState.update { state ->
+                if (state.selectedTrip?.id == trip.id) state.copy(selectedTripPoints = points)
+                else state
             }
         }
-        .map { (trips, label, _) ->
-            // Calculate period totals
-            val totalKm = trips.sumOf { it.distanceKm ?: 0.0 }
-            val totalKwh = trips.sumOf { it.kwhConsumed ?: 0.0 }
-            val avgConsumption = if (totalKm > 0.0) totalKwh / totalKm * 100.0 else 0.0
-            val totalCost = trips.sumOf { it.cost ?: 0.0 }
-            val (expandedId, expandedPoints) = _expansion.value
-
-            TripsUiState(
-                trips = trips,
-                periodLabel = label,
-                totalKm = totalKm,
-                totalKwh = totalKwh,
-                avgConsumption = avgConsumption,
-                totalCost = totalCost,
-                expandedTripId = expandedId,
-                expandedTripPoints = expandedPoints,
-                currencySymbol = currencySymbol
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = TripsUiState()
-        )
-
-    /** Switch the active period filter. */
-    fun setPeriod(period: Period) {
-        _period.value = period
-        // Collapse any expanded trip when switching periods
-        _expansion.value = null to emptyList()
     }
 
-    /** Toggle trip detail expansion; loads trip points when expanding. */
+    fun clearSelectedTrip() {
+        _uiState.update { it.copy(selectedTrip = null, selectedTripPoints = emptyList()) }
+    }
+
     fun toggleTripExpansion(tripId: Long) {
-        val current = _expansion.value
-        if (current.first == tripId) {
-            // Collapse
-            _expansion.update { null to emptyList() }
-        } else {
-            // Expand: load trip points asynchronously
-            _expansion.update { tripId to emptyList() }
-            viewModelScope.launch {
-                val points = tripPointDao.getByTripId(tripId)
-                // Only update if this trip is still expanded
-                _expansion.update { (id, _) ->
-                    if (id == tripId) tripId to points else id to emptyList()
+        // Legacy compat
+    }
+
+    private fun loadTrips() {
+        viewModelScope.launch {
+            val state = _uiState.value
+            val (from, to) = dateRangeFor(state.period)
+
+            tripRepository.getTripsByDateRange(from, to).collect { allTrips ->
+                val filtered = when (state.filter) {
+                    TripFilter.ALL -> allTrips
+                    TripFilter.TRIPS_ONLY -> allTrips.filter { (it.distanceKm ?: 0.0) > 0 }
+                    TripFilter.STOPS_ONLY -> allTrips.filter { (it.distanceKm ?: 0.0) == 0.0 }
+                }
+
+                val months = groupIntoMonths(filtered)
+                val totalKm = filtered.sumOf { it.distanceKm ?: 0.0 }
+                val totalKwh = filtered.sumOf { it.kwhConsumed ?: 0.0 }
+                val avgConsumption = if (totalKm > 0) totalKwh / totalKm * 100.0 else 0.0
+                val totalCost = filtered.sumOf { it.cost ?: 0.0 }
+
+                // Auto-expand first month and first day
+                val autoExpandMonth = months.firstOrNull()?.yearMonth
+                val autoExpandDay = months.firstOrNull()?.days?.firstOrNull()?.date
+
+                _uiState.update { s ->
+                    s.copy(
+                        months = months,
+                        trips = filtered,
+                        totalKm = totalKm,
+                        totalKwh = totalKwh,
+                        avgConsumption = avgConsumption,
+                        totalCost = totalCost,
+                        expandedMonths = if (s.expandedMonths.isEmpty() && autoExpandMonth != null)
+                            setOf(autoExpandMonth) else s.expandedMonths,
+                        expandedDays = if (s.expandedDays.isEmpty() && autoExpandDay != null)
+                            setOf(autoExpandDay) else s.expandedDays
+                    )
                 }
             }
         }
     }
 
-    // -- Date range helpers --
+    private fun groupIntoMonths(trips: List<TripEntity>): List<MonthGroup> {
+        val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
+        val dayKeyFmt = SimpleDateFormat("dd.MM", Locale.US)
+        val dayOfWeekFmt = SimpleDateFormat("EEE", Locale("ru"))
+        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", Locale("ru"))
 
-    /**
-     * Returns a pair of epoch-millisecond timestamps (from, to) for the given period,
-     * ending at "now" and starting either 7 or 30 days ago at midnight.
-     */
-    private fun dateRangeFor(period: Period): Pair<Long, Long> {
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance().apply {
-            when (period) {
-                Period.WEEK -> add(Calendar.DAY_OF_YEAR, -7)
-                Period.MONTH -> add(Calendar.DAY_OF_YEAR, -30)
-            }
-            // Start of that day
-            set(Calendar.HOUR_OF_DAY, 0)
-            set(Calendar.MINUTE, 0)
-            set(Calendar.SECOND, 0)
-            set(Calendar.MILLISECOND, 0)
+        val monthMap = linkedMapOf<String, MutableList<TripEntity>>()
+        for (trip in trips) {
+            val key = monthKeyFmt.format(Date(trip.startTs))
+            monthMap.getOrPut(key) { mutableListOf() }.add(trip)
         }
-        return cal.timeInMillis to now
+
+        return monthMap.map { (monthKey, monthTrips) ->
+            val dayMap = linkedMapOf<String, MutableList<TripEntity>>()
+            for (trip in monthTrips) {
+                val dayKey = dayKeyFmt.format(Date(trip.startTs))
+                dayMap.getOrPut(dayKey) { mutableListOf() }.add(trip)
+            }
+
+            val days = dayMap.map { (dayKey, dayTrips) ->
+                val km = dayTrips.sumOf { it.distanceKm ?: 0.0 }
+                val kwh = dayTrips.sumOf { it.kwhConsumed ?: 0.0 }
+                DayGroup(
+                    date = dayKey,
+                    dayOfWeek = dayOfWeekFmt.format(Date(dayTrips.first().startTs)),
+                    totalKm = km,
+                    totalKwh = kwh,
+                    avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
+                    totalCost = dayTrips.sumOf { it.cost ?: 0.0 },
+                    trips = dayTrips
+                )
+            }
+
+            val km = monthTrips.sumOf { it.distanceKm ?: 0.0 }
+            val kwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            MonthGroup(
+                yearMonth = monthKey,
+                label = monthLabelFmt.format(Date(monthTrips.first().startTs))
+                    .replaceFirstChar { it.uppercase() },
+                totalKm = km,
+                totalKwh = kwh,
+                avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
+                totalCost = monthTrips.sumOf { it.cost ?: 0.0 },
+                days = days
+            )
+        }
     }
 
-    /** Human-readable label for the active period. */
-    private fun periodLabel(period: Period): String = when (period) {
-        Period.WEEK -> "7 дней"
-        Period.MONTH -> "30 дней"
+    private fun dateRangeFor(period: TripPeriod): Pair<Long, Long> {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+        return when (period) {
+            TripPeriod.TODAY -> {
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            TripPeriod.WEEK -> {
+                cal.add(Calendar.DAY_OF_YEAR, -7)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            TripPeriod.MONTH -> {
+                cal.add(Calendar.DAY_OF_YEAR, -30)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            TripPeriod.YEAR -> {
+                cal.add(Calendar.YEAR, -1)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            TripPeriod.ALL -> 0L to now
+        }
     }
 }
+
+// Legacy enum for backward compatibility
+enum class Period { WEEK, MONTH }
