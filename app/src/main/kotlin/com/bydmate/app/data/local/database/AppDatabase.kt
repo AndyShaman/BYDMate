@@ -27,7 +27,7 @@ import com.bydmate.app.data.local.entity.TripPointEntity
         IdleDrainEntity::class,
         BatterySnapshotEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

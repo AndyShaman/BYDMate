@@ -226,7 +226,7 @@ fun TripCard(
 
         // Cost
         Text(
-            text = trip.cost?.let { "$currencySymbol${"%.0f".format(it)}" } ?: "",
+            text = trip.cost?.let { "${"%.1f".format(it)}" } ?: "",
             color = AccentGreen, fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )

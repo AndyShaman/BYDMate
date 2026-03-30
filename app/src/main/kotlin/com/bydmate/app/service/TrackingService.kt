@@ -13,6 +13,7 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -172,6 +173,9 @@ class TrackingService : Service(), LocationListener {
 
     override fun onLocationChanged(location: Location) {
         lastLocation = location
+        Log.d(TAG, "GPS fix: lat=${location.latitude} lon=${location.longitude} " +
+            "acc=${"%.1f".format(location.accuracy)}m speed=${"%.1f".format(location.speed * 3.6f)}km/h " +
+            "provider=${location.provider}")
     }
 
     private fun startPolling() {
@@ -301,24 +305,59 @@ class TrackingService : Service(), LocationListener {
             return
         }
 
-        locationManager = getSystemService(LOCATION_SERVICE) as LocationManager
+        val lm = getSystemService(LOCATION_SERVICE) as LocationManager
+        locationManager = lm
+
+        val gpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
+        val netEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { false }
+        Log.i(TAG, "Location providers: gps=$gpsEnabled network=$netEnabled")
+
+        // GPS provider — same params as TripInfo (2000ms, 8m, explicit MainLooper)
+        if (gpsEnabled) {
+            try {
+                lm.requestLocationUpdates(
+                    LocationManager.GPS_PROVIDER,
+                    2000L, 8.0f,
+                    this, Looper.getMainLooper()
+                )
+                Log.i(TAG, "requestLocationUpdates(GPS_PROVIDER) registered")
+            } catch (e: Exception) {
+                Log.e(TAG, "GPS provider registration failed: ${e.message}", e)
+            }
+        }
+
+        // Network provider for initial fix
+        if (netEnabled) {
+            try {
+                lm.requestLocationUpdates(
+                    LocationManager.NETWORK_PROVIDER,
+                    2000L, 8.0f,
+                    this, Looper.getMainLooper()
+                )
+                Log.i(TAG, "requestLocationUpdates(NETWORK_PROVIDER) registered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Network provider registration failed: ${e.message}")
+            }
+        }
+
+        // Get last known location for immediate fix (like TripInfo)
         try {
-            locationManager?.requestLocationUpdates(
-                LocationManager.GPS_PROVIDER,
-                5000L, // 5 sec
-                5f,    // 5 meters
-                this
-            )
-            // Also try network for initial fix
-            locationManager?.requestLocationUpdates(
-                LocationManager.NETWORK_PROVIDER,
-                10000L,
-                50f,
-                this
-            )
-            Log.d(TAG, "Location updates started (GPS + Network)")
+            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
+                else if (netEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
+                else null
+            if (lastKnown != null) {
+                lastLocation = lastKnown
+                Log.i(TAG, "lastKnownLocation: lat=${lastKnown.latitude} lon=${lastKnown.longitude} " +
+                    "provider=${lastKnown.provider} age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")
+            } else {
+                Log.w(TAG, "lastKnownLocation is null")
+            }
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to start location updates: ${e.message}", e)
+            Log.w(TAG, "getLastKnownLocation failed: ${e.message}")
+        }
+
+        if (!gpsEnabled && !netEnabled) {
+            Log.e(TAG, "No location provider enabled! GPS will not work.")
         }
     }
 

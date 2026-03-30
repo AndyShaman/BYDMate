@@ -150,7 +150,7 @@ class DashboardViewModel @Inject constructor(
 
     private fun observeRecentTrips() {
         viewModelScope.launch {
-            tripRepository.getRecentTrips(7).collect { trips ->
+            tripRepository.getRecentTrips(6).collect { trips ->
                 _uiState.update { it.copy(recentTrips = trips) }
             }
         }
@@ -281,11 +281,13 @@ class DashboardViewModel @Inject constructor(
     // One-time cleanup: BatCapacity method produced inflated values in v1.0.0–1.0.4
     private fun cleanupBadIdleDrainData() {
         viewModelScope.launch {
+            if (settingsRepository.isIdleDrainCleanupDone()) return@launch
             val count = idleDrainDao.getCount()
             if (count > 0) {
                 idleDrainDao.deleteAll()
                 android.util.Log.i("DashboardVM", "Cleared $count bad idle drain records (BatCapacity bug)")
             }
+            settingsRepository.setIdleDrainCleanupDone()
         }
     }
 

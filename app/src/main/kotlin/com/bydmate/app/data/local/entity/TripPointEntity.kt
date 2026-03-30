@@ -2,20 +2,11 @@ package com.bydmate.app.data.local.entity
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 @Entity(
     tableName = "trip_points",
-    foreignKeys = [
-        ForeignKey(
-            entity = TripEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["trip_id"],
-            onDelete = ForeignKey.CASCADE
-        )
-    ],
     indices = [Index("trip_id")]
 )
 data class TripPointEntity(
