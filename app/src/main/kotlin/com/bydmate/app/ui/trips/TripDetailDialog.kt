@@ -220,7 +220,19 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
             map.overlays.clear()
 
             if (geoPoints.size >= 2) {
-                // Draw speed-colored segments
+                // Dark outline underneath for contrast on any road color
+                for (i in 0 until points.size - 1) {
+                    val outline = Polyline().apply {
+                        setPoints(listOf(geoPoints[i], geoPoints[i + 1]))
+                        outlinePaint.color = android.graphics.Color.argb(180, 0, 0, 0)
+                        outlinePaint.strokeWidth = 14f
+                        outlinePaint.isAntiAlias = true
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
+                        infoWindow = null
+                    }
+                    map.overlays.add(outline)
+                }
+                // Bright speed-colored track on top
                 for (i in 0 until points.size - 1) {
                     val speed = points[i].speedKmh ?: 0.0
                     val color = speedColor(speed)
@@ -228,8 +240,9 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
                     val segment = Polyline().apply {
                         setPoints(listOf(geoPoints[i], geoPoints[i + 1]))
                         outlinePaint.color = color.toArgb()
-                        outlinePaint.strokeWidth = 6f
+                        outlinePaint.strokeWidth = 8f
                         outlinePaint.isAntiAlias = true
+                        outlinePaint.strokeCap = android.graphics.Paint.Cap.ROUND
                         infoWindow = null
                     }
                     map.overlays.add(segment)
@@ -298,7 +311,7 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
 }
 
 private fun speedColor(speed: Double): Color = when {
-    speed < 20 -> SocRed
-    speed < 60 -> AccentOrange
-    else -> AccentGreen
+    speed < 20 -> Color(0xFFFF1744.toInt())  // bright red — distinct from map's pink roads
+    speed < 60 -> Color(0xFFFFFF8D.toInt())  // pale yellow — distinct from map's orange roads
+    else -> Color(0xFF00E676.toInt())         // bright green — distinct from map's muted greens
 }

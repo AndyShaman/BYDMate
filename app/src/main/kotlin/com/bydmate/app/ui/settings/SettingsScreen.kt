@@ -283,18 +283,6 @@ fun SettingsScreen(
                                 fontSize = 12.sp
                             )
                         }
-                        // Chain log — full autostart diagnostic
-                        val chainLog = state.chainLog
-                        if (chainLog != null) {
-                            Text("Лог автозапуска:", color = TextSecondary, fontSize = 11.sp)
-                            Text(
-                                chainLog,
-                                color = TextMuted,
-                                fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace,
-                                lineHeight = 14.sp
-                            )
-                        }
                         Text(
                             text = "github.com/AndyShaman/BYDMate",
                             color = AccentBlue,
