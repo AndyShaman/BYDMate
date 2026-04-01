@@ -148,12 +148,25 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
             Spacer(modifier = Modifier.width(6.dp))
             Text(month.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
-        Text(
-            "%.0f км | %.0f кВт·ч | %.1f/100 | %.2f %s".format(
-                month.totalKm, month.totalKwh, month.avgConsumption, month.totalCost, currencySymbol
-            ),
-            color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("%.0f км".format(month.totalKm), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(80.dp))
+            Text("%.0f кВт·ч".format(month.totalKwh), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(104.dp))
+            Text("%.1f/100".format(month.avgConsumption),
+                color = consumptionColor(month.avgConsumption), fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1, modifier = Modifier.width(72.dp))
+            Text("%.2f %s".format(month.totalCost, currencySymbol), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(80.dp))
+        }
     }
 }
 
@@ -173,12 +186,25 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
             Spacer(modifier = Modifier.width(6.dp))
             Text("${day.date} (${day.dayOfWeek})", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
-        Text(
-            "%.1f км | %.1f кВт·ч | %.1f/100 | %.2f %s".format(
-                day.totalKm, day.totalKwh, day.avgConsumption, day.totalCost, currencySymbol
-            ),
-            color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("%.1f км".format(day.totalKm), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(80.dp))
+            Text("%.1f кВт·ч".format(day.totalKwh), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(104.dp))
+            Text("%.1f/100".format(day.avgConsumption),
+                color = consumptionColor(day.avgConsumption), fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1, modifier = Modifier.width(72.dp))
+            Text("%.2f %s".format(day.totalCost, currencySymbol), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(80.dp))
+        }
     }
 }
 
