@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -280,6 +281,18 @@ fun SettingsScreen(
                                 "Автозапуск: не зафиксирован",
                                 color = SocRed,
                                 fontSize = 12.sp
+                            )
+                        }
+                        // Chain log — full autostart diagnostic
+                        val chainLog = state.chainLog
+                        if (chainLog != null) {
+                            Text("Лог автозапуска:", color = TextSecondary, fontSize = 11.sp)
+                            Text(
+                                chainLog,
+                                color = TextMuted,
+                                fontSize = 10.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 14.sp
                             )
                         }
                         Text(

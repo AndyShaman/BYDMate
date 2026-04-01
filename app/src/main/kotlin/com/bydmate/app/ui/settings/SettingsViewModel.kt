@@ -60,7 +60,8 @@ data class SettingsUiState(
     val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
-    val lastBootInfo: String? = null
+    val lastBootInfo: String? = null,
+    val chainLog: String? = null
 )
 
 @HiltViewModel
@@ -122,6 +123,7 @@ class SettingsViewModel @Inject constructor(
 
             // Read boot log from SharedPreferences
             val bootInfo = readBootInfo()
+            val chainLog = readChainLog()
 
             _uiState.update {
                 it.copy(
@@ -134,7 +136,8 @@ class SettingsViewModel @Inject constructor(
                     tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
-                    lastBootInfo = bootInfo
+                    lastBootInfo = bootInfo,
+                    chainLog = chainLog
                 )
             }
         }
@@ -396,6 +399,14 @@ class SettingsViewModel @Inject constructor(
             val method = prefs.getString(BootReceiver.KEY_LAST_BOOT_METHOD, "?") ?: "?"
             val sdf = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
             "${sdf.format(Date(ts))} ($method)"
+        } catch (_: Exception) { null }
+    }
+
+    private fun readChainLog(): String? {
+        return try {
+            val prefs = appContext.getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            val log = prefs.getString(BootReceiver.KEY_CHAIN_LOG, null)
+            if (log.isNullOrBlank()) null else log
         } catch (_: Exception) { null }
     }
 
