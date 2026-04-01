@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -89,51 +90,46 @@ fun DashboardScreen(
                         Text(
                             text = if (state.odometer != null) "%.1f km".format(state.odometer) else "— km",
                             color = TextSecondary,
-                            fontSize = 15.sp,
-                            fontWeight = FontWeight.Medium
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            fontFamily = FontFamily.Monospace
                         )
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         // Range estimate
                         val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
                         Row(verticalAlignment = Alignment.Bottom) {
-                            Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold)
+                            Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold,
+                                fontFamily = FontFamily.Monospace)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text("км", color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 3.dp))
+                                fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
                         }
-                        Text("расчётный пробег", color = TextMuted, fontSize = 13.sp)
+                        Text("расчётный пробег", color = TextMuted, fontSize = 12.sp)
                     }
 
-                    // 3 compact cards: charge, idle drain, battery
+                    // 3 compact cards: SoH, battery, idle drain
                     Column(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
+                        // SoH card
+                        val sohPct = state.sohPercent
+                        val sohColor = when {
+                            sohPct == null -> TextMuted
+                            sohPct >= 95 -> AccentGreen
+                            sohPct >= 85 -> SocYellow
+                            else -> SocRed
+                        }
                         CompactCard(
-                            leftValue = state.lastCharge?.kwhCharged?.let { "%.1f".format(it) } ?: "—",
-                            leftLabel = "кВт·ч",
-                            rightValue = state.lastCharge?.type ?: "—",
-                            rightLabel = "зарядка",
-                            borderColor = when (state.lastCharge?.type) {
-                                null -> TextMuted
-                                "DC" -> AccentOrange
-                                else -> AccentBlue
-                            },
-                            hasData = state.lastCharge != null,
-                            onClick = { viewModel.toggleChargeExpanded() }
+                            leftValue = state.sohPercent?.let { "%.1f%%".format(it) } ?: "—",
+                            leftLabel = "SoH",
+                            rightValue = state.estimatedCapacityKwh?.let { "%.1f".format(it) } ?: "—",
+                            rightLabel = "кВт·ч",
+                            borderColor = sohColor,
+                            hasData = state.sohPercent != null,
+                            onClick = { viewModel.toggleSohExpanded() }
                         )
-                        CompactCard(
-                            leftValue = "%.1f".format(state.idleDrainKwhToday),
-                            leftLabel = "кВт·ч",
-                            rightValue = "%.0f".format(state.idleDrainHours) + "ч",
-                            rightLabel = "стоянка",
-                            borderColor = when {
-                                state.idleDrainPercent > 5.0 -> SocRed
-                                state.idleDrainPercent > 2.0 -> SocYellow
-                                else -> AccentGreen
-                            },
-                            onClick = { viewModel.toggleIdleDrainExpanded() }
-                        )
+                        // Battery card
                         CompactCard(
                             leftValue = state.avgBatTemp?.let { "${it}°C" } ?: "—",
                             leftLabel = "батарея",
@@ -149,29 +145,43 @@ fun DashboardScreen(
                             },
                             onClick = { viewModel.toggleBatteryHealthExpanded() }
                         )
+                        // Idle drain card
+                        CompactCard(
+                            leftValue = "%.1f".format(state.idleDrainKwhToday),
+                            leftLabel = "кВт·ч",
+                            rightValue = "%.0f".format(state.idleDrainHours) + "ч",
+                            rightLabel = "стоянка",
+                            borderColor = when {
+                                state.idleDrainPercent > 5.0 -> SocRed
+                                state.idleDrainPercent > 2.0 -> SocYellow
+                                else -> AccentGreen
+                            },
+                            onClick = { viewModel.toggleIdleDrainExpanded() }
+                        )
                     }
 
                     // Pop-up dialogs
-                    if (state.chargeExpanded) {
-                        state.lastCharge?.let { charge ->
-                            val color = if (charge.type == "DC") AccentOrange else AccentBlue
-                            CardDetailDialog(
-                                title = "Последняя зарядка",
-                                borderColor = color,
-                                onDismiss = { viewModel.toggleChargeExpanded() }
-                            ) {
-                                DetailRow("Тип", charge.type ?: "—", color)
-                                DetailRow("SOC", "${charge.socStart ?: "?"}% → ${charge.socEnd ?: "?"}%", TextPrimary)
-                                charge.kwhCharged?.let {
-                                    DetailRow("Энергия", "${"%.1f".format(it)} кВт·ч", TextPrimary)
-                                }
-                                DetailRow("Время", com.bydmate.app.ui.components.formatDateTime(charge.startTs), TextPrimary)
-                                if (charge.endTs != null) {
-                                    DetailRow("Длительность", com.bydmate.app.ui.components.formatDuration(charge.startTs, charge.endTs), TextPrimary)
-                                }
-                                charge.cost?.let { cost ->
-                                    DetailRow("Стоимость", "${state.currencySymbol}${"%.1f".format(cost)}", AccentGreen)
-                                }
+                    if (state.sohExpanded) {
+                        val sohPctD = state.sohPercent
+                        val sohColor = when {
+                            sohPctD == null -> TextMuted
+                            sohPctD >= 95 -> AccentGreen
+                            sohPctD >= 85 -> SocYellow
+                            else -> SocRed
+                        }
+                        CardDetailDialog(
+                            title = "Здоровье ВВБ (SoH)",
+                            borderColor = sohColor,
+                            onDismiss = { viewModel.toggleSohExpanded() }
+                        ) {
+                            if (state.sohPercent != null) {
+                                DetailRow("SoH", "${"%.1f".format(state.sohPercent)}%", sohColor)
+                                DetailRow("Ёмкость", "${"%.1f".format(state.estimatedCapacityKwh)} кВт·ч", TextPrimary)
+                                DetailRow("Номинал", "72.9 кВт·ч", TextMuted)
+                                DetailRow("По данным", "${state.sohTripCount} поездок", TextSecondary)
+                            } else {
+                                DetailRow("Статус", "Мало данных", TextMuted)
+                                DetailRow("Нужно", "Поездки с дельтой SOC ≥ 10%", TextSecondary)
                             }
                         }
                     }
@@ -234,7 +244,7 @@ fun DashboardScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Period chips
-                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     DashboardPeriodChip("День", state.period == DashboardPeriod.TODAY) { viewModel.setPeriod(DashboardPeriod.TODAY) }
                     DashboardPeriodChip("Нед", state.period == DashboardPeriod.WEEK) { viewModel.setPeriod(DashboardPeriod.WEEK) }
                     DashboardPeriodChip("Мес", state.period == DashboardPeriod.MONTH) { viewModel.setPeriod(DashboardPeriod.MONTH) }
@@ -256,18 +266,18 @@ fun DashboardScreen(
 
                 SectionHeader(text = "Последние поездки")
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
-                    Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     Text("длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     Text("/100", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         state.recentTrips.forEach { trip ->
                             TripCard(
                                 trip = trip,
@@ -294,13 +304,13 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
         Text(
             text = "BYDMate",
             color = TextPrimary,
-            fontSize = 22.sp,
+            fontSize = 24.sp,
             fontWeight = FontWeight.Bold
         )
 
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             if (isServiceRunning && !diPlusConnected) {
                 Text(
@@ -312,14 +322,14 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
             }
             Box(
                 modifier = Modifier
-                    .size(10.dp)
+                    .size(12.dp)
                     .clip(CircleShape)
                     .background(if (isServiceRunning) AccentGreen else TextMuted)
             )
             Text(
                 text = if (isServiceRunning) "Online" else "Offline",
                 color = TextSecondary,
-                fontSize = 13.sp
+                fontSize = 12.sp
             )
         }
     }
@@ -355,12 +365,12 @@ private fun CompactCard(
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(leftValue, color = if (hasData) borderColor else TextMuted,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Text(leftLabel, color = TextMuted, fontSize = 11.sp)
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(rightValue, color = if (hasData) borderColor else TextMuted,
-                    fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
                 Text(rightLabel, color = TextMuted, fontSize = 11.sp)
             }
         }
@@ -401,10 +411,10 @@ private fun CardDetailDialog(
                     .clickable { onDismiss() }
             ) {
                 Column(
-                    modifier = Modifier.padding(14.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(title, color = borderColor, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                     content()
                 }
             }
@@ -419,7 +429,8 @@ private fun DetailRow(label: String, value: String, valueColor: Color) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, color = TextSecondary, fontSize = 14.sp)
-        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(value, color = valueColor, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace)
     }
 }
 
@@ -465,17 +476,17 @@ private fun StatCard(title: String, value: String, subtitle: String?, accentColo
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        modifier = modifier
+        modifier = modifier.height(64.dp)
     ) {
         Column(
-            modifier = Modifier.padding(10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
         ) {
             Text(title, color = TextSecondary, fontSize = 11.sp)
-            Text(value, color = accentColor, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-            if (subtitle != null) {
-                Text(subtitle, color = TextMuted, fontSize = 11.sp)
-            }
+            Text(value, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace)
+            Text(subtitle ?: "", color = TextMuted, fontSize = 11.sp)
         }
     }
 }

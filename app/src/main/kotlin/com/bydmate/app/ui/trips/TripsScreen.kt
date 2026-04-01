@@ -25,6 +25,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,7 +49,7 @@ fun TripsScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
         // Period chips
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             TripsChip("День", state.period == TripPeriod.TODAY) { viewModel.setPeriod(TripPeriod.TODAY) }
             TripsChip("Нед", state.period == TripPeriod.WEEK) { viewModel.setPeriod(TripPeriod.WEEK) }
             TripsChip("Мес", state.period == TripPeriod.MONTH) { viewModel.setPeriod(TripPeriod.MONTH) }
@@ -150,7 +152,7 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
             "%.0f км | %.0f кВт·ч | %.1f/100 | %.2f %s".format(
                 month.totalKm, month.totalKwh, month.avgConsumption, month.totalCost, currencySymbol
             ),
-            color = TextSecondary, fontSize = 12.sp
+            color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
         )
     }
 }
@@ -175,7 +177,7 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
             "%.1f км | %.1f кВт·ч | %.1f/100 | %.2f %s".format(
                 day.totalKm, day.totalKwh, day.avgConsumption, day.totalCost, currencySymbol
             ),
-            color = TextSecondary, fontSize = 12.sp
+            color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace
         )
     }
 }
@@ -190,11 +192,11 @@ private fun ColumnHeaders(currencySymbol: String) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(80.dp))
-        Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(48.dp))
-        Text("Длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
-        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
-        Text("/100", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(40.dp))
-        Text(currencySymbol, color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(60.dp))
+        Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+        Text("Длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+        Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+        Text(currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
     }
     HorizontalDivider(color = CardBorder.copy(alpha = 0.5f), thickness = 0.5.dp,
         modifier = Modifier.padding(start = 36.dp, end = 12.dp))
@@ -225,33 +227,38 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
             Text(
                 "$time–$endTime",
                 color = if (isStop) TextMuted else TextSecondary,
-                fontSize = 13.sp,
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 modifier = Modifier.width(80.dp)
             )
             // Distance
             Text(
                 if (isStop) "⏸ 0.0" else dist,
                 color = if (isStop) TextMuted else TextPrimary,
-                fontSize = 13.sp,
+                fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
+                textAlign = TextAlign.End,
                 modifier = Modifier.width(48.dp)
             )
             // Duration
-            Text(dur, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(40.dp))
+            Text(dur, color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
             // kWh
-            Text(kwh, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(40.dp))
+            Text(kwh, color = TextSecondary, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
             // /100
             Text(
                 if (isStop) "—" else per100,
                 color = if (isStop) TextMuted else consColor,
-                fontSize = 13.sp,
+                fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
+                textAlign = TextAlign.End,
                 modifier = Modifier.width(40.dp)
             )
             // Cost
             Text(
                 "$cost $currencySymbol",
-                color = TextSecondary, fontSize = 13.sp,
+                color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
                 modifier = Modifier.width(60.dp)
             )
         }

@@ -29,6 +29,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bydmate.app.service.BootReceiver
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -58,7 +59,8 @@ data class SettingsUiState(
     val isRecordingLogs: Boolean = false,
     val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
-    val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD
+    val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
+    val lastBootInfo: String? = null
 )
 
 @HiltViewModel
@@ -118,6 +120,9 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.DEFAULT_CONSUMPTION_BAD
             )
 
+            // Read boot log from SharedPreferences
+            val bootInfo = readBootInfo()
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -128,7 +133,8 @@ class SettingsViewModel @Inject constructor(
                     currencySymbol = currency.symbol,
                     tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
-                    consumptionBad = consumptionBad
+                    consumptionBad = consumptionBad,
+                    lastBootInfo = bootInfo
                 )
             }
         }
@@ -382,6 +388,17 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    private fun readBootInfo(): String? {
+        return try {
+            val prefs = appContext.getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            val ts = prefs.getLong(BootReceiver.KEY_LAST_BOOT_TS, 0L)
+            if (ts == 0L) return null
+            val method = prefs.getString(BootReceiver.KEY_LAST_BOOT_METHOD, "?") ?: "?"
+            val sdf = SimpleDateFormat("dd.MM.yy HH:mm:ss", Locale.US)
+            "${sdf.format(Date(ts))} ($method)"
+        } catch (_: Exception) { null }
+    }
+
     fun saveConsumptionGood(value: String) {
         _uiState.update { it.copy(consumptionGood = value) }
         viewModelScope.launch {
@@ -431,7 +448,8 @@ class SettingsViewModel @Inject constructor(
 
                 logProcess = Runtime.getRuntime().exec(arrayOf(
                     "logcat", "-v", "time",
-                    "-s", "DiParsClient:*", "TrackingService:*", "TripTracker:*",
+                    "-s", "BootReceiver:*", "SilentStartActivity:*",
+                    "DiParsClient:*", "TrackingService:*", "TripTracker:*",
                     "ChargeTracker:*", "IdleDrainTracker:*", "DiPlusDbReader:*",
                     "HistoryImporter:*", "EnergyDataReader:*"
                 ))

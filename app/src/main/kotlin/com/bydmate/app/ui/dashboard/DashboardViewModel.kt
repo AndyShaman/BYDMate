@@ -2,10 +2,8 @@ package com.bydmate.app.ui.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
-import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
@@ -42,7 +40,6 @@ data class DashboardUiState(
     val idleDrainKwhToday: Double = 0.0,
     val lastTrip: TripEntity? = null,
     val recentTrips: List<TripEntity> = emptyList(),
-    val lastCharge: ChargeEntity? = null,
     val isServiceRunning: Boolean = false,
     val currencySymbol: String = "Br",
     val avgBatTemp: Int? = null,
@@ -56,8 +53,11 @@ data class DashboardUiState(
     val idleDrainPercent: Double = 0.0,
     val idleDrainRate: Double = 0.0,
     val idleDrainHours: Double = 0.0,
+    val sohPercent: Double? = null,
+    val estimatedCapacityKwh: Double? = null,
+    val sohTripCount: Int = 0,
+    val sohExpanded: Boolean = false,
     val batteryHealthExpanded: Boolean = false,
-    val chargeExpanded: Boolean = false,
     val idleDrainExpanded: Boolean = false,
     val idleDrainKwhWeek: Double = 0.0,
     val idleDrainHoursWeek: Double = 0.0,
@@ -68,7 +68,6 @@ data class DashboardUiState(
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
-    private val chargeRepository: ChargeRepository,
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao
 ) : ViewModel() {
@@ -83,8 +82,8 @@ class DashboardViewModel @Inject constructor(
         observeLiveData()
         observeLastTrip()
         observeRecentTrips()
-        observeLastCharge()
         loadCurrency()
+        loadSoH()
         loadPeriodSummary()
         loadRecentAvgConsumption()
     }
@@ -152,15 +151,6 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             tripRepository.getRecentTrips(6).collect { trips ->
                 _uiState.update { it.copy(recentTrips = trips) }
-            }
-        }
-    }
-
-    /** Observe the most recent charge session from the database. */
-    private fun observeLastCharge() {
-        viewModelScope.launch {
-            chargeRepository.getLastCharge().collect { charge ->
-                _uiState.update { it.copy(lastCharge = charge) }
             }
         }
     }
@@ -291,23 +281,64 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Calculate SoH from qualifying trips (SOC delta >= 10%).
+     * capacity = kwhConsumed / (socDelta / 100)
+     * SoH = avgCapacity / nominalCapacity * 100%
+     */
+    private fun loadSoH() {
+        viewModelScope.launch {
+            val nominalCapacity = settingsRepository.getBatteryCapacity()
+            val trips = tripRepository.getTripsForCapacityEstimate()
+
+            if (trips.isEmpty()) {
+                _uiState.update { it.copy(sohPercent = null, estimatedCapacityKwh = null, sohTripCount = 0) }
+                return@launch
+            }
+
+            val capacities = trips.mapNotNull { trip ->
+                val socDelta = (trip.socStart ?: return@mapNotNull null) - (trip.socEnd ?: return@mapNotNull null)
+                val kwh = trip.kwhConsumed ?: return@mapNotNull null
+                if (socDelta < 10 || kwh <= 0) return@mapNotNull null
+                val cap = kwh / (socDelta / 100.0)
+                // Filter outliers: 50–90 kWh for 72.9 nominal
+                if (cap < nominalCapacity * 0.6 || cap > nominalCapacity * 1.15) null else cap
+            }
+
+            if (capacities.isEmpty()) {
+                _uiState.update { it.copy(sohPercent = null, estimatedCapacityKwh = null, sohTripCount = 0) }
+                return@launch
+            }
+
+            val avgCapacity = capacities.average()
+            val soh = (avgCapacity / nominalCapacity * 100.0).coerceIn(0.0, 110.0)
+
+            _uiState.update { it.copy(
+                sohPercent = soh,
+                estimatedCapacityKwh = avgCapacity,
+                sohTripCount = capacities.size
+            ) }
+        }
+    }
+
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
         loadPeriodSummary()
         loadRecentAvgConsumption()
+        loadSoH()
     }
 
     fun toggleBatteryHealthExpanded() {
         _uiState.update { it.copy(
             batteryHealthExpanded = !it.batteryHealthExpanded,
-            chargeExpanded = false,
+            sohExpanded = false,
             idleDrainExpanded = false
         ) }
     }
 
-    fun toggleChargeExpanded() {
+    fun toggleSohExpanded() {
         _uiState.update { it.copy(
-            chargeExpanded = !it.chargeExpanded,
+            sohExpanded = !it.sohExpanded,
             idleDrainExpanded = false,
             batteryHealthExpanded = false
         ) }
@@ -316,7 +347,7 @@ class DashboardViewModel @Inject constructor(
     fun toggleIdleDrainExpanded() {
         _uiState.update { it.copy(
             idleDrainExpanded = !it.idleDrainExpanded,
-            chargeExpanded = false,
+            sohExpanded = false,
             batteryHealthExpanded = false
         ) }
     }
