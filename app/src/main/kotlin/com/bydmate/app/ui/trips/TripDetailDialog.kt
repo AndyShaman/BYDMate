@@ -299,6 +299,6 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
 
 private fun speedColor(speed: Double): Color = when {
     speed < 20 -> SocRed
-    speed < 60 -> SocYellow
+    speed < 60 -> AccentOrange
     else -> AccentGreen
 }

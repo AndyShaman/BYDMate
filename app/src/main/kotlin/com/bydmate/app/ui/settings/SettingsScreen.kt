@@ -149,30 +149,6 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Button(
-                            onClick = { viewModel.importBydHistory() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange, contentColor = Color.White)
-                        ) {
-                            Text("Импорт поездок BYD", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        Button(
-                            onClick = { viewModel.importDiPlusCharges() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentOrange, contentColor = Color.White)
-                        ) {
-                            Text("Импорт зарядок DiPlus", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        if (state.importStatus != null) {
-                            Text(
-                                state.importStatus!!,
-                                color = if (state.importStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        Button(
                             onClick = { viewModel.exportCsv() },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(8.dp),
@@ -293,6 +269,19 @@ fun SettingsScreen(
                     ) {
                         Text("BYDMate v${state.appVersion}", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Medium)
                         Text("\u00A9 2026 AndyShaman", color = TextSecondary, fontSize = 14.sp)
+                        if (state.lastBootInfo != null) {
+                            Text(
+                                "Автозапуск: ${state.lastBootInfo}",
+                                color = AccentGreen,
+                                fontSize = 12.sp
+                            )
+                        } else {
+                            Text(
+                                "Автозапуск: не зафиксирован",
+                                color = SocRed,
+                                fontSize = 12.sp
+                            )
+                        }
                         Text(
                             text = "github.com/AndyShaman/BYDMate",
                             color = AccentBlue,

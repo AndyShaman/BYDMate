@@ -52,4 +52,7 @@ class TripRepository @Inject constructor(
 
     suspend fun getTripPointsByTimeRange(from: Long, to: Long): List<TripPointEntity> =
         tripPointDao.getByTimeRange(from, to)
+
+    suspend fun getTripsForCapacityEstimate(): List<TripEntity> =
+        tripDao.getTripsForCapacityEstimate()
 }

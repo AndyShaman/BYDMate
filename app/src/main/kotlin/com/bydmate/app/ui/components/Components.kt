@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -155,6 +156,7 @@ fun SocGauge(
                 color = TextPrimary,
                 fontSize = 32.sp,
                 fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.Center
             )
             Text(
@@ -185,7 +187,7 @@ fun TripCard(
             .fillMaxWidth()
             .background(CardSurface, RoundedCornerShape(8.dp))
             .clickable(onClick = onClick)
-            .padding(horizontal = 10.dp, vertical = 7.dp),
+            .padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         // Time range
@@ -194,40 +196,40 @@ fun TripCard(
             append("–")
             append(trip.endTs?.let { formatTime(it) } ?: "…")
         }
-        Text(text = timeRange, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(2.5f))
+        Text(text = timeRange, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace, modifier = Modifier.weight(2.5f))
+
+        // Duration (2nd column)
+        Text(
+            text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
+            color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            modifier = Modifier.weight(1f)
+        )
 
         // Distance
         Text(
             text = trip.distanceKm?.let { "%.1f".format(it) } ?: "—",
-            color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium,
-            modifier = Modifier.weight(1f)
-        )
-
-        // Duration
-        Text(
-            text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
-            color = TextMuted, fontSize = 12.sp,
-            modifier = Modifier.weight(1f)
+            color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f)
         )
 
         // kWh
         Text(
             text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
-            color = TextSecondary, fontSize = 13.sp,
+            color = TextSecondary, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f)
         )
 
         // Consumption — color-coded
         val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
-        Text(text = consumptionText, color = consumptionClr, fontSize = 13.sp, fontWeight = FontWeight.Bold,
-            modifier = Modifier.weight(1f))
+        Text(text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
 
         // Cost
         Text(
             text = trip.cost?.let { "${"%.1f".format(it)}" } ?: "",
-            color = AccentGreen, fontSize = 12.sp,
+            color = AccentGreen, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             modifier = Modifier.weight(1f)
         )
     }

@@ -74,6 +74,16 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    /** Trips with sufficient SOC delta for battery capacity estimation. */
+    @Query("""
+        SELECT * FROM trips
+        WHERE soc_start IS NOT NULL AND soc_end IS NOT NULL
+          AND kwh_consumed IS NOT NULL AND kwh_consumed > 0
+          AND (soc_start - soc_end) >= :minSocDelta
+        ORDER BY start_ts DESC LIMIT :limit
+    """)
+    suspend fun getTripsForCapacityEstimate(minSocDelta: Int = 10, limit: Int = 20): List<TripEntity>
+
     @Query("""
         SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
                COALESCE(SUM(distance_km), 0.0) as totalKm,
