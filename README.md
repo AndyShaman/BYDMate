@@ -4,7 +4,7 @@
 
 # BYDMate
 
-### Trip & Charge Tracker for BYD DiLink 5.0
+### Trip Tracker & Battery Health Monitor for BYD DiLink 5.0
 
 [![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
@@ -12,7 +12,7 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/AndyShaman/BYDMate?style=flat-square)](https://github.com/AndyShaman/BYDMate/releases)
 
-**Реальная статистика расхода, зарядок, GPS-маршрутов и здоровья батареи — локально, без облака.**
+**Реальная статистика расхода, GPS-маршрутов и здоровья батареи — локально, без облака.**
 
 [Возможности](#-возможности) | [Установка](#-установка) | [Как работает](#-как-работает) | [Сборка](#-сборка-из-исходников) | [Благодарности](#-благодарности)
 
@@ -38,11 +38,10 @@
 |---|---------|----------|
 | **SOC** | Реальный расход | Дельта SOC метод вместо бортового компьютера |
 | **GPS** | Трекинг поездок | GPS-маршруты, дистанция, скорость, температура |
-| **AC/DC** | Зарядки | Power curve, определение AC/DC, расчёт стоимости |
-| **Battery** | Здоровье батареи | Баланс ячеек, 12V, SOH, тренд деградации |
+| **SoH** | Здоровье батареи | Расчёт деградации по реальным поездкам (SOC delta) |
 | **Idle** | Расход на стоянке | Мониторинг idle drain (отопление, кондиционер) |
-| **Map** | Карта маршрутов | osmdroid (OpenStreetMap), без Google Maps |
-| **Import** | Импорт истории | Автоимпорт из BYD energydata + DiPlus |
+| **Map** | Карта маршрута | osmdroid (OpenStreetMap) в деталях поездки |
+| **Import** | Автоимпорт | Из BYD energydata + DiPlus при каждом запуске |
 | **Update** | Автообновление | Проверка новых версий на GitHub |
 | **Currency** | Мультивалюта | BYN, RUB, UAH, KZT, USD, EUR, CNY |
 
@@ -78,6 +77,18 @@ DiPlus API (localhost:8988)  →  BYDMate Service  →  Room DB  →  Compose UI
 | История поездок | BYD energydata (SQLite) |
 
 **Без OBD-адаптера** — BYD блокирует сторонние OBD-устройства и может сбрасывать ошибки после OTA-обновлений. BYDMate использует тот же API, что и встроенные приложения BYD.
+
+### Расчёт SoH (State of Health)
+
+BYDMate рассчитывает здоровье батареи по данным реальных поездок:
+
+1. Берутся поездки с дельтой SOC ≥ 10%
+2. Для каждой: `ёмкость = кВт·ч / (дельта_SOC / 100)`
+3. Отбрасываются выбросы (< 60% или > 115% от номинала)
+4. Скользящее среднее по последним 20 подходящим поездкам
+5. `SoH = расчётная_ёмкость / номинальная × 100%`
+
+Номинальная ёмкость BYD Leopard 3 — **72.9 кВт·ч**. SoH отображается на главном экране с цветовой индикацией (зелёный ≥ 95%, жёлтый ≥ 85%, красный < 85%).
 
 ---
 
@@ -157,7 +168,7 @@ Copyright (C) 2026 [AndyShaman](https://github.com/AndyShaman)
 
 ## What is BYDMate?
 
-BYDMate is an Android app for BYD vehicles with DiLink 5.0 head unit (Leopard 3 / Bao 3). It tracks trips, charging sessions, GPS routes, and real energy consumption — all locally on the head unit, no cloud required.
+BYDMate is an Android app for BYD vehicles with DiLink 5.0 head unit (Leopard 3 / Bao 3). It tracks trips, GPS routes, real energy consumption, and battery health — all locally on the head unit, no cloud required.
 
 ### Why?
 
@@ -167,17 +178,18 @@ The BYD onboard computer **underestimates consumption by 10–30%**. BYDMate cal
 
 - **Real consumption** via delta SOC method (not onboard estimates)
 - **Trip logging** with GPS routes, distance, speed, temperature
-- **Charge tracking** with power curve, AC/DC detection, cost calculation
-- **Battery health** — cell balance, 12V monitoring, SOH degradation tracking
-- **Idle drain** monitoring while parked
-- **Interactive map** with trip routes (osmdroid, no Google Maps)
-- **Auto-import** from BYD energydata + DiPlus databases
+- **Battery SoH** — degradation tracking from real trip data (SOC delta method)
+- **Idle drain** monitoring while parked (heating, AC)
+- **Trip map** with routes in trip details (osmdroid, no Google Maps)
+- **Auto-import** from BYD energydata + DiPlus databases on every launch
 - **Auto-update** from GitHub Releases
-- **Multi-currency** support
+- **Multi-currency** support (BYN, RUB, UAH, KZT, USD, EUR, CNY)
 
 ### How it works
 
 BYDMate reads vehicle data from the **DiPlus** app's local API (`localhost:8988`) every 9 seconds. No OBD adapter needed — uses the same API as BYD's built-in apps. No cloud/server — everything stays on the head unit.
+
+**SoH calculation:** Uses trips with SOC delta ≥ 10%. For each: `capacity = kWh / (SOC_delta / 100)`. Outliers filtered (60–115% of nominal). Rolling average of last 20 qualifying trips. `SoH = estimated / nominal × 100%`. Nominal capacity for Leopard 3: **72.9 kWh**.
 
 ### Installation
 
