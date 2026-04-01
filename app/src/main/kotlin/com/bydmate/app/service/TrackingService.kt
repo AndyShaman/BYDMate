@@ -126,6 +126,8 @@ class TrackingService : Service(), LocationListener {
                 val result = historyImporter.syncFromEnergyData()
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
                 historyImporter.enrichWithDiPlus()
+                // One-time fix: recalculate consumption from BMS (energydata)
+                historyImporter.recalculateConsumptionFromEnergyData()
                 historyImporter.calculateMissingCosts(settingsRepository.getTripCostTariff())
                 historyImporter.attachGpsPoints()
                 // Also import charging sessions

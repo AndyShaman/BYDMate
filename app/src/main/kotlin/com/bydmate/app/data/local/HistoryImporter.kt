@@ -178,7 +178,6 @@ class HistoryImporter @Inject constructor(
                 return
             }
 
-            val batteryCapacity = settingsRepository.getBatteryCapacity()
             val tripsWithoutSoc = tripDao.getTripsWithoutSoc()
 
             var enriched = 0
@@ -186,18 +185,11 @@ class HistoryImporter @Inject constructor(
                 val endTs = trip.endTs ?: continue
                 val match = diPlusDbReader.findMatchingTrip(diplusTrips, trip.startTs, endTs) ?: continue
 
-                val socStart = match.socStart.toInt()
-                val socEnd = match.socEnd.toInt()
-                val kwhConsumed = (match.socStart - match.socEnd) / 100.0 * batteryCapacity
-                val kwhPer100km = if (trip.distanceKm != null && trip.distanceKm > 0 && kwhConsumed > 0) {
-                    kwhConsumed / trip.distanceKm * 100.0
-                } else trip.kwhPer100km
-
+                // DiPlus provides SOC + avgSpeed only.
+                // kwhConsumed/kwhPer100km stay from energydata (BMS — more accurate than SOC delta).
                 tripRepository.updateTrip(trip.copy(
-                    socStart = socStart,
-                    socEnd = socEnd,
-                    kwhConsumed = if (kwhConsumed > 0) kwhConsumed else trip.kwhConsumed,
-                    kwhPer100km = kwhPer100km,
+                    socStart = match.socStart.toInt(),
+                    socEnd = match.socEnd.toInt(),
                     avgSpeedKmh = if (match.avgSpeed > 0) match.avgSpeed else trip.avgSpeedKmh
                 ))
                 enriched++
@@ -357,6 +349,64 @@ class HistoryImporter @Inject constructor(
             deleted
         } catch (e: Exception) {
             Log.e(TAG, "cleanupDuplicates failed", e)
+            0
+        }
+    }
+
+    /**
+     * One-time recalculation of kwhConsumed/kwhPer100km for ALL existing trips
+     * from energydata BMS electricity values.
+     * Previous versions incorrectly overwrote BMS consumption with SOC-delta estimates.
+     * Runs once, sets consumption_recalc_done flag.
+     */
+    suspend fun recalculateConsumptionFromEnergyData(): Int {
+        if (settingsRepository.isConsumptionRecalcDone()) return 0
+
+        return try {
+            val bydRecords = energyDataReader.readTrips()
+            if (bydRecords.isEmpty()) {
+                Log.d(TAG, "recalculateConsumption: no energydata records")
+                settingsRepository.setConsumptionRecalcDone()
+                return 0
+            }
+
+            val allTrips = tripDao.getAllSnapshot()
+            var updated = 0
+
+            for (trip in allTrips) {
+                // Match by bydId first
+                val match = if (trip.bydId != null) {
+                    bydRecords.firstOrNull { it.id == trip.bydId }
+                } else {
+                    // Fallback: match by start_timestamp ±5 min
+                    val startTsSec = trip.startTs / 1000L
+                    bydRecords.firstOrNull { byd ->
+                        kotlin.math.abs(byd.startTimestamp - startTsSec) < 300L
+                    }
+                } ?: continue
+
+                val oldKwh = trip.kwhConsumed
+                val newKwh = match.electricityKwh
+                val newPer100 = if ((trip.distanceKm ?: 0.0) > 0) {
+                    newKwh / trip.distanceKm!! * 100.0
+                } else null
+
+                // Only update if values actually differ
+                if (oldKwh != newKwh) {
+                    tripRepository.updateTrip(trip.copy(
+                        kwhConsumed = newKwh,
+                        kwhPer100km = newPer100,
+                        cost = null // will be recalculated by calculateMissingCosts()
+                    ))
+                    updated++
+                }
+            }
+
+            settingsRepository.setConsumptionRecalcDone()
+            Log.i(TAG, "recalculateConsumption: updated $updated/${allTrips.size} trips from energydata BMS")
+            updated
+        } catch (e: Exception) {
+            Log.e(TAG, "recalculateConsumption failed", e)
             0
         }
     }

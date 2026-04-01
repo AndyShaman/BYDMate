@@ -25,6 +25,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_SETUP_COMPLETED = "setup_completed"
         const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
+        const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -123,4 +124,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setIdleDrainCleanupDone() =
         setString(KEY_IDLE_DRAIN_CLEANUP_DONE, "true")
+
+    suspend fun isConsumptionRecalcDone(): Boolean =
+        getString(KEY_CONSUMPTION_RECALC_DONE, "false") == "true"
+
+    suspend fun setConsumptionRecalcDone() =
+        setString(KEY_CONSUMPTION_RECALC_DONE, "true")
 }
