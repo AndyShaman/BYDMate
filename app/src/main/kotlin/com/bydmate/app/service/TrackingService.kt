@@ -27,6 +27,9 @@ import com.bydmate.app.domain.tracker.IdleDrainTracker
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.ChargeState
 import com.bydmate.app.domain.tracker.TripTracker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -93,12 +96,15 @@ class TrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
+        appendChainLog("TrackingService onCreate")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification("Starting..."))
+        appendChainLog("startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
         startPolling()
         _isRunning.value = true
+        appendChainLog("TrackingService fully started")
 
         // Finalize stale SUSPENDED charge sessions from previous runs
         serviceScope.launch {
@@ -136,6 +142,7 @@ class TrackingService : Service(), LocationListener {
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
+        appendChainLog("TrackingService onDestroy")
         pollingJob?.cancel()
 
         // Force-end active trip/charge sessions asynchronously
@@ -166,7 +173,37 @@ class TrackingService : Service(), LocationListener {
 
         wakeLock?.let { if (it.isHeld) it.release() }
         _isRunning.value = false
+
+        // Auto-restart via WorkManager (like BydConnect AutoRestartReceiver)
+        try {
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
+            WorkManager.getInstance(this).enqueueUniqueWork(
+                ServiceStartWorker.WORK_NAME,
+                ExistingWorkPolicy.KEEP,
+                request
+            )
+            Log.i(TAG, "Restart scheduled via WorkManager")
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to schedule restart: ${e.message}")
+        }
+
         super.onDestroy()
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        super.onTaskRemoved(rootIntent)
+        Log.i(TAG, "onTaskRemoved: scheduling restart via WorkManager")
+        appendChainLog("onTaskRemoved → restart")
+        try {
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
+            WorkManager.getInstance(this).enqueueUniqueWork(
+                ServiceStartWorker.WORK_NAME,
+                ExistingWorkPolicy.REPLACE,
+                request
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to schedule restart on task removed: ${e.message}")
+        }
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -393,6 +430,18 @@ class TrackingService : Service(), LocationListener {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun appendChainLog(entry: String) {
+        try {
+            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
+            val ts = sdf.format(java.util.Date())
+            val prefs = getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
+            val existing = prefs.getString(BootReceiver.KEY_CHAIN_LOG, "") ?: ""
+            val lines = existing.lines().takeLast(19)
+            val updated = (lines + "$ts $entry").joinToString("\n")
+            prefs.edit().putString(BootReceiver.KEY_CHAIN_LOG, updated).apply()
+        } catch (_: Exception) {}
     }
 
     private fun updateNotification(data: DiParsData) {
