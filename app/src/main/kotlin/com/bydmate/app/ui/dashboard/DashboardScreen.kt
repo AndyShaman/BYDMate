@@ -269,7 +269,7 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
+                    Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
                     Text("длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
                     Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))

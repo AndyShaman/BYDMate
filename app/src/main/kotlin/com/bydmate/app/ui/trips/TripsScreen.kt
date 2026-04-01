@@ -191,12 +191,12 @@ private fun ColumnHeaders(currencySymbol: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("Время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(80.dp))
+        Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
+        Text("длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
-        Text("Длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
-        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
-        Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
-        Text(currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(60.dp))
+        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
     }
     HorizontalDivider(color = CardBorder.copy(alpha = 0.5f), thickness = 0.5.dp,
         modifier = Modifier.padding(start = 36.dp, end = 12.dp))
@@ -228,23 +228,26 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 "$time–$endTime",
                 color = if (isStop) TextMuted else TextSecondary,
                 fontSize = 12.sp, fontFamily = FontFamily.Monospace,
-                modifier = Modifier.width(80.dp)
+                maxLines = 1,
+                modifier = Modifier.width(96.dp)
             )
+            // Duration
+            Text(dur, color = if (isStop) TextMuted else TextSecondary,
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
             // Distance
             Text(
-                if (isStop) "⏸ 0.0" else dist,
+                if (isStop) "0.0" else dist,
                 color = if (isStop) TextMuted else TextPrimary,
                 fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
                 textAlign = TextAlign.End,
                 modifier = Modifier.width(48.dp)
             )
-            // Duration
-            Text(dur, color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
             // kWh
-            Text(kwh, color = TextSecondary, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
-                textAlign = TextAlign.End, modifier = Modifier.width(40.dp))
+            Text(kwh, color = if (isStop) TextMuted else TextSecondary,
+                fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
             // /100
             Text(
                 if (isStop) "—" else per100,
@@ -252,14 +255,15 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
                 textAlign = TextAlign.End,
-                modifier = Modifier.width(40.dp)
+                modifier = Modifier.width(44.dp)
             )
             // Cost
             Text(
                 "$cost $currencySymbol",
-                color = TextSecondary, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                color = if (isStop) TextMuted else TextSecondary,
+                fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.End,
-                modifier = Modifier.width(60.dp)
+                modifier = Modifier.width(56.dp)
             )
         }
         HorizontalDivider(color = CardBorder.copy(alpha = 0.3f), thickness = 0.5.dp,
