@@ -56,6 +56,8 @@ data class DashboardUiState(
     val idleDrainHours: Double = 0.0,
     val insightTitle: String? = null,
     val insightSummary: String? = null,
+    val insightFacts: String? = null,
+    val insightInsights: String? = null,
     val insightDetails: String? = null,
     val insightTone: String = "good",
     val insightDate: String? = null,
@@ -298,6 +300,8 @@ class DashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(
                     insightTitle = cached.title,
                     insightSummary = cached.summary,
+                    insightFacts = cached.facts,
+                    insightInsights = cached.insights,
                     insightDetails = cached.details,
                     insightTone = cached.tone,
                     insightDate = insightsManager.getCachedDate()
@@ -314,6 +318,8 @@ class DashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(
                     insightTitle = insight.title,
                     insightSummary = insight.summary,
+                    insightFacts = insight.facts,
+                    insightInsights = insight.insights,
                     insightDetails = insight.details,
                     insightTone = insight.tone,
                     insightDate = insightsManager.getCachedDate(),

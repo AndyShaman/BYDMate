@@ -171,46 +171,65 @@ fun DashboardScreen(
                             else -> AccentGreen
                         }
                         CardDetailDialog(
-                            title = state.insightTitle ?: "AI Инсайт",
+                            title = "AI Инсайт",
                             borderColor = insightDialogColor,
                             onDismiss = { viewModel.toggleInsightExpanded() }
                         ) {
+                            val facts = state.insightFacts
+                            val insights = state.insightInsights
                             val details = state.insightDetails
                             val error = state.insightError
-                            if (details != null) {
-                                Text(
-                                    details,
-                                    color = TextPrimary,
-                                    fontSize = 13.sp,
-                                    lineHeight = 18.sp
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                state.insightDate?.let {
+                            val hasContent = facts != null || insights != null || details != null
+                            if (hasContent) {
+                                // Facts section (compact bullet points)
+                                val factsText = facts?.takeIf { it.isNotBlank() }
+                                if (factsText != null) {
                                     Text(
-                                        "Обновлено: $it",
-                                        color = TextMuted,
-                                        fontSize = 11.sp
-                                    )
-                                }
-                                if (error != null) {
-                                    Text(error, color = SocRed, fontSize = 11.sp)
-                                }
-                                Spacer(modifier = Modifier.height(4.dp))
-                                androidx.compose.material3.Button(
-                                    onClick = { viewModel.refreshInsight() },
-                                    enabled = !state.insightLoading,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                        containerColor = insightDialogColor,
-                                        contentColor = Color.White
-                                    )
-                                ) {
-                                    Text(
-                                        if (state.insightLoading) "Обновление..." else "Обновить",
+                                        factsText,
+                                        color = TextPrimary,
                                         fontSize = 13.sp,
-                                        fontWeight = FontWeight.Medium
+                                        fontFamily = FontFamily.Monospace,
+                                        lineHeight = 18.sp
                                     )
+                                    Spacer(modifier = Modifier.height(10.dp))
+                                }
+                                // Insights section (detailed analysis)
+                                val insightsText = insights?.takeIf { it.isNotBlank() } ?: details
+                                if (insightsText != null) {
+                                    Text(
+                                        insightsText,
+                                        color = TextSecondary,
+                                        fontSize = 13.sp,
+                                        lineHeight = 18.sp
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    state.insightDate?.let {
+                                        Text(it, color = TextMuted, fontSize = 11.sp)
+                                    }
+                                    if (error != null) {
+                                        Text(error, color = SocRed, fontSize = 11.sp)
+                                    }
+                                    androidx.compose.material3.Button(
+                                        onClick = { viewModel.refreshInsight() },
+                                        enabled = !state.insightLoading,
+                                        shape = RoundedCornerShape(8.dp),
+                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                            containerColor = insightDialogColor,
+                                            contentColor = Color.White
+                                        )
+                                    ) {
+                                        Text(
+                                            if (state.insightLoading) "Обновление..." else "Обновить",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    }
                                 }
                             } else if (!state.hasApiKey) {
                                 Text(

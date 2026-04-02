@@ -3,7 +3,9 @@ package com.bydmate.app.data.remote
 data class InsightData(
     val title: String,
     val summary: String,
-    val details: String,
+    val facts: String,   // 2-3 bullet points with key metrics
+    val insights: String, // 2-3 paragraphs with recommendations
+    val details: String,  // legacy fallback (facts + insights combined)
     val tone: String // "good", "warning", "critical"
 )
 

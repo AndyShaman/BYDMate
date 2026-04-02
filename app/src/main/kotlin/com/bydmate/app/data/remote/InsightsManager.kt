@@ -38,18 +38,19 @@ class InsightsManager @Inject constructor(
 Analyze the provided driving statistics and return actionable insights in Russian.
 
 Focus on:
-- Consumption patterns and trends (improving or degrading vs previous period)
+- Consumption patterns and trends (week-over-week AND month-over-month)
 - Anomalies (unusually high consumption trips, excessive idle drain)
 - Cost optimization opportunities
 - Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
 - Driving habit impact (short trips vs long, speed impact on consumption)
 - Seasonal/temperature effects on range and consumption
+- Correlations the user wouldn't notice (time of day vs efficiency, temperature vs consumption)
 
 Be specific — reference actual numbers from the data. Give practical advice.
 Do NOT mention SoH percentage or battery capacity estimation — we cannot measure it accurately.
 
 Return ONLY valid JSON (no markdown, no code fences):
-{"title":"3-4 word headline in Russian","summary":"One sentence max 60 chars in Russian","details":"2-4 paragraphs with specific recommendations in Russian","tone":"good|warning|critical"}
+{"title":"3-4 words in Russian","summary":"max 60 chars in Russian","facts":"2-3 bullet lines with key metrics and trends, use arrows (e.g. расход 23.7/100 ↓8% за месяц). Keep very short.","insights":"2-3 paragraphs: correlations, anomalies, behavioral advice the user wouldn't see themselves. Be specific.","tone":"good|warning|critical"}
 
 tone guidelines:
 - "good": everything looks normal or improving
@@ -142,10 +143,17 @@ tone guidelines:
         cal.add(Calendar.DAY_OF_YEAR, -14)
         val twoWeeksAgo = cal.timeInMillis
 
-        val recentTrips = tripDao.getAllSnapshot().filter { it.startTs >= weekAgo }
-        val prevTrips = tripDao.getAllSnapshot().filter { it.startTs in twoWeeksAgo until weekAgo }
+        // Last 30 days
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -30)
+        val monthAgo = cal.timeInMillis
 
-        if (recentTrips.isEmpty() && prevTrips.isEmpty()) return@withContext null
+        val allTrips = tripDao.getAllSnapshot()
+        val recentTrips = allTrips.filter { it.startTs >= weekAgo }
+        val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
+        val monthTrips = allTrips.filter { it.startTs >= monthAgo }
+
+        if (recentTrips.isEmpty() && monthTrips.isEmpty()) return@withContext null
 
         val sb = StringBuilder()
 
@@ -190,16 +198,37 @@ tone guidelines:
             sb.appendLine("Avg consumption: %.1f kWh/100km".format(prevAvgCons))
         }
 
-        // Idle drain
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -7)
+        // Monthly summary (30 days)
+        if (monthTrips.size > recentTrips.size) {
+            val monthKm = monthTrips.sumOf { it.distanceKm ?: 0.0 }
+            val monthKwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val monthAvgCons = if (monthKm > 0) monthKwh / monthKm * 100 else 0.0
+            val monthCost = monthTrips.sumOf { it.cost ?: 0.0 }
+            val monthShort = monthTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
+            sb.appendLine("\n=== Last 30 days (monthly) ===")
+            sb.appendLine("Trips: ${monthTrips.size}, Total: %.1f km, %.1f kWh".format(monthKm, monthKwh))
+            sb.appendLine("Avg consumption: %.1f kWh/100km".format(monthAvgCons))
+            sb.appendLine("Short trips (<5km): $monthShort of ${monthTrips.size}")
+            if (monthCost > 0) {
+                sb.appendLine("Total cost: %.2f %s".format(monthCost, currency.code))
+            }
+        }
+
+        // Idle drain (7 days + 30 days)
         val drainKwh = idleDrainDao.getKwhSince(weekAgo)
         val drainHours = idleDrainDao.getHoursSince(weekAgo)
-        if (drainKwh > 0) {
-            sb.appendLine("\n=== Idle drain (7 days) ===")
-            sb.appendLine("Total: %.1f kWh in %.0f hours".format(drainKwh, drainHours))
-            if (drainHours > 0) {
-                sb.appendLine("Rate: %.2f kWh/hour, ~%.1f kWh/day".format(drainKwh / drainHours, drainKwh / 7.0))
+        val drainKwhMonth = idleDrainDao.getKwhSince(monthAgo)
+        val drainHoursMonth = idleDrainDao.getHoursSince(monthAgo)
+        if (drainKwh > 0 || drainKwhMonth > 0) {
+            sb.appendLine("\n=== Idle drain ===")
+            if (drainKwh > 0) {
+                sb.appendLine("7 days: %.1f kWh in %.0f hours".format(drainKwh, drainHours))
+                if (drainHours > 0) {
+                    sb.appendLine("Rate: %.2f kWh/hour".format(drainKwh / drainHours))
+                }
+            }
+            if (drainKwhMonth > drainKwh) {
+                sb.appendLine("30 days: %.1f kWh in %.0f hours".format(drainKwhMonth, drainHoursMonth))
             }
         }
 
@@ -231,10 +260,16 @@ tone guidelines:
     private fun parseInsight(json: String): InsightData? {
         return try {
             val obj = JSONObject(json)
+            val facts = obj.optString("facts", "")
+            val insights = obj.optString("insights", "")
+            // Legacy fallback: if model returns "details" instead of facts/insights
+            val details = obj.optString("details", "")
             InsightData(
                 title = obj.optString("title", ""),
                 summary = obj.optString("summary", ""),
-                details = obj.optString("details", ""),
+                facts = facts.ifBlank { details.lines().take(3).joinToString("\n") },
+                insights = insights.ifBlank { details },
+                details = if (facts.isNotBlank() && insights.isNotBlank()) "$facts\n\n$insights" else details,
                 tone = obj.optString("tone", "good")
             )
         } catch (e: Exception) {
