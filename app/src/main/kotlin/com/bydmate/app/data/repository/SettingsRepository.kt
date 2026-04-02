@@ -26,6 +26,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
         const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
+        const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
 
@@ -132,4 +133,10 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setConsumptionRecalcDone() =
         setString(KEY_CONSUMPTION_RECALC_DONE, "true")
+
+    suspend fun isIdleDrainV2CleanupDone(): Boolean =
+        getString(KEY_IDLE_DRAIN_V2_CLEANUP, "false") == "true"
+
+    suspend fun setIdleDrainV2CleanupDone() =
+        setString(KEY_IDLE_DRAIN_V2_CLEANUP, "true")
 }

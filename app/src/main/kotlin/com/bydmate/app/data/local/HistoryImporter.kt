@@ -412,6 +412,34 @@ class HistoryImporter @Inject constructor(
     }
 
     /**
+     * One-time cleanup: remove inflated idle_drain records from live power integration
+     * and re-import from energydata BMS (accurate zero-km records).
+     * Runs once, sets idle_drain_v2_cleanup flag.
+     */
+    suspend fun cleanupIdleDrainV2(): Int {
+        if (settingsRepository.isIdleDrainV2CleanupDone()) return 0
+
+        return try {
+            // Delete all idle_drain records (inflated from live power integration)
+            idleDrainDao.deleteAll()
+
+            // Delete zero-km trips so they get re-imported with correct idle_drain records
+            val deleted = tripDao.deleteZeroKmTrips()
+
+            // Reset import timestamp so energydata records are re-processed.
+            // Non-zero trips won't duplicate (bydId check), only deleted zero-km ones re-import.
+            settingsRepository.setLastEnergyImportTs(0L)
+
+            settingsRepository.setIdleDrainV2CleanupDone()
+            Log.i(TAG, "cleanupIdleDrainV2: cleared idle_drains, deleted $deleted zero-km trips, reset import ts")
+            deleted
+        } catch (e: Exception) {
+            Log.e(TAG, "cleanupIdleDrainV2 failed", e)
+            0
+        }
+    }
+
+    /**
      * Legacy sync method (backward compat for Settings import button).
      */
     suspend fun sync(): ImportResult = syncFromEnergyData()

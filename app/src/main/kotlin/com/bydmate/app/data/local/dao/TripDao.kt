@@ -74,6 +74,9 @@ interface TripDao {
     @Query("DELETE FROM trips WHERE id = :id")
     suspend fun deleteById(id: Long)
 
+    @Query("DELETE FROM trips WHERE COALESCE(distance_km, 0.0) = 0.0 AND source = 'energydata'")
+    suspend fun deleteZeroKmTrips(): Int
+
     /** Trips with sufficient SOC delta for battery capacity estimation. */
     @Query("""
         SELECT * FROM trips

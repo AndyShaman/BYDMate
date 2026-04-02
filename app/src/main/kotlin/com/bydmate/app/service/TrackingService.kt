@@ -23,7 +23,6 @@ import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.ChargeTracker
-import com.bydmate.app.domain.tracker.IdleDrainTracker
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.ChargeState
 import com.bydmate.app.domain.tracker.TripTracker
@@ -50,7 +49,6 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var diParsClient: DiParsClient
     @Inject lateinit var tripTracker: TripTracker
     @Inject lateinit var chargeTracker: ChargeTracker
-    @Inject lateinit var idleDrainTracker: IdleDrainTracker
     @Inject lateinit var chargeRepository: ChargeRepository
     @Inject lateinit var tripRepository: com.bydmate.app.data.repository.TripRepository
     @Inject lateinit var historyImporter: com.bydmate.app.data.local.HistoryImporter
@@ -124,6 +122,8 @@ class TrackingService : Service(), LocationListener {
         // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
+                // One-time: remove inflated idle drain from live power integration
+                historyImporter.cleanupIdleDrainV2()
                 val result = historyImporter.syncFromEnergyData()
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
                 historyImporter.enrichWithDiPlus()
@@ -247,11 +247,8 @@ class TrackingService : Service(), LocationListener {
                         val loc = lastLocation
                         tripTracker.onData(data, loc)
                         chargeTracker.onData(data, loc)
-                        idleDrainTracker.onData(
-                            data,
-                            isMoving = tripTracker.state.value == TripState.DRIVING,
-                            isCharging = chargeTracker.state.value == ChargeState.CHARGING
-                        )
+                        // Idle drain tracked via energydata zero-km records only (HistoryImporter).
+                        // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++

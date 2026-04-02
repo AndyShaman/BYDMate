@@ -302,6 +302,32 @@ fun SettingsScreen(
                                 maxLines = 1
                             )
                         }
+                        Button(
+                            onClick = { viewModel.saveAiSettings() },
+                            enabled = state.openRouterApiKey.isNotBlank() &&
+                                state.openRouterModel.isNotBlank() &&
+                                state.aiSaveStatus != "Загрузка инсайта...",
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentGreen,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                if (state.aiSaveStatus == "Загрузка инсайта...") "Загрузка..."
+                                else "Сохранить и получить инсайт",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        if (state.aiSaveStatus != null && state.aiSaveStatus != "Загрузка инсайта...") {
+                            Text(
+                                state.aiSaveStatus!!,
+                                color = if (state.aiSaveStatus!!.startsWith("Ошибка")) SocRed else AccentGreen,
+                                fontSize = 12.sp
+                            )
+                        }
                     }
                 }
 
