@@ -69,7 +69,8 @@ data class SettingsUiState(
     val openRouterModelName: String = "",
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
-    val modelsLoading: Boolean = false
+    val modelsLoading: Boolean = false,
+    val aiSaveStatus: String? = null
 )
 
 @HiltViewModel
@@ -456,6 +457,24 @@ class SettingsViewModel @Inject constructor(
 
     fun hideModelPicker() {
         _uiState.update { it.copy(showModelPicker = false) }
+    }
+
+    fun saveAiSettings() {
+        val apiKey = _uiState.value.openRouterApiKey
+        val model = _uiState.value.openRouterModel
+        if (apiKey.isBlank() || model.isBlank()) {
+            _uiState.update { it.copy(aiSaveStatus = "Укажите API-ключ и модель") }
+            return
+        }
+        _uiState.update { it.copy(aiSaveStatus = "Загрузка инсайта...") }
+        viewModelScope.launch {
+            val insight = insightsManager.refresh()
+            if (insight != null) {
+                _uiState.update { it.copy(aiSaveStatus = "Готово! Переключитесь на Главную") }
+            } else {
+                _uiState.update { it.copy(aiSaveStatus = "Ошибка получения инсайта") }
+            }
+        }
     }
 
     fun saveConsumptionGood(value: String) {
