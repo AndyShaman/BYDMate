@@ -49,8 +49,10 @@ Focus on:
 Be specific — reference actual numbers from the data. Give practical advice.
 Do NOT mention SoH percentage or battery capacity estimation — we cannot measure it accurately.
 
+Key metrics (consumption, mileage, idle drain) are shown separately — do NOT repeat them. Focus ONLY on non-obvious analysis.
+
 Return ONLY valid JSON (no markdown, no code fences):
-{"title":"3-4 words in Russian","summary":"max 60 chars in Russian","facts":"2-3 bullet lines with key metrics and trends, use arrows (e.g. расход 23.7/100 ↓8% за месяц). Keep very short.","insights":"2-3 paragraphs: correlations, anomalies, behavioral advice the user wouldn't see themselves. Be specific.","tone":"good|warning|critical"}
+{"title":"3-4 words in Russian","summary":"max 60 chars in Russian","insights":"2-3 paragraphs in Russian: correlations, anomalies, behavioral advice the user wouldn't notice themselves. Reference specific numbers from the data.","tone":"good|warning|critical"}
 
 tone guidelines:
 - "good": everything looks normal or improving
@@ -112,21 +114,110 @@ tone guidelines:
                 .removeSuffix("```")
                 .trim()
 
-            val insight = parseInsight(cleaned)
+            // Build deterministic facts from actual data (not LLM)
+            val facts = buildFacts()
+
+            // Merge our facts into LLM response before caching
+            val mergedJson = try {
+                val obj = JSONObject(cleaned)
+                obj.put("facts", facts)
+                obj.toString()
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to merge facts into JSON: ${e.message}")
+                cleaned
+            }
+
+            val insight = parseInsight(mergedJson)
             if (insight != null) {
                 prefs.edit()
-                    .putString(KEY_INSIGHT_JSON, cleaned)
+                    .putString(KEY_INSIGHT_JSON, mergedJson)
                     .putString(KEY_INSIGHT_DATE, todayString())
                     .apply()
                 Log.i(TAG, "Insight refreshed: ${insight.title}")
             } else {
-                Log.w(TAG, "Failed to parse insight: $cleaned")
+                Log.w(TAG, "Failed to parse insight: $mergedJson")
             }
             insight ?: getCachedInsight()
         } catch (e: Exception) {
             Log.e(TAG, "refresh failed: ${e.message}")
             getCachedInsight()
         }
+    }
+
+    private suspend fun buildFacts(): String = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -7)
+        val weekAgo = cal.timeInMillis
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -14)
+        val twoWeeksAgo = cal.timeInMillis
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -30)
+        val monthAgo = cal.timeInMillis
+
+        val allTrips = tripDao.getAllSnapshot()
+        val recentTrips = allTrips.filter { it.startTs >= weekAgo }
+        val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
+        val monthTrips = allTrips.filter { it.startTs >= monthAgo }
+
+        val lines = mutableListOf<String>()
+
+        val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
+        val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
+        val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+
+        // Consumption with week-over-week trend
+        if (recentAvgCons > 0) {
+            val sb = StringBuilder("\u26A1 %.1f кВтч/100".format(recentAvgCons))
+            val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
+            val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+            if (prevAvgCons > 0) {
+                val pct = (recentAvgCons - prevAvgCons) / prevAvgCons * 100
+                sb.append(if (pct > 0) " \u2191" else " \u2193")
+                sb.append("%.0f%% за нед.".format(kotlin.math.abs(pct)))
+            }
+            lines.add(sb.toString())
+        }
+
+        // Weekly summary
+        if (recentTrips.isNotEmpty()) {
+            lines.add("\uD83D\uDCCD ${recentTrips.size} поездок \u00B7 ${"%.1f".format(recentKm)} км \u00B7 ${"%.1f".format(recentKwh)} кВтч")
+        }
+
+        // Short trips ratio
+        if (recentTrips.isNotEmpty()) {
+            val shortCount = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
+            if (shortCount > 0) {
+                val pct = shortCount * 100 / recentTrips.size
+                lines.add("\uD83D\uDE97 $pct% коротких < 5 км ($shortCount/${recentTrips.size})")
+            }
+        }
+
+        // Monthly comparison (only if significantly different from weekly)
+        if (monthTrips.size > recentTrips.size) {
+            val monthKm = monthTrips.sumOf { it.distanceKm ?: 0.0 }
+            val monthKwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val monthAvgCons = if (monthKm > 0) monthKwh / monthKm * 100 else 0.0
+            if (monthAvgCons > 0) {
+                lines.add("\uD83D\uDCC5 30д: ${"%.1f".format(monthAvgCons)}/100 \u00B7 ${monthTrips.size} поездок \u00B7 ${"%.0f".format(monthKm)} км")
+            }
+        }
+
+        // Idle drain
+        val drainKwh = idleDrainDao.getKwhSince(weekAgo)
+        val drainHours = idleDrainDao.getHoursSince(weekAgo)
+        if (drainKwh > 0.1) {
+            val rate = if (drainHours > 0) " (${"%.2f".format(drainKwh / drainHours)} кВтч/ч)" else ""
+            lines.add("\uD83D\uDD0C простой ${"%.1f".format(drainKwh)} кВтч / ${"%.0f".format(drainHours)}ч$rate")
+        }
+
+        lines.joinToString("\n")
     }
 
     private suspend fun buildDataPrompt(): String? = withContext(Dispatchers.IO) {
@@ -262,14 +353,14 @@ tone guidelines:
             val obj = JSONObject(json)
             val facts = obj.optString("facts", "")
             val insights = obj.optString("insights", "")
-            // Legacy fallback: if model returns "details" instead of facts/insights
+            // Legacy fallback: old cache with "details" field
             val details = obj.optString("details", "")
             InsightData(
                 title = obj.optString("title", ""),
                 summary = obj.optString("summary", ""),
-                facts = facts.ifBlank { details.lines().take(3).joinToString("\n") },
+                facts = facts,
                 insights = insights.ifBlank { details },
-                details = if (facts.isNotBlank() && insights.isNotBlank()) "$facts\n\n$insights" else details,
+                details = details,
                 tone = obj.optString("tone", "good")
             )
         } catch (e: Exception) {
