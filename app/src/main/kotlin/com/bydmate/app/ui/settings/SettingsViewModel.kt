@@ -12,6 +12,8 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiPlusDbReader
+import com.bydmate.app.data.remote.InsightsManager
+import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -61,7 +63,13 @@ data class SettingsUiState(
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
     val lastBootInfo: String? = null,
-    val chainLog: String? = null
+    val chainLog: String? = null,
+    val openRouterApiKey: String = "",
+    val openRouterModel: String = "",
+    val openRouterModelName: String = "",
+    val showModelPicker: Boolean = false,
+    val availableModels: List<OpenRouterModel> = emptyList(),
+    val modelsLoading: Boolean = false
 )
 
 @HiltViewModel
@@ -75,7 +83,8 @@ class SettingsViewModel @Inject constructor(
     private val energyDataReader: EnergyDataReader,
     private val diParsClient: DiParsClient,
     private val idleDrainDao: IdleDrainDao,
-    private val diPlusDbReader: DiPlusDbReader
+    private val diPlusDbReader: DiPlusDbReader,
+    private val insightsManager: InsightsManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -125,6 +134,10 @@ class SettingsViewModel @Inject constructor(
             val bootInfo = readBootInfo()
             val chainLog = readChainLog()
 
+            // AI settings
+            val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
+            val modelId = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_MODEL, "")
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -137,7 +150,10 @@ class SettingsViewModel @Inject constructor(
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
                     lastBootInfo = bootInfo,
-                    chainLog = chainLog
+                    chainLog = chainLog,
+                    openRouterApiKey = apiKey,
+                    openRouterModel = modelId,
+                    openRouterModelName = modelId.substringAfterLast("/").substringBefore(":")
                 )
             }
         }
@@ -408,6 +424,38 @@ class SettingsViewModel @Inject constructor(
             val log = prefs.getString(BootReceiver.KEY_CHAIN_LOG, null)
             if (log.isNullOrBlank()) null else log
         } catch (_: Exception) { null }
+    }
+
+    fun saveOpenRouterApiKey(value: String) {
+        _uiState.update { it.copy(openRouterApiKey = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value)
+        }
+    }
+
+    fun selectModel(model: OpenRouterModel) {
+        _uiState.update { it.copy(
+            openRouterModel = model.id,
+            openRouterModelName = model.name,
+            showModelPicker = false
+        ) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_MODEL, model.id)
+        }
+    }
+
+    fun showModelPicker() {
+        val apiKey = _uiState.value.openRouterApiKey
+        if (apiKey.isBlank()) return
+        _uiState.update { it.copy(showModelPicker = true, modelsLoading = true) }
+        viewModelScope.launch {
+            val models = insightsManager.getModels(apiKey)
+            _uiState.update { it.copy(availableModels = models, modelsLoading = false) }
+        }
+    }
+
+    fun hideModelPicker() {
+        _uiState.update { it.copy(showModelPicker = false) }
     }
 
     fun saveConsumptionGood(value: String) {

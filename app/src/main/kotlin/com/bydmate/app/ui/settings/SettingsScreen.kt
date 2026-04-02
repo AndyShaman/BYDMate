@@ -26,6 +26,10 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -41,6 +45,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.theme.*
 
@@ -257,6 +267,55 @@ fun SettingsScreen(
                     }
                 }
 
+                SectionHeader(text = "AI Инсайты")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsTextField(
+                            label = "OpenRouter API Key",
+                            value = state.openRouterApiKey,
+                            onValueChange = { viewModel.saveOpenRouterApiKey(it) },
+                            keyboardType = KeyboardType.Password
+                        )
+                        Button(
+                            onClick = { viewModel.showModelPicker() },
+                            enabled = state.openRouterApiKey.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentBlue,
+                                contentColor = Color.White
+                            )
+                        ) {
+                            Text(
+                                if (state.openRouterModelName.isNotBlank())
+                                    "Модель: ${state.openRouterModelName}"
+                                else "Выбрать модель",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1
+                            )
+                        }
+                    }
+                }
+
+                // Model picker dialog
+                if (state.showModelPicker) {
+                    ModelPickerDialog(
+                        models = state.availableModels,
+                        loading = state.modelsLoading,
+                        selectedId = state.openRouterModel,
+                        onSelect = { viewModel.selectModel(it) },
+                        onDismiss = { viewModel.hideModelPicker() }
+                    )
+                }
+
                 SectionHeader(text = "О приложении")
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -373,4 +432,98 @@ private fun UnitChip(
             selected = selected
         )
     )
+}
+
+@Composable
+private fun ModelPickerDialog(
+    models: List<OpenRouterModel>,
+    loading: Boolean,
+    selectedId: String,
+    onSelect: (OpenRouterModel) -> Unit,
+    onDismiss: () -> Unit
+) {
+    var searchQuery by remember { mutableStateOf("") }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
+            modifier = Modifier
+                .fillMaxWidth(0.6f)
+                .heightIn(max = 500.dp)
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text("Выбор модели", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text("Поиск") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedTextColor = Color.White,
+                        unfocusedTextColor = Color.White,
+                        focusedBorderColor = AccentGreen,
+                        unfocusedBorderColor = CardBorder,
+                        focusedLabelColor = AccentGreen,
+                        unfocusedLabelColor = TextSecondary,
+                        cursorColor = AccentGreen
+                    )
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                if (loading) {
+                    Text("Загрузка моделей...", color = TextSecondary, fontSize = 14.sp)
+                } else {
+                    val filtered = if (searchQuery.isBlank()) models
+                    else models.filter { it.name.contains(searchQuery, ignoreCase = true) ||
+                        it.id.contains(searchQuery, ignoreCase = true) }
+
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        items(filtered) { model ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(model) }
+                                    .background(
+                                        if (model.id == selectedId) AccentGreen.copy(alpha = 0.15f)
+                                        else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    model.name,
+                                    color = if (model.id == selectedId) AccentGreen else TextPrimary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f),
+                                    maxLines = 1
+                                )
+                                Text(
+                                    if (model.pricingPrompt == 0.0) "FREE"
+                                    else "${"%.2f".format(model.pricingPrompt)}$/M",
+                                    color = if (model.pricingPrompt == 0.0) AccentGreen else TextSecondary,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

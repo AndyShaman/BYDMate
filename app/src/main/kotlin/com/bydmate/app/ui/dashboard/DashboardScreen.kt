@@ -107,27 +107,24 @@ fun DashboardScreen(
                         Text("расчётный пробег", color = TextMuted, fontSize = 12.sp)
                     }
 
-                    // 3 compact cards: SoH, battery, idle drain
+                    // 3 compact cards: insight, battery, idle drain
                     Column(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        // SoH card
-                        val sohPct = state.sohPercent
-                        val sohColor = when {
-                            sohPct == null -> TextMuted
-                            sohPct >= 95 -> AccentGreen
-                            sohPct >= 85 -> SocYellow
-                            else -> SocRed
+                        // AI Insight card
+                        val insightColor = when (state.insightTone) {
+                            "critical" -> SocRed
+                            "warning" -> SocYellow
+                            else -> AccentGreen
                         }
-                        CompactCard(
-                            leftValue = state.sohPercent?.let { "%.1f%%".format(it) } ?: "—",
-                            leftLabel = "SoH",
-                            rightValue = state.estimatedCapacityKwh?.let { "%.1f".format(it) } ?: "—",
-                            rightLabel = "кВт·ч",
-                            borderColor = sohColor,
-                            hasData = state.sohPercent != null,
-                            onClick = { viewModel.toggleSohExpanded() }
+                        InsightCard(
+                            title = state.insightTitle,
+                            summary = state.insightSummary,
+                            hasApiKey = state.hasApiKey,
+                            loading = state.insightLoading,
+                            borderColor = insightColor,
+                            onClick = { viewModel.toggleInsightExpanded() }
                         )
                         // Battery card
                         CompactCard(
@@ -161,27 +158,62 @@ fun DashboardScreen(
                     }
 
                     // Pop-up dialogs
-                    if (state.sohExpanded) {
-                        val sohPctD = state.sohPercent
-                        val sohColor = when {
-                            sohPctD == null -> TextMuted
-                            sohPctD >= 95 -> AccentGreen
-                            sohPctD >= 85 -> SocYellow
-                            else -> SocRed
+                    if (state.insightExpanded) {
+                        val insightDialogColor = when (state.insightTone) {
+                            "critical" -> SocRed
+                            "warning" -> SocYellow
+                            else -> AccentGreen
                         }
                         CardDetailDialog(
-                            title = "Здоровье ВВБ (SoH)",
-                            borderColor = sohColor,
-                            onDismiss = { viewModel.toggleSohExpanded() }
+                            title = state.insightTitle ?: "AI Инсайт",
+                            borderColor = insightDialogColor,
+                            onDismiss = { viewModel.toggleInsightExpanded() }
                         ) {
-                            if (state.sohPercent != null) {
-                                DetailRow("SoH", "${"%.1f".format(state.sohPercent)}%", sohColor)
-                                DetailRow("Ёмкость", "${"%.1f".format(state.estimatedCapacityKwh)} кВт·ч", TextPrimary)
-                                DetailRow("Номинал", "72.9 кВт·ч", TextMuted)
-                                DetailRow("По данным", "${state.sohTripCount} поездок", TextSecondary)
+                            val details = state.insightDetails
+                            val error = state.insightError
+                            if (details != null) {
+                                Text(
+                                    details,
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    lineHeight = 18.sp
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                                state.insightDate?.let {
+                                    Text(
+                                        "Обновлено: $it",
+                                        color = TextMuted,
+                                        fontSize = 11.sp
+                                    )
+                                }
+                                if (error != null) {
+                                    Text(error, color = SocRed, fontSize = 11.sp)
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                androidx.compose.material3.Button(
+                                    onClick = { viewModel.refreshInsight() },
+                                    enabled = !state.insightLoading,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = androidx.compose.material3.ButtonDefaults.buttonColors(
+                                        containerColor = insightDialogColor,
+                                        contentColor = Color.White
+                                    )
+                                ) {
+                                    Text(
+                                        if (state.insightLoading) "Обновление..." else "Обновить",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
+                            } else if (!state.hasApiKey) {
+                                Text(
+                                    "Для AI-инсайтов настройте OpenRouter API в Настройках",
+                                    color = TextSecondary,
+                                    fontSize = 13.sp
+                                )
                             } else {
-                                DetailRow("Статус", "Мало данных", TextMuted)
-                                DetailRow("Нужно", "Поездки с дельтой SOC ≥ 10%", TextSecondary)
+                                Text("Мало данных для анализа", color = TextMuted, fontSize = 13.sp)
                             }
                         }
                     }
@@ -331,6 +363,69 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
                 color = TextSecondary,
                 fontSize = 12.sp
             )
+        }
+    }
+}
+
+// ============================================================================
+// AI Insight card — text-based, different from value-pair cards
+// ============================================================================
+
+@Composable
+private fun InsightCard(
+    title: String?,
+    summary: String?,
+    hasApiKey: Boolean,
+    loading: Boolean,
+    borderColor: Color,
+    onClick: () -> Unit
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(
+            1.5.dp,
+            if (hasApiKey && title != null) borderColor.copy(alpha = 0.5f) else TextMuted.copy(alpha = 0.3f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("✦", fontSize = 16.sp, color = if (hasApiKey && title != null) borderColor else TextMuted)
+            Spacer(modifier = Modifier.width(8.dp))
+            if (loading) {
+                Text("Анализ...", color = TextSecondary, fontSize = 13.sp)
+            } else if (title != null && hasApiKey) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        title,
+                        color = borderColor,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1
+                    )
+                    if (summary != null) {
+                        Text(
+                            summary,
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            maxLines = 1
+                        )
+                    }
+                }
+            } else {
+                Text(
+                    "AI Инсайты — Настройте OpenRouter →",
+                    color = TextMuted,
+                    fontSize = 12.sp
+                )
+            }
         }
     }
 }

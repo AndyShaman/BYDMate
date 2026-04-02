@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
@@ -53,10 +54,15 @@ data class DashboardUiState(
     val idleDrainPercent: Double = 0.0,
     val idleDrainRate: Double = 0.0,
     val idleDrainHours: Double = 0.0,
-    val sohPercent: Double? = null,
-    val estimatedCapacityKwh: Double? = null,
-    val sohTripCount: Int = 0,
-    val sohExpanded: Boolean = false,
+    val insightTitle: String? = null,
+    val insightSummary: String? = null,
+    val insightDetails: String? = null,
+    val insightTone: String = "good",
+    val insightDate: String? = null,
+    val insightLoading: Boolean = false,
+    val insightError: String? = null,
+    val insightExpanded: Boolean = false,
+    val hasApiKey: Boolean = false,
     val batteryHealthExpanded: Boolean = false,
     val idleDrainExpanded: Boolean = false,
     val idleDrainKwhWeek: Double = 0.0,
@@ -69,7 +75,8 @@ data class DashboardUiState(
 class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
-    private val idleDrainDao: IdleDrainDao
+    private val idleDrainDao: IdleDrainDao,
+    private val insightsManager: InsightsManager
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -83,7 +90,7 @@ class DashboardViewModel @Inject constructor(
         observeLastTrip()
         observeRecentTrips()
         loadCurrency()
-        loadSoH()
+        loadInsight()
         loadPeriodSummary()
         loadRecentAvgConsumption()
     }
@@ -281,43 +288,43 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Calculate SoH from qualifying trips (SOC delta >= 10%).
-     * capacity = kwhConsumed / (socDelta / 100)
-     * SoH = avgCapacity / nominalCapacity * 100%
-     */
-    private fun loadSoH() {
+    private fun loadInsight() {
         viewModelScope.launch {
-            val nominalCapacity = settingsRepository.getBatteryCapacity()
-            val trips = tripRepository.getTripsForCapacityEstimate()
+            val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
+            _uiState.update { it.copy(hasApiKey = apiKey.isNotBlank()) }
 
-            if (trips.isEmpty()) {
-                _uiState.update { it.copy(sohPercent = null, estimatedCapacityKwh = null, sohTripCount = 0) }
-                return@launch
+            val cached = insightsManager.getCachedInsight()
+            if (cached != null) {
+                _uiState.update { it.copy(
+                    insightTitle = cached.title,
+                    insightSummary = cached.summary,
+                    insightDetails = cached.details,
+                    insightTone = cached.tone,
+                    insightDate = insightsManager.getCachedDate()
+                ) }
             }
+        }
+    }
 
-            val capacities = trips.mapNotNull { trip ->
-                val socDelta = (trip.socStart ?: return@mapNotNull null) - (trip.socEnd ?: return@mapNotNull null)
-                val kwh = trip.kwhConsumed ?: return@mapNotNull null
-                if (socDelta < 10 || kwh <= 0) return@mapNotNull null
-                val cap = kwh / (socDelta / 100.0)
-                // Filter outliers: 50–90 kWh for 72.9 nominal
-                if (cap < nominalCapacity * 0.6 || cap > nominalCapacity * 1.15) null else cap
+    fun refreshInsight() {
+        viewModelScope.launch {
+            _uiState.update { it.copy(insightLoading = true, insightError = null) }
+            val insight = insightsManager.refresh()
+            if (insight != null) {
+                _uiState.update { it.copy(
+                    insightTitle = insight.title,
+                    insightSummary = insight.summary,
+                    insightDetails = insight.details,
+                    insightTone = insight.tone,
+                    insightDate = insightsManager.getCachedDate(),
+                    insightLoading = false
+                ) }
+            } else {
+                _uiState.update { it.copy(
+                    insightLoading = false,
+                    insightError = "Не удалось обновить"
+                ) }
             }
-
-            if (capacities.isEmpty()) {
-                _uiState.update { it.copy(sohPercent = null, estimatedCapacityKwh = null, sohTripCount = 0) }
-                return@launch
-            }
-
-            val avgCapacity = capacities.average()
-            val soh = (avgCapacity / nominalCapacity * 100.0).coerceIn(0.0, 110.0)
-
-            _uiState.update { it.copy(
-                sohPercent = soh,
-                estimatedCapacityKwh = avgCapacity,
-                sohTripCount = capacities.size
-            ) }
         }
     }
 
@@ -325,20 +332,20 @@ class DashboardViewModel @Inject constructor(
     fun refresh() {
         loadPeriodSummary()
         loadRecentAvgConsumption()
-        loadSoH()
+        loadInsight()
     }
 
     fun toggleBatteryHealthExpanded() {
         _uiState.update { it.copy(
             batteryHealthExpanded = !it.batteryHealthExpanded,
-            sohExpanded = false,
+            insightExpanded = false,
             idleDrainExpanded = false
         ) }
     }
 
-    fun toggleSohExpanded() {
+    fun toggleInsightExpanded() {
         _uiState.update { it.copy(
-            sohExpanded = !it.sohExpanded,
+            insightExpanded = !it.insightExpanded,
             idleDrainExpanded = false,
             batteryHealthExpanded = false
         ) }
@@ -347,7 +354,7 @@ class DashboardViewModel @Inject constructor(
     fun toggleIdleDrainExpanded() {
         _uiState.update { it.copy(
             idleDrainExpanded = !it.idleDrainExpanded,
-            sohExpanded = false,
+            insightExpanded = false,
             batteryHealthExpanded = false
         ) }
     }

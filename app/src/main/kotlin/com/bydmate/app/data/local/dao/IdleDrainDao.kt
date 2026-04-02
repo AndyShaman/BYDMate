@@ -40,4 +40,13 @@ interface IdleDrainDao {
         WHERE start_ts >= :dayStart AND start_ts <= :dayEnd AND end_ts IS NOT NULL
     """)
     suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double
+
+    @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains WHERE start_ts >= :since")
+    suspend fun getKwhSince(since: Long): Double
+
+    @Query("""
+        SELECT COALESCE(SUM(CAST(end_ts - start_ts AS REAL) / 3600000.0), 0.0)
+        FROM idle_drains WHERE start_ts >= :since AND end_ts IS NOT NULL
+    """)
+    suspend fun getHoursSince(since: Long): Double
 }

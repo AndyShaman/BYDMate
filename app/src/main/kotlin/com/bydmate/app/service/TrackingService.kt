@@ -56,6 +56,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var historyImporter: com.bydmate.app.data.local.HistoryImporter
     @Inject lateinit var diPlusDbReader: com.bydmate.app.data.remote.DiPlusDbReader
     @Inject lateinit var settingsRepository: com.bydmate.app.data.repository.SettingsRepository
+    @Inject lateinit var insightsManager: com.bydmate.app.data.remote.InsightsManager
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -132,6 +133,8 @@ class TrackingService : Service(), LocationListener {
                 historyImporter.attachGpsPoints()
                 // Also import charging sessions
                 diPlusDbReader.importChargingLog()
+                // AI insights (once per day)
+                insightsManager.refreshIfNeeded()
             } catch (e: Exception) {
                 Log.w(TAG, "Sync failed: ${e.message}")
             }
