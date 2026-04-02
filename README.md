@@ -132,7 +132,10 @@ BYDMate может анализировать вашу статистику во
 2. В **Настройках** введите ключ и выберите модель (есть бесплатные)
 3. Нажмите **"Сохранить и получить инсайт"**
 
-AI анализирует данные за 7 дней: расход, тренды, короткие поездки, idle drain, температуру батареи, баланс ячеек — и даёт практические рекомендации на русском языке.
+AI анализирует данные за 7 и 30 дней: расход, тренды, короткие поездки, idle drain, температуру батареи, баланс ячеек.
+
+- **Факты** — метрики рассчитываются из реальных данных (расход с трендом, % коротких поездок, idle drain)
+- **Инсайты** — LLM находит корреляции, аномалии и даёт поведенческие рекомендации
 
 Запрос отправляется **раз в день**. Данные кэшируются локально.
 
@@ -218,7 +221,7 @@ No OBD adapter needed. No cloud/server — everything stays on the head unit (ex
 2. Enter the key in BYDMate Settings and select a model
 3. Click "Save and get insight"
 
-AI analyzes 7-day driving stats and provides recommendations in Russian.
+AI analyzes 7-day and 30-day driving stats. Key metrics (consumption trends, short trips ratio, idle drain) are calculated deterministically. LLM provides correlations, anomalies, and behavioral advice in Russian.
 
 ### Building
 
