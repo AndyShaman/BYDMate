@@ -493,15 +493,19 @@ private fun BarChart(
         }
     }
 
-    val maxValue = bars.maxOfOrNull { it.value } ?: 1.0
-    val niceMax = niceAxisMax(maxValue)
-    val showEveryNth = if (bars.size > 15) (bars.size / 7).coerceAtLeast(2) else 1
+    val niceMax = remember(bars) {
+        val maxValue = bars.maxOfOrNull { it.value } ?: 1.0
+        niceAxisMax(maxValue)
+    }
+    val showEveryNth = remember(bars) {
+        if (bars.size > 15) (bars.size / 7).coerceAtLeast(2) else 1
+    }
 
     Box(modifier = modifier) {
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(bars.size, selectedIndex) {
+                .pointerInput(bars, selectedIndex) {
                     detectTapGestures { offset ->
                         val yAxisW = 48f * density
                         val chartLeft = yAxisW

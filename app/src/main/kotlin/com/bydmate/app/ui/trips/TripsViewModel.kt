@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -82,6 +83,7 @@ class TripsViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(TripsUiState())
     val uiState: StateFlow<TripsUiState> = _uiState.asStateFlow()
+    private var loadJob: Job? = null
 
     init {
         viewModelScope.launch {
@@ -159,12 +161,13 @@ class TripsViewModel @Inject constructor(
     }
 
     private fun loadTrips() {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val (from, to) = dateRangeFor(state.period)
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val (from, to) = dateRangeFor(_uiState.value.period)
 
             tripRepository.getTripsByDateRange(from, to).collect { allTrips ->
-                val filtered = when (state.filter) {
+                val currentFilter = _uiState.value.filter
+                val filtered = when (currentFilter) {
                     TripFilter.ALL -> allTrips
                     TripFilter.TRIPS_ONLY -> allTrips.filter { (it.distanceKm ?: 0.0) > 0 }
                     TripFilter.STOPS_ONLY -> allTrips.filter { (it.distanceKm ?: 0.0) == 0.0 }
