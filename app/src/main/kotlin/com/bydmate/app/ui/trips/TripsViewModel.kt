@@ -22,6 +22,14 @@ import javax.inject.Inject
 enum class TripPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
 enum class TripFilter { ALL, TRIPS_ONLY, STOPS_ONLY }
 
+enum class ChartMetric { PER_100, KWH, COST }
+
+data class ChartBar(
+    val label: String,      // "08.04", "Мар", "09:36"
+    val value: Double,      // metric value
+    val tripCount: Int      // number of trips in this bar
+)
+
 data class MonthGroup(
     val yearMonth: String,     // "2026-03"
     val label: String,         // "Март 2026"
@@ -51,6 +59,9 @@ data class TripsUiState(
     val selectedTrip: TripEntity? = null,
     val selectedTripPoints: List<TripPointEntity> = emptyList(),
     val currencySymbol: String = "Br",
+    val chartMetric: ChartMetric = ChartMetric.PER_100,
+    val chartBars: List<ChartBar> = emptyList(),
+    val selectedBarIndex: Int? = null,
     // Legacy compat
     val trips: List<TripEntity> = emptyList(),
     val totalKm: Double = 0.0,
@@ -95,7 +106,11 @@ class TripsViewModel @Inject constructor(
     }
 
     fun setFilter(filter: TripFilter) {
-        _uiState.update { it.copy(filter = filter) }
+        _uiState.update { state ->
+            val newMetric = if (filter == TripFilter.STOPS_ONLY && state.chartMetric == ChartMetric.PER_100)
+                ChartMetric.KWH else state.chartMetric
+            state.copy(filter = filter, chartMetric = newMetric)
+        }
         loadTrips()
     }
 
@@ -128,6 +143,15 @@ class TripsViewModel @Inject constructor(
 
     fun clearSelectedTrip() {
         _uiState.update { it.copy(selectedTrip = null, selectedTripPoints = emptyList()) }
+    }
+
+    fun setChartMetric(metric: ChartMetric) {
+        _uiState.update { it.copy(chartMetric = metric, selectedBarIndex = null) }
+        rebuildChart()
+    }
+
+    fun selectBar(index: Int?) {
+        _uiState.update { it.copy(selectedBarIndex = index) }
     }
 
     fun toggleTripExpansion(tripId: Long) {
@@ -170,8 +194,84 @@ class TripsViewModel @Inject constructor(
                             setOf(autoExpandDay) else s.expandedDays
                     )
                 }
+                rebuildChart()
             }
         }
+    }
+
+    private fun rebuildChart() {
+        val state = _uiState.value
+        val bars = buildChartBars(state.trips, state.period, state.chartMetric, state.filter)
+        _uiState.update { it.copy(chartBars = bars, selectedBarIndex = null) }
+    }
+
+    private fun buildChartBars(
+        trips: List<TripEntity>,
+        period: TripPeriod,
+        metric: ChartMetric,
+        filter: TripFilter
+    ): List<ChartBar> {
+        if (trips.isEmpty()) return emptyList()
+
+        val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
+        val dayFmt = SimpleDateFormat("dd.MM", Locale.US)
+        val monthShortFmt = SimpleDateFormat("MMM", Locale("ru"))
+        val monthYearFmt = SimpleDateFormat("MM.yy", Locale.US)
+        val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
+        val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+
+        val effectiveMetric = if (filter == TripFilter.STOPS_ONLY && metric == ChartMetric.PER_100)
+            ChartMetric.KWH else metric
+
+        data class Group(val label: String, val sortKey: String, val trips: MutableList<TripEntity>)
+
+        val groups = linkedMapOf<String, Group>()
+
+        when (period) {
+            TripPeriod.TODAY -> {
+                for (trip in trips) {
+                    val key = trip.id.toString()
+                    val label = timeFmt.format(Date(trip.startTs))
+                    groups[key] = Group(label, trip.startTs.toString(), mutableListOf(trip))
+                }
+            }
+            TripPeriod.WEEK, TripPeriod.MONTH -> {
+                for (trip in trips) {
+                    val d = Date(trip.startTs)
+                    val key = dayKeyFmt.format(d)
+                    val label = dayFmt.format(d)
+                    groups.getOrPut(key) { Group(label, key, mutableListOf()) }.trips.add(trip)
+                }
+            }
+            TripPeriod.YEAR, TripPeriod.ALL -> {
+                for (trip in trips) {
+                    val d = Date(trip.startTs)
+                    val key = monthKeyFmt.format(d)
+                    val label = if (period == TripPeriod.YEAR)
+                        monthShortFmt.format(d).replaceFirstChar { it.uppercase() }
+                    else monthYearFmt.format(d)
+                    groups.getOrPut(key) { Group(label, key, mutableListOf()) }.trips.add(trip)
+                }
+            }
+        }
+
+        return groups.values
+            .sortedBy { it.sortKey }
+            .map { group ->
+                val totalKm = group.trips.sumOf { it.distanceKm ?: 0.0 }
+                val totalKwh = group.trips.sumOf { it.kwhConsumed ?: 0.0 }
+                val totalCost = group.trips.sumOf { it.cost ?: 0.0 }
+                val value = when (effectiveMetric) {
+                    ChartMetric.PER_100 -> if (totalKm > 0) totalKwh / totalKm * 100.0 else 0.0
+                    ChartMetric.KWH -> totalKwh
+                    ChartMetric.COST -> totalCost
+                }
+                ChartBar(
+                    label = group.label,
+                    value = value,
+                    tripCount = group.trips.size
+                )
+            }
     }
 
     private fun groupIntoMonths(trips: List<TripEntity>): List<MonthGroup> {
