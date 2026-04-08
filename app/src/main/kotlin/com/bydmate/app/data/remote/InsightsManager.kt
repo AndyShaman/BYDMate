@@ -39,24 +39,30 @@ Analyze the provided driving statistics and return actionable insights in Russia
 
 Focus on:
 - Consumption patterns and trends (week-over-week AND month-over-month)
-- Anomalies (unusually high consumption trips, excessive idle drain)
 - Cost optimization opportunities
 - Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
 - Driving habit impact (short trips vs long, speed impact on consumption)
 - Seasonal/temperature effects on range and consumption
 - Correlations the user wouldn't notice (time of day vs efficiency, temperature vs consumption)
 
+IMPORTANT about "Stationary consumption":
+This is energy used while the vehicle is RUNNING but NOT MOVING — engine warmup, waiting with A/C on, configuring the car, etc. This is NORMAL behavior, NOT a parasitic drain or anomaly. Do NOT recommend checking remote access, alarm systems, or parking mode settings. Only mention it if the proportion is notably high compared to driving consumption, and frame advice as "reduce idle time" not "diagnose a problem".
+
 Be specific — reference actual numbers from the data. Give practical advice.
 Do NOT mention SoH percentage or battery capacity estimation — we cannot measure it accurately.
 
-Key metrics (consumption, mileage, idle drain) are shown separately — do NOT repeat them. Focus ONLY on non-obvious analysis.
+Key metrics and dynamics (consumption, mileage, trends) are shown separately in the UI — do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
 
 Return ONLY valid JSON (no markdown, no code fences):
-{"title":"3-4 words in Russian","summary":"max 60 chars in Russian","insights":"2-3 paragraphs in Russian: correlations, anomalies, behavioral advice the user wouldn't notice themselves. Reference specific numbers from the data.","tone":"good|warning|critical"}
+{"title":"key change in 3-5 words","summary":"cause or advice, max 60 chars","insights":["insight 1","insight 2","insight 3"],"tone":"good|warning|critical"}
+
+title: the most important change or finding — e.g. "Расход ▲8% за неделю", "Расход стабилен", "Батарея в норме". NEVER write generic titles like "Анализ эффективности", "Обзор статистики", "Итоги недели" — always the KEY FINDING with a number.
+summary: the cause or actionable advice — e.g. "Много коротких поездок — прогрев забирает энергию". Max 60 chars.
+Each insight: 1-2 sentences in Russian. Start with the key finding. Reference specific numbers. Max 3 insights.
 
 tone guidelines:
 - "good": everything looks normal or improving
-- "warning": notable degradation, high drain, or concerning pattern
+- "warning": notable degradation or concerning pattern
 - "critical": anomaly that needs immediate attention"""
     }
 
@@ -114,16 +120,33 @@ tone guidelines:
                 .removeSuffix("```")
                 .trim()
 
-            // Build deterministic facts from actual data (not LLM)
-            val facts = buildFacts()
+            // Build deterministic dynamics from actual data (not LLM)
+            val dynamics = buildDynamics()
 
-            // Merge our facts into LLM response before caching
+            // Serialize dynamics into JSON array for caching
+            val dynamicsArr = org.json.JSONArray()
+            for (m in dynamics) {
+                dynamicsArr.put(JSONObject().apply {
+                    put("label", m.label)
+                    put("current", m.current)
+                    if (m.previous != null) put("previous", m.previous)
+                    if (m.changePct != null) put("changePct", m.changePct)
+                    put("sentiment", m.sentiment)
+                    if (m.section != null) put("section", m.section)
+                })
+            }
+
+            // Determine tone from data (not LLM)
+            val deterministicTone = determineTone(dynamics)
+
+            // Merge dynamics + override tone into LLM response before caching
             val mergedJson = try {
                 val obj = JSONObject(cleaned)
-                obj.put("facts", facts)
+                obj.put("dynamics", dynamicsArr)
+                obj.put("tone", deterministicTone)
                 obj.toString()
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to merge facts into JSON: ${e.message}")
+                Log.w(TAG, "Failed to merge dynamics into JSON: ${e.message}")
                 cleaned
             }
 
@@ -144,7 +167,7 @@ tone guidelines:
         }
     }
 
-    private suspend fun buildFacts(): String = withContext(Dispatchers.IO) {
+    private suspend fun buildDynamics(): List<DynamicMetric> = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance()
 
@@ -156,68 +179,134 @@ tone guidelines:
         cal.add(Calendar.DAY_OF_YEAR, -14)
         val twoWeeksAgo = cal.timeInMillis
 
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -30)
-        val monthAgo = cal.timeInMillis
-
         val allTrips = tripDao.getAllSnapshot()
         val recentTrips = allTrips.filter { it.startTs >= weekAgo }
         val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
-        val monthTrips = allTrips.filter { it.startTs >= monthAgo }
 
-        val lines = mutableListOf<String>()
+        val metrics = mutableListOf<DynamicMetric>()
 
+        // --- Consumption ---
         val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
         val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+        val recentCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
 
-        // Consumption with week-over-week trend
-        if (recentAvgCons > 0) {
-            val sb = StringBuilder("\u26A1 %.1f кВтч/100".format(recentAvgCons))
-            val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
-            val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
-            val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
-            if (prevAvgCons > 0) {
-                val pct = (recentAvgCons - prevAvgCons) / prevAvgCons * 100
-                sb.append(if (pct > 0) " \u2191" else " \u2193")
-                sb.append("%.0f%% за нед.".format(kotlin.math.abs(pct)))
-            }
-            lines.add(sb.toString())
+        val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
+        val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
+        val prevCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+
+        if (recentCons > 0) {
+            val pct = if (prevCons > 0) (recentCons - prevCons) / prevCons * 100 else null
+            metrics.add(DynamicMetric(
+                label = "Расход",
+                current = "%.1f кВтч/100".format(recentCons),
+                previous = if (prevCons > 0) "%.1f".format(prevCons) else null,
+                changePct = pct,
+                sentiment = consumptionSentiment(pct),
+                section = "Неделя к неделе"
+            ))
         }
 
-        // Weekly summary
+        // --- Trips ---
         if (recentTrips.isNotEmpty()) {
-            lines.add("\uD83D\uDCCD ${recentTrips.size} поездок \u00B7 ${"%.1f".format(recentKm)} км \u00B7 ${"%.1f".format(recentKwh)} кВтч")
+            val pct = if (prevTrips.isNotEmpty())
+                (recentTrips.size - prevTrips.size).toDouble() / prevTrips.size * 100 else null
+            metrics.add(DynamicMetric(
+                label = "Поездки",
+                current = "${recentTrips.size} · ${"%.0f".format(recentKm)} км",
+                previous = if (prevTrips.isNotEmpty()) "${prevTrips.size} · ${"%.0f".format(prevKm)} км" else null,
+                changePct = pct,
+                sentiment = "neutral"
+            ))
         }
 
-        // Short trips ratio
+        // --- Short trips % ---
         if (recentTrips.isNotEmpty()) {
-            val shortCount = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
-            if (shortCount > 0) {
-                val pct = shortCount * 100 / recentTrips.size
-                lines.add("\uD83D\uDE97 $pct% коротких < 5 км ($shortCount/${recentTrips.size})")
+            val shortNow = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
+            val pctNow = shortNow * 100 / recentTrips.size
+            val shortPrev = if (prevTrips.isNotEmpty()) prevTrips.count { (it.distanceKm ?: 0.0) < 5.0 } else 0
+            val pctPrev = if (prevTrips.isNotEmpty()) shortPrev * 100 / prevTrips.size else null
+
+            val changePct = if (pctPrev != null && pctPrev > 0)
+                (pctNow - pctPrev).toDouble() / pctPrev * 100 else null
+
+            if (pctNow > 0) {
+                metrics.add(DynamicMetric(
+                    label = "Короткие < 5 км",
+                    current = "$pctNow% ($shortNow/${recentTrips.size})",
+                    previous = if (pctPrev != null) "$pctPrev%" else null,
+                    changePct = changePct,
+                    sentiment = consumptionSentiment(changePct)
+                ))
             }
         }
 
-        // Monthly comparison (only if significantly different from weekly)
-        if (monthTrips.size > recentTrips.size) {
-            val monthKm = monthTrips.sumOf { it.distanceKm ?: 0.0 }
-            val monthKwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
-            val monthAvgCons = if (monthKm > 0) monthKwh / monthKm * 100 else 0.0
-            if (monthAvgCons > 0) {
-                lines.add("\uD83D\uDCC5 30д: ${"%.1f".format(monthAvgCons)}/100 \u00B7 ${monthTrips.size} поездок \u00B7 ${"%.0f".format(monthKm)} км")
-            }
+        // --- Average distance ---
+        if (recentTrips.isNotEmpty()) {
+            val avgDistNow = recentKm / recentTrips.size
+            val avgDistPrev = if (prevTrips.isNotEmpty()) prevKm / prevTrips.size else null
+
+            val pct = if (avgDistPrev != null && avgDistPrev > 0)
+                (avgDistNow - avgDistPrev) / avgDistPrev * 100 else null
+
+            metrics.add(DynamicMetric(
+                label = "Ср. дистанция",
+                current = "%.1f км".format(avgDistNow),
+                previous = if (avgDistPrev != null) "%.1f".format(avgDistPrev) else null,
+                changePct = pct,
+                sentiment = efficiencySentiment(pct)
+            ))
         }
 
-        // Idle drain
+        // --- Stationary consumption ---
         val drainKwh = idleDrainDao.getKwhSince(weekAgo)
         val drainHours = idleDrainDao.getHoursSince(weekAgo)
+        val prevDrainKwh = idleDrainDao.getKwhBetween(twoWeeksAgo, weekAgo)
+
         if (drainKwh > 0.1) {
-            val rate = if (drainHours > 0) " (${"%.2f".format(drainKwh / drainHours)} кВтч/ч)" else ""
-            lines.add("\uD83D\uDD0C простой ${"%.1f".format(drainKwh)} кВтч / ${"%.0f".format(drainHours)}ч$rate")
+            val rate = if (drainHours > 0) drainKwh / drainHours else 0.0
+            val pct = if (prevDrainKwh > 0.1)
+                (drainKwh - prevDrainKwh) / prevDrainKwh * 100 else null
+
+            val drainTimeStr = if (drainHours < 1.0)
+                "${"%.0f".format(drainHours * 60)} мин" else "${"%.1f".format(drainHours)} ч"
+            metrics.add(DynamicMetric(
+                label = "Стоянка",
+                current = "${"%.1f".format(drainKwh)} кВтч · $drainTimeStr",
+                previous = if (prevDrainKwh > 0.1) "${"%.1f".format(prevDrainKwh)} кВтч" else null,
+                changePct = pct,
+                sentiment = consumptionSentiment(pct)
+            ))
         }
 
-        lines.joinToString("\n")
+        metrics
+    }
+
+    // Deterministic tone based on dynamics data
+    private fun determineTone(dynamics: List<DynamicMetric>): String {
+        val badMetrics = dynamics.filter { it.sentiment == "bad" && it.changePct != null }
+        val maxBadChange = badMetrics.maxOfOrNull { kotlin.math.abs(it.changePct!!) } ?: 0.0
+        return when {
+            maxBadChange > 15.0 -> "critical"
+            maxBadChange > 5.0 -> "warning"
+            badMetrics.isNotEmpty() -> "warning"
+            else -> "good"
+        }
+    }
+
+    // up = bad (consumption, short trips, stationary)
+    private fun consumptionSentiment(changePct: Double?): String = when {
+        changePct == null -> "neutral"
+        changePct > 0.5 -> "bad"
+        changePct < -0.5 -> "good"
+        else -> "neutral"
+    }
+
+    // up = good (avg distance)
+    private fun efficiencySentiment(changePct: Double?): String = when {
+        changePct == null -> "neutral"
+        changePct > 0.5 -> "good"
+        changePct < -0.5 -> "bad"
+        else -> "neutral"
     }
 
     private suspend fun buildDataPrompt(): String? = withContext(Dispatchers.IO) {
@@ -305,13 +394,13 @@ tone guidelines:
             }
         }
 
-        // Idle drain (7 days + 30 days)
+        // Stationary consumption (vehicle running, not moving: warmup, waiting, A/C)
         val drainKwh = idleDrainDao.getKwhSince(weekAgo)
         val drainHours = idleDrainDao.getHoursSince(weekAgo)
         val drainKwhMonth = idleDrainDao.getKwhSince(monthAgo)
         val drainHoursMonth = idleDrainDao.getHoursSince(monthAgo)
         if (drainKwh > 0 || drainKwhMonth > 0) {
-            sb.appendLine("\n=== Idle drain ===")
+            sb.appendLine("\n=== Stationary consumption (engine running, not moving) ===")
             if (drainKwh > 0) {
                 sb.appendLine("7 days: %.1f kWh in %.0f hours".format(drainKwh, drainHours))
                 if (drainHours > 0) {
@@ -351,16 +440,57 @@ tone guidelines:
     private fun parseInsight(json: String): InsightData? {
         return try {
             val obj = JSONObject(json)
-            val facts = obj.optString("facts", "")
-            val insights = obj.optString("insights", "")
-            // Legacy fallback: old cache with "details" field
-            val details = obj.optString("details", "")
+
+            // Parse dynamics (structured metrics with trends)
+            val dynamicsList = mutableListOf<DynamicMetric>()
+            val dynArr = obj.optJSONArray("dynamics")
+            if (dynArr != null) {
+                for (i in 0 until dynArr.length()) {
+                    val d = dynArr.getJSONObject(i)
+                    dynamicsList.add(DynamicMetric(
+                        label = d.getString("label"),
+                        current = d.getString("current"),
+                        previous = d.optString("previous", null),
+                        changePct = if (d.has("changePct")) d.getDouble("changePct") else null,
+                        sentiment = d.optString("sentiment", "neutral"),
+                        section = d.optString("section", null)
+                    ))
+                }
+            }
+
+            // Parse insights — array of strings (new) or single string (legacy)
+            val insightsList = mutableListOf<String>()
+            val insightsVal = obj.opt("insights")
+            when (insightsVal) {
+                is org.json.JSONArray -> {
+                    for (i in 0 until insightsVal.length()) {
+                        insightsList.add(insightsVal.getString(i))
+                    }
+                }
+                is String -> {
+                    if (insightsVal.isNotBlank()) {
+                        insightsVal.split("\n\n").filter { it.isNotBlank() }.forEach {
+                            insightsList.add(it.trim())
+                        }
+                    }
+                }
+            }
+
+            // Legacy fallback: "details" field from old cache
+            if (insightsList.isEmpty()) {
+                val details = obj.optString("details", "")
+                if (details.isNotBlank()) {
+                    details.split("\n\n").filter { it.isNotBlank() }.forEach {
+                        insightsList.add(it.trim())
+                    }
+                }
+            }
+
             InsightData(
                 title = obj.optString("title", ""),
                 summary = obj.optString("summary", ""),
-                facts = facts,
-                insights = insights.ifBlank { details },
-                details = details,
+                dynamics = dynamicsList,
+                insights = insightsList,
                 tone = obj.optString("tone", "good")
             )
         } catch (e: Exception) {

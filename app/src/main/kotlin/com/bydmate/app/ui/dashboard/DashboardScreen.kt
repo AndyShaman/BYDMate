@@ -34,7 +34,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -42,6 +45,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
+import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
 import com.bydmate.app.ui.components.consumptionColor
@@ -151,10 +155,13 @@ fun DashboardScreen(
                             onClick = { viewModel.toggleBatteryHealthExpanded() }
                         )
                         // Idle drain card
+                        val idleTimeStr = if (state.idleDrainHours < 1.0)
+                            "%.0f".format(state.idleDrainHours * 60) + "мин"
+                        else "%.1f".format(state.idleDrainHours) + "ч"
                         CompactCard(
                             leftValue = "%.1f".format(state.idleDrainKwhToday),
                             leftLabel = "кВт·ч",
-                            rightValue = "%.0f".format(state.idleDrainHours) + "ч",
+                            rightValue = idleTimeStr,
                             rightLabel = "стоянка",
                             borderColor = when {
                                 state.idleDrainPercent > 5.0 -> SocRed
@@ -173,39 +180,61 @@ fun DashboardScreen(
                             else -> AccentGreen
                         }
                         CardDetailDialog(
-                            title = "AI Инсайт",
+                            title = null,
                             borderColor = insightDialogColor,
                             onDismiss = { viewModel.toggleInsightExpanded() }
                         ) {
-                            val facts = state.insightFacts
+                            val dynamics = state.insightDynamics
                             val insights = state.insightInsights
-                            val details = state.insightDetails
-                            val error = state.insightError
-                            val hasContent = facts != null || insights != null || details != null
+                            val hasContent = dynamics.isNotEmpty() || insights.isNotEmpty()
                             if (hasContent) {
-                                // Facts section (compact bullet points)
-                                val factsText = facts?.takeIf { it.isNotBlank() }
-                                if (factsText != null) {
-                                    Text(
-                                        factsText,
-                                        color = TextPrimary,
-                                        fontSize = 13.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                        lineHeight = 18.sp
-                                    )
+                                // Dynamics table
+                                if (dynamics.isNotEmpty()) {
+                                    Column {
+                                        dynamics.forEach { metric ->
+                                            if (metric.section != null) {
+                                                Text(
+                                                    metric.section,
+                                                    color = TextMuted,
+                                                    fontSize = 10.sp,
+                                                    fontWeight = FontWeight.Medium,
+                                                    modifier = Modifier.padding(start = 4.dp, top = 6.dp, bottom = 2.dp)
+                                                )
+                                            }
+                                            DynamicsRow(metric = metric)
+                                        }
+                                    }
                                     Spacer(modifier = Modifier.height(10.dp))
                                 }
-                                // Insights section (detailed analysis)
-                                val insightsText = insights?.takeIf { it.isNotBlank() } ?: details
-                                if (insightsText != null) {
-                                    Text(
-                                        insightsText,
-                                        color = TextSecondary,
-                                        fontSize = 13.sp,
-                                        lineHeight = 18.sp
-                                    )
+                                // Divider
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(1.dp)
+                                        .background(Color(0xFF2A2A2E))
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                // Insights as bullet points
+                                if (insights.isNotEmpty()) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        insights.forEach { text ->
+                                            Row(modifier = Modifier.fillMaxWidth()) {
+                                                Box(
+                                                    modifier = Modifier
+                                                        .padding(top = 7.dp, end = 8.dp)
+                                                        .size(5.dp)
+                                                        .background(
+                                                            insightDialogColor.copy(alpha = 0.5f),
+                                                            shape = CircleShape
+                                                        )
+                                                )
+                                                StyledInsightText(text = text, bulletColor = insightDialogColor)
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.height(8.dp))
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
+                                // Footer
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -214,8 +243,8 @@ fun DashboardScreen(
                                     state.insightDate?.let {
                                         Text(it, color = TextMuted, fontSize = 11.sp)
                                     }
-                                    if (error != null) {
-                                        Text(error, color = SocRed, fontSize = 11.sp)
+                                    state.insightError?.let { err ->
+                                        Text(err, color = SocRed, fontSize = 11.sp)
                                     }
                                     androidx.compose.material3.Button(
                                         onClick = { viewModel.refreshInsight() },
@@ -440,7 +469,7 @@ private fun InsightCard(
                     if (summary != null) {
                         Text(
                             summary,
-                            color = TextSecondary,
+                            color = borderColor.copy(alpha = 0.8f),
                             fontSize = 12.sp,
                             maxLines = 1
                         )
@@ -505,7 +534,7 @@ private fun CompactCard(
 
 @Composable
 private fun CardDetailDialog(
-    title: String,
+    title: String? = null,
     borderColor: Color,
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit
@@ -538,12 +567,117 @@ private fun CardDetailDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    if (title != null) {
+                        Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    }
                     content()
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DynamicsRow(metric: DynamicMetric) {
+    val changeColor = when (metric.sentiment) {
+        "good" -> AccentGreen
+        "bad" -> SocRed
+        else -> TextMuted
+    }
+    val arrow = when {
+        metric.changePct == null -> ""
+        metric.changePct > 0 -> "▲"
+        metric.changePct < 0 -> "▼"
+        else -> ""
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 4.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            metric.label,
+            color = TextSecondary,
+            fontSize = 11.sp,
+            modifier = Modifier.width(100.dp)
+        )
+        Text(
+            metric.current,
+            color = TextPrimary,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            fontWeight = FontWeight.SemiBold
+        )
+        if (metric.previous != null) {
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("\u2190", color = TextMuted, fontSize = 10.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                metric.previous,
+                color = TextMuted,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+        Spacer(modifier = Modifier.weight(1f))
+        if (metric.changePct != null) {
+            Text(
+                "$arrow${"%.0f".format(kotlin.math.abs(metric.changePct))}%",
+                color = changeColor,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace
+            )
+        }
+    }
+}
+
+// Highlight numbers in insight text with amber color, bold text before first dash
+@Composable
+private fun StyledInsightText(text: String, bulletColor: Color) {
+    val numberPattern = Regex("""(\d+[.,]\d+|\d+)(%| кВтч?/ч| кВтч?/100км| кВтч?| км/ч| км| мВ|°C)?""")
+    val annotated = buildAnnotatedString {
+        var lastEnd = 0
+        // Bold: text before first " —" or " —"
+        val dashIdx = text.indexOf(" — ").takeIf { it > 0 }
+            ?: text.indexOf(" — ").takeIf { it > 0 }
+        if (dashIdx != null && dashIdx < 40) {
+            withStyle(SpanStyle(color = TextPrimary, fontWeight = FontWeight.SemiBold)) {
+                append(text.substring(0, dashIdx))
+            }
+            lastEnd = dashIdx
+        }
+        // Highlight numbers
+        val remaining = text.substring(lastEnd)
+        var rLastEnd = 0
+        for (match in numberPattern.findAll(remaining)) {
+            if (match.range.first > rLastEnd) {
+                withStyle(SpanStyle(color = TextSecondary)) {
+                    append(remaining.substring(rLastEnd, match.range.first))
+                }
+            }
+            val num = match.value
+            // Only highlight if it looks like a real metric (has digits)
+            if (num.any { it.isDigit() } && num.length > 1) {
+                withStyle(SpanStyle(color = SocYellow, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                    append(num)
+                }
+            } else {
+                withStyle(SpanStyle(color = TextSecondary)) {
+                    append(num)
+                }
+            }
+            rLastEnd = match.range.last + 1
+        }
+        if (rLastEnd < remaining.length) {
+            withStyle(SpanStyle(color = TextSecondary)) {
+                append(remaining.substring(rLastEnd))
+            }
+        }
+    }
+    Text(annotated, fontSize = 13.sp, lineHeight = 19.sp)
 }
 
 @Composable

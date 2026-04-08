@@ -1,11 +1,19 @@
 package com.bydmate.app.data.remote
 
+data class DynamicMetric(
+    val label: String,         // "Расход", "Поездки", etc.
+    val current: String,       // "26.7 кВтч/100"
+    val previous: String?,     // "25.4" or null if no prev data
+    val changePct: Double?,    // 5.1 or null
+    val sentiment: String,     // "good", "bad", "neutral"
+    val section: String? = null // section header shown above this row
+)
+
 data class InsightData(
     val title: String,
     val summary: String,
-    val facts: String,   // 2-3 bullet points with key metrics
-    val insights: String, // 2-3 paragraphs with recommendations
-    val details: String,  // legacy fallback (facts + insights combined)
+    val dynamics: List<DynamicMetric>,
+    val insights: List<String>,
     val tone: String // "good", "warning", "critical"
 )
 
