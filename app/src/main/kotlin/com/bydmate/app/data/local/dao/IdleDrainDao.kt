@@ -49,4 +49,7 @@ interface IdleDrainDao {
         FROM idle_drains WHERE start_ts >= :since AND end_ts IS NOT NULL
     """)
     suspend fun getHoursSince(since: Long): Double
+
+    @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains WHERE start_ts >= :from AND start_ts < :to")
+    suspend fun getKwhBetween(from: Long, to: Long): Double
 }

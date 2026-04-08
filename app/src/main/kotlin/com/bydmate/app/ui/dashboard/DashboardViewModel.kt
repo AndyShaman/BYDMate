@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -56,9 +57,8 @@ data class DashboardUiState(
     val idleDrainHours: Double = 0.0,
     val insightTitle: String? = null,
     val insightSummary: String? = null,
-    val insightFacts: String? = null,
-    val insightInsights: String? = null,
-    val insightDetails: String? = null,
+    val insightDynamics: List<DynamicMetric> = emptyList(),
+    val insightInsights: List<String> = emptyList(),
     val insightTone: String = "good",
     val insightDate: String? = null,
     val insightLoading: Boolean = false,
@@ -300,9 +300,8 @@ class DashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(
                     insightTitle = cached.title,
                     insightSummary = cached.summary,
-                    insightFacts = cached.facts,
+                    insightDynamics = cached.dynamics,
                     insightInsights = cached.insights,
-                    insightDetails = cached.details,
                     insightTone = cached.tone,
                     insightDate = insightsManager.getCachedDate()
                 ) }
@@ -318,9 +317,8 @@ class DashboardViewModel @Inject constructor(
                 _uiState.update { it.copy(
                     insightTitle = insight.title,
                     insightSummary = insight.summary,
-                    insightFacts = insight.facts,
+                    insightDynamics = insight.dynamics,
                     insightInsights = insight.insights,
-                    insightDetails = insight.details,
                     insightTone = insight.tone,
                     insightDate = insightsManager.getCachedDate(),
                     insightLoading = false
@@ -376,7 +374,7 @@ class DashboardViewModel @Inject constructor(
         if (delta == null && temp == null) return current.batteryHealthStatus
         return when {
             (delta != null && delta > 0.10) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
-            (delta != null && delta > 0.05) || (temp != null && (temp < 10 || temp > 45)) -> "warning"
+            (delta != null && delta > 0.05) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
             else -> "ok"
         }
     }
