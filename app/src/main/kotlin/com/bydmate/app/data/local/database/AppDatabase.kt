@@ -6,6 +6,8 @@ import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.RuleDao
+import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
@@ -13,6 +15,8 @@ import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
+import com.bydmate.app.data.local.entity.RuleEntity
+import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
@@ -25,9 +29,11 @@ import com.bydmate.app.data.local.entity.TripPointEntity
         ChargePointEntity::class,
         SettingEntity::class,
         IdleDrainEntity::class,
-        BatterySnapshotEntity::class
+        BatterySnapshotEntity::class,
+        RuleEntity::class,
+        RuleLogEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -38,4 +44,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun settingsDao(): SettingsDao
     abstract fun idleDrainDao(): IdleDrainDao
     abstract fun batterySnapshotDao(): BatterySnapshotDao
+    abstract fun ruleDao(): RuleDao
+    abstract fun ruleLogDao(): RuleLogDao
 }

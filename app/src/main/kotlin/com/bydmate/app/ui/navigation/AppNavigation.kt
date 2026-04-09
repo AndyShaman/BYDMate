@@ -2,6 +2,7 @@ package com.bydmate.app.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
@@ -28,6 +29,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.battery.BatteryHealthScreen
+import com.bydmate.app.ui.automation.AutomationScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.theme.*
@@ -37,6 +39,7 @@ import com.bydmate.app.ui.welcome.WelcomeScreen
 enum class Screen(val route: String, val label: String, val icon: ImageVector) {
     Dashboard("dashboard", "Главная", Icons.Outlined.Home),
     Trips("trips", "Поездки", Icons.Outlined.DirectionsCar),
+    Automation("automation", "Автоматизация", Icons.Outlined.Bolt),
     Settings("settings", "Настройки", Icons.Outlined.Settings)
 }
 
@@ -113,6 +116,7 @@ fun AppNavigation(
             }
             composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Trips.route) { TripsScreen() }
+            composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) { SettingsScreen() }
             composable("battery_health") { BatteryHealthScreen() }
         }

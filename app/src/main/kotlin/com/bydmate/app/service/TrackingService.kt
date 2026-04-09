@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
+import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.ChargeRepository
@@ -55,6 +56,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var diPlusDbReader: com.bydmate.app.data.remote.DiPlusDbReader
     @Inject lateinit var settingsRepository: com.bydmate.app.data.repository.SettingsRepository
     @Inject lateinit var insightsManager: com.bydmate.app.data.remote.InsightsManager
+    @Inject lateinit var automationEngine: AutomationEngine
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -166,6 +168,7 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
+        automationEngine.shutdown()
         serviceScope.cancel()
 
         // Remove GPS listener to prevent leak
@@ -249,6 +252,7 @@ class TrackingService : Service(), LocationListener {
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                         // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
+                        automationEngine.evaluate(data)
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++

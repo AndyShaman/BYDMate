@@ -25,7 +25,38 @@ data class DiParsData(
     val voltage12v: Double?,
     val maxCellVoltage: Double?,
     val minCellVoltage: Double?,
-    val exteriorTemp: Int?
+    val exteriorTemp: Int?,
+    // Automation params (v2.2.0)
+    val gear: Int?,               // 1=P, 2=R, 3=N, 4=D
+    val powerState: Int?,         // 0=OFF, 1=ON, 2=DRIVE
+    val insideTemp: Int?,
+    val acStatus: Int?,           // 0=OFF, 1=ON
+    val acTemp: Int?,
+    val fanLevel: Int?,
+    val acCirc: Int?,             // 0=external, 1=internal
+    val doorFL: Int?,             // 0=closed, 1=open
+    val doorFR: Int?,
+    val doorRL: Int?,
+    val doorRR: Int?,
+    val windowFL: Int?,           // 0-100%
+    val windowFR: Int?,
+    val windowRL: Int?,
+    val windowRR: Int?,
+    val sunroof: Int?,            // 0-100%
+    val trunk: Int?,              // 0=closed, 1=open
+    val hood: Int?,               // 0=closed, 1=open
+    val seatbeltFL: Int?,         // 0=unbuckled, 1=buckled, 2=invalid
+    val lockFL: Int?,             // 1=unlocked, 2=locked
+    val tirePressFL: Int?,        // kPa
+    val tirePressFR: Int?,
+    val tirePressRL: Int?,
+    val tirePressRR: Int?,
+    val driveMode: Int?,          // 1=ECO, 2=SPORT
+    val workMode: Int?,           // 0=stop, 1=EV, 2=forced EV, 3=HEV
+    val autoPark: Int?,           // 0=disabled, 1=standby, 2=active
+    val rain: Int?,
+    val lightLow: Int?,           // 0=OFF, 1=ON
+    val drl: Int?                 // 0=invalid, 1=ON, 2=OFF
 )
 
 @Singleton
@@ -42,7 +73,21 @@ class DiParsClient @Inject constructor(
             "|ChargingStatus:{充电状态}" +
             "|BatCapacity:{电池容量}|TotalElecCon:{总电耗}" +
             "|Voltage12V:{蓄电池电压}|MaxCellV:{最高电池电压}" +
-            "|MinCellV:{最低电池电压}|ExtTemp:{车外温度}"
+            "|MinCellV:{最低电池电压}|ExtTemp:{车外温度}" +
+            // Automation params (v2.2.0)
+            "|Gear:{档位}|PowerState:{电源状态}|InsideTemp:{车内温度}" +
+            "|ACStatus:{空调状态}|ACTemp:{主驾驶空调温度}|FanLevel:{风量档位}" +
+            "|ACCirc:{空调循环方式}" +
+            "|DoorFL:{主驾车门}|DoorFR:{副驾车门}|DoorRL:{左后车门}|DoorRR:{右后车门}" +
+            "|WindowFL:{主驾车窗打开百分比}|WindowFR:{副驾车窗打开百分比}" +
+            "|WindowRL:{左后车窗打开百分比}|WindowRR:{右后车窗打开百分比}" +
+            "|Sunroof:{天窗打开百分比}|Trunk:{后备箱门}|Hood:{引擎盖}" +
+            "|SeatbeltFL:{主驾驶安全带状态}|LockFL:{主驾车门锁}" +
+            "|TirePressFL:{左前轮气压}|TirePressFR:{右前轮气压}" +
+            "|TirePressRL:{左后轮气压}|TirePressRR:{右后轮气压}" +
+            "|DriveMode:{整车运行模式}|WorkMode:{整车工作模式}" +
+            "|AutoPark:{自动驻车}|Rain:{雨量}" +
+            "|LightLow:{近光灯}|DRL:{日行灯}"
     }
 
     suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
@@ -118,7 +163,37 @@ class DiParsClient @Inject constructor(
             voltage12v = v12,
             maxCellVoltage = maxCell,
             minCellVoltage = minCell,
-            exteriorTemp = map["ExtTemp"]?.toIntOrNull()
+            exteriorTemp = map["ExtTemp"]?.toIntOrNull(),
+            gear = map["Gear"]?.toIntOrNull(),
+            powerState = map["PowerState"]?.toIntOrNull(),
+            insideTemp = map["InsideTemp"]?.toIntOrNull(),
+            acStatus = map["ACStatus"]?.toIntOrNull(),
+            acTemp = map["ACTemp"]?.toIntOrNull(),
+            fanLevel = map["FanLevel"]?.toIntOrNull(),
+            acCirc = map["ACCirc"]?.toIntOrNull(),
+            doorFL = map["DoorFL"]?.toIntOrNull(),
+            doorFR = map["DoorFR"]?.toIntOrNull(),
+            doorRL = map["DoorRL"]?.toIntOrNull(),
+            doorRR = map["DoorRR"]?.toIntOrNull(),
+            windowFL = map["WindowFL"]?.toIntOrNull(),
+            windowFR = map["WindowFR"]?.toIntOrNull(),
+            windowRL = map["WindowRL"]?.toIntOrNull(),
+            windowRR = map["WindowRR"]?.toIntOrNull(),
+            sunroof = map["Sunroof"]?.toIntOrNull(),
+            trunk = map["Trunk"]?.toIntOrNull(),
+            hood = map["Hood"]?.toIntOrNull(),
+            seatbeltFL = map["SeatbeltFL"]?.toIntOrNull(),
+            lockFL = map["LockFL"]?.toIntOrNull(),
+            tirePressFL = map["TirePressFL"]?.toIntOrNull(),
+            tirePressFR = map["TirePressFR"]?.toIntOrNull(),
+            tirePressRL = map["TirePressRL"]?.toIntOrNull(),
+            tirePressRR = map["TirePressRR"]?.toIntOrNull(),
+            driveMode = map["DriveMode"]?.toIntOrNull(),
+            workMode = map["WorkMode"]?.toIntOrNull(),
+            autoPark = map["AutoPark"]?.toIntOrNull(),
+            rain = map["Rain"]?.toIntOrNull(),
+            lightLow = map["LightLow"]?.toIntOrNull(),
+            drl = map["DRL"]?.toIntOrNull()
         )
     }
 }

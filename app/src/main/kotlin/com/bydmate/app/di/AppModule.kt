@@ -8,6 +8,8 @@ import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.RuleDao
+import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
@@ -125,6 +127,40 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_7_8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS automation_rules (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    enabled INTEGER NOT NULL DEFAULT 1,
+                    trigger_logic TEXT NOT NULL DEFAULT 'AND',
+                    triggers TEXT NOT NULL,
+                    actions TEXT NOT NULL,
+                    cooldown_seconds INTEGER NOT NULL DEFAULT 60,
+                    require_park INTEGER NOT NULL DEFAULT 0,
+                    confirm_before_execute INTEGER NOT NULL DEFAULT 0,
+                    last_triggered_at INTEGER,
+                    trigger_count INTEGER NOT NULL DEFAULT 0,
+                    created_at INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS automation_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    rule_id INTEGER NOT NULL,
+                    rule_name TEXT NOT NULL,
+                    triggered_at INTEGER NOT NULL,
+                    triggers_snapshot TEXT NOT NULL,
+                    actions_result TEXT NOT NULL,
+                    success INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_automation_log_triggered_at ON automation_log(triggered_at)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_automation_log_rule_id ON automation_log(rule_id)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -133,7 +169,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
             .build()
     }
 
@@ -144,6 +180,8 @@ object AppModule {
     @Provides fun provideSettingsDao(db: AppDatabase): SettingsDao = db.settingsDao()
     @Provides fun provideIdleDrainDao(db: AppDatabase): IdleDrainDao = db.idleDrainDao()
     @Provides fun provideBatterySnapshotDao(db: AppDatabase): BatterySnapshotDao = db.batterySnapshotDao()
+    @Provides fun provideRuleDao(db: AppDatabase): RuleDao = db.ruleDao()
+    @Provides fun provideRuleLogDao(db: AppDatabase): RuleLogDao = db.ruleLogDao()
 
     @Provides
     @Singleton
