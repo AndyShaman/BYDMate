@@ -53,6 +53,8 @@ class AutomationEngine @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingConfirmations = ConcurrentHashMap<Int, PendingAction>()
+    // Edge triggering: only fire when condition transitions from false→true
+    private val lastEvalResults = ConcurrentHashMap<Long, Boolean>()
 
     private data class PendingAction(
         val rule: RuleEntity,
@@ -87,7 +89,10 @@ class AutomationEngine @Inject constructor(
                 if (triggers.isEmpty()) continue
 
                 val matched = evaluateTriggers(triggers, data, rule.triggerLogic)
-                if (!matched) continue
+                val wasMatched = lastEvalResults.put(rule.id, matched) ?: false
+
+                // Edge trigger: only fire on false→true transition
+                if (!matched || wasMatched) continue
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue
@@ -244,6 +249,7 @@ class AutomationEngine @Inject constructor(
     fun shutdown() {
         scope.cancel()
         pendingConfirmations.clear()
+        lastEvalResults.clear()
     }
 
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {

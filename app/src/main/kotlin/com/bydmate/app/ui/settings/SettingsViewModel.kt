@@ -70,7 +70,10 @@ data class SettingsUiState(
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
     val modelsLoading: Boolean = false,
-    val aiSaveStatus: String? = null
+    val aiSaveStatus: String? = null,
+    val tariffSaveStatus: String? = null,
+    val recalcStatus: String? = null,
+    val showRecalcConfirm: Boolean = false
 )
 
 @HiltViewModel
@@ -168,19 +171,43 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Save home (AC) tariff setting. */
-    fun saveHomeTariff(value: String) {
+    /** Update tariff in UI only (no DB save until explicit "Save" press). */
+    fun updateHomeTariff(value: String) {
         _uiState.update { it.copy(homeTariff = value) }
+    }
+
+    fun updateDcTariff(value: String) {
+        _uiState.update { it.copy(dcTariff = value) }
+    }
+
+    /** Save tariffs to DB and calculate costs for new trips. */
+    fun saveTariffs() {
+        val state = _uiState.value
         viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, value)
+            settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
+            settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
+            val tariff = settingsRepository.getTripCostTariff()
+            historyImporter.calculateMissingCosts(tariff)
+            _uiState.update { it.copy(tariffSaveStatus = "Сохранено") }
+            delay(2000)
+            _uiState.update { it.copy(tariffSaveStatus = null) }
         }
     }
 
-    /** Save DC fast-charge tariff setting. */
-    fun saveDcTariff(value: String) {
-        _uiState.update { it.copy(dcTariff = value) }
+    /** Recalculate cost for ALL trips using current tariff. */
+    fun recalculateAllCosts() {
         viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, value)
+            val tariff = settingsRepository.getTripCostTariff()
+            val allTrips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
+            var count = 0
+            for (trip in allTrips) {
+                val kwh = trip.kwhConsumed ?: continue
+                tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
+                count++
+            }
+            _uiState.update { it.copy(recalcStatus = "Пересчитано: $count поездок") }
+            delay(3000)
+            _uiState.update { it.copy(recalcStatus = null) }
         }
     }
 
@@ -198,6 +225,13 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_TRIP_COST_TARIFF, value)
         }
+    }
+
+    fun showRecalcConfirm() { _uiState.update { it.copy(showRecalcConfirm = true) } }
+    fun hideRecalcConfirm() { _uiState.update { it.copy(showRecalcConfirm = false) } }
+    fun confirmRecalc() {
+        _uiState.update { it.copy(showRecalcConfirm = false) }
+        recalculateAllCosts()
     }
 
     /** Save currency preference. */

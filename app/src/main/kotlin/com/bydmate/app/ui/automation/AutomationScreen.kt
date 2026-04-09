@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -221,7 +222,8 @@ private fun RuleCard(
                     modifier = Modifier
                         .size(8.dp)
                         .clip(CircleShape)
-                        .background(if (rule.enabled) AccentGreen else TextMuted)
+                        .background(if (rule.enabled) AccentGreen else Color.Transparent)
+                        .border(1.5.dp, if (rule.enabled) AccentGreen else TextSecondary, CircleShape)
                 )
                 Spacer(Modifier.width(8.dp))
                 Text(rule.name, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
@@ -804,39 +806,39 @@ private fun LogItem(log: RuleLogEntity) {
         } catch (_: Exception) { "" }
     }
 
-    Column(
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(bgColor, RoundedCornerShape(8.dp))
-            .border(width = 0.dp, color = Color.Transparent, shape = RoundedCornerShape(8.dp))
-            .padding(start = 3.dp)
-            .background(bgColor, RoundedCornerShape(topEnd = 8.dp, bottomEnd = 8.dp))
-            .drawLeftBorder(borderColor, 3.dp)
-            .padding(8.dp, 6.dp)
+            .height(IntrinsicSize.Min)
+            .clip(RoundedCornerShape(8.dp))
+            .background(bgColor)
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text(log.ruleName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
-            Text(
-                formatRelativeTime(log.triggeredAt),
-                fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = TextMuted
-            )
-        }
-        Text("→ $actionsText", fontSize = 12.sp, color = AccentTeal)
-        if (reasonText != null) {
-            Text(reasonText, fontSize = 11.sp, color = AccentOrange)
-        }
-        if (snapshotText.isNotEmpty()) {
-            Text(snapshotText, fontSize = 11.sp, color = TextSecondary)
+        // Left color stripe
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(borderColor)
+        )
+        // Content
+        Column(modifier = Modifier.weight(1f).padding(8.dp, 6.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text(log.ruleName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
+                Text(
+                    formatRelativeTime(log.triggeredAt),
+                    fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = TextMuted
+                )
+            }
+            Text("→ $actionsText", fontSize = 12.sp, color = AccentTeal)
+            if (reasonText != null) {
+                Text(reasonText, fontSize = 11.sp, color = AccentOrange)
+            }
+            if (snapshotText.isNotEmpty()) {
+                Text(snapshotText, fontSize = 11.sp, color = TextSecondary)
+            }
         }
     }
 }
-
-// Draw a left border stripe on the log item
-private fun Modifier.drawLeftBorder(color: Color, width: androidx.compose.ui.unit.Dp) =
-    this.then(
-        Modifier.background(color, RoundedCornerShape(topStart = width, bottomStart = width))
-            .padding(start = width)
-    )
 
 // --- Shared Composables ---
 

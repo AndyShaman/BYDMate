@@ -23,26 +23,29 @@ class DiParsControlClient @Inject constructor(
 
     suspend fun sendCommand(command: String): Boolean = withContext(Dispatchers.IO) {
         if (BLOCKED_PATTERNS.any { command.contains(it) }) {
-            Log.w(TAG, "Blocked dangerous command: $command")
+            Log.w(TAG, "BLOCKED dangerous command: '$command'")
             return@withContext false
         }
 
+        val fullCmd = "$PREFIX$command"
+        val startTime = System.currentTimeMillis()
         try {
-            val fullCmd = "$PREFIX$command"
             val url = BASE_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("cmd", fullCmd)
                 .build()
             val request = Request.Builder().url(url).build()
             val response = httpClient.newCall(request).execute()
             val body = response.body?.string()
+            val elapsed = System.currentTimeMillis() - startTime
 
-            Log.d(TAG, "sendCmd '$fullCmd' -> $body")
+            Log.i(TAG, "CMD '$fullCmd' → HTTP ${response.code} (${elapsed}ms) body=$body")
 
             // D+ always returns {"success":true} even for invalid commands
             val json = body?.let { JSONObject(it) }
             json?.optBoolean("success", false) ?: false
         } catch (e: Exception) {
-            Log.e(TAG, "sendCmd failed: ${e.message}")
+            val elapsed = System.currentTimeMillis() - startTime
+            Log.e(TAG, "CMD '$fullCmd' → FAILED (${elapsed}ms): ${e.message}")
             false
         }
     }

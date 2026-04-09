@@ -20,6 +20,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -61,6 +63,36 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    // Recalculate confirmation dialog
+    if (state.showRecalcConfirm) {
+        val tariffLabel = when (state.tripCostTariff) {
+            "home" -> state.homeTariff
+            "dc" -> state.dcTariff
+            else -> state.tripCostTariff
+        }
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { viewModel.hideRecalcConfirm() },
+            title = { Text("Пересчитать стоимость?", color = TextPrimary) },
+            text = {
+                Text(
+                    "Все поездки будут пересчитаны по тарифу $tariffLabel ${state.currencySymbol}/кВт·ч.\nУже посчитанные значения будут заменены.",
+                    color = TextSecondary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.confirmRecalc() }) {
+                    Text("Пересчитать", color = AccentOrange)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.hideRecalcConfirm() }) {
+                    Text("Отмена", color = TextSecondary)
+                }
+            },
+            containerColor = CardSurface
+        )
+    }
 
     // Update dialog
     if (state.showUpdateDialog) {
@@ -121,13 +153,13 @@ fun SettingsScreen(
                         SettingsTextField(
                             label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
                             value = state.homeTariff,
-                            onValueChange = { viewModel.saveHomeTariff(it) },
+                            onValueChange = { viewModel.updateHomeTariff(it) },
                             keyboardType = KeyboardType.Decimal
                         )
                         SettingsTextField(
                             label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
                             value = state.dcTariff,
-                            onValueChange = { viewModel.saveDcTariff(it) },
+                            onValueChange = { viewModel.updateDcTariff(it) },
                             keyboardType = KeyboardType.Decimal
                         )
                         Text("Тариф поездок", color = TextSecondary, fontSize = 14.sp)
@@ -146,6 +178,43 @@ fun SettingsScreen(
                                 keyboardType = KeyboardType.Decimal
                             )
                         }
+
+                        // Save tariffs button
+                        Button(
+                            onClick = { viewModel.saveTariffs() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
+                        ) {
+                            Text("Сохранить тарифы", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        state.tariffSaveStatus?.let {
+                            Text(it, color = AccentGreen, fontSize = 12.sp)
+                        }
+                        Text(
+                            "Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.",
+                            color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+                        )
+
+                        HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
+
+                        // Recalculate all trips button
+                        Button(
+                            onClick = { viewModel.showRecalcConfirm() },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentOrange),
+                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.4f))
+                        ) {
+                            Text("Пересчитать все поездки", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        state.recalcStatus?.let {
+                            Text(it, color = AccentGreen, fontSize = 12.sp)
+                        }
+                        Text(
+                            "Пересчитает стоимость всех поездок\nпо текущему тарифу.",
+                            color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+                        )
                     }
                 }
 

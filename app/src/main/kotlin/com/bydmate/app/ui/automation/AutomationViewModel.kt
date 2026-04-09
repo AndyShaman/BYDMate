@@ -40,20 +40,20 @@ val TRIGGER_PARAMS = listOf(
     TriggerParamOption("Gear", "档位", "Передача", "", "Движение",
         enumValues = listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D")),
     TriggerParamOption("DriveMode", "整车运行模式", "Режим вождения", "", "Движение",
-        enumValues = listOf("1" to "ECO", "2" to "SPORT")),
+        enumValues = listOf("0" to "NORMAL", "1" to "ECO", "2" to "SPORT", "4" to "SNOW")),
     TriggerParamOption("SOC", "电量百分比", "SOC", "%", "Энергия"),
     TriggerParamOption("ChargingStatus", "充电状态", "Статус зарядки", "", "Энергия",
         enumValues = listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается")),
     TriggerParamOption("PowerState", "电源状态", "Питание", "", "Энергия",
-        enumValues = listOf("0" to "Выкл", "1" to "Вкл", "2" to "Движение")),
+        enumValues = listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE")),
     TriggerParamOption("ExtTemp", "车外温度", "Темп. снаружи", "°C", "Температура"),
     TriggerParamOption("InsideTemp", "车内温度", "Темп. салона", "°C", "Температура"),
     TriggerParamOption("AvgBatTemp", "平均电池温度", "Темп. батареи", "°C", "Температура"),
-    TriggerParamOption("WindowFL", "主驾车窗打开百分比", "Окно водителя", "%", "Кузов"),
-    TriggerParamOption("WindowFR", "副驾车窗打开百分比", "Окно пассажира", "%", "Кузов"),
-    TriggerParamOption("WindowRL", "左后车窗打开百分比", "Окно ЛЗ", "%", "Кузов"),
-    TriggerParamOption("WindowRR", "右后车窗打开百分比", "Окно ПЗ", "%", "Кузов"),
-    TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "%", "Кузов"),
+    TriggerParamOption("WindowFL", "主驾车窗打开百分比", "Окно водителя", "% откр.", "Кузов"),
+    TriggerParamOption("WindowFR", "副驾车窗打开百分比", "Окно пассажира", "% откр.", "Кузов"),
+    TriggerParamOption("WindowRL", "左后车窗打开百分比", "Окно ЛЗ", "% откр.", "Кузов"),
+    TriggerParamOption("WindowRR", "右后车窗打开百分比", "Окно ПЗ", "% откр.", "Кузов"),
+    TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "% откр.", "Кузов"),
     TriggerParamOption("DoorFL", "主驾车门", "Дверь водителя", "", "Кузов",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
     TriggerParamOption("Trunk", "后备箱门", "Багажник", "", "Кузов",
@@ -68,7 +68,7 @@ val TRIGGER_PARAMS = listOf(
     TriggerParamOption("TirePressFR", "右前轮气压", "Давление ПП шины", "кПа", "Безопасность"),
     TriggerParamOption("TirePressRL", "左后轮气压", "Давление ЛЗ шины", "кПа", "Безопасность"),
     TriggerParamOption("TirePressRR", "右后轮气压", "Давление ПЗ шины", "кПа", "Безопасность"),
-    TriggerParamOption("Rain", "雨量", "Дождь", "", "Безопасность"),
+    TriggerParamOption("Rain", "雨量", "Датчик дождя", "(0=сухо)", "Безопасность"),
     TriggerParamOption("LightLow", "近光灯", "Ближний свет", "", "Свет",
         enumValues = listOf("0" to "Выкл", "1" to "Вкл")),
     TriggerParamOption("DRL", "日行灯", "Дневные ходовые", "", "Свет",
@@ -84,38 +84,41 @@ val ACTION_COMMANDS = listOf(
     ActionOption("后排车窗关闭", "Закрыть задние", "Окна"),
     ActionOption("前排车窗全开", "Открыть передние", "Окна"),
     ActionOption("后排车窗全开", "Открыть задние", "Окна"),
-    ActionOption("打开空调", "Включить AC", "Климат"),
-    ActionOption("关闭空调", "Выключить AC", "Климат"),
     ActionOption("自动空调", "Авто AC", "Климат"),
+    ActionOption("打开空调通风", "Обдув без AC", "Климат"),
+    ActionOption("设置温度18", "Темп. 18°C", "Климат"),
+    ActionOption("设置温度20", "Темп. 20°C", "Климат"),
+    ActionOption("设置温度22", "Темп. 22°C", "Климат"),
+    ActionOption("设置温度25", "Темп. 25°C", "Климат"),
     ActionOption("内循环", "Циркуляция внутр.", "Климат"),
     ActionOption("外循环", "Циркуляция внешн.", "Климат"),
-    ActionOption("前窗吹风", "Обдув лобового", "Климат"),
+    ActionOption("吹前挡", "Обдув лобового вкл", "Климат"),
+    ActionOption("关闭吹前挡", "Обдув лобового выкл", "Климат"),
     ActionOption("主驾座椅加热1档", "Подогрев водителя 1", "Сиденья"),
     ActionOption("主驾座椅加热2档", "Подогрев водителя 2", "Сиденья"),
     ActionOption("主驾座椅加热关闭", "Подогрев водителя выкл", "Сиденья"),
     ActionOption("副驾座椅加热1档", "Подогрев пассажира 1", "Сиденья"),
     ActionOption("副驾座椅加热2档", "Подогрев пассажира 2", "Сиденья"),
+    ActionOption("副驾座椅加热关闭", "Подогрев пассажира выкл", "Сиденья"),
     ActionOption("主驾座椅通风1档", "Вентиляция водителя 1", "Сиденья"),
     ActionOption("主驾座椅通风2档", "Вентиляция водителя 2", "Сиденья"),
     ActionOption("主驾座椅通风关闭", "Вентиляция водителя выкл", "Сиденья"),
-    ActionOption("方向盘加热", "Подогрев руля вкл", "Руль и зеркала"),
-    ActionOption("方向盘加热关闭", "Подогрев руля выкл", "Руль и зеркала"),
-    ActionOption("后视镜加热", "Подогрев зеркал вкл", "Руль и зеркала"),
-    ActionOption("后视镜加热关闭", "Подогрев зеркал выкл", "Руль и зеркала"),
+    ActionOption("副驾座椅通风1档", "Вентиляция пассажира 1", "Сиденья"),
+    ActionOption("副驾座椅通风2档", "Вентиляция пассажира 2", "Сиденья"),
+    ActionOption("副驾座椅通风关闭", "Вентиляция пассажира выкл", "Сиденья"),
+    ActionOption("后视镜加热", "Подогрев зеркал вкл", "Зеркала"),
+    ActionOption("关闭后视镜加热", "Подогрев зеркал выкл", "Зеркала"),
     ActionOption("氛围灯打开", "Амбиент вкл", "Свет"),
     ActionOption("氛围灯关闭", "Амбиент выкл", "Свет"),
-    ActionOption("车内灯打开", "Салонный свет вкл", "Свет"),
-    ActionOption("雾灯打开", "ПТФ вкл", "Свет"),
-    ActionOption("雾灯关闭", "ПТФ выкл", "Свет"),
-    ActionOption("ECO模式", "ECO режим", "Режимы"),
-    ActionOption("SPORT模式", "SPORT режим", "Режимы"),
-    ActionOption("NORMAL模式", "NORMAL режим", "Режимы"),
-    ActionOption("EV模式", "Режим EV", "Режимы"),
-    ActionOption("HEV切换", "Режим HEV", "Режимы"),
+    ActionOption("打开车内灯", "Салонный свет вкл", "Свет"),
+    ActionOption("关闭车内灯", "Салонный свет выкл", "Свет"),
     ActionOption("车门上锁", "Заблокировать", "Замки"),
     ActionOption("车门解锁", "Разблокировать", "Замки"),
-    ActionOption("天窗关闭", "Закрыть люк", "Люк"),
-    ActionOption("遮阳帘关闭", "Закрыть шторку", "Люк")
+    ActionOption("天窗打开100", "Люк открыть 100%", "Люк"),
+    ActionOption("天窗打开50", "Люк открыть 50%", "Люк"),
+    ActionOption("天窗打开0", "Люк закрыть", "Люк"),
+    ActionOption("遮阳帘打开", "Шторка открыть", "Люк"),
+    ActionOption("遮阳帘关闭", "Шторка закрыть", "Люк")
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -311,11 +314,10 @@ class AutomationViewModel @Inject constructor(
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
                     TriggerDef("ExtTemp", "车外温度", "<", "0", "Темп. снаружи < 0°C"),
-                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = ON")
+                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
                 )),
                 actions = ActionDef.listToJson(listOf(
                     ActionDef("主驾座椅加热2档", "Подогрев водителя 2"),
-                    ActionDef("方向盘加热", "Подогрев руля вкл"),
                     ActionDef("后视镜加热", "Подогрев зеркал вкл")
                 )),
                 cooldownSeconds = 600
@@ -338,11 +340,23 @@ class AutomationViewModel @Inject constructor(
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
                     TriggerDef("InsideTemp", "车内温度", ">", "30", "Темп. салона > 30°C"),
-                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = ON")
+                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
                 )),
                 actions = ActionDef.listToJson(listOf(
                     ActionDef("主驾座椅通风1档", "Вентиляция водителя 1"),
                     ActionDef("自动空调", "Авто AC")
+                )),
+                cooldownSeconds = 600
+            ),
+            RuleEntity(
+                name = "Шторка при движении",
+                enabled = false,
+                triggerLogic = "AND",
+                triggers = TriggerDef.listToJson(listOf(
+                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
+                )),
+                actions = ActionDef.listToJson(listOf(
+                    ActionDef("遮阳帘打开", "Открыть шторку")
                 )),
                 cooldownSeconds = 600
             ),
