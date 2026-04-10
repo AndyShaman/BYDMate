@@ -12,9 +12,9 @@
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/AndyShaman/BYDMate?style=flat-square)](https://github.com/AndyShaman/BYDMate/releases)
 
-**Реальный расход, GPS-маршруты, AI-аналитика вождения — локально, без облака.**
+**Реальный расход, GPS-маршруты, автоматизация, AI-аналитика — локально, без облака.**
 
-[Возможности](#-возможности) | [Скриншоты](#-скриншоты) | [Установка](#-установка) | [AI Инсайты](#-ai-инсайты) | [Сборка](#-сборка-из-исходников)
+[Возможности](#-возможности) | [Скриншоты](#-скриншоты) | [Автоматизация](#-автоматизация) | [AI Инсайты](#-ai-инсайты) | [Установка](#-установка) | [Сборка](#-сборка-из-исходников)
 
 </div>
 
@@ -38,6 +38,7 @@
 | **Idle** | Расход на стоянке | Мониторинг idle drain из energydata |
 | **Bat** | Здоровье батареи | Температура, баланс ячеек, 12V |
 | **Map** | Карта маршрута | osmdroid (OpenStreetMap) в деталях поездки |
+| **Rules** | Автоматизация | Правила WHEN→THEN: триггеры по параметрам → команды D+ |
 | **Auto** | Автозапуск | WorkManager, запускается при включении |
 | **CSV** | Экспорт данных | Экспорт поездок и зарядок в CSV |
 
@@ -77,6 +78,40 @@
 
 ---
 
+## Автоматизация
+
+Вкладка **Автоматизация** позволяет создавать правила для автоматического управления автомобилем через D+ API.
+
+### Принцип работы
+
+**КОГДА** условие выполняется **→ ТОГДА** выполнить команду.
+
+Примеры:
+- SOC < 20% → включить внутреннюю циркуляцию
+- Скорость > 0 → закрыть шторку
+- Температура за бортом < 0 → включить подогрев зеркал
+
+### Возможности
+
+| | Описание |
+|---|----------|
+| **25 триггеров** | SOC, скорость, температура, двери, окна, давление шин, режим езды и др. |
+| **37 команд** | Окна, климат, свет, замки, люк, зеркала — всё через D+ API |
+| **Edge trigger** | Срабатывает только при переходе false→true (не повторяется каждые 3 сек) |
+| **Cooldown** | Настраиваемая пауза между срабатываниями |
+| **Подтверждение** | Опциональное уведомление перед выполнением |
+| **Безопасность** | Окна не открываются на скорости > 80 км/ч, CAN/SHELL команды заблокированы |
+| **Журнал** | Лог всех срабатываний с результатами |
+| **Шаблоны** | 6 готовых правил для быстрого старта |
+
+### Логика
+
+- **AND** — все условия должны выполняться
+- **OR** — достаточно одного условия
+- **Только на P** — правило срабатывает только когда авто на паркинге
+
+---
+
 ## Целевое устройство
 
 | Параметр | Значение |
@@ -92,9 +127,10 @@
 ## Как работает
 
 ```
-BYD energydata (BMS SQLite)  →  HistoryImporter  →  Room DB  →  Compose UI
-DiPlus API (localhost:8988)  →  TrackingService   ↗     ↓
-Android LocationManager     →  TripTracker (GPS)  ↗   AI (OpenRouter)
+BYD energydata (BMS SQLite)  →  HistoryImporter    →  Room DB  →  Compose UI
+DiPlus API (localhost:8988)  →  TrackingService     ↗     ↓
+Android LocationManager     →  TripTracker (GPS)    ↗   AI (OpenRouter)
+DiPlus sendCmd API           ←  AutomationEngine   ←  Rules (Room DB)
 ```
 
 | Данные | Источник |
@@ -104,6 +140,7 @@ Android LocationManager     →  TripTracker (GPS)  ↗   AI (OpenRouter)
 | Напряжение ячеек, 12V | DiPlus API |
 | GPS координаты | Android LocationManager |
 | AI-аналитика | OpenRouter API (опционально) |
+| Управление авто | DiPlus sendCmd API (автоматизация) |
 
 **Без OBD-адаптера** — BYD блокирует сторонние OBD-устройства. BYDMate использует тот же API, что и встроенные приложения BYD.
 
@@ -196,6 +233,7 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 - **Idle drain** monitoring from BMS data
 - **Battery health** — temperature, cell balance, 12V voltage
 - **Trip map** with speed-colored routes (osmdroid, no Google Maps)
+- **Automation** — WHEN→THEN rules: triggers on 25 parameters → 37 D+ commands (windows, climate, lights, locks, mirrors)
 - **Auto-start** via WorkManager on boot
 - **CSV export** for trips and charges
 
