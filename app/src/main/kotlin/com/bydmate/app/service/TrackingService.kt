@@ -246,6 +246,9 @@ class TrackingService : Service(), LocationListener {
                         _diPlusConnected.value = true
                         _lastData.value = data
 
+                        // Feed DiPlus data to Alice for real device states
+                        alicePollingManager.latestData = data
+
                         // Save SOC for retrospective charge detection
                         data.soc?.let { soc ->
                             settingsRepository.saveLastKnownSoc(soc)
