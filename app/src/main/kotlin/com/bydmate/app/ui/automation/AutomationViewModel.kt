@@ -450,3 +450,68 @@ fun ActionDef.withAppLaunch(packageName: String, appLabel: String): ActionDef = 
         put("appLabel", appLabel)
     }.toString()
 )
+
+// --- Call helpers (v2.3.0) ---
+
+fun newCallAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Звонок",
+    kind = "call",
+    payload = """{"phone":""}"""
+)
+
+fun ActionDef.callPhone(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("phone")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withCall(phone: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply { put("phone", phone) }.toString()
+)
+
+// --- Navigate helpers (v2.3.0) ---
+
+fun newNavigateAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Маршрут в Я.Навигаторе",
+    kind = "navigate",
+    payload = """{"lat":0,"lon":0,"name":""}"""
+)
+
+fun ActionDef.navigateLat(): Double? = try {
+    val d = org.json.JSONObject(payload ?: "{}").optDouble("lat", Double.NaN)
+    if (d.isNaN()) null else d
+} catch (e: Exception) { null }
+
+fun ActionDef.navigateLon(): Double? = try {
+    val d = org.json.JSONObject(payload ?: "{}").optDouble("lon", Double.NaN)
+    if (d.isNaN()) null else d
+} catch (e: Exception) { null }
+
+fun ActionDef.navigateName(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("name")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withNavigate(lat: Double, lon: Double, name: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("lat", lat)
+        put("lon", lon)
+        put("name", name)
+    }.toString()
+)
+
+// --- URL helpers (v2.3.0) ---
+
+fun newUrlAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Открыть URL",
+    kind = "url",
+    payload = """{"url":""}"""
+)
+
+fun ActionDef.urlString(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("url")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withUrl(url: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply { put("url", url) }.toString()
+)

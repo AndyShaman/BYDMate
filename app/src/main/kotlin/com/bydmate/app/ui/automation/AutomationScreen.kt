@@ -27,13 +27,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreVert
+import androidx.compose.material.icons.outlined.Navigation
+import androidx.compose.material.icons.outlined.Notifications
+import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -444,6 +447,7 @@ private fun EditorDialog(
                         ActionRow(
                             index = idx,
                             action = action,
+                            places = places,
                             onUpdate = { newAction ->
                                 onUpdate {
                                     copy(actions = actions.toMutableList().apply { set(idx, newAction) })
@@ -469,6 +473,15 @@ private fun EditorDialog(
                             },
                             onAddAppLaunch = {
                                 onUpdate { copy(actions = actions + newAppLaunchAction()) }
+                            },
+                            onAddCall = {
+                                onUpdate { copy(actions = actions + newCallAction()) }
+                            },
+                            onAddNavigate = {
+                                onUpdate { copy(actions = actions + newNavigateAction()) }
+                            },
+                            onAddUrl = {
+                                onUpdate { copy(actions = actions + newUrlAction()) }
                             }
                         )
                     }
@@ -768,6 +781,7 @@ private fun PlaceTriggerControls(
 private fun ActionRow(
     index: Int,
     action: ActionDef,
+    places: List<PlaceEntity>,
     onUpdate: (ActionDef) -> Unit,
     onDelete: () -> Unit
 ) {
@@ -787,6 +801,12 @@ private fun ActionRow(
                 NotificationActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "app_launch" ->
                 AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "call" ->
+                CallActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "navigate" ->
+                NavigateActionControls(action = action, places = places, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "url" ->
+                UrlActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1043,7 +1063,10 @@ private fun SettingRow(label: String, content: @Composable () -> Unit) {
 private fun AddActionButton(
     onAddParam: () -> Unit,
     onAddNotification: (silent: Boolean) -> Unit,
-    onAddAppLaunch: () -> Unit
+    onAddAppLaunch: () -> Unit,
+    onAddCall: () -> Unit,
+    onAddNavigate: () -> Unit,
+    onAddUrl: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -1073,6 +1096,18 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text("Запуск приложения", fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddAppLaunch() }
+            )
+            DropdownMenuItem(
+                text = { Text("Звонок", fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddCall() }
+            )
+            DropdownMenuItem(
+                text = { Text("Маршрут в Я.Навигаторе", fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddNavigate() }
+            )
+            DropdownMenuItem(
+                text = { Text("Открыть URL", fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddUrl() }
             )
         }
     }
@@ -1343,6 +1378,344 @@ private fun queryLaunchableApps(context: android.content.Context): List<Installe
         .filter { it.packageName != self }
         .distinctBy { it.packageName }
         .sortedBy { it.label.lowercase() }
+}
+
+// --- Call Action Controls ---
+
+@Composable
+private fun CallActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val phone = action.callPhone()
+    val preview = if (phone.isNotBlank()) phone else "Нажмите, чтобы задать номер…"
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Call,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (phone.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1
+        )
+    }
+
+    if (editing) {
+        CallEditDialog(
+            initialPhone = phone,
+            onDismiss = { editing = false },
+            onSave = { newPhone ->
+                onUpdate(action.withCall(newPhone))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun CallEditDialog(
+    initialPhone: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var phoneText by remember { mutableStateOf(initialPhone) }
+    val trimmed = phoneText.trim()
+    val canSave = trimmed.isNotBlank() && trimmed.length in 5..20
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = { Text("Позвонить", color = TextPrimary, fontSize = 16.sp) },
+        text = {
+            OutlinedTextField(
+                value = phoneText,
+                onValueChange = { phoneText = it },
+                label = { Text("Номер телефона") },
+                singleLine = true,
+                isError = phoneText.isNotBlank() && !canSave,
+                shape = RoundedCornerShape(8.dp),
+                colors = fieldColors,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { if (canSave) onSave(trimmed) }, enabled = canSave) {
+                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", color = TextSecondary)
+            }
+        }
+    )
+}
+
+// --- Navigate Action Controls ---
+
+@Composable
+private fun NavigateActionControls(
+    action: ActionDef,
+    places: List<PlaceEntity>,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val name = action.navigateName()
+    val preview = if (name.isNotBlank()) name else "Нажмите, чтобы выбрать место…"
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Navigation,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (name.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1
+        )
+    }
+
+    if (editing) {
+        NavigateEditDialog(
+            action = action,
+            places = places,
+            onDismiss = { editing = false },
+            onSave = { lat, lon, placeName ->
+                onUpdate(action.withNavigate(lat, lon, placeName))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun NavigateEditDialog(
+    action: ActionDef,
+    places: List<PlaceEntity>,
+    onDismiss: () -> Unit,
+    onSave: (lat: Double, lon: Double, name: String) -> Unit
+) {
+    // Preselect by name match, then by lat/lon proximity, otherwise null
+    val initialPlace = remember(action, places) {
+        val actionName = action.navigateName()
+        val actionLat = action.navigateLat()
+        val actionLon = action.navigateLon()
+        places.find { it.name == actionName }
+            ?: if (actionLat != null && actionLon != null) {
+                places.find { Math.abs(it.lat - actionLat) < 0.0001 && Math.abs(it.lon - actionLon) < 0.0001 }
+            } else null
+    }
+    var selectedPlace by remember { mutableStateOf(initialPlace) }
+    var placeExpanded by remember { mutableStateOf(false) }
+
+    val canSave = selectedPlace != null && places.isNotEmpty()
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = { Text("Маршрут в Я.Навигаторе", color = TextPrimary, fontSize = 16.sp) },
+        text = {
+            if (places.isEmpty()) {
+                Text(
+                    text = "Сначала добавьте место в Настройки → Места",
+                    fontSize = 13.sp,
+                    color = TextMuted
+                )
+            } else {
+                Column {
+                    Box(modifier = Modifier.fillMaxWidth()) {
+                        Text(
+                            text = selectedPlace?.name ?: "Выберите место…",
+                            fontSize = 13.sp,
+                            color = if (selectedPlace == null) TextMuted else TextPrimary,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(CardSurface, RoundedCornerShape(8.dp))
+                                .border(1.dp, CardBorder, RoundedCornerShape(8.dp))
+                                .clickable { placeExpanded = true }
+                                .padding(12.dp, 10.dp),
+                            maxLines = 1
+                        )
+                        DropdownMenu(expanded = placeExpanded, onDismissRequest = { placeExpanded = false }) {
+                            places.forEach { place ->
+                                DropdownMenuItem(
+                                    text = { Text(place.name, fontSize = 13.sp) },
+                                    onClick = {
+                                        placeExpanded = false
+                                        selectedPlace = place
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val p = selectedPlace
+                    if (canSave && p != null) onSave(p.lat, p.lon, p.name)
+                },
+                enabled = canSave
+            ) {
+                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", color = TextSecondary)
+            }
+        }
+    )
+}
+
+// --- URL Action Controls ---
+
+@Composable
+private fun UrlActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val url = action.urlString()
+    val preview = if (url.isNotBlank()) url else "Нажмите, чтобы задать URL…"
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Link,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (url.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1
+        )
+    }
+
+    if (editing) {
+        UrlEditDialog(
+            initialUrl = url,
+            onDismiss = { editing = false },
+            onSave = { newUrl ->
+                onUpdate(action.withUrl(newUrl))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun UrlEditDialog(
+    initialUrl: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var urlText by remember { mutableStateOf(initialUrl) }
+    val trimmed = urlText.trim()
+    val urlValid = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    val canSave = trimmed.isNotBlank() && urlValid
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen,
+        errorBorderColor = Color(0xFFEF4444),
+        errorLabelColor = Color(0xFFEF4444)
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = { Text("Открыть URL", color = TextPrimary, fontSize = 16.sp) },
+        text = {
+            OutlinedTextField(
+                value = urlText,
+                onValueChange = { urlText = it },
+                label = { Text("URL") },
+                singleLine = true,
+                isError = urlText.isNotBlank() && !urlValid,
+                shape = RoundedCornerShape(8.dp),
+                colors = fieldColors,
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(onClick = { if (canSave) onSave(trimmed) }, enabled = canSave) {
+                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", color = TextSecondary)
+            }
+        }
+    )
 }
 
 @Composable
