@@ -30,6 +30,7 @@ import androidx.navigation.compose.rememberNavController
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.battery.BatteryHealthScreen
 import com.bydmate.app.ui.automation.AutomationScreen
+import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.theme.*
@@ -117,8 +118,9 @@ fun AppNavigation(
             composable(Screen.Dashboard.route) { DashboardScreen() }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Automation.route) { AutomationScreen() }
-            composable(Screen.Settings.route) { SettingsScreen() }
+            composable(Screen.Settings.route) { SettingsScreen(onNavigateToPlaces = { navController.navigate("places") }) }
             composable("battery_health") { BatteryHealthScreen() }
+            composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }
