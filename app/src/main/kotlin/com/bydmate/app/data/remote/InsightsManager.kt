@@ -281,16 +281,10 @@ tone guidelines:
         metrics
     }
 
-    // Deterministic tone based on dynamics data
+    // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
-        val badMetrics = dynamics.filter { it.sentiment == "bad" && it.changePct != null }
-        val maxBadChange = badMetrics.maxOfOrNull { kotlin.math.abs(it.changePct!!) } ?: 0.0
-        return when {
-            maxBadChange > 15.0 -> "critical"
-            maxBadChange > 5.0 -> "warning"
-            badMetrics.isNotEmpty() -> "warning"
-            else -> "good"
-        }
+        val consumption = dynamics.firstOrNull { it.label == "Расход" }
+        return com.bydmate.app.data.automation.InsightToneLogic.consumptionTone(consumption?.changePct)
     }
 
     // up = bad (consumption, short trips, stationary)
@@ -330,6 +324,10 @@ tone guidelines:
 
         val allTrips = tripDao.getAllSnapshot()
         val recentTrips = allTrips.filter { it.startTs >= weekAgo }
+        if (recentTrips.size < 5) {
+            Log.d(TAG, "Less than 5 trips in last 7 days — skip LLM call")
+            return@withContext null
+        }
         val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
         val monthTrips = allTrips.filter { it.startTs >= monthAgo }
 
