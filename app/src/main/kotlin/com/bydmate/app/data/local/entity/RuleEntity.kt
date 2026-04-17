@@ -74,17 +74,23 @@ data class TriggerDef(
 
 data class ActionDef(
     val command: String,
-    val displayName: String
+    val displayName: String,
+    val kind: String = "param",    // "param" | "notification_silent" | "notification_sound" | "app_launch" | "call" | "navigate" | "url"
+    val payload: String? = null    // JSON string with kind-specific params (null for kind="param")
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("command", command)
         put("displayName", displayName)
+        put("kind", kind)
+        if (payload != null) put("payload", payload)
     }
 
     companion object {
         fun fromJson(json: JSONObject) = ActionDef(
             command = json.getString("command"),
-            displayName = json.getString("displayName")
+            displayName = json.getString("displayName"),
+            kind = json.optString("kind", "param"),
+            payload = if (json.has("payload") && !json.isNull("payload")) json.getString("payload") else null
         )
 
         fun listFromJson(jsonStr: String): List<ActionDef> = try {
