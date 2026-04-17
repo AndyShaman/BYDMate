@@ -29,6 +29,7 @@ class ActionDispatcher @Inject constructor(
         private const val CHANNEL_SILENT_ID = "bydmate_automation_silent"
         private const val CHANNEL_SOUND_ID = "bydmate_automation_sound"
         private const val USER_NOTIF_BASE_ID = 10000
+        private const val MINIMIZE_DELAY_MS = 3000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
     }
 
@@ -47,6 +48,7 @@ class ActionDispatcher @Inject constructor(
             "call" -> dial(action)
             "navigate" -> navigate(action)
             "url" -> openUrl(action)
+            "yandex_music" -> launchYandexMusic(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -86,10 +88,16 @@ class ActionDispatcher @Inject constructor(
 
     // --- notifications (user-visible) ---
 
-    private fun showNotification(action: ActionDef, silent: Boolean): DispatchResult {
+    private suspend fun showNotification(action: ActionDef, silent: Boolean): DispatchResult {
         val payload = parsePayload(action.payload)
         val title = payload?.optString("title")?.takeIf(String::isNotBlank) ?: action.displayName
         val text = payload?.optString("text") ?: ""
+
+        if (!silent && com.bydmate.app.ui.overlay.OverlayNotificationManager.canShow(context)) {
+            val shown = com.bydmate.app.ui.overlay.OverlayNotificationManager.show(context, title, text)
+            if (shown) return DispatchResult(true)
+        }
+
         val channelId = if (silent) CHANNEL_SILENT_ID else CHANNEL_SOUND_ID
         val notif = NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
@@ -128,13 +136,16 @@ class ActionDispatcher @Inject constructor(
 
     // --- external activities ---
 
-    private fun launchApp(action: ActionDef): DispatchResult {
-        val pkg = parsePayload(action.payload)?.optString("packageName")?.takeIf(String::isNotBlank)
+    private suspend fun launchApp(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val pkg = payload?.optString("packageName")?.takeIf(String::isNotBlank)
             ?: return DispatchResult(false, "packageName не задан")
         val intent = context.packageManager.getLaunchIntentForPackage(pkg)
             ?: return DispatchResult(false, "Приложение не установлено: $pkg")
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return tryStartActivity(intent, "app_launch:$pkg")
+        val result = tryStartActivity(intent, "app_launch:$pkg")
+        if (result.success) maybeMinimize(payload)
+        return result
     }
 
     private fun dial(action: ActionDef): DispatchResult {
@@ -142,7 +153,7 @@ class ActionDispatcher @Inject constructor(
             ?: return DispatchResult(false, "phone не задан")
         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return tryStartActivity(intent, "call:$phone")
+        return tryStartActivity(intent, "dial:$phone")
     }
 
     private fun navigate(action: ActionDef): DispatchResult {
@@ -156,12 +167,42 @@ class ActionDispatcher @Inject constructor(
         return tryStartActivity(intent, "navigate:$lat,$lon")
     }
 
-    private fun openUrl(action: ActionDef): DispatchResult {
-        val url = parsePayload(action.payload)?.optString("url")?.takeIf(String::isNotBlank)
+    private suspend fun openUrl(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val url = payload?.optString("url")?.takeIf(String::isNotBlank)
             ?: return DispatchResult(false, "url не задан")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return tryStartActivity(intent, "url:$url")
+        val result = tryStartActivity(intent, "url:$url")
+        if (result.success) maybeMinimize(payload)
+        return result
+    }
+
+    private suspend fun launchYandexMusic(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val mode = payload?.optString("mode")?.takeIf(String::isNotBlank) ?: "mybeat"
+        val deeplink = when (mode) {
+            "mybeat" -> "yandexmusic://radio/user/onyourwave?play=true"
+            else -> return DispatchResult(false, "Неизвестный режим Я.Музыки: $mode")
+        }
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(deeplink))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val result = tryStartActivity(intent, "yandex_music:$mode")
+        if (result.success) maybeMinimize(payload)
+        return result
+    }
+
+    private suspend fun maybeMinimize(payload: JSONObject?) {
+        if (payload?.optBoolean("minimize", false) != true) return
+        kotlinx.coroutines.delay(MINIMIZE_DELAY_MS)
+        val home = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        try {
+            context.startActivity(home)
+        } catch (e: Exception) {
+            Log.w(TAG, "home failed: ${e.message}")
+        }
     }
 
     private fun tryStartActivity(intent: Intent, label: String): DispatchResult = try {
@@ -170,6 +211,9 @@ class ActionDispatcher @Inject constructor(
     } catch (e: ActivityNotFoundException) {
         Log.w(TAG, "$label: ${e.message}")
         DispatchResult(false, "Нет приложения для обработки: ${e.message}")
+    } catch (e: SecurityException) {
+        Log.w(TAG, "$label (security): ${e.message}")
+        DispatchResult(false, "Нет разрешения: ${e.message}")
     }
 
     // --- helpers ---

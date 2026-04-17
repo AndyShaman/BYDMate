@@ -278,9 +278,14 @@ class AutomationViewModel @Inject constructor(
                 }
                 "url" -> {
                     val u = a.urlString().trim()
-                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
-                        return "Действие #$n: URL должен начинаться с http:// или https://"
+                    if (u.isEmpty()) return "Действие #$n: URL пустой"
+                    // Allow any scheme: http(s)://, yandexmusic://, tel:, intent://, geo:, etc.
+                    if (!u.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))) {
+                        return "Действие #$n: URL должен содержать схему (http://, yandexmusic://, tel:, ...)"
                     }
+                }
+                "yandex_music" -> {
+                    if (a.yandexMusicMode().isBlank()) return "Действие #$n: режим Я.Музыки не выбран"
                 }
             }
         }
@@ -490,10 +495,15 @@ fun ActionDef.appLaunchLabel(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("appLabel")
 } catch (e: Exception) { "" }
 
-fun ActionDef.withAppLaunch(packageName: String, appLabel: String): ActionDef = copy(
+fun ActionDef.appLaunchMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", false)
+} catch (e: Exception) { false }
+
+fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boolean): ActionDef = copy(
     payload = org.json.JSONObject().apply {
         put("packageName", packageName)
         put("appLabel", appLabel)
+        put("minimize", minimize)
     }.toString()
 )
 
@@ -510,8 +520,15 @@ fun ActionDef.callPhone(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("phone")
 } catch (e: Exception) { "" }
 
-fun ActionDef.withCall(phone: String): ActionDef = copy(
-    payload = org.json.JSONObject().apply { put("phone", phone) }.toString()
+fun ActionDef.callName(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("name")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withCall(phone: String, name: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("phone", phone)
+        put("name", name)
+    }.toString()
 )
 
 // --- Navigate helpers (v2.3.0) ---
@@ -558,6 +575,37 @@ fun ActionDef.urlString(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("url")
 } catch (e: Exception) { "" }
 
-fun ActionDef.withUrl(url: String): ActionDef = copy(
-    payload = org.json.JSONObject().apply { put("url", url) }.toString()
+fun ActionDef.urlMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", false)
+} catch (e: Exception) { false }
+
+fun ActionDef.withUrl(url: String, minimize: Boolean): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("url", url)
+        put("minimize", minimize)
+    }.toString()
+)
+
+// --- Yandex Music helpers (v2.3.0) ---
+
+fun newYandexMusicAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Яндекс.Музыка",
+    kind = "yandex_music",
+    payload = """{"mode":"mybeat","minimize":true}"""
+)
+
+fun ActionDef.yandexMusicMode(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("mode")
+} catch (e: Exception) { "" }
+
+fun ActionDef.yandexMusicMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", true)
+} catch (e: Exception) { true }
+
+fun ActionDef.withYandexMusic(mode: String, minimize: Boolean): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("mode", mode)
+        put("minimize", minimize)
+    }.toString()
 )

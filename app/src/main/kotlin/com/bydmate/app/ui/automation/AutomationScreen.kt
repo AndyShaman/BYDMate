@@ -44,6 +44,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -422,6 +424,9 @@ private fun EditorDialog(
                             },
                             onAddPlace = { place ->
                                 onUpdate { copy(triggers = triggers + newPlaceTrigger(place)) }
+                            },
+                            onAddTimeOfDay = {
+                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger()) }
                             }
                         )
                     }
@@ -484,6 +489,9 @@ private fun EditorDialog(
                             },
                             onAddUrl = {
                                 onUpdate { copy(actions = actions + newUrlAction()) }
+                            },
+                            onAddYandexMusic = {
+                                onUpdate { copy(actions = actions + newYandexMusicAction()) }
                             }
                         )
                     }
@@ -597,6 +605,7 @@ private fun TriggerRow(
 
         when (trigger.kind) {
             "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
+            "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
             else -> ParamTriggerControls(trigger, onUpdate)
         }
 
@@ -789,6 +798,43 @@ private fun PlaceTriggerControls(
     }
 }
 
+@Composable
+private fun TimeOfDayTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit
+) {
+    val phases = listOf("DAY" to "День", "NIGHT" to "Ночь", "DAWN" to "Рассвет", "DUSK" to "Закат")
+    val current = phases.find { it.first == trigger.value.uppercase() } ?: phases[1]
+    var expanded by remember { mutableStateOf(false) }
+
+    Text("Время суток:", fontSize = 12.sp, color = TextMuted)
+    Spacer(Modifier.width(4.dp))
+    Box {
+        Text(
+            current.second,
+            fontSize = 13.sp,
+            color = AccentGreen,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .clickable { expanded = true }
+                .padding(8.dp, 6.dp)
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            phases.forEach { (value, label) ->
+                DropdownMenuItem(
+                    text = { Text(label, fontSize = 13.sp) },
+                    onClick = {
+                        expanded = false
+                        onUpdate(trigger.copy(value = value, displayName = label))
+                    }
+                )
+            }
+        }
+    }
+}
+
 // --- Action Row ---
 
 @Composable
@@ -821,6 +867,8 @@ private fun ActionRow(
                 NavigateActionControls(action = action, places = places, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "url" ->
                 UrlActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "yandex_music" ->
+                YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1080,9 +1128,13 @@ private fun AddActionButton(
     onAddAppLaunch: () -> Unit,
     onAddCall: () -> Unit,
     onAddNavigate: () -> Unit,
-    onAddUrl: () -> Unit
+    onAddUrl: () -> Unit,
+    onAddYandexMusic: () -> Unit
 ) {
+    val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
+    var showOverlayPrompt by remember { mutableStateOf(false) }
+
     Box {
         Box(
             modifier = Modifier
@@ -1105,11 +1157,21 @@ private fun AddActionButton(
             )
             DropdownMenuItem(
                 text = { Text("Уведомление (звук)", fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddNotification(false) }
+                onClick = {
+                    menuExpanded = false
+                    onAddNotification(false)
+                    if (!android.provider.Settings.canDrawOverlays(context)) {
+                        showOverlayPrompt = true
+                    }
+                }
             )
             DropdownMenuItem(
                 text = { Text("Запуск приложения", fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddAppLaunch() }
+            )
+            DropdownMenuItem(
+                text = { Text("Яндекс.Музыка", fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddYandexMusic() }
             )
             DropdownMenuItem(
                 text = { Text("Звонок", fontSize = 13.sp) },
@@ -1124,6 +1186,38 @@ private fun AddActionButton(
                 onClick = { menuExpanded = false; onAddUrl() }
             )
         }
+    }
+
+    if (showOverlayPrompt) {
+        AlertDialog(
+            onDismissRequest = { showOverlayPrompt = false },
+            containerColor = CardSurface,
+            title = { Text("Нужно разрешение", color = TextPrimary, fontSize = 16.sp) },
+            text = {
+                Text(
+                    "Звуковые уведомления показываются как всплывающее окно поверх других приложений. Откройте системные настройки и включите \"Поверх других окон\" для BYDMate.",
+                    fontSize = 13.sp,
+                    color = TextPrimary
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showOverlayPrompt = false
+                    val intent = android.content.Intent(
+                        android.provider.Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        android.net.Uri.parse("package:${context.packageName}")
+                    ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+                    try { context.startActivity(intent) } catch (_: Exception) {}
+                }) {
+                    Text("Открыть настройки", color = AccentGreen)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showOverlayPrompt = false }) {
+                    Text("Позже", color = TextSecondary)
+                }
+            }
+        )
     }
 }
 
@@ -1292,9 +1386,10 @@ private fun AppLaunchActionControls(
     if (editing) {
         AppLaunchPickerDialog(
             currentPackage = pkg,
+            currentMinimize = action.appLaunchMinimize(),
             onDismiss = { editing = false },
-            onSelect = { newPkg, newLabel ->
-                onUpdate(action.withAppLaunch(newPkg, newLabel))
+            onSelect = { newPkg, newLabel, newMinimize ->
+                onUpdate(action.withAppLaunch(newPkg, newLabel, newMinimize))
                 editing = false
             }
         )
@@ -1306,12 +1401,14 @@ private data class InstalledApp(val packageName: String, val label: String)
 @Composable
 private fun AppLaunchPickerDialog(
     currentPackage: String,
+    currentMinimize: Boolean,
     onDismiss: () -> Unit,
-    onSelect: (pkg: String, label: String) -> Unit
+    onSelect: (pkg: String, label: String, minimize: Boolean) -> Unit
 ) {
     val context = LocalContext.current
     val apps = remember { queryLaunchableApps(context) }
     var search by remember { mutableStateOf("") }
+    var minimize by remember { mutableStateOf(currentMinimize) }
 
     val filtered = remember(search, apps) {
         val q = search.trim().lowercase()
@@ -1344,6 +1441,28 @@ private fun AppLaunchPickerDialog(
                     colors = fieldColors,
                     modifier = Modifier.fillMaxWidth()
                 )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { minimize = !minimize }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = minimize,
+                        onCheckedChange = { minimize = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = AccentGreen,
+                            uncheckedColor = CardBorder,
+                            checkmarkColor = TextPrimary
+                        )
+                    )
+                    Text(
+                        "Свернуть после запуска (через 3 сек)",
+                        fontSize = 13.sp,
+                        color = TextPrimary
+                    )
+                }
                 Spacer(Modifier.height(8.dp))
                 LazyColumn(
                     modifier = Modifier
@@ -1355,7 +1474,7 @@ private fun AppLaunchPickerDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .clickable { onSelect(app.packageName, app.label) }
+                                .clickable { onSelect(app.packageName, app.label, minimize) }
                                 .background(if (selected) AccentGreen.copy(alpha = 0.1f) else Color.Transparent)
                                 .padding(horizontal = 8.dp, vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -1404,7 +1523,12 @@ private fun CallActionControls(
 ) {
     var editing by remember { mutableStateOf(false) }
     val phone = action.callPhone()
-    val preview = if (phone.isNotBlank()) phone else "Нажмите, чтобы задать номер…"
+    val name = action.callName()
+    val preview = when {
+        name.isNotBlank() && phone.isNotBlank() -> "$name — $phone"
+        phone.isNotBlank() -> phone
+        else -> "Нажмите, чтобы задать номер…"
+    }
 
     Row(
         modifier = modifier
@@ -1432,9 +1556,10 @@ private fun CallActionControls(
     if (editing) {
         CallEditDialog(
             initialPhone = phone,
+            initialName = name,
             onDismiss = { editing = false },
-            onSave = { newPhone ->
-                onUpdate(action.withCall(newPhone))
+            onSave = { newPhone, newName ->
+                onUpdate(action.withCall(newPhone, newName))
                 editing = false
             }
         )
@@ -1444,12 +1569,15 @@ private fun CallActionControls(
 @Composable
 private fun CallEditDialog(
     initialPhone: String,
+    initialName: String,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit
+    onSave: (phone: String, name: String) -> Unit
 ) {
     var phoneText by remember { mutableStateOf(initialPhone) }
-    val trimmed = phoneText.trim()
-    val canSave = trimmed.isNotBlank() && trimmed.length in 5..20
+    var nameText by remember { mutableStateOf(initialName) }
+    var showContacts by remember { mutableStateOf(false) }
+    val trimmedPhone = phoneText.trim()
+    val canSave = trimmedPhone.isNotBlank() && trimmedPhone.length in 5..20
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
         focusedTextColor = TextPrimary,
@@ -1466,20 +1594,36 @@ private fun CallEditDialog(
         containerColor = CardSurface,
         title = { Text("Позвонить", color = TextPrimary, fontSize = 16.sp) },
         text = {
-            OutlinedTextField(
-                value = phoneText,
-                onValueChange = { phoneText = it },
-                label = { Text("Номер телефона") },
-                singleLine = true,
-                isError = phoneText.isNotBlank() && !canSave,
-                shape = RoundedCornerShape(8.dp),
-                colors = fieldColors,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                OutlinedTextField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    label = { Text("Имя (необязательно)") },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                OutlinedTextField(
+                    value = phoneText,
+                    onValueChange = { phoneText = it },
+                    label = { Text("Номер телефона") },
+                    singleLine = true,
+                    isError = phoneText.isNotBlank() && !canSave,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = { showContacts = true }) {
+                    Text("Выбрать из контактов", color = AccentGreen, fontSize = 13.sp)
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = { if (canSave) onSave(trimmed) }, enabled = canSave) {
+            TextButton(onClick = { if (canSave) onSave(trimmedPhone, nameText.trim()) }, enabled = canSave) {
                 Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
             }
         },
@@ -1489,6 +1633,17 @@ private fun CallEditDialog(
             }
         }
     )
+
+    if (showContacts) {
+        ContactPickerDialog(
+            onDismiss = { showContacts = false },
+            onSelect = { pickedName, pickedPhone ->
+                nameText = pickedName
+                phoneText = pickedPhone
+                showContacts = false
+            }
+        )
+    }
 }
 
 // --- Navigate Action Controls ---
@@ -1670,9 +1825,10 @@ private fun UrlActionControls(
     if (editing) {
         UrlEditDialog(
             initialUrl = url,
+            initialMinimize = action.urlMinimize(),
             onDismiss = { editing = false },
-            onSave = { newUrl ->
-                onUpdate(action.withUrl(newUrl))
+            onSave = { newUrl, newMinimize ->
+                onUpdate(action.withUrl(newUrl, newMinimize))
                 editing = false
             }
         )
@@ -1682,12 +1838,14 @@ private fun UrlActionControls(
 @Composable
 private fun UrlEditDialog(
     initialUrl: String,
+    initialMinimize: Boolean,
     onDismiss: () -> Unit,
-    onSave: (String) -> Unit
+    onSave: (String, Boolean) -> Unit
 ) {
     var urlText by remember { mutableStateOf(initialUrl) }
+    var minimize by remember { mutableStateOf(initialMinimize) }
     val trimmed = urlText.trim()
-    val urlValid = trimmed.startsWith("http://") || trimmed.startsWith("https://")
+    val urlValid = trimmed.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))
     val canSave = trimmed.isNotBlank() && urlValid
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
@@ -1707,21 +1865,183 @@ private fun UrlEditDialog(
         containerColor = CardSurface,
         title = { Text("Открыть URL", color = TextPrimary, fontSize = 16.sp) },
         text = {
-            OutlinedTextField(
-                value = urlText,
-                onValueChange = { urlText = it },
-                label = { Text("URL") },
-                singleLine = true,
-                isError = urlText.isNotBlank() && !urlValid,
-                shape = RoundedCornerShape(8.dp),
-                colors = fieldColors,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
-                modifier = Modifier.fillMaxWidth()
-            )
+            Column {
+                OutlinedTextField(
+                    value = urlText,
+                    onValueChange = { urlText = it },
+                    label = { Text("URL") },
+                    singleLine = true,
+                    isError = urlText.isNotBlank() && !urlValid,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { minimize = !minimize }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = minimize,
+                        onCheckedChange = { minimize = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = AccentGreen,
+                            uncheckedColor = CardBorder,
+                            checkmarkColor = TextPrimary
+                        )
+                    )
+                    Text(
+                        "Свернуть после запуска (через 3 сек)",
+                        fontSize = 13.sp,
+                        color = TextPrimary
+                    )
+                }
+            }
         },
         confirmButton = {
-            TextButton(onClick = { if (canSave) onSave(trimmed) }, enabled = canSave) {
+            TextButton(onClick = { if (canSave) onSave(trimmed, minimize) }, enabled = canSave) {
                 Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Отмена", color = TextSecondary)
+            }
+        }
+    )
+}
+
+// --- Yandex Music Action Controls ---
+
+@Composable
+private fun YandexMusicActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val mode = action.yandexMusicMode()
+    val preview = when (mode) {
+        "mybeat" -> "Моя Волна"
+        else -> "Нажмите для настройки…"
+    }
+    val minimize = action.yandexMusicMinimize()
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (mode.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1,
+            modifier = Modifier.weight(1f)
+        )
+        if (minimize) {
+            Spacer(Modifier.width(6.dp))
+            Text("↓", fontSize = 13.sp, color = TextMuted)
+        }
+    }
+
+    if (editing) {
+        YandexMusicEditDialog(
+            initialMode = mode.ifBlank { "mybeat" },
+            initialMinimize = minimize,
+            onDismiss = { editing = false },
+            onSave = { newMode, newMinimize ->
+                onUpdate(action.withYandexMusic(newMode, newMinimize))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun YandexMusicEditDialog(
+    initialMode: String,
+    initialMinimize: Boolean,
+    onDismiss: () -> Unit,
+    onSave: (mode: String, minimize: Boolean) -> Unit
+) {
+    val modes = listOf("mybeat" to "Моя Волна")
+    var selectedMode by remember { mutableStateOf(initialMode) }
+    var minimize by remember { mutableStateOf(initialMinimize) }
+    var dropdownExpanded by remember { mutableStateOf(false) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = { Text("Яндекс.Музыка", color = TextPrimary, fontSize = 16.sp) },
+        text = {
+            Column {
+                Text("Что запустить:", fontSize = 12.sp, color = TextMuted)
+                Spacer(Modifier.height(4.dp))
+                Box {
+                    val label = modes.find { it.first == selectedMode }?.second ?: selectedMode
+                    Text(
+                        label,
+                        fontSize = 14.sp,
+                        color = AccentGreen,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(CardSurface, RoundedCornerShape(6.dp))
+                            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                            .clickable { dropdownExpanded = true }
+                            .padding(10.dp, 8.dp)
+                    )
+                    DropdownMenu(
+                        expanded = dropdownExpanded,
+                        onDismissRequest = { dropdownExpanded = false }
+                    ) {
+                        modes.forEach { (value, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label, fontSize = 13.sp) },
+                                onClick = {
+                                    selectedMode = value
+                                    dropdownExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                Spacer(Modifier.height(12.dp))
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { minimize = !minimize }
+                        .padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = minimize,
+                        onCheckedChange = { minimize = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = AccentGreen,
+                            uncheckedColor = CardBorder,
+                            checkmarkColor = TextPrimary
+                        )
+                    )
+                    Text(
+                        "Свернуть после запуска (через 3 сек)",
+                        fontSize = 13.sp,
+                        color = TextPrimary
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onSave(selectedMode, minimize) }) {
+                Text("Сохранить", color = AccentGreen)
             }
         },
         dismissButton = {
@@ -1736,7 +2056,8 @@ private fun UrlEditDialog(
 private fun AddTriggerButton(
     places: List<PlaceEntity>,
     onAddParam: () -> Unit,
-    onAddPlace: (PlaceEntity) -> Unit
+    onAddPlace: (PlaceEntity) -> Unit,
+    onAddTimeOfDay: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -1775,6 +2096,13 @@ private fun AddTriggerButton(
                 },
                 enabled = firstPlace != null
             )
+            DropdownMenuItem(
+                text = { Text("Время суток", fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddTimeOfDay()
+                }
+            )
         }
     }
 }
@@ -1789,6 +2117,17 @@ private fun newPlaceTrigger(place: PlaceEntity): TriggerDef {
         kind = "place_enter",
         placeId = place.id,
         placeName = place.name
+    )
+}
+
+private fun newTimeOfDayTrigger(): TriggerDef {
+    return TriggerDef(
+        param = "TimeOfDay",
+        chineseName = "时间段",
+        operator = "==",
+        value = "NIGHT",
+        displayName = "Ночь",
+        kind = "time_of_day"
     )
 }
 

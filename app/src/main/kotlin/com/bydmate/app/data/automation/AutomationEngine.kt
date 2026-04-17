@@ -130,6 +130,7 @@ class AutomationEngine @Inject constructor(
             when (trigger.kind) {
                 "place_enter" -> evaluatePlace(trigger, location, places, enterKind = true)
                 "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
+                "time_of_day" -> evaluateTimeOfDay(trigger, location)
                 else -> { // "param" (default)
                     val actual = getParamValue(data, trigger.param) ?: return@map false
                     val expected = trigger.value.toDoubleOrNull() ?: return@map false
@@ -157,6 +158,13 @@ class AutomationEngine @Inject constructor(
             place.lat, place.lon, place.radiusM
         )
         return if (enterKind) inside else !inside
+    }
+
+    private fun evaluateTimeOfDay(trigger: TriggerDef, location: Location?): Boolean {
+        val loc = location ?: return false
+        val phase = SunTimeCalculator.currentPhase(loc)
+        val target = trigger.value.uppercase()
+        return phase.name == target
     }
 
     private fun compare(actual: Double, op: String, expected: Double): Boolean = when (op) {
@@ -261,6 +269,7 @@ class AutomationEngine @Inject constructor(
             when (t.kind) {
                 "place_enter" -> json.put("place_enter", t.placeName ?: "?")
                 "place_exit" -> json.put("place_exit", t.placeName ?: "?")
+                "time_of_day" -> json.put("time_of_day", t.value)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
             }
         }
