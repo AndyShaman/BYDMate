@@ -162,7 +162,8 @@ data class AutomationUiState(
     val showJournal: Boolean = false,
     val editing: EditingRule = EditingRule(),
     val showDeleteConfirm: Long? = null,
-    val places: List<PlaceEntity> = emptyList()
+    val places: List<PlaceEntity> = emptyList(),
+    val editorError: String? = null
 )
 
 @HiltViewModel
@@ -244,16 +245,61 @@ class AutomationViewModel @Inject constructor(
     }
 
     fun closeEditor() {
-        _uiState.update { it.copy(showEditor = false) }
+        _uiState.update { it.copy(showEditor = false, editorError = null) }
     }
 
     fun updateEditing(transform: EditingRule.() -> EditingRule) {
         _uiState.update { it.copy(editing = it.editing.transform()) }
     }
 
+    private fun validateActions(actions: List<ActionDef>): String? {
+        actions.forEachIndexed { idx, a ->
+            val n = idx + 1
+            when (a.kind) {
+                "param" -> {
+                    if (a.command.isBlank()) return "Действие #$n: команда не задана"
+                }
+                "notification_silent", "notification_sound" -> {
+                    if (a.notificationTitle().isBlank()) return "Действие #$n: заголовок уведомления пуст"
+                }
+                "app_launch" -> {
+                    if (a.appLaunchPackageName().isBlank()) return "Действие #$n: приложение не выбрано"
+                }
+                "call" -> {
+                    val phone = a.callPhone().trim()
+                    if (phone.length !in 5..20) return "Действие #$n: номер телефона некорректен"
+                }
+                "navigate" -> {
+                    val lat = a.navigateLat()
+                    val lon = a.navigateLon()
+                    if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
+                        return "Действие #$n: место для маршрута не выбрано"
+                    }
+                }
+                "url" -> {
+                    val u = a.urlString().trim()
+                    if (!u.startsWith("http://") && !u.startsWith("https://")) {
+                        return "Действие #$n: URL должен начинаться с http:// или https://"
+                    }
+                }
+            }
+        }
+        return null
+    }
+
     fun saveRule() {
         val e = _uiState.value.editing
-        if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) return
+        if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) {
+            _uiState.value = _uiState.value.copy(editorError = "Название и хотя бы одно условие и действие обязательны")
+            return
+        }
+        val actionError = validateActions(e.actions)
+        if (actionError != null) {
+            _uiState.value = _uiState.value.copy(editorError = actionError)
+            return
+        }
+        // Clear previous error on success path
+        _uiState.value = _uiState.value.copy(editorError = null)
 
         val entity = RuleEntity(
             id = if (e.isNew) 0 else e.id,

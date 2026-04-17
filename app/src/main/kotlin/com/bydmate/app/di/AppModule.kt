@@ -170,7 +170,7 @@ object AppModule {
                     name TEXT NOT NULL,
                     lat REAL NOT NULL,
                     lon REAL NOT NULL,
-                    radius_m INTEGER NOT NULL DEFAULT 50,
+                    radius_m INTEGER NOT NULL,
                     created_at INTEGER NOT NULL
                 )
             """)

@@ -94,10 +94,9 @@ class AutomationEngine @Inject constructor(
                 if (triggers.isEmpty()) continue
 
                 val matched = evaluateTriggers(triggers, data, rule.triggerLogic, location, placesById)
-                val wasMatched = lastEvalResults.put(rule.id, matched) ?: false
-
-                // Edge trigger: only fire on false→true transition
-                if (!matched || wasMatched) continue
+                val previous = lastEvalResults.put(rule.id, matched)
+                if (previous == null) continue          // first observation — seed only, do not fire
+                if (!matched || previous) continue       // edge trigger: fire only on false→true
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue

@@ -162,6 +162,7 @@ fun AutomationScreen(
         EditorDialog(
             editing = state.editing,
             places = state.places,
+            editorError = state.editorError,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
             onDismiss = { viewModel.closeEditor() }
@@ -318,6 +319,7 @@ private fun RuleCard(
 private fun EditorDialog(
     editing: EditingRule,
     places: List<PlaceEntity>,
+    editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
     onDismiss: () -> Unit
@@ -536,25 +538,37 @@ private fun EditorDialog(
 
             // Footer
             HorizontalDivider(color = CardBorder)
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(12.dp, 10.dp),
-                horizontalArrangement = Arrangement.End
+                    .padding(12.dp, 10.dp)
             ) {
-                Button(
-                    onClick = onDismiss,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                    shape = RoundedCornerShape(8.dp),
-                    modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                ) { Text("Отмена") }
-                Spacer(Modifier.width(10.dp))
-                Button(
-                    onClick = onSave,
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                    shape = RoundedCornerShape(8.dp),
-                    enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
-                ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
+                editorError?.let { err ->
+                    Text(
+                        text = err,
+                        color = Color(0xFFEF4444),
+                        fontSize = 12.sp,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    Button(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+                    ) { Text("Отмена") }
+                    Spacer(Modifier.width(10.dp))
+                    Button(
+                        onClick = onSave,
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                        shape = RoundedCornerShape(8.dp),
+                        enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
+                    ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
+                }
             }
         }
     }
