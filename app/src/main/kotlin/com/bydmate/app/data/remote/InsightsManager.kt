@@ -32,6 +32,7 @@ class InsightsManager @Inject constructor(
         private const val KEY_INSIGHT_DATE = "insight_date"
         private const val KEY_MODELS_JSON = "models_json"
         private const val KEY_MODELS_DATE = "models_date"
+        private const val KEY_V12_HISTORY = "v12_history"   // JSON array of {date:"yyyy-MM-dd", volts:Double}, max 7 entries
 
         private const val SYSTEM_PROMPT = """You are an EV driving analyst for BYD Leopard 3 (Fangchengbao Bao 3), a plug-in hybrid SUV with a 72.9 kWh LFP Blade Battery.
 
@@ -63,7 +64,12 @@ Each insight: 1-2 sentences in Russian. Start with the key finding. Reference sp
 tone guidelines:
 - "good": everything looks normal or improving
 - "warning": notable degradation or concerning pattern
-- "critical": anomaly that needs immediate attention"""
+- "critical": anomaly that needs immediate attention
+
+Anti-hallucination rules (CRITICAL):
+- If the data block shows fewer than 5 trips, fewer than 2 days of 12V history, or a section is entirely missing — do NOT invent trends, percentages, or correlations for that aspect. Either omit that topic or say data is insufficient.
+- Never quote numbers the data block does not contain. If you are uncertain about a figure, do not mention it.
+- If the data is too thin overall, return {"title":"Данных мало для анализа","summary":"Нужно больше поездок на неделе","insights":[],"tone":"good"} and nothing else."""
     }
 
     private val prefs by lazy {
@@ -92,7 +98,30 @@ tone guidelines:
         return refresh()
     }
 
+    /** Record today's 12V reading (if available). Keeps the last 7 unique dates. */
+    private fun append12VSample() {
+        val volts = TrackingService.lastData.value?.voltage12v ?: return
+        val today = todayString()
+        val raw = prefs.getString(KEY_V12_HISTORY, null)
+        val arr = try { if (raw != null) org.json.JSONArray(raw) else org.json.JSONArray() } catch (_: Exception) { org.json.JSONArray() }
+
+        // Skip if today already recorded
+        for (i in 0 until arr.length()) {
+            if (arr.getJSONObject(i).optString("date") == today) return
+        }
+        arr.put(org.json.JSONObject().apply {
+            put("date", today)
+            put("volts", volts)
+        })
+        // Trim to last 7 entries
+        val trimmed = org.json.JSONArray()
+        val start = (arr.length() - 7).coerceAtLeast(0)
+        for (i in start until arr.length()) trimmed.put(arr.get(i))
+        prefs.edit().putString(KEY_V12_HISTORY, trimmed.toString()).apply()
+    }
+
     suspend fun refresh(): InsightData? {
+        append12VSample()
         val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
         if (apiKey.isBlank()) return null
 
@@ -281,16 +310,10 @@ tone guidelines:
         metrics
     }
 
-    // Deterministic tone based on dynamics data
+    // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
-        val badMetrics = dynamics.filter { it.sentiment == "bad" && it.changePct != null }
-        val maxBadChange = badMetrics.maxOfOrNull { kotlin.math.abs(it.changePct!!) } ?: 0.0
-        return when {
-            maxBadChange > 15.0 -> "critical"
-            maxBadChange > 5.0 -> "warning"
-            badMetrics.isNotEmpty() -> "warning"
-            else -> "good"
-        }
+        val consumption = dynamics.firstOrNull { it.label == "Расход" }
+        return com.bydmate.app.data.automation.InsightToneLogic.consumptionTone(consumption?.changePct)
     }
 
     // up = bad (consumption, short trips, stationary)
@@ -330,6 +353,10 @@ tone guidelines:
 
         val allTrips = tripDao.getAllSnapshot()
         val recentTrips = allTrips.filter { it.startTs >= weekAgo }
+        if (recentTrips.size < 5) {
+            Log.d(TAG, "Less than 5 trips in last 7 days — skip LLM call")
+            return@withContext null
+        }
         val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
         val monthTrips = allTrips.filter { it.startTs >= monthAgo }
 
@@ -425,6 +452,32 @@ tone guidelines:
                 sb.appendLine("Cell voltages: ${"%.3f".format(liveData.minCellVoltage)}–${"%.3f".format(liveData.maxCellVoltage)}V (delta: ${"%.0f".format(delta * 1000)}mV)")
             }
             liveData.mileage?.let { sb.appendLine("Odometer: ${"%.1f".format(it)} km") }
+        }
+
+        // --- 12V 7-day history ---
+        val v12Raw = prefs.getString(KEY_V12_HISTORY, null)
+        if (v12Raw != null) {
+            try {
+                val arr = org.json.JSONArray(v12Raw)
+                val values = (0 until arr.length()).map { arr.getJSONObject(it).getDouble("volts") }
+                if (values.size >= 2) {
+                    val avg = values.average()
+                    val minV = values.min()
+                    val maxV = values.max()
+                    // Simple trend: last half vs first half
+                    val half = values.size / 2
+                    val firstAvg = values.take(half).average()
+                    val lastAvg = values.takeLast(half).average()
+                    val delta = lastAvg - firstAvg
+                    val trend = when {
+                        delta > 0.1 -> "rising"
+                        delta < -0.1 -> "falling"
+                        else -> "stable"
+                    }
+                    sb.appendLine("\n=== 12V battery history (last ${values.size} days) ===")
+                    sb.appendLine("Avg: %.2fV, Min: %.2fV, Max: %.2fV, Trend: %s (Δ%+.2fV)".format(avg, minV, maxV, trend, delta))
+                }
+            } catch (_: Exception) { /* ignore malformed cache */ }
         }
 
         // Temperature from recent trips

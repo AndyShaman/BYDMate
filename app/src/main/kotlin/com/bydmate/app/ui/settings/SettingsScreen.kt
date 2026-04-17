@@ -6,6 +6,9 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material3.Icon
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -64,7 +67,8 @@ private val PrimaryColor = AccentGreen
 
 @Composable
 fun SettingsScreen(
-    viewModel: SettingsViewModel = hiltViewModel()
+    viewModel: SettingsViewModel = hiltViewModel(),
+    onNavigateToPlaces: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -465,6 +469,32 @@ fun SettingsScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
                         ) {
                             Text("Проверить обновления", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                }
+
+                SectionHeader(text = "Автоматизация")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToPlaces() }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Place,
+                            contentDescription = null,
+                            tint = AccentGreen,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Места", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Точки для триггеров 'Место'", color = TextSecondary, fontSize = 12.sp)
                         }
                     }
                 }

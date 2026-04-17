@@ -125,7 +125,7 @@ fun DashboardScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         // AI Insight card
-                        val insightColor = when (state.insightTone) {
+                        val insightColor = when (state.effectiveInsightTone) {
                             "critical" -> SocRed
                             "warning" -> SocYellow
                             else -> AccentGreen
@@ -174,7 +174,7 @@ fun DashboardScreen(
 
                     // Pop-up dialogs
                     if (state.insightExpanded) {
-                        val insightDialogColor = when (state.insightTone) {
+                        val insightDialogColor = when (state.effectiveInsightTone) {
                             "critical" -> SocRed
                             "warning" -> SocYellow
                             else -> AccentGreen

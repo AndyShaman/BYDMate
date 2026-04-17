@@ -7,6 +7,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.location.Location
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -14,11 +15,12 @@ import kotlin.math.abs
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
-import com.bydmate.app.data.remote.DiParsControlClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -36,7 +38,8 @@ import javax.inject.Singleton
 class AutomationEngine @Inject constructor(
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
-    private val controlClient: DiParsControlClient,
+    private val actionDispatcher: ActionDispatcher,
+    private val placeRepository: PlaceRepository,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -48,7 +51,6 @@ class AutomationEngine @Inject constructor(
         const val ACTION_CONFIRM = "com.bydmate.app.AUTOMATION_CONFIRM"
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
         const val EXTRA_NOTIF_ID = "notif_id"
-        private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -73,6 +75,9 @@ class AutomationEngine @Inject constructor(
     suspend fun evaluate(data: DiParsData) {
         cleanupExpired()
 
+        val location = TrackingService.lastLocation.value
+        val placesById = placeRepository.getAllSnapshot().associateBy { it.id }
+
         val rules = ruleDao.getEnabled()
         val now = System.currentTimeMillis()
 
@@ -88,11 +93,10 @@ class AutomationEngine @Inject constructor(
                 val triggers = TriggerDef.listFromJson(rule.triggers)
                 if (triggers.isEmpty()) continue
 
-                val matched = evaluateTriggers(triggers, data, rule.triggerLogic)
-                val wasMatched = lastEvalResults.put(rule.id, matched) ?: false
-
-                // Edge trigger: only fire on false→true transition
-                if (!matched || wasMatched) continue
+                val matched = evaluateTriggers(triggers, data, rule.triggerLogic, location, placesById)
+                val previous = lastEvalResults.put(rule.id, matched)
+                if (previous == null) continue          // first observation — seed only, do not fire
+                if (!matched || previous) continue       // edge trigger: fire only on false→true
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue
@@ -118,17 +122,49 @@ class AutomationEngine @Inject constructor(
     private fun evaluateTriggers(
         triggers: List<TriggerDef>,
         data: DiParsData,
-        logic: String
+        logic: String,
+        location: Location?,
+        places: Map<Long, PlaceEntity>
     ): Boolean {
         val results = triggers.map { trigger ->
-            val actual = getParamValue(data, trigger.param) ?: return@map false
-            val expected = trigger.value.toDoubleOrNull() ?: return@map false
-            compare(actual, trigger.operator, expected)
+            when (trigger.kind) {
+                "place_enter" -> evaluatePlace(trigger, location, places, enterKind = true)
+                "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
+                "time_of_day" -> evaluateTimeOfDay(trigger, location)
+                else -> { // "param" (default)
+                    val actual = getParamValue(data, trigger.param) ?: return@map false
+                    val expected = trigger.value.toDoubleOrNull() ?: return@map false
+                    compare(actual, trigger.operator, expected)
+                }
+            }
         }
         return when (logic) {
             "OR" -> results.any { it }
             else -> results.all { it }
         }
+    }
+
+    private fun evaluatePlace(
+        trigger: TriggerDef,
+        location: Location?,
+        places: Map<Long, PlaceEntity>,
+        enterKind: Boolean
+    ): Boolean {
+        if (location == null) return false
+        val placeId = trigger.placeId ?: return false
+        val place = places[placeId] ?: return false
+        val inside = PlaceGeometry.isInside(
+            location.latitude, location.longitude,
+            place.lat, place.lon, place.radiusM
+        )
+        return if (enterKind) inside else !inside
+    }
+
+    private fun evaluateTimeOfDay(trigger: TriggerDef, location: Location?): Boolean {
+        val loc = location ?: return false
+        val phase = SunTimeCalculator.currentPhase(loc)
+        val target = trigger.value.uppercase()
+        return phase.name == target
     }
 
     private fun compare(actual: Double, op: String, expected: Double): Boolean = when (op) {
@@ -181,6 +217,7 @@ class AutomationEngine @Inject constructor(
         "MinBatTemp" -> data.minBatTemp?.toDouble()
         "Power" -> data.power
         "Mileage" -> data.mileage
+        "Voltage12V" -> data.voltage12v
         else -> null
     }
 
@@ -196,20 +233,15 @@ class AutomationEngine @Inject constructor(
         var allSuccess = true
 
         for (action in actions) {
-            val blockReason = getBlockReason(action.command, data)
-            val success = if (blockReason == null) {
-                controlClient.sendCommand(action.command)
-            } else {
-                Log.w(TAG, "Blocked '${action.command}' for rule '${rule.name}': $blockReason")
-                false
-            }
+            val result = actionDispatcher.dispatch(action, data)
             results.put(JSONObject().apply {
                 put("command", action.command)
                 put("displayName", action.displayName)
-                put("success", success)
-                if (blockReason != null) put("reason", blockReason)
+                put("kind", action.kind)
+                put("success", result.success)
+                if (result.reason != null) put("reason", result.reason)
             })
-            if (!success) allSuccess = false
+            if (!result.success) allSuccess = false
         }
 
         ruleLogDao.insert(
@@ -225,27 +257,6 @@ class AutomationEngine @Inject constructor(
         Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
     }
 
-    // --- Safety ---
-
-    private fun isWindowOpenCommand(command: String): Boolean {
-        val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
-        val openWords = listOf("全开", "半开", "打开", "通风")
-        val isWindow = subjects.any { command.contains(it) }
-        val isOpen = openWords.any { command.contains(it) }
-        return isWindow && isOpen && !command.contains("关")
-    }
-
-    // Returns null if safe, or a reason string if blocked
-    private fun getBlockReason(command: String, data: DiParsData?): String? {
-        if (BLOCKED_PATTERNS.any { command.contains(it) }) return "Запрещённая команда"
-        if (data == null) return null
-        if (isWindowOpenCommand(command)) {
-            val speed = data.speed ?: return "Скорость неизвестна"
-            if (speed > 80) return "Открытие окон заблокировано на скорости ${speed} км/ч (>80)"
-        }
-        return null
-    }
-
     fun shutdown() {
         scope.cancel()
         pendingConfirmations.clear()
@@ -255,7 +266,12 @@ class AutomationEngine @Inject constructor(
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {
         val json = JSONObject()
         triggers.forEach { t ->
-            json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
+            when (t.kind) {
+                "place_enter" -> json.put("place_enter", t.placeName ?: "?")
+                "place_exit" -> json.put("place_exit", t.placeName ?: "?")
+                "time_of_day" -> json.put("time_of_day", t.value)
+                else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
+            }
         }
         return json.toString()
     }

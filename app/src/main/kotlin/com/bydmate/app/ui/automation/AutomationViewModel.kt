@@ -6,9 +6,11 @@ import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.data.repository.PlaceRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -46,6 +48,7 @@ val TRIGGER_PARAMS = listOf(
         enumValues = listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается")),
     TriggerParamOption("PowerState", "电源状态", "Питание", "", "Энергия",
         enumValues = listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE")),
+    TriggerParamOption("Voltage12V", "蓄电池电压", "12V аккумулятор", "В", "Энергия"),
     TriggerParamOption("ExtTemp", "车外温度", "Темп. снаружи", "°C", "Температура"),
     TriggerParamOption("InsideTemp", "车内温度", "Темп. салона", "°C", "Температура"),
     TriggerParamOption("AvgBatTemp", "平均电池温度", "Темп. батареи", "°C", "Температура"),
@@ -56,10 +59,22 @@ val TRIGGER_PARAMS = listOf(
     TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "% откр.", "Кузов"),
     TriggerParamOption("DoorFL", "主驾车门", "Дверь водителя", "", "Кузов",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
+    TriggerParamOption("DoorFR", "副驾车门", "Дверь пассажира", "", "Кузов",
+        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
+    TriggerParamOption("DoorRL", "左后车门", "Дверь ЛЗ", "", "Кузов",
+        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
+    TriggerParamOption("DoorRR", "右后车门", "Дверь ПЗ", "", "Кузов",
+        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
+    TriggerParamOption("Hood", "引擎盖", "Капот", "", "Кузов",
+        enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
+    TriggerParamOption("LockFL", "主驾车门锁", "Замок двери водителя", "", "Кузов",
+        enumValues = listOf("0" to "Разблокирован", "1" to "Заблокирован")),
     TriggerParamOption("Trunk", "后备箱门", "Багажник", "", "Кузов",
         enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
     TriggerParamOption("ACStatus", "空调状态", "Кондиционер", "", "Климат",
         enumValues = listOf("0" to "Выкл", "1" to "Вкл")),
+    TriggerParamOption("ACCirc", "空调循环方式", "Режим циркуляции", "", "Климат",
+        enumValues = listOf("0" to "Внешний воздух", "1" to "Внутренний воздух")),
     TriggerParamOption("ACTemp", "主驾驶空调温度", "Темп. AC", "°C", "Климат"),
     TriggerParamOption("FanLevel", "风量档位", "Вентилятор", "", "Климат"),
     TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", "Ремень водителя", "", "Безопасность",
@@ -146,13 +161,16 @@ data class AutomationUiState(
     val showEditor: Boolean = false,
     val showJournal: Boolean = false,
     val editing: EditingRule = EditingRule(),
-    val showDeleteConfirm: Long? = null
+    val showDeleteConfirm: Long? = null,
+    val places: List<PlaceEntity> = emptyList(),
+    val editorError: String? = null
 )
 
 @HiltViewModel
 class AutomationViewModel @Inject constructor(
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
+    private val placeRepository: PlaceRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -169,6 +187,11 @@ class AutomationViewModel @Inject constructor(
         viewModelScope.launch {
             ruleLogDao.getRecent(100).collect { logs ->
                 _uiState.update { it.copy(logs = logs) }
+            }
+        }
+        viewModelScope.launch {
+            placeRepository.getAll().collect { places ->
+                _uiState.update { it.copy(places = places) }
             }
         }
     }
@@ -222,16 +245,66 @@ class AutomationViewModel @Inject constructor(
     }
 
     fun closeEditor() {
-        _uiState.update { it.copy(showEditor = false) }
+        _uiState.update { it.copy(showEditor = false, editorError = null) }
     }
 
     fun updateEditing(transform: EditingRule.() -> EditingRule) {
         _uiState.update { it.copy(editing = it.editing.transform()) }
     }
 
+    private fun validateActions(actions: List<ActionDef>): String? {
+        actions.forEachIndexed { idx, a ->
+            val n = idx + 1
+            when (a.kind) {
+                "param" -> {
+                    if (a.command.isBlank()) return "Действие #$n: команда не задана"
+                }
+                "notification_silent", "notification_sound" -> {
+                    if (a.notificationTitle().isBlank()) return "Действие #$n: заголовок уведомления пуст"
+                }
+                "app_launch" -> {
+                    if (a.appLaunchPackageName().isBlank()) return "Действие #$n: приложение не выбрано"
+                }
+                "call" -> {
+                    val phone = a.callPhone().trim()
+                    if (phone.length !in 5..20) return "Действие #$n: номер телефона некорректен"
+                }
+                "navigate" -> {
+                    val lat = a.navigateLat()
+                    val lon = a.navigateLon()
+                    if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
+                        return "Действие #$n: место для маршрута не выбрано"
+                    }
+                }
+                "url" -> {
+                    val u = a.urlString().trim()
+                    if (u.isEmpty()) return "Действие #$n: URL пустой"
+                    // Allow any scheme: http(s)://, yandexmusic://, tel:, intent://, geo:, etc.
+                    if (!u.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))) {
+                        return "Действие #$n: URL должен содержать схему (http://, yandexmusic://, tel:, ...)"
+                    }
+                }
+                "yandex_music" -> {
+                    if (a.yandexMusicMode().isBlank()) return "Действие #$n: режим Я.Музыки не выбран"
+                }
+            }
+        }
+        return null
+    }
+
     fun saveRule() {
         val e = _uiState.value.editing
-        if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) return
+        if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) {
+            _uiState.value = _uiState.value.copy(editorError = "Название и хотя бы одно условие и действие обязательны")
+            return
+        }
+        val actionError = validateActions(e.actions)
+        if (actionError != null) {
+            _uiState.value = _uiState.value.copy(editorError = actionError)
+            return
+        }
+        // Clear previous error on success path
+        _uiState.value = _uiState.value.copy(editorError = null)
 
         val entity = RuleEntity(
             id = if (e.isNew) 0 else e.id,
@@ -380,3 +453,159 @@ class AutomationViewModel @Inject constructor(
         prefs.edit().putBoolean("templates_inserted", true).apply()
     }
 }
+
+// --- Action kind helpers (v2.3.0) ---
+
+fun newNotificationAction(silent: Boolean): ActionDef = ActionDef(
+    command = "",
+    displayName = if (silent) "Уведомление (без звука)" else "Уведомление (звук)",
+    kind = if (silent) "notification_silent" else "notification_sound",
+    payload = """{"title":"","text":""}"""
+)
+
+fun ActionDef.notificationTitle(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("title")
+} catch (e: Exception) { "" }
+
+fun ActionDef.notificationText(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("text")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withNotification(title: String, text: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("title", title)
+        put("text", text)
+    }.toString()
+)
+
+// --- App launch helpers (v2.3.0) ---
+
+fun newAppLaunchAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Запуск приложения",
+    kind = "app_launch",
+    payload = """{"packageName":"","appLabel":""}"""
+)
+
+fun ActionDef.appLaunchPackageName(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("packageName")
+} catch (e: Exception) { "" }
+
+fun ActionDef.appLaunchLabel(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("appLabel")
+} catch (e: Exception) { "" }
+
+fun ActionDef.appLaunchMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", false)
+} catch (e: Exception) { false }
+
+fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boolean): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("packageName", packageName)
+        put("appLabel", appLabel)
+        put("minimize", minimize)
+    }.toString()
+)
+
+// --- Call helpers (v2.3.0) ---
+
+fun newCallAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Звонок",
+    kind = "call",
+    payload = """{"phone":""}"""
+)
+
+fun ActionDef.callPhone(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("phone")
+} catch (e: Exception) { "" }
+
+fun ActionDef.callName(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("name")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withCall(phone: String, name: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("phone", phone)
+        put("name", name)
+    }.toString()
+)
+
+// --- Navigate helpers (v2.3.0) ---
+
+fun newNavigateAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Маршрут в Я.Навигаторе",
+    kind = "navigate",
+    payload = """{"lat":0,"lon":0,"name":""}"""
+)
+
+fun ActionDef.navigateLat(): Double? = try {
+    val d = org.json.JSONObject(payload ?: "{}").optDouble("lat", Double.NaN)
+    if (d.isNaN()) null else d
+} catch (e: Exception) { null }
+
+fun ActionDef.navigateLon(): Double? = try {
+    val d = org.json.JSONObject(payload ?: "{}").optDouble("lon", Double.NaN)
+    if (d.isNaN()) null else d
+} catch (e: Exception) { null }
+
+fun ActionDef.navigateName(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("name")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withNavigate(lat: Double, lon: Double, name: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("lat", lat)
+        put("lon", lon)
+        put("name", name)
+    }.toString()
+)
+
+// --- URL helpers (v2.3.0) ---
+
+fun newUrlAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Открыть URL",
+    kind = "url",
+    payload = """{"url":""}"""
+)
+
+fun ActionDef.urlString(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("url")
+} catch (e: Exception) { "" }
+
+fun ActionDef.urlMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", false)
+} catch (e: Exception) { false }
+
+fun ActionDef.withUrl(url: String, minimize: Boolean): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("url", url)
+        put("minimize", minimize)
+    }.toString()
+)
+
+// --- Yandex Music helpers (v2.3.0) ---
+
+fun newYandexMusicAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Яндекс.Музыка",
+    kind = "yandex_music",
+    payload = """{"mode":"mybeat","minimize":true}"""
+)
+
+fun ActionDef.yandexMusicMode(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("mode")
+} catch (e: Exception) { "" }
+
+fun ActionDef.yandexMusicMinimize(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("minimize", true)
+} catch (e: Exception) { true }
+
+fun ActionDef.withYandexMusic(mode: String, minimize: Boolean): ActionDef = copy(
+    payload = org.json.JSONObject().apply {
+        put("mode", mode)
+        put("minimize", minimize)
+    }.toString()
+)

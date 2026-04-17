@@ -63,7 +63,6 @@ class TrackingService : Service(), LocationListener {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
-    private var lastLocation: Location? = null
     private var locationManager: LocationManager? = null
     private var consecutiveNullCount = 0
     private var firstDataReceived = false
@@ -79,6 +78,9 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
+
+        private val _lastLocation = MutableStateFlow<Location?>(null)
+        val lastLocation: StateFlow<Location?> = _lastLocation
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning
@@ -169,7 +171,7 @@ class TrackingService : Service(), LocationListener {
             try {
                 withTimeout(4000L) {
                     val lastData = _lastData.value
-                    val lastLoc = lastLocation
+                    val lastLoc = _lastLocation.value
                     tripTracker.forceEnd(lastData, lastLoc)
                     chargeTracker.forceEnd(lastData)
                 }
@@ -228,7 +230,7 @@ class TrackingService : Service(), LocationListener {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onLocationChanged(location: Location) {
-        lastLocation = location
+        _lastLocation.value = location
         Log.d(TAG, "GPS fix: lat=${location.latitude} lon=${location.longitude} " +
             "acc=${"%.1f".format(location.accuracy)}m speed=${"%.1f".format(location.speed * 3.6f)}km/h " +
             "provider=${location.provider}")
@@ -261,7 +263,7 @@ class TrackingService : Service(), LocationListener {
                                 detectOfflineCharge(currentSoc)
                             }
                         }
-                        val loc = lastLocation
+                        val loc = _lastLocation.value
                         tripTracker.onData(data, loc)
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
@@ -403,7 +405,7 @@ class TrackingService : Service(), LocationListener {
                 else if (netEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
                 else null
             if (lastKnown != null) {
-                lastLocation = lastKnown
+                _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: lat=${lastKnown.latitude} lon=${lastKnown.longitude} " +
                     "provider=${lastKnown.provider} age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")
             } else {

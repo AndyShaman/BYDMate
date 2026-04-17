@@ -17,8 +17,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 220
-        versionName = "2.2.0"
+        versionCode = 230
+        versionName = "2.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -107,6 +107,9 @@ dependencies {
 
     // JSON parsing
     implementation("org.json:json:20231013")
+
+    // Sun/moon position calculation for time_of_day trigger
+    implementation("org.shredzone.commons:commons-suncalc:3.7")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

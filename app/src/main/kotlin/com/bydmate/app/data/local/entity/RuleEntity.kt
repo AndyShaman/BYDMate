@@ -28,7 +28,10 @@ data class TriggerDef(
     val chineseName: String,
     val operator: String,
     val value: String,
-    val displayName: String
+    val displayName: String,
+    val kind: String = "param",            // "param" | "place_enter" | "place_exit"
+    val placeId: Long? = null,             // only when kind is a place_* kind
+    val placeName: String? = null          // cached for display
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("param", param)
@@ -36,6 +39,9 @@ data class TriggerDef(
         put("operator", operator)
         put("value", value)
         put("displayName", displayName)
+        put("kind", kind)
+        if (placeId != null) put("placeId", placeId)
+        if (placeName != null) put("placeName", placeName)
     }
 
     companion object {
@@ -44,7 +50,10 @@ data class TriggerDef(
             chineseName = json.getString("chineseName"),
             operator = json.getString("operator"),
             value = json.getString("value"),
-            displayName = json.getString("displayName")
+            displayName = json.getString("displayName"),
+            kind = json.optString("kind", "param"),
+            placeId = if (json.has("placeId") && !json.isNull("placeId")) json.getLong("placeId") else null,
+            placeName = if (json.has("placeName") && !json.isNull("placeName")) json.getString("placeName") else null
         )
 
         fun listFromJson(jsonStr: String): List<TriggerDef> = try {
@@ -65,17 +74,23 @@ data class TriggerDef(
 
 data class ActionDef(
     val command: String,
-    val displayName: String
+    val displayName: String,
+    val kind: String = "param",    // "param" | "notification_silent" | "notification_sound" | "app_launch" | "call" | "navigate" | "url"
+    val payload: String? = null    // JSON string with kind-specific params (null for kind="param")
 ) {
     fun toJson(): JSONObject = JSONObject().apply {
         put("command", command)
         put("displayName", displayName)
+        put("kind", kind)
+        if (payload != null) put("payload", payload)
     }
 
     companion object {
         fun fromJson(json: JSONObject) = ActionDef(
             command = json.getString("command"),
-            displayName = json.getString("displayName")
+            displayName = json.getString("displayName"),
+            kind = json.optString("kind", "param"),
+            payload = if (json.has("payload") && !json.isNull("payload")) json.getString("payload") else null
         )
 
         fun listFromJson(jsonStr: String): List<ActionDef> = try {
