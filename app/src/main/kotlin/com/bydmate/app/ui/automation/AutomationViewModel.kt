@@ -524,10 +524,15 @@ fun ActionDef.callName(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("name")
 } catch (e: Exception) { "" }
 
-fun ActionDef.withCall(phone: String, name: String): ActionDef = copy(
+fun ActionDef.callAutoDial(): Boolean = try {
+    org.json.JSONObject(payload ?: "{}").optBoolean("autoDial", false)
+} catch (e: Exception) { false }
+
+fun ActionDef.withCall(phone: String, name: String, autoDial: Boolean): ActionDef = copy(
     payload = org.json.JSONObject().apply {
         put("phone", phone)
         put("name", name)
+        put("autoDial", autoDial)
     }.toString()
 )
 

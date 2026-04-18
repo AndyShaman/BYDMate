@@ -30,6 +30,10 @@ class ActionDispatcher @Inject constructor(
         private const val CHANNEL_SOUND_ID = "bydmate_automation_sound"
         private const val USER_NOTIF_BASE_ID = 10000
         private const val MINIMIZE_DELAY_MS = 3000L
+        private const val AUTO_DIAL_DELAY_MS = 300L
+        private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
+        private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
+        private const val BT_CALL_KEYCODE_DIAL = 313
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
     }
 
@@ -148,12 +152,26 @@ class ActionDispatcher @Inject constructor(
         return result
     }
 
-    private fun dial(action: ActionDef): DispatchResult {
-        val phone = parsePayload(action.payload)?.optString("phone")?.takeIf(String::isNotBlank)
+    private suspend fun dial(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val phone = payload?.optString("phone")?.takeIf(String::isNotBlank)
             ?: return DispatchResult(false, "phone не задан")
         val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone"))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        return tryStartActivity(intent, "dial:$phone")
+        val result = tryStartActivity(intent, "dial:$phone")
+        if (result.success && payload.optBoolean("autoDial", false)) {
+            kotlinx.coroutines.delay(AUTO_DIAL_DELAY_MS)
+            val press = Intent(BT_CALL_ACTION_DIAL_HANGUP).apply {
+                setPackage(BT_CALL_PACKAGE)
+                putExtra("keycode", BT_CALL_KEYCODE_DIAL)
+            }
+            try {
+                context.sendBroadcast(press)
+            } catch (e: Exception) {
+                Log.w(TAG, "autoDial broadcast failed: ${e.message}")
+            }
+        }
+        return result
     }
 
     private fun navigate(action: ActionDef): DispatchResult {

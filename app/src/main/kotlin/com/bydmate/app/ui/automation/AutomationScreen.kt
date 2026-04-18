@@ -1557,9 +1557,10 @@ private fun CallActionControls(
         CallEditDialog(
             initialPhone = phone,
             initialName = name,
+            initialAutoDial = action.callAutoDial(),
             onDismiss = { editing = false },
-            onSave = { newPhone, newName ->
-                onUpdate(action.withCall(newPhone, newName))
+            onSave = { newPhone, newName, newAutoDial ->
+                onUpdate(action.withCall(newPhone, newName, newAutoDial))
                 editing = false
             }
         )
@@ -1570,12 +1571,13 @@ private fun CallActionControls(
 private fun CallEditDialog(
     initialPhone: String,
     initialName: String,
+    initialAutoDial: Boolean,
     onDismiss: () -> Unit,
-    onSave: (phone: String, name: String) -> Unit
+    onSave: (phone: String, name: String, autoDial: Boolean) -> Unit
 ) {
     var phoneText by remember { mutableStateOf(initialPhone) }
     var nameText by remember { mutableStateOf(initialName) }
-    var showContacts by remember { mutableStateOf(false) }
+    var autoDial by remember { mutableStateOf(initialAutoDial) }
     val trimmedPhone = phoneText.trim()
     val canSave = trimmedPhone.isNotBlank() && trimmedPhone.length in 5..20
 
@@ -1617,13 +1619,39 @@ private fun CallEditDialog(
                     modifier = Modifier.fillMaxWidth()
                 )
                 Spacer(Modifier.height(8.dp))
-                TextButton(onClick = { showContacts = true }) {
-                    Text("Выбрать из контактов", color = AccentGreen, fontSize = 13.sp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { autoDial = !autoDial }
+                        .padding(vertical = 4.dp)
+                ) {
+                    Checkbox(
+                        checked = autoDial,
+                        onCheckedChange = { autoDial = it },
+                        colors = CheckboxDefaults.colors(
+                            checkedColor = AccentGreen,
+                            uncheckedColor = TextMuted,
+                            checkmarkColor = NavyDark
+                        )
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Column {
+                        Text("Звонить автоматически", color = TextPrimary, fontSize = 13.sp)
+                        Text(
+                            "Без нажатия зелёной кнопки",
+                            color = TextMuted,
+                            fontSize = 11.sp
+                        )
+                    }
                 }
             }
         },
         confirmButton = {
-            TextButton(onClick = { if (canSave) onSave(trimmedPhone, nameText.trim()) }, enabled = canSave) {
+            TextButton(
+                onClick = { if (canSave) onSave(trimmedPhone, nameText.trim(), autoDial) },
+                enabled = canSave
+            ) {
                 Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
             }
         },
@@ -1633,17 +1661,6 @@ private fun CallEditDialog(
             }
         }
     )
-
-    if (showContacts) {
-        ContactPickerDialog(
-            onDismiss = { showContacts = false },
-            onSelect = { pickedName, pickedPhone ->
-                nameText = pickedName
-                phoneText = pickedPhone
-                showContacts = false
-            }
-        )
-    }
 }
 
 // --- Navigate Action Controls ---
