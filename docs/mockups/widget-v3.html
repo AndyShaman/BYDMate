@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BYDMate Widget v3 — mockup</title>
+<style>
+  :root {
+    --navy-deep: #0F1929;
+    --navy-mid: #1B2838;
+    --card-surface: #1E2A3F;
+    --card-border: #2A3A52;
+    --text-primary: #E8EEF7;
+    --text-secondary: #B8C4D6;
+    --text-muted: #64748B;
+    --accent-green: #22C55E;
+    --soc-green: #22C55E;
+    --soc-yellow: #EAB308;
+    --soc-red: #EF4444;
+    --soc-cyan: #38BDF8;
+  }
+  html, body {
+    background: var(--navy-deep);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 8px 0; }
+  h2 { font-size: 14px; color: var(--text-secondary); margin: 28px 0 10px 0; font-weight: 500; }
+  .note { color: var(--text-muted); font-size: 12px; margin-bottom: 24px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .variant { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .variant .label { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+
+  /* --- v2.4.0 current (190×64 dp) --- */
+  .widget-old {
+    width: 190px; height: 64px;
+    background: var(--card-surface);
+    border: 1.5px solid var(--accent-green);
+    border-radius: 12px;
+    padding: 4px 10px;
+    box-sizing: border-box;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.4);
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'Menlo', monospace;
+  }
+  .widget-old .r {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .widget-old .soc { font-size: 18px; font-weight: bold; color: var(--accent-green); }
+  .widget-old .km { font-size: 12px; color: var(--text-primary); }
+  .widget-old .cons { font-size: 11px; color: var(--accent-green); }
+  .widget-old .hr { height: 1px; background: rgba(100,116,139,0.2); }
+  .widget-old .sec { font-size: 10px; color: var(--text-muted); display: flex; align-items: center; gap: 3px; }
+  .widget-old .tiny { font-size: 9px; }
+
+  /* --- v3 new (260×108 dp) --- */
+  .widget-new {
+    width: 260px; height: 108px;
+    background: var(--card-surface);
+    border: 1.5px solid var(--accent-green);
+    border-radius: 14px;
+    padding: 8px 14px;
+    box-sizing: border-box;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'Menlo', monospace;
+  }
+  .widget-new.warn { border-color: var(--soc-yellow); }
+  .widget-new.crit { border-color: var(--soc-red); }
+
+  .widget-new .row1 {
+    display: flex; justify-content: center; align-items: baseline;
+  }
+  .widget-new .km-big {
+    font-size: 34px; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--accent-green); line-height: 1;
+  }
+  .widget-new.warn .km-big { color: var(--soc-yellow); }
+  .widget-new.crit .km-big { color: var(--soc-red); }
+  .widget-new .km-suffix {
+    font-size: 16px; font-weight: 500; color: var(--text-secondary);
+    margin-left: 4px;
+  }
+
+  .widget-new .row2 {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .widget-new .soc-mid {
+    font-size: 20px; font-weight: 700; color: var(--accent-green);
+  }
+  .widget-new.warn .soc-mid { color: var(--soc-yellow); }
+  .widget-new.crit .soc-mid { color: var(--soc-red); }
+  .widget-new .cons-mid {
+    font-size: 14px; font-weight: 600;
+    display: flex; align-items: center; gap: 3px;
+    color: var(--accent-green);
+  }
+  .widget-new .cons-mid.flat { color: var(--text-muted); }
+  .widget-new .cons-mid.up { color: var(--soc-yellow); }
+
+  .widget-new .row3 {
+    display: flex; justify-content: space-between; align-items: center;
+    color: var(--text-muted); font-size: 11px;
+  }
+  .widget-new .chip {
+    display: inline-flex; align-items: center; gap: 3px;
+  }
+
+  .icn { display: inline-block; width: 10px; height: 10px;
+    background: currentColor; -webkit-mask-repeat: no-repeat; mask-repeat: no-repeat;
+    -webkit-mask-position: center; mask-position: center;
+    -webkit-mask-size: contain; mask-size: contain;
+  }
+
+  /* side-by-side comparison card */
+  .bg-sim {
+    padding: 36px; background: linear-gradient(135deg, #0A1220 0%, #1A2540 100%);
+    border-radius: 12px; display: inline-block;
+  }
+
+  /* specs block */
+  .spec {
+    background: var(--navy-mid); border-radius: 10px; padding: 14px 16px;
+    border: 1px solid var(--card-border); max-width: 560px;
+    color: var(--text-primary); font-size: 13px; line-height: 1.55;
+  }
+  .spec b { color: var(--accent-green); }
+  .spec code { background: #0a1220; padding: 1px 5px; border-radius: 4px; color: var(--accent-green); font-size: 12px; }
+</style>
+</head>
+<body>
+
+<h1>BYDMate — виджет v3 (мокап для утверждения)</h1>
+<div class="note">Сравнение: слева то что есть сейчас (v2.4.0), справа — предлагаемый новый.</div>
+
+<h2>Сравнение 1 к 1 (пропорции соответствуют реальным dp на DiLink)</h2>
+<div class="row">
+  <div class="variant">
+    <div class="label">Сейчас v2.4.0 — 190 × 64 dp</div>
+    <div class="bg-sim">
+      <div class="widget-old">
+        <div class="r">
+          <span class="soc">78%</span>
+          <span class="km">~352 км</span>
+          <span class="cons">↓ 14.8</span>
+        </div>
+        <div class="hr"></div>
+        <div class="r">
+          <span class="sec">⏱ 22 мин</span>
+          <span class="sec">🚗 25°</span>
+        </div>
+        <div class="hr"></div>
+        <div class="r">
+          <span class="sec tiny">🔋 28°</span>
+          <span class="sec tiny">⚡ 12.7 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="label">Новый v3 — 260 × 108 dp (+37% ширина, +69% высота)</div>
+    <div class="bg-sim">
+      <div class="widget-new">
+        <div class="row1">
+          <span class="km-big">~352</span>
+          <span class="km-suffix">км</span>
+        </div>
+        <div class="row2">
+          <span class="soc-mid">78%</span>
+          <span class="cons-mid">↓ 14.8 <span style="color:var(--text-muted); font-weight:500;">kWh</span></span>
+        </div>
+        <div class="row3">
+          <span class="chip">⏱ 22 мин</span>
+          <span class="chip">🚗 25°</span>
+          <span class="chip">🔋 28°</span>
+          <span class="chip">⚡ 12.7 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Состояния цвета (по SOC)</h2>
+<div class="row">
+  <div class="variant">
+    <div class="label">OK — SOC ≥ 30%</div>
+    <div class="bg-sim">
+      <div class="widget-new">
+        <div class="row1"><span class="km-big">~352</span><span class="km-suffix">км</span></div>
+        <div class="row2">
+          <span class="soc-mid">78%</span>
+          <span class="cons-mid">↓ 14.8 <span style="color:var(--text-muted); font-weight:500;">kWh</span></span>
+        </div>
+        <div class="row3">
+          <span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span>
+          <span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="label">WARN — SOC 15–29%</div>
+    <div class="bg-sim">
+      <div class="widget-new warn">
+        <div class="row1"><span class="km-big">~112</span><span class="km-suffix">км</span></div>
+        <div class="row2">
+          <span class="soc-mid">24%</span>
+          <span class="cons-mid up">↑ 17.2 <span style="color:var(--text-muted); font-weight:500;">kWh</span></span>
+        </div>
+        <div class="row3">
+          <span class="chip">⏱ 1 ч 05 мин</span><span class="chip">🚗 22°</span>
+          <span class="chip">🔋 31°</span><span class="chip">⚡ 12.4 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="variant">
+    <div class="label">CRIT — SOC &lt; 15% или 12V &lt; 12.0</div>
+    <div class="bg-sim">
+      <div class="widget-new crit">
+        <div class="row1"><span class="km-big">~43</span><span class="km-suffix">км</span></div>
+        <div class="row2">
+          <span class="soc-mid">9%</span>
+          <span class="cons-mid flat">— 15.1 <span style="color:var(--text-muted); font-weight:500;">kWh</span></span>
+        </div>
+        <div class="row3">
+          <span class="chip">⏱ 2 ч 18 мин</span><span class="chip">🚗 20°</span>
+          <span class="chip">🔋 34°</span><span class="chip">⚡ 11.8 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>В покое (машина стоит, поездки нет)</h2>
+<div class="row">
+  <div class="variant">
+    <div class="label">idle — tripStartedAt = null</div>
+    <div class="bg-sim">
+      <div class="widget-new">
+        <div class="row1"><span class="km-big">~352</span><span class="km-suffix">км</span></div>
+        <div class="row2">
+          <span class="soc-mid">78%</span>
+          <span class="cons-mid flat">— <span style="color:var(--text-muted); font-weight:500;">kWh</span></span>
+        </div>
+        <div class="row3">
+          <span class="chip">⏱ —</span><span class="chip">🚗 25°</span>
+          <span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2>Пропорции шрифтов</h2>
+<div class="spec">
+  <b>Строка 1 (главная):</b> <code>~352 км</code> — число <b>34sp bold</b>, суффикс «км» 16sp. Цвет зелёный/жёлтый/красный по статусу SOC.<br>
+  <b>Строка 2 (вторичная):</b> SOC <code>78%</code> 20sp bold (слева), расход <code>↓ 14.8 kWh</code> 14sp (справа, со стрелкой тренда).<br>
+  <b>Строка 3 (сервисная):</b> 4 чипа 11sp моно в одну строку — время в пути, Т° салона, Т° батареи, 12В.<br>
+  <b>Общий размер:</b> 260 × 108 dp (против 190 × 64 в v2.4.0). На экране DiLink 2.5K виджет становится заметно крупнее, не занимая половину экрана.
+</div>
+
+</body>
+</html>

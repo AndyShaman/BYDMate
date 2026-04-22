@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BYDMate Widget v3 — финальный мокап</title>
+<style>
+  :root {
+    --navy-deep: #0F1929;
+    --card-surface: #1E2A3F;
+    --text-primary: #E8EEF7;
+    --text-secondary: #B8C4D6;
+    --text-muted: #64748B;
+    --accent-green: #22C55E;
+    --soc-yellow: #EAB308;
+    --soc-red: #EF4444;
+  }
+  html, body {
+    background: var(--navy-deep);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 8px 0; }
+  h2 { font-size: 14px; color: var(--accent-green); margin: 28px 0 8px 0; }
+  .note { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin-top: 12px; }
+  .variant { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .label { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  .bg-sim { padding: 24px; background: linear-gradient(135deg,#0A1220 0%,#1A2540 100%); border-radius: 10px; position: relative; }
+
+  .w {
+    width: 260px; height: 108px;
+    background: var(--card-surface);
+    border: 1.5px solid var(--accent-green);
+    border-radius: 14px;
+    padding: 8px 14px;
+    box-sizing: border-box;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'Menlo', monospace;
+    position: relative;
+  }
+  .w.warn { border-color: var(--soc-yellow); }
+  .w.crit { border-color: var(--soc-red); }
+  .w.pressing { box-shadow: 0 0 0 3px rgba(34,197,94,0.35), 0 6px 14px rgba(0,0,0,0.45); transform: scale(0.98); transition: transform 0.2s; }
+  .w.fading { opacity: 0.35; transition: opacity 0.3s; }
+
+  .hr { height: 1px; background: rgba(100,116,139,0.22); }
+  .r { display: flex; justify-content: space-between; align-items: center; }
+
+  .r-mid { align-items: baseline; }
+  .soc { font-size: 18px; font-weight: 700; color: var(--accent-green); }
+  .soc.warn { color: var(--soc-yellow); }
+  .soc.crit { color: var(--soc-red); }
+
+  .km { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; color: var(--text-primary); }
+  .km-suffix { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-left: 3px; }
+
+  .cns { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:4px; color: var(--accent-green); }
+  .cns.up { color: var(--soc-yellow); }
+  .cns.flat { color: var(--text-muted); }
+
+  .r-serv { font-size: 13px; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; color: var(--text-primary); }
+  .chip .icon { color: var(--text-muted); }
+
+  .icon { width: 13px; height: 13px; fill: none; stroke: currentColor; stroke-width: 2;
+    stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+  .icon-trend { width: 14px; height: 14px; }
+
+  /* Long-press ripple indicator */
+  .ripple {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    width: 0; height: 0; border-radius: 50%;
+    background: radial-gradient(circle, rgba(34,197,94,0.25) 0%, transparent 70%);
+    animation: rippleGrow 1.5s linear;
+    pointer-events: none;
+  }
+  @keyframes rippleGrow {
+    0%   { width: 0; height: 0; opacity: 1; }
+    100% { width: 320px; height: 320px; opacity: 0; }
+  }
+
+  /* Toast */
+  .toast {
+    margin-top: 14px;
+    background: rgba(30,42,63,0.95);
+    border: 1px solid rgba(100,116,139,0.3);
+    color: var(--text-primary);
+    font-size: 13px;
+    padding: 10px 14px;
+    border-radius: 10px;
+    max-width: 280px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .toast .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent-green); flex-shrink: 0;
+  }
+
+  /* Step arrow */
+  .arrow {
+    font-size: 22px; color: var(--text-muted); margin: 0 6px; align-self: center;
+  }
+  .step-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+
+  .spec {
+    background: #131e32; border-radius: 10px; padding: 14px 16px;
+    border: 1px solid #2A3A52; max-width: 680px;
+    color: var(--text-primary); font-size: 13px; line-height: 1.65;
+    margin-top: 24px;
+  }
+  .spec b { color: var(--accent-green); }
+  .spec code { background: #0a1220; padding: 1px 5px; border-radius: 4px; color: var(--accent-green); font-size: 12px; }
+
+  .phase-label {
+    display: inline-block; padding: 2px 8px; border-radius: 4px;
+    background: rgba(34,197,94,0.15); color: var(--accent-green);
+    font-size: 11px; font-weight: 600; margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h1>BYDMate Widget v3 — финальный</h1>
+<div class="note">Размер <b style="color:#fff">260 × 108 dp</b> · SOC-строка по вертикальному центру · километраж белым крупно (28sp bold) · SOC % и расход одного размера (18sp) · иконки серые, значения белые · <b style="color:#fff">Long-press → скрыть до открытия BYDMate</b>.</div>
+
+<svg width="0" height="0" style="position:absolute">
+  <defs>
+    <symbol id="ic-schedule" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12,7 12,12 15,14"/></symbol>
+    <symbol id="ic-car" viewBox="0 0 24 24">
+      <path d="M5 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2M16 17v2a1 1 0 0 0 1 1h1a1 1 0 0 0 1-1v-2"/>
+      <path d="M3 17v-5l2-5a2 2 0 0 1 2-1h10a2 2 0 0 1 2 1l2 5v5H3z"/>
+      <circle cx="7.5" cy="14.5" r="0.8" fill="currentColor"/><circle cx="16.5" cy="14.5" r="0.8" fill="currentColor"/>
+    </symbol>
+    <symbol id="ic-battery" viewBox="0 0 24 24">
+      <rect x="7" y="5" width="10" height="16" rx="1"/>
+      <rect x="10" y="3" width="4" height="2" fill="currentColor" stroke="none"/>
+      <rect x="8.5" y="9" width="7" height="11" fill="currentColor" stroke="none"/>
+    </symbol>
+    <symbol id="ic-bolt" viewBox="0 0 24 24"><path d="M13 2 L5 14 L11 14 L11 22 L19 10 L13 10 Z" fill="currentColor" stroke="none"/></symbol>
+    <symbol id="ic-trend-down" viewBox="0 0 24 24"><polyline points="3,7 10,14 14,10 21,17"/><polyline points="15,17 21,17 21,11"/></symbol>
+    <symbol id="ic-trend-flat" viewBox="0 0 24 24"><polyline points="3,12 18,12"/><polyline points="15,8 19,12 15,16"/></symbol>
+    <symbol id="ic-trend-up" viewBox="0 0 24 24"><polyline points="3,17 10,10 14,14 21,7"/><polyline points="15,7 21,7 21,13"/></symbol>
+  </defs>
+</svg>
+
+<!-- ================================ -->
+<h2>Статические состояния</h2>
+
+<div class="row">
+  <div class="variant"><div class="label">OK — SOC ≥ 30 %</div><div class="bg-sim">
+    <div class="w">
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-schedule"/></svg> 22 мин</span>
+        <span class="chip"><svg class="icon"><use href="#ic-car"/></svg> 25°</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-mid">
+        <span class="soc">78%</span>
+        <span><span class="km">~352</span><span class="km-suffix">км</span></span>
+        <span class="cns"><svg class="icon icon-trend"><use href="#ic-trend-down"/></svg> 14.8</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-battery"/></svg> 28°</span>
+        <span class="chip"><svg class="icon"><use href="#ic-bolt"/></svg> 12.7 В</span>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">WARN — SOC 15–29 %</div><div class="bg-sim">
+    <div class="w warn">
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-schedule"/></svg> 1 ч 05 мин</span>
+        <span class="chip"><svg class="icon"><use href="#ic-car"/></svg> 22°</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-mid">
+        <span class="soc warn">24%</span>
+        <span><span class="km">~112</span><span class="km-suffix">км</span></span>
+        <span class="cns up"><svg class="icon icon-trend"><use href="#ic-trend-up"/></svg> 17.2</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-battery"/></svg> 31°</span>
+        <span class="chip"><svg class="icon"><use href="#ic-bolt"/></svg> 12.4 В</span>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">CRIT — SOC &lt; 15 %</div><div class="bg-sim">
+    <div class="w crit">
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-schedule"/></svg> 2 ч 18 мин</span>
+        <span class="chip"><svg class="icon"><use href="#ic-car"/></svg> 20°</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-mid">
+        <span class="soc crit">9%</span>
+        <span><span class="km">~43</span><span class="km-suffix">км</span></span>
+        <span class="cns flat"><svg class="icon icon-trend"><use href="#ic-trend-flat"/></svg> 15.1</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-battery"/></svg> 34°</span>
+        <span class="chip"><svg class="icon"><use href="#ic-bolt"/></svg> 11.8 В</span>
+      </div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ================================ -->
+<h2>Long-press → скрыть до открытия BYDMate</h2>
+
+<div class="row">
+
+  <!-- Phase 1 -->
+  <div class="variant"><div class="label">1. Обычное состояние</div><div class="bg-sim">
+    <div class="w">
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-schedule"/></svg> 22 мин</span>
+        <span class="chip"><svg class="icon"><use href="#ic-car"/></svg> 25°</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-mid">
+        <span class="soc">78%</span>
+        <span><span class="km">~352</span><span class="km-suffix">км</span></span>
+        <span class="cns"><svg class="icon icon-trend"><use href="#ic-trend-down"/></svg> 14.8</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-battery"/></svg> 28°</span>
+        <span class="chip"><svg class="icon"><use href="#ic-bolt"/></svg> 12.7 В</span>
+      </div>
+    </div>
+  </div></div>
+
+  <div class="arrow">→</div>
+
+  <!-- Phase 2: long-press in progress -->
+  <div class="variant"><div class="label">2. Палец на виджете ≥ 1.5 сек</div><div class="bg-sim">
+    <div class="ripple"></div>
+    <div class="w pressing">
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-schedule"/></svg> 22 мин</span>
+        <span class="chip"><svg class="icon"><use href="#ic-car"/></svg> 25°</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-mid">
+        <span class="soc">78%</span>
+        <span><span class="km">~352</span><span class="km-suffix">км</span></span>
+        <span class="cns"><svg class="icon icon-trend"><use href="#ic-trend-down"/></svg> 14.8</span>
+      </div>
+      <div class="hr"></div>
+      <div class="r r-serv">
+        <span class="chip"><svg class="icon"><use href="#ic-battery"/></svg> 28°</span>
+        <span class="chip"><svg class="icon"><use href="#ic-bolt"/></svg> 12.7 В</span>
+      </div>
+    </div>
+    <div style="font-size:10px; color:var(--text-muted); margin-top:6px; font-family:monospace;">подсветка + лёгкий scale 0.98</div>
+  </div></div>
+
+  <div class="arrow">→</div>
+
+  <!-- Phase 3: hidden + toast -->
+  <div class="variant"><div class="label">3. Скрыт + toast</div><div class="bg-sim">
+    <div style="width:260px; height:108px; border:1.5px dashed rgba(100,116,139,0.35); border-radius:14px; display:flex; align-items:center; justify-content:center; color:var(--text-muted); font-size:12px; font-family:monospace;">
+      (виджет скрыт)
+    </div>
+    <div class="toast">
+      <span class="dot"></span>
+      <span>Виджет скрыт. Откройте BYDMate — вернётся.</span>
+    </div>
+  </div></div>
+
+</div>
+
+<!-- ================================ -->
+<h2>Как вернуть виджет</h2>
+
+<div class="row">
+  <div class="variant"><div class="label">открыть BYDMate</div><div class="bg-sim" style="min-width:280px">
+    <div style="display:flex; flex-direction:column; gap:12px; font-size:13px; color:var(--text-primary); line-height:1.5;">
+      <div>• Тап по ярлыку <b style="color:var(--accent-green)">BYDMate</b> на главном экране DiLink</div>
+      <div>• Приложение открывается → виджет <b style="color:#fff">автоматически возвращается</b> на своё место (позиция сохранена)</div>
+      <div>• Закрываешь BYDMate → виджет снова висит поверх</div>
+      <div style="color:var(--text-muted); font-size:12px; margin-top:8px;">— никаких кнопок, никакого permission — просто открой приложение</div>
+    </div>
+  </div></div>
+</div>
+
+<!-- ================================ -->
+<div class="spec">
+  <b>Вёрстка виджета:</b><br>
+  Размер: <code>260 × 108 dp</code>, padding 8×14 dp, border 1.5 dp, corner 14 dp.<br>
+  Строка 1 — <code>⏱ 22 мин</code> · <code>🚗 25°</code> (13sp моно). Иконки <b style="color:var(--text-muted)">серые</b>, значения <b style="color:#fff">белые</b>.<br>
+  Строка 2 (центр) — <code>78%</code> 18sp bold (цвет по SOC) · <code>~352 км</code> 28sp bold <b style="color:#fff">белый</b> · <code>↓ 14.8</code> 18sp (цвет по тренду).<br>
+  Строка 3 — <code>🔋 28°</code> · <code>⚡ 12.7 В</code>. Тот же стиль что строка 1.<br>
+  Разделители — 1dp line alpha 0.22.<br>
+  Иконки: Material Outlined — <code>Schedule</code>, <code>DirectionsCar</code>, <code>Battery6Bar</code>, <code>Bolt</code>, <code>TrendingDown/Flat/Up</code>.
+  <br><br>
+
+  <b>Поведение касаний:</b><br>
+  • <b>Обычный тап</b> → открыть BYDMate (как сейчас).<br>
+  • <b>Drag</b> → перемещение виджета; в зоне «корзина» (нижняя центральная) — отключение совсем (флаг в настройках).<br>
+  • <b>Long-press 1500 мс</b> → <b style="color:var(--accent-green)">скрыть до следующего открытия BYDMate</b>. Подсветка во время нажатия, toast после срабатывания.<br>
+  <br>
+
+  <b>Техническая реализация long-press:</b><br>
+  • В <code>WidgetTouchListener</code> добавить Handler с задержкой 1500 мс в <code>ACTION_DOWN</code>, отменять в <code>ACTION_MOVE</code> (если превысили threshold) и <code>ACTION_UP</code>.<br>
+  • При срабатывании: <code>WidgetPreferences.setHiddenUntilAppLaunch(true)</code>, <code>WidgetController.detach()</code>, <code>Toast.makeText(...)</code>.<br>
+  • В <code>BYDMateApp.WidgetLifecycleCallbacks.onActivityResumed</code> сбросить флаг <code>false</code> (виджет вернётся автоматически, когда Activity уйдёт в pause — стандартная логика attach в background).<br>
+  • В <code>WidgetController.attach</code> добавить early-return если <code>hiddenUntilAppLaunch == true</code>.
+</div>
+
+</body>
+</html>

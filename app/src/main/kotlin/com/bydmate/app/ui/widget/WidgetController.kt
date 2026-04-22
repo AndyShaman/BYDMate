@@ -23,11 +23,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import android.view.View
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
-import com.bydmate.app.util.AppForegroundWatcher
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -41,10 +39,11 @@ object WidgetController {
     private const val TAG = "WidgetController"
 
     // Widget dimensions in dp — matches FloatingWidgetView layout
-    private const val WIDGET_WIDTH_DP = 190
-    private const val WIDGET_HEIGHT_DP = 64
+    private const val WIDGET_WIDTH_DP = 260
+    private const val WIDGET_HEIGHT_DP = 108
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
+    private const val LONG_PRESS_MS = 1500L
 
     @Volatile private var appForegrounded: Boolean = false
 
@@ -59,7 +58,6 @@ object WidgetController {
     private var dataScope: CoroutineScope? = null
     private var dataJob: Job? = null
     private lateinit var prefsAlphaFlow: kotlinx.coroutines.flow.Flow<Float>
-    private lateinit var prefsBlocklistFlow: kotlinx.coroutines.flow.Flow<Set<String>>
 
     // Compose state for the widget data
     private var socState = mutableStateOf<Int?>(null)
@@ -79,12 +77,14 @@ object WidgetController {
         if (widgetView != null) return  // already attached
 
         val appCtx = context.applicationContext
+        val prefs = WidgetPreferences(appCtx)
+        // long-press hid widget until user opens MainActivity
+        if (prefs.isHiddenUntilAppLaunch()) return
+
         val windowManager = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = windowManager
 
-        val prefs = WidgetPreferences(appCtx)
         prefsAlphaFlow = prefs.alphaFlow()
-        prefsBlocklistFlow = prefs.blocklistFlow()
         val metrics = appCtx.resources.displayMetrics
 
         val widgetWpx = dp(appCtx, WIDGET_WIDTH_DP)
@@ -182,12 +182,9 @@ object WidgetController {
                 TrackingService.lastRangeKm,
                 TrackingService.tripStartedAt,
                 ConsumptionAggregator.state,
-                combine(prefsAlphaFlow, prefsBlocklistFlow, AppForegroundWatcher.currentForegroundPackage) {
-                        alpha, blocklist, foreground ->
-                    AlphaAndVisibility(alpha = alpha, hidden = foreground != null && foreground in blocklist)
-                },
-            ) { data, range, tripStart, consumption, av ->
-                WidgetSnapshot(data, range, tripStart, consumption, av.alpha, av.hidden)
+                prefsAlphaFlow,
+            ) { data, range, tripStart, consumption, alpha ->
+                WidgetSnapshot(data, range, tripStart, consumption, alpha)
             }.collect { snap ->
                 socState.value = snap.data?.soc
                 rangeState.value = snap.range
@@ -198,21 +195,9 @@ object WidgetController {
                 consumptionState.value = snap.consumption.displayValue
                 trendState.value = snap.consumption.trend
                 alphaState.value = snap.alpha
-                applyVisibility(snap.hidden)
             }
         }
     }
-
-    private fun applyVisibility(hidden: Boolean) {
-        val v = widgetView ?: return
-        val desired = if (hidden) View.GONE else View.VISIBLE
-        if (v.visibility != desired) {
-            v.visibility = desired
-            if (hidden) hideTrashZone()
-        }
-    }
-
-    private data class AlphaAndVisibility(val alpha: Float, val hidden: Boolean)
 
     private data class WidgetSnapshot(
         val data: com.bydmate.app.data.remote.DiParsData?,
@@ -220,7 +205,6 @@ object WidgetController {
         val tripStartedAt: Long?,
         val consumption: ConsumptionState,
         val alpha: Float,
-        val hidden: Boolean,
     )
 
     // --- Trash zone ---
@@ -334,6 +318,8 @@ object WidgetController {
         private var initialParamX = 0
         private var initialParamY = 0
         private var dragging = false
+        private val longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
+        private var longPressRunnable: Runnable? = null
 
         override fun onTouch(v: android.view.View, event: MotionEvent): Boolean {
             val params = widgetParams ?: return false
@@ -347,6 +333,23 @@ object WidgetController {
                     initialParamX = params.x
                     initialParamY = params.y
                     dragging = false
+                    // Schedule long-press: if finger stays still for LONG_PRESS_MS,
+                    // hide widget until user opens BYDMate. Canceled in ACTION_MOVE
+                    // as soon as finger travels past drag threshold, and in ACTION_UP.
+                    val runnable = Runnable {
+                        if (dragging) return@Runnable
+                        prefs.setHiddenUntilAppLaunch(true)
+                        detach()
+                        try {
+                            android.widget.Toast.makeText(
+                                context,
+                                "Виджет скрыт. Откройте BYDMate — вернётся.",
+                                android.widget.Toast.LENGTH_SHORT,
+                            ).show()
+                        } catch (_: Exception) {}
+                    }
+                    longPressRunnable = runnable
+                    longPressHandler.postDelayed(runnable, LONG_PRESS_MS)
                     return true
                 }
                 MotionEvent.ACTION_MOVE -> {
@@ -355,6 +358,8 @@ object WidgetController {
                     val totalDistPx = kotlin.math.hypot(dx.toDouble(), dy.toDouble()).toInt()
                     if (!dragging && totalDistPx > thresholdPx) {
                         dragging = true
+                        longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
+                        longPressRunnable = null
                         showTrashZone(context)
                     }
                     if (dragging) {
@@ -389,6 +394,8 @@ object WidgetController {
                     return true
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
+                    longPressRunnable = null
                     val dx = (event.rawX - downX).toInt()
                     val dy = (event.rawY - downY).toInt()
                     val wasTap = DragGestureLogic.isTap(0, 0, dx, dy, thresholdPx)

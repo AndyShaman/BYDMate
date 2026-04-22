@@ -27,7 +27,7 @@ class UpdateChecker @Inject constructor(
         private const val KEY_LAST_CHECK = "last_check"
         private const val KEY_AUTO_CHECK = "auto_check_enabled"
         private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
-        private const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
+        private const val CHECK_INTERVAL_MS = 10 * 60 * 1000L // 10 minutes (protects only against repeated launches within one session)
 
         fun isAutoCheckEnabled(context: Context): Boolean =
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

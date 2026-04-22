@@ -61,23 +61,14 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
-    fun getBlocklist(): Set<String> {
-        // First-install preset is applied lazily so users can opt out.
-        val raw = prefs.getStringSet(KEY_BLOCKLIST, null)
-        return raw ?: DEFAULT_BLOCKLIST
-    }
+    /**
+     * Transient flag: when true, widget stays hidden until user opens MainActivity.
+     * Triggered by long-press on the widget. Cleared in onActivityResumed.
+     */
+    fun isHiddenUntilAppLaunch(): Boolean = prefs.getBoolean(KEY_HIDDEN_UNTIL_LAUNCH, false)
 
-    fun setBlocklist(packages: Set<String>) {
-        prefs.edit().putStringSet(KEY_BLOCKLIST, packages.toMutableSet()).apply()
-    }
-
-    fun blocklistFlow(): Flow<Set<String>> = callbackFlow {
-        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == KEY_BLOCKLIST) trySend(getBlocklist())
-        }
-        trySend(getBlocklist())
-        prefs.registerOnSharedPreferenceChangeListener(listener)
-        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    fun setHiddenUntilAppLaunch(hidden: Boolean) {
+        prefs.edit().putBoolean(KEY_HIDDEN_UNTIL_LAUNCH, hidden).apply()
     }
 
     companion object {
@@ -86,11 +77,6 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_X = "widget_x"
         const val KEY_Y = "widget_y"
         const val KEY_ALPHA = "widget_alpha"
-        const val KEY_BLOCKLIST = "widget_blocklist"
-
-        private val DEFAULT_BLOCKLIST = setOf(
-            "com.google.android.youtube",
-            "com.android.settings",
-        )
+        const val KEY_HIDDEN_UNTIL_LAUNCH = "widget_hidden_until_launch"
     }
 }

@@ -1,0 +1,253 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BYDMate Widget v3 — варианты (структура v2.4.0 сохранена)</title>
+<style>
+  :root {
+    --navy-deep: #0F1929;
+    --navy-mid: #1B2838;
+    --card-surface: #1E2A3F;
+    --card-border: #2A3A52;
+    --text-primary: #E8EEF7;
+    --text-secondary: #B8C4D6;
+    --text-muted: #64748B;
+    --accent-green: #22C55E;
+    --soc-yellow: #EAB308;
+    --soc-red: #EF4444;
+  }
+  html, body {
+    background: var(--navy-deep);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0;
+    padding: 32px;
+  }
+  h1 { font-size: 22px; margin: 0 0 8px 0; }
+  h2 { font-size: 15px; color: var(--accent-green); margin: 28px 0 6px 0; font-weight: 600; }
+  .note { color: var(--text-muted); font-size: 12px; margin-bottom: 4px; }
+  .note b { color: var(--text-secondary); font-weight: 500; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; margin-top: 14px; }
+  .variant { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+  .label { font-size: 11px; color: var(--text-muted); font-family: monospace; }
+  .bg-sim { padding: 24px; background: linear-gradient(135deg,#0A1220 0%,#1A2540 100%); border-radius: 10px; }
+
+  /* Base widget v3 frame */
+  .w {
+    background: var(--card-surface);
+    border: 1.5px solid var(--accent-green);
+    border-radius: 14px;
+    box-sizing: border-box;
+    box-shadow: 0 6px 14px rgba(0,0,0,0.45);
+    display: flex; flex-direction: column; justify-content: space-between;
+    font-family: 'Menlo', monospace;
+  }
+  .hr { height: 1px; background: rgba(100,116,139,0.22); }
+  .r { display: flex; justify-content: space-between; align-items: center; }
+
+  .g { color: var(--accent-green); }
+  .y { color: var(--soc-yellow); }
+  .rd { color: var(--soc-red); }
+  .tm { color: var(--text-muted); }
+  .tp { color: var(--text-primary); }
+
+  /* === Variant A: сбалансированный 260×108 === */
+  .wA { width: 260px; height: 108px; padding: 8px 14px; }
+  .wA .r1 { align-items: baseline; }
+  .wA .soc { font-size: 18px; font-weight: 700; }
+  .wA .km  { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .wA .cns { font-size: 18px; font-weight: 600; display:flex; align-items:center; gap:3px; }
+  .wA .r23 { font-size: 13px; }
+
+  /* === Variant B: максимально контрастный === */
+  .wB { width: 260px; height: 108px; padding: 8px 14px; }
+  .wB .r1 { align-items: baseline; }
+  .wB .soc { font-size: 16px; font-weight: 700; }
+  .wB .km  { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
+  .wB .cns { font-size: 16px; font-weight: 600; display:flex; align-items:center; gap:3px; }
+  .wB .r23 { font-size: 14px; }
+
+  /* === Variant C: компактный 260×96 === */
+  .wC { width: 260px; height: 96px; padding: 6px 14px; }
+  .wC .r1 { align-items: baseline; }
+  .wC .soc { font-size: 16px; font-weight: 700; }
+  .wC .km  { font-size: 26px; font-weight: 800; letter-spacing: -0.5px; }
+  .wC .cns { font-size: 16px; font-weight: 600; display:flex; align-items:center; gap:3px; }
+  .wC .r23 { font-size: 12px; }
+
+  /* === Variant D: с акцентным фоном за километражем === */
+  .wD { width: 260px; height: 108px; padding: 8px 14px; }
+  .wD .r1 { align-items: baseline; }
+  .wD .soc { font-size: 17px; font-weight: 700; }
+  .wD .km-wrap {
+    background: linear-gradient(135deg, rgba(34,197,94,0.14), rgba(34,197,94,0.04));
+    padding: 2px 10px; border-radius: 8px;
+  }
+  .wD .km { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .wD .cns { font-size: 17px; font-weight: 600; display:flex; align-items:center; gap:3px; }
+  .wD .r23 { font-size: 13px; }
+
+  /* icon span */
+  .chip { display: inline-flex; align-items: center; gap: 4px; color: var(--text-muted); }
+
+  /* comparison: сейчас */
+  .wOld { width: 190px; height: 64px; padding: 4px 10px; border-color: var(--accent-green); }
+  .wOld .soc { font-size: 18px; font-weight: bold; }
+  .wOld .km { font-size: 12px; }
+  .wOld .cns { font-size: 11px; }
+  .wOld .r23 { font-size: 10px; color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<h1>BYDMate Widget v3 — варианты</h1>
+<div class="note">Структура 3 строки <b>сохранена как в v2.4.0</b>: &nbsp; Строка 1 — SOC % · запас км · расход+тренд &nbsp;|&nbsp; Строка 2 — время в пути · Т° салона &nbsp;|&nbsp; Строка 3 — Т° батареи · 12 В</div>
+<div class="note">Во всех вариантах: <b>км крупно</b>, <b>SOC % и расход одного размера</b>.</div>
+
+<!-- Для справки — как сейчас -->
+<h2>Для сравнения — как сейчас (v2.4.0, 190×64)</h2>
+<div class="row">
+  <div class="variant">
+    <div class="label">v2.4.0</div>
+    <div class="bg-sim">
+      <div class="w wOld">
+        <div class="r"><span class="soc g">78%</span><span class="km tp">~352 км</span><span class="cns g">↓ 14.8</span></div>
+        <div class="hr"></div>
+        <div class="r r23"><span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span></div>
+        <div class="hr"></div>
+        <div class="r r23"><span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Variant A -->
+<h2>Вариант A — сбалансированный (260 × 108)</h2>
+<div class="note">km = 28sp bold · SOC = расход = 18sp · сервис = 13sp. Средняя иерархия, плавный переход.</div>
+<div class="row">
+  <div class="variant"><div class="label">OK</div><div class="bg-sim">
+    <div class="w wA">
+      <div class="r r1"><span class="soc g">78%</span><span class="km g">~352 км</span><span class="cns g">↓ 14.8</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">WARN</div><div class="bg-sim">
+    <div class="w wA" style="border-color:var(--soc-yellow)">
+      <div class="r r1"><span class="soc y">24%</span><span class="km y">~112 км</span><span class="cns y">↑ 17.2</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 1 ч 05 мин</span><span class="chip">🚗 22°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 31°</span><span class="chip">⚡ 12.4 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">CRIT</div><div class="bg-sim">
+    <div class="w wA" style="border-color:var(--soc-red)">
+      <div class="r r1"><span class="soc rd">9%</span><span class="km rd">~43 км</span><span class="cns tm">— 15.1</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 2 ч 18 мин</span><span class="chip">🚗 20°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 34°</span><span class="chip">⚡ 11.8 В</span></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Variant B -->
+<h2>Вариант B — максимально контрастный (260 × 108)</h2>
+<div class="note">km = 32sp bold · SOC = расход = 16sp · сервис = 14sp. Км доминирует, SOC и расход вторичны.</div>
+<div class="row">
+  <div class="variant"><div class="label">OK</div><div class="bg-sim">
+    <div class="w wB">
+      <div class="r r1"><span class="soc g">78%</span><span class="km g">~352 км</span><span class="cns g">↓ 14.8</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">WARN</div><div class="bg-sim">
+    <div class="w wB" style="border-color:var(--soc-yellow)">
+      <div class="r r1"><span class="soc y">24%</span><span class="km y">~112 км</span><span class="cns y">↑ 17.2</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 1 ч 05 мин</span><span class="chip">🚗 22°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 31°</span><span class="chip">⚡ 12.4 В</span></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Variant C -->
+<h2>Вариант C — компактный (260 × 96, на 12dp ниже)</h2>
+<div class="note">km = 26sp bold · SOC = расход = 16sp · сервис = 12sp. Менее высокий, меньше мешает.</div>
+<div class="row">
+  <div class="variant"><div class="label">OK</div><div class="bg-sim">
+    <div class="w wC">
+      <div class="r r1"><span class="soc g">78%</span><span class="km g">~352 км</span><span class="cns g">↓ 14.8</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">WARN</div><div class="bg-sim">
+    <div class="w wC" style="border-color:var(--soc-yellow)">
+      <div class="r r1"><span class="soc y">24%</span><span class="km y">~112 км</span><span class="cns y">↑ 17.2</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 1 ч 05 мин</span><span class="chip">🚗 22°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 31°</span><span class="chip">⚡ 12.4 В</span></div>
+    </div>
+  </div></div>
+</div>
+
+<!-- Variant D -->
+<h2>Вариант D — с акцентной подложкой за километражем (260 × 108)</h2>
+<div class="note">km = 28sp bold на полупрозрачной цветной плашке (по статусу SOC) · SOC = расход = 17sp · сервис = 13sp.<br>Километраж визуально подчёркнут подложкой, не увеличиваясь сильно.</div>
+<div class="row">
+  <div class="variant"><div class="label">OK</div><div class="bg-sim">
+    <div class="w wD">
+      <div class="r r1"><span class="soc g">78%</span><span class="km-wrap"><span class="km g">~352 км</span></span><span class="cns g">↓ 14.8</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 22 мин</span><span class="chip">🚗 25°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 28°</span><span class="chip">⚡ 12.7 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">WARN</div><div class="bg-sim">
+    <div class="w wD" style="border-color:var(--soc-yellow)">
+      <div class="r r1"><span class="soc y">24%</span>
+        <span class="km-wrap" style="background: linear-gradient(135deg, rgba(234,179,8,0.18), rgba(234,179,8,0.05))"><span class="km y">~112 км</span></span>
+        <span class="cns y">↑ 17.2</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 1 ч 05 мин</span><span class="chip">🚗 22°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 31°</span><span class="chip">⚡ 12.4 В</span></div>
+    </div>
+  </div></div>
+
+  <div class="variant"><div class="label">CRIT</div><div class="bg-sim">
+    <div class="w wD" style="border-color:var(--soc-red)">
+      <div class="r r1"><span class="soc rd">9%</span>
+        <span class="km-wrap" style="background: linear-gradient(135deg, rgba(239,68,68,0.20), rgba(239,68,68,0.05))"><span class="km rd">~43 км</span></span>
+        <span class="cns tm">— 15.1</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">⏱ 2 ч 18 мин</span><span class="chip">🚗 20°</span></div>
+      <div class="hr"></div>
+      <div class="r r23"><span class="chip">🔋 34°</span><span class="chip">⚡ 11.8 В</span></div>
+    </div>
+  </div></div>
+</div>
+
+<p style="margin-top:40px; color:var(--text-muted); font-size:12px;">
+Все варианты сохраняют 3 строки с разделителями и те же поля что сейчас.<br>
+Разница только в размерах и, в D, в акцентной подложке.
+</p>
+</body>
+</html>

@@ -59,7 +59,6 @@ import com.bydmate.app.ui.settings.UpdateState
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
-import kotlinx.coroutines.delay
 
 enum class Screen(val route: String, val label: String, val icon: ImageVector) {
     Dashboard("dashboard", "Главная", Icons.Outlined.Home),
@@ -85,13 +84,11 @@ fun AppNavigation(
 
     if (startDestination == null) return // Loading
 
-    // Автоматическая проверка обновлений: через 30с после открытия приложения
-    // дёргаем GitHub, если включено в настройках и есть новая версия —
-    // показываем стандартный UpdateDialog.
+    // Автоматическая проверка обновлений при запуске приложения.
+    // UpdateChecker сам throttle-ит запросы (10 мин между реальными походами в GitHub).
     val autoCheckContext = LocalContext.current
     var autoUpdateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
     LaunchedEffect(Unit) {
-        delay(30_000L)
         if (!UpdateChecker.isAutoCheckEnabled(autoCheckContext)) return@LaunchedEffect
         try {
             autoUpdateInfo = updateChecker.checkForUpdate(autoCheckContext, forceCheck = false)

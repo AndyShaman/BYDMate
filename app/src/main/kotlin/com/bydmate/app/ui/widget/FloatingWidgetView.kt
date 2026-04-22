@@ -39,7 +39,6 @@ import androidx.compose.ui.unit.sp
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
-import com.bydmate.app.ui.theme.SocGreen
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.SocYellow
 import com.bydmate.app.ui.theme.TextMuted
@@ -47,21 +46,14 @@ import com.bydmate.app.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 
 /**
- * v2 layout — 190 × 64 dp, 3 rows, 7 fields.
+ * v3 layout — 260 × 108 dp, 3 rows, SOC row vertically centered.
  *
- * Row 1: SOC% (bold, green gradient), range km, consumption + trend arrow
- * Row 2: trip duration (⏱), cabin temperature (🚗)
- * Row 3: battery temperature (🔋), 12V bus (⚡)
+ * Row 1 (top, service): trip duration (⏱), cabin temperature (🚗) — 13sp.
+ * Row 2 (center, main): SOC% (18sp, status color) · range km (28sp bold white) · consumption + trend (18sp).
+ * Row 3 (bottom, service): battery temperature (🔋), 12V (⚡) — 13sp.
  *
- * @param soc 0–100, null when missing
- * @param rangeKm estimated remaining range, null when missing
- * @param consumption kWh/100km to display (EMA before 3-min prewarmup, trip-avg after)
- * @param trend NONE (hide arrow) / DOWN / FLAT / UP
- * @param tripStartedAt timestamp when active trip started, null when idle
- * @param insideTemp cabin temperature °C, null when missing
- * @param batTemp battery temperature °C, null when missing
- * @param voltage12v 12V bus voltage, null when missing
- * @param alpha overall widget alpha 0.3..1.0
+ * Icons are muted gray, values are white in service rows. Km is always white
+ * regardless of SOC status (only the border + SOC % + trend text colorize).
  */
 @Composable
 fun FloatingWidgetView(
@@ -86,34 +78,23 @@ fun FloatingWidgetView(
     Column(
         modifier = Modifier
             .alpha(alpha.coerceIn(0.3f, 1.0f))
-            .size(width = 190.dp, height = 64.dp)
-            .shadow(elevation = 8.dp, shape = RoundedCornerShape(12.dp))
-            .background(CardSurface, RoundedCornerShape(12.dp))
-            .border(1.5.dp, borderColor, RoundedCornerShape(12.dp))
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .size(width = 260.dp, height = 108.dp)
+            .shadow(elevation = 8.dp, shape = RoundedCornerShape(14.dp))
+            .background(CardSurface, RoundedCornerShape(14.dp))
+            .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Row1Energy(
-            soc = soc,
-            rangeKm = rangeKm,
-            consumption = consumption,
-            trend = trend,
-        )
+        RowTrip(tripStartedAt = tripStartedAt, insideTemp = insideTemp)
         WidgetDivider()
-        Row2Trip(
-            tripStartedAt = tripStartedAt,
-            insideTemp = insideTemp,
-        )
+        RowEnergy(soc = soc, rangeKm = rangeKm, consumption = consumption, trend = trend)
         WidgetDivider()
-        Row3Service(
-            batTemp = batTemp,
-            voltage12v = voltage12v,
-        )
+        RowService(batTemp = batTemp, voltage12v = voltage12v)
     }
 }
 
 @Composable
-private fun Row1Energy(
+private fun RowEnergy(
     soc: Int?,
     rangeKm: Double?,
     consumption: Double?,
@@ -136,13 +117,24 @@ private fun Row1Energy(
             fontFamily = FontFamily.Monospace,
             color = socColor(soc),
         )
-        Text(
-            text = rangeKm?.let { "~${"%.0f".format(it)} км" } ?: "~— км",
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace,
-            color = if (rangeKm != null) TextPrimary else TextMuted,
-        )
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text(
+                text = rangeKm?.let { "~${"%.0f".format(it)}" } ?: "~—",
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                fontFamily = FontFamily.Monospace,
+                color = TextPrimary,
+            )
+            Spacer(Modifier.width(3.dp))
+            Text(
+                text = "км",
+                fontSize = 18.sp,
+                fontWeight = FontWeight.SemiBold,
+                fontFamily = FontFamily.Monospace,
+                color = TextPrimary,
+                modifier = Modifier.padding(bottom = 2.dp),
+            )
+        }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (trend != Trend.NONE) {
                 Icon(
@@ -153,13 +145,13 @@ private fun Row1Energy(
                     },
                     contentDescription = null,
                     tint = trendColor,
-                    modifier = Modifier.size(10.dp),
+                    modifier = Modifier.size(14.dp),
                 )
-                Spacer(Modifier.width(2.dp))
+                Spacer(Modifier.width(3.dp))
             }
             Text(
                 text = consumption?.let { "%.1f".format(it) } ?: "—",
-                fontSize = 11.sp,
+                fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = FontFamily.Monospace,
                 color = if (trend == Trend.NONE) TextMuted else trendColor,
@@ -169,7 +161,7 @@ private fun Row1Energy(
 }
 
 @Composable
-private fun Row2Trip(
+private fun RowTrip(
     tripStartedAt: Long?,
     insideTemp: Int?,
 ) {
@@ -184,21 +176,13 @@ private fun Row2Trip(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconText(
-            icon = Icons.Outlined.Schedule,
-            text = durationText,
-            textColor = if (tripStartedAt == null) TextMuted else TextPrimary,
-        )
-        IconText(
-            icon = Icons.Outlined.DirectionsCar,
-            text = insideTemp?.let { "$it°" } ?: "—",
-            textColor = if (insideTemp != null) TextPrimary else TextMuted,
-        )
+        IconText(icon = Icons.Outlined.Schedule, text = durationText)
+        IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
     }
 }
 
 @Composable
-private fun Row3Service(
+private fun RowService(
     batTemp: Int?,
     voltage12v: Double?,
 ) {
@@ -207,41 +191,27 @@ private fun Row3Service(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconText(
-            icon = Icons.Outlined.Battery6Bar,
-            text = batTemp?.let { "$it°" } ?: "—",
-            textColor = TextMuted,
-            fontSize = 9,
-        )
-        IconText(
-            icon = Icons.Outlined.Bolt,
-            text = voltage12v?.let { "${"%.1f".format(it)} В" } ?: "—",
-            textColor = TextMuted,
-            fontSize = 9,
-        )
+        IconText(icon = Icons.Outlined.Battery6Bar, text = batTemp?.let { "$it°" } ?: "—")
+        IconText(icon = Icons.Outlined.Bolt, text = voltage12v?.let { "${"%.1f".format(it)} В" } ?: "—")
     }
 }
 
+/** Icon muted gray, value white, 13sp. */
 @Composable
-private fun IconText(
-    icon: ImageVector,
-    text: String,
-    textColor: Color,
-    fontSize: Int = 10,
-) {
+private fun IconText(icon: ImageVector, text: String) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Icon(
             imageVector = icon,
             contentDescription = null,
             tint = TextMuted,
-            modifier = Modifier.size(10.dp),
+            modifier = Modifier.size(13.dp),
         )
-        Spacer(Modifier.width(3.dp))
+        Spacer(Modifier.width(5.dp))
         Text(
             text = text,
-            fontSize = fontSize.sp,
+            fontSize = 13.sp,
             fontFamily = FontFamily.Monospace,
-            color = textColor,
+            color = TextPrimary,
         )
     }
 }
@@ -252,7 +222,7 @@ private fun WidgetDivider() {
         modifier = Modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(TextMuted.copy(alpha = 0.2f)),
+            .background(TextMuted.copy(alpha = 0.22f)),
     )
 }
 
@@ -262,10 +232,10 @@ private fun formatDurationShort(tripStartedAt: Long?): String {
     val totalMin = (elapsed / 60_000L).toInt().coerceAtLeast(0)
     val hours = totalMin / 60
     val minutes = totalMin % 60
-    return if (hours > 0) "${hours} ч ${minutes} мин" else "${minutes} мин"
+    return if (hours > 0) "$hours ч $minutes мин" else "$minutes мин"
 }
 
-// ---- Status model (unchanged, covered by WidgetStatusTest) ----
+// ---- Status model (covered by WidgetStatusTest) ----
 
 internal enum class Status { OK, WARN, CRIT, NO_DATA }
 

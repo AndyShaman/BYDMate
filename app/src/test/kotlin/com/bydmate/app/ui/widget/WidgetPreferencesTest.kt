@@ -84,20 +84,19 @@ class WidgetPreferencesTest {
         assertEquals(0.65f, prefs.getAlpha(), 0.001f)
     }
 
-    @Test fun `blocklist default includes YouTube and Settings`() {
-        val bl = prefs.getBlocklist()
-        assertTrue(bl.contains("com.google.android.youtube"))
-        assertTrue(bl.contains("com.android.settings"))
+    @Test fun `hiddenUntilAppLaunch defaults to false`() {
+        assertFalse(prefs.isHiddenUntilAppLaunch())
     }
 
-    @Test fun `setBlocklist overwrites default`() {
-        prefs.setBlocklist(setOf("com.example.app"))
-        assertEquals(setOf("com.example.app"), prefs.getBlocklist())
+    @Test fun `setHiddenUntilAppLaunch true is persisted`() {
+        prefs.setHiddenUntilAppLaunch(true)
+        assertTrue(prefs.isHiddenUntilAppLaunch())
     }
 
-    @Test fun `setBlocklist empty clears entries`() {
-        prefs.setBlocklist(emptySet())
-        assertEquals(emptySet<String>(), prefs.getBlocklist())
+    @Test fun `setHiddenUntilAppLaunch toggles back to false`() {
+        prefs.setHiddenUntilAppLaunch(true)
+        prefs.setHiddenUntilAppLaunch(false)
+        assertFalse(prefs.isHiddenUntilAppLaunch())
     }
 
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---

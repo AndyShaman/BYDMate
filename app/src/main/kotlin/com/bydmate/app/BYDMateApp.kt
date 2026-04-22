@@ -16,7 +16,6 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
-import com.bydmate.app.util.AppForegroundWatcher
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,12 +53,6 @@ class BYDMateApp : Application(), Configuration.Provider {
         }
         scheduleDataThinning()
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this))
-
-        // Non-runtime permission — user grants via Settings → Special access.
-        // Watcher self-checks permission and starts only when widget is enabled.
-        if (WidgetPreferences(this).isEnabled()) {
-            AppForegroundWatcher.start(this)
-        }
     }
 
     private fun initOsmdroid() {
@@ -86,8 +79,10 @@ class BYDMateApp : Application(), Configuration.Provider {
         override fun onActivityResumed(activity: Activity) {
             resumedCount++
             if (resumedCount == 1) {
-                // Foregrounded → hide widget; flag guards against a late attach
-                // from TrackingService.onStartCommand racing past this callback.
+                // User opened BYDMate → widget hides; also clear the
+                // "hidden until app launch" long-press flag so it reappears
+                // next time the app goes to background.
+                WidgetPreferences(app).setHiddenUntilAppLaunch(false)
                 WidgetController.setAppForegrounded(true)
             }
         }
