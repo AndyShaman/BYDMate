@@ -28,6 +28,7 @@ import com.bydmate.app.domain.tracker.ChargeTracker
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.ChargeState
 import com.bydmate.app.domain.tracker.TripTracker
+import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -71,6 +72,7 @@ class TrackingService : Service(), LocationListener {
     // Cached values for range estimation in notification.
     // Updated at service start + after history sync (new trips → TripRepository invalidates its own EMA cache).
     @Volatile private var cachedEmaConsumption: Double = 0.0
+    @Volatile private var cachedWeeklyEmaConsumption: Double = 0.0
     @Volatile private var cachedBatteryCapacity: Double = 72.9
 
     companion object {
@@ -89,6 +91,9 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
+
+        private val _tripStartedAt = MutableStateFlow<Long?>(null)
+        val tripStartedAt: StateFlow<Long?> = _tripStartedAt
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning
@@ -145,6 +150,11 @@ class TrackingService : Service(), LocationListener {
         // Will also be refreshed after history sync below (if new trips appeared).
         refreshConsumptionCache()
 
+        // Mirror TripTracker's tripStartedAt into companion StateFlow for UI consumers
+        serviceScope.launch {
+            tripTracker.tripStartedAt.collect { _tripStartedAt.value = it }
+        }
+
         // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
@@ -173,8 +183,10 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             try {
                 cachedEmaConsumption = tripRepository.getEmaConsumption()
+                cachedWeeklyEmaConsumption = tripRepository.getWeeklyEmaConsumption()
                 cachedBatteryCapacity = settingsRepository.getBatteryCapacity()
-                Log.d(TAG, "Consumption cache: ema=${"%.2f".format(cachedEmaConsumption)} kWh/100km, cap=$cachedBatteryCapacity kWh")
+                Log.d(TAG, "Consumption cache: ema=${"%.2f".format(cachedEmaConsumption)} kWh/100km, " +
+                    "weekly=${"%.2f".format(cachedWeeklyEmaConsumption)} kWh/100km, cap=$cachedBatteryCapacity kWh")
             } catch (e: Exception) {
                 Log.w(TAG, "refreshConsumptionCache failed: ${e.message}")
             }
@@ -208,6 +220,7 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         com.bydmate.app.ui.widget.WidgetController.detach()
         appendChainLog("TrackingService onDestroy")
+        ConsumptionAggregator.reset()
         pollingJob?.cancel()
 
         // Force-end active trip/charge sessions asynchronously
@@ -311,6 +324,13 @@ class TrackingService : Service(), LocationListener {
                         }
                         val loc = _lastLocation.value
                         tripTracker.onData(data, loc)
+                        ConsumptionAggregator.onSample(
+                            now = System.currentTimeMillis(),
+                            tripStartedAt = tripTracker.tripStartedAt.value,
+                            mileageKm = data.mileage,
+                            totalElecKwh = data.totalElecConsumption,
+                            weeklyEma = cachedWeeklyEmaConsumption,
+                        )
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                         // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
