@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BYDMate — Floating SOC Widget (B2, v2)</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: 'Manrope', sans-serif;
+    padding: 40px;
+    min-height: 100vh;
+  }
+
+  h1 {
+    font-size: 22px;
+    font-weight: 700;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    color: #888;
+    font-size: 13px;
+    margin-bottom: 32px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin: 40px 0 16px 0;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  /* === Widget base (B2) — без крестика === */
+  .widget {
+    background: #16161a;
+    border-radius: 12px;
+    width: 220px;
+    height: 78px;
+    padding: 10px 14px;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+    user-select: none;
+    position: relative;
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .widget-green  { border: 1.5px solid rgba(58, 158, 92, 0.7); }
+  .widget-yellow { border: 1.5px solid rgba(212, 160, 23, 0.7); }
+  .widget-red    { border: 1.5px solid rgba(229, 72, 77, 0.7); }
+  .widget-grey   { border: 1.5px solid rgba(120, 120, 120, 0.4); }
+
+  .widget.dragging {
+    transform: scale(1.04);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7);
+  }
+  .widget.over-trash {
+    opacity: 0.5;
+    transform: scale(0.9);
+    filter: grayscale(0.7);
+  }
+
+  .row-top {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+  }
+  .soc {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .soc-green  { color: #3a9e5c; }
+  .soc-yellow { color: #d4a017; }
+  .soc-red    { color: #e5484d; }
+  .soc-grey   { color: #6b6b6b; }
+
+  .range {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 14px;
+    font-weight: 500;
+    color: #e8e8e8;
+  }
+  .range-muted { color: #6b6b6b; }
+
+  .divider {
+    height: 1px;
+    background: rgba(120, 120, 120, 0.2);
+    margin: 8px 0 6px 0;
+  }
+
+  .row-bottom {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #6b6b6b;
+  }
+
+  /* === States gallery === */
+  .states {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 24px;
+    max-width: 1200px;
+  }
+  .state {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    align-items: center;
+  }
+  .state-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: center;
+  }
+  .state-desc {
+    font-size: 11px;
+    color: #555;
+    text-align: center;
+    line-height: 1.4;
+    max-width: 200px;
+  }
+
+  /* === DiLink simulation === */
+  .dilink {
+    margin-top: 16px;
+    width: 100%;
+    max-width: 1200px;
+    aspect-ratio: 16 / 10;
+    border: 2px solid #2a2a2a;
+    border-radius: 8px;
+    position: relative;
+    overflow: hidden;
+    background:
+      linear-gradient(180deg, #0f1a2e 0%, #1a2f4a 50%, #2a4060 100%);
+  }
+  .dilink::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(90deg, transparent 0px, transparent 99px, rgba(80, 120, 180, 0.15) 100px),
+      linear-gradient(0deg, transparent 0px, transparent 99px, rgba(80, 120, 180, 0.15) 100px);
+    background-size: 100px 100px;
+  }
+  .fake-route {
+    position: absolute;
+    top: 30%;
+    left: 10%;
+    width: 60%;
+    height: 40%;
+    border: 3px solid rgba(100, 180, 255, 0.7);
+    border-radius: 30px 80px 20px 100px / 40px 20px 100px 30px;
+    background: transparent;
+    pointer-events: none;
+  }
+  .fake-marker {
+    position: absolute;
+    bottom: 20%;
+    left: 40%;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #3a9e5c;
+    box-shadow: 0 0 20px rgba(58, 158, 92, 0.6);
+    border: 3px solid #e8e8e8;
+  }
+  .fake-ui {
+    position: absolute;
+    top: 16px;
+    left: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+  }
+  .fake-ui-right {
+    position: absolute;
+    top: 16px;
+    right: 16px;
+    font-family: 'JetBrains Mono', monospace;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 12px;
+  }
+  .widget-floating {
+    position: absolute;
+  }
+
+  /* === Trash drop zone === */
+  .trash-zone {
+    position: absolute;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 72px;
+    height: 72px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(229, 72, 77, 0.18) 0%, rgba(229, 72, 77, 0.0) 70%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.2s, background 0.2s;
+  }
+  .trash-zone-inner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: rgba(30, 30, 30, 0.85);
+    border: 1.5px solid rgba(229, 72, 77, 0.6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: rgba(229, 72, 77, 0.9);
+    font-size: 22px;
+    font-weight: 300;
+    backdrop-filter: blur(8px);
+    transition: transform 0.2s, background 0.2s, border-color 0.2s;
+  }
+  .trash-zone.active .trash-zone-inner {
+    transform: scale(1.3);
+    background: rgba(229, 72, 77, 0.7);
+    border-color: rgba(229, 72, 77, 1);
+    color: #fff;
+  }
+  .trash-hint {
+    position: absolute;
+    bottom: -24px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: rgba(229, 72, 77, 0.7);
+    white-space: nowrap;
+  }
+
+  /* === Scene labels === */
+  .scene-label {
+    position: absolute;
+    top: -28px;
+    left: 0;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #666;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  .scenes {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 60px;
+    max-width: 1200px;
+  }
+
+  /* === Interaction demo === */
+  .interactions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 20px;
+    margin-top: 16px;
+    max-width: 1100px;
+  }
+  .interaction {
+    background: #111;
+    border: 1px solid #222;
+    border-radius: 10px;
+    padding: 20px;
+  }
+  .interaction-title {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 10px;
+  }
+  .interaction-desc {
+    font-size: 12px;
+    color: #aaa;
+    line-height: 1.5;
+  }
+
+  .legend {
+    margin-top: 30px;
+    font-size: 12px;
+    color: #888;
+    line-height: 1.7;
+    max-width: 900px;
+  }
+  .legend code {
+    font-family: 'JetBrains Mono', monospace;
+    background: #1a1a1a;
+    padding: 2px 6px;
+    border-radius: 4px;
+    color: #ccc;
+  }
+</style>
+</head>
+<body>
+
+<h1>Плавающий виджет SOC — визуальный макет (B2, v2)</h1>
+<div class="subtitle">
+  BYDMate v2.4.0 · 220×78 px · закрывается драгом в zone-trash (без крестика на виджете)
+</div>
+
+<div class="section-title">// 4 состояния виджета — чистая карточка без кнопок</div>
+<div class="states">
+
+  <div class="state">
+    <div class="widget widget-green">
+      <div class="row-top">
+        <div class="soc soc-green">83%</div>
+        <div class="range">~274 км</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row-bottom">
+        <div>16°C</div>
+        <div>13.8 V</div>
+      </div>
+    </div>
+    <div class="state-label">нормально</div>
+    <div class="state-desc">SOC&nbsp;≥&nbsp;30%, все метрики в норме</div>
+  </div>
+
+  <div class="state">
+    <div class="widget widget-yellow">
+      <div class="row-top">
+        <div class="soc soc-yellow">28%</div>
+        <div class="range">~92 км</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row-bottom">
+        <div>8°C</div>
+        <div>12.3 V</div>
+      </div>
+    </div>
+    <div class="state-label">предупреждение</div>
+    <div class="state-desc">SOC&nbsp;15–30% или 12V 12.0–12.5</div>
+  </div>
+
+  <div class="state">
+    <div class="widget widget-red">
+      <div class="row-top">
+        <div class="soc soc-red">9%</div>
+        <div class="range">~28 км</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row-bottom">
+        <div>−4°C</div>
+        <div>11.7 V</div>
+      </div>
+    </div>
+    <div class="state-label">критично</div>
+    <div class="state-desc">SOC&nbsp;&lt;&nbsp;15% или 12V&nbsp;&lt;&nbsp;12.0</div>
+  </div>
+
+  <div class="state">
+    <div class="widget widget-grey">
+      <div class="row-top">
+        <div class="soc soc-grey">—</div>
+        <div class="range range-muted">~— км</div>
+      </div>
+      <div class="divider"></div>
+      <div class="row-bottom">
+        <div>—</div>
+        <div>—</div>
+      </div>
+    </div>
+    <div class="state-label">нет данных</div>
+    <div class="state-desc">DiPlus не отвечает</div>
+  </div>
+
+</div>
+
+<div class="section-title">// 3 сцены взаимодействия — как работает скрытие драгом</div>
+<div class="scenes">
+
+  <!-- Scene 1: Widget at rest -->
+  <div style="position: relative; padding-top: 36px;">
+    <div class="scene-label">1 · Виджет в покое</div>
+    <div class="dilink">
+      <div class="fake-ui">14:22 · VRadio</div>
+      <div class="fake-ui-right">ETA 17:05</div>
+      <div class="fake-route"></div>
+      <div class="fake-marker"></div>
+
+      <div class="widget-floating" style="top: 40px; right: 48px;">
+        <div class="widget widget-green">
+          <div class="row-top">
+            <div class="soc soc-green">83%</div>
+            <div class="range">~274 км</div>
+          </div>
+          <div class="divider"></div>
+          <div class="row-bottom">
+            <div>16°C</div>
+            <div>13.8 V</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 2: Dragging — trash zone appears -->
+  <div style="position: relative; padding-top: 36px;">
+    <div class="scene-label">2 · Пользователь тянет виджет → появляется zone-trash внизу</div>
+    <div class="dilink">
+      <div class="fake-ui">14:22 · VRadio</div>
+      <div class="fake-ui-right">ETA 17:05</div>
+      <div class="fake-route"></div>
+      <div class="fake-marker"></div>
+
+      <div class="widget-floating" style="top: 40%; left: 55%;">
+        <div class="widget widget-green dragging">
+          <div class="row-top">
+            <div class="soc soc-green">83%</div>
+            <div class="range">~274 км</div>
+          </div>
+          <div class="divider"></div>
+          <div class="row-bottom">
+            <div>16°C</div>
+            <div>13.8 V</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trash-zone">
+        <div class="trash-zone-inner">✕</div>
+        <div class="trash-hint">перетащить сюда, чтобы скрыть</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Scene 3: Hovering over trash -->
+  <div style="position: relative; padding-top: 36px;">
+    <div class="scene-label">3 · Виджет наведён на zone-trash → зона увеличилась, виджет побледнел</div>
+    <div class="dilink">
+      <div class="fake-ui">14:22 · VRadio</div>
+      <div class="fake-ui-right">ETA 17:05</div>
+      <div class="fake-route"></div>
+      <div class="fake-marker"></div>
+
+      <div class="widget-floating" style="bottom: 32px; left: 50%; transform: translateX(-50%);">
+        <div class="widget widget-green over-trash">
+          <div class="row-top">
+            <div class="soc soc-green">83%</div>
+            <div class="range">~274 км</div>
+          </div>
+          <div class="divider"></div>
+          <div class="row-bottom">
+            <div>16°C</div>
+            <div>13.8 V</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="trash-zone active">
+        <div class="trash-zone-inner">✕</div>
+        <div class="trash-hint" style="color: #e5484d;">отпустить — виджет скрыт</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">// Взаимодействия</div>
+<div class="interactions">
+  <div class="interaction">
+    <div class="interaction-title">TAP</div>
+    <div class="interaction-desc">
+      Открывает BYDMate (MainActivity). Виджет автоматически скрывается пока приложение на переднем плане, возвращается когда уходит в фон.
+    </div>
+  </div>
+  <div class="interaction">
+    <div class="interaction-title">DRAG</div>
+    <div class="interaction-desc">
+      Свободное перетаскивание. Порог 8dp отличает тап от драга. Пока палец двигается, в нижней части экрана видна zone-trash.
+    </div>
+  </div>
+  <div class="interaction">
+    <div class="interaction-title">DROP в zone-trash</div>
+    <div class="interaction-desc">
+      Виджет скрывается и тумблер в Настройках выключается. Чтобы вернуть — включить в Настройках.
+    </div>
+  </div>
+</div>
+
+<div class="legend">
+  <b>Zone-trash появляется только во время драга</b> — в покое экран чистый, никаких элементов поверх.<br>
+  <b>Положение zone-trash:</b> снизу по центру (бессознательный жест «смести вниз»), 72×72 px, красный ореол.<br>
+  <b>Магнитная зона:</b> когда виджет внутри круга, он подсвечивается как «будет удалён» (серый/уменьшенный), иконка trash увеличивается.<br><br>
+
+  <b>Цветовая семантика рамки</b> (по худшему показателю из SOC и 12V):<br>
+  <code>зелёный</code> — SOC ≥ 30% и 12V ≥ 12.5<br>
+  <code>жёлтый</code> — SOC 15–30% или 12V 12.0–12.5<br>
+  <code>красный</code> — SOC &lt; 15% или 12V &lt; 12.0<br>
+  <code>серый</code> — DiPlus отвалился / данных нет<br><br>
+
+  <b>Шрифты:</b> Manrope для подписей, JetBrains Mono для чисел.<br>
+  <b>Углы:</b> RoundedCornerShape(12dp) — идентично CompactCard на дашборде.<br>
+  <b>Фон:</b> #16161a (CardSurface), тень 0 6px 20px rgba(0,0,0,0.5).
+</div>
+
+</body>
+</html>
