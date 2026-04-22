@@ -86,8 +86,9 @@ class BYDMateApp : Application(), Configuration.Provider {
         override fun onActivityResumed(activity: Activity) {
             resumedCount++
             if (resumedCount == 1) {
-                // Foregrounded → hide widget (service + data subscription stay alive elsewhere)
-                WidgetController.detach()
+                // Foregrounded → hide widget; flag guards against a late attach
+                // from TrackingService.onStartCommand racing past this callback.
+                WidgetController.setAppForegrounded(true)
             }
         }
 
@@ -95,7 +96,7 @@ class BYDMateApp : Application(), Configuration.Provider {
             resumedCount--
             if (resumedCount <= 0) {
                 resumedCount = 0
-                // Backgrounded → show widget if enabled + permitted
+                WidgetController.setAppForegrounded(false)
                 val prefs = WidgetPreferences(app)
                 if (prefs.isEnabled() && Settings.canDrawOverlays(app)) {
                     WidgetController.attach(app)

@@ -46,6 +46,8 @@ object WidgetController {
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
 
+    @Volatile private var appForegrounded: Boolean = false
+
     private var wm: WindowManager? = null
     private var widgetView: ComposeView? = null
     private var widgetLifecycle: OverlayLifecycleOwner? = null
@@ -73,6 +75,7 @@ object WidgetController {
 
     @Synchronized
     fun attach(context: Context) {
+        if (appForegrounded) return     // race-guard: our app is on screen
         if (widgetView != null) return  // already attached
 
         val appCtx = context.applicationContext
@@ -139,6 +142,12 @@ object WidgetController {
         }
 
         startDataSubscription()
+    }
+
+    @Synchronized
+    fun setAppForegrounded(foreground: Boolean) {
+        appForegrounded = foreground
+        if (foreground) detach()
     }
 
     @Synchronized
