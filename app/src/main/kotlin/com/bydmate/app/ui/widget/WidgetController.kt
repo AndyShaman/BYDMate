@@ -23,6 +23,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import com.bydmate.app.domain.calculator.ConsumptionAggregator
+import com.bydmate.app.domain.calculator.ConsumptionState
+import com.bydmate.app.domain.calculator.Trend
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -36,8 +39,8 @@ object WidgetController {
     private const val TAG = "WidgetController"
 
     // Widget dimensions in dp — matches FloatingWidgetView layout
-    private const val WIDGET_WIDTH_DP = 220
-    private const val WIDGET_HEIGHT_DP = 78
+    private const val WIDGET_WIDTH_DP = 190
+    private const val WIDGET_HEIGHT_DP = 64
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
 
@@ -51,12 +54,18 @@ object WidgetController {
 
     private var dataScope: CoroutineScope? = null
     private var dataJob: Job? = null
+    private lateinit var prefsAlphaFlow: kotlinx.coroutines.flow.Flow<Float>
 
     // Compose state for the widget data
     private var socState = mutableStateOf<Int?>(null)
     private var rangeState = mutableStateOf<Double?>(null)
-    private var tempState = mutableStateOf<Int?>(null)
+    private var consumptionState = mutableStateOf<Double?>(null)
+    private var trendState = mutableStateOf(Trend.NONE)
+    private var tripStartedAtState = mutableStateOf<Long?>(null)
+    private var insideTempState = mutableStateOf<Int?>(null)
+    private var batTempState = mutableStateOf<Int?>(null)
     private var voltsState = mutableStateOf<Double?>(null)
+    private var alphaState = mutableStateOf(1.0f)
     private var trashActive = mutableStateOf(false)
 
     @Synchronized
@@ -68,6 +77,7 @@ object WidgetController {
         wm = windowManager
 
         val prefs = WidgetPreferences(appCtx)
+        prefsAlphaFlow = prefs.alphaFlow()
         val metrics = appCtx.resources.displayMetrics
 
         val widgetWpx = dp(appCtx, WIDGET_WIDTH_DP)
@@ -103,8 +113,13 @@ object WidgetController {
                 FloatingWidgetView(
                     soc = socState.value,
                     rangeKm = rangeState.value,
-                    batTemp = tempState.value,
+                    consumption = consumptionState.value,
+                    trend = trendState.value,
+                    tripStartedAt = tripStartedAtState.value,
+                    insideTemp = insideTempState.value,
+                    batTemp = batTempState.value,
                     voltage12v = voltsState.value,
+                    alpha = alphaState.value,
                 )
             }
             setOnTouchListener(WidgetTouchListener(appCtx, prefs, metrics, widgetWpx, widgetHpx))
@@ -149,16 +164,35 @@ object WidgetController {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
         dataJob = scope.launch {
-            TrackingService.lastData.combine(TrackingService.lastRangeKm) { data, range ->
-                data to range
-            }.collect { (data, range) ->
-                socState.value = data?.soc
-                rangeState.value = range
-                tempState.value = data?.avgBatTemp
-                voltsState.value = data?.voltage12v
+            combine(
+                TrackingService.lastData,
+                TrackingService.lastRangeKm,
+                TrackingService.tripStartedAt,
+                ConsumptionAggregator.state,
+                prefsAlphaFlow,
+            ) { data, range, tripStart, consumption, alpha ->
+                WidgetSnapshot(data, range, tripStart, consumption, alpha)
+            }.collect { snap ->
+                socState.value = snap.data?.soc
+                rangeState.value = snap.range
+                insideTempState.value = snap.data?.insideTemp
+                batTempState.value = snap.data?.avgBatTemp
+                voltsState.value = snap.data?.voltage12v
+                tripStartedAtState.value = snap.tripStartedAt
+                consumptionState.value = snap.consumption.displayValue
+                trendState.value = snap.consumption.trend
+                alphaState.value = snap.alpha
             }
         }
     }
+
+    private data class WidgetSnapshot(
+        val data: com.bydmate.app.data.remote.DiParsData?,
+        val range: Double?,
+        val tripStartedAt: Long?,
+        val consumption: ConsumptionState,
+        val alpha: Float,
+    )
 
     // --- Trash zone ---
 
