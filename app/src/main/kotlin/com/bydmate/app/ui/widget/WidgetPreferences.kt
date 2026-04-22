@@ -45,10 +45,52 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    fun getAlpha(): Float = prefs.getFloat(KEY_ALPHA, 1.0f)
+
+    fun setAlpha(alpha: Float) {
+        val clamped = alpha.coerceIn(0.3f, 1.0f)
+        prefs.edit().putFloat(KEY_ALPHA, clamped).apply()
+    }
+
+    fun alphaFlow(): Flow<Float> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == KEY_ALPHA) trySend(getAlpha())
+        }
+        trySend(getAlpha())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    fun getBlocklist(): Set<String> {
+        // First-install preset is applied lazily so users can opt out.
+        val raw = prefs.getStringSet(KEY_BLOCKLIST, null)
+        return raw ?: DEFAULT_BLOCKLIST
+    }
+
+    fun setBlocklist(packages: Set<String>) {
+        prefs.edit().putStringSet(KEY_BLOCKLIST, packages.toMutableSet()).apply()
+    }
+
+    fun blocklistFlow(): Flow<Set<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == KEY_BLOCKLIST) trySend(getBlocklist())
+        }
+        trySend(getBlocklist())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     companion object {
         const val PREFS_NAME = "bydmate_widget"
         const val KEY_ENABLED = "floating_widget_enabled"
         const val KEY_X = "widget_x"
         const val KEY_Y = "widget_y"
+        const val KEY_ALPHA = "widget_alpha"
+        const val KEY_BLOCKLIST = "widget_blocklist"
+
+        private val DEFAULT_BLOCKLIST = setOf(
+            "com.google.android.youtube",
+            "com.android.settings",
+        )
     }
 }

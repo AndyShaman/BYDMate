@@ -65,6 +65,41 @@ class WidgetPreferencesTest {
         assertEquals(0, prefs.getY())
     }
 
+    @Test fun `alpha defaults to 1 0`() {
+        assertEquals(1.0f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `setAlpha clamps to 0 3 minimum`() {
+        prefs.setAlpha(0.1f)
+        assertEquals(0.3f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `setAlpha clamps to 1 0 maximum`() {
+        prefs.setAlpha(1.5f)
+        assertEquals(1.0f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `setAlpha stores mid-range value as-is`() {
+        prefs.setAlpha(0.65f)
+        assertEquals(0.65f, prefs.getAlpha(), 0.001f)
+    }
+
+    @Test fun `blocklist default includes YouTube and Settings`() {
+        val bl = prefs.getBlocklist()
+        assertTrue(bl.contains("com.google.android.youtube"))
+        assertTrue(bl.contains("com.android.settings"))
+    }
+
+    @Test fun `setBlocklist overwrites default`() {
+        prefs.setBlocklist(setOf("com.example.app"))
+        assertEquals(setOf("com.example.app"), prefs.getBlocklist())
+    }
+
+    @Test fun `setBlocklist empty clears entries`() {
+        prefs.setBlocklist(emptySet())
+        assertEquals(emptySet<String>(), prefs.getBlocklist())
+    }
+
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
     private fun fakeSharedPrefs(backing: MutableMap<String, Any?>): SharedPreferences {
         return object : SharedPreferences {
