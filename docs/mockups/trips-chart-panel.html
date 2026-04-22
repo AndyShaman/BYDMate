@@ -1,0 +1,669 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Trips Screen — Chart Panel Mockup</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Manrope:wght@400;500;600;700&display=swap');
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0d0d0d;
+    color: #e8e8e8;
+    font-family: 'Manrope', sans-serif;
+    padding: 20px;
+  }
+
+  .screen {
+    width: 1200px;
+    height: 600px;
+    background: linear-gradient(180deg, #10131a 0%, #0c0e14 100%);
+    border-radius: 12px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Top filter bar */
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    padding: 12px 16px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .chip {
+    padding: 5px 14px;
+    border-radius: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid #2a2d35;
+    color: #888;
+    background: transparent;
+  }
+  .chip.active {
+    background: #3a9e5c;
+    border-color: #3a9e5c;
+    color: #fff;
+  }
+  .chip-separator {
+    width: 1px;
+    height: 20px;
+    background: #2a2d35;
+    margin: 0 4px;
+  }
+
+  /* Main content area */
+  .content {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+  }
+
+  /* Left: trip list */
+  .trip-list {
+    flex: 0.65;
+    padding: 0 16px 16px;
+    overflow-y: auto;
+  }
+
+  .divider-v {
+    width: 1px;
+    background: #1e2028;
+    flex-shrink: 0;
+  }
+
+  /* Month header */
+  .month-header {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    gap: 8px;
+  }
+  .month-arrow { color: #3a9e5c; font-size: 10px; }
+  .month-name { font-size: 14px; font-weight: 700; color: #ccc; }
+  .month-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 16px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #888;
+  }
+  .month-stats .green { color: #3a9e5c; }
+
+  /* Day header */
+  .day-header {
+    display: flex;
+    align-items: center;
+    padding: 6px 0 6px 12px;
+    gap: 8px;
+  }
+  .day-arrow { color: #3a9e5c; font-size: 9px; }
+  .day-name { font-size: 13px; font-weight: 600; color: #aaa; }
+  .day-stats {
+    margin-left: auto;
+    display: flex;
+    gap: 16px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #777;
+  }
+  .day-stats .consumption { font-weight: 600; }
+  .day-stats .orange { color: #e8943a; }
+  .day-stats .green { color: #3a9e5c; }
+
+  /* Column headers */
+  .col-headers {
+    display: flex;
+    padding: 4px 0 4px 24px;
+    font-size: 10px;
+    color: #555;
+    font-family: 'JetBrains Mono', monospace;
+  }
+  .col-headers span { text-align: right; }
+  .col-time { width: 100px; text-align: left !important; }
+  .col-dur { width: 50px; }
+  .col-km { width: 60px; }
+  .col-kwh { width: 65px; }
+  .col-per100 { width: 65px; }
+  .col-cost { width: 60px; }
+
+  /* Trip row */
+  .trip-row {
+    display: flex;
+    padding: 5px 0 5px 24px;
+    font-size: 12px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #aaa;
+  }
+  .trip-row span { text-align: right; }
+  .trip-row .muted { color: #555; }
+
+  /* Collapsed days */
+  .collapsed-day {
+    display: flex;
+    align-items: center;
+    padding: 6px 0 6px 12px;
+    gap: 8px;
+  }
+  .collapsed-day .day-arrow { color: #555; }
+  .collapsed-day .day-name { color: #777; }
+
+  /* Right: chart panel */
+  .chart-panel {
+    flex: 0.35;
+    padding: 0 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  /* Metric chips */
+  .metric-chips {
+    display: flex;
+    gap: 6px;
+    justify-content: center;
+  }
+  .metric-chip {
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    border: 1.5px solid #2a2d35;
+    color: #666;
+    background: transparent;
+  }
+  .metric-chip.active {
+    background: rgba(58, 158, 92, 0.15);
+    border-color: #3a9e5c;
+    color: #3a9e5c;
+  }
+
+  /* Chart area */
+  .chart-area {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    position: relative;
+  }
+
+  /* Y axis */
+  .y-axis {
+    width: 44px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 4px 0;
+    flex-shrink: 0;
+  }
+  .y-label {
+    font-size: 10px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #555;
+    text-align: right;
+    padding-right: 6px;
+    position: relative;
+  }
+
+  /* Chart grid + bars */
+  .chart-grid {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .grid-lines {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 24px;
+  }
+  .grid-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: #1e2028;
+  }
+
+  .bars-container {
+    flex: 1;
+    display: flex;
+    align-items: flex-end;
+    gap: 3px;
+    padding: 4px 4px 0 4px;
+    position: relative;
+  }
+
+  .bar-wrapper {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 0;
+    position: relative;
+    height: 100%;
+    justify-content: flex-end;
+  }
+
+  .bar {
+    width: 80%;
+    max-width: 36px;
+    background: #3a9e5c;
+    border-radius: 3px 3px 0 0;
+    opacity: 0.7;
+    transition: opacity 0.15s;
+    cursor: pointer;
+    position: relative;
+  }
+  .bar:hover, .bar.selected {
+    opacity: 1.0;
+  }
+
+  /* X axis labels */
+  .x-labels {
+    display: flex;
+    gap: 3px;
+    padding: 4px 4px 0 4px;
+    height: 20px;
+    flex-shrink: 0;
+  }
+  .x-label {
+    flex: 1;
+    text-align: center;
+    font-size: 9px;
+    font-family: 'JetBrains Mono', monospace;
+    color: #555;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+
+  /* Tooltip */
+  .tooltip {
+    position: absolute;
+    background: #1a1d25;
+    border: 1px solid #2a2d35;
+    border-radius: 6px;
+    padding: 6px 10px;
+    pointer-events: none;
+    z-index: 10;
+    white-space: nowrap;
+  }
+  .tooltip-value {
+    font-size: 13px;
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: #3a9e5c;
+  }
+  .tooltip-sub {
+    font-size: 10px;
+    color: #666;
+    margin-top: 2px;
+  }
+
+  /* Version labels */
+  .label-row {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 16px;
+  }
+  .version-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .scenario-title {
+    font-size: 11px;
+    color: #555;
+    font-family: 'JetBrains Mono', monospace;
+    margin: 24px 0 8px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+</style>
+</head>
+<body>
+
+<div class="version-label" style="margin-bottom: 12px;">Trips Screen — Chart Panel (Неделя, кВтч/100)</div>
+
+<div class="screen">
+  <!-- Filter bar -->
+  <div class="filter-bar">
+    <div class="chip">День</div>
+    <div class="chip active">Нед</div>
+    <div class="chip">Мес</div>
+    <div class="chip">Год</div>
+    <div class="chip">Всё</div>
+    <div class="chip-separator"></div>
+    <div class="chip active">Поездки</div>
+    <div class="chip">Стоянки</div>
+  </div>
+
+  <div class="content">
+    <!-- Left: Trip list -->
+    <div class="trip-list">
+      <div class="month-header">
+        <span class="month-arrow">&#9660;</span>
+        <span class="month-name">Апрель 2026</span>
+        <div class="month-stats">
+          <span>473 км</span>
+          <span>128 кВтч</span>
+          <span class="green">27.1/100</span>
+          <span>15.11 Br</span>
+        </div>
+      </div>
+
+      <div class="day-header">
+        <span class="day-arrow">&#9660;</span>
+        <span class="day-name">08.04 (ср)</span>
+        <div class="day-stats">
+          <span>41.1 км</span>
+          <span>12.8 кВтч</span>
+          <span class="consumption orange">31.1/100</span>
+          <span>1.51 Br</span>
+        </div>
+      </div>
+
+      <div class="col-headers">
+        <span class="col-time">время</span>
+        <span class="col-dur">длит.</span>
+        <span class="col-km">км</span>
+        <span class="col-kwh">кВтч</span>
+        <span class="col-per100">/100</span>
+        <span class="col-cost">br</span>
+      </div>
+
+      <div class="trip-row">
+        <span class="col-time">11:42-11:51</span>
+        <span class="col-dur">9м</span>
+        <span class="col-km muted">0.0</span>
+        <span class="col-kwh">0.3</span>
+        <span class="col-per100 muted">—</span>
+        <span class="col-cost">0.04 Br</span>
+      </div>
+      <div class="trip-row">
+        <span class="col-time">09:36-10:06</span>
+        <span class="col-dur">30м</span>
+        <span class="col-km">14.5</span>
+        <span class="col-kwh">4.5</span>
+        <span class="col-per100" style="color:#e8943a;font-weight:600">31.0</span>
+        <span class="col-cost">0.53 Br</span>
+      </div>
+      <div class="trip-row">
+        <span class="col-time">08:03-08:54</span>
+        <span class="col-dur">50м</span>
+        <span class="col-km">14.5</span>
+        <span class="col-kwh">4.4</span>
+        <span class="col-per100" style="color:#e8943a;font-weight:600">30.3</span>
+        <span class="col-cost">0.52 Br</span>
+      </div>
+      <div class="trip-row">
+        <span class="col-time">07:28-07:52</span>
+        <span class="col-dur">24м</span>
+        <span class="col-km">12.1</span>
+        <span class="col-kwh">3.4</span>
+        <span class="col-per100" style="color:#3a9e5c;font-weight:600">28.1</span>
+        <span class="col-cost">0.40 Br</span>
+      </div>
+
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">07.04 (вт)</span>
+        <div class="day-stats">
+          <span>164.2 км</span>
+          <span>43.0 кВтч</span>
+          <span class="consumption green">26.2/100</span>
+          <span>5.07 Br</span>
+        </div>
+      </div>
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">06.04 (пн)</span>
+        <div class="day-stats">
+          <span>87.5 км</span>
+          <span>22.7 кВтч</span>
+          <span class="consumption green">25.9/100</span>
+          <span>2.68 Br</span>
+        </div>
+      </div>
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">05.04 (вс)</span>
+        <div class="day-stats">
+          <span>29.9 км</span>
+          <span>8.8 кВтч</span>
+          <span class="consumption orange">29.4/100</span>
+          <span>1.04 Br</span>
+        </div>
+      </div>
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">04.04 (сб)</span>
+        <div class="day-stats" style="color:#555">
+          <span>0.0 км</span>
+          <span>0.3 кВтч</span>
+          <span class="consumption" style="color:#555">0.0/100</span>
+          <span>0.04 Br</span>
+        </div>
+      </div>
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">03.04 (пт)</span>
+        <div class="day-stats">
+          <span>55.2 км</span>
+          <span>14.5 кВтч</span>
+          <span class="consumption green">26.3/100</span>
+          <span>1.71 Br</span>
+        </div>
+      </div>
+      <div class="collapsed-day">
+        <span class="day-arrow">&#9654;</span>
+        <span class="day-name">02.04 (чт)</span>
+        <div class="day-stats">
+          <span>94.8 км</span>
+          <span>26.1 кВтч</span>
+          <span class="consumption green">27.5/100</span>
+          <span>3.08 Br</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="divider-v"></div>
+
+    <!-- Right: Chart panel -->
+    <div class="chart-panel">
+      <div class="metric-chips">
+        <div class="metric-chip active">кВтч/100</div>
+        <div class="metric-chip">кВтч</div>
+        <div class="metric-chip">Br</div>
+      </div>
+
+      <div class="chart-area">
+        <div class="y-axis">
+          <div class="y-label">35</div>
+          <div class="y-label">30</div>
+          <div class="y-label">25</div>
+          <div class="y-label">20</div>
+          <div class="y-label"></div>
+        </div>
+
+        <div class="chart-grid">
+          <div class="grid-lines">
+            <div class="grid-line" style="top: 0%"></div>
+            <div class="grid-line" style="top: 25%"></div>
+            <div class="grid-line" style="top: 50%"></div>
+            <div class="grid-line" style="top: 75%"></div>
+            <div class="grid-line" style="top: 100%"></div>
+          </div>
+
+          <div class="bars-container">
+            <!-- 02.04 - 27.5 -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 55%"></div>
+            </div>
+            <!-- 03.04 - 26.3 -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 48%"></div>
+            </div>
+            <!-- 04.04 - 0 (no driving trips) -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 2px; opacity: 0.3"></div>
+            </div>
+            <!-- 05.04 - 29.4 -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 68%"></div>
+            </div>
+            <!-- 06.04 - 25.9 -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 45%"></div>
+            </div>
+            <!-- 07.04 - 26.2, selected -->
+            <div class="bar-wrapper">
+              <div class="bar selected" style="height: 47%">
+                <div class="tooltip" style="bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);">
+                  <div class="tooltip-value">26.2 кВтч/100</div>
+                  <div class="tooltip-sub">6 поездок</div>
+                </div>
+              </div>
+            </div>
+            <!-- 08.04 - 31.1 -->
+            <div class="bar-wrapper">
+              <div class="bar" style="height: 78%"></div>
+            </div>
+          </div>
+
+          <div class="x-labels">
+            <div class="x-label">02.04</div>
+            <div class="x-label">03.04</div>
+            <div class="x-label">04.04</div>
+            <div class="x-label">05.04</div>
+            <div class="x-label">06.04</div>
+            <div class="x-label">07.04</div>
+            <div class="x-label">08.04</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Second scenario: Month + kWh -->
+<div class="scenario-title" style="margin-top: 32px;">Вариант: Месяц, метрика кВтч</div>
+
+<div class="screen" style="height: 260px;">
+  <div class="filter-bar">
+    <div class="chip">День</div>
+    <div class="chip">Нед</div>
+    <div class="chip active">Мес</div>
+    <div class="chip">Год</div>
+    <div class="chip">Всё</div>
+    <div class="chip-separator"></div>
+    <div class="chip active">Поездки</div>
+    <div class="chip">Стоянки</div>
+  </div>
+  <div class="content">
+    <div class="trip-list" style="flex:0.65">
+      <div style="color:#555; text-align:center; padding-top: 60px; font-size: 13px;">
+        [ список поездок за месяц ]
+      </div>
+    </div>
+    <div class="divider-v"></div>
+    <div class="chart-panel" style="flex:0.35">
+      <div class="metric-chips">
+        <div class="metric-chip">кВтч/100</div>
+        <div class="metric-chip active">кВтч</div>
+        <div class="metric-chip">Br</div>
+      </div>
+      <div class="chart-area">
+        <div class="y-axis">
+          <div class="y-label">50</div>
+          <div class="y-label">35</div>
+          <div class="y-label">20</div>
+          <div class="y-label">5</div>
+          <div class="y-label"></div>
+        </div>
+        <div class="chart-grid">
+          <div class="grid-lines">
+            <div class="grid-line" style="top: 0%"></div>
+            <div class="grid-line" style="top: 25%"></div>
+            <div class="grid-line" style="top: 50%"></div>
+            <div class="grid-line" style="top: 75%"></div>
+            <div class="grid-line" style="top: 100%"></div>
+          </div>
+          <div class="bars-container">
+            <!-- 30 days worth of bars, varying heights -->
+            <div class="bar-wrapper"><div class="bar" style="height: 52%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 28%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 65%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 40%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 2px;opacity:0.3"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 72%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 35%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 48%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 58%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 22%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 90%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 45%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 2px;opacity:0.3"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 38%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 55%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 42%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 68%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 30%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 2px;opacity:0.3"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 50%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 62%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 44%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 78%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 33%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 56%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 2px;opacity:0.3"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 41%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 85%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 60%"></div></div>
+            <div class="bar-wrapper"><div class="bar" style="height: 47%"></div></div>
+          </div>
+          <div class="x-labels" style="font-size:8px">
+            <div class="x-label">10</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">15</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">20</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">25</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">30</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">05</div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label"></div>
+            <div class="x-label">08</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

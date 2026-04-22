@@ -39,6 +39,7 @@
 | **Bat** | Здоровье батареи | Температура, баланс ячеек, 12V |
 | **Map** | Карта маршрута | osmdroid (OpenStreetMap) в деталях поездки |
 | **Rules** | Автоматизация | Правила WHEN→THEN: триггеры по параметрам → команды D+ |
+| **Widget** | Плавающий виджет SOC | Drag-виджет поверх других приложений: SOC, запас хода, 12V, температура батареи |
 | **Auto** | Автозапуск | WorkManager, запускается при включении |
 | **CSV** | Экспорт данных | Экспорт поездок и зарядок в CSV |
 
@@ -101,11 +102,12 @@
 
 | | Описание |
 |---|----------|
-| **25 триггеров** | SOC, скорость, температура, двери, окна, давление шин, режим езды и др. |
-| **37 команд** | Окна, климат, свет, замки, люк, зеркала — всё через D+ API |
+| **25 триггеров** | SOC, скорость, температура, двери, окна, давление шин, режим езды, точки-геозоны, время суток и др. |
+| **41 команда** | Окна (включая отдельные — водителя и пассажира), климат, свет, замки, люк, зеркала — всё через D+ API |
+| **8 видов действий** | D+ команда, тихое/звуковое уведомление, запуск приложения, звонок, навигация, URL, Яндекс.Музыка |
 | **Edge trigger** | Срабатывает только при переходе false→true (не повторяется каждые 3 сек) |
 | **Cooldown** | Настраиваемая пауза между срабатываниями |
-| **Подтверждение** | Опциональное уведомление перед выполнением |
+| **Overlay-подтверждение** | Всплывающее окно «Отмена / Выполнить» перед действием. Таймаут 15 с → автоотмена |
 | **Безопасность** | Окна не открываются на скорости > 80 км/ч, CAN/SHELL команды заблокированы |
 | **Журнал** | Лог всех срабатываний с результатами |
 | **Шаблоны** | 6 готовых правил для быстрого старта |
@@ -292,7 +294,8 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 - **Idle drain** monitoring from BMS data
 - **Battery health** — temperature, cell balance, 12V voltage
 - **Trip map** with speed-colored routes (osmdroid, no Google Maps)
-- **Automation** — WHEN→THEN rules: triggers on 25 parameters → 37 D+ commands (windows, climate, lights, locks, mirrors)
+- **Automation** — WHEN→THEN rules: triggers on 25 parameters → 41 D+ commands (windows incl. driver/passenger, climate, lights, locks, mirrors) + 8 action kinds (notification, app launch, call, navigate, URL, Yandex Music). Overlay confirmation with 15 s auto-cancel
+- **Floating SOC widget** — draggable overlay: SOC, estimated range, 12V, battery temperature
 - **Auto-start** via WorkManager on boot
 - **CSV export** for trips and charges
 

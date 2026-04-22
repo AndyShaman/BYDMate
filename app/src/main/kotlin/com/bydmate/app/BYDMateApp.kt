@@ -1,6 +1,11 @@
 package com.bydmate.app
 
+import android.app.Activity
 import android.app.Application
+import android.app.Application.ActivityLifecycleCallbacks
+import android.content.Context
+import android.os.Bundle
+import android.provider.Settings
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -9,6 +14,8 @@ import androidx.work.WorkManager
 import com.bydmate.app.data.local.DataThinningWorker
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.widget.WidgetController
+import com.bydmate.app.ui.widget.WidgetPreferences
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +52,7 @@ class BYDMateApp : Application(), Configuration.Provider {
             }
         }
         scheduleDataThinning()
+        registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this))
     }
 
     private fun initOsmdroid() {
@@ -60,6 +68,37 @@ class BYDMateApp : Application(), Configuration.Provider {
             tileFileSystemCacheTrimBytes = 80L * 1024 * 1024
             load(this@BYDMateApp, getSharedPreferences("osmdroid", MODE_PRIVATE))
         }
+    }
+
+    private class WidgetLifecycleCallbacks(private val app: Context) : ActivityLifecycleCallbacks {
+        private var resumedCount = 0
+
+        override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
+        override fun onActivityStarted(activity: Activity) {}
+
+        override fun onActivityResumed(activity: Activity) {
+            resumedCount++
+            if (resumedCount == 1) {
+                // Foregrounded → hide widget (service + data subscription stay alive elsewhere)
+                WidgetController.detach()
+            }
+        }
+
+        override fun onActivityPaused(activity: Activity) {
+            resumedCount--
+            if (resumedCount <= 0) {
+                resumedCount = 0
+                // Backgrounded → show widget if enabled + permitted
+                val prefs = WidgetPreferences(app)
+                if (prefs.isEnabled() && Settings.canDrawOverlays(app)) {
+                    WidgetController.attach(app)
+                }
+            }
+        }
+
+        override fun onActivityStopped(activity: Activity) {}
+        override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
+        override fun onActivityDestroyed(activity: Activity) {}
     }
 
     private fun scheduleDataThinning() {

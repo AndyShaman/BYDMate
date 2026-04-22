@@ -84,6 +84,9 @@ class TrackingService : Service(), LocationListener {
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
 
+        private val _lastRangeKm = MutableStateFlow<Double?>(null)
+        val lastRangeKm: StateFlow<Double?> = _lastRangeKm
+
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
@@ -188,11 +191,22 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        maybeAttachWidget()
         return START_STICKY
+    }
+
+    private fun maybeAttachWidget() {
+        val prefs = com.bydmate.app.ui.widget.WidgetPreferences(this)
+        if (prefs.isEnabled() && android.provider.Settings.canDrawOverlays(this)) {
+            // ActivityLifecycleCallbacks detaches the widget when an Activity is resumed,
+            // so calling attach unconditionally here is safe.
+            com.bydmate.app.ui.widget.WidgetController.attach(this)
+        }
     }
 
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
+        com.bydmate.app.ui.widget.WidgetController.detach()
         appendChainLog("TrackingService onDestroy")
         pollingJob?.cancel()
 
@@ -503,7 +517,9 @@ class TrackingService : Service(), LocationListener {
 
         // Block 1: запас (SOC + оценка km) + t°бат
         val socStr = data.soc?.let { "$it%" } ?: "—"
-        val rangeStr = estimateRangeKm(data.soc)?.let { " ~${"%.0f".format(it)} км" } ?: ""
+        val rangeKm = estimateRangeKm(data.soc)
+        _lastRangeKm.value = rangeKm
+        val rangeStr = rangeKm?.let { " ~${"%.0f".format(it)} км" } ?: ""
         val tempStr = data.avgBatTemp?.let { ", t°бат: ${it}°C" } ?: ""
         parts += "запас: $socStr$rangeStr$tempStr"
 

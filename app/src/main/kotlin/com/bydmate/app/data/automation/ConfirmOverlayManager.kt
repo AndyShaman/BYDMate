@@ -53,7 +53,7 @@ import com.bydmate.app.ui.theme.TextPrimary
 object ConfirmOverlayManager {
 
     private const val TAG = "ConfirmOverlay"
-    private const val DEFAULT_TIMEOUT_MS = 30_000L
+    private const val DEFAULT_TIMEOUT_MS = 15_000L
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 

@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Insight Dialog — Dynamics</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Manrope:wght@400;500;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #0a0a0a;
+    color: #e8e8e8;
+    font-family: 'Manrope', sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 32px 24px;
+    gap: 40px;
+  }
+
+  .comparison {
+    display: flex;
+    gap: 32px;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 1050px;
+  }
+
+  .version { flex: 1; }
+
+  .version-label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    margin-bottom: 12px;
+    text-align: center;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .dialog-frame {
+    background: #131315;
+    border-radius: 14px;
+    border: 1px solid #27272b;
+    padding: 18px 20px 14px;
+  }
+
+  /* ======= OLD ======= */
+  .old-header {
+    color: #d4a017;
+    font-size: 15px;
+    font-weight: 700;
+    margin-bottom: 12px;
+  }
+  .old-facts {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #ccc;
+    margin-bottom: 14px;
+    white-space: pre-line;
+  }
+  .old-insights {
+    font-size: 13px;
+    line-height: 1.55;
+    color: #999;
+  }
+  .old-insights p { margin-bottom: 10px; }
+  .old-insights p:last-child { margin-bottom: 0; }
+
+  /* ======= NEW: dynamics table ======= */
+
+  .dyn-table {
+    margin-bottom: 14px;
+  }
+
+  .dyn-row {
+    display: flex;
+    align-items: center;
+    padding: 6px 8px;
+    border-radius: 6px;
+  }
+
+  .dyn-row:nth-child(odd) {
+    background: #17171b;
+  }
+
+  .dyn-label {
+    flex: 0 0 120px;
+    font-size: 11.5px;
+    color: #777;
+    font-weight: 500;
+  }
+
+  .dyn-values {
+    flex: 1;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .dyn-current {
+    font-size: 14px;
+    font-weight: 600;
+    color: #eee;
+    min-width: 60px;
+  }
+
+  .dyn-current .unit {
+    font-size: 10px;
+    font-weight: 400;
+    color: #555;
+  }
+
+  .dyn-arrow {
+    font-size: 10px;
+    color: #444;
+  }
+
+  .dyn-prev {
+    font-size: 11px;
+    color: #555;
+    min-width: 50px;
+  }
+
+  .dyn-change {
+    font-size: 11.5px;
+    font-weight: 600;
+    min-width: 44px;
+    text-align: right;
+    margin-left: auto;
+  }
+
+  .dyn-up { color: #e07040; }
+  .dyn-down { color: #3a9e5c; }
+  .dyn-flat { color: #555; }
+
+  /* ======= Divider ======= */
+  .divider-line {
+    height: 1px;
+    background: #2a2a2e;
+    margin: 2px 0 12px;
+  }
+
+  /* ======= Insights ======= */
+  .insights-section {
+    margin-bottom: 12px;
+  }
+
+  .ins-item {
+    font-size: 13px;
+    line-height: 1.6;
+    color: #aaa;
+    padding-left: 14px;
+    position: relative;
+    margin-bottom: 10px;
+  }
+  .ins-item:last-child { margin-bottom: 0; }
+
+  .ins-item::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 7px;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #d4a01766;
+  }
+
+  .ins-item .hl {
+    color: #d4a017;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  .ins-item strong {
+    color: #ccc;
+    font-weight: 600;
+  }
+
+  /* ======= Footer ======= */
+  .footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding-top: 10px;
+    border-top: 1px solid #1e1e22;
+  }
+
+  .footer-date {
+    font-size: 11px;
+    color: #444;
+    font-family: 'JetBrains Mono', monospace;
+  }
+
+  .btn-refresh {
+    background: #d4a017;
+    color: #111;
+    border: none;
+    border-radius: 8px;
+    padding: 7px 18px;
+    font-size: 12.5px;
+    font-weight: 600;
+    font-family: 'Manrope', sans-serif;
+    cursor: pointer;
+  }
+  .btn-refresh:hover { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<div class="comparison">
+
+  <!-- ===== CURRENT ===== -->
+  <div class="version">
+    <div class="version-label">Сейчас</div>
+    <div class="dialog-frame">
+      <div class="old-header">AI Инсайт</div>
+      <div class="old-facts">⚡ 26.7 кВтч/100 ↑5% за нед.
+📍 40 поездок · 431.6 км · 115.4 кВтч
+🚗 55% коротких < 5 км (22/40)
+📅 30д: 26.0/100 · 113 поездок · 989 км
+🔌 простой 5.4 кВтч / 5ч (1.13 кВтч/ч)</div>
+      <div class="old-insights">
+        <p>Ваш средний расход вырос с 25.4 до 26.7 кВт·ч/100 км за неделю. Основная причина — преобладание коротких поездок (55%), при которых Blade Battery не успевает выйти на оптимальный температурный режим.</p>
+        <p>Критическим фактором является idle drain (паразитное потребление): расход 1.13 кВт·ч/час в простое избыточен. Рекомендуется проверить настройки удалённого доступа.</p>
+      </div>
+      <div class="footer" style="margin-top:12px">
+        <span class="footer-date">2026-04-08</span>
+        <button class="btn-refresh">Обновить</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== NEW: dynamics + insights ===== -->
+  <div class="version">
+    <div class="version-label">Новый — динамика + инсайты</div>
+    <div class="dialog-frame">
+
+      <!-- Dynamics table -->
+      <div class="dyn-table">
+        <div class="dyn-row">
+          <span class="dyn-label">Расход</span>
+          <div class="dyn-values">
+            <span class="dyn-current">26.7 <span class="unit">кВтч/100</span></span>
+            <span class="dyn-arrow">←</span>
+            <span class="dyn-prev">25.4</span>
+            <span class="dyn-change dyn-up">▲ 5%</span>
+          </div>
+        </div>
+
+        <div class="dyn-row">
+          <span class="dyn-label">Поездки</span>
+          <div class="dyn-values">
+            <span class="dyn-current">40 <span class="unit">· 432 км</span></span>
+            <span class="dyn-arrow">←</span>
+            <span class="dyn-prev">35 · 510</span>
+            <span class="dyn-change dyn-up">▲ 14%</span>
+          </div>
+        </div>
+
+        <div class="dyn-row">
+          <span class="dyn-label">Короткие</span>
+          <div class="dyn-values">
+            <span class="dyn-current">55% <span class="unit">(22/40)</span></span>
+            <span class="dyn-arrow">←</span>
+            <span class="dyn-prev">48%</span>
+            <span class="dyn-change dyn-up">▲ 7%</span>
+          </div>
+        </div>
+
+        <div class="dyn-row">
+          <span class="dyn-label">Ср. дистанция</span>
+          <div class="dyn-values">
+            <span class="dyn-current">10.8 <span class="unit">км</span></span>
+            <span class="dyn-arrow">←</span>
+            <span class="dyn-prev">14.6</span>
+            <span class="dyn-change dyn-down">▼ 26%</span>
+          </div>
+        </div>
+
+        <div class="dyn-row">
+          <span class="dyn-label">Стоянка</span>
+          <div class="dyn-values">
+            <span class="dyn-current">5.4 <span class="unit">кВтч · 5 ч</span></span>
+            <span class="dyn-arrow">←</span>
+            <span class="dyn-prev">3.2 · 3 ч</span>
+            <span class="dyn-change dyn-up">▲ 69%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="divider-line"></div>
+
+      <!-- Insights -->
+      <div class="insights-section">
+        <div class="ins-item"><strong>Расход вырос</strong> из-за доли коротких поездок (<span class="hl">55%</span> vs <span class="hl">48%</span> неделю назад) — на первых километрах прогрев салона и батареи забирает до 15% энергии.</div>
+        <div class="ins-item"><strong>Стоянка +69%</strong> — это нормально: больше коротких поездок = больше прогревов и ожиданий. Расход <span class="hl">1.1 кВтч/ч</span> на стоянке типичен для работы климата и мультимедиа.</div>
+        <div class="ins-item">Разброс потребления <span class="hl">22.7</span>–<span class="hl">31.3</span> коррелирует со скоростью: объединение 2-3 коротких маршрутов в один снизит средний расход на ~8%.</div>
+      </div>
+
+      <!-- Footer -->
+      <div class="footer">
+        <span class="footer-date">2026-04-08</span>
+        <button class="btn-refresh">Обновить</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

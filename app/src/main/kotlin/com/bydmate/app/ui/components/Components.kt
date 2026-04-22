@@ -63,7 +63,7 @@ fun formatTime(ts: Long): String {
 }
 
 fun formatDateTime(ts: Long): String {
-    val sdf = SimpleDateFormat("dd.MM HH:mm", Locale.getDefault())
+    val sdf = SimpleDateFormat("dd.MM  HH:mm", Locale.getDefault())
     return sdf.format(Date(ts))
 }
 

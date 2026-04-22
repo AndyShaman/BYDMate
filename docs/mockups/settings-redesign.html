@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BYDMate — Настройки (редизайн)</title>
+<style>
+  :root {
+    --navy-dark:    #0b1324;
+    --navy-surface: #111b30;
+    --card:         #18243e;
+    --card-hi:      #1e2c4a;
+    --border:       #253454;
+    --text-primary: #e6ecf6;
+    --text-secondary:#9eb0cf;
+    --text-muted:   #6579a0;
+    --green:        #42d27a;
+    --green-soft:   #42d27a22;
+    --blue:         #4ca0ff;
+    --blue-soft:    #4ca0ff22;
+    --orange:       #ffa54a;
+    --orange-soft:  #ffa54a22;
+    --red:          #f24a4a;
+    --purple:       #b080ff;
+    --mono: "SF Mono", "Menlo", "Consolas", monospace;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--navy-dark);
+    color: var(--text-primary);
+    font-family: -apple-system, "SF Pro Text", "Inter", "Segoe UI", Roboto, sans-serif;
+    font-size: 14px;
+    min-height: 100vh;
+    padding: 24px;
+  }
+  .frame {
+    max-width: 1400px;
+    margin: 0 auto;
+    background: var(--navy-surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+  }
+  .titlebar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, #131e37 0%, #111b30 100%);
+  }
+  .titlebar h1 {
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+  }
+  .screen {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+  }
+  /* column */
+  .col { display: flex; flex-direction: column; gap: 12px; }
+  .col-label {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.4px;
+    color: var(--text-muted);
+    padding: 0 6px 4px;
+  }
+  /* section */
+  .section-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 6px 0;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .section-header .dot {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+  .section-header.blue .dot { background: var(--blue); }
+  .section-header.orange .dot { background: var(--orange); }
+  .section-header.purple .dot { background: var(--purple); }
+  .section-header.muted .dot { background: var(--text-muted); }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  /* form bits */
+  .field {
+    background: var(--card-hi);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+  }
+  .field-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .field-value {
+    font-family: var(--mono);
+    font-size: 14px;
+    color: var(--text-primary);
+  }
+  .field-value.pwd { letter-spacing: 3px; }
+  .hint {
+    font-size: 11px;
+    color: var(--text-muted);
+    line-height: 1.45;
+  }
+  .muted-label {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+
+  /* chips */
+  .chip-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--border);
+    background: var(--card-hi);
+    font-size: 13px;
+    color: var(--text-primary);
+  }
+  .chip.active {
+    background: var(--green);
+    border-color: var(--green);
+    color: #07131f;
+    font-weight: 600;
+  }
+
+  /* buttons */
+  .btn {
+    border: none;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    text-align: center;
+  }
+  .btn.primary  { background: var(--green); color: #07131f; }
+  .btn.blue     { background: var(--blue); color: #06111f; }
+  .btn.outline  { background: transparent; border: 1px solid var(--orange); color: var(--orange); }
+  .btn.ghost    { background: var(--card-hi); color: var(--text-primary); }
+  .btn.danger   { background: var(--red); color: #fff; }
+  .btn.purple   { background: var(--purple); color: #1a0f3a; }
+  .btn[disabled]{ opacity: .45; }
+
+  .row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  /* toggle */
+  .toggle {
+    width: 44px; height: 24px;
+    border-radius: 999px;
+    background: var(--border);
+    position: relative;
+    flex-shrink: 0;
+  }
+  .toggle.on { background: var(--green); }
+  .toggle::after {
+    content: ""; width: 18px; height: 18px; border-radius: 50%;
+    background: #fff;
+    position: absolute; top: 3px; left: 3px;
+    transition: transform .2s;
+  }
+  .toggle.on::after { transform: translateX(20px); }
+
+  /* link-row used for "Места" one-line section */
+  .link-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 4px 0;
+  }
+  .link-row .icon {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    background: var(--green-soft);
+    color: var(--green);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px;
+    flex-shrink: 0;
+  }
+  .link-row .title { font-size: 14px; font-weight: 600; color: var(--text-primary); }
+  .link-row .sub   { font-size: 12px; color: var(--text-secondary); margin-top: 2px; }
+  .link-row .chev  { color: var(--text-muted); font-size: 18px; }
+
+  /* about */
+  .about-version {
+    font-size: 17px;
+    font-weight: 600;
+    font-family: var(--mono);
+    cursor: default;
+  }
+  .about-meta {
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .about-meta .status-ok { color: var(--green); }
+
+  .link {
+    color: var(--blue);
+    text-decoration: underline;
+    font-size: 13px;
+  }
+
+  /* commentary rail on the right of the mockup */
+  .note {
+    background: var(--card);
+    border: 1px dashed var(--blue);
+    border-radius: 10px;
+    padding: 10px 12px;
+    color: var(--text-secondary);
+    font-size: 12px;
+    line-height: 1.5;
+    margin-top: 4px;
+  }
+  .note b { color: var(--blue); }
+  .note.warn { border-color: var(--orange); }
+  .note.warn b { color: var(--orange); }
+
+  .footer-note {
+    border-top: 1px solid var(--border);
+    padding: 14px 20px;
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+  }
+
+  .divider-h {
+    height: 1px;
+    background: var(--border);
+    margin: 2px 0;
+  }
+</style>
+</head>
+<body>
+
+<div class="frame">
+  <div class="titlebar">
+    <h1>Настройки</h1>
+    <div style="font-size:12px;color:var(--text-muted)">BYDMate v2.3.3 · редизайн по best-practices</div>
+  </div>
+
+  <div class="screen">
+
+    <!-- LEFT COLUMN: "Моя машина" -->
+    <div class="col">
+      <div class="col-label">Моя машина</div>
+
+      <!-- Батарея и тарифы -->
+      <div class="section-header"><span class="dot"></span>Батарея и тарифы</div>
+      <div class="card">
+        <div class="field">
+          <div class="field-label">Ёмкость батареи (кВт·ч)</div>
+          <div class="field-value">72.9</div>
+        </div>
+        <div class="row-between" style="gap:8px">
+          <div class="field" style="flex:1">
+            <div class="field-label">Тариф дома (BYN/кВт·ч)</div>
+            <div class="field-value">0.14</div>
+          </div>
+          <div class="field" style="flex:1">
+            <div class="field-label">Тариф DC (BYN/кВт·ч)</div>
+            <div class="field-value">0.79</div>
+          </div>
+        </div>
+        <div class="muted-label">Тариф поездок</div>
+        <div class="chip-row">
+          <div class="chip active">AC</div>
+          <div class="chip">DC</div>
+          <div class="chip">Свой</div>
+        </div>
+        <button class="btn primary">Сохранить тарифы</button>
+        <div class="hint">Новый тариф применяется к будущим поездкам. Уже посчитанные поездки не изменятся.</div>
+        <div class="divider-h"></div>
+        <button class="btn outline">Пересчитать все поездки</button>
+        <div class="hint">Пересчитает стоимость всех поездок по текущему тарифу.</div>
+      </div>
+
+      <!-- Пороги расхода -->
+      <div class="section-header blue"><span class="dot"></span>Пороги расхода</div>
+      <div class="card">
+        <div class="row-between" style="gap:8px">
+          <div class="field" style="flex:1">
+            <div class="field-label">Хороший &lt; (кВт·ч/100км)</div>
+            <div class="field-value">20</div>
+          </div>
+          <div class="field" style="flex:1">
+            <div class="field-label">Плохой &gt; (кВт·ч/100км)</div>
+            <div class="field-value">30</div>
+          </div>
+        </div>
+        <div class="hint">Управляет цветом расхода в поездках и на дашборде.</div>
+      </div>
+
+      <!-- Данные -->
+      <div class="section-header muted"><span class="dot"></span>Данные</div>
+      <div class="card">
+        <button class="btn blue">Экспорт CSV</button>
+        <button class="btn purple">Запись логов</button>
+        <div class="hint">Экспорт сохраняет все поездки в CSV-файл. Запись логов включает детальный лог для диагностики.</div>
+      </div>
+
+      <div class="note">
+        <b>Изменение:</b> секция «Данные» сдвинута вниз левой колонки — это редкая функция, её место ниже основных настроек.
+      </div>
+    </div>
+
+
+    <!-- RIGHT COLUMN: "Приложение" -->
+    <div class="col">
+      <div class="col-label">Приложение</div>
+
+      <!-- Единицы и валюта -->
+      <div class="section-header blue"><span class="dot"></span>Единицы и валюта</div>
+      <div class="card">
+        <div class="muted-label">Расстояние</div>
+        <div class="chip-row">
+          <div class="chip active">км</div>
+          <div class="chip">мили</div>
+        </div>
+        <div class="muted-label" style="margin-top:2px">Валюта</div>
+        <div class="chip-row">
+          <div class="chip active">BYN Бел. руб.</div>
+          <div class="chip">₽ Рос. руб.</div>
+          <div class="chip">₴ Гривна</div>
+          <div class="chip">₸ Тенге</div>
+          <div class="chip">$ Доллар</div>
+          <div class="chip">€ Евро</div>
+        </div>
+      </div>
+
+      <!-- Плавающий виджет -->
+      <div class="section-header"><span class="dot"></span>Плавающий виджет</div>
+      <div class="card">
+        <div class="row-between">
+          <div style="font-size:13px">Показывать виджет SOC</div>
+          <div class="toggle on"></div>
+        </div>
+        <button class="btn ghost">Сбросить позицию</button>
+        <div class="hint">Виджет с SOC, запасом хода и температурой поверх других приложений. Тап — открыть BYDMate.</div>
+      </div>
+
+      <!-- AI Инсайты -->
+      <div class="section-header purple"><span class="dot"></span>AI-инсайты</div>
+      <div class="card">
+        <div class="field">
+          <div class="field-label">OpenRouter API Key</div>
+          <div class="field-value pwd">•••••••••••••••••••</div>
+        </div>
+        <button class="btn blue">Модель: Anthropic Claude 3.7 Sonnet</button>
+        <button class="btn primary">Сохранить и получить инсайт</button>
+        <div class="hint">Инсайт обновляется раз в сутки и доступен на вкладке «Главная».</div>
+      </div>
+
+      <!-- Места (переимен. из "Автоматизация") -->
+      <div class="section-header orange"><span class="dot"></span>Места</div>
+      <div class="card" style="padding:12px 14px">
+        <div class="link-row">
+          <div class="icon">📍</div>
+          <div style="flex:1">
+            <div class="title">Точки для автоматизации</div>
+            <div class="sub">Дом, работа, любимые места — триггеры «Въезд» / «Выезд»</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+      </div>
+
+      <!-- О приложении (внизу) -->
+      <div class="section-header muted"><span class="dot"></span>О приложении</div>
+      <div class="card">
+        <div class="about-version">BYDMate v2.3.3</div>
+        <div class="about-meta">© 2026 AndyShaman</div>
+        <div class="about-meta">Автозапуск: <span class="status-ok">зафиксирован 22.04 14:23</span></div>
+        <a class="link" href="#">github.com/AndyShaman/BYDMate</a>
+        <button class="btn blue">Проверить обновления</button>
+        <div class="hint">Долгое нажатие на номер версии — разблокировка сервисных функций.</div>
+      </div>
+
+      <div class="note warn">
+        <b>Изменение:</b> «О приложении» спущено в самый низ (по соглашению — это место «О приложении» в большинстве приложений). «Автоматизация» переименована в прямолинейную секцию «Места» (одна ссылка).
+      </div>
+    </div>
+
+  </div>
+
+  <div class="footer-note">
+    <div>Скрытая секция «Умный дом» (VPS + Алиса) — разблокируется как раньше: 7 тапов по версии в «О приложении». В макете не показана.</div>
+    <div>Макет 1400px max-width; на 1920×1080 DiLink раскроется на всю ширину.</div>
+  </div>
+</div>
+
+</body>
+</html>

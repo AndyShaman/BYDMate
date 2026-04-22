@@ -2,6 +2,9 @@ package com.bydmate.app.ui.settings
 
 import android.content.Intent
 import android.net.Uri
+import android.provider.Settings as AndroidSettings
+import com.bydmate.app.ui.widget.WidgetController
+import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -226,6 +229,31 @@ fun SettingsScreen(
                     }
                 }
 
+                SectionHeader(text = "Пороги расхода")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        SettingsTextField(
+                            label = "Хороший < (кВт·ч/100км)",
+                            value = state.consumptionGood,
+                            onValueChange = { viewModel.saveConsumptionGood(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                        SettingsTextField(
+                            label = "Плохой > (кВт·ч/100км)",
+                            value = state.consumptionBad,
+                            onValueChange = { viewModel.saveConsumptionBad(it) },
+                            keyboardType = KeyboardType.Decimal
+                        )
+                    }
+                }
+
                 SectionHeader(text = "Данные")
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -319,28 +347,68 @@ fun SettingsScreen(
                     }
                 }
 
-                SectionHeader(text = "Пороги расхода")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                // --- Плавающий виджет ---
+                val widgetCtx = LocalContext.current
+                val widgetPrefs = remember { WidgetPreferences(widgetCtx) }
+                val widgetEnabled by widgetPrefs.enabledFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isEnabled())
+
+                SectionHeader(text = "Плавающий виджет")
+                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 0.dp)) {
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = CardSurface),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        SettingsTextField(
-                            label = "Хороший < (кВт·ч/100км)",
-                            value = state.consumptionGood,
-                            onValueChange = { viewModel.saveConsumptionGood(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                        SettingsTextField(
-                            label = "Плохой > (кВт·ч/100км)",
-                            value = state.consumptionBad,
-                            onValueChange = { viewModel.saveConsumptionBad(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "Показывать виджет SOC",
+                                    color = TextPrimary,
+                                    fontSize = 13.sp,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Switch(
+                                    checked = widgetEnabled,
+                                    onCheckedChange = { requested ->
+                                        if (requested) {
+                                            if (AndroidSettings.canDrawOverlays(widgetCtx)) {
+                                                widgetPrefs.setEnabled(true)
+                                                WidgetController.attach(widgetCtx)
+                                            } else {
+                                                val intent = Intent(
+                                                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                                    Uri.parse("package:${widgetCtx.packageName}"),
+                                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                                                widgetCtx.startActivity(intent)
+                                            }
+                                        } else {
+                                            widgetPrefs.setEnabled(false)
+                                            WidgetController.detach()
+                                        }
+                                    },
+                                )
+                            }
+                            Button(
+                                onClick = {
+                                    widgetPrefs.resetPosition()
+                                    if (widgetEnabled && AndroidSettings.canDrawOverlays(widgetCtx)) {
+                                        WidgetController.detach()
+                                        WidgetController.attach(widgetCtx)
+                                    }
+                                },
+                                enabled = widgetEnabled,
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+                            ) {
+                                Text("Сбросить позицию", fontSize = 13.sp, color = TextPrimary)
+                            }
+                        }
                     }
                 }
 
@@ -419,6 +487,32 @@ fun SettingsScreen(
                     )
                 }
 
+                SectionHeader(text = "Места")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onNavigateToPlaces() }
+                            .padding(horizontal = 12.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Place,
+                            contentDescription = null,
+                            tint = AccentGreen,
+                        )
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text("Точки для автоматизации", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text("Дом, работа, любимые места — триггеры «Въезд» / «Выезд»", color = TextSecondary, fontSize = 12.sp)
+                        }
+                    }
+                }
+
                 SectionHeader(text = "О приложении")
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -469,32 +563,6 @@ fun SettingsScreen(
                             colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
                         ) {
                             Text("Проверить обновления", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                SectionHeader(text = "Автоматизация")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToPlaces() }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Place,
-                            contentDescription = null,
-                            tint = AccentGreen,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Места", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text("Точки для триггеров 'Место'", color = TextSecondary, fontSize = 12.sp)
                         }
                     }
                 }
