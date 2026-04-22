@@ -25,6 +25,9 @@ class TripTracker @Inject constructor(
     private val _state = MutableStateFlow(TripState.IDLE)
     val state: StateFlow<TripState> = _state
 
+    private val _tripStartedAt = MutableStateFlow<Long?>(null)
+    val tripStartedAt: StateFlow<Long?> = _tripStartedAt
+
     private var speedAboveThresholdSince: Long? = null
     private var speedZeroSince: Long? = null
     private val pendingPoints = Collections.synchronizedList(mutableListOf<TripPointEntity>())
@@ -48,6 +51,7 @@ class TripTracker @Inject constructor(
                         speedAboveThresholdSince = now
                     } else if (now - speedAboveThresholdSince!! >= START_DELAY_MS) {
                         _state.value = TripState.DRIVING
+                        _tripStartedAt.value = now
                         speedZeroSince = null
                         speedAboveThresholdSince = null
                         Log.d(TAG, "Driving started (GPS collection)")
@@ -73,6 +77,7 @@ class TripTracker @Inject constructor(
                     } else if (now - speedZeroSince!! >= STOP_DELAY_MS) {
                         flushPoints()
                         _state.value = TripState.IDLE
+                        _tripStartedAt.value = null
                         speedZeroSince = null
                         speedAboveThresholdSince = null
                         Log.d(TAG, "Driving stopped (GPS collection ended)")
@@ -112,6 +117,7 @@ class TripTracker @Inject constructor(
         Log.w(TAG, "forceEnd: flushing GPS points on shutdown")
         flushPoints()
         _state.value = TripState.IDLE
+        _tripStartedAt.value = null
         speedZeroSince = null
         speedAboveThresholdSince = null
     }
