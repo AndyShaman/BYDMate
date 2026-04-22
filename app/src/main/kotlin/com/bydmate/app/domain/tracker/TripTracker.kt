@@ -26,6 +26,11 @@ class TripTracker @Inject constructor(
     val state: StateFlow<TripState> = _state
 
     private val _tripStartedAt = MutableStateFlow<Long?>(null)
+    /**
+     * Epoch millis when the IDLE→DRIVING transition was confirmed (≤[START_DELAY_MS] ms after
+     * actual movement started). Null when not driving.
+     * Set on IDLE→DRIVING, cleared on DRIVING→IDLE and in [forceEnd].
+     */
     val tripStartedAt: StateFlow<Long?> = _tripStartedAt
 
     private var speedAboveThresholdSince: Long? = null
