@@ -86,6 +86,7 @@ import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 import org.json.JSONArray
 import org.json.JSONObject
@@ -244,10 +245,7 @@ private fun RuleCard(
                 Switch(
                     checked = rule.enabled,
                     onCheckedChange = { onToggle() },
-                    colors = SwitchDefaults.colors(
-                        checkedTrackColor = AccentGreen,
-                        uncheckedTrackColor = CardBorder
-                    ),
+                    colors = bydSwitchColors(),
                     modifier = Modifier.height(24.dp)
                 )
                 Box {
@@ -528,9 +526,7 @@ private fun EditorDialog(
                         Switch(
                             checked = editing.requirePark,
                             onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = AccentGreen, uncheckedTrackColor = CardBorder
-                            )
+                            colors = bydSwitchColors(),
                         )
                     }
 
@@ -539,9 +535,7 @@ private fun EditorDialog(
                         Switch(
                             checked = editing.confirmBeforeExecute,
                             onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
-                            colors = SwitchDefaults.colors(
-                                checkedTrackColor = AccentGreen, uncheckedTrackColor = CardBorder
-                            )
+                            colors = bydSwitchColors(),
                         )
                     }
                 }

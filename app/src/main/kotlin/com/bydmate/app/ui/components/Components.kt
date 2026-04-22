@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.SwitchColors
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -73,6 +75,18 @@ fun formatDuration(startTs: Long, endTs: Long): String {
     val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
     return if (hours > 0) "${hours}ч ${minutes}м" else "${minutes}м"
 }
+
+// Единый стиль Switch по всему приложению:
+// включён — зелёный track + тёмный thumb, выключен — серый track + тёмный thumb.
+@Composable
+fun bydSwitchColors(): SwitchColors = SwitchDefaults.colors(
+    checkedThumbColor = NavyMid,
+    checkedTrackColor = AccentGreen,
+    checkedBorderColor = Color.Transparent,
+    uncheckedThumbColor = NavyMid,
+    uncheckedTrackColor = TextMuted,
+    uncheckedBorderColor = Color.Transparent,
+)
 
 // ============================================================================
 // SocGauge - Premium circular arc gauge with gradient and glow

@@ -64,6 +64,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 
 private val PrimaryColor = AccentGreen
@@ -392,6 +393,7 @@ fun SettingsScreen(
                                             WidgetController.detach()
                                         }
                                     },
+                                    colors = bydSwitchColors(),
                                 )
                             }
                             Button(
@@ -588,11 +590,7 @@ fun SettingsScreen(
                                 Switch(
                                     checked = state.aliceEnabled,
                                     onCheckedChange = { viewModel.toggleAlice(it) },
-                                    colors = SwitchDefaults.colors(
-                                        checkedThumbColor = Color.White,
-                                        checkedTrackColor = AccentGreen,
-                                        uncheckedTrackColor = CardBorder
-                                    )
+                                    colors = bydSwitchColors(),
                                 )
                             }
                             SettingsTextField(

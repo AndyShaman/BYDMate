@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BYDMate — варианты Switch</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 32px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #0A1628;
+    color: #E2E8F0;
+  }
+  h1 { font-size: 18px; margin: 0 0 24px; }
+  h2 { font-size: 14px; color: #94A3B8; margin: 28px 0 12px; font-weight: 500; }
+  .wrap { max-width: 760px; }
+
+  .card {
+    background: #162032;
+    border: 1px solid #2A3A52;
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+  .label { font-size: 14px; color: #E2E8F0; flex: 1; }
+  .hint { font-size: 12px; color: #64748B; margin-top: 2px; }
+
+  /* Switch base */
+  .sw {
+    position: relative;
+    width: 52px;
+    height: 32px;
+    border-radius: 999px;
+    flex-shrink: 0;
+    transition: background .15s ease;
+  }
+  .sw .thumb {
+    position: absolute;
+    top: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    transition: left .15s ease, background .15s ease;
+  }
+  .sw.off .thumb { left: 4px; }
+  .sw.on  .thumb { left: 24px; }
+
+  /* ===== Вариант A — предложенный мной ===== */
+  .varA .sw.on  { background: #4ADE80; }
+  .varA .sw.off { background: #64748B; }
+  .varA .thumb  { background: #000000; }
+
+  /* ===== Вариант B — thumb тёмно-серый, чуть мягче ===== */
+  .varB .sw.on  { background: #4ADE80; }
+  .varB .sw.off { background: #64748B; }
+  .varB .thumb  { background: #1B2838; }
+
+  /* ===== Вариант C — белый thumb, как сейчас в виджете (для сравнения) ===== */
+  .varC .sw.on  { background: #4ADE80; }
+  .varC .sw.off { background: #2A3A52; }
+  .varC .thumb  { background: #FFFFFF; }
+
+  /* ===== Вариант D — thumb чёрный с тонкой светлой обводкой ===== */
+  .varD .sw.on  { background: #4ADE80; }
+  .varD .sw.off { background: #64748B; }
+  .varD .thumb  { background: #000; box-shadow: inset 0 0 0 1.5px #334155; }
+
+  .note {
+    background: #162032;
+    border: 1px dashed #2A3A52;
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    color: #94A3B8;
+    margin-top: 12px;
+  }
+  .note b { color: #E2E8F0; }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>BYDMate — единый стиль Switch</h1>
+
+<div class="note">
+  Все варианты показаны в двух состояниях (включен / выключен) на фоне настоящей карточки приложения
+  (<b>CardSurface #162032</b>) и тёмного фона (<b>NavyDark #0A1628</b>).
+</div>
+
+<!-- Вариант A -->
+<h2>Вариант A — предложенный: track зелёный / TextMuted, thumb Color.Black</h2>
+<div class="varA">
+  <div class="card">
+    <div>
+      <div class="label">Включить правило</div>
+      <div class="hint">состояние: включено</div>
+    </div>
+    <div class="sw on"><div class="thumb"></div></div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">Только на парковке (P)</div>
+      <div class="hint">состояние: выключено</div>
+    </div>
+    <div class="sw off"><div class="thumb"></div></div>
+  </div>
+</div>
+
+<!-- Вариант B -->
+<h2>Вариант B — thumb тёмно-серый (NavyMid), track тот же</h2>
+<div class="varB">
+  <div class="card">
+    <div>
+      <div class="label">Включить правило</div>
+      <div class="hint">включено</div>
+    </div>
+    <div class="sw on"><div class="thumb"></div></div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">Только на парковке (P)</div>
+      <div class="hint">выключено</div>
+    </div>
+    <div class="sw off"><div class="thumb"></div></div>
+  </div>
+</div>
+
+<!-- Вариант C -->
+<h2>Вариант C — как было: белый thumb + CardBorder track (для сравнения)</h2>
+<div class="varC">
+  <div class="card">
+    <div>
+      <div class="label">Включить правило</div>
+      <div class="hint">включено</div>
+    </div>
+    <div class="sw on"><div class="thumb"></div></div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">Только на парковке (P)</div>
+      <div class="hint">выключено — thumb плохо виден на тёмном track</div>
+    </div>
+    <div class="sw off"><div class="thumb"></div></div>
+  </div>
+</div>
+
+<!-- Вариант D -->
+<h2>Вариант D — thumb чёрный с тонкой обводкой (#334155)</h2>
+<div class="varD">
+  <div class="card">
+    <div>
+      <div class="label">Включить правило</div>
+      <div class="hint">включено</div>
+    </div>
+    <div class="sw on"><div class="thumb"></div></div>
+  </div>
+  <div class="card">
+    <div>
+      <div class="label">Только на парковке (P)</div>
+      <div class="hint">выключено</div>
+    </div>
+    <div class="sw off"><div class="thumb"></div></div>
+  </div>
+</div>
+
+<div class="note" style="margin-top:28px">
+  Выбираете вариант — применяю его через helper <code>bydSwitchColors()</code> во всех
+  5 местах (Автоматизация — 3 Switch, Настройки — 2 Switch).
+</div>
+
+</div>
+</body>
+</html>
