@@ -520,7 +520,7 @@ class TrackingService : Service(), LocationListener {
         val rangeKm = estimateRangeKm(data.soc)
         _lastRangeKm.value = rangeKm
         val rangeStr = rangeKm?.let { " ~${"%.0f".format(it)} км" } ?: ""
-        val tempStr = data.avgBatTemp?.let { ", t°бат: ${it}°C" } ?: ""
+        val tempStr = data.avgBatTemp?.let { " | t°бат: ${it}°C" } ?: ""
         parts += "запас: $socStr$rangeStr$tempStr"
 
         // Block 2: 12V

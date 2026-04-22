@@ -315,9 +315,9 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 textAlign = TextAlign.End,
                 modifier = Modifier.width(44.dp)
             )
-            // Cost
+            // Cost (без кода валюты — он в заголовке дня/месяца)
             Text(
-                "$cost $currencySymbol",
+                cost,
                 color = if (isStop) TextMuted else TextSecondary,
                 fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.End,
