@@ -335,7 +335,7 @@ class TrackingService : Service(), LocationListener {
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                         // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
-                        automationEngine.evaluate(data)
+                        automationEngine.evaluate(data, tripTracker.tripStartedAt.value)
                         updateNotification(data)
                     } else {
                         consecutiveNullCount++

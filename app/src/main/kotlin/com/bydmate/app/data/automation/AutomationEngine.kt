@@ -73,8 +73,11 @@ class AutomationEngine @Inject constructor(
         registerConfirmReceiver()
     }
 
-    // Called every 3s from TrackingService poll loop
-    suspend fun evaluate(data: DiParsData) {
+    // Called every 3s from TrackingService poll loop.
+    // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)
+    // because the latter mirrors TripTracker via an async collect, which lags by a
+    // poll tick — would make the once-per-trip gate unreliable at trip boundaries.
+    suspend fun evaluate(data: DiParsData, tripStartedAt: Long?) {
         cleanupExpired()
 
         val location = TrackingService.lastLocation.value
@@ -101,17 +104,16 @@ class AutomationEngine @Inject constructor(
                 if (!matched || previous) continue       // edge trigger: fire only on false→true
 
                 // Once-per-trip gate: skip if already fired in the current trip
-                val currentTripStart = TrackingService.tripStartedAt.value
-                if (rule.fireOncePerTrip && currentTripStart != null &&
-                    lastFiredTripByRule[rule.id] == currentTripStart) continue
+                if (rule.fireOncePerTrip && tripStartedAt != null &&
+                    lastFiredTripByRule[rule.id] == tripStartedAt) continue
 
                 val actions = ActionDef.listFromJson(rule.actions)
                 if (actions.isEmpty()) continue
 
                 // Mark triggered immediately to prevent re-fire
                 ruleDao.updateLastTriggered(rule.id, now)
-                if (rule.fireOncePerTrip && currentTripStart != null) {
-                    lastFiredTripByRule[rule.id] = currentTripStart
+                if (rule.fireOncePerTrip && tripStartedAt != null) {
+                    lastFiredTripByRule[rule.id] = tripStartedAt
                 }
 
                 val snapshot = buildSnapshot(triggers, data)
