@@ -38,7 +38,7 @@ sealed class UpdateState {
     data object Checking : UpdateState()
     data object UpToDate : UpdateState()
     data class Available(val version: String, val notes: String) : UpdateState()
-    data class Downloading(val progress: String) : UpdateState()
+    data class Downloading(val version: String, val progress: String) : UpdateState()
     data class Error(val message: String) : UpdateState()
 }
 
@@ -121,6 +121,10 @@ fun UpdateDialog(
                             }
                         }
                         is UpdateState.Downloading -> {
+                            Text(
+                                "Скачивается v${state.version}",
+                                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium
+                            )
                             Text(state.progress, color = AccentBlue, fontSize = 14.sp)
                             LinearProgressIndicator(
                                 modifier = Modifier.fillMaxWidth(),

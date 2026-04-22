@@ -739,12 +739,16 @@ class SettingsViewModel @Inject constructor(
 
     fun downloadUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateDialogState = UpdateState.Downloading("Скачивание...")) }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
+                    _uiState.update {
+                        it.copy(updateDialogState = UpdateState.Downloading(update.version, "Скачивание: 0%"))
+                    }
                     updateChecker.downloadAndInstall(appContext, update) { progress ->
-                        _uiState.update { it.copy(updateDialogState = UpdateState.Downloading(progress)) }
+                        _uiState.update {
+                            it.copy(updateDialogState = UpdateState.Downloading(update.version, progress))
+                        }
                     }
                 }
             } catch (e: Exception) {

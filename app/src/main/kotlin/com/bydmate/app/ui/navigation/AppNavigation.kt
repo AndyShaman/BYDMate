@@ -1,6 +1,25 @@
 package com.bydmate.app.ui.navigation
 
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
@@ -98,6 +117,25 @@ fun AppNavigation(
         )
     }
 
+    // Post-install reminder: первый запуск новой версии → напомнить про Disable background Apps.
+    val currentAppVersion = remember {
+        runCatching {
+            autoCheckContext.packageManager.getPackageInfo(autoCheckContext.packageName, 0).versionName ?: "?"
+        }.getOrDefault("?")
+    }
+    var showPostInstallReminder by remember {
+        mutableStateOf(UpdateChecker.getLastSeenVersion(autoCheckContext) != currentAppVersion)
+    }
+    if (showPostInstallReminder) {
+        PostInstallReminderDialog(
+            version = currentAppVersion,
+            onDismiss = {
+                UpdateChecker.setLastSeenVersion(autoCheckContext, currentAppVersion)
+                showPostInstallReminder = false
+            }
+        )
+    }
+
     val isWelcome = currentDestination?.route == "welcome"
 
     Scaffold(
@@ -159,6 +197,53 @@ fun AppNavigation(
             composable(Screen.Settings.route) { SettingsScreen(onNavigateToPlaces = { navController.navigate("places") }) }
             composable("battery_health") { BatteryHealthScreen() }
             composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
+        }
+    }
+}
+
+@Composable
+private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    indication = null,
+                    interactionSource = MutableInteractionSource()
+                ) { onDismiss() },
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier
+                    .fillMaxWidth(0.55f)
+                    .clickable { /* absorb */ }
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Text("BYDMate обновлён до v$version", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        "Проверьте, что фоновая работа не заблокирована:\n\n" +
+                            "Настройки DiLink → General → Disable background Apps → BYDMate → OFF\n\n" +
+                            "Если переключатель включён (ON), DiLink может прибить сервис BYDMate — тогда поездки и GPS не будут писаться.",
+                        color = TextSecondary, fontSize = 14.sp
+                    )
+                    Button(
+                        onClick = onDismiss,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                    ) {
+                        Text("Понятно", color = Color.Black, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
         }
     }
 }

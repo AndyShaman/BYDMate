@@ -26,6 +26,7 @@ class UpdateChecker @Inject constructor(
         private const val PREFS_NAME = "update_prefs"
         private const val KEY_LAST_CHECK = "last_check"
         private const val KEY_AUTO_CHECK = "auto_check_enabled"
+        private const val KEY_LAST_SEEN_VERSION = "last_seen_version"
         private const val CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000L // 24 hours
 
         fun isAutoCheckEnabled(context: Context): Boolean =
@@ -35,6 +36,15 @@ class UpdateChecker @Inject constructor(
         fun setAutoCheckEnabled(context: Context, enabled: Boolean) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                 .edit().putBoolean(KEY_AUTO_CHECK, enabled).apply()
+        }
+
+        fun getLastSeenVersion(context: Context): String? =
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(KEY_LAST_SEEN_VERSION, null)
+
+        fun setLastSeenVersion(context: Context, version: String) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putString(KEY_LAST_SEEN_VERSION, version).apply()
         }
     }
 
