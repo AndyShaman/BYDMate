@@ -193,7 +193,7 @@ fun TripCard(
         // Time range
         val timeRange = buildString {
             append(formatDateTime(trip.startTs))
-            append("–")
+            append(" – ")
             append(trip.endTs?.let { formatTime(it) } ?: "…")
         }
         Text(text = timeRange, color = TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium,
@@ -203,6 +203,7 @@ fun TripCard(
         Text(
             text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
             color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
 
@@ -210,26 +211,34 @@ fun TripCard(
         Text(
             text = trip.distanceKm?.let { "%.1f".format(it) } ?: "—",
             color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Medium,
-            fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f)
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
         )
 
         // kWh
         Text(
             text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
             color = AccentBlue, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
 
         // Consumption — color-coded
         val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
-        Text(text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
+        Text(
+            text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
+            modifier = Modifier.weight(1f)
+        )
 
         // Cost
         Text(
             text = trip.cost?.let { "${"%.1f".format(it)}" } ?: "",
             color = AccentGreen, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+            textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
     }

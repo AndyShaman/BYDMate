@@ -39,6 +39,7 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -156,8 +157,8 @@ fun DashboardScreen(
                         )
                         // Idle drain card
                         val idleTimeStr = if (state.idleDrainHours < 1.0)
-                            "%.0f".format(state.idleDrainHours * 60) + "мин"
-                        else "%.1f".format(state.idleDrainHours) + "ч"
+                            "%.0f".format(state.idleDrainHours * 60) + " мин"
+                        else "%.1f".format(state.idleDrainHours) + " ч"
                         CompactCard(
                             leftValue = "%.1f".format(state.idleDrainKwhToday),
                             leftLabel = "кВт·ч",
@@ -358,11 +359,11 @@ fun DashboardScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
-                    Text("длит.", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("км", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("кВт·ч", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text("/100", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(1f))
+                    Text("длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
