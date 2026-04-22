@@ -107,7 +107,35 @@ class AutomationEngine @Inject constructor(
                 val snapshot = buildSnapshot(triggers, data)
 
                 if (rule.confirmBeforeExecute) {
-                    showConfirmNotification(rule, actions, snapshot)
+                    val shown = ConfirmOverlayManager.show(
+                        context = context,
+                        ruleName = rule.name,
+                        actionsSummary = actions.joinToString(", ") { it.displayName },
+                        onConfirm = {
+                            scope.launch {
+                                executeAndLog(rule, actions, snapshot, TrackingService.lastData.value)
+                            }
+                        },
+                        onCancel = {
+                            scope.launch {
+                                ruleLogDao.insert(
+                                    RuleLogEntity(
+                                        ruleId = rule.id,
+                                        ruleName = rule.name,
+                                        triggeredAt = now,
+                                        triggersSnapshot = snapshot,
+                                        actionsResult = """[{"result":"cancelled"}]""",
+                                        success = false,
+                                    )
+                                )
+                                Log.i(TAG, "Cancelled via overlay: '${rule.name}'")
+                            }
+                        },
+                    )
+                    if (!shown) {
+                        // Fallback: user hasn't granted SYSTEM_ALERT_WINDOW.
+                        showConfirmNotification(rule, actions, snapshot)
+                    }
                 } else {
                     scope.launch { executeAndLog(rule, actions, snapshot, data) }
                 }
