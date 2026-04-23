@@ -61,7 +61,7 @@ fun FloatingWidgetView(
     rangeKm: Double?,
     consumption: Double?,
     trend: Trend,
-    tripStartedAt: Long?,
+    sessionStartedAt: Long?,
     insideTemp: Int?,
     batTemp: Int?,
     voltage12v: Double?,
@@ -85,7 +85,7 @@ fun FloatingWidgetView(
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        RowTrip(tripStartedAt = tripStartedAt, insideTemp = insideTemp)
+        RowTrip(sessionStartedAt = sessionStartedAt, insideTemp = insideTemp)
         WidgetDivider()
         RowEnergy(soc = soc, rangeKm = rangeKm, consumption = consumption, trend = trend)
         WidgetDivider()
@@ -162,12 +162,12 @@ private fun RowEnergy(
 
 @Composable
 private fun RowTrip(
-    tripStartedAt: Long?,
+    sessionStartedAt: Long?,
     insideTemp: Int?,
 ) {
-    val durationText by produceState(initialValue = formatDurationShort(tripStartedAt), tripStartedAt) {
+    val durationText by produceState(initialValue = formatDurationShort(sessionStartedAt), sessionStartedAt) {
         while (true) {
-            value = formatDurationShort(tripStartedAt)
+            value = formatDurationShort(sessionStartedAt)
             delay(15_000L)
         }
     }
@@ -226,9 +226,9 @@ private fun WidgetDivider() {
     )
 }
 
-private fun formatDurationShort(tripStartedAt: Long?): String {
-    if (tripStartedAt == null) return "—"
-    val elapsed = System.currentTimeMillis() - tripStartedAt
+private fun formatDurationShort(sessionStartedAt: Long?): String {
+    if (sessionStartedAt == null) return "—"
+    val elapsed = System.currentTimeMillis() - sessionStartedAt
     val totalMin = (elapsed / 60_000L).toInt().coerceAtLeast(0)
     val hours = totalMin / 60
     val minutes = totalMin % 60

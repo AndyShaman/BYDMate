@@ -64,7 +64,7 @@ object WidgetController {
     private var rangeState = mutableStateOf<Double?>(null)
     private var consumptionState = mutableStateOf<Double?>(null)
     private var trendState = mutableStateOf(Trend.NONE)
-    private var tripStartedAtState = mutableStateOf<Long?>(null)
+    private var sessionStartedAtState = mutableStateOf<Long?>(null)
     private var insideTempState = mutableStateOf<Int?>(null)
     private var batTempState = mutableStateOf<Int?>(null)
     private var voltsState = mutableStateOf<Double?>(null)
@@ -122,7 +122,7 @@ object WidgetController {
                     rangeKm = rangeState.value,
                     consumption = consumptionState.value,
                     trend = trendState.value,
-                    tripStartedAt = tripStartedAtState.value,
+                    sessionStartedAt = sessionStartedAtState.value,
                     insideTemp = insideTempState.value,
                     batTemp = batTempState.value,
                     voltage12v = voltsState.value,
@@ -180,18 +180,18 @@ object WidgetController {
             combine(
                 TrackingService.lastData,
                 TrackingService.lastRangeKm,
-                TrackingService.tripStartedAt,
+                TrackingService.sessionStartedAt,
                 ConsumptionAggregator.state,
                 prefsAlphaFlow,
-            ) { data, range, tripStart, consumption, alpha ->
-                WidgetSnapshot(data, range, tripStart, consumption, alpha)
+            ) { data, range, sessionStart, consumption, alpha ->
+                WidgetSnapshot(data, range, sessionStart, consumption, alpha)
             }.collect { snap ->
                 socState.value = snap.data?.soc
                 rangeState.value = snap.range
                 insideTempState.value = snap.data?.insideTemp
                 batTempState.value = snap.data?.avgBatTemp
                 voltsState.value = snap.data?.voltage12v
-                tripStartedAtState.value = snap.tripStartedAt
+                sessionStartedAtState.value = snap.sessionStartedAt
                 consumptionState.value = snap.consumption.displayValue
                 trendState.value = snap.consumption.trend
                 alphaState.value = snap.alpha
@@ -202,7 +202,7 @@ object WidgetController {
     private data class WidgetSnapshot(
         val data: com.bydmate.app.data.remote.DiParsData?,
         val range: Double?,
-        val tripStartedAt: Long?,
+        val sessionStartedAt: Long?,
         val consumption: ConsumptionState,
         val alpha: Float,
     )

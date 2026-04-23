@@ -6,29 +6,53 @@ import kotlinx.coroutines.flow.StateFlow
 enum class Trend { NONE, DOWN, FLAT, UP }
 
 data class ConsumptionState(
-    /** null when neither EMA nor trip-avg are usable (e.g. fresh install, no trip) */
+    /** null when the widget should show a dash (either no session or first 500 m). */
     val displayValue: Double?,
     val trend: Trend,
 )
 
 /**
- * Accumulates current-trip consumption and decides what to display on the floating widget.
+ * Snapshot TrackingService persists to SharedPreferences so a mid-trip process kill
+ * does not lose the session anchor. Re-handed to [ConsumptionAggregator.onSample] on
+ * the first sample after restart.
+ */
+data class SessionBaseline(
+    val sessionStartedAt: Long,
+    val mileageStart: Double,
+    val totalElecStart: Double,
+)
+
+/**
+ * Per-session consumption aggregator for the floating widget.
  *
- * Number:
- *   - No active trip → baselineEma (or null when EMA is 0)
- *   - Active trip, tripKm < 1.0 → null (— shown in widget, honest "not enough data")
- *   - Active trip, tripKm ≥ 1.0 → trip-avg (tripKwh / tripKm * 100)
+ * Session boundary is decided by TrackingService (primary signal: `powerState`
+ * transition 0 → ≥1 for start, ≥1 → 0 for end; fallback: `TripTracker.state == DRIVING`
+ * when `powerState` is unreliable). This class treats `sessionStartedAt` as an opaque
+ * session ID — when it changes, per-session state resets.
  *
- * Trend (arrow): only when tripKm ≥ 2.0. Compares trip-avg against baselineEma
- * with hysteresis + 60-sec debounce. Stays NONE below 2 km and while baseline is 0.
+ * Display value (kWh / 100 km):
+ *   - No session       → baseline EMA (ambient), null if EMA is 0.
+ *   - cum dist < 0.5 km → null (first-500 m suppression).
+ *   - 0.5–5 km         → cumulative session average since ignition-on.
+ *   - ≥ 5 km           → rolling window over the last ≥5 km of driving.
  *
- * Pure state machine — no timers. Caller feeds `now` on each sample (3-sec polling cadence).
+ * Trend arrow activates only when cumulative distance ≥ 2 km. It compares
+ * `displayValue` to `baselineEma` with hysteresis (0.95/1.05 entry, 0.97/1.03 exit)
+ * and a 60-second debounce.
+ *
+ * Persistence: [currentSessionBaseline] returns the captured `mileageStart` /
+ * `totalElecStart` so TrackingService can save them. On process restart the saved
+ * snapshot is passed back via `persistedBaseline`, and `onSample` resumes cumulative
+ * mode from the ignition-on anchor instead of re-capturing from the current tick.
+ * The rolling window itself is not persisted — it naturally refills over the first
+ * few kilometres after restart.
  */
 object ConsumptionAggregator {
 
-    private const val MIN_TRIP_KM_DISPLAY = 1.0     // show trip-avg from 1 km
-    private const val MIN_TRIP_KM_TREND = 2.0       // enable trend arrow from 2 km
-    private const val DEBOUNCE_MS = 60_000L         // 60 sec
+    private const val MIN_DISPLAY_KM = 0.5      // first-500m suppression
+    private const val MIN_TREND_KM = 2.0        // arrow activates from 2 km
+    private const val ROLLING_WINDOW_KM = 5.0   // rolling window span
+    private const val DEBOUNCE_MS = 60_000L
 
     private const val ENTER_DOWN = 0.95
     private const val ENTER_UP = 1.05
@@ -38,92 +62,146 @@ object ConsumptionAggregator {
     private val _state = MutableStateFlow(ConsumptionState(null, Trend.NONE))
     val state: StateFlow<ConsumptionState> = _state
 
-    // Trip accumulation state
-    private var currentTripStart: Long? = null
+    // Per-session baseline
+    private var sessionId: Long? = null
     private var mileageStart: Double? = null
-    private var totalElecStart: Double? = null
+    private var elecStart: Double? = null
 
-    // Trend debounce state
+    // Rolling buffer of (mileage, totalElec) tick snapshots trimmed so oldest pair
+    // lies just past the 5-km horizon from the newest.
+    private val window = ArrayDeque<Pair<Double, Double>>()
+
+    // Trend debounce
     private var committedTrend: Trend = Trend.NONE
     private var candidateTrend: Trend = Trend.NONE
     private var candidateSince: Long = 0L
 
-    /**
-     * Called every polling tick (~3 sec).
-     *
-     * @param now system millis (pass System.currentTimeMillis() in prod, synthetic in tests)
-     * @param tripStartedAt start timestamp of active trip, or null when IDLE
-     * @param mileageKm DiPars odometer in km, or null when missing
-     * @param totalElecKwh DiPars cumulative electricity consumption in kWh, or null
-     * @param baselineEma EMA from last 10 trips ≥ 1 km (TripRepository); 0.0 means no history
-     */
     @Synchronized
     fun onSample(
         now: Long,
-        tripStartedAt: Long?,
+        sessionStartedAt: Long?,
         mileageKm: Double?,
         totalElecKwh: Double?,
         baselineEma: Double,
+        persistedBaseline: SessionBaseline? = null,
     ) {
-        // Idle (no active trip) — ambient display of baseline
-        if (tripStartedAt == null) {
-            clearTripState()
+        if (sessionStartedAt == null) {
+            clearSessionState()
             publish(displayOrNull(baselineEma), Trend.NONE)
             return
         }
 
-        // New trip — capture baselines on first sample with valid mileage/elec
-        if (currentTripStart != tripStartedAt) {
-            currentTripStart = tripStartedAt
-            mileageStart = null
-            totalElecStart = null
-            candidateTrend = Trend.NONE
+        // First sample for this session ID — set up baselines
+        if (sessionId != sessionStartedAt) {
+            sessionId = sessionStartedAt
+            window.clear()
             committedTrend = Trend.NONE
+            candidateTrend = Trend.NONE
+            candidateSince = 0L
+            if (persistedBaseline != null &&
+                persistedBaseline.sessionStartedAt == sessionStartedAt
+            ) {
+                mileageStart = persistedBaseline.mileageStart
+                elecStart = persistedBaseline.totalElecStart
+            } else {
+                mileageStart = mileageKm
+                elecStart = totalElecKwh
+            }
+        } else {
+            // Late-capture if first tick lacked data
+            if (mileageStart == null && mileageKm != null) mileageStart = mileageKm
+            if (elecStart == null && totalElecKwh != null) elecStart = totalElecKwh
         }
-        if (mileageStart == null && mileageKm != null) mileageStart = mileageKm
-        if (totalElecStart == null && totalElecKwh != null) totalElecStart = totalElecKwh
 
-        val tripKm = if (mileageKm != null && mileageStart != null) mileageKm - mileageStart!! else null
-        val tripKwh = if (totalElecKwh != null && totalElecStart != null) totalElecKwh - totalElecStart!! else null
+        if (mileageKm == null || totalElecKwh == null ||
+            mileageStart == null || elecStart == null
+        ) {
+            publish(null, Trend.NONE)
+            return
+        }
 
-        val tripAvg: Double? = if (tripKm != null && tripKm >= MIN_TRIP_KM_DISPLAY && tripKwh != null && tripKwh > 0) {
-            tripKwh / tripKm * 100.0
-        } else null
+        val cumKm = mileageKm - mileageStart!!
+        val cumKwh = totalElecKwh - elecStart!!
 
-        // Not enough trip distance yet — honest "—" instead of an unrelated number
-        if (tripAvg == null) {
+        pushRolling(mileageKm, totalElecKwh)
+
+        if (cumKm < MIN_DISPLAY_KM) {
             clearTrendCandidate()
             publish(null, Trend.NONE)
             return
         }
 
-        // tripAvg valid — trend only from 2 km onward
-        if (tripKm == null || tripKm < MIN_TRIP_KM_TREND) {
+        val display = rollingAverage() ?: cumulativeAverage(cumKm, cumKwh)
+        if (display == null) {
             clearTrendCandidate()
-            publish(tripAvg, Trend.NONE)
+            publish(null, Trend.NONE)
             return
         }
 
-        val candidate = if (baselineEma <= 0.01) Trend.FLAT
-        else candidateFor(committedTrend, tripAvg / baselineEma)
+        if (cumKm < MIN_TREND_KM) {
+            clearTrendCandidate()
+            publish(display, Trend.NONE)
+            return
+        }
 
+        if (baselineEma <= 0.01) {
+            publish(display, Trend.NONE)
+            return
+        }
+
+        val ratio = display / baselineEma
+        val candidate = candidateFor(committedTrend, ratio)
         updateDebounce(now, candidate)
-        publish(tripAvg, if (baselineEma <= 0.01) Trend.NONE else committedTrend)
+        publish(display, committedTrend)
+    }
+
+    private fun cumulativeAverage(cumKm: Double, cumKwh: Double): Double? =
+        if (cumKm > 0 && cumKwh > 0) cumKwh / cumKm * 100.0 else null
+
+    private fun pushRolling(mileage: Double, elec: Double) {
+        val last = window.lastOrNull()
+        if (last != null && mileage < last.first) {
+            // Mileage regression — odometer glitch or restore with stale tick; skip.
+            return
+        }
+        window.addLast(mileage to elec)
+        // Trim front while the second-oldest snapshot still covers the 5-km window.
+        while (window.size >= 2) {
+            val second = window.elementAt(1)
+            if (window.last().first - second.first >= ROLLING_WINDOW_KM) {
+                window.removeFirst()
+            } else break
+        }
+    }
+
+    private fun rollingAverage(): Double? {
+        if (window.size < 2) return null
+        val first = window.first()
+        val last = window.last()
+        val km = last.first - first.first
+        val kwh = last.second - first.second
+        return if (km >= ROLLING_WINDOW_KM && kwh > 0) kwh / km * 100.0 else null
+    }
+
+    @Synchronized
+    fun currentSessionBaseline(): SessionBaseline? {
+        val id = sessionId ?: return null
+        val m = mileageStart ?: return null
+        val e = elecStart ?: return null
+        return SessionBaseline(id, m, e)
     }
 
     @Synchronized
     fun reset() {
-        clearTripState()
-        committedTrend = Trend.NONE
-        candidateTrend = Trend.NONE
-        candidateSince = 0L
+        clearSessionState()
         _state.value = ConsumptionState(null, Trend.NONE)
     }
 
-    private fun clearTripState() {
-        currentTripStart = null
+    private fun clearSessionState() {
+        sessionId = null
         mileageStart = null
-        totalElecStart = null
+        elecStart = null
+        window.clear()
         committedTrend = Trend.NONE
         candidateTrend = Trend.NONE
         candidateSince = 0L
@@ -155,7 +233,6 @@ object ConsumptionAggregator {
 
     private fun updateDebounce(now: Long, candidate: Trend) {
         if (candidate == committedTrend) {
-            // Committed already matches → no-op, reset candidate to match
             candidateTrend = candidate
             candidateSince = now
             return

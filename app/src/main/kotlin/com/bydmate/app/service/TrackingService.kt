@@ -69,11 +69,26 @@ class TrackingService : Service(), LocationListener {
     private var firstDataReceived = false
     private var currentPollIntervalMs = POLL_INTERVAL_MS
 
-    // Cached values for range estimation in notification.
-    // Updated at service start + after history sync (new trips → TripRepository invalidates its own EMA cache).
+    // Cached values for range estimation in notification + floating widget.
+    // Refreshed at service start, after history sync, AND periodically every
+    // [CACHE_REFRESH_INTERVAL_MS] inside the polling loop so a Settings change
+    // (battery capacity, data source) or a newly-finalised trip invalidating
+    // TripRepository's own EMA cache propagates to the widget without waiting
+    // for the next service restart. Dashboard already re-reads on every tab
+    // switch — this periodic refresh keeps the widget in sync with it.
     @Volatile private var cachedEmaConsumption: Double = 0.0
     @Volatile private var cachedBaselineEma: Double = 0.0
     @Volatile private var cachedBatteryCapacity: Double = 72.9
+    @Volatile private var lastCacheRefreshTs: Long = 0L
+
+    // Widget session (ignition-on → ignition-off) — decoupled from TripTracker GPS state.
+    // Primary signal: DiPars powerState ≥ 1. Fallback when powerState is unreliable:
+    // tripTracker.state == DRIVING. Session closes when both are inactive for 30 sec
+    // so a short powerState glitch doesn't split one physical trip into two.
+    private lateinit var sessionPersistence: SessionPersistence
+    @Volatile private var pendingBaseline: com.bydmate.app.domain.calculator.SessionBaseline? = null
+    @Volatile private var sessionLastActiveTs: Long = 0L
+    private var lastSummaryLogTs: Long = 0L
 
     companion object {
         private const val TAG = "TrackingService"
@@ -82,6 +97,15 @@ class TrackingService : Service(), LocationListener {
         private const val POLL_INTERVAL_MS = 3000L // 3 seconds for detailed GPS + charging curve
         private const val NULL_WARNING_THRESHOLD = 5
         private const val MAX_POLL_INTERVAL_MS = 60_000L
+        // Tolerance between last "session active" tick and the current tick before we
+        // consider the session closed. 30 sec survives brief powerState blips and
+        // covers the DiLink wind-down after ignition-off.
+        private const val SESSION_IDLE_CLOSE_MS = 30_000L
+        // Throttle for the periodic INFO summary so logcat doesn't get flooded.
+        private const val SUMMARY_LOG_INTERVAL_MS = 60_000L
+        // Re-read battery capacity + EMA this often from Settings/TripRepository.
+        // TripRepository caches EMA in-memory so hits are cheap; Settings is Room.
+        private const val CACHE_REFRESH_INTERVAL_MS = 30_000L
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -92,8 +116,13 @@ class TrackingService : Service(), LocationListener {
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
-        private val _tripStartedAt = MutableStateFlow<Long?>(null)
-        val tripStartedAt: StateFlow<Long?> = _tripStartedAt
+        /**
+         * Current widget-session anchor (epoch millis of ignition-on), or null when
+         * the vehicle is idle. Consumers: widget duration, ConsumptionAggregator,
+         * AutomationEngine.fireOncePerTrip.
+         */
+        private val _sessionStartedAt = MutableStateFlow<Long?>(null)
+        val sessionStartedAt: StateFlow<Long?> = _sessionStartedAt
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning
@@ -120,6 +149,26 @@ class TrackingService : Service(), LocationListener {
         appendChainLog("startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
+
+        // Restore widget session anchor if the process was killed mid-trip.
+        // Aggregator will resume cumulative mode on its first post-restart tick
+        // as long as the session is still live (powerState ≥ 1 within grace window).
+        sessionPersistence = SessionPersistence(this)
+        val restored = sessionPersistence.load()
+        if (restored != null) {
+            _sessionStartedAt.value = restored.baseline.sessionStartedAt
+            pendingBaseline = restored.baseline
+            sessionLastActiveTs = restored.lastActiveTs
+            Log.i(TAG, "Restored session: startedAt=${restored.baseline.sessionStartedAt}, " +
+                "mileageStart=${"%.2f".format(restored.baseline.mileageStart)} km, " +
+                "elecStart=${"%.2f".format(restored.baseline.totalElecStart)} kWh, " +
+                "lastActiveTs=${restored.lastActiveTs}")
+        }
+
+        // Initial load of consumption cache for notification range estimate.
+        // Will also be refreshed after history sync below (if new trips appeared).
+        refreshConsumptionCache()
+
         startPolling()
         _isRunning.value = true
         appendChainLog("TrackingService fully started")
@@ -146,15 +195,6 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
-        // Initial load of consumption cache for notification range estimate.
-        // Will also be refreshed after history sync below (if new trips appeared).
-        refreshConsumptionCache()
-
-        // Mirror TripTracker's tripStartedAt into companion StateFlow for UI consumers
-        serviceScope.launch {
-            tripTracker.tripStartedAt.collect { _tripStartedAt.value = it }
-        }
-
         // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
@@ -173,20 +213,36 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun refreshConsumptionCache() {
-        serviceScope.launch {
-            try {
-                cachedEmaConsumption = tripRepository.getEmaConsumption()
-                // Baseline for widget trend: last 10 trips >= 1 km; fallback to weekly
-                // EMA when < 3 eligible trips (cold install / sparse history).
-                val recent = tripRepository.getRecentTripsEmaConsumption()
-                cachedBaselineEma = if (recent > 0.01) recent
-                    else tripRepository.getWeeklyEmaConsumption()
-                cachedBatteryCapacity = settingsRepository.getBatteryCapacity()
-                Log.d(TAG, "Consumption cache: ema=${"%.2f".format(cachedEmaConsumption)} kWh/100km, " +
-                    "baseline=${"%.2f".format(cachedBaselineEma)} kWh/100km, cap=$cachedBatteryCapacity kWh")
-            } catch (e: Exception) {
-                Log.w(TAG, "refreshConsumptionCache failed: ${e.message}")
-            }
+        serviceScope.launch { doRefreshConsumptionCache() }
+    }
+
+    /**
+     * In-polling periodic refresh: same as [refreshConsumptionCache] but runs
+     * inline on the existing polling coroutine (no extra launch) and is throttled
+     * to [CACHE_REFRESH_INTERVAL_MS]. Keeps the widget range in sync with the
+     * Dashboard — previously the widget cached values from service-start only
+     * and drifted when the user changed battery capacity / data source in
+     * Settings or a new trip finalised and shifted EMA.
+     */
+    private suspend fun maybeRefreshConsumptionCache(now: Long) {
+        if (now - lastCacheRefreshTs < CACHE_REFRESH_INTERVAL_MS) return
+        lastCacheRefreshTs = now
+        doRefreshConsumptionCache()
+    }
+
+    private suspend fun doRefreshConsumptionCache() {
+        try {
+            cachedEmaConsumption = tripRepository.getEmaConsumption()
+            // Baseline for widget trend: last 10 trips >= 1 km; fallback to weekly
+            // EMA when < 3 eligible trips (cold install / sparse history).
+            val recent = tripRepository.getRecentTripsEmaConsumption()
+            cachedBaselineEma = if (recent > 0.01) recent
+                else tripRepository.getWeeklyEmaConsumption()
+            cachedBatteryCapacity = settingsRepository.getBatteryCapacity()
+            Log.d(TAG, "Consumption cache: ema=${"%.2f".format(cachedEmaConsumption)} kWh/100km, " +
+                "baseline=${"%.2f".format(cachedBaselineEma)} kWh/100km, cap=$cachedBatteryCapacity kWh")
+        } catch (e: Exception) {
+            Log.w(TAG, "refreshConsumptionCache failed: ${e.message}")
         }
     }
 
@@ -213,13 +269,75 @@ class TrackingService : Service(), LocationListener {
         }
     }
 
+    /**
+     * Widget-session state machine — decoupled from TripTracker's GPS segmentation.
+     *
+     * Active = powerState ≥ 1 OR tripTracker currently driving. The OR guards against
+     * DiPars returning null/0 for powerState on some firmwares — if the fallback
+     * detects motion, we still open/keep the session.
+     *
+     * Session closes when both signals are silent for [SESSION_IDLE_CLOSE_MS],
+     * absorbing short powerState blips so one physical trip stays one session.
+     */
+    private fun updateSessionState(now: Long, data: DiParsData): Long? {
+        val powerOn = (data.powerState ?: 0) >= 1
+        val driving = tripTracker.state.value == com.bydmate.app.domain.tracker.TripState.DRIVING
+        val active = powerOn || driving
+
+        val currentSession = _sessionStartedAt.value
+
+        if (active) {
+            sessionLastActiveTs = now
+            if (currentSession == null) {
+                _sessionStartedAt.value = now
+                pendingBaseline = null   // fresh session — aggregator will capture
+                Log.i(TAG, "Widget session START at $now (powerOn=$powerOn, driving=$driving)")
+            }
+        } else if (currentSession != null) {
+            val idleFor = now - sessionLastActiveTs
+            if (idleFor >= SESSION_IDLE_CLOSE_MS) {
+                Log.i(TAG, "Widget session END (idle ${idleFor / 1000}s, powerOn=$powerOn, driving=$driving)")
+                _sessionStartedAt.value = null
+                pendingBaseline = null
+                sessionPersistence.clear()
+            }
+            // else: grace period — keep session alive through brief blip
+        }
+
+        return _sessionStartedAt.value
+    }
+
+    /**
+     * Once per minute emit a compact INFO line with session summary — helps field
+     * diagnosis (logcat) without flooding on every 3-sec tick.
+     */
+    private fun maybeLogSessionSummary(now: Long, data: DiParsData, sessionId: Long?) {
+        if (now - lastSummaryLogTs < SUMMARY_LOG_INTERVAL_MS) return
+        lastSummaryLogTs = now
+        val baseline = ConsumptionAggregator.currentSessionBaseline()
+        val state = ConsumptionAggregator.state.value
+        val cumKm = if (baseline != null && data.mileage != null)
+            data.mileage!! - baseline.mileageStart else null
+        val cumKwh = if (baseline != null && data.totalElecConsumption != null)
+            data.totalElecConsumption!! - baseline.totalElecStart else null
+        Log.i(TAG, "Widget session: id=$sessionId, " +
+            "cumKm=${cumKm?.let { "%.2f".format(it) } ?: "—"}, " +
+            "cumKwh=${cumKwh?.let { "%.3f".format(it) } ?: "—"}, " +
+            "display=${state.displayValue?.let { "%.1f".format(it) } ?: "—"} kWh/100, " +
+            "trend=${state.trend}, " +
+            "powerState=${data.powerState}, tripTracker=${tripTracker.state.value}")
+    }
+
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         com.bydmate.app.ui.widget.WidgetController.detach()
         appendChainLog("TrackingService onDestroy")
         pollingJob?.cancel()
         ConsumptionAggregator.reset()
-        _tripStartedAt.value = null
+        // NOTE: do NOT null out _sessionStartedAt or clear SessionPersistence here.
+        // onDestroy can fire on sys-kill mid-trip; persistence must survive so the
+        // next process can resume the session. The ignition-off branch in
+        // updateSessionState is the only place that clears prefs.
 
         // Force-end active trip/charge sessions asynchronously
         // Android gives ~5 seconds after onDestroy before killing process
@@ -322,18 +440,33 @@ class TrackingService : Service(), LocationListener {
                         }
                         val loc = _lastLocation.value
                         tripTracker.onData(data, loc)
+
+                        val nowMs = System.currentTimeMillis()
+                        maybeRefreshConsumptionCache(nowMs)
+                        val sessionId = updateSessionState(nowMs, data)
+
                         ConsumptionAggregator.onSample(
-                            now = System.currentTimeMillis(),
-                            tripStartedAt = tripTracker.tripStartedAt.value,
+                            now = nowMs,
+                            sessionStartedAt = sessionId,
                             mileageKm = data.mileage,
                             totalElecKwh = data.totalElecConsumption,
                             baselineEma = cachedBaselineEma,
+                            persistedBaseline = pendingBaseline,
                         )
+                        // Aggregator captured the real baseline on the first seen tick
+                        // for this session — persist it so a process kill doesn't lose
+                        // the ignition-on anchor.
+                        ConsumptionAggregator.currentSessionBaseline()?.let { baseline ->
+                            sessionPersistence.save(baseline, sessionLastActiveTs)
+                            pendingBaseline = baseline
+                        }
+
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                         // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
-                        automationEngine.evaluate(data, tripTracker.tripStartedAt.value)
+                        automationEngine.evaluate(data, sessionId)
                         updateNotification(data)
+                        maybeLogSessionSummary(nowMs, data, sessionId)
                     } else {
                         consecutiveNullCount++
                         if (consecutiveNullCount >= NULL_WARNING_THRESHOLD) {

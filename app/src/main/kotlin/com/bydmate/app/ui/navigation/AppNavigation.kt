@@ -36,7 +36,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -87,30 +89,45 @@ fun AppNavigation(
     // Автоматическая проверка обновлений при запуске приложения.
     // UpdateChecker сам throttle-ит запросы (10 мин между реальными походами в GitHub).
     val autoCheckContext = LocalContext.current
+    val autoCheckScope = rememberCoroutineScope()
     var autoUpdateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+    var autoUpdateState by remember { mutableStateOf<UpdateState?>(null) }
     LaunchedEffect(Unit) {
         if (!UpdateChecker.isAutoCheckEnabled(autoCheckContext)) return@LaunchedEffect
         try {
-            autoUpdateInfo = updateChecker.checkForUpdate(autoCheckContext, forceCheck = false)
+            val info = updateChecker.checkForUpdate(autoCheckContext, forceCheck = false)
+            if (info != null) {
+                autoUpdateInfo = info
+                autoUpdateState = UpdateState.Available(version = info.version, notes = info.releaseNotes)
+            }
         } catch (_: Exception) {
             // тихо игнорируем — оффлайн, rate-limit и т.п.
         }
     }
-    autoUpdateInfo?.let { info ->
+    autoUpdateState?.let { dialogState ->
         val currentVersion = runCatching {
             autoCheckContext.packageManager.getPackageInfo(autoCheckContext.packageName, 0).versionName ?: "?"
         }.getOrDefault("?")
         UpdateDialog(
             currentVersion = currentVersion,
-            state = UpdateState.Available(version = info.version, notes = info.releaseNotes),
+            state = dialogState,
             onCheck = {
-                navController.navigate(Screen.Settings.route) {
-                    popUpTo(navController.graph.findStartDestination().id) { saveState = true }
-                    launchSingleTop = true
+                val info = autoUpdateInfo ?: return@UpdateDialog
+                autoUpdateState = UpdateState.Downloading(info.version, "Скачивание: 0%")
+                autoCheckScope.launch {
+                    try {
+                        updateChecker.downloadAndInstall(autoCheckContext, info) { progress ->
+                            autoUpdateState = UpdateState.Downloading(info.version, progress)
+                        }
+                    } catch (e: Exception) {
+                        autoUpdateState = UpdateState.Error(e.message ?: "Download failed")
+                    }
                 }
-                autoUpdateInfo = null
             },
-            onDismiss = { autoUpdateInfo = null }
+            onDismiss = {
+                autoUpdateState = null
+                autoUpdateInfo = null
+            }
         )
     }
 
