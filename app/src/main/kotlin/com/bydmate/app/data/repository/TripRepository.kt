@@ -103,6 +103,32 @@ class TripRepository @Inject constructor(
         return ema ?: 0.0
     }
 
+    /**
+     * EMA of consumption (kWh/100km) over the most recent [count] trips
+     * with distanceKm >= [minKm]. Used as baseline for widget trend arrow —
+     * calendar-independent, so a quiet week doesn't inflate the number.
+     *
+     * Returns 0.0 when fewer than 3 eligible trips — caller should fall back
+     * to getWeeklyEmaConsumption() (cold install / sparse history).
+     */
+    suspend fun getRecentTripsEmaConsumption(
+        count: Int = 10,
+        minKm: Double = 1.0,
+        alpha: Double = 0.3,
+    ): Double {
+        val trips = tripDao.getRecentForEmaFiltered(minKm, count)
+        if (trips.size < 3) return 0.0
+        var ema: Double? = null
+        for (t in trips.asReversed()) {
+            val km = t.distanceKm ?: continue
+            val kwh = t.kwhConsumed ?: continue
+            if (km <= 0.0) continue
+            val c = kwh / km * 100.0
+            ema = if (ema == null) c else alpha * c + (1.0 - alpha) * ema
+        }
+        return ema ?: 0.0
+    }
+
     private fun invalidateEmaCache() {
         cachedEmaConsumption = null
     }

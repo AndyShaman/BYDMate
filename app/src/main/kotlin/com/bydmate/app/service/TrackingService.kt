@@ -72,7 +72,7 @@ class TrackingService : Service(), LocationListener {
     // Cached values for range estimation in notification.
     // Updated at service start + after history sync (new trips → TripRepository invalidates its own EMA cache).
     @Volatile private var cachedEmaConsumption: Double = 0.0
-    @Volatile private var cachedWeeklyEmaConsumption: Double = 0.0
+    @Volatile private var cachedBaselineEma: Double = 0.0
     @Volatile private var cachedBatteryCapacity: Double = 72.9
 
     companion object {
@@ -183,10 +183,14 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             try {
                 cachedEmaConsumption = tripRepository.getEmaConsumption()
-                cachedWeeklyEmaConsumption = tripRepository.getWeeklyEmaConsumption()
+                // Baseline for widget trend: last 10 trips >= 1 km; fallback to weekly
+                // EMA when < 3 eligible trips (cold install / sparse history).
+                val recent = tripRepository.getRecentTripsEmaConsumption()
+                cachedBaselineEma = if (recent > 0.01) recent
+                    else tripRepository.getWeeklyEmaConsumption()
                 cachedBatteryCapacity = settingsRepository.getBatteryCapacity()
                 Log.d(TAG, "Consumption cache: ema=${"%.2f".format(cachedEmaConsumption)} kWh/100km, " +
-                    "weekly=${"%.2f".format(cachedWeeklyEmaConsumption)} kWh/100km, cap=$cachedBatteryCapacity kWh")
+                    "baseline=${"%.2f".format(cachedBaselineEma)} kWh/100km, cap=$cachedBatteryCapacity kWh")
             } catch (e: Exception) {
                 Log.w(TAG, "refreshConsumptionCache failed: ${e.message}")
             }
@@ -330,7 +334,7 @@ class TrackingService : Service(), LocationListener {
                             tripStartedAt = tripTracker.tripStartedAt.value,
                             mileageKm = data.mileage,
                             totalElecKwh = data.totalElecConsumption,
-                            weeklyEma = cachedWeeklyEmaConsumption,
+                            baselineEma = cachedBaselineEma,
                         )
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).

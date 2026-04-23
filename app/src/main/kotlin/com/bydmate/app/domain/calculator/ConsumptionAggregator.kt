@@ -15,19 +15,19 @@ data class ConsumptionState(
  * Accumulates current-trip consumption and decides what to display on the floating widget.
  *
  * Number:
- *   - No active trip or trip age < 3 min → weeklyEma (or null when EMA is 0)
- *   - Active trip, age ≥ 3 min, tripKm > 0.1 → trip-avg (tripKwh / tripKm * 100)
- *   - Else → weeklyEma fallback
+ *   - No active trip → baselineEma (or null when EMA is 0)
+ *   - Active trip, tripKm < 1.0 → null (— shown in widget, honest "not enough data")
+ *   - Active trip, tripKm ≥ 1.0 → trip-avg (tripKwh / tripKm * 100)
  *
- * Trend: compares trip-avg against weeklyEma with hysteresis + 60-sec debounce.
- * Stays NONE while we're still showing EMA.
+ * Trend (arrow): only when tripKm ≥ 2.0. Compares trip-avg against baselineEma
+ * with hysteresis + 60-sec debounce. Stays NONE below 2 km and while baseline is 0.
  *
  * Pure state machine — no timers. Caller feeds `now` on each sample (3-sec polling cadence).
  */
 object ConsumptionAggregator {
 
-    private const val PREWARMUP_MS = 180_000L       // 3 min
-    private const val MIN_TRIP_KM = 0.1             // 100 m
+    private const val MIN_TRIP_KM_DISPLAY = 1.0     // show trip-avg from 1 km
+    private const val MIN_TRIP_KM_TREND = 2.0       // enable trend arrow from 2 km
     private const val DEBOUNCE_MS = 60_000L         // 60 sec
 
     private const val ENTER_DOWN = 0.95
@@ -55,7 +55,7 @@ object ConsumptionAggregator {
      * @param tripStartedAt start timestamp of active trip, or null when IDLE
      * @param mileageKm DiPars odometer in km, or null when missing
      * @param totalElecKwh DiPars cumulative electricity consumption in kWh, or null
-     * @param weeklyEma 7-day EMA from TripRepository; 0.0 means cold-install / no history
+     * @param baselineEma EMA from last 10 trips ≥ 1 km (TripRepository); 0.0 means no history
      */
     @Synchronized
     fun onSample(
@@ -63,12 +63,12 @@ object ConsumptionAggregator {
         tripStartedAt: Long?,
         mileageKm: Double?,
         totalElecKwh: Double?,
-        weeklyEma: Double,
+        baselineEma: Double,
     ) {
-        // Trip ended — clean trip-state
+        // Idle (no active trip) — ambient display of baseline
         if (tripStartedAt == null) {
             clearTripState()
-            publish(displayOrNull(weeklyEma), Trend.NONE)
+            publish(displayOrNull(baselineEma), Trend.NONE)
             return
         }
 
@@ -83,27 +83,32 @@ object ConsumptionAggregator {
         if (mileageStart == null && mileageKm != null) mileageStart = mileageKm
         if (totalElecStart == null && totalElecKwh != null) totalElecStart = totalElecKwh
 
-        val age = now - tripStartedAt
         val tripKm = if (mileageKm != null && mileageStart != null) mileageKm - mileageStart!! else null
         val tripKwh = if (totalElecKwh != null && totalElecStart != null) totalElecKwh - totalElecStart!! else null
 
-        val tripAvg: Double? = if (tripKm != null && tripKm > MIN_TRIP_KM && tripKwh != null && tripKwh > 0) {
+        val tripAvg: Double? = if (tripKm != null && tripKm >= MIN_TRIP_KM_DISPLAY && tripKwh != null && tripKwh > 0) {
             tripKwh / tripKm * 100.0
         } else null
 
-        // Prewarmup or no trip-avg yet → show EMA, no arrow
-        if (age < PREWARMUP_MS || tripAvg == null) {
+        // Not enough trip distance yet — honest "—" instead of an unrelated number
+        if (tripAvg == null) {
             clearTrendCandidate()
-            publish(displayOrNull(weeklyEma), Trend.NONE)
+            publish(null, Trend.NONE)
             return
         }
 
-        // Past prewarmup and trip-avg valid — show trip-avg
-        val candidate = if (weeklyEma <= 0.01) Trend.FLAT
-        else candidateFor(committedTrend, tripAvg / weeklyEma)
+        // tripAvg valid — trend only from 2 km onward
+        if (tripKm == null || tripKm < MIN_TRIP_KM_TREND) {
+            clearTrendCandidate()
+            publish(tripAvg, Trend.NONE)
+            return
+        }
+
+        val candidate = if (baselineEma <= 0.01) Trend.FLAT
+        else candidateFor(committedTrend, tripAvg / baselineEma)
 
         updateDebounce(now, candidate)
-        publish(tripAvg, if (weeklyEma <= 0.01) Trend.NONE else committedTrend)
+        publish(tripAvg, if (baselineEma <= 0.01) Trend.NONE else committedTrend)
     }
 
     @Synchronized
