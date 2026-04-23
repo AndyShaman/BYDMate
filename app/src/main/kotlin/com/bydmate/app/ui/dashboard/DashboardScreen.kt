@@ -155,22 +155,24 @@ fun DashboardScreen(
                             },
                             onClick = { viewModel.toggleBatteryHealthExpanded() }
                         )
-                        // Idle drain card
-                        val idleTimeStr = if (state.idleDrainHours < 1.0)
-                            "%.0f".format(state.idleDrainHours * 60) + " мин"
-                        else "%.1f".format(state.idleDrainHours) + " ч"
-                        CompactCard(
-                            leftValue = "%.1f".format(state.idleDrainKwhToday),
-                            leftLabel = "кВт·ч",
-                            rightValue = idleTimeStr,
-                            rightLabel = "стоянка",
-                            borderColor = when {
-                                state.idleDrainPercent > 5.0 -> SocRed
-                                state.idleDrainPercent > 2.0 -> SocYellow
-                                else -> AccentGreen
-                            },
-                            onClick = { viewModel.toggleIdleDrainExpanded() }
-                        )
+                        // Idle drain card — hidden in DiPlus mode (no zero-km records)
+                        if (state.idleDrainAvailable) {
+                            val idleTimeStr = if (state.idleDrainHours < 1.0)
+                                "%.0f".format(state.idleDrainHours * 60) + " мин"
+                            else "%.1f".format(state.idleDrainHours) + " ч"
+                            CompactCard(
+                                leftValue = "%.1f".format(state.idleDrainKwhToday),
+                                leftLabel = "кВт·ч",
+                                rightValue = idleTimeStr,
+                                rightLabel = "стоянка",
+                                borderColor = when {
+                                    state.idleDrainPercent > 5.0 -> SocRed
+                                    state.idleDrainPercent > 2.0 -> SocYellow
+                                    else -> AccentGreen
+                                },
+                                onClick = { viewModel.toggleIdleDrainExpanded() }
+                            )
+                        }
                     }
 
                     // Pop-up dialogs

@@ -75,15 +75,101 @@ fun WelcomeScreen(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            "Шаг ${state.step} из 2",
+            "Шаг ${state.step} из 3",
             color = TextSecondary,
             fontSize = 14.sp
         )
         Spacer(modifier = Modifier.height(16.dp))
 
         when (state.step) {
-            1 -> TariffStep(state, viewModel)
-            2 -> AutoStartStep(state, viewModel)
+            1 -> ModelStep(state, viewModel)
+            2 -> TariffStep(state, viewModel)
+            3 -> AutoStartStep(state, viewModel)
+        }
+    }
+}
+
+@Composable
+private fun ModelStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        SectionCard("Какая у тебя модель BYD?") {
+            Text(
+                "От этого зависит источник данных о поездках.\nLeopard 3 хранит их в встроенной базе BYD (energydata).\nSong и другие модели — только в DiPlus.",
+                color = TextSecondary,
+                fontSize = 13.sp
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
+                ModelButton(
+                    label = "Leopard 3",
+                    sublabel = "BYD energydata",
+                    selected = state.dataSource == "ENERGYDATA",
+                    onClick = { viewModel.setDataSource("ENERGYDATA") },
+                    modifier = Modifier.weight(1f)
+                )
+                ModelButton(
+                    label = "Song / другая",
+                    sublabel = "DiPlus TripInfo",
+                    selected = state.dataSource == "DIPLUS",
+                    onClick = { viewModel.setDataSource("DIPLUS") },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                "Можно поменять позже в настройках.",
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = { viewModel.nextStep() },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+        ) {
+            Text("Далее →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+private fun ModelButton(
+    label: String,
+    sublabel: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) AccentGreen else CardSurfaceElevated
+        ),
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                label,
+                color = if (selected) Color.White else TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                sublabel,
+                color = if (selected) Color.White else TextSecondary,
+                fontSize = 11.sp
+            )
         }
     }
 }

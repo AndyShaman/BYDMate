@@ -32,6 +32,7 @@ class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
+        const val KEY_DATA_SOURCE = "data_source"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.30"
@@ -53,6 +54,8 @@ class SettingsRepository @Inject constructor(
     }
 
     data class Currency(val code: String, val symbol: String, val label: String)
+
+    enum class DataSource { ENERGYDATA, DIPLUS }
 
     suspend fun getString(key: String, default: String): String =
         settingsDao.get(key) ?: default
@@ -142,4 +145,15 @@ class SettingsRepository @Inject constructor(
 
     suspend fun setIdleDrainV2CleanupDone() =
         setString(KEY_IDLE_DRAIN_V2_CLEANUP, "true")
+
+    suspend fun getDataSource(): DataSource =
+        when (getString(KEY_DATA_SOURCE, "ENERGYDATA")) {
+            "DIPLUS" -> DataSource.DIPLUS
+            else -> DataSource.ENERGYDATA
+        }
+
+    suspend fun setDataSource(source: DataSource) =
+        setString(KEY_DATA_SOURCE, source.name)
+
+    fun observeDataSource(): Flow<String?> = observeString(KEY_DATA_SOURCE)
 }

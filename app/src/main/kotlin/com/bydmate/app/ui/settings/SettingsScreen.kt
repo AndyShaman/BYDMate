@@ -30,6 +30,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
@@ -256,6 +258,47 @@ fun SettingsScreen(
                             onValueChange = { viewModel.saveConsumptionBad(it) },
                             keyboardType = KeyboardType.Decimal
                         )
+                    }
+                }
+
+                SectionHeader(text = "Источник данных поездок")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Leopard 3 — BYD energydata.\nSong и другие без встроенной базы — DiPlus TripInfo.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                        )
+                        DataSourceOption(
+                            label = "BYD energydata",
+                            selected = state.dataSource == "ENERGYDATA",
+                            onClick = { viewModel.setDataSource("ENERGYDATA") },
+                        )
+                        DataSourceOption(
+                            label = "DiPlus TripInfo",
+                            selected = state.dataSource == "DIPLUS",
+                            onClick = { viewModel.setDataSource("DIPLUS") },
+                        )
+                        Text(
+                            text = "Если после 2–3 поездок список пустой — переключи режим.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(top = 2.dp),
+                        )
+                        if (state.dataSourceStatus != null) {
+                            Text(
+                                state.dataSourceStatus!!,
+                                color = PrimaryColor,
+                                fontSize = 11.sp,
+                            )
+                        }
                     }
                 }
 
@@ -702,6 +745,32 @@ private fun SectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
+}
+
+@Composable
+private fun DataSourceOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = AccentGreen,
+                unselectedColor = TextMuted,
+            ),
+        )
+        Text(
+            text = label,
+            color = TextPrimary,
+            fontSize = 13.sp,
+            modifier = Modifier.padding(start = 4.dp),
+        )
+    }
 }
 
 @Composable

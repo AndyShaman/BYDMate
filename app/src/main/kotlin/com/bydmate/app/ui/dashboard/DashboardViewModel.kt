@@ -71,7 +71,8 @@ data class DashboardUiState(
     val idleDrainKwhWeek: Double = 0.0,
     val idleDrainHoursWeek: Double = 0.0,
     val estimatedRangeKm: Double? = null,
-    val diPlusConnected: Boolean = true
+    val diPlusConnected: Boolean = true,
+    val idleDrainAvailable: Boolean = true
 )
 
 @HiltViewModel
@@ -182,7 +183,13 @@ class DashboardViewModel @Inject constructor(
     private fun loadCurrency() {
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
-            _uiState.update { it.copy(currencySymbol = symbol) }
+            val dataSource = settingsRepository.getDataSource()
+            _uiState.update {
+                it.copy(
+                    currencySymbol = symbol,
+                    idleDrainAvailable = dataSource == SettingsRepository.DataSource.ENERGYDATA
+                )
+            }
         }
     }
 

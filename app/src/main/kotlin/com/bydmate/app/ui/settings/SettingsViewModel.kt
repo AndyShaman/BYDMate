@@ -80,7 +80,9 @@ data class SettingsUiState(
     val aliceApiKey: String = "",
     val aliceEnabled: Boolean = false,
     val aliceSaveStatus: String? = null,
-    val autoCheckUpdates: Boolean = true
+    val autoCheckUpdates: Boolean = true,
+    val dataSource: String = "ENERGYDATA",
+    val dataSourceStatus: String? = null
 )
 
 @HiltViewModel
@@ -155,6 +157,8 @@ class SettingsViewModel @Inject constructor(
             val aliceApiKey = settingsRepository.getString(SettingsRepository.KEY_ALICE_API_KEY, "")
             val aliceEnabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
 
+            val dataSource = settingsRepository.getDataSource().name
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -173,9 +177,21 @@ class SettingsViewModel @Inject constructor(
                     openRouterModelName = modelId.substringAfterLast("/").substringBefore(":"),
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
-                    aliceEnabled = aliceEnabled
+                    aliceEnabled = aliceEnabled,
+                    dataSource = dataSource
                 )
             }
+        }
+    }
+
+    fun setDataSource(value: String) {
+        if (value == _uiState.value.dataSource) return
+        val target = runCatching { SettingsRepository.DataSource.valueOf(value) }.getOrNull() ?: return
+        _uiState.update { it.copy(dataSource = value, dataSourceStatus = "Переключение...") }
+        viewModelScope.launch {
+            settingsRepository.setDataSource(target)
+            val r = historyImporter.runSync()
+            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: "Готово") }
         }
     }
 

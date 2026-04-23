@@ -19,6 +19,7 @@ import javax.inject.Inject
 
 data class WelcomeUiState(
     val step: Int = 1,
+    val dataSource: String = "ENERGYDATA", // "ENERGYDATA" or "DIPLUS"
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
@@ -55,8 +56,10 @@ class WelcomeViewModel @Inject constructor(
         _uiState.update { it.copy(currency = currency.code, currencySymbol = currency.symbol) }
     }
 
-    fun nextStep() = _uiState.update { it.copy(step = 2) }
-    fun prevStep() = _uiState.update { it.copy(step = 1) }
+    fun setDataSource(value: String) = _uiState.update { it.copy(dataSource = value) }
+
+    fun nextStep() = _uiState.update { it.copy(step = (it.step + 1).coerceAtMost(3)) }
+    fun prevStep() = _uiState.update { it.copy(step = (it.step - 1).coerceAtLeast(1)) }
 
     fun startBydMate() {
         viewModelScope.launch {
@@ -64,6 +67,9 @@ class WelcomeViewModel @Inject constructor(
 
             // Save all settings
             val state = _uiState.value
+            val dataSource = runCatching { SettingsRepository.DataSource.valueOf(state.dataSource) }
+                .getOrDefault(SettingsRepository.DataSource.ENERGYDATA)
+            settingsRepository.setDataSource(dataSource)
             settingsRepository.setString(SettingsRepository.KEY_BATTERY_CAPACITY, state.batteryCapacity)
             settingsRepository.setString(SettingsRepository.KEY_CURRENCY, state.currency)
             settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
@@ -82,16 +88,10 @@ class WelcomeViewModel @Inject constructor(
 
             _uiState.update { it.copy(importStatus = if (isUpgrade) "Обновление данных..." else "Импорт поездок...") }
 
-            val tariff = settingsRepository.getTripCostTariff()
-
-            if (isUpgrade) {
+            if (isUpgrade && settingsRepository.getDataSource() == SettingsRepository.DataSource.ENERGYDATA) {
                 historyImporter.deduplicateWithExisting()
-            } else {
-                historyImporter.syncFromEnergyData()
             }
-            historyImporter.enrichWithDiPlus()
-            historyImporter.calculateMissingCosts(tariff)
-            historyImporter.attachGpsPoints()
+            historyImporter.runSync()
 
             // Import charges
             diPlusDbReader.importChargingLog()

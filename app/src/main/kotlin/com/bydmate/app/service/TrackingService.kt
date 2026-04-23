@@ -158,15 +158,8 @@ class TrackingService : Service(), LocationListener {
         // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
-                // One-time: remove inflated idle drain from live power integration
-                historyImporter.cleanupIdleDrainV2()
-                val result = historyImporter.syncFromEnergyData()
+                val result = historyImporter.runSync()
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
-                historyImporter.enrichWithDiPlus()
-                // One-time fix: recalculate consumption from BMS (energydata)
-                historyImporter.recalculateConsumptionFromEnergyData()
-                historyImporter.calculateMissingCosts(settingsRepository.getTripCostTariff())
-                historyImporter.attachGpsPoints()
                 // Also import charging sessions
                 diPlusDbReader.importChargingLog()
                 // AI insights (once per day)
