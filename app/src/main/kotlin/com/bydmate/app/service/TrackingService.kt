@@ -86,7 +86,9 @@ class TrackingService : Service(), LocationListener {
     // tripTracker.state == DRIVING. Session closes when both are inactive for 30 sec
     // so a short powerState glitch doesn't split one physical trip into two.
     private lateinit var sessionPersistence: SessionPersistence
-    @Volatile private var pendingBaseline: com.bydmate.app.domain.calculator.SessionBaseline? = null
+    // TODO(Task 6): pendingBaseline + SessionBaseline shim will be removed when TrackingService
+    // is rewired to OdometerConsumptionBuffer. Shim lives in SessionBaselineCompat.kt.
+    @Volatile private var pendingBaseline: SessionBaseline? = null
     @Volatile private var sessionLastActiveTs: Long = 0L
     private var lastSummaryLogTs: Long = 0L
 
@@ -314,12 +316,10 @@ class TrackingService : Service(), LocationListener {
     private fun maybeLogSessionSummary(now: Long, data: DiParsData, sessionId: Long?) {
         if (now - lastSummaryLogTs < SUMMARY_LOG_INTERVAL_MS) return
         lastSummaryLogTs = now
-        val baseline = ConsumptionAggregator.currentSessionBaseline()
+        // TODO(Task 7): re-wire to OdometerConsumptionBuffer.getCumulativeStats() once Task 6/7 land.
         val state = ConsumptionAggregator.state.value
-        val cumKm = if (baseline != null && data.mileage != null)
-            data.mileage!! - baseline.mileageStart else null
-        val cumKwh = if (baseline != null && data.totalElecConsumption != null)
-            data.totalElecConsumption!! - baseline.totalElecStart else null
+        val cumKm: Double? = null
+        val cumKwh: Double? = null
         Log.i(TAG, "Widget session: id=$sessionId, " +
             "cumKm=${cumKm?.let { "%.2f".format(it) } ?: "—"}, " +
             "cumKwh=${cumKwh?.let { "%.3f".format(it) } ?: "—"}, " +
@@ -445,21 +445,13 @@ class TrackingService : Service(), LocationListener {
                         maybeRefreshConsumptionCache(nowMs)
                         val sessionId = updateSessionState(nowMs, data)
 
+                        // TODO(Task 7): replace stub call with OdometerConsumptionBuffer-backed
+                        // recentAvg / shortAvg once Task 6/7 wires the new buffer.
                         ConsumptionAggregator.onSample(
                             now = nowMs,
-                            sessionStartedAt = sessionId,
-                            mileageKm = data.mileage,
-                            totalElecKwh = data.totalElecConsumption,
-                            baselineEma = cachedBaselineEma,
-                            persistedBaseline = pendingBaseline,
+                            recentAvg = cachedBaselineEma,
+                            shortAvg = null,
                         )
-                        // Aggregator captured the real baseline on the first seen tick
-                        // for this session — persist it so a process kill doesn't lose
-                        // the ignition-on anchor.
-                        ConsumptionAggregator.currentSessionBaseline()?.let { baseline ->
-                            sessionPersistence.save(baseline, sessionLastActiveTs)
-                            pendingBaseline = baseline
-                        }
 
                         chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).

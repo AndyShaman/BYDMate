@@ -1,7 +1,7 @@
 package com.bydmate.app.service
 
 import android.content.Context
-import com.bydmate.app.domain.calculator.SessionBaseline
+// TODO(Task 6): SessionBaseline will be removed; shim lives in SessionBaselineCompat.kt
 
 /**
  * Thin SharedPreferences wrapper holding the current widget session anchor
