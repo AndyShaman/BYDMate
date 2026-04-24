@@ -1,18 +1,18 @@
 package com.bydmate.app.service
 
 import android.content.Context
-import com.bydmate.app.domain.calculator.SessionBaseline
 
 /**
- * Thin SharedPreferences wrapper holding the current widget session anchor
- * (ignition-on timestamp + mileage/elec baselines). Survives process kill so that
- * the ConsumptionAggregator can resume cumulative mode from the real ignition-on
- * point, not from whenever the process was respawned.
+ * Holds the current widget-session anchor across process restarts. After v2.5.0
+ * the aggregator no longer needs mileage/totalElec baselines (those moved into
+ * OdometerConsumptionBuffer which is itself Room-persistent), so this is just
+ * the ignition-on timestamp + last-active heartbeat.
  *
- * Cleared on ignition-off (powerState 0) so the next session starts fresh.
+ * Cleared on ignition-off (powerState 0 + 30 sec idle) so the next session
+ * gets a fresh sessionStartedAt.
  */
 data class PersistedSession(
-    val baseline: SessionBaseline,
+    val sessionStartedAt: Long,
     val lastActiveTs: Long,
 )
 
@@ -24,25 +24,14 @@ class SessionPersistence(context: Context) {
     fun load(): PersistedSession? {
         if (!prefs.contains(KEY_STARTED_AT)) return null
         val ts = prefs.getLong(KEY_STARTED_AT, 0L)
-        val miles = loadDouble(KEY_MILEAGE_START_BITS, KEY_MILEAGE_START)
-        val elec = loadDouble(KEY_ELEC_START_BITS, KEY_ELEC_START)
-        val lastActiveTs = prefs.getLong(KEY_LAST_ACTIVE_TS, 0L)
-        if (ts <= 0L || miles == null || elec == null) return null
-        return PersistedSession(
-            baseline = SessionBaseline(
-                sessionStartedAt = ts,
-                mileageStart = miles,
-                totalElecStart = elec,
-            ),
-            lastActiveTs = lastActiveTs,
-        )
+        val last = prefs.getLong(KEY_LAST_ACTIVE_TS, 0L)
+        if (ts <= 0L) return null
+        return PersistedSession(sessionStartedAt = ts, lastActiveTs = last)
     }
 
-    fun save(baseline: SessionBaseline, lastActiveTs: Long) {
+    fun save(sessionStartedAt: Long, lastActiveTs: Long) {
         prefs.edit()
-            .putLong(KEY_STARTED_AT, baseline.sessionStartedAt)
-            .putLong(KEY_MILEAGE_START_BITS, baseline.mileageStart.toRawBits())
-            .putLong(KEY_ELEC_START_BITS, baseline.totalElecStart.toRawBits())
+            .putLong(KEY_STARTED_AT, sessionStartedAt)
             .putLong(KEY_LAST_ACTIVE_TS, lastActiveTs)
             .apply()
     }
@@ -50,30 +39,23 @@ class SessionPersistence(context: Context) {
     fun clear() {
         prefs.edit()
             .remove(KEY_STARTED_AT)
-            .remove(KEY_MILEAGE_START)
-            .remove(KEY_ELEC_START)
-            .remove(KEY_MILEAGE_START_BITS)
-            .remove(KEY_ELEC_START_BITS)
             .remove(KEY_LAST_ACTIVE_TS)
+            // Also wipe legacy keys from v2.4.x in case of in-place upgrade.
+            .remove(LEGACY_KEY_MILEAGE_START)
+            .remove(LEGACY_KEY_ELEC_START)
+            .remove(LEGACY_KEY_MILEAGE_START_BITS)
+            .remove(LEGACY_KEY_ELEC_START_BITS)
             .apply()
-    }
-
-    private fun loadDouble(bitsKey: String, floatKey: String): Double? {
-        if (prefs.contains(bitsKey)) {
-            return Double.fromBits(prefs.getLong(bitsKey, 0L))
-        }
-        if (!prefs.contains(floatKey)) return null
-        val value = prefs.getFloat(floatKey, Float.NaN)
-        return if (value.isNaN()) null else value.toDouble()
     }
 
     companion object {
         private const val PREFS_NAME = "bydmate_widget_session"
         private const val KEY_STARTED_AT = "session_started_at"
-        private const val KEY_MILEAGE_START = "mileage_start_km"
-        private const val KEY_ELEC_START = "elec_start_kwh"
-        private const val KEY_MILEAGE_START_BITS = "mileage_start_km_bits"
-        private const val KEY_ELEC_START_BITS = "elec_start_kwh_bits"
         private const val KEY_LAST_ACTIVE_TS = "last_active_ts"
+        // Legacy v2.4.x keys — only cleared, never read.
+        private const val LEGACY_KEY_MILEAGE_START = "mileage_start_km"
+        private const val LEGACY_KEY_ELEC_START = "elec_start_kwh"
+        private const val LEGACY_KEY_MILEAGE_START_BITS = "mileage_start_km_bits"
+        private const val LEGACY_KEY_ELEC_START_BITS = "elec_start_kwh_bits"
     }
 }

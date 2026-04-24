@@ -1,8 +1,8 @@
 # Adaptive Range & Consumption — Design Spec
 
 **Версия:** v2.5.0
-**Дата:** 2026-04-24
-**Статус:** draft, ждёт review
+**Дата:** 2026-04-24 (rev. 2 — закрыты open questions, заменён Δtime-фильтр на sessionId boundary)
+**Статус:** approved, готов к имплементации
 
 ---
 
@@ -68,15 +68,26 @@ Central rolling-window calculator. **Один на всё приложение**
 @Singleton
 class OdometerConsumptionBuffer @Inject constructor(
     private val dao: OdometerSampleDao,
-    private val fallbackEmaProvider: () -> Double  // TripRepository.getEmaConsumption
+    private val fallbackEmaProvider: suspend () -> Double  // TripRepository.getEmaConsumption
 ) {
-    /** Update on every DiPars tick. Idempotent on duplicate mileage/elec. */
-    suspend fun onSample(mileage: Double?, totalElec: Double?, isCharging: Boolean)
+    /**
+     * Update on every DiPars tick. Idempotent on duplicate mileage/elec.
+     * @param sessionId монотонный идентификатор ignition cycle
+     *   (= TrackingService.sessionStartedAt). Используется как boundary —
+     *   пары снимков из разных сессий пропускаются при расчёте среднего.
+     */
+    suspend fun onSample(
+        mileage: Double?,
+        totalElec: Double?,
+        socPercent: Int?,
+        sessionId: Long?,
+        isCharging: Boolean
+    )
 
-    /** kWh/100km. Returns fallback EMA if buffer has < MIN_BUFFER_KM. */
+    /** kWh/100km. Returns fallback EMA if usable distance < MIN_BUFFER_KM. */
     suspend fun recentAvgConsumption(): Double
 
-    /** Short-horizon (2 km) for trend arrow. Null if buffer too short. */
+    /** Short-horizon (2 km) for trend arrow. Null if usable distance < SHORT_WINDOW_KM. */
     suspend fun shortAvgConsumption(): Double?
 
     /** For debugging / summary logs. */
@@ -86,11 +97,39 @@ class OdometerConsumptionBuffer @Inject constructor(
 
 **Константы:**
 
-- `WINDOW_KM = 25.0` — длина rolling-окна.
-- `SHORT_WINDOW_KM = 2.0` — окно для стрелки тренда.
-- `MIN_BUFFER_KM = 5.0` — ниже этого ориентируемся на fallback EMA.
-- `MIN_MILEAGE_DELTA = 0.05` — игнорируем tick'и где пробег не вырос и нет простоя с HVAC (шум).
-- `MAX_BUFFER_ROWS = 500` — hard cap на случай простоев с большим количеством tick'ов (trim по кол-ву, не по пробегу).
+- `WINDOW_KM = 25.0` — длина rolling-окна для recent avg (закрыто 2026-04-24).
+- `SHORT_WINDOW_KM = 2.0` — окно для стрелки тренда (закрыто 2026-04-24).
+- `MIN_BUFFER_KM = 5.0` — ниже этого `recentAvg` возвращает fallback EMA.
+- `MIN_MILEAGE_DELTA = 0.05` — пишем новый snapshot только если одометр сдвинулся на ≥ 50 м от предыдущего snapshot'а ИЛИ изменился sessionId. Защищает от тысяч снапшотов с одинаковым mileage в простое.
+- `MAX_BUFFER_ROWS = 500` — hard cap, trim самых старых при превышении (страховка).
+
+**Алгоритм `recentAvgConsumption()`:**
+
+```
+samples = dao.windowFrom(newest.mileage - WINDOW_KM)  // ASC по mileage
+if samples.size < 2: return fallbackEmaProvider()
+
+totalKm = 0; totalKwh = 0
+for i from 1 to samples.lastIndex:
+    prev = samples[i-1]; cur = samples[i]
+    if prev.sessionId != cur.sessionId: continue   // ignition cycle boundary — skip pair
+    if cur.totalElecKwh == null || prev.totalElecKwh == null: continue   // SOC_BASED взаимоисключения покрываются ниже
+    dKm  = cur.mileageKm - prev.mileageKm
+    dKwh = cur.totalElecKwh - prev.totalElecKwh
+    if dKm <= 0 || dKwh < 0: continue              // glitch / regen — skip
+    totalKm += dKm; totalKwh += dKwh
+
+if totalKm < MIN_BUFFER_KM: return fallbackEmaProvider()
+return totalKwh / totalKm * 100
+```
+
+`shortAvgConsumption()` — то же самое, но окно `SHORT_WINDOW_KM`. Возвращает `null`, если суммарный валидный `totalKm < SHORT_WINDOW_KM`.
+
+**Почему sessionId, а не Δtime:**
+
+- Внутри одной сессии (ignition on → off) DiPars живой, любые простои с HVAC, прогревы, заторы — это **реальный расход батареи**, должен учитываться. Фильтрация по Δtime выкинула бы их и заниженно показала real-world consumption.
+- Между сессиями (машина выключена 12 часов: ночной BMS drain или зарядка на Wall Box) — переход через эту «дыру» не имеет физического смысла как «расход на езду». Скрипт пропускает только эту cross-session пару, остальные snapshots обеих сессий продолжают участвовать в расчёте.
+- Зарядка всегда происходит при ignition off → автоматически попадает в boundary, отдельный SOC-rise detection не нужен.
 
 ### 3.2 Новый класс `RangeCalculator`
 
@@ -165,12 +204,16 @@ enum class BufferMode { TOTAL_ELEC, SOC_BASED }
 **Новая Room-таблица `odometer_samples`:**
 
 ```kotlin
-@Entity(tableName = "odometer_samples")
+@Entity(
+    tableName = "odometer_samples",
+    indices = [Index("mileageKm"), Index("sessionId")]
+)
 data class OdometerSampleEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val mileageKm: Double,
     val totalElecKwh: Double?,   // null в SOC_BASED режиме
     val socPercent: Int?,         // снимок SOC для калибровки
+    val sessionId: Long?,         // = TrackingService.sessionStartedAt; null при unknown
     val timestamp: Long
 )
 ```
@@ -182,11 +225,11 @@ data class OdometerSampleEntity(
 interface OdometerSampleDao {
     @Insert suspend fun insert(sample: OdometerSampleEntity): Long
 
-    /** Last sample (by id, since id is monotonic). */
+    /** Last sample by id (id monotonic since autoGenerate). */
     @Query("SELECT * FROM odometer_samples ORDER BY id DESC LIMIT 1")
     suspend fun last(): OdometerSampleEntity?
 
-    /** All samples where mileage >= (newest mileage - WINDOW_KM). */
+    /** All samples where mileage >= (newest mileage - WINDOW_KM). ASC by mileage. */
     @Query("""
         SELECT * FROM odometer_samples
         WHERE mileageKm >= :minMileage
@@ -196,6 +239,14 @@ interface OdometerSampleDao {
 
     @Query("DELETE FROM odometer_samples WHERE mileageKm < :cutoff")
     suspend fun trimBelow(cutoff: Double)
+
+    /** Hard cap fallback — удаляем самые старые при превышении MAX_BUFFER_ROWS. */
+    @Query("""
+        DELETE FROM odometer_samples WHERE id IN (
+            SELECT id FROM odometer_samples ORDER BY id ASC LIMIT :howMany
+        )
+    """)
+    suspend fun deleteOldest(howMany: Int)
 
     @Query("SELECT COUNT(*) FROM odometer_samples") suspend fun count(): Int
 }
@@ -258,19 +309,27 @@ WidgetController ─────────►   RangeCalculator.estimate (че
 
 ### 4.5 Долгий простой (сутки+) с HVAC выключенным
 
-`totalElec` может немного вырасти (12V discharge, BMS overhead) без движения. При следующем включении первый tick даст `Δtotalelec > 0, Δmileage = 0`. Это попадёт в буфер как простойное потребление.
+DiLink при ignition off не работает — DiPars молчит, никаких tick'ов мы не получаем. Утром при ignition on `TrackingService` создаёт **новый sessionStartedAt** (поскольку powerState 0→1). Первый snapshot новой сессии получит свежий `sessionId`.
 
-На 25-км горизонте это ~0.3–0.5 кВт·ч = +1–2 кВт·ч/100км к среднему. Некритично, но теоретически можно отфильтровать: если `(currentTimestamp - lastSampleTimestamp) > 6 часов` — вставляем «разделитель» (пропускаем, сбрасываем `totalElecAtSocChange`). Уточнить в реализации.
+В буфере получится:
+- `(mileage=10000.0, totalElec=8500.0, sessionId=1730000000)` — последний вечерний snapshot
+- `(mileage=10000.05, totalElec=8501.2, sessionId=1730043200)` — первый утренний snapshot
+
+Алгоритм `recentAvgConsumption()` встретит `prev.sessionId != cur.sessionId` → **пропустит эту пару**. Ночной BMS drain (1.2 кВт·ч) и пройденные за ночь 50 м не попадут в средний расход. Снимки обеих сессий продолжат участвовать каждый по своему — пары внутри вчерашней сессии и пары внутри сегодняшней.
+
+Никаких Δtime-фильтров не нужно — sessionId сам по себе закрывает кейс.
 
 ### 4.6 Sys-kill процесса
 
 Буфер persist в Room → переживает. `SocInterpolator.totalElecAtSocChange` persist в SharedPreferences → переживает. На первом tick'е после рестарта — продолжаем с того же места.
 
-### 4.7 SOC «прыгает» вверх (регенерация, быстрая зарядка, baseline drift)
+### 4.7 SOC «прыгает» вверх (регенерация, baseline drift)
 
-Если `soc_now > soc_prev` и не заряжаемся — вероятно регенерация (короткий импульс). Игнорируем изменение `totalElecAtSocChange` (оставляем предыдущий), позволяем `carryOver` временно стать отрицательным в формуле. `remaining_kwh` может чуть подпрыгнуть — это честно, так и есть (вернулось немного энергии).
+Внутри живой сессии `soc_now > soc_prev` бывает только при регенеративном торможении (мелкий импульс, ≤ 1%). Это реальное возвращение энергии в батарею, отражается естественно: `totalElec` тоже может на чуть-чуть просесть, либо остаться. В формуле `recentAvg` пара с `dKwh < 0` пропускается (см. алгоритм в 3.1) — отдельной обработки не нужно.
 
-Если `soc_now - soc_prev > 2%` за один tick — вероятно zaряжались и пропустили. Обновляем `totalElecAtSocChange = totalElec_now` (сбрасываем carry).
+Зарядка (соответственно SOC up на десятки процентов) всегда происходит при ignition off → следующий snapshot будет уже в новой сессии → sessionId boundary автоматически выкидывает пару из расчёта. Отдельный SOC-rise detection не требуется.
+
+Для `SocInterpolator`: внутри сессии при `soc_now > soc_prev` обновляем `totalElecAtSocChange = totalElec_now` (сбрасываем carryOver в 0, потому что физическая референс-точка сместилась). При смене сессии `SocInterpolator` тоже сбрасывается на первом tick'е новой сессии.
 
 ### 4.8 Отсутствующие поля DiPars
 
@@ -339,15 +398,18 @@ WidgetController ─────────►   RangeCalculator.estimate (че
 **`OdometerConsumptionBufferTest`:**
 
 - empty buffer returns fallback EMA
-- < MIN_BUFFER_KM returns fallback
+- < MIN_BUFFER_KM (валидный) returns fallback
 - ≥ MIN_BUFFER_KM computes from buffer
 - trim старых samples при росте mileage
-- charging samples игнорируются
+- charging samples игнорируются (`isCharging=true` → no insert)
 - odometer regression tick пропускается
 - huge forward jump (>100 км) пропускается и warning'ится
 - SOC_BASED fallback когда totalElec null 3+ tick'а
 - short window (2 км) и recent window (25 км) считаются независимо
 - persistent state выживает «рестарт» (DAO in-memory stub)
+- **sessionId boundary**: пара снимков с разными sessionId пропускается, остальные суммируются — на синтетическом окне «10 км в session A → 5 км gap → 10 км в session B» recentAvg = средневзвешенное по 20 валидным км
+- **HVAC-простой внутри сессии**: 5 км → snapshot с тем же mileage и +1 кВт·ч totalElec через 30 мин (одна сессия) → пара пропускается из-за `dKm <= 0`, расход не искажается
+- **MIN_MILEAGE_DELTA**: tick'и с движением < 50 м не пишутся в буфер (защита от спама в простое с DiPars живой)
 
 **`SocInterpolatorTest`:**
 
@@ -414,17 +476,24 @@ WidgetController ─────────►   RangeCalculator.estimate (че
 
 ---
 
-## 9. Открытые вопросы для обсуждения
+## 9. Закрытые решения (2026-04-24)
 
-1. **Длина окна (25 км)** — правильный компромисс между инерцией и актуальностью? Tesla использует 5/15/30 miles (8/24/48 км), BMW ~20 миль (32 км), Hyundai похоже. 25 км — середина, можно поэкспериментировать. Готов сделать константой с TODO пересмотреть после 1-2 недель использования.
+Все open questions из предыдущей версии спеца обсуждены и закрыты:
 
-2. **Short window для стрелки (2 км)** — не слишком ли короткий? Если rolling 2 км окажется дёрганым в реальной езде (например, на городских пробках), увеличить до 3–5 км или временной window (последние 3 минуты движения).
+1. **Длина recent window — 25 км.** Середина между Tesla 8/24/48 и BMW i3 ~32. После выпуска возможна корректировка по полевым данным, но в v2.5.0 идёт как константа.
 
-3. **Filtering простоев > 6 часов** (п. 4.5) — делать или не париться? Простой эффект мал, усложнение буфера заметное. Моё мнение: **не делать** в v2.5.0, посмотреть на реальные данные из logcat, при необходимости добавить потом.
+2. **Short window для стрелки — 2 км.** Целевой сценарий пользователя — короткая поездка 6 км до работы с холодным стартом и прогревом. При 3 км стрелка активировалась бы только во второй половине, прогрев уже прошёл — нечего показывать. При 2 км стрелка появляется к началу «нормального» движения после прогрева. Дёрганье на светофорах гасится hysteresis (0.90/1.10) и debounce 30 сек.
 
-4. **Стратегия для стрелки на коротких поездках** — сейчас стрелка активируется с `cumKm ≥ 2` в рамках сессии. В новой модели «сессия» для расхода не существует. Предлагаю: стрелка активируется, когда **оба** окна (short и recent) достаточно заполнены — `short ≥ 2 km` и `recent ≥ 5 km`. Это естественно отсечёт первые километры поездки после долгого простоя (там ratio врёт из-за прогрева).
+3. **Никакого Δtime-фильтра простоев.** Заменено на **sessionId boundary** (см. 3.1 и 4.5). Внутри одной сессии все простои с HVAC учитываются как реальный расход. Между сессиями (ignition cycle, ночная стоянка, зарядка) пара снимков пропускается. Это:
+   - Не выкидывает реальный HVAC-расход из живой сессии (как сделал бы Δtime-фильтр).
+   - Автоматически покрывает зарядку без отдельного SOC-rise detection.
+   - Не зависит от непредсказуемых параметров типа «считать ли 30 минут простой пропастью».
 
-5. **Дефолт batteryCapacity на старте** — сейчас 38.0 в `DashboardViewModel`. Это рудимент старых BYD моделей. Предлагаю поднять до 72.9 (Leopard 3) — он в 95% случаев ближе к правде для пользователей этого приложения. Если владелец Song зайдёт — он всё равно сразу сходит в Settings и поправит.
+4. **Активация стрелки** — когда оба окна заполнены: `short ≥ 2 km` валидного движения и `recent ≥ 5 km` валидного движения (после фильтрации cross-session pair). Цифра расхода появляется при `recent ≥ 2 km`, иначе показываем fallback EMA.
+
+5. **Дефолт `batteryCapacity` в `DashboardViewModel` → 72.9.** Текущее значение 38.0 — рудимент. Меняем как часть v2.5.0 (`SettingsRepository.DEFAULT_BATTERY_CAPACITY` уже 72.9, остаётся синхронизировать).
+
+**Побочка (вне основной фичи, закоммичено в main как `chore`):** дефолты тарифов AC 0.30→0.20 и DC 0.50→0.73.
 
 ---
 
