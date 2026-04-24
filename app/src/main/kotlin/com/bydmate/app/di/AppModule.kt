@@ -8,6 +8,7 @@ import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
+import com.bydmate.app.data.local.dao.OdometerSampleDao
 import com.bydmate.app.data.local.dao.PlaceDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -185,6 +186,23 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_10_11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS odometer_samples (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    mileage_km REAL NOT NULL,
+                    total_elec_kwh REAL,
+                    soc_percent INTEGER,
+                    session_id INTEGER,
+                    timestamp INTEGER NOT NULL
+                )
+            """)
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_odometer_samples_mileage_km ON odometer_samples(mileage_km)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_odometer_samples_session_id ON odometer_samples(session_id)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -193,7 +211,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
     }
 
@@ -207,6 +225,7 @@ object AppModule {
     @Provides fun provideRuleDao(db: AppDatabase): RuleDao = db.ruleDao()
     @Provides fun provideRuleLogDao(db: AppDatabase): RuleLogDao = db.ruleLogDao()
     @Provides fun providePlaceDao(db: AppDatabase): PlaceDao = db.placeDao()
+    @Provides fun provideOdometerSampleDao(db: AppDatabase): OdometerSampleDao = db.odometerSampleDao()
 
     @Provides
     @Singleton
