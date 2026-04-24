@@ -86,8 +86,6 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
-    private var recentAvgConsumption: Double = 0.0
-
     init {
         cleanupBadIdleDrainData()
         observeLiveData()
@@ -96,7 +94,6 @@ class DashboardViewModel @Inject constructor(
         loadCurrency()
         loadInsight()
         loadPeriodSummary()
-        loadRecentAvgConsumption()
     }
 
     fun setPeriod(period: DashboardPeriod) {
@@ -107,23 +104,29 @@ class DashboardViewModel @Inject constructor(
     /**
      * Collect live DiPars data and service running status
      * from TrackingService companion StateFlows.
+     * Range is read directly from TrackingService.lastRangeKm (single source of truth).
      */
-    private var pollCount = 0
+    private data class LiveSnapshot(
+        val data: com.bydmate.app.data.remote.DiParsData?,
+        val running: Boolean,
+        val connected: Boolean,
+        val rangeKm: Double?,
+    )
 
     private fun observeLiveData() {
         viewModelScope.launch {
             combine(
                 TrackingService.lastData,
                 TrackingService.isRunning,
-                TrackingService.diPlusConnected
-            ) { data, running, connected ->
-                Triple(data, running, connected)
-            }.collect { (data, running, connected) ->
-                // Retry loading avg consumption if still 0 (auto-import may have finished)
-                pollCount++
-                if (recentAvgConsumption <= 0 && pollCount % 3 == 0) {
-                    loadRecentAvgConsumption()
-                }
+                TrackingService.diPlusConnected,
+                TrackingService.lastRangeKm,
+            ) { data, running, connected, rangeKm ->
+                LiveSnapshot(data, running, connected, rangeKm)
+            }.collect { snapshot ->
+                val data = snapshot.data
+                val running = snapshot.running
+                val connected = snapshot.connected
+                val rangeKm = snapshot.rangeKm
 
                 _uiState.update { current ->
                     val newSoc = data?.soc ?: current.soc
@@ -151,7 +154,7 @@ class DashboardViewModel @Inject constructor(
                                 data?.minCellVoltage ?: current.cellVoltageMin
                             )
                         ),
-                        estimatedRangeKm = calculateRange(newSoc, current.estimatedRangeKm),
+                        estimatedRangeKm = rangeKm ?: current.estimatedRangeKm,
                         diPlusConnected = connected
                     )
                 }
@@ -277,24 +280,6 @@ class DashboardViewModel @Inject constructor(
         return Pair(dayStart, dayEnd)
     }
 
-    private var batteryCapacityKwh: Double = 38.0
-
-    private fun loadRecentAvgConsumption() {
-        viewModelScope.launch {
-            recentAvgConsumption = tripRepository.getEmaConsumption()
-            batteryCapacityKwh = settingsRepository.getBatteryCapacity()
-            _uiState.update {
-                it.copy(estimatedRangeKm = calculateRange(it.soc, null))
-            }
-        }
-    }
-
-    private fun calculateRange(soc: Int?, fallback: Double?): Double? {
-        if (soc == null || soc <= 0 || recentAvgConsumption <= 0) return fallback
-        val availableKwh = soc / 100.0 * batteryCapacityKwh
-        return availableKwh / recentAvgConsumption * 100.0
-    }
-
     // One-time cleanup: BatCapacity method produced inflated values in v1.0.0–1.0.4
     private fun cleanupBadIdleDrainData() {
         viewModelScope.launch {
@@ -363,7 +348,6 @@ class DashboardViewModel @Inject constructor(
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
         loadPeriodSummary()
-        loadRecentAvgConsumption()
         loadInsight()
     }
 
