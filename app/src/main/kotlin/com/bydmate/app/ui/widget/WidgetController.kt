@@ -65,6 +65,7 @@ object WidgetController {
     private var consumptionState = mutableStateOf<Double?>(null)
     private var trendState = mutableStateOf(Trend.NONE)
     private var sessionStartedAtState = mutableStateOf<Long?>(null)
+    private var tripDistanceKmState = mutableStateOf<Double?>(null)
     private var insideTempState = mutableStateOf<Int?>(null)
     private var batTempState = mutableStateOf<Int?>(null)
     private var voltsState = mutableStateOf<Double?>(null)
@@ -123,6 +124,7 @@ object WidgetController {
                     consumption = consumptionState.value,
                     trend = trendState.value,
                     sessionStartedAt = sessionStartedAtState.value,
+                    tripDistanceKm = tripDistanceKmState.value,
                     insideTemp = insideTempState.value,
                     batTemp = batTempState.value,
                     voltage12v = voltsState.value,
@@ -176,15 +178,25 @@ object WidgetController {
     private fun startDataSubscription() {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
+        // Stock combine(...) is typed only up to 5 flows — bundle consumption + alpha
+        // into one derived pair so we stay under the limit.
+        val uiFlow = ConsumptionAggregator.state.combine(prefsAlphaFlow) { c, a -> c to a }
         dataJob = scope.launch {
             combine(
                 TrackingService.lastData,
                 TrackingService.lastRangeKm,
                 TrackingService.sessionStartedAt,
-                ConsumptionAggregator.state,
-                prefsAlphaFlow,
-            ) { data, range, sessionStart, consumption, alpha ->
-                WidgetSnapshot(data, range, sessionStart, consumption, alpha)
+                TrackingService.tripDistanceKm,
+                uiFlow,
+            ) { data, range, sessionStart, tripDist, bundled ->
+                WidgetSnapshot(
+                    data = data,
+                    range = range,
+                    sessionStartedAt = sessionStart,
+                    tripDistanceKm = tripDist,
+                    consumption = bundled.first,
+                    alpha = bundled.second,
+                )
             }.collect { snap ->
                 socState.value = snap.data?.soc
                 rangeState.value = snap.range
@@ -192,6 +204,7 @@ object WidgetController {
                 batTempState.value = snap.data?.avgBatTemp
                 voltsState.value = snap.data?.voltage12v
                 sessionStartedAtState.value = snap.sessionStartedAt
+                tripDistanceKmState.value = snap.tripDistanceKm
                 consumptionState.value = snap.consumption.displayValue
                 trendState.value = snap.consumption.trend
                 alphaState.value = snap.alpha
@@ -203,6 +216,7 @@ object WidgetController {
         val data: com.bydmate.app.data.remote.DiParsData?,
         val range: Double?,
         val sessionStartedAt: Long?,
+        val tripDistanceKm: Double?,
         val consumption: ConsumptionState,
         val alpha: Float,
     )

@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Battery6Bar
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.TrendingFlat
@@ -46,9 +47,10 @@ import com.bydmate.app.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 
 /**
- * v3 layout — 260 × 108 dp, 3 rows, SOC row vertically centered.
+ * v3.1 layout — 260 × 108 dp, 3 rows, SOC row vertically centered.
  *
- * Row 1 (top, service): trip duration (⏱), cabin temperature (🚗) — 13sp.
+ * Row 1 (top, service, three equal slots):
+ *   left — trip duration (⏱), center — trip distance (🗺 route), right — cabin temp (🚗). 13sp.
  * Row 2 (center, main): SOC% (18sp, status color) · range km (28sp bold white) · consumption + trend (18sp).
  * Row 3 (bottom, service): battery temperature (🔋), 12V (⚡) — 13sp.
  *
@@ -62,6 +64,7 @@ fun FloatingWidgetView(
     consumption: Double?,
     trend: Trend,
     sessionStartedAt: Long?,
+    tripDistanceKm: Double?,
     insideTemp: Int?,
     batTemp: Int?,
     voltage12v: Double?,
@@ -85,7 +88,11 @@ fun FloatingWidgetView(
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        RowTrip(sessionStartedAt = sessionStartedAt, insideTemp = insideTemp)
+        RowTrip(
+            sessionStartedAt = sessionStartedAt,
+            tripDistanceKm = tripDistanceKm,
+            insideTemp = insideTemp,
+        )
         WidgetDivider()
         RowEnergy(soc = soc, rangeKm = rangeKm, consumption = consumption, trend = trend)
         WidgetDivider()
@@ -163,6 +170,7 @@ private fun RowEnergy(
 @Composable
 private fun RowTrip(
     sessionStartedAt: Long?,
+    tripDistanceKm: Double?,
     insideTemp: Int?,
 ) {
     val durationText by produceState(initialValue = formatDurationShort(sessionStartedAt), sessionStartedAt) {
@@ -171,13 +179,20 @@ private fun RowTrip(
             delay(15_000L)
         }
     }
+    // Three equal slots so long labels ("1ч 25м", "287 км") never collide.
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconText(icon = Icons.Outlined.Schedule, text = durationText)
-        IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+            IconText(icon = Icons.Outlined.Schedule, text = durationText)
+        }
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+            IconText(icon = Icons.Outlined.Route, text = formatTripKm(tripDistanceKm))
+        }
+        Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+            IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
+        }
     }
 }
 
@@ -232,7 +247,14 @@ private fun formatDurationShort(sessionStartedAt: Long?): String {
     val totalMin = (elapsed / 60_000L).toInt().coerceAtLeast(0)
     val hours = totalMin / 60
     val minutes = totalMin % 60
-    return if (hours > 0) "$hours ч $minutes мин" else "$minutes мин"
+    // Compact form in hours mode ("1ч 25м") keeps label narrow enough to fit in
+    // the top row's 1/3-width slot alongside trip distance and cabin temp.
+    return if (hours > 0) "${hours}ч ${minutes}м" else "$minutes мин"
+}
+
+private fun formatTripKm(km: Double?): String {
+    if (km == null || km.isNaN() || km.isInfinite() || km < 0.0) return "—"
+    return if (km < 10.0) "%.1f км".format(km) else "%.0f км".format(km)
 }
 
 // ---- Status model (covered by WidgetStatusTest) ----

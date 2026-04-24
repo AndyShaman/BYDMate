@@ -36,9 +36,12 @@ class OdometerConsumptionBuffer(
         totalElec: Double?,
         socPercent: Int?,
         sessionId: Long?,
-        isCharging: Boolean,
     ): Unit = mutex.withLock {
-        if (isCharging) return@withLock
+        // Charging is handled by the built-in delta guards: mileage stays constant
+        // during charging, so MIN_MILEAGE_DELTA suppresses inserts and dKm<=0
+        // skips the pair during averaging. An explicit isCharging flag was
+        // dropped in v2.4.7 because chargeGunState semantics differ per model
+        // and the mis-detection silently blocked all driving samples.
         if (mileage == null) return@withLock
         val prev = dao.last()
         if (prev != null) {

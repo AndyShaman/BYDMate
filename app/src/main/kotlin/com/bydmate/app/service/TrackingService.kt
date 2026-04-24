@@ -81,6 +81,8 @@ class TrackingService : Service(), LocationListener {
     // so a short powerState glitch doesn't split one physical trip into two.
     private lateinit var sessionPersistence: SessionPersistence
     @Volatile private var sessionLastActiveTs: Long = 0L
+    // Odometer reading captured at session-start. current mileage - this = trip distance.
+    @Volatile private var sessionStartMileageKm: Double? = null
     private var lastSummaryLogTs: Long = 0L
 
     companion object {
@@ -102,6 +104,10 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastRangeKm = MutableStateFlow<Double?>(null)
         val lastRangeKm: StateFlow<Double?> = _lastRangeKm
+
+        /** Live trip distance (current odometer - session-start odometer). Null when idle or data unready. */
+        private val _tripDistanceKm = MutableStateFlow<Double?>(null)
+        val tripDistanceKm: StateFlow<Double?> = _tripDistanceKm
 
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
@@ -139,6 +145,11 @@ class TrackingService : Service(), LocationListener {
         appendChainLog("startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
+
+        // Reset the live trip-distance companion flow — stale value from a prior
+        // service instance in the same process must not leak to the widget before
+        // the first polling tick overwrites it.
+        _tripDistanceKm.value = null
 
         // Restore widget session anchor if the process was killed mid-trip.
         // Aggregator will resume cumulative mode on its first post-restart tick
@@ -239,13 +250,20 @@ class TrackingService : Service(), LocationListener {
             sessionLastActiveTs = now
             if (currentSession == null) {
                 _sessionStartedAt.value = now
-                Log.i(TAG, "Widget session START at $now (powerOn=$powerOn, driving=$driving)")
+                sessionStartMileageKm = data.mileage
+                Log.i(TAG, "Widget session START at $now " +
+                    "(powerOn=$powerOn, driving=$driving, mileageStart=${data.mileage})")
+            } else if (sessionStartMileageKm == null && data.mileage != null) {
+                // DiPars was unready at the exact session-start tick — lazy-initialize now.
+                sessionStartMileageKm = data.mileage
             }
         } else if (currentSession != null) {
             val idleFor = now - sessionLastActiveTs
             if (idleFor >= SESSION_IDLE_CLOSE_MS) {
                 Log.i(TAG, "Widget session END (idle ${idleFor / 1000}s, powerOn=$powerOn, driving=$driving)")
                 _sessionStartedAt.value = null
+                sessionStartMileageKm = null
+                _tripDistanceKm.value = null
                 sessionPersistence.clear()
             }
             // else: grace period — keep session alive through brief blip
@@ -391,13 +409,11 @@ class TrackingService : Service(), LocationListener {
                         val nowMs = System.currentTimeMillis()
                         val sessionId = updateSessionState(nowMs, data)
 
-                        val isCharging = (data.chargeGunState ?: 0) > 0
                         odometerBuffer.onSample(
                             mileage = data.mileage,
                             totalElec = data.totalElecConsumption,
                             socPercent = data.soc,
                             sessionId = sessionId,
-                            isCharging = isCharging,
                         )
                         socInterpolator.onSample(
                             soc = data.soc,
@@ -411,6 +427,15 @@ class TrackingService : Service(), LocationListener {
 
                         val rangeKm = rangeCalculator.estimate(soc = data.soc, totalElecKwh = data.totalElecConsumption)
                         _lastRangeKm.value = rangeKm
+
+                        // Odometer regression (rare DiPars glitch) leaves delta negative.
+                        // Show "—" on the widget instead of silent 0.0 so field diagnosis
+                        // still sees the anomaly. OdometerConsumptionBuffer blocks the same
+                        // regression at insert, so consumption math is unaffected.
+                        val tripDistance = sessionStartMileageKm?.let { start ->
+                            data.mileage?.let { cur -> (cur - start).takeIf { it >= 0.0 } }
+                        }
+                        _tripDistanceKm.value = tripDistance
 
                         sessionId?.let { sessionPersistence.save(it, sessionLastActiveTs) }
 
