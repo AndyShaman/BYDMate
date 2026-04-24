@@ -23,7 +23,7 @@ interface SocInterpolatorPrefs {
  * at each integer SOC click.
  */
 @Singleton
-class SocInterpolator(
+open class SocInterpolator(
     private val persistence: SocInterpolatorPrefs,
 ) {
     @Volatile private var state: SocInterpolatorState? = persistence.load()
@@ -49,7 +49,7 @@ class SocInterpolator(
      * SOC step. Returns 0 when no anchor yet.
      */
     @Synchronized
-    fun carryOver(totalElecKwh: Double?, soc: Int?): Double {
+    open fun carryOver(totalElecKwh: Double?, soc: Int?): Double {
         val st = state ?: return 0.0
         if (totalElecKwh == null || soc == null) return 0.0
         if (soc != st.lastSoc) return 0.0  // SOC moved but onSample hasn't run yet

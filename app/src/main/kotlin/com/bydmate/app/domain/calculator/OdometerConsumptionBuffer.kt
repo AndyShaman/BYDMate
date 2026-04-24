@@ -28,7 +28,7 @@ data class BufferStatus(
 class OdometerConsumptionBuffer(
     private val dao: OdometerSampleDao,
     private val fallbackEmaProvider: suspend () -> Double,
-) {
+) : ConsumptionAvgSource {
     private val mutex = Mutex()
 
     suspend fun onSample(
@@ -63,7 +63,7 @@ class OdometerConsumptionBuffer(
         if (n > MAX_BUFFER_ROWS) dao.deleteOldest(n - MAX_BUFFER_ROWS)
     }
 
-    suspend fun recentAvgConsumption(): Double = mutex.withLock { computeAvg(WINDOW_KM, fallbackOnShort = true) }
+    override suspend fun recentAvgConsumption(): Double = mutex.withLock { computeAvg(WINDOW_KM, fallbackOnShort = true) }
 
     suspend fun shortAvgConsumption(): Double? = mutex.withLock {
         val v = computeAvg(SHORT_WINDOW_KM, fallbackOnShort = false)

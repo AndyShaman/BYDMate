@@ -17,6 +17,7 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
+import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.SocInterpolator
 import com.bydmate.app.domain.calculator.SocInterpolatorPrefs
 import com.bydmate.app.domain.calculator.SocInterpolatorPrefsImpl
@@ -251,6 +252,18 @@ object AppModule {
     fun provideSocInterpolator(
         prefs: SocInterpolatorPrefs,
     ): SocInterpolator = SocInterpolator(persistence = prefs)
+
+    @Provides
+    @Singleton
+    fun provideRangeCalculator(
+        buffer: OdometerConsumptionBuffer,
+        settingsRepository: com.bydmate.app.data.repository.SettingsRepository,
+        socInterpolator: SocInterpolator,
+    ): RangeCalculator = RangeCalculator(
+        buffer = buffer,
+        capacityProvider = { settingsRepository.getBatteryCapacity() },
+        socInterpolator = socInterpolator,
+    )
 
     @Provides
     @Singleton
