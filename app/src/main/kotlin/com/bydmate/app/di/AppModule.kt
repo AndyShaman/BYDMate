@@ -238,12 +238,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideSocInterpolator(
-        settingsRepository: com.bydmate.app.data.repository.SettingsRepository,
         prefs: SocInterpolatorPrefs,
-    ): SocInterpolator = SocInterpolator(
-        capacityKwhProvider = { settingsRepository.getBatteryCapacity() },
-        persistence = prefs,
-    )
+    ): SocInterpolator = SocInterpolator(persistence = prefs)
 
     @Provides
     @Singleton

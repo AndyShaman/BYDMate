@@ -5,8 +5,8 @@ import org.junit.Test
 
 class SocInterpolatorTest {
 
-    private fun newInterpolator(capacity: Double = 72.9): SocInterpolator {
-        return SocInterpolator(capacityKwhProvider = { capacity }, persistence = InMemorySocInterpolatorPrefs())
+    private fun newInterpolator(): SocInterpolator {
+        return SocInterpolator(persistence = InMemorySocInterpolatorPrefs())
     }
 
     @Test fun `cold start — first sample initialises anchor, carry 0`() {
@@ -47,6 +47,18 @@ class SocInterpolatorTest {
         interp.onSample(soc = 80, totalElecKwh = 1000.0, sessionId = 1L)
         interp.onSample(soc = 80, totalElecKwh = 1000.5, sessionId = 1L)
         assertEquals(0.0, interp.carryOver(totalElecKwh = 999.8, soc = 80), 0.001)
+    }
+
+    @Test fun `state restored from persistence across instances`() {
+        val prefs = InMemorySocInterpolatorPrefs()
+        val a = SocInterpolator(persistence = prefs)
+        a.onSample(soc = 80, totalElecKwh = 1000.0, sessionId = 1L)
+        a.onSample(soc = 80, totalElecKwh = 1000.5, sessionId = 1L)
+
+        // New SocInterpolator instance (simulates sys-kill + restart) but same prefs
+        val b = SocInterpolator(persistence = prefs)
+        // Before any onSample on b, carryOver uses state loaded from prefs
+        assertEquals(0.5, b.carryOver(totalElecKwh = 1000.5, soc = 80), 0.001)
     }
 }
 

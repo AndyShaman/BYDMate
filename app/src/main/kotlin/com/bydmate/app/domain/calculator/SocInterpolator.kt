@@ -1,7 +1,6 @@
 package com.bydmate.app.domain.calculator
 
 import javax.inject.Singleton
-import kotlin.math.max
 
 data class SocInterpolatorState(
     val lastSoc: Int,
@@ -25,7 +24,6 @@ interface SocInterpolatorPrefs {
  */
 @Singleton
 class SocInterpolator(
-    private val capacityKwhProvider: suspend () -> Double,
     private val persistence: SocInterpolatorPrefs,
 ) {
     @Volatile private var state: SocInterpolatorState? = persistence.load()
@@ -50,6 +48,7 @@ class SocInterpolator(
      * kWh consumed since the last SOC change. Always >= 0 within the same
      * SOC step. Returns 0 when no anchor yet.
      */
+    @Synchronized
     fun carryOver(totalElecKwh: Double?, soc: Int?): Double {
         val st = state ?: return 0.0
         if (totalElecKwh == null || soc == null) return 0.0
