@@ -37,7 +37,9 @@ import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Navigation
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.NotificationsOff
+import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -428,6 +430,9 @@ private fun EditorDialog(
                             },
                             onAddTimeOfDay = {
                                 onUpdate { copy(triggers = triggers + newTimeOfDayTrigger()) }
+                            },
+                            onAddServiceStart = {
+                                onUpdate { copy(triggers = triggers + newServiceStartTrigger()) }
                             }
                         )
                     }
@@ -493,6 +498,9 @@ private fun EditorDialog(
                             },
                             onAddYandexMusic = {
                                 onUpdate { copy(actions = actions + newYandexMusicAction()) }
+                            },
+                            onAddDelay = {
+                                onUpdate { copy(actions = actions + newDelayAction()) }
                             }
                         )
                     }
@@ -612,6 +620,7 @@ private fun TriggerRow(
         when (trigger.kind) {
             "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
             "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
+            "service_start" -> ServiceStartTriggerControls()
             else -> ParamTriggerControls(trigger, onUpdate)
         }
 
@@ -841,6 +850,23 @@ private fun TimeOfDayTriggerControls(
     }
 }
 
+@Composable
+private fun ServiceStartTriggerControls() {
+    Icon(
+        Icons.Outlined.PlayArrow,
+        contentDescription = null,
+        tint = AccentGreen,
+        modifier = Modifier.size(16.dp)
+    )
+    Spacer(Modifier.width(6.dp))
+    Text(
+        "Запуск BYDMate",
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold
+    )
+}
+
 // --- Action Row ---
 
 @Composable
@@ -875,6 +901,8 @@ private fun ActionRow(
                 UrlActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "yandex_music" ->
                 YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "delay" ->
+                DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -902,6 +930,68 @@ private fun ParamActionControls(
             onUpdate(ActionDef(a.command, a.displayName))
         }
     )
+}
+
+private val DELAY_OPTIONS = listOf(
+    500L to "0,5 сек",
+    1000L to "1 сек",
+    2000L to "2 сек",
+    3000L to "3 сек",
+    5000L to "5 сек",
+    10000L to "10 сек"
+)
+
+@Composable
+private fun DelayActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val currentMs = action.payload?.toLongOrNull() ?: 1000L
+    val currentLabel = DELAY_OPTIONS.find { it.first == currentMs }?.second ?: "$currentMs мс"
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.Pause,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text("Пауза", fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(6.dp))
+        Box {
+            Text(
+                currentLabel,
+                fontSize = 13.sp,
+                color = AccentTeal,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(CardSurface, RoundedCornerShape(6.dp))
+                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                    .clickable { expanded = true }
+                    .padding(8.dp, 6.dp)
+            )
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                DELAY_OPTIONS.forEach { (ms, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label, fontSize = 13.sp) },
+                        onClick = {
+                            expanded = false
+                            onUpdate(action.copy(
+                                payload = ms.toString(),
+                                displayName = "Пауза $label"
+                            ))
+                        }
+                    )
+                }
+            }
+        }
+    }
 }
 
 // --- Catalog Dropdown (with category headers) ---
@@ -1135,7 +1225,8 @@ private fun AddActionButton(
     onAddCall: () -> Unit,
     onAddNavigate: () -> Unit,
     onAddUrl: () -> Unit,
-    onAddYandexMusic: () -> Unit
+    onAddYandexMusic: () -> Unit,
+    onAddDelay: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1190,6 +1281,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text("Открыть URL", fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddUrl() }
+            )
+            DropdownMenuItem(
+                text = { Text("Пауза", fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddDelay() }
             )
         }
     }
@@ -2080,7 +2175,8 @@ private fun AddTriggerButton(
     places: List<PlaceEntity>,
     onAddParam: () -> Unit,
     onAddPlace: (PlaceEntity) -> Unit,
-    onAddTimeOfDay: () -> Unit
+    onAddTimeOfDay: () -> Unit,
+    onAddServiceStart: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -2126,6 +2222,13 @@ private fun AddTriggerButton(
                     onAddTimeOfDay()
                 }
             )
+            DropdownMenuItem(
+                text = { Text("Запуск BYDMate", fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddServiceStart()
+                }
+            )
         }
     }
 }
@@ -2142,6 +2245,24 @@ private fun newPlaceTrigger(place: PlaceEntity): TriggerDef {
         placeName = place.name
     )
 }
+
+private fun newServiceStartTrigger(): TriggerDef {
+    return TriggerDef(
+        param = "ServiceStart",
+        chineseName = "服务启动",
+        operator = "==",
+        value = "true",
+        displayName = "Запуск BYDMate",
+        kind = "service_start"
+    )
+}
+
+private fun newDelayAction(): ActionDef = ActionDef(
+    command = "delay_1000",
+    displayName = "Пауза 1 сек",
+    kind = "delay",
+    payload = "1000"
+)
 
 private fun newTimeOfDayTrigger(): TriggerDef {
     return TriggerDef(

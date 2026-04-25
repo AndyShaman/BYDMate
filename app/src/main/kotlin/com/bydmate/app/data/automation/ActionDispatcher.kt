@@ -34,6 +34,8 @@ class ActionDispatcher @Inject constructor(
         private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
         private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
         private const val BT_CALL_KEYCODE_DIAL = 313
+        // Hard cap on user-set delay action; protects against typos like "60000000".
+        private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
     }
 
@@ -53,11 +55,22 @@ class ActionDispatcher @Inject constructor(
             "navigate" -> navigate(action)
             "url" -> openUrl(action)
             "yandex_music" -> launchYandexMusic(action)
+            "delay" -> dispatchDelay(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
         Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.message}")
         DispatchResult(false, e.message ?: "Unknown error")
+    }
+
+    private suspend fun dispatchDelay(action: ActionDef): DispatchResult {
+        val ms = action.payload?.toLongOrNull()
+            ?: return DispatchResult(false, "Длительность паузы не задана")
+        if (ms < 0 || ms > MAX_DELAY_MS) {
+            return DispatchResult(false, "Длительность паузы вне диапазона (0..${MAX_DELAY_MS} мс)")
+        }
+        kotlinx.coroutines.delay(ms)
+        return DispatchResult(true)
     }
 
     // --- param (D+ sendCmd) ---

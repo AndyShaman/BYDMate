@@ -59,6 +59,11 @@ class AutomationEngine @Inject constructor(
     private val lastEvalResults = ConcurrentHashMap<Long, Boolean>()
     // Once-per-trip gate: ruleId -> tripStartedAt captured when rule last fired
     private val lastFiredTripByRule = ConcurrentHashMap<Long, Long>()
+    // Service-start trigger: true on the very first evaluate() call after process
+    // start, then flipped to false. Lets the "Запуск BYDMate" trigger fire exactly
+    // once per service lifecycle without going through edge-detection (which would
+    // seed-only the first observation and never fire).
+    @Volatile private var serviceStartFiredOnce = false
 
     private data class PendingAction(
         val rule: RuleEntity,
@@ -80,6 +85,11 @@ class AutomationEngine @Inject constructor(
     suspend fun evaluate(data: DiParsData, tripStartedAt: Long?) {
         cleanupExpired()
 
+        // Capture-and-flip: only the first evaluate() after process start sees true.
+        // Read into a local so all rules in this loop see a consistent value.
+        val justStarted = !serviceStartFiredOnce
+        if (justStarted) serviceStartFiredOnce = true
+
         val location = TrackingService.lastLocation.value
         val placesById = placeRepository.getAllSnapshot().associateBy { it.id }
 
@@ -98,10 +108,20 @@ class AutomationEngine @Inject constructor(
                 val triggers = TriggerDef.listFromJson(rule.triggers)
                 if (triggers.isEmpty()) continue
 
-                val matched = evaluateTriggers(triggers, data, rule.triggerLogic, location, placesById)
-                val previous = lastEvalResults.put(rule.id, matched)
-                if (previous == null) continue          // first observation — seed only, do not fire
-                if (!matched || previous) continue       // edge trigger: fire only on false→true
+                val matched = evaluateTriggers(triggers, data, rule.triggerLogic, location, placesById, justStarted)
+
+                // Service-start triggers are events, not conditions — they bypass edge
+                // detection: a "Запуск BYDMate" trigger that's matched on first eval
+                // must fire, even though there's no false→true transition history.
+                val hasServiceStart = triggers.any { it.kind == "service_start" }
+                if (hasServiceStart) {
+                    lastEvalResults[rule.id] = matched
+                    if (!justStarted || !matched) continue
+                } else {
+                    val previous = lastEvalResults.put(rule.id, matched)
+                    if (previous == null) continue          // first observation — seed only, do not fire
+                    if (!matched || previous) continue       // edge trigger: fire only on false→true
+                }
 
                 // Once-per-trip gate: skip if already fired in the current trip
                 if (rule.fireOncePerTrip && tripStartedAt != null &&
@@ -164,13 +184,15 @@ class AutomationEngine @Inject constructor(
         data: DiParsData,
         logic: String,
         location: Location?,
-        places: Map<Long, PlaceEntity>
+        places: Map<Long, PlaceEntity>,
+        isFirstEval: Boolean
     ): Boolean {
         val results = triggers.map { trigger ->
             when (trigger.kind) {
                 "place_enter" -> evaluatePlace(trigger, location, places, enterKind = true)
                 "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
                 "time_of_day" -> evaluateTimeOfDay(trigger, location)
+                "service_start" -> isFirstEval
                 else -> { // "param" (default)
                     val actual = getParamValue(data, trigger.param) ?: return@map false
                     val expected = trigger.value.toDoubleOrNull() ?: return@map false
@@ -310,6 +332,7 @@ class AutomationEngine @Inject constructor(
                 "place_enter" -> json.put("place_enter", t.placeName ?: "?")
                 "place_exit" -> json.put("place_exit", t.placeName ?: "?")
                 "time_of_day" -> json.put("time_of_day", t.value)
+                "service_start" -> json.put("service_start", true)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
             }
         }
