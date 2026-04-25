@@ -9,6 +9,7 @@
 .externalNativeBuild
 .cxx
 *.apk
+*.aab
 *.idsig
 *.ap_
 *.dex
@@ -16,8 +17,18 @@
 *.log
 *.jks
 *.keystore
+*.p12
+*.pem
+.env
+.env.*
+*.secret
+secrets/
 CLAUDE.md
 docs/plans/
 screen/
 docs/superpowers/handoff-*
 .superpowers/
+
+.research/
+.scratch/
+.local/
