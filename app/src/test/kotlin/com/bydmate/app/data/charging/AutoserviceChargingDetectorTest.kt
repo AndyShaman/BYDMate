@@ -62,6 +62,12 @@ class AutoserviceChargingDetectorTest {
             inserted.filter { it.detectionSource?.startsWith("autoservice_") == true }
         override suspend fun hasLegacyCharges(): Boolean =
             inserted.any { it.detectionSource == null || it.detectionSource?.startsWith("autoservice_") != true }
+        override suspend fun deleteEmpty(): Int = inserted.removeAll {
+            it.kwhCharged == null || (it.kwhCharged ?: 0.0) < 0.05
+        }.let { 0 }
+        override suspend fun delete(charge: ChargeEntity) {
+            inserted.removeAll { it.id == charge.id }
+        }
     }
 
     // Deviation #1: replaced delete/thinPointsForCharge with getCount/thinOldPoints
@@ -284,6 +290,22 @@ class AutoserviceChargingDetectorTest {
         val result = setup.detector.runCatchUp(now = 1500L)
 
         assertEquals(CatchUpOutcome.SENTINEL, result.outcome)
+        assertEquals(0, setup.chargeDao.inserted.size)
+    }
+
+    @Test
+    fun `delta below safety floor 005 returns NO_DELTA without inserting`() = runTest {
+        // 600.02 - 600.00 = 0.02 kWh, below the 0.05 safety floor.
+        // BMS calibration drift / measurement noise should never create a session.
+        val battery = BatteryReading(
+            sohPercent = 100f, socPercent = 91f, lifetimeKwh = 600.02f,
+            lifetimeMileageKm = 2091f, voltage12v = 14f, readAtMs = 1000L
+        )
+        val setup = build(battery, baselineKwh = 600.0)
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
         assertEquals(0, setup.chargeDao.inserted.size)
     }
 

@@ -86,6 +86,15 @@ class ChargesViewModelTest {
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = autoserviceCharges
         override suspend fun hasLegacyCharges(): Boolean = legacyExists
+        override suspend fun deleteEmpty(): Int {
+            val before = chargesFlow.value
+            val after = before.filter { it.kwhCharged != null && it.kwhCharged >= 0.05 }
+            chargesFlow.value = after
+            return before.size - after.size
+        }
+        override suspend fun delete(charge: ChargeEntity) {
+            chargesFlow.value = chargesFlow.value.filter { it.id != charge.id }
+        }
     }
 
     private class StubChargePointDao : ChargePointDao {

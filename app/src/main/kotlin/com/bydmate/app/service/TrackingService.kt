@@ -199,6 +199,16 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             try {
                 val result = historyImporter.runSync()
+                // v2.4.16: одноразово вычищаем "пустые" зарядки, оставшиеся от
+                // detector-багов v2.4.15 (catch-up при неправильных tx-кодах писал
+                // ChargeEntity с большинством полей null). Защита `if (delta<0.05)` в
+                // детекторе предотвращает повторение, но историю надо подмести.
+                try {
+                    val deleted = chargeRepository.deleteEmpty()
+                    if (deleted > 0) Log.i(TAG, "Cleaned $deleted empty charge row(s)")
+                } catch (e: Exception) {
+                    Log.w(TAG, "deleteEmpty failed: ${e.message}")
+                }
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
                 // Autoservice catch-up: synthesizes COMPLETED ChargeEntity records
                 // for charging that happened while DiLink was asleep. Best-effort —

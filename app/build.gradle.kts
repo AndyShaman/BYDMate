@@ -59,6 +59,11 @@ android {
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
+            // android.util.Log is unavailable in pure JVM unit tests without Robolectric.
+            // returnDefaultValues = true makes all unmocked Android API methods return 0/null/false
+            // instead of throwing RuntimeException — this keeps AutoserviceChargingDetector
+            // testable without requiring Robolectric for every test class.
+            isReturnDefaultValues = true
         }
     }
 

@@ -74,6 +74,18 @@ interface ChargeDao {
      */
     @Query("SELECT EXISTS(SELECT 1 FROM charges WHERE detection_source IS NULL OR detection_source NOT LIKE 'autoservice_%')")
     suspend fun hasLegacyCharges(): Boolean
+
+    /**
+     * Removes empty/junk charge rows that runCatchUp left behind in v2.4.15
+     * (3-row morning batch). Triggered once per TrackingService.onCreate after
+     * historyImporter.runSync. Filter mirrors the safety floor in
+     * AutoserviceChargingDetector (delta < 0.05 kWh ≈ measurement noise).
+     */
+    @Query("DELETE FROM charges WHERE kwh_charged IS NULL OR kwh_charged < 0.05")
+    suspend fun deleteEmpty(): Int
+
+    @androidx.room.Delete
+    suspend fun delete(charge: ChargeEntity)
 }
 
 data class ChargeSummary(

@@ -27,8 +27,6 @@ class AutoserviceClientImpl @Inject constructor(
 
     override suspend fun isAvailable(): Boolean {
         // Lazy reconnect: protocol singleton lives in process memory only.
-        // After process restart with toggle persisted ON, nothing has called
-        // connect() yet — bootstrap here so callers don't need to know.
         if (!adb.isConnected()) {
             val r = adb.connect()
             if (r.isFailure) {
@@ -36,11 +34,15 @@ class AutoserviceClientImpl @Inject constructor(
                 return false
             }
         }
-        // SoH is an INT fid (tx=5), raw 0..100. Returns null on sentinel
-        // (FEATURE_LINK_ERROR / NOT_INITIALIZED / wrong-direction).
-        val soh = getInt(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)
-        if (soh == null) Log.w(TAG, "isAvailable: SoH probe returned null")
-        return soh != null
+        // Probe in fallback order: SoH → lifetime_kwh → SOC. Any one non-null
+        // means autoservice is responding. SoH alone is fragile during BMS
+        // recalibration after a full charge (can return -1.0f sentinel for
+        // tens of seconds while the rest of the bus is fine).
+        getInt(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)?.let { return true }
+        getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_LIFETIME_KWH)?.let { return true }
+        getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOC)?.let { return true }
+        Log.w(TAG, "isAvailable: all 3 probe fids returned sentinel")
+        return false
     }
 
     override suspend fun getInt(dev: Int, fid: Int): Int? {
@@ -49,7 +51,11 @@ class AutoserviceClientImpl @Inject constructor(
         if (raw == null) { Log.w(TAG, "getInt($dev,$fid): exec null"); return null }
         val value = parseParcelInt(raw)
         if (value == null) { Log.w(TAG, "getInt($dev,$fid): parse failed: ${raw.take(160)}"); return null }
-        return SentinelDecoder.decodeInt(value)
+        val decoded = SentinelDecoder.decodeInt(value)
+        if (decoded == null) {
+            Log.w(TAG, "getInt($dev,$fid): sentinel raw=0x${"%08x".format(value)} (${value})")
+        }
+        return decoded
     }
 
     override suspend fun getFloat(dev: Int, fid: Int): Float? {
@@ -58,7 +64,11 @@ class AutoserviceClientImpl @Inject constructor(
         if (raw == null) { Log.w(TAG, "getFloat($dev,$fid): exec null"); return null }
         val bits = parseParcelInt(raw)
         if (bits == null) { Log.w(TAG, "getFloat($dev,$fid): parse failed: ${raw.take(160)}"); return null }
-        return SentinelDecoder.parseFloatFromShellInt(bits)
+        val decoded = SentinelDecoder.parseFloatFromShellInt(bits)
+        if (decoded == null) {
+            Log.w(TAG, "getFloat($dev,$fid): sentinel bits=0x${"%08x".format(bits)} (raw float=${java.lang.Float.intBitsToFloat(bits)})")
+        }
+        return decoded
     }
 
     override suspend fun readBatterySnapshot(): BatteryReading? {

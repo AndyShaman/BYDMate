@@ -67,4 +67,8 @@ class ChargeRepository @Inject constructor(
     }
 
     suspend fun hasLegacyCharges(): Boolean = chargeDao.hasLegacyCharges()
+
+    suspend fun deleteEmpty(): Int = chargeDao.deleteEmpty()
+
+    suspend fun deleteCharge(charge: ChargeEntity) = chargeDao.delete(charge)
 }

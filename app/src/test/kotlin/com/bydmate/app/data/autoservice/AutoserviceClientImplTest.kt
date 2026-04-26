@@ -2,6 +2,7 @@ package com.bydmate.app.data.autoservice
 
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -183,7 +184,38 @@ class AutoserviceClientImplTest {
         val adb = FakeAdb(responses = mapOf(cmd to parcelInt(0xFFFF)))
         val client = AutoserviceClientImpl(adb)
 
-        // Connected but SoH returns FEATURE_LINK_ERROR → fid not exposed on this firmware.
+        // Connected but SoH returns FEATURE_LINK_ERROR → all 3 fallback fids unavailable
+        // (lifetime_kwh and SOC return null from exec since not in map) → false.
         assertEquals(false, client.isAvailable())
+    }
+
+    @Test
+    fun `isAvailable returns true when SoH is sentinel but lifetime_kwh works`() = runTest {
+        // Simulates BMS-calibrating-after-full-charge: SoH probe returns FEATURE_LINK_ERROR
+        // sentinel for ~30 sec but lifetime_kwh stays valid. Without 3-fid fallback the user
+        // would see "ADB не отвечает" while catch-up still works.
+        val adb = FakeAdb(responses = mapOf(
+            // SoH int returns 0xFFFF = FEATURE_LINK_ERROR sentinel → null
+            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(0xFFFF),
+            // lifetime_kwh float returns valid bits 0x44197A66 ≈ 612.6f → non-null → true
+            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0x44197A66)
+        ))
+        val client = AutoserviceClientImpl(adb)
+
+        assertTrue(client.isAvailable())
+    }
+
+    @Test
+    fun `isAvailable returns false when all 3 probe fids return sentinel`() = runTest {
+        // SoH (int) → FEATURE_LINK_ERROR (0x0000FFFF); lifetime_kwh + SOC (float) → -1.0f
+        // sentinel (0xBF800000). All three return null → isAvailable() = false.
+        val adb = FakeAdb(responses = mapOf(
+            "service call autoservice 5 i32 1014 i32 ${FidRegistry.FID_SOH}" to parcelInt(0xFFFF),
+            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_LIFETIME_KWH}" to parcelFloat(0xBF800000.toInt()),
+            "service call autoservice 7 i32 1014 i32 ${FidRegistry.FID_SOC}" to parcelFloat(0xBF800000.toInt())
+        ))
+        val client = AutoserviceClientImpl(adb)
+
+        assertFalse(client.isAvailable())
     }
 }
