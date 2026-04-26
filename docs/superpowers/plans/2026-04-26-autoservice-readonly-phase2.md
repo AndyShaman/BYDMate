@@ -12,7 +12,7 @@
 ## Decisions (фиксируем перед стартом)
 
 - **Номинал батареи** — из настроек (`SettingsRepository.getBatteryCapacityKwh()`, default 72.9), НЕ hardcoded.
-- **adblib** — включаем в Phase 2 как C0 (до C1). Pairing — minimal dialog, не wizard (spec § 6: «pairing wizard не делать», но кнопка + диалог 6-значного кода — допустимо).
+- **ADB transport** (REVISED 2026-04-26) — hand-rolled Kotlin port competitor's `AdbClient.java` (`.research/competitor/decompiled/`). NO `adblib` JitPack dep (она не существует на MavenCentral как `cgutman/adblib`). NO 6-значного pairing'а — competitor использует старый ADB pubkey auth на 127.0.0.1:5555 (proven на Leopard 3); DiLink сам показывает нативный «Allow USB debugging» dialog. См. C0 для деталей.
 - **Charges fallback (2)** — Idea 3: только period summary, без lifetime карточки + footnote «Lifetime метрики и SoH тренды доступны после включения 'Системные данные'».
 - **Charges фильтры периода** — расширить до 5 чипов как в Trips: `TODAY/WEEK/MONTH/YEAR/ALL` (ранее только WEEK/MONTH).
 - **Charges layout** — копия Trips: 65% слева иерархия Месяц▶/День▶/Сессия + 35% справа правая панель.
@@ -32,61 +32,126 @@
 
 ## Tasks
 
-### C0 — adblib integration + minimal pairing UX
+### C0 — hand-rolled ADB protocol client + RSA pubkey auth (no 6-digit pairing)
+
+**Decision (2026-04-26):** Use ADB pubkey auth on `127.0.0.1:5555` (proven working by competitor BYD EV Pro on Leopard 3). NO TLS pairing, NO 6-digit code, NO mDNS port discovery, NO `adblib` dependency. DiLink's `adbd` already listens on 5555 once user enables Wireless ADB in Developer Options. Auth flow: app sends RSA-signed AUTH token; if key unknown, DiLink shows native «Allow USB debugging from this computer? RSA fingerprint: XX. ☑ Always allow from this computer» dialog; user accepts on DiLink itself. No in-app pairing UI needed.
+
+**Reference:** `.research/competitor/decompiled/AdbClient.java` (~420 lines, JADX-decompiled). Implements full ADB CONNECT/AUTH/OPEN handshake, RSA pubkey serialization for ADB, and shell stream exec. **Proven on Leopard 3.** One method (`g(AdbClient, String)`) failed to decompile — IGNORE it, port the synchronized `d(String)` instead (lines 194-261 — same purpose, better implementation).
 
 **Files:**
-- `app/build.gradle.kts` (deps + JitPack repo)
-- `app/src/main/kotlin/com/bydmate/app/data/autoservice/AdbOnDeviceClient.kt` (impl)
-- `app/src/main/kotlin/com/bydmate/app/data/autoservice/AdbKeyStore.kt` (NEW — RSA keypair persistence)
-- `app/src/main/kotlin/com/bydmate/app/ui/settings/AdbPairingDialog.kt` (NEW — Compose dialog)
-- `app/src/main/kotlin/com/bydmate/app/ui/settings/SettingsViewModel.kt` (pairing state)
-- `app/src/test/kotlin/com/bydmate/app/data/autoservice/AdbOnDeviceClientTest.kt` (NEW)
+- `app/src/main/kotlin/com/bydmate/app/data/autoservice/AdbProtocolClient.kt` (NEW — Kotlin port of competitor's AdbClient.java; pure JDK, no external deps)
+- `app/src/main/kotlin/com/bydmate/app/data/autoservice/AdbKeyStore.kt` (NEW — RSA keypair persisted as PKCS8/X.509 binary in `context.filesDir/adb_keys/`)
+- `app/src/main/kotlin/com/bydmate/app/data/autoservice/AdbOnDeviceClient.kt` (replace stub `ensureConnected()`/`doExec()`/`tryPing()`; add `connect()` to interface)
+- `app/src/main/kotlin/com/bydmate/app/ui/settings/SettingsViewModel.kt` (add `suspend fun tryConnect(): Result<Unit>`)
 - `app/src/test/kotlin/com/bydmate/app/data/autoservice/AdbKeyStoreTest.kt` (NEW)
+- `app/src/test/kotlin/com/bydmate/app/data/autoservice/AdbProtocolClientTest.kt` (NEW — packet construction unit tests, no real socket)
+- `app/src/test/kotlin/com/bydmate/app/data/autoservice/AdbOnDeviceClientTest.kt` (NEW — write barrier + connect lifecycle, with fake AdbProtocolClient seam)
+- `app/src/test/kotlin/com/bydmate/app/data/autoservice/AutoserviceClientImplTest.kt` (UPDATE existing fake to implement new `connect()` method)
+
+**Explicit non-changes:** NO `app/build.gradle.kts` change (no JitPack, no adblib). NO `AdbPairingDialog.kt`. NO `tryPair(code)` method.
 
 **Implementation:**
-1. `app/build.gradle.kts`:
-   - Add `maven { url = uri("https://jitpack.io") }` в `repositories` (settings.gradle.kts → dependencyResolutionManagement).
-   - Add `implementation("com.github.cgutman:AdbLib:adblib:1.0.0")` (или последняя стабильная — проверить).
-   - Если adblib не собирается с targetSdk=29 — fallback: hand-rolled port из `.research/competitor/` (см. `reference_competitor_byd_ev_pro.md`).
-2. `AdbKeyStore` (Singleton):
-   - Persistent RSA keypair в `EncryptedSharedPreferences` (или Keystore-backed file `adb_keys/private.pem` + `public.pem` в `context.filesDir`).
-   - `loadOrGenerate(): KeyPair` — атомарно: если файлов нет, генерим 2048-bit RSA, сохраняем; иначе читаем.
-   - `getFingerprint(): String` — для логов.
-3. `AdbOnDeviceClientImpl`:
-   - `ensureConnected()` — `AdbConnection.create(host=127.0.0.1, port=5555, keyPair=keystore.loadOrGenerate())`. Storing `connection: AdbConnection?`.
-   - `doExec(cmd)` — `connection.openShell(cmd).readText()`.
-   - `tryPing()` — `doExec("echo 1") == "1"` или per-adblib эквивалент.
-   - **Pairing flow** (новый метод `suspend fun pair(code: String): Result<Unit>`):
-     - `AdbConnection.pair(host=127.0.0.1, port=PAIRING_PORT, code)` — adblib API.
-     - PAIRING_PORT — auto-discovery через mDNS или фиксированный (DiLink Wireless ADB обычно использует случайный порт, надо смотреть ADB Wireless Debugging Settings).
-     - Возвращает Result.success() при ОК, Result.failure(exception) при ошибке.
-   - WRITE_BARRIER_REGEX уже есть, оставляем.
-4. `AdbPairingDialog`:
-   - `@Composable fun AdbPairingDialog(onDismiss, onPair: suspend (code: String) -> Result<Unit>)`.
-   - 6-значный TextField input, кнопки `[Отмена] [Подключить]`.
-   - Loading state + error message.
-   - Дизайн: использовать существующие токены (CardSurface, AccentGreen).
-5. `SettingsViewModel.tryPair(code: String)` — вызывает client.pair(), обновляет status в UiState.
+
+1. **`AdbKeyStore` (@Singleton, @Inject):**
+   - Persistent RSA keypair in `context.filesDir/adb_keys/{adb_key.priv, adb_key.pub}` as raw bytes (PKCS8 private, X.509 public — same format competitor uses, lines 271-272).
+   - `fun loadOrGenerate(): KeyPair` — atomic: if both files exist & parse → load; else generate 2048-bit RSA, save both, return. On parse failure → regenerate (mirror competitor lines 269-288).
+   - `fun getFingerprint(): String` — SHA-1 hex of public key encoded form, for logs.
+
+2. **`AdbProtocolClient` (Kotlin port of `.research/competitor/decompiled/AdbClient.java`):**
+   - Constructor: `class AdbProtocolClient(private val keyStore: AdbKeyStore, private val host: String = "127.0.0.1", private val port: Int = 5555)`.
+   - **Magic constants** (verified from competitor source):
+     ```
+     A_CNXN = 0x4E584E43 (1314410051)
+     A_AUTH = 0x48545541 (1213486401)
+     A_OPEN = 0x4E45504F (1313165391)
+     A_OKAY = 0x4F4B4159 (1497451343)  // little-endian → "OKAY"
+     A_CLSE = 0x434C5345 (1163086915)  // little-endian → "CLSE"
+     A_WRTE = 0x57525445 (1163154007)  // little-endian → "WRTE"
+     A_VERSION_AUTH = 0x01000001 (16777217)
+     MAX_PAYLOAD = 262144
+     AUTH_TOKEN = 1, AUTH_SIGNATURE = 2, AUTH_RSAPUBLICKEY = 3
+     ```
+   - **ADB_AUTH_PADDING**: `byteArrayOf(0x30, 0x21, 0x30, 0x09, 0x06, 0x05, 0x2b, 0x0e, 0x03, 0x02, 0x1a, 0x05, 0x00, 0x04, 0x14)` (15 bytes — competitor `f778g` line 43).
+   - **`fun connect(): Boolean`** — full handshake (port from competitor `b()` lines 66-132 + `e()` lines 263-367):
+     - Open socket to `127.0.0.1:5555`, soTimeout 5000 ms, tcpNoDelay true.
+     - Send `A_CNXN(version, MAX_PAYLOAD, "host::\0".bytes)`.
+     - Read response. If `A_CNXN` → connected (no auth required). If `A_AUTH(arg0=1, payload=token)` → auth flow:
+       - Sign `ADB_AUTH_PADDING ‖ token` with `Signature.getInstance("NONEwithRSA")` using RSA private key.
+       - Send `A_AUTH(arg0=2, signature)`.
+       - If response is `A_CNXN` → success (key cached).
+       - If response is `A_AUTH(arg0=1)` again → key unknown to device. Send `A_AUTH(arg0=3, adbFormatPubkey)` — DiLink shows native dialog. Set socket soTimeout to 60000 ms while waiting for user. After user taps «Always allow» → `A_CNXN` → success. Restore soTimeout to 5000 ms.
+     - On any unexpected response or socket error → close, return false.
+     - Thread-safe via `synchronized(this)` block (matches competitor `ReentrantLock` pattern; class-level lock, not the static one — that's competitor-specific).
+   - **`fun exec(cmd: String): String?`** (port competitor `d()` lines 194-261):
+     - `synchronized` block.
+     - If `!isConnected()` → null.
+     - Increment local stream id (`localId`), send `A_OPEN(localId, 0, "shell:<cmd>\0".bytes)`.
+     - Loop reading packets up to 20 times waiting for `A_OKAY(arg0=remoteId, arg1=localId)` from device.
+     - Then loop reading WRTE packets (up to 500), accumulating payload as String. ACK each WRTE with `A_OKAY(localId, remoteId, empty)`. Stop on `A_CLSE` — reply with `A_CLSE` and break.
+     - Return accumulated string trimmed.
+     - On exception → close socket, return null.
+   - **`fun isConnected(): Boolean`** — socket non-null, isConnected, !isClosed (port competitor `f()` lines 369-373).
+   - **`fun disconnect()`** — close socket, null out streams (port competitor `c()` lines 180-192).
+   - **Packet I/O** (port competitor `i()` reader and `j()` writer, lines 390-420):
+     - Header: 24 bytes little-endian — `[command(4)][arg0(4)][arg1(4)][payloadLen(4)][checksum(4)][magic(4)]`.
+     - `magic = command xor 0xFFFFFFFF` (i.e. `~command`).
+     - `checksum = sum(payload[i] & 0xFF for i in payload)` (low-byte unsigned sum).
+   - **Public key serialization** (port competitor `e()` lines 302-323):
+     - 524-byte ByteBuffer LITTLE_ENDIAN: `[modSizeWords=64 (i32)][n0inv (i32)][modulus (64 i32 little-endian)][rr (64 i32 little-endian)][exponent (i32)]` where `n0inv = -modulus.and(2^32-1).modInverse(2^32) mod 2^32` and `rr = (1 << 4096) mod modulus`.
+     - Base64 encode (no wrap), append `" bydmate@dilink "` and convert to UTF-8 bytes.
+
+3. **`AdbOnDeviceClientImpl` rewrite:**
+   - Inject `AdbKeyStore`. (Drop `Context` if unused — but keep for future-proofing; AdbKeyStore needs Context anyway.)
+   - Hold `private var protocol: AdbProtocolClient? = null` (under `@Volatile`).
+   - **Add to interface:** `suspend fun connect(): Result<Unit>` — lazy-create `AdbProtocolClient(keyStore)`, call `protocol.connect()` on Dispatchers.IO. Return `Result.success(Unit)` on `true`, `Result.failure(IOException("ADB connect refused"))` on `false`. Catch exceptions → `Result.failure(e)`.
+   - `isConnected()` — delegate to `protocol?.isConnected() ?: false`.
+   - `exec(cmd)` — keep `WRITE_BARRIER_REGEX` guard. If `protocol == null` → return null. Else `protocol.exec(cmd)`.
+   - `shutdown()` — `protocol?.disconnect(); protocol = null`.
+   - **Remove:** stub inner class `AdbConnectionHandle`, `tryPing()`, `doExec()`, `ensureConnected()` throwing stub.
+   - **Keep:** `WRITE_BARRIER_REGEX` regex unchanged (Phase 1 spec invariant).
+
+4. **`SettingsViewModel`:**
+   - Add `suspend fun tryConnect(): Result<Unit>` — delegates to `adbOnDeviceClient.connect()`. Update UI state via `loadAutoserviceState()` after success/failure (loadAutoserviceState comes in C1; for C0 just expose the function).
+   - **Note for C0:** there is no UI button yet (that's C2). For manual smoke during C0, the implementer should add a temporary debug log in `init { viewModelScope.launch { tryConnect()... } }` OR provide a debug menu hook — but it MUST be reverted before completion. Acceptable C0 stub: just expose `tryConnect()` as public method, smoke-test via Android Studio Logcat + breakpoint, OR via direct DI-injected call from a debug `MainActivity.onCreate` trigger that's reverted before commit.
 
 **Tests:**
-- `AdbKeyStoreTest`:
-  - `loadOrGenerate_firstCall_generatesNewKeypair`
-  - `loadOrGenerate_secondCall_returnsSameKeypair`
-- `AdbOnDeviceClientTest` (с моком adblib или через interface seam):
-  - `exec_writeCommand_throws` (WRITE_BARRIER_REGEX)
-  - `exec_disconnected_returnsNull`
-  - `pair_validCode_returnsSuccess`
-  - `pair_invalidCode_returnsFailure`
+
+- **`AdbKeyStoreTest`** (Robolectric for filesDir):
+  - `loadOrGenerate_firstCall_generatesAndPersistsKeypair` (assert files exist after, public key parseable as RSA 2048).
+  - `loadOrGenerate_secondCall_returnsSameKeypair` (compare encoded bytes equal across two calls).
+  - `loadOrGenerate_corruptedPrivateFile_regenerates` (delete priv, leave pub → should regenerate both, no exception).
+  - `getFingerprint_isStable` (same fingerprint across two `loadOrGenerate()` calls).
+
+- **`AdbProtocolClientTest`** (no real socket — test pure helpers via internal-visible methods or via package-private):
+  - `packet_checksum_isUnsignedByteSumOfPayload` (give known payload, assert checksum field).
+  - `packet_magic_isBitwiseInverseOfCommand` (`A_CNXN xor 0xFFFFFFFF.toInt()` matches header).
+  - `packet_header_isLittleEndian24Bytes` (encode A_OPEN packet, decode header back, fields match).
+  - `publicKey_serialization_isExactly524Bytes_plusBase64TailIncludesUsername` (encode keypair, assert size + Base64 trailing string contains "bydmate@dilink ").
+  - `signaturePayload_prependsAdbAuthPadding` (give 20-byte token, assert signed input is 35 bytes starting with the 15 padding bytes).
+
+- **`AdbOnDeviceClientTest`** (no real socket; use a fake AdbProtocolClient via constructor seam — make `AdbOnDeviceClientImpl` accept an optional `protocolFactory: (AdbKeyStore) -> AdbProtocolClient` for tests):
+  - `exec_writeCommand_throws_writeBarrier` (Phase 1 invariant: `setInt`-style commands rejected).
+  - `exec_disconnected_returnsNull`.
+  - `connect_protocolReturnsTrue_returnsSuccess`.
+  - `connect_protocolReturnsFalse_returnsFailure`.
+  - `connect_protocolThrows_returnsFailure_doesNotCrash`.
+  - `shutdown_idempotent_doesNotCrashWhenNeverConnected`.
+  - `shutdown_afterConnect_disconnectsProtocol`.
+
+- **`AutoserviceClientImplTest`** (existing) — UPDATE its anonymous `AdbOnDeviceClient` fake to implement new `connect(): Result<Unit>` method (return `Result.success(Unit)` by default — keeps existing tests green).
 
 **Acceptance:**
+
 - `./gradlew :app:assembleDebug` BUILD SUCCESSFUL.
-- Все новые тесты зелёные.
-- ❗ **Manual smoke на Leopard 3 (Andy на машине, обязательно)**:
-  - Включить Wireless ADB Debugging на DiLink (Settings → Developer Options).
-  - Запустить APK, открыть Настройки, включить toggle «Системные данные».
-  - В B-state нажать [Подключить], ввести 6-значный код с DiLink.
-  - Status должен переключиться на C («✓ подключено · SoH 100% · lifetime ...»).
-- Если manual smoke падает — логировать ошибку, fallback на hand-rolled implementation.
+- All new tests green; all Phase 1 tests still green (`./gradlew :app:testDebugUnitTest`).
+- ❗ **Manual smoke on Leopard 3 (Andy on the car, mandatory gate before C1-C5):**
+  - Step 1 — On DiLink: `Settings → System → Developer options → Wireless debugging → ON`. (One-time. If toggle missing, enable Developer mode first via 7 taps on Build number.)
+  - Step 2 — Install C0 APK on DiLink.
+  - Step 3 — Trigger `viewModel.tryConnect()` (per «Note for C0» above — temporary debug hook reverted before final commit).
+  - Step 4 — On first attempt, DiLink shows native «Allow USB debugging from this computer? RSA fingerprint: XX:XX:...» dialog. Tap «Always allow from this computer» → OK. Note the fingerprint matches `keyStore.getFingerprint()` in Logcat.
+  - Step 5 — `tryConnect()` returns `Result.success(Unit)`. `adb.exec("service call autoservice 5 i32 1014 i32 1246777400")` returns SOC parcel string (per `feedback_autoservice_validated.md`). Reading SoH/lifetime via `BatteryStateRepository.refresh()` returns real values (not nulls).
+  - Step 6 — Restart app. `tryConnect()` succeeds silently (key cached on DiLink, no dialog).
+- If manual smoke fails — implementer logs **specific** auth step that died (which packet command code arrived as response, e.g. «expected A_CNXN, got 0xXXXXXXXX»). Escalate.
 
 **Dependencies:** None (стартовый task).
 
@@ -163,7 +228,7 @@
                Text("Включить", ...)
                Switch(checked = state.autoserviceEnabled, onCheckedChange = { vm.setAutoserviceEnabled(it) }, colors = bydSwitchColors())
            }
-           AutoserviceStatusBlock(state.autoserviceStatus, onPair = { showPairDialog = true })
+           AutoserviceStatusBlock(state.autoserviceStatus, onConnect = { vm.tryConnect() })
            if (state.autoserviceEnabled) {
                Row(...) {
                    Text("Спрашивать после каждой зарядки", ...)
@@ -172,13 +237,11 @@
            }
        }
    }
-   if (showPairDialog) {
-       AdbPairingDialog(onDismiss = { showPairDialog = false }, onPair = vm::tryPair)
-   }
    ```
-3. `AutoserviceStatusBlock(status: AutoserviceStatus, onPair: () -> Unit)` — render по 4 substate'ам (см. mock `<div class="status-block">`):
+   No pairing dialog — DiLink itself shows the native «Allow USB debugging from this computer» prompt the first time the app calls `tryConnect()`. See C0 decision note.
+3. `AutoserviceStatusBlock(status: AutoserviceStatus, onConnect: () -> Unit)` — render по 4 substate'ам (см. mock `<div class="status-block">`):
    - `NotEnabled` → пусто.
-   - `Disconnected` → `Text("✗ не подключено · проверь Wi-Fi на DiLink", color = TextMuted)` + Button `[Подключить]` → `onPair()`.
+   - `Disconnected` → `Text("✗ не подключено · включите Wireless ADB в Developer options DiLink, затем подтвердите запрос на машине", color = TextMuted)` + Button `[Подключить к ADB]` → `onConnect()`.
    - `Connected(...)` → `Text("✓ подключено\n   SoH ${sohPercent}% · lifetime ${lifetimeKm} км / ${lifetimeKwh} кВт·ч", color = AccentGreen)`.
    - `AllSentinel` → `Text("⚠ подключено, но данные не читаются\n   возможно функция работает только на Leopard 3", color = SocYellow)`.
 
@@ -540,7 +603,7 @@ Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
 Финал Phase 2:
 - `./gradlew :app:assembleRelease` (release build).
 - Manual smoke на Leopard 3 (Andy):
-  - 1. App startup → Настройки → toggle ON → AdbPairingDialog → ввести код → status переключается на Connected → видны SoH/lifetime.
+  - 1. На DiLink: Developer options → Wireless debugging → ON. App startup → Настройки → toggle «Системные данные» ON → кнопка «Подключить к ADB» → DiLink показывает нативный «Allow USB debugging from this computer» с RSA fingerprint → «Always allow» → status переключается на Connected → видны SoH/lifetime.
   - 2. На Главной — TopBar показывает 3 статуса (сервис/DiPlus/ADB).
   - 3. Tap на BatteryCard → переход в BatteryHealthScreen.
   - 4. Bottom nav — 5 табов, Зарядки между Поездки и Автоматизация.
@@ -560,10 +623,6 @@ Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
 
 ## Open questions для следующей сессии
 
-1. **adblib JitPack совместимость с targetSdk=29** — проверить первым делом в C0. Если не собирается — fallback hand-rolled (артефакты `.research/competitor/byd-ev-pro/AdbClient.java`).
-2. **Pairing port discovery** — DiLink Wireless ADB использует случайный порт для pairing. Способы:
-   - mDNS lookup (`_adb-tls-pairing._tcp`).
-   - Или попросить юзера ввести `port:code` строкой (5-значный порт + 6-значный код).
-3. **EncryptedSharedPreferences на DiLink Android 12** — должен работать, но min API check.
-4. **«Раскрыть первый месяц по умолчанию»** — UX gut feeling, при `period = ALL` может быть много месяцев. Возможно лучше: текущий месяц всегда раскрыт.
-5. **Mini-charts при < 2 данных** — рендерить «недостаточно данных» текст или скрывать?
+1. ~~adblib JitPack совместимость~~ / ~~Pairing port discovery~~ / ~~EncryptedSharedPreferences~~ — закрыты решением C0 (ADB pubkey auth по 127.0.0.1:5555, hand-rolled, без 6-значного кода, без EncryptedSharedPreferences).
+2. **«Раскрыть первый месяц по умолчанию»** — UX gut feeling, при `period = ALL` может быть много месяцев. Возможно лучше: текущий месяц всегда раскрыт.
+3. **Mini-charts при < 2 данных** — рендерить «недостаточно данных» текст или скрывать?
