@@ -191,6 +191,7 @@ class AutoserviceChargingDetectorTest {
         assertEquals(600.0, ch.lifetimeKwhAtStart!!, 0.01)
         assertEquals(608.0, ch.lifetimeKwhAtFinish!!, 0.01)
         assertEquals("autoservice_catchup", ch.detectionSource)
+        assertNull(ch.gunState)  // gun=1 (NONE) → null in DB per spec:130
         // Heuristic: 8 kWh in <1h would be DC, but we cannot know hours from a snapshot
         // alone. The detector uses a duration assumption (see implementation). Type may
         // be AC or DC depending on the heuristic — we only assert it's one of them.

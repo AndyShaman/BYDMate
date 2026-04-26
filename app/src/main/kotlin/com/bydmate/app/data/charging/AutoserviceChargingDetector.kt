@@ -117,7 +117,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 status = "COMPLETED",
                 lifetimeKwhAtStart = baseline,
                 lifetimeKwhAtFinish = lifetimeKwh,
-                gunState = charging?.gunConnectState,
+                gunState = charging?.gunConnectState?.takeIf { it != 1 },
                 detectionSource = "autoservice_catchup"
             )
             val chargeId = chargeRepo.insertCharge(charge)
