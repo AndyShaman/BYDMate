@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.HistoryImporter
-import com.bydmate.app.data.remote.DiPlusDbReader
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
@@ -37,8 +36,7 @@ class WelcomeViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val tripRepository: TripRepository,
-    private val historyImporter: HistoryImporter,
-    private val diPlusDbReader: DiPlusDbReader
+    private val historyImporter: HistoryImporter
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(WelcomeUiState())
@@ -92,9 +90,6 @@ class WelcomeViewModel @Inject constructor(
                 historyImporter.deduplicateWithExisting()
             }
             historyImporter.runSync()
-
-            // Import charges
-            diPlusDbReader.importChargingLog()
 
             // Mark setup complete
             settingsRepository.setSetupCompleted()

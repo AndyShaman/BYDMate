@@ -11,7 +11,6 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
-import com.bydmate.app.data.remote.DiPlusDbReader
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
@@ -96,7 +95,6 @@ class SettingsViewModel @Inject constructor(
     private val energyDataReader: EnergyDataReader,
     private val diParsClient: DiParsClient,
     private val idleDrainDao: IdleDrainDao,
-    private val diPlusDbReader: DiPlusDbReader,
     private val insightsManager: InsightsManager
 ) : ViewModel() {
 
@@ -363,24 +361,6 @@ class SettingsViewModel @Inject constructor(
                 val status = result.details
                     ?: "Импортировано ${result.count} поездок из BYD"
                 _uiState.update { it.copy(importStatus = status) }
-            }
-        }
-    }
-
-    /** Import charging sessions from DiPlus ChargingLog database. */
-    fun importDiPlusCharges() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(importStatus = "Импорт DiPlus...") }
-            val result = diPlusDbReader.importChargingLog()
-            if (result.isError) {
-                _uiState.update { it.copy(importStatus = "Ошибка: ${result.error}") }
-            } else {
-                val msg = buildString {
-                    append("Импортировано ${result.imported} зарядок")
-                    if (result.skipped > 0) append(", пропущено ${result.skipped} дублей")
-                    append(" (всего в DiPlus: ${result.totalInDb})")
-                }
-                _uiState.update { it.copy(importStatus = msg) }
             }
         }
     }
