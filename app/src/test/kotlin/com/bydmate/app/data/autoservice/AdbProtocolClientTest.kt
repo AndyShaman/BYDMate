@@ -103,4 +103,21 @@ class AdbProtocolClientTest {
         // RSA 2048-bit signature is exactly 256 bytes.
         assertEquals(256, sig.size)
     }
+
+    @Test
+    fun `magic constants match ADB wire format`() {
+        // Verify all 6 ADB protocol commands serialize to canonical 4-char ASCII
+        // sequences when written little-endian. This guards against byte-swap
+        // typos in hex literals — adbd sends ASCII bytes 'O','K','A','Y' etc.,
+        // and our read path interprets them as little-endian Int.
+        fun toLeBytes(v: Int) = ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt(v).array()
+        fun ascii(v: Int) = String(toLeBytes(v), Charsets.US_ASCII)
+
+        assertEquals("CNXN", ascii(AdbProtocolClient.A_CNXN))
+        assertEquals("AUTH", ascii(AdbProtocolClient.A_AUTH))
+        assertEquals("OPEN", ascii(AdbProtocolClient.A_OPEN))
+        assertEquals("OKAY", ascii(AdbProtocolClient.A_OKAY))
+        assertEquals("CLSE", ascii(AdbProtocolClient.A_CLSE))
+        assertEquals("WRTE", ascii(AdbProtocolClient.A_WRTE))
+    }
 }

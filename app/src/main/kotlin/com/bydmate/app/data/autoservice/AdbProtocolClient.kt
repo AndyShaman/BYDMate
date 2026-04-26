@@ -275,9 +275,9 @@ internal class AdbProtocolClient(
         const val A_CNXN: Int = 0x4E584E43          // "CNXN"
         const val A_AUTH: Int = 0x48545541          // "AUTH"
         const val A_OPEN: Int = 0x4E45504F          // "OPEN"
-        const val A_OKAY: Int = 0x4F4B4159          // "OKAY"
-        const val A_CLSE: Int = 0x434C5345          // "CLSE"
-        const val A_WRTE: Int = 0x57525445          // "WRTE"
+        const val A_OKAY: Int = 0x59414B4F          // bytes 'O','K','A','Y' LE
+        const val A_CLSE: Int = 0x45534C43          // bytes 'C','L','S','E' LE
+        const val A_WRTE: Int = 0x45545257          // bytes 'W','R','T','E' LE
 
         const val A_VERSION_AUTH: Int = 0x01000001  // ADB version negotiated for AUTH-style handshake
         const val MAX_PAYLOAD: Int = 262144
