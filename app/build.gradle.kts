@@ -47,6 +47,12 @@ android {
         disable += "ExpiredTargetSdkVersion"
     }
 
+    testOptions {
+        unitTests {
+            isIncludeAndroidResources = true
+        }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -113,5 +119,16 @@ dependencies {
 
     // Testing
     testImplementation("junit:junit:4.13.2")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
+    testImplementation("org.robolectric:robolectric:4.13")
+    testImplementation("androidx.test:core:1.6.1")
+    testImplementation("androidx.test.ext:junit:1.2.1")
+    testImplementation("androidx.room:room-testing:2.6.1")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+
+    // ADB-on-device for autoservice access (path H, read-only)
+    // com.cgutman:adblib does not exist on MavenCentral (only com.tananaev:adblib does).
+    // Task 4 will use a hand-rolled ADB client fallback.
+    // implementation("com.cgutman:adblib:1.0.0")
 }
