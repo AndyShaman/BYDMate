@@ -1,5 +1,6 @@
 package com.bydmate.app.data.autoservice
 
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -25,23 +26,37 @@ class AutoserviceClientImpl @Inject constructor(
 ) : AutoserviceClient {
 
     override suspend fun isAvailable(): Boolean {
-        if (!adb.isConnected()) return false
+        // Lazy reconnect: protocol singleton lives in process memory only.
+        // After process restart with toggle persisted ON, nothing has called
+        // connect() yet — bootstrap here so callers don't need to know.
+        if (!adb.isConnected()) {
+            val r = adb.connect()
+            if (r.isFailure) {
+                Log.w(TAG, "isAvailable: connect failed: ${r.exceptionOrNull()?.message}")
+                return false
+            }
+        }
         // SoH is the lightest known-good probe — present on every BMS.
         val soh = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)
+        if (soh == null) Log.w(TAG, "isAvailable: SoH probe returned null")
         return soh != null
     }
 
     override suspend fun getInt(dev: Int, fid: Int): Int? {
         val cmd = "service call autoservice ${FidRegistry.TX_GET_INT} i32 $dev i32 $fid"
-        val raw = adb.exec(cmd) ?: return null
-        val value = parseParcelInt(raw) ?: return null
+        val raw = adb.exec(cmd)
+        if (raw == null) { Log.w(TAG, "getInt($dev,$fid): exec null"); return null }
+        val value = parseParcelInt(raw)
+        if (value == null) { Log.w(TAG, "getInt($dev,$fid): parse failed: ${raw.take(160)}"); return null }
         return SentinelDecoder.decodeInt(value)
     }
 
     override suspend fun getFloat(dev: Int, fid: Int): Float? {
         val cmd = "service call autoservice ${FidRegistry.TX_GET_FLOAT} i32 $dev i32 $fid"
-        val raw = adb.exec(cmd) ?: return null
-        val bits = parseParcelInt(raw) ?: return null
+        val raw = adb.exec(cmd)
+        if (raw == null) { Log.w(TAG, "getFloat($dev,$fid): exec null"); return null }
+        val bits = parseParcelInt(raw)
+        if (bits == null) { Log.w(TAG, "getFloat($dev,$fid): parse failed: ${raw.take(160)}"); return null }
         return SentinelDecoder.parseFloatFromShellInt(bits)
     }
 
@@ -79,6 +94,7 @@ class AutoserviceClientImpl @Inject constructor(
     }
 
     private companion object {
+        const val TAG = "AutoserviceClient"
         val PARCEL_REGEX = Regex("""Parcel\(00000000\s+([0-9a-fA-F]{8})""")
     }
 }
