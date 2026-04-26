@@ -246,10 +246,10 @@ class SentinelDecoderTest {
 
     @Test
     fun `parseFloatFromShellInt parses IEEE 754 representation correctly`() {
-        // 91.0f as int bits = 0x42B60000 = 1119879168
-        assertEquals(91.0f, SentinelDecoder.parseFloatFromShellInt(1119879168)!!, 0.001f)
-        // 602.7f as int bits = 0x4416B333 ≈ 1142989619
-        assertEquals(602.7f, SentinelDecoder.parseFloatFromShellInt(1142989619)!!, 0.01f)
+        // 91.0f as int bits = 0x42B60000 = 1119223808
+        assertEquals(91.0f, SentinelDecoder.parseFloatFromShellInt(1119223808)!!, 0.001f)
+        // 602.7f as int bits = 0x4416ACCD = 1142336717
+        assertEquals(602.7f, SentinelDecoder.parseFloatFromShellInt(1142336717)!!, 0.01f)
     }
 
     @Test
