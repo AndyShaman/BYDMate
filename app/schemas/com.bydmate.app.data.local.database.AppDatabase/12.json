@@ -1,0 +1,915 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 12,
+    "identityHash": "0ec33cbdcf9fee39bfc6cdd2daebab4b",
+    "entities": [
+      {
+        "tableName": "trips",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `start_ts` INTEGER NOT NULL, `end_ts` INTEGER, `distance_km` REAL, `kwh_consumed` REAL, `kwh_per_100km` REAL, `soc_start` INTEGER, `soc_end` INTEGER, `temp_avg_c` REAL, `avg_speed_kmh` REAL, `bat_temp_avg` REAL, `bat_temp_max` REAL, `bat_temp_min` REAL, `cost` REAL, `exterior_temp` INTEGER, `source` TEXT NOT NULL DEFAULT 'live', `byd_id` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTs",
+            "columnName": "start_ts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTs",
+            "columnName": "end_ts",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "distanceKm",
+            "columnName": "distance_km",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kwhConsumed",
+            "columnName": "kwh_consumed",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kwhPer100km",
+            "columnName": "kwh_per_100km",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socStart",
+            "columnName": "soc_start",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socEnd",
+            "columnName": "soc_end",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "tempAvgC",
+            "columnName": "temp_avg_c",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "avgSpeedKmh",
+            "columnName": "avg_speed_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempAvg",
+            "columnName": "bat_temp_avg",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempMax",
+            "columnName": "bat_temp_max",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempMin",
+            "columnName": "bat_temp_min",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cost",
+            "columnName": "cost",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "exteriorTemp",
+            "columnName": "exterior_temp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "source",
+            "columnName": "source",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'live'"
+          },
+          {
+            "fieldPath": "bydId",
+            "columnName": "byd_id",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trips_start_ts",
+            "unique": false,
+            "columnNames": [
+              "start_ts"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_start_ts` ON `${TABLE_NAME}` (`start_ts`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "trip_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `trip_id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `speed_kmh` REAL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tripId",
+            "columnName": "trip_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "speedKmh",
+            "columnName": "speed_kmh",
+            "affinity": "REAL",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trip_points_trip_id",
+            "unique": false,
+            "columnNames": [
+              "trip_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_points_trip_id` ON `${TABLE_NAME}` (`trip_id`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "charges",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `start_ts` INTEGER NOT NULL, `end_ts` INTEGER, `soc_start` INTEGER, `soc_end` INTEGER, `kwh_charged` REAL, `kwh_charged_soc` REAL, `max_power_kw` REAL, `type` TEXT, `cost` REAL, `lat` REAL, `lon` REAL, `bat_temp_avg` REAL, `bat_temp_max` REAL, `bat_temp_min` REAL, `avg_power_kw` REAL, `status` TEXT NOT NULL, `cell_voltage_min` REAL, `cell_voltage_max` REAL, `voltage_12v` REAL, `exterior_temp` INTEGER, `merged_count` INTEGER NOT NULL, `lifetime_kwh_at_start` REAL, `lifetime_kwh_at_finish` REAL, `gun_state` INTEGER, `detection_source` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTs",
+            "columnName": "start_ts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTs",
+            "columnName": "end_ts",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socStart",
+            "columnName": "soc_start",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socEnd",
+            "columnName": "soc_end",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kwhCharged",
+            "columnName": "kwh_charged",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kwhChargedSoc",
+            "columnName": "kwh_charged_soc",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "maxPowerKw",
+            "columnName": "max_power_kw",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "type",
+            "columnName": "type",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cost",
+            "columnName": "cost",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempAvg",
+            "columnName": "bat_temp_avg",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempMax",
+            "columnName": "bat_temp_max",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempMin",
+            "columnName": "bat_temp_min",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "avgPowerKw",
+            "columnName": "avg_power_kw",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cellVoltageMin",
+            "columnName": "cell_voltage_min",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cellVoltageMax",
+            "columnName": "cell_voltage_max",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "voltage12v",
+            "columnName": "voltage_12v",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "exteriorTemp",
+            "columnName": "exterior_temp",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "mergedCount",
+            "columnName": "merged_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lifetimeKwhAtStart",
+            "columnName": "lifetime_kwh_at_start",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "lifetimeKwhAtFinish",
+            "columnName": "lifetime_kwh_at_finish",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "gunState",
+            "columnName": "gun_state",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "detectionSource",
+            "columnName": "detection_source",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_charges_start_ts",
+            "unique": false,
+            "columnNames": [
+              "start_ts"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_charges_start_ts` ON `${TABLE_NAME}` (`start_ts`)"
+          },
+          {
+            "name": "index_charges_status",
+            "unique": false,
+            "columnNames": [
+              "status"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_charges_status` ON `${TABLE_NAME}` (`status`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "charge_points",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `charge_id` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, `power_kw` REAL, `soc` INTEGER, `bat_temp` INTEGER, FOREIGN KEY(`charge_id`) REFERENCES `charges`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chargeId",
+            "columnName": "charge_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "powerKw",
+            "columnName": "power_kw",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "soc",
+            "columnName": "soc",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTemp",
+            "columnName": "bat_temp",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_charge_points_charge_id",
+            "unique": false,
+            "columnNames": [
+              "charge_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_charge_points_charge_id` ON `${TABLE_NAME}` (`charge_id`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "charges",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "charge_id"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "settings",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`key` TEXT NOT NULL, `value` TEXT, PRIMARY KEY(`key`))",
+        "fields": [
+          {
+            "fieldPath": "key",
+            "columnName": "key",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "key"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "idle_drains",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `start_ts` INTEGER NOT NULL, `end_ts` INTEGER, `soc_start` INTEGER, `soc_end` INTEGER, `kwh_consumed` REAL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startTs",
+            "columnName": "start_ts",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endTs",
+            "columnName": "end_ts",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socStart",
+            "columnName": "soc_start",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socEnd",
+            "columnName": "soc_end",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "kwhConsumed",
+            "columnName": "kwh_consumed",
+            "affinity": "REAL",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "battery_snapshots",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timestamp` INTEGER NOT NULL, `odometer_km` REAL, `soc_start` INTEGER NOT NULL, `soc_end` INTEGER NOT NULL, `kwh_charged` REAL NOT NULL, `calculated_capacity_kwh` REAL, `soh_percent` REAL, `cell_delta_v` REAL, `bat_temp_avg` REAL, `charge_id` INTEGER)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "odometerKm",
+            "columnName": "odometer_km",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socStart",
+            "columnName": "soc_start",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "socEnd",
+            "columnName": "soc_end",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "kwhCharged",
+            "columnName": "kwh_charged",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "calculatedCapacityKwh",
+            "columnName": "calculated_capacity_kwh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sohPercent",
+            "columnName": "soh_percent",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "cellDeltaV",
+            "columnName": "cell_delta_v",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "batTempAvg",
+            "columnName": "bat_temp_avg",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "chargeId",
+            "columnName": "charge_id",
+            "affinity": "INTEGER",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_battery_snapshots_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_battery_snapshots_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "automation_rules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `trigger_logic` TEXT NOT NULL, `triggers` TEXT NOT NULL, `actions` TEXT NOT NULL, `cooldown_seconds` INTEGER NOT NULL, `require_park` INTEGER NOT NULL, `confirm_before_execute` INTEGER NOT NULL, `fire_once_per_trip` INTEGER NOT NULL DEFAULT 0, `last_triggered_at` INTEGER, `trigger_count` INTEGER NOT NULL, `created_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggerLogic",
+            "columnName": "trigger_logic",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggers",
+            "columnName": "triggers",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actions",
+            "columnName": "actions",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cooldownSeconds",
+            "columnName": "cooldown_seconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requirePark",
+            "columnName": "require_park",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "confirmBeforeExecute",
+            "columnName": "confirm_before_execute",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "fireOncePerTrip",
+            "columnName": "fire_once_per_trip",
+            "affinity": "INTEGER",
+            "notNull": true,
+            "defaultValue": "0"
+          },
+          {
+            "fieldPath": "lastTriggeredAt",
+            "columnName": "last_triggered_at",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "triggerCount",
+            "columnName": "trigger_count",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "automation_log",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `rule_id` INTEGER NOT NULL, `rule_name` TEXT NOT NULL, `triggered_at` INTEGER NOT NULL, `triggers_snapshot` TEXT NOT NULL, `actions_result` TEXT NOT NULL, `success` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleId",
+            "columnName": "rule_id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ruleName",
+            "columnName": "rule_name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggeredAt",
+            "columnName": "triggered_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "triggersSnapshot",
+            "columnName": "triggers_snapshot",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "actionsResult",
+            "columnName": "actions_result",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "success",
+            "columnName": "success",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_automation_log_triggered_at",
+            "unique": false,
+            "columnNames": [
+              "triggered_at"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_automation_log_triggered_at` ON `${TABLE_NAME}` (`triggered_at`)"
+          },
+          {
+            "name": "index_automation_log_rule_id",
+            "unique": false,
+            "columnNames": [
+              "rule_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_automation_log_rule_id` ON `${TABLE_NAME}` (`rule_id`)"
+          }
+        ],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "places",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `lat` REAL NOT NULL, `lon` REAL NOT NULL, `radius_m` INTEGER NOT NULL, `created_at` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lat",
+            "columnName": "lat",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lon",
+            "columnName": "lon",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "radiusM",
+            "columnName": "radius_m",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "created_at",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "odometer_samples",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `mileage_km` REAL NOT NULL, `total_elec_kwh` REAL, `soc_percent` INTEGER, `session_id` INTEGER, `timestamp` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mileageKm",
+            "columnName": "mileage_km",
+            "affinity": "REAL",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalElecKwh",
+            "columnName": "total_elec_kwh",
+            "affinity": "REAL",
+            "notNull": false
+          },
+          {
+            "fieldPath": "socPercent",
+            "columnName": "soc_percent",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "session_id",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_odometer_samples_mileage_km",
+            "unique": false,
+            "columnNames": [
+              "mileage_km"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_odometer_samples_mileage_km` ON `${TABLE_NAME}` (`mileage_km`)"
+          },
+          {
+            "name": "index_odometer_samples_session_id",
+            "unique": false,
+            "columnNames": [
+              "session_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_odometer_samples_session_id` ON `${TABLE_NAME}` (`session_id`)"
+          }
+        ],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '0ec33cbdcf9fee39bfc6cdd2daebab4b')"
+    ]
+  }
+}

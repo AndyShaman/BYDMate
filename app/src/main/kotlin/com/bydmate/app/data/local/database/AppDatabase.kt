@@ -39,7 +39,7 @@ import com.bydmate.app.data.local.entity.TripPointEntity
         PlaceEntity::class,
         OdometerSampleEntity::class
     ],
-    version = 11,
+    version = 12,
     exportSchema = true
 )
 abstract class AppDatabase : RoomDatabase() {

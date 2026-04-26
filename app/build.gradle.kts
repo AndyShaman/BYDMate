@@ -47,6 +47,15 @@ android {
         disable += "ExpiredTargetSdkVersion"
     }
 
+    sourceSets {
+        // MigrationTestHelper (Robolectric) resolves schemas via merged debug
+        // assets — not the "test" sourceSet. Adding to "debug" keeps schemas
+        // out of the release APK while making them visible to unit tests.
+        getByName("debug") {
+            assets.srcDirs("$projectDir/schemas")
+        }
+    }
+
     testOptions {
         unitTests {
             isIncludeAndroidResources = true
