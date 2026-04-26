@@ -24,9 +24,7 @@ import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.ChargeRepository
-import com.bydmate.app.domain.tracker.ChargeTracker
 import com.bydmate.app.domain.tracker.TripState
-import com.bydmate.app.domain.tracker.ChargeState
 import com.bydmate.app.domain.tracker.TripTracker
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
@@ -54,7 +52,6 @@ class TrackingService : Service(), LocationListener {
 
     @Inject lateinit var diParsClient: DiParsClient
     @Inject lateinit var tripTracker: TripTracker
-    @Inject lateinit var chargeTracker: ChargeTracker
     @Inject lateinit var chargeRepository: ChargeRepository
     @Inject lateinit var tripRepository: com.bydmate.app.data.repository.TripRepository
     @Inject lateinit var historyImporter: com.bydmate.app.data.local.HistoryImporter
@@ -197,27 +194,11 @@ class TrackingService : Service(), LocationListener {
             if (enabled) alicePollingManager.start()
         }
 
-        // Finalize stale SUSPENDED charge sessions from previous runs
-        serviceScope.launch {
-            try {
-                val cutoff = System.currentTimeMillis() - 30 * 60 * 1000L
-                val stale = chargeRepository.getStaleSessions(cutoff)
-                stale.forEach { chargeTracker.finalizeSuspended(it) }
-                if (stale.isNotEmpty()) {
-                    Log.d(TAG, "Finalized ${stale.size} stale suspended charge sessions")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to finalize stale sessions: ${e.message}")
-            }
-        }
-
         // v2.0: event-based sync on service start
         serviceScope.launch {
             try {
                 val result = historyImporter.runSync()
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
-                // Also import charging sessions
-                diPlusDbReader.importChargingLog()
                 // AI insights (once per day)
                 insightsManager.refreshIfNeeded()
             } catch (e: Exception) {
@@ -324,7 +305,6 @@ class TrackingService : Service(), LocationListener {
                     val lastData = _lastData.value
                     val lastLoc = _lastLocation.value
                     tripTracker.forceEnd(lastData, lastLoc)
-                    chargeTracker.forceEnd(lastData)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Graceful shutdown: ${e.message}")
@@ -450,7 +430,6 @@ class TrackingService : Service(), LocationListener {
 
                         sessionId?.let { sessionPersistence.save(it, sessionLastActiveTs) }
 
-                        chargeTracker.onData(data, loc)
                         // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                         // Live power integration removed — DiPars 发动机功率 ≠ total battery drain.
                         automationEngine.evaluate(data, sessionId)

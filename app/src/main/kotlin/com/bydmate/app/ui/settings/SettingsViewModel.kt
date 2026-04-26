@@ -638,7 +638,7 @@ class SettingsViewModel @Inject constructor(
                     "logcat", "-v", "time",
                     "-s", "BootReceiver:*", "SilentStartActivity:*",
                     "DiParsClient:*", "TrackingService:*", "TripTracker:*",
-                    "ChargeTracker:*", "IdleDrainTracker:*", "DiPlusDbReader:*",
+                    "DiPlusDbReader:*",
                     "HistoryImporter:*", "EnergyDataReader:*"
                 ))
 
