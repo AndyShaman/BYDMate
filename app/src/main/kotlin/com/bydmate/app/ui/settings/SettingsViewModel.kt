@@ -7,6 +7,7 @@ import android.os.Environment
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.dao.IdleDrainDao
@@ -95,7 +96,8 @@ class SettingsViewModel @Inject constructor(
     private val energyDataReader: EnergyDataReader,
     private val diParsClient: DiParsClient,
     private val idleDrainDao: IdleDrainDao,
-    private val insightsManager: InsightsManager
+    private val insightsManager: InsightsManager,
+    private val adbOnDeviceClient: AdbOnDeviceClient
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -697,6 +699,12 @@ class SettingsViewModel @Inject constructor(
         UpdateChecker.setAutoCheckEnabled(appContext, enabled)
         _uiState.update { it.copy(autoCheckUpdates = enabled) }
     }
+
+    /**
+     * Triggers the ADB-on-device handshake. UI button binding lands in C2;
+     * exposed here so C0 can be smoked manually from a debug entrypoint.
+     */
+    suspend fun tryConnect(): Result<Unit> = adbOnDeviceClient.connect()
 
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {

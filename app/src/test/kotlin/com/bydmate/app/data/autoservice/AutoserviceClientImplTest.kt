@@ -13,6 +13,7 @@ class AutoserviceClientImplTest {
         val connected: Boolean = true
     ) : AdbOnDeviceClient {
         val calls = mutableListOf<String>()
+        override suspend fun connect(): Result<Unit> = Result.success(Unit)
         override suspend fun isConnected(): Boolean = connected
         override suspend fun exec(cmd: String): String? {
             calls += cmd
