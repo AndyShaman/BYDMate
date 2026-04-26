@@ -63,6 +63,17 @@ interface ChargeDao {
           AND lifetime_kwh_at_finish IS NOT NULL
     """)
     suspend fun getMaxLifetimeKwhAtFinish(): Double?
+
+    /** All charges detected by the autoservice path, ascending by start time. */
+    @Query("SELECT * FROM charges WHERE detection_source LIKE 'autoservice_%' ORDER BY start_ts ASC")
+    suspend fun getAllAutoserviceCharges(): List<ChargeEntity>
+
+    /**
+     * Returns true if there is at least one charge that was NOT sourced from autoservice
+     * (i.e. legacy DiPlus / manual charges).
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM charges WHERE detection_source IS NULL OR detection_source NOT LIKE 'autoservice_%')")
+    suspend fun hasLegacyCharges(): Boolean
 }
 
 data class ChargeSummary(

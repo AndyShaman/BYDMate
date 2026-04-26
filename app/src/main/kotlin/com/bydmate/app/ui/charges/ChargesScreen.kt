@@ -1,28 +1,29 @@
 package com.bydmate.app.ui.charges
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -33,20 +34,23 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.bydmate.app.data.local.entity.ChargePointEntity
-import com.bydmate.app.ui.components.ChargeCard
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.data.local.dao.ChargeSummary
+import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
-private val ChartLineColor = ChartLine
-private val ChartGridColor = ChartGrid
-
-// Charges screen - list of charging sessions with energy/cost stats
 @Composable
 fun ChargesScreen(
+    onNavigateSettings: () -> Unit = {},
     viewModel: ChargesViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -55,444 +59,629 @@ fun ChargesScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
-            .padding(horizontal = 16.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        Spacer(modifier = Modifier.height(12.dp))
+        // Fallback state 1: toggle OFF, no legacy data → onboarding
+        if (!state.autoserviceEnabled && !state.hasLegacyCharges) {
+            OnboardingEmptyState(onNavigateSettings)
+            return@Column
+        }
 
-        // -- Screen title --
-        Text(
-            text = "Зарядки",
-            color = TextPrimary,
-            fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
-        )
+        // Fallback state 4: toggle ON, connected, all sentinel
+        if (state.autoserviceEnabled && state.autoserviceAllSentinel) {
+            SentinelEmptyState()
+            return@Column
+        }
 
-        Spacer(modifier = Modifier.height(12.dp))
+        // Fallback state 2: toggle OFF + has legacy data → yellow banner
+        if (!state.autoserviceEnabled && state.hasLegacyCharges) {
+            NotTrackingBanner(onClick = onNavigateSettings)
+        }
 
-        // -- Period toggle and type filter chips --
-        PeriodAndFilterRow(
-            currentPeriod = state.periodLabel,
-            typeFilter = state.typeFilter,
-            onPeriodWeek = { viewModel.setPeriod(Period.WEEK) },
-            onPeriodMonth = { viewModel.setPeriod(Period.MONTH) },
-            onTypeFilter = { viewModel.setTypeFilter(it) }
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // -- Summary row: sessions, kWh, cost --
-        ChargeSummaryRow(
-            sessionCount = state.sessionCount,
-            totalKwh = state.totalKwh,
-            totalCost = state.totalCost,
-            currencySymbol = state.currencySymbol
-        )
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // -- Period label --
-        Text(
-            text = state.periodLabel,
-            color = TextSecondary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium
-        )
+        // Chips row: 5 period chips + spacer + 3 type chips
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ChargesChip("День", state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
+            ChargesChip("Нед", state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
+            ChargesChip("Мес", state.period == ChargesPeriod.MONTH) { viewModel.setPeriod(ChargesPeriod.MONTH) }
+            ChargesChip("Год", state.period == ChargesPeriod.YEAR) { viewModel.setPeriod(ChargesPeriod.YEAR) }
+            ChargesChip("Всё", state.period == ChargesPeriod.ALL) { viewModel.setPeriod(ChargesPeriod.ALL) }
+            Spacer(modifier = Modifier.width(12.dp))
+            ChargesChip("Все", state.typeFilter == ChargeTypeFilter.ALL) { viewModel.setTypeFilter(ChargeTypeFilter.ALL) }
+            ChargesChip("AC", state.typeFilter == ChargeTypeFilter.AC) { viewModel.setTypeFilter(ChargeTypeFilter.AC) }
+            ChargesChip("DC", state.typeFilter == ChargeTypeFilter.DC) { viewModel.setTypeFilter(ChargeTypeFilter.DC) }
+        }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        // -- Charges list --
-        if (state.charges.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "Зарядок за этот период нет",
-                    color = TextSecondary,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(
-                    items = state.charges,
-                    key = { it.id }
-                ) { charge ->
-                    Column {
-                        ChargeCard(
-                            charge = charge,
-                            onClick = { viewModel.toggleExpanded(charge.id) },
-                            currencySymbol = state.currencySymbol
-                        )
-
-                        // Expanded power curve chart
-                        AnimatedVisibility(
-                            visible = state.expandedChargeId == charge.id,
-                            enter = expandVertically(),
-                            exit = shrinkVertically()
-                        ) {
-                            PowerCurveChart(
-                                points = state.expandedChargePoints,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(top = 4.dp)
+        Row(modifier = Modifier.fillMaxSize()) {
+            // Left 65%: hierarchical month/day/charge list
+            if (state.months.isEmpty()) {
+                Column(
+                    modifier = Modifier.weight(0.65f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "Нет зарядок за выбранный период",
+                        color = TextSecondary,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(0.65f).fillMaxHeight(),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    for (month in state.months) {
+                        item(key = "month_${month.yearMonth}") {
+                            ChargesMonthHeader(
+                                month = month,
+                                expanded = month.yearMonth in state.expandedMonths,
+                                currencySymbol = state.currencySymbol,
+                                onClick = { viewModel.toggleMonth(month.yearMonth) }
                             )
+                        }
+                        if (month.yearMonth in state.expandedMonths) {
+                            for (day in month.days) {
+                                item(key = "day_${month.yearMonth}_${day.date}") {
+                                    ChargesDayHeader(
+                                        day = day,
+                                        expanded = day.date in state.expandedDays,
+                                        currencySymbol = state.currencySymbol,
+                                        onClick = { viewModel.toggleDay(day.date) }
+                                    )
+                                }
+                                if (day.date in state.expandedDays) {
+                                    item(key = "cheader_${month.yearMonth}_${day.date}") {
+                                        ChargesColumnHeaders(currencySymbol = state.currencySymbol)
+                                    }
+                                    for (charge in day.charges) {
+                                        item(key = "charge_${charge.id}") {
+                                            ChargeRow(
+                                                charge = charge,
+                                                currencySymbol = state.currencySymbol
+                                            )
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 }
+            }
 
-                // Bottom spacing for nav bar clearance
-                item { Spacer(modifier = Modifier.height(16.dp)) }
+            // Vertical divider
+            Box(
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .width(1.dp)
+                    .background(CardBorder.copy(alpha = 0.5f))
+            )
+
+            // Right 35%: stats panel
+            ChargesStatsPanel(
+                periodSummary = state.periodSummary,
+                currencySymbol = state.currencySymbol,
+                lifetimeAcKwh = state.lifetimeAcKwh,
+                lifetimeDcKwh = state.lifetimeDcKwh,
+                lifetimeTotalKwh = state.lifetimeTotalKwh,
+                equivCycles = state.equivCycles,
+                nominalCapacityKwh = state.nominalCapacityKwh,
+                sohSeries = state.sohSeries,
+                capacitySeries = state.capacitySeries,
+                showLifetime = state.autoserviceEnabled && state.autoserviceConnected,
+                modifier = Modifier.weight(0.35f).fillMaxHeight()
+            )
+        }
+    }
+}
+
+// ─── Fallback states ──────────────────────────────────────────────────────────
+
+@Composable
+private fun OnboardingEmptyState(onNavigateSettings: () -> Unit) {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(12.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                .padding(horizontal = 32.dp, vertical = 60.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки — включи «Системные данные» в Настройках.",
+                color = TextSecondary,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Button(
+                onClick = onNavigateSettings,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text("Перейти в Настройки", fontWeight = FontWeight.SemiBold)
             }
         }
     }
 }
 
-/** Period toggle buttons and type filter chips row. */
 @Composable
-private fun PeriodAndFilterRow(
-    currentPeriod: String,
-    typeFilter: String?,
-    onPeriodWeek: () -> Unit,
-    onPeriodMonth: () -> Unit,
-    onTypeFilter: (String?) -> Unit
-) {
-    // Determine active period from label
-    val isWeek = currentPeriod.startsWith("Неделя")
+private fun SentinelEmptyState() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Box(
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(12.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                .padding(horizontal = 32.dp, vertical = 60.dp)
+        ) {
+            Text(
+                text = "На вашей модели машины статистика зарядок недоступна — диагностические данные не читаются. SoH тоже не показывается.",
+                color = TextSecondary,
+                fontSize = 14.sp,
+                textAlign = TextAlign.Center,
+                lineHeight = 20.sp
+            )
+        }
+    }
+}
 
+@Composable
+private fun NotTrackingBanner(onClick: () -> Unit) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                color = SocYellow.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(8.dp)
+            )
+            .border(1.dp, SocYellow.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Period toggle chips
-        FilterChip(
-            selected = isWeek,
-            onClick = onPeriodWeek,
-            label = { Text("Неделя", fontSize = 13.sp) },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = AccentGreen,
-                selectedLabelColor = Color.White,
-                containerColor = CardSurfaceElevated,
-                labelColor = TextSecondary
-            ),
-            shape = RoundedCornerShape(8.dp)
+        Text(
+            text = "Новые зарядки сейчас не отслеживаются.",
+            color = SocYellow,
+            fontSize = 12.sp,
+            modifier = Modifier.weight(1f)
         )
-        FilterChip(
-            selected = !isWeek,
-            onClick = onPeriodMonth,
-            label = { Text("Месяц", fontSize = 13.sp) },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = AccentGreen,
-                selectedLabelColor = Color.White,
-                containerColor = CardSurfaceElevated,
-                labelColor = TextSecondary
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
-
         Spacer(modifier = Modifier.width(8.dp))
-
-        // Type filter chips: All / AC / DC
-        FilterChip(
-            selected = typeFilter == null,
-            onClick = { onTypeFilter(null) },
-            label = { Text("Все", fontSize = 13.sp) },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = AccentBlue,
-                selectedLabelColor = Color.White,
-                containerColor = CardSurfaceElevated,
-                labelColor = TextSecondary
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
-        FilterChip(
-            selected = typeFilter == "AC",
-            onClick = { onTypeFilter("AC") },
-            label = { Text("AC", fontSize = 13.sp) },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = AccentBlue,
-                selectedLabelColor = Color.White,
-                containerColor = CardSurfaceElevated,
-                labelColor = TextSecondary
-            ),
-            shape = RoundedCornerShape(8.dp)
-        )
-        FilterChip(
-            selected = typeFilter == "DC",
-            onClick = { onTypeFilter("DC") },
-            label = { Text("DC", fontSize = 13.sp) },
-            colors = FilterChipDefaults.filterChipColors(
-                selectedContainerColor = AccentOrange,
-                selectedLabelColor = Color.White,
-                containerColor = CardSurfaceElevated,
-                labelColor = TextSecondary
-            ),
-            shape = RoundedCornerShape(8.dp)
+        Text(
+            text = "Включить →",
+            color = AccentGreen,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.clickable { onClick() }
         )
     }
+    Spacer(modifier = Modifier.height(8.dp))
 }
 
-/** Summary row with 3 stat boxes: sessions, total kWh, total cost. */
+// ─── List components ──────────────────────────────────────────────────────────
+
 @Composable
-private fun ChargeSummaryRow(
-    sessionCount: Int,
-    totalKwh: Double,
-    totalCost: Double,
-    currencySymbol: String = "BYN"
+private fun ChargesMonthHeader(
+    month: ChargesMonthGroup,
+    expanded: Boolean,
+    currencySymbol: String,
+    onClick: () -> Unit
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .background(CardSurface.copy(alpha = 0.7f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        SummaryBox(
-            value = "$sessionCount",
-            label = "Сессий",
-            modifier = Modifier.weight(1f)
-        )
-        SummaryBox(
-            value = "%.1f".format(totalKwh),
-            unit = "кВт·ч",
-            label = "Заряжено",
-            modifier = Modifier.weight(1f)
-        )
-        SummaryBox(
-            value = "%.0f".format(totalCost),
-            unit = currencySymbol,
-            label = "Стоимость",
-            modifier = Modifier.weight(1f)
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (expanded) "▼" else "▶", color = AccentGreen, fontSize = 11.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(month.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                "${month.sessionCount}",
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(36.dp)
+            )
+            Text(
+                "%.1f кВт·ч".format(month.totalKwh),
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(88.dp)
+            )
+            Text(
+                "%.2f %s".format(month.totalCost, currencySymbol),
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(72.dp)
+            )
+        }
     }
 }
 
-/** Single summary stat box. */
 @Composable
-private fun SummaryBox(
-    value: String,
-    label: String,
-    modifier: Modifier = Modifier,
-    unit: String? = null
+private fun ChargesDayHeader(
+    day: ChargesDayGroup,
+    expanded: Boolean,
+    currencySymbol: String,
+    onClick: () -> Unit
 ) {
-    Box(
-        contentAlignment = Alignment.Center,
-        modifier = modifier
-            .background(
-                color = CardSurface,
-                shape = RoundedCornerShape(12.dp)
-            )
-            .height(76.dp)
-            .padding(horizontal = 12.dp, vertical = 8.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .background(CardSurface.copy(alpha = 0.4f), RoundedCornerShape(6.dp))
+            .padding(start = 20.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(if (expanded) "▼" else "▶", color = AccentBlue, fontSize = 11.sp)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(day.label, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+        }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Text(
+                "${day.sessionCount}",
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(36.dp)
+            )
+            Text(
+                "%.1f кВт·ч".format(day.totalKwh),
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(88.dp)
+            )
+            Text(
+                "%.2f %s".format(day.totalCost, currencySymbol),
+                color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(72.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun ChargesColumnHeaders(currencySymbol: String) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = 36.dp, end = 12.dp, top = 4.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(100.dp))
+        Text("SOC", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(80.dp))
+        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
+        Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
+    }
+    HorizontalDivider(
+        color = CardBorder.copy(alpha = 0.5f),
+        thickness = 0.5.dp,
+        modifier = Modifier.padding(start = 36.dp, end = 12.dp)
+    )
+}
+
+@Composable
+private fun ChargeRow(charge: ChargeEntity, currencySymbol: String) {
+    val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
+    val startTime = timeFmt.format(Date(charge.startTs))
+    val endTime = charge.endTs?.let { timeFmt.format(Date(it)) } ?: "—"
+    val timeRange = "$startTime – $endTime"
+
+    val socText = when {
+        charge.socStart != null && charge.socEnd != null -> "${charge.socStart}% → ${charge.socEnd}%"
+        charge.socStart != null -> "${charge.socStart}% → —"
+        else -> "—"
+    }
+
+    val kwh = charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"
+    val cost = charge.cost?.let { "%.2f".format(it) } ?: "—"
+
+    // gunState: 1=NONE, 2=AC, 3=DC, 4=GB_DC
+    val typeLabel = when (charge.gunState) {
+        2 -> "AC"
+        3, 4 -> "DC"
+        else -> charge.type ?: "—"
+    }
+    val typeColor = when (typeLabel) {
+        "DC" -> AccentOrange
+        else -> AccentBlue
+    }
+
+    Column {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 36.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Type badge + time
             Row(
-                verticalAlignment = Alignment.Bottom,
-                horizontalArrangement = Arrangement.Center
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.width(100.dp)
             ) {
-                Text(
-                    text = value,
-                    color = TextPrimary,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Medium
-                )
-                if (unit != null) {
+                Box(
+                    modifier = Modifier
+                        .background(CardSurfaceElevated, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                ) {
                     Text(
-                        text = " $unit",
-                        color = TextSecondary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.padding(bottom = 2.dp)
+                        typeLabel,
+                        color = typeColor,
+                        fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace,
+                        fontWeight = FontWeight.Bold
                     )
                 }
+                Spacer(modifier = Modifier.width(4.dp))
+                Text(
+                    startTime,
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace
+                )
             }
             Text(
-                text = label,
+                socText,
+                color = TextMuted,
+                fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace,
+                modifier = Modifier.width(80.dp)
+            )
+            Text(
+                kwh,
+                color = AccentGreen,
+                fontSize = 14.sp,
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(56.dp)
+            )
+            Text(
+                cost,
                 color = TextSecondary,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Medium
+                fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(56.dp)
+            )
+        }
+        HorizontalDivider(
+            color = CardBorder.copy(alpha = 0.3f),
+            thickness = 0.5.dp,
+            modifier = Modifier.padding(start = 36.dp, end = 12.dp)
+        )
+    }
+}
+
+// ─── Stats panel ──────────────────────────────────────────────────────────────
+
+@Composable
+private fun ChargesStatsPanel(
+    periodSummary: ChargeSummary,
+    currencySymbol: String,
+    lifetimeAcKwh: Double,
+    lifetimeDcKwh: Double,
+    lifetimeTotalKwh: Double,
+    equivCycles: Double,
+    nominalCapacityKwh: Double,
+    sohSeries: List<Float>,
+    capacitySeries: List<Float>,
+    showLifetime: Boolean,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp)
+    ) {
+        // Period summary label
+        Text(
+            "За выбранный период",
+            color = TextMuted,
+            fontSize = 11.sp,
+            letterSpacing = 0.3.sp,
+            modifier = Modifier.padding(bottom = 6.dp)
+        )
+
+        // Period summary card
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(CardSurface, RoundedCornerShape(10.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            StatRow("Сессий", "${periodSummary.sessionCount}", TextPrimary)
+            Spacer(modifier = Modifier.height(4.dp))
+            StatRow("кВт·ч", "%.1f".format(periodSummary.totalKwh), AccentGreen)
+            Spacer(modifier = Modifier.height(4.dp))
+            StatRow("Стоимость", "%.2f %s".format(periodSummary.totalCost, currencySymbol), TextPrimary)
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (showLifetime) {
+            // Lifetime label
+            Text(
+                "Лайфтайм",
+                color = TextMuted,
+                fontSize = 11.sp,
+                letterSpacing = 0.3.sp,
+                modifier = Modifier.padding(bottom = 6.dp)
+            )
+
+            // Lifetime card
+            val totalForRatio = lifetimeAcKwh + lifetimeDcKwh
+            val acPct = if (totalForRatio > 0) (lifetimeAcKwh / totalForRatio * 100).toInt() else 0
+            val dcPct = if (totalForRatio > 0) 100 - acPct else 0
+
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(CardSurface, RoundedCornerShape(10.dp))
+                    .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("AC / DC", color = TextMuted, fontSize = 11.sp)
+                    Row {
+                        Text("$acPct%", color = AccentGreen, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                        Text(" · ", color = TextMuted, fontSize = 13.sp)
+                        Text("$dcPct%", color = AccentOrange, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+                    }
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text("Эквив. циклов", color = TextMuted, fontSize = 11.sp)
+                    Text("%.1f".format(equivCycles), color = TextPrimary, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                }
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    "%.0f кВт·ч ÷ %.1f номинал".format(lifetimeTotalKwh, nominalCapacityKwh),
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    lineHeight = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Mini SoH chart
+            if (sohSeries.size >= 2) {
+                MiniLineChart(
+                    series = sohSeries,
+                    title = "SoH (%)",
+                    lineColor = AccentGreen
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            // Mini Capacity chart
+            if (capacitySeries.size >= 2) {
+                MiniLineChart(
+                    series = capacitySeries,
+                    title = "Ёмкость (кВт·ч)",
+                    lineColor = AccentBlue
+                )
+            }
+        } else {
+            Text(
+                "Lifetime метрики и SoH тренды доступны после включения «Системные данные»",
+                color = TextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
             )
         }
     }
 }
 
-/**
- * Dual-axis charge chart: Power (kW) + SOC (%) + Battery Temp.
- * Green line = power, Blue line = SOC, Orange line = battery temp.
- */
 @Composable
-private fun PowerCurveChart(
-    points: List<ChargePointEntity>,
-    modifier: Modifier = Modifier
-) {
-    if (points.size < 2) {
-        Box(
-            modifier = modifier
-                .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
-                .height(120.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = if (points.isEmpty()) "Загрузка..." else "Недостаточно данных",
-                color = TextSecondary, fontSize = 13.sp
-            )
-        }
-        return
-    }
-
-    val validPoints = points.filter { it.powerKw != null }
-    if (validPoints.size < 2) {
-        Box(
-            modifier = modifier
-                .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
-                .height(120.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(text = "Нет данных о мощности", color = TextSecondary, fontSize = 13.sp)
-        }
-        return
-    }
-
-    val minTime = validPoints.first().timestamp
-    val maxTime = validPoints.last().timestamp
-    val timeRange = (maxTime - minTime).coerceAtLeast(1L).toFloat()
-    val maxPower = validPoints.maxOf { kotlin.math.abs(it.powerKw!!) }.coerceAtLeast(1.0).toFloat()
-    val hasSoc = validPoints.any { it.soc != null }
-    val hasBatTemp = validPoints.any { it.batTemp != null }
-
-    Column(
-        modifier = modifier
-            .background(color = CardSurface, shape = RoundedCornerShape(12.dp))
-            .padding(12.dp)
+private fun StatRow(label: String, value: String, valueColor: Color) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        // Chart header with legend
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(text = "Мощность", color = ChartLineColor, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                if (hasSoc) Text(text = "SOC", color = AccentBlue, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                if (hasBatTemp) Text(text = "Темп.", color = AccentOrange, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-            Text(
-                text = "макс. %.1f кВт".format(maxPower.toDouble()),
-                color = TextSecondary, fontSize = 12.sp
-            )
-        }
+        Text(label, color = TextMuted, fontSize = 11.sp)
+        Text(value, color = valueColor, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+    }
+}
 
-        Spacer(modifier = Modifier.height(8.dp))
-
+@Composable
+private fun MiniLineChart(
+    series: List<Float>,
+    title: String,
+    lineColor: Color
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurface, RoundedCornerShape(10.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+            .padding(10.dp)
+    ) {
+        Text(title, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
         Canvas(
-            modifier = Modifier.fillMaxWidth().height(140.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(60.dp)
         ) {
-            val chartWidth = size.width
-            val chartHeight = size.height
-            val padding = 4.dp.toPx()
-            val plotWidth = chartWidth - padding * 2
-            val plotHeight = chartHeight - padding * 2
+            val w = size.width
+            val h = size.height
+            val minVal = series.min()
+            val maxVal = series.max()
+            val range = (maxVal - minVal).coerceAtLeast(0.01f)
+            val pad = 4.dp.toPx()
 
-            // Grid lines
-            for (i in 0..4) {
-                val y = padding + plotHeight * (1f - i / 4f)
-                drawLine(ChartGridColor, Offset(padding, y), Offset(chartWidth - padding, y), 1f)
-            }
-
-            // Power curve (green)
-            val powerPath = Path()
-            validPoints.forEachIndexed { index, point ->
-                val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
-                val y = padding + plotHeight * (1f - (kotlin.math.abs(point.powerKw!!).toFloat() / maxPower))
-                if (index == 0) powerPath.moveTo(x, y) else powerPath.lineTo(x, y)
-            }
-            drawPath(powerPath, ChartLineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-
-            // Fill under power curve
-            val fillPath = Path().apply {
-                addPath(powerPath)
-                val lastX = padding + ((validPoints.last().timestamp - minTime) / timeRange) * plotWidth
-                val firstX = padding + ((validPoints.first().timestamp - minTime) / timeRange) * plotWidth
-                lineTo(lastX, padding + plotHeight)
-                lineTo(firstX, padding + plotHeight)
-                close()
-            }
-            drawPath(fillPath, ChartLineColor.copy(alpha = 0.1f))
-
-            // SOC curve (blue, 0-100%)
-            if (hasSoc) {
-                val socPath = Path()
-                var first = true
-                validPoints.forEach { point ->
-                    val soc = point.soc ?: return@forEach
-                    val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
-                    val y = padding + plotHeight * (1f - soc / 100f)
-                    if (first) { socPath.moveTo(x, y); first = false } else socPath.lineTo(x, y)
-                }
-                drawPath(socPath, AccentBlue, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-            }
-
-            // Battery temp curve (orange)
-            if (hasBatTemp) {
-                val temps = validPoints.mapNotNull { it.batTemp }
-                if (temps.size >= 2) {
-                    val minTemp = (temps.min() - 5).coerceAtLeast(0).toFloat()
-                    val maxTemp = (temps.max() + 5).toFloat()
-                    val tempRange = (maxTemp - minTemp).coerceAtLeast(1f)
-                    val tempPath = Path()
-                    var first = true
-                    validPoints.forEach { point ->
-                        val temp = point.batTemp ?: return@forEach
-                        val x = padding + ((point.timestamp - minTime) / timeRange) * plotWidth
-                        val y = padding + plotHeight * (1f - (temp - minTemp) / tempRange)
-                        if (first) { tempPath.moveTo(x, y); first = false } else tempPath.lineTo(x, y)
-                    }
-                    drawPath(tempPath, AccentOrange, style = Stroke(1.5f.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
-                }
-            }
-        }
-
-        // Stats row below chart
-        Spacer(modifier = Modifier.height(8.dp))
-        val durationMs = maxTime - minTime
-        val durationMin = durationMs / 60_000
-        val socPoints = validPoints.mapNotNull { it.soc }
-        val socDelta = if (socPoints.size >= 2) socPoints.last() - socPoints.first() else null
-        val chargeSpeed = if (socDelta != null && durationMs > 0) socDelta / (durationMs / 3_600_000.0) else null
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            SummaryBox(
-                value = "${durationMin}",
-                unit = "мин",
-                label = "Время",
-                modifier = Modifier.weight(1f)
+            // Grid line
+            drawLine(
+                color = ChartGrid,
+                start = Offset(pad, pad),
+                end = Offset(w - pad, pad),
+                strokeWidth = 0.5.dp.toPx()
             )
-            if (chargeSpeed != null) {
-                SummaryBox(
-                    value = "%.0f".format(chargeSpeed),
-                    unit = "%/ч",
-                    label = "Скорость",
-                    modifier = Modifier.weight(1f)
-                )
+
+            val path = Path()
+            series.forEachIndexed { index, value ->
+                val x = pad + (index.toFloat() / (series.size - 1)) * (w - pad * 2)
+                val y = pad + (1f - (value - minVal) / range) * (h - pad * 2)
+                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
             }
-            if (hasBatTemp) {
-                val avgTemp = validPoints.mapNotNull { it.batTemp }.average()
-                SummaryBox(
-                    value = "%.0f".format(avgTemp),
-                    unit = "°C",
-                    label = "Батарея",
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            drawPath(path, lineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
     }
+}
+
+// ─── Chip ─────────────────────────────────────────────────────────────────────
+
+@Composable
+private fun ChargesChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, fontSize = 12.sp) },
+        shape = RoundedCornerShape(8.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = AccentGreen,
+            selectedLabelColor = Color.White,
+            containerColor = CardSurface,
+            labelColor = TextSecondary
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = Color.Transparent,
+            selectedBorderColor = Color.Transparent,
+            enabled = true,
+            selected = selected
+        )
+    )
 }

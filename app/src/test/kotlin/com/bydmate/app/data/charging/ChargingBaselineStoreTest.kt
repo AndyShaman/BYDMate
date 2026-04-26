@@ -28,6 +28,8 @@ class ChargingBaselineStoreTest {
         override suspend fun getLastChargeSync(): ChargeEntity? = null
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = maxKwh
+        override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
+        override suspend fun hasLegacyCharges(): Boolean = false
     }
 
     private class FakeSettings(

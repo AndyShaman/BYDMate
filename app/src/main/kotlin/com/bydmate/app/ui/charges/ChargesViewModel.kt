@@ -2,16 +2,18 @@ package com.bydmate.app.ui.charges
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bydmate.app.data.local.dao.ChargePointDao
+import com.bydmate.app.data.local.dao.BatterySnapshotDao
+import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.domain.battery.BatteryStateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -20,160 +22,287 @@ import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
 
-/** UI state for the Charges screen. */
-data class ChargesUiState(
-    val charges: List<ChargeEntity> = emptyList(),
-    val periodLabel: String = "",
-    val sessionCount: Int = 0,
-    val totalKwh: Double = 0.0,
-    val totalCost: Double = 0.0,
-    val currencySymbol: String = "BYN",
-    val typeFilter: String? = null,
-    val expandedChargeId: Long? = null,
-    val expandedChargePoints: List<ChargePointEntity> = emptyList()
+enum class ChargesPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
+enum class ChargeTypeFilter { ALL, AC, DC }
+
+data class ChargesMonthGroup(
+    val yearMonth: String,
+    val label: String,
+    val totalKwh: Double,
+    val sessionCount: Int,
+    val totalCost: Double,
+    val days: List<ChargesDayGroup>
 )
 
-/** Period filter for charges list. */
-enum class Period { WEEK, MONTH }
+data class ChargesDayGroup(
+    val date: String,
+    val label: String,
+    val dayOfWeek: String,
+    val totalKwh: Double,
+    val sessionCount: Int,
+    val totalCost: Double,
+    val charges: List<ChargeEntity>
+)
+
+data class ChargesUiState(
+    val period: ChargesPeriod = ChargesPeriod.MONTH,
+    val typeFilter: ChargeTypeFilter = ChargeTypeFilter.ALL,
+    val months: List<ChargesMonthGroup> = emptyList(),
+    val expandedMonths: Set<String> = emptySet(),
+    val expandedDays: Set<String> = emptySet(),
+    val periodSummary: ChargeSummary = ChargeSummary(0, 0.0, 0.0),
+    val currencySymbol: String = "BYN",
+    val autoserviceEnabled: Boolean = false,
+    val autoserviceConnected: Boolean = false,
+    val autoserviceAllSentinel: Boolean = false,
+    val hasLegacyCharges: Boolean = false,
+    val lifetimeAcKwh: Double = 0.0,
+    val lifetimeDcKwh: Double = 0.0,
+    val lifetimeTotalKwh: Double = 0.0,
+    val equivCycles: Double = 0.0,
+    val nominalCapacityKwh: Double = 72.9,
+    val sohSeries: List<Float> = emptyList(),
+    val capacitySeries: List<Float> = emptyList()
+)
 
 @HiltViewModel
 class ChargesViewModel @Inject constructor(
     private val chargeRepository: ChargeRepository,
-    private val chargePointDao: ChargePointDao,
-    private val settingsRepository: SettingsRepository
+    private val batterySnapshotDao: BatterySnapshotDao,
+    private val settingsRepository: SettingsRepository,
+    private val batteryStateRepository: BatteryStateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChargesUiState())
     val uiState: StateFlow<ChargesUiState> = _uiState.asStateFlow()
 
-    private var currentPeriod: Period = Period.WEEK
-    private var chargesJob: Job? = null
+    private var loadJob: Job? = null
 
     init {
-        loadCharges()
-        loadCurrency()
-    }
-
-    private fun loadCurrency() {
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
-            _uiState.update { it.copy(currencySymbol = symbol) }
+            val nominal = settingsRepository.getBatteryCapacity()
+            _uiState.update { it.copy(currencySymbol = symbol, nominalCapacityKwh = nominal) }
+        }
+        loadAutoserviceState()
+        loadAll()
+        loadLifetimeStats()
+        loadHealthSeries()
+    }
+
+    fun setPeriod(period: ChargesPeriod) {
+        _uiState.update { it.copy(period = period) }
+        loadAll()
+    }
+
+    fun setTypeFilter(filter: ChargeTypeFilter) {
+        _uiState.update { it.copy(typeFilter = filter) }
+        loadAll()
+    }
+
+    fun toggleMonth(yearMonth: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedMonths.toMutableSet()
+            if (yearMonth in expanded) expanded.remove(yearMonth) else expanded.add(yearMonth)
+            state.copy(expandedMonths = expanded)
         }
     }
 
-    /** Switch between WEEK and MONTH period. */
-    fun setPeriod(period: Period) {
-        if (period == currentPeriod) return
-        currentPeriod = period
-        // Collapse any expanded card on period change
-        _uiState.update { it.copy(expandedChargeId = null, expandedChargePoints = emptyList()) }
-        loadCharges()
-    }
-
-    /** Set type filter: null = all, "AC", "DC". */
-    fun setTypeFilter(type: String?) {
-        if (type == _uiState.value.typeFilter) return
-        _uiState.update { it.copy(typeFilter = type, expandedChargeId = null, expandedChargePoints = emptyList()) }
-        loadCharges()
-    }
-
-    /** Toggle expanded state for a charge card, loading charge points on expand. */
-    fun toggleExpanded(chargeId: Long) {
-        val current = _uiState.value.expandedChargeId
-        if (current == chargeId) {
-            // Collapse
-            _uiState.update { it.copy(expandedChargeId = null, expandedChargePoints = emptyList()) }
-        } else {
-            // Expand and load charge points
-            _uiState.update { it.copy(expandedChargeId = chargeId, expandedChargePoints = emptyList()) }
-            loadChargePoints(chargeId)
+    fun toggleDay(date: String) {
+        _uiState.update { state ->
+            val expanded = state.expandedDays.toMutableSet()
+            if (date in expanded) expanded.remove(date) else expanded.add(date)
+            state.copy(expandedDays = expanded)
         }
     }
 
-    /** Load charge points for the expanded charge session. */
-    private fun loadChargePoints(chargeId: Long) {
-        viewModelScope.launch {
-            val points = chargePointDao.getByChargeId(chargeId)
-            _uiState.update { state ->
-                // Only update if this charge is still expanded
-                if (state.expandedChargeId == chargeId) {
-                    state.copy(expandedChargePoints = points)
-                } else {
-                    state
-                }
-            }
-        }
-    }
+    private fun loadAll() {
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val (from, to) = dateRangeFor(_uiState.value.period)
 
-    /** Reload charges from the database based on current period and type filter. */
-    private fun loadCharges() {
-        chargesJob?.cancel()
-        val (from, to) = periodRange(currentPeriod)
-        val label = periodLabel(currentPeriod, from, to)
-
-        chargesJob = viewModelScope.launch {
-            // Load summary for the period
-            val summary = chargeRepository.getPeriodSummary(from, to)
-
-            // Observe charges in the date range
             chargeRepository.getChargesByDateRange(from, to).collect { allCharges ->
                 val typeFilter = _uiState.value.typeFilter
-                val filtered = if (typeFilter != null) {
-                    allCharges.filter { it.type == typeFilter }
-                } else {
-                    allCharges
+                val filtered = when (typeFilter) {
+                    ChargeTypeFilter.ALL -> allCharges
+                    ChargeTypeFilter.AC -> allCharges.filter { it.gunState == 2 }
+                    ChargeTypeFilter.DC -> allCharges.filter { it.gunState in setOf(3, 4) }
                 }
 
-                // Recalculate summary for filtered results
-                val filteredCount = filtered.size
-                val filteredKwh = filtered.sumOf { it.kwhCharged ?: 0.0 }
-                val filteredCost = filtered.sumOf { it.cost ?: 0.0 }
+                val months = groupChargesByMonthDay(filtered)
 
-                _uiState.update {
-                    it.copy(
-                        charges = filtered,
-                        periodLabel = label,
-                        sessionCount = filteredCount,
-                        totalKwh = filteredKwh,
-                        totalCost = filteredCost
+                val periodSummary = ChargeSummary(
+                    sessionCount = filtered.size,
+                    totalKwh = filtered.sumOf { it.kwhCharged ?: 0.0 },
+                    totalCost = filtered.sumOf { it.cost ?: 0.0 }
+                )
+
+                val autoExpandMonth = months.firstOrNull()?.yearMonth
+                val autoExpandDay = months.firstOrNull()?.days?.firstOrNull()?.date
+
+                _uiState.update { s ->
+                    s.copy(
+                        months = months,
+                        periodSummary = periodSummary,
+                        expandedMonths = if (s.expandedMonths.isEmpty() && autoExpandMonth != null)
+                            setOf(autoExpandMonth) else s.expandedMonths,
+                        expandedDays = if (s.expandedDays.isEmpty() && autoExpandDay != null)
+                            setOf(autoExpandDay) else s.expandedDays
                     )
                 }
             }
         }
     }
 
-    /** Calculate start/end timestamps for the given period. */
-    private fun periodRange(period: Period): Pair<Long, Long> {
-        val cal = Calendar.getInstance()
-        // End of today
-        cal.set(Calendar.HOUR_OF_DAY, 23)
-        cal.set(Calendar.MINUTE, 59)
-        cal.set(Calendar.SECOND, 59)
-        cal.set(Calendar.MILLISECOND, 999)
-        val to = cal.timeInMillis
+    internal fun groupChargesByMonthDay(charges: List<ChargeEntity>): List<ChargesMonthGroup> {
+        val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
+        val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val dayOfWeekFmt = SimpleDateFormat("EEE", Locale("ru"))
+        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", Locale("ru"))
 
-        // Start of period
-        when (period) {
-            Period.WEEK -> cal.add(Calendar.DAY_OF_YEAR, -7)
-            Period.MONTH -> cal.add(Calendar.MONTH, -1)
+        val todayCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
         }
-        cal.set(Calendar.HOUR_OF_DAY, 0)
-        cal.set(Calendar.MINUTE, 0)
-        cal.set(Calendar.SECOND, 0)
-        cal.set(Calendar.MILLISECOND, 0)
-        val from = cal.timeInMillis
+        val todayKey = dayKeyFmt.format(todayCal.time)
+        val yesterdayCal = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+            add(Calendar.DAY_OF_YEAR, -1)
+        }
+        val yesterdayKey = dayKeyFmt.format(yesterdayCal.time)
 
-        return Pair(from, to)
+        val monthMap = linkedMapOf<String, MutableList<ChargeEntity>>()
+        for (charge in charges) {
+            val key = monthKeyFmt.format(Date(charge.startTs))
+            monthMap.getOrPut(key) { mutableListOf() }.add(charge)
+        }
+
+        return monthMap.entries
+            .sortedByDescending { it.key }
+            .map { (monthKey, monthCharges) ->
+                val dayMap = linkedMapOf<String, MutableList<ChargeEntity>>()
+                for (charge in monthCharges) {
+                    val dk = dayKeyFmt.format(Date(charge.startTs))
+                    dayMap.getOrPut(dk) { mutableListOf() }.add(charge)
+                }
+
+                val days = dayMap.entries
+                    .sortedByDescending { it.key }
+                    .map { (dayKey, dayCharges) ->
+                        val dow = dayOfWeekFmt.format(Date(dayCharges.first().startTs))
+                        val dayLabel = when (dayKey) {
+                            todayKey -> "сегодня ($dow)"
+                            yesterdayKey -> "вчера"
+                            else -> {
+                                val ddMmm = SimpleDateFormat("dd MMM", Locale("ru")).format(Date(dayCharges.first().startTs))
+                                "$ddMmm ($dow)"
+                            }
+                        }
+                        ChargesDayGroup(
+                            date = dayKey,
+                            label = dayLabel,
+                            dayOfWeek = dow,
+                            totalKwh = dayCharges.sumOf { it.kwhCharged ?: 0.0 },
+                            sessionCount = dayCharges.size,
+                            totalCost = dayCharges.sumOf { it.cost ?: 0.0 },
+                            charges = dayCharges
+                        )
+                    }
+
+                val firstTs = monthCharges.first().startTs
+                ChargesMonthGroup(
+                    yearMonth = monthKey,
+                    label = monthLabelFmt.format(Date(firstTs)).replaceFirstChar { it.uppercase() },
+                    totalKwh = monthCharges.sumOf { it.kwhCharged ?: 0.0 },
+                    sessionCount = monthCharges.size,
+                    totalCost = monthCharges.sumOf { it.cost ?: 0.0 },
+                    days = days
+                )
+            }
     }
 
-    /** Format a human-readable label for the period. */
-    private fun periodLabel(period: Period, from: Long, to: Long): String {
-        val sdf = SimpleDateFormat("dd.MM", Locale.getDefault())
-        val fromStr = sdf.format(Date(from))
-        val toStr = sdf.format(Date(to))
+    private fun loadAutoserviceState() {
+        viewModelScope.launch {
+            val enabled = settingsRepository.isAutoserviceEnabled()
+            val legacyExists = chargeRepository.hasLegacyCharges()
+
+            val disconnectedDefault = com.bydmate.app.domain.battery.BatteryState(
+                socNow = null, voltage12v = null, sohPercent = null,
+                lifetimeKm = null, lifetimeKwh = null, autoserviceAvailable = false
+            )
+            val state = runCatching { batteryStateRepository.refresh() }
+                .getOrDefault(disconnectedDefault)
+
+            val connected = state.autoserviceAvailable
+            val allSentinel = connected &&
+                    state.socNow == null && state.lifetimeKm == null && state.lifetimeKwh == null
+
+            _uiState.update {
+                it.copy(
+                    autoserviceEnabled = enabled,
+                    autoserviceConnected = connected,
+                    autoserviceAllSentinel = allSentinel,
+                    hasLegacyCharges = legacyExists
+                )
+            }
+        }
+    }
+
+    private fun loadLifetimeStats() {
+        viewModelScope.launch {
+            val stats = runCatching { chargeRepository.getLifetimeStats() }.getOrNull()
+                ?: return@launch
+            val nominal = _uiState.value.nominalCapacityKwh
+            val equiv = if (nominal > 0) stats.totalKwhAdded / nominal else 0.0
+            _uiState.update {
+                it.copy(
+                    lifetimeAcKwh = stats.acKwh,
+                    lifetimeDcKwh = stats.dcKwh,
+                    lifetimeTotalKwh = stats.totalKwhAdded,
+                    equivCycles = equiv
+                )
+            }
+        }
+    }
+
+    private fun loadHealthSeries() {
+        viewModelScope.launch {
+            val snapshots = batterySnapshotDao.getAll().first().reversed()
+            val soh = snapshots.mapNotNull { it.sohPercent?.toFloat() }
+            val cap = snapshots.mapNotNull { it.calculatedCapacityKwh?.toFloat() }
+            _uiState.update { it.copy(sohSeries = soh, capacitySeries = cap) }
+        }
+    }
+
+    private fun dateRangeFor(period: ChargesPeriod): Pair<Long, Long> {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
         return when (period) {
-            Period.WEEK -> "Неделя: $fromStr – $toStr"
-            Period.MONTH -> "Месяц: $fromStr – $toStr"
+            ChargesPeriod.TODAY -> {
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            ChargesPeriod.WEEK -> {
+                cal.add(Calendar.DAY_OF_YEAR, -7)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            ChargesPeriod.MONTH -> {
+                cal.add(Calendar.DAY_OF_YEAR, -30)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            ChargesPeriod.YEAR -> {
+                cal.add(Calendar.DAY_OF_YEAR, -365)
+                cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
+                cal.timeInMillis to now
+            }
+            ChargesPeriod.ALL -> 0L to now
         }
     }
 }

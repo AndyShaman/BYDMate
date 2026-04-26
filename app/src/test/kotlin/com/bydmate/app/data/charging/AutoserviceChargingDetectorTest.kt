@@ -58,6 +58,10 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getLastChargeSync(): ChargeEntity? = inserted.lastOrNull()
         override suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> = emptyList()
         override suspend fun getMaxLifetimeKwhAtFinish(): Double? = maxBaseline
+        override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> =
+            inserted.filter { it.detectionSource?.startsWith("autoservice_") == true }
+        override suspend fun hasLegacyCharges(): Boolean =
+            inserted.any { it.detectionSource == null || it.detectionSource?.startsWith("autoservice_") != true }
     }
 
     // Deviation #1: replaced delete/thinPointsForCharge with getCount/thinOldPoints

@@ -9,6 +9,13 @@ import kotlinx.coroutines.flow.Flow
 import javax.inject.Inject
 import javax.inject.Singleton
 
+data class LifetimeChargingStats(
+    val totalKwhAdded: Double,
+    val acKwh: Double,
+    val dcKwh: Double,
+    val sessionCount: Int
+)
+
 @Singleton
 class ChargeRepository @Inject constructor(
     private val chargeDao: ChargeDao,
@@ -46,4 +53,18 @@ class ChargeRepository @Inject constructor(
 
     suspend fun getMaxLifetimeKwhAtFinish(): Double? =
         chargeDao.getMaxLifetimeKwhAtFinish()
+
+    suspend fun getLifetimeStats(): LifetimeChargingStats {
+        val all = chargeDao.getAllAutoserviceCharges()
+        val ac = all.filter { it.gunState == 2 }.sumOf { it.kwhCharged ?: 0.0 }
+        val dc = all.filter { it.gunState in setOf(3, 4) }.sumOf { it.kwhCharged ?: 0.0 }
+        return LifetimeChargingStats(
+            totalKwhAdded = ac + dc,
+            acKwh = ac,
+            dcKwh = dc,
+            sessionCount = all.size
+        )
+    }
+
+    suspend fun hasLegacyCharges(): Boolean = chargeDao.hasLegacyCharges()
 }
