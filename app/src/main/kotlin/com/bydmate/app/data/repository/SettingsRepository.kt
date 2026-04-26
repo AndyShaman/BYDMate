@@ -33,6 +33,11 @@ class SettingsRepository @Inject constructor(
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
         const val KEY_DATA_SOURCE = "data_source"
+        const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
+        const val KEY_CHARGING_PROMPT_ENABLED = "charging_prompt_enabled"
+        const val KEY_AUTOSERVICE_BASELINE_KWH = "autoservice_baseline_kwh"
+        const val KEY_AUTOSERVICE_BASELINE_TS = "autoservice_baseline_ts"
+        const val KEY_LAST_SEEN_SOC = "last_seen_soc"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -156,4 +161,33 @@ class SettingsRepository @Inject constructor(
         setString(KEY_DATA_SOURCE, source.name)
 
     fun observeDataSource(): Flow<String?> = observeString(KEY_DATA_SOURCE)
+
+    suspend fun isAutoserviceEnabled(): Boolean =
+        getString(KEY_AUTOSERVICE_ENABLED, "false") == "true"
+
+    suspend fun setAutoserviceEnabled(enabled: Boolean) =
+        setString(KEY_AUTOSERVICE_ENABLED, enabled.toString())
+
+    suspend fun isChargingPromptEnabled(): Boolean =
+        getString(KEY_CHARGING_PROMPT_ENABLED, "true") == "true"
+
+    suspend fun setChargingPromptEnabled(enabled: Boolean) =
+        setString(KEY_CHARGING_PROMPT_ENABLED, enabled.toString())
+
+    suspend fun getAutoserviceBaseline(): Pair<Double, Long>? {
+        val kwh = getString(KEY_AUTOSERVICE_BASELINE_KWH, "").toDoubleOrNull() ?: return null
+        val ts = getString(KEY_AUTOSERVICE_BASELINE_TS, "0").toLongOrNull() ?: 0L
+        return kwh to ts
+    }
+
+    suspend fun setAutoserviceBaseline(kwh: Double, ts: Long) {
+        setString(KEY_AUTOSERVICE_BASELINE_KWH, kwh.toString())
+        setString(KEY_AUTOSERVICE_BASELINE_TS, ts.toString())
+    }
+
+    suspend fun getLastSeenSoc(): Int? =
+        getString(KEY_LAST_SEEN_SOC, "").toIntOrNull()
+
+    suspend fun setLastSeenSoc(soc: Int) =
+        setString(KEY_LAST_SEEN_SOC, soc.toString())
 }
