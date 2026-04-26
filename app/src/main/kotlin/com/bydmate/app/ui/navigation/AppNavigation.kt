@@ -205,7 +205,9 @@ fun AppNavigation(
                     }
                 )
             }
-            composable(Screen.Dashboard.route) { DashboardScreen() }
+            composable(Screen.Dashboard.route) {
+                DashboardScreen(onNavigateBatteryHealth = { navController.navigate("battery_health") })
+            }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) { SettingsScreen(onNavigateToPlaces = { navController.navigate("places") }) }

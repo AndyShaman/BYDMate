@@ -8,6 +8,7 @@ import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -72,7 +73,8 @@ data class DashboardUiState(
     val idleDrainHoursWeek: Double = 0.0,
     val estimatedRangeKm: Double? = null,
     val diPlusConnected: Boolean = true,
-    val idleDrainAvailable: Boolean = true
+    val idleDrainAvailable: Boolean = true,
+    val adbConnected: Boolean? = null
 )
 
 @HiltViewModel
@@ -80,7 +82,8 @@ class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao,
-    private val insightsManager: InsightsManager
+    private val insightsManager: InsightsManager,
+    private val batteryStateRepository: BatteryStateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -94,6 +97,7 @@ class DashboardViewModel @Inject constructor(
         loadCurrency()
         loadInsight()
         loadPeriodSummary()
+        viewModelScope.launch { loadAutoserviceFlag() }
     }
 
     fun setPeriod(period: DashboardPeriod) {
@@ -349,6 +353,13 @@ class DashboardViewModel @Inject constructor(
     fun refresh() {
         loadPeriodSummary()
         loadInsight()
+        viewModelScope.launch { loadAutoserviceFlag() }
+    }
+
+    internal suspend fun loadAutoserviceFlag() {
+        val enabled = settingsRepository.isAutoserviceEnabled()
+        val flag: Boolean? = if (!enabled) null else batteryStateRepository.refresh().autoserviceAvailable
+        _uiState.update { it.copy(adbConnected = flag) }
     }
 
     fun toggleBatteryHealthExpanded() {

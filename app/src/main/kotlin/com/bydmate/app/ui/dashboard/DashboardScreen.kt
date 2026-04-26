@@ -54,7 +54,8 @@ import com.bydmate.app.ui.theme.*
 
 @Composable
 fun DashboardScreen(
-    viewModel: DashboardViewModel = hiltViewModel()
+    viewModel: DashboardViewModel = hiltViewModel(),
+    onNavigateBatteryHealth: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -69,7 +70,7 @@ fun DashboardScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        TopBar(isServiceRunning = state.isServiceRunning, diPlusConnected = state.diPlusConnected)
+        TopBar(isServiceRunning = state.isServiceRunning, diPlusConnected = state.diPlusConnected, adbConnected = state.adbConnected)
         Spacer(modifier = Modifier.height(4.dp))
 
         Row(
@@ -153,7 +154,7 @@ fun DashboardScreen(
                                 }
                                 when (worst) { "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen }
                             },
-                            onClick = { viewModel.toggleBatteryHealthExpanded() }
+                            onClick = { onNavigateBatteryHealth() }
                         )
                         // Idle drain card — hidden in DiPlus mode (no zero-km records)
                         if (state.idleDrainAvailable) {
@@ -296,36 +297,6 @@ fun DashboardScreen(
                             }
                         }
                     }
-                    if (state.batteryHealthExpanded) {
-                        val color = when {
-                            state.batteryHealthStatus == "critical" -> SocRed
-                            state.batteryHealthStatus == "warning" -> SocYellow
-                            else -> AccentGreen
-                        }
-                        CardDetailDialog(
-                            title = "Здоровье батареи",
-                            borderColor = color,
-                            onDismiss = { viewModel.toggleBatteryHealthExpanded() }
-                        ) {
-                            state.avgBatTemp?.let {
-                                DetailRow("Температура", "${it}°C", color)
-                            }
-                            state.voltage12v?.let {
-                                val v12Color = when (state.voltage12vStatus) {
-                                    "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
-                                }
-                                DetailRow("12V батарея", "${"%.1f".format(it)}V", v12Color)
-                            }
-                            state.cellVoltageDelta?.let { delta ->
-                                DetailRow("Баланс ячеек", "${"%.3f".format(delta)}V", when {
-                                    delta > 0.10 -> SocRed; delta > 0.05 -> SocYellow; else -> AccentGreen
-                                })
-                            }
-                            if (state.cellVoltageMin != null && state.cellVoltageMax != null) {
-                                DetailRow("Ячейки", "${"%.3f".format(state.cellVoltageMin)}–${"%.3f".format(state.cellVoltageMax)}V", TextPrimary)
-                            }
-                        }
-                    }
                 }
             }
 
@@ -386,7 +357,7 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
+private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean, adbConnected: Boolean? = null) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -409,6 +380,10 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean) {
                     color = SocYellow,
                     fontSize = 12.sp
                 )
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+            if (isServiceRunning && adbConnected == false) {
+                Text("ADB не отвечает", color = SocYellow, fontSize = 12.sp)
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Box(
