@@ -58,11 +58,13 @@ class AutoserviceClientImplTest {
     }
 
     @Test
-    fun `getInt returns null when ADB returns null (connection lost)`() = runTest {
+    fun `getInt returns null when ADB exec returns null`() = runTest {
+        val cmd = "service call autoservice 5 i32 1014 i32 1246777400"
         val adb = FakeAdb(responses = emptyMap(), connected = false)
         val client = AutoserviceClientImpl(adb)
 
         assertNull(client.getInt(dev = 1014, fid = 1246777400))
+        assertEquals(listOf(cmd), adb.calls)
     }
 
     @Test
@@ -129,6 +131,7 @@ class AutoserviceClientImplTest {
         assertEquals(2, snap.chargingType)
         assertEquals(512, snap.chargeBatteryVoltV)
         assertEquals(1, snap.batteryType)
+        assertTrue(snap.readAtMs > 0)
     }
 
     @Test
