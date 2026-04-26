@@ -58,7 +58,6 @@ import com.bydmate.app.ui.theme.*
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
-    onNavigateBatteryHealth: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -145,21 +144,39 @@ fun DashboardScreen(
                             borderColor = insightColor,
                             onClick = { viewModel.toggleInsightExpanded() }
                         )
-                        // Battery card
-                        CompactCard(
-                            leftValue = state.avgBatTemp?.let { "${it}°C" } ?: "—",
-                            leftLabel = "батарея",
-                            rightValue = state.voltage12v?.let { "${"%.1f".format(it)} В" } ?: "—",
-                            rightLabel = "бортовая сеть",
-                            borderColor = run {
-                                val worst = when {
-                                    state.batteryHealthStatus == "critical" || state.voltage12vStatus == "critical" -> "critical"
-                                    state.batteryHealthStatus == "warning" || state.voltage12vStatus == "warning" -> "warning"
-                                    else -> "ok"
-                                }
-                                when (worst) { "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen }
-                            },
-                            onClick = { onNavigateBatteryHealth() }
+                        // Battery card — 3 значения: SoH | темп. батареи | бортовая сеть
+                        val sohStatus = when {
+                            (state.currentSoh ?: 100f) < 80f -> "critical"
+                            (state.currentSoh ?: 100f) < 90f -> "warning"
+                            else -> "ok"
+                        }
+                        val sohColor = when (sohStatus) {
+                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
+                        }
+                        val tempColor = when (state.batteryHealthStatus) {
+                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
+                        }
+                        val voltageColor = when (state.voltage12vStatus) {
+                            "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
+                        }
+                        val worstColor = when {
+                            sohStatus == "critical" ||
+                                state.batteryHealthStatus == "critical" ||
+                                state.voltage12vStatus == "critical" -> SocRed
+                            sohStatus == "warning" ||
+                                state.batteryHealthStatus == "warning" ||
+                                state.voltage12vStatus == "warning" -> SocYellow
+                            else -> AccentGreen
+                        }
+                        BatteryCompactCard(
+                            sohText = state.currentSoh?.let { "%.0f%%".format(it) } ?: "—",
+                            sohColor = sohColor,
+                            tempText = state.avgBatTemp?.let { "${it}°" } ?: "—",
+                            tempColor = tempColor,
+                            voltageText = state.voltage12v?.let { "%.1fВ".format(it) } ?: "—",
+                            voltageColor = voltageColor,
+                            borderColor = worstColor,
+                            onClick = { viewModel.toggleBatteryHealthExpanded() }
                         )
                         // Idle drain card — hidden in DiPlus mode (no zero-km records)
                         if (state.idleDrainAvailable) {
@@ -281,6 +298,25 @@ fun DashboardScreen(
                                 Text("Мало данных для анализа", color = TextMuted, fontSize = 13.sp)
                             }
                         }
+                    }
+                    if (state.batteryHealthExpanded) {
+                        val sohForColor = state.currentSoh ?: 100f
+                        val color = when {
+                            sohForColor < 80f ||
+                                state.batteryHealthStatus == "critical" ||
+                                state.voltage12vStatus == "critical" -> SocRed
+                            sohForColor < 90f ||
+                                state.batteryHealthStatus == "warning" ||
+                                state.voltage12vStatus == "warning" -> SocYellow
+                            else -> AccentGreen
+                        }
+                        com.bydmate.app.ui.battery.BatteryHealthDialog(
+                            liveSoh = state.currentSoh,
+                            liveLifetimeKm = state.currentLifetimeKm,
+                            liveLifetimeKwh = state.currentLifetimeKwh,
+                            borderColor = color,
+                            onDismiss = { viewModel.toggleBatteryHealthExpanded() },
+                        )
                     }
                     if (state.idleDrainExpanded) {
                         val color = when {
@@ -508,6 +544,47 @@ private fun CompactCard(
                 Text(rightLabel, color = TextMuted, fontSize = 11.sp)
             }
         }
+    }
+}
+
+@Composable
+private fun BatteryCompactCard(
+    sohText: String,
+    sohColor: Color,
+    tempText: String,
+    tempColor: Color,
+    voltageText: String,
+    voltageColor: Color,
+    borderColor: Color,
+    onClick: () -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor.copy(alpha = 0.5f)),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            BatteryCell(value = sohText, label = "SoH", color = sohColor)
+            BatteryCell(value = tempText, label = "темп. бат.", color = tempColor)
+            BatteryCell(value = voltageText, label = "борт. сеть", color = voltageColor)
+        }
+    }
+}
+
+@Composable
+private fun BatteryCell(value: String, label: String, color: Color) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace)
+        Text(label, color = TextMuted, fontSize = 10.sp)
     }
 }
 

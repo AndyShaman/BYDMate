@@ -52,7 +52,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.platform.LocalContext
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.UpdateChecker
-import com.bydmate.app.ui.battery.BatteryHealthScreen
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
 import com.bydmate.app.ui.places.PlacesScreen
@@ -209,7 +208,7 @@ fun AppNavigation(
                 )
             }
             composable(Screen.Dashboard.route) {
-                DashboardScreen(onNavigateBatteryHealth = { navController.navigate("battery_health") })
+                DashboardScreen()
             }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Charges.route) {
@@ -217,7 +216,6 @@ fun AppNavigation(
             }
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) { SettingsScreen(onNavigateToPlaces = { navController.navigate("places") }) }
-            composable("battery_health") { BatteryHealthScreen() }
             composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
         }
     }

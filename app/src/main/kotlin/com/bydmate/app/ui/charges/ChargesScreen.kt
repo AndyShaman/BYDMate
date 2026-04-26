@@ -1,9 +1,11 @@
 package com.bydmate.app.ui.charges
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -17,12 +19,17 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -134,7 +141,8 @@ fun ChargesScreen(
                                         item(key = "charge_${charge.id}") {
                                             ChargeRow(
                                                 charge = charge,
-                                                currencySymbol = state.currencySymbol
+                                                currencySymbol = state.currencySymbol,
+                                                onLongClick = { viewModel.onLongPressCharge(charge) }
                                             )
                                         }
                                     }
@@ -165,6 +173,87 @@ fun ChargesScreen(
                 showLifetime = state.autoserviceEnabled && state.lifetimeTotalKwh > 0,
                 modifier = Modifier.weight(0.35f).fillMaxHeight()
             )
+        }
+
+        state.selectedChargeForAction?.let { charge ->
+            ChargeActionSheet(
+                charge = charge,
+                onDismiss = { viewModel.onDismissActionSheet() },
+                onEdit = { viewModel.onEditCharge() },
+                onDeletePrompt = { viewModel.onConfirmDeletePrompt() },
+            )
+        }
+        state.editingCharge?.let { charge ->
+            ChargeEditDialog(
+                charge = charge,
+                homeTariff = state.homeTariff,
+                dcTariff = state.dcTariff,
+                batteryCapacityKwh = state.nominalCapacityKwh,
+                currencySymbol = state.currencySymbol,
+                onDismiss = { viewModel.onDismissEdit() },
+                onSave = { viewModel.onSaveEdit(it) },
+            )
+        }
+        state.deleteConfirmCharge?.let { charge ->
+            AlertDialog(
+                onDismissRequest = { viewModel.onDismissDeleteConfirm() },
+                title = { Text("Удалить зарядку?") },
+                text = {
+                    Text("${charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"} кВт·ч • восстановить будет нельзя.")
+                },
+                confirmButton = {
+                    TextButton(onClick = { viewModel.onConfirmDelete() }) {
+                        Text("Удалить", color = SocRed)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { viewModel.onDismissDeleteConfirm() }) {
+                        Text("Отмена")
+                    }
+                },
+                containerColor = CardSurface,
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ChargeActionSheet(
+    charge: ChargeEntity,
+    onDismiss: () -> Unit,
+    onEdit: () -> Unit,
+    onDeletePrompt: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = CardSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "${charge.type ?: "—"} • ${charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"} кВт·ч",
+                color = TextSecondary, fontSize = 12.sp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Изменить", color = TextPrimary, fontSize = 16.sp)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("Удалить", color = SocRed, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }
@@ -377,8 +466,13 @@ private fun ChargesColumnHeaders(currencySymbol: String) {
     )
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun ChargeRow(charge: ChargeEntity, currencySymbol: String) {
+private fun ChargeRow(
+    charge: ChargeEntity,
+    currencySymbol: String,
+    onLongClick: () -> Unit,
+) {
     val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
     val startTime = timeFmt.format(Date(charge.startTs))
 
@@ -402,7 +496,12 @@ private fun ChargeRow(charge: ChargeEntity, currencySymbol: String) {
         else -> AccentBlue
     }
 
-    Column {
+    Column(
+        modifier = Modifier.combinedClickable(
+            onClick = { /* no-op для обычного клика */ },
+            onLongClick = onLongClick,
+        )
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

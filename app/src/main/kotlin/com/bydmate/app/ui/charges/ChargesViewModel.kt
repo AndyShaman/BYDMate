@@ -62,7 +62,12 @@ data class ChargesUiState(
     val equivCycles: Double = 0.0,
     val nominalCapacityKwh: Double = 72.9,
     val sohSeries: List<Float> = emptyList(),
-    val capacitySeries: List<Float> = emptyList()
+    val capacitySeries: List<Float> = emptyList(),
+    val selectedChargeForAction: ChargeEntity? = null,
+    val editingCharge: ChargeEntity? = null,
+    val deleteConfirmCharge: ChargeEntity? = null,
+    val homeTariff: Double = 0.20,
+    val dcTariff: Double = 0.73,
 )
 
 @HiltViewModel
@@ -82,7 +87,16 @@ class ChargesViewModel @Inject constructor(
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
             val nominal = settingsRepository.getBatteryCapacity()
-            _uiState.update { it.copy(currencySymbol = symbol, nominalCapacityKwh = nominal) }
+            val home = settingsRepository.getHomeTariff()
+            val dc = settingsRepository.getDcTariff()
+            _uiState.update {
+                it.copy(
+                    currencySymbol = symbol,
+                    nominalCapacityKwh = nominal,
+                    homeTariff = home,
+                    dcTariff = dc,
+                )
+            }
         }
         loadAutoserviceState()
         loadAll()
@@ -129,10 +143,11 @@ class ChargesViewModel @Inject constructor(
             val (from, to) = dateRangeFor(period)
 
             chargeRepository.getChargesByDateRange(from, to).collect { rawCharges ->
+                val nonEmpty = rawCharges.filter { (it.kwhCharged ?: 0.0) >= 0.05 }
                 val filtered = when (typeFilter) {
-                    ChargeTypeFilter.ALL -> rawCharges
-                    ChargeTypeFilter.AC -> rawCharges.filter { it.gunState == 2 }
-                    ChargeTypeFilter.DC -> rawCharges.filter { it.gunState in setOf(3, 4) }
+                    ChargeTypeFilter.ALL -> nonEmpty
+                    ChargeTypeFilter.AC -> nonEmpty.filter { it.gunState == 2 }
+                    ChargeTypeFilter.DC -> nonEmpty.filter { it.gunState in setOf(3, 4) }
                 }
 
                 val months = groupChargesByMonthDay(filtered)
@@ -309,6 +324,45 @@ class ChargesViewModel @Inject constructor(
                 cal.timeInMillis to now
             }
             ChargesPeriod.ALL -> 0L to now
+        }
+    }
+
+    fun onLongPressCharge(charge: ChargeEntity) {
+        _uiState.update { it.copy(selectedChargeForAction = charge) }
+    }
+
+    fun onDismissActionSheet() {
+        _uiState.update { it.copy(selectedChargeForAction = null) }
+    }
+
+    fun onEditCharge() {
+        _uiState.update { it.copy(editingCharge = it.selectedChargeForAction, selectedChargeForAction = null) }
+    }
+
+    fun onDismissEdit() {
+        _uiState.update { it.copy(editingCharge = null) }
+    }
+
+    fun onSaveEdit(updated: ChargeEntity) {
+        viewModelScope.launch {
+            chargeRepository.updateCharge(updated)
+            _uiState.update { it.copy(editingCharge = null) }
+        }
+    }
+
+    fun onConfirmDeletePrompt() {
+        _uiState.update { it.copy(deleteConfirmCharge = it.selectedChargeForAction, selectedChargeForAction = null) }
+    }
+
+    fun onDismissDeleteConfirm() {
+        _uiState.update { it.copy(deleteConfirmCharge = null) }
+    }
+
+    fun onConfirmDelete() {
+        viewModelScope.launch {
+            val charge = _uiState.value.deleteConfirmCharge ?: return@launch
+            chargeRepository.deleteCharge(charge)
+            _uiState.update { it.copy(deleteConfirmCharge = null) }
         }
     }
 }

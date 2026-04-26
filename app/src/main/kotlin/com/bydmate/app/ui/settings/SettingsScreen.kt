@@ -832,7 +832,7 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
             marker = "✗",
             markerColor = TextMuted,
             title = "не подключено",
-            detail = "проверь что Wi-Fi на DiLink включён",
+            detail = "перезапусти приложение, если ADB включён в Настройках разработчика",
             detailColor = TextSecondary,
         )
         AutoserviceStatus.AllSentinel -> StatusRow(

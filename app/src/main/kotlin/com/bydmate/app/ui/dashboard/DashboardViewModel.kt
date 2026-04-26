@@ -74,7 +74,10 @@ data class DashboardUiState(
     val estimatedRangeKm: Double? = null,
     val diPlusConnected: Boolean = true,
     val idleDrainAvailable: Boolean = true,
-    val adbConnected: Boolean? = null
+    val adbConnected: Boolean? = null,
+    val currentSoh: Float? = null,
+    val currentLifetimeKm: Float? = null,
+    val currentLifetimeKwh: Float? = null,
 )
 
 @HiltViewModel
@@ -358,10 +361,30 @@ class DashboardViewModel @Inject constructor(
 
     private suspend fun loadAutoserviceFlag() {
         val enabled = settingsRepository.isAutoserviceEnabled()
-        val flag: Boolean? = if (!enabled) null else runCatching {
-            batteryStateRepository.refresh().autoserviceAvailable
-        }.getOrDefault(false)
-        _uiState.update { it.copy(adbConnected = flag) }
+        if (!enabled) {
+            _uiState.update {
+                it.copy(
+                    adbConnected = null,
+                    currentSoh = null,
+                    currentLifetimeKm = null,
+                    currentLifetimeKwh = null,
+                )
+            }
+            return
+        }
+        val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
+        _uiState.update {
+            if (state == null) {
+                it.copy(adbConnected = false)
+            } else {
+                it.copy(
+                    adbConnected = state.autoserviceAvailable,
+                    currentSoh = state.sohPercent,
+                    currentLifetimeKm = state.lifetimeKm,
+                    currentLifetimeKwh = state.lifetimeKwh,
+                )
+            }
+        }
     }
 
     fun toggleBatteryHealthExpanded() {
