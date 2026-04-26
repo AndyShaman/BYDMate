@@ -45,8 +45,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -81,6 +83,7 @@ fun SettingsScreen(
     onNavigateToPlaces: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val scope = rememberCoroutineScope()
 
     // Recalculate confirmation dialog
     if (state.showRecalcConfirm) {
@@ -298,6 +301,60 @@ fun SettingsScreen(
                                 color = PrimaryColor,
                                 fontSize = 11.sp,
                             )
+                        }
+                    }
+                }
+
+                SectionHeader(text = "Системные данные (экспериментально)")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Text(
+                            text = "Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text("Включить", color = TextPrimary, fontSize = 14.sp)
+                            Switch(
+                                checked = state.autoserviceEnabled,
+                                onCheckedChange = { enabled ->
+                                    viewModel.setAutoserviceEnabled(enabled)
+                                    if (enabled) {
+                                        scope.launch { viewModel.tryConnect() }
+                                    }
+                                },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+                        AutoserviceStatusBlock(status = state.autoserviceStatus)
+                        if (state.autoserviceEnabled) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "Спрашивать после каждой зарядки",
+                                    color = TextSecondary,
+                                    fontSize = 13.sp,
+                                )
+                                Switch(
+                                    checked = state.chargingPromptEnabled,
+                                    onCheckedChange = { viewModel.setChargingPromptEnabled(it) },
+                                    colors = bydSwitchColors(),
+                                )
+                            }
                         }
                     }
                 }
@@ -770,6 +827,70 @@ private fun DataSourceOption(label: String, selected: Boolean, onClick: () -> Un
             fontSize = 13.sp,
             modifier = Modifier.padding(start = 4.dp),
         )
+    }
+}
+
+@Composable
+private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
+    when (status) {
+        AutoserviceStatus.NotEnabled -> Unit
+        AutoserviceStatus.Disconnected -> StatusRow(
+            marker = "✗",
+            markerColor = TextMuted,
+            title = "не подключено",
+            detail = "проверь что Wi-Fi на DiLink включён",
+            detailColor = TextMuted,
+        )
+        AutoserviceStatus.AllSentinel -> StatusRow(
+            marker = "⚠",
+            markerColor = SocYellow,
+            title = "подключено, но данные не читаются",
+            detail = "возможно функция работает только на Leopard 3",
+            detailColor = SocYellow,
+        )
+        is AutoserviceStatus.Connected -> {
+            val soh = status.sohPercent?.let { "%.0f%%".format(it) } ?: "—"
+            val km = status.lifetimeKm?.let { "%.0f км".format(it) } ?: "—"
+            val kwh = status.lifetimeKwh?.let { "%.0f кВт·ч".format(it) } ?: "—"
+            StatusRow(
+                marker = "✓",
+                markerColor = AccentGreen,
+                title = "подключено",
+                detail = "SoH $soh • lifetime $km / $kwh",
+                detailColor = AccentGreen,
+            )
+        }
+    }
+}
+
+@Composable
+private fun StatusRow(
+    marker: String,
+    markerColor: Color,
+    title: String,
+    detail: String,
+    detailColor: Color,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            text = marker,
+            color = markerColor,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.padding(top = 1.dp),
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(text = title, color = TextPrimary, fontSize = 13.sp)
+            Text(
+                text = detail,
+                color = detailColor.copy(alpha = 0.85f),
+                fontSize = 11.sp,
+            )
+        }
     }
 }
 
