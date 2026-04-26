@@ -458,6 +458,15 @@ class TrackingService : Service(), LocationListener {
     private fun detectOfflineCharge(currentSoc: Int) {
         serviceScope.launch {
             try {
+                // When autoservice is enabled, AutoserviceChargingDetector.runCatchUp
+                // is the source of truth (lifetime_kwh delta is more accurate than
+                // SOC delta, and it survives BMS calibration ticks). Skip the
+                // legacy SOC-delta path to avoid duplicate ChargeEntity inserts.
+                if (settingsRepository.isAutoserviceEnabled()) {
+                    Log.d(TAG, "detectOfflineCharge skipped (autoservice ON)")
+                    return@launch
+                }
+
                 val lastSoc = settingsRepository.getLastKnownSoc() ?: return@launch
                 val lastTs = settingsRepository.getLastSocTimestamp()
                 val now = System.currentTimeMillis()
