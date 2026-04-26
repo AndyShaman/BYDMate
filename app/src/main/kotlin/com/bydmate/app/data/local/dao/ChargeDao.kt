@@ -51,6 +51,18 @@ interface ChargeDao {
         ORDER BY start_ts DESC LIMIT 30
     """)
     suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity>
+
+    /**
+     * Returns the highest lifetime_kwh_at_finish recorded by an autoservice
+     * detector, or null if no autoservice-sourced sessions exist yet.
+     * Used as the catch-up baseline.
+     */
+    @Query("""
+        SELECT MAX(lifetime_kwh_at_finish) FROM charges
+        WHERE detection_source LIKE 'autoservice%'
+          AND lifetime_kwh_at_finish IS NOT NULL
+    """)
+    suspend fun getMaxLifetimeKwhAtFinish(): Double?
 }
 
 data class ChargeSummary(

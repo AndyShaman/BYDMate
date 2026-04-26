@@ -34,5 +34,10 @@ data class ChargeEntity(
     @ColumnInfo(name = "cell_voltage_max") val cellVoltageMax: Double? = null,
     @ColumnInfo(name = "voltage_12v") val voltage12v: Double? = null,
     @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null,
-    @ColumnInfo(name = "merged_count") val mergedCount: Int = 0
+    @ColumnInfo(name = "merged_count") val mergedCount: Int = 0,
+    // v12: autoservice catch-up trace
+    @ColumnInfo(name = "lifetime_kwh_at_start") val lifetimeKwhAtStart: Double? = null,
+    @ColumnInfo(name = "lifetime_kwh_at_finish") val lifetimeKwhAtFinish: Double? = null,
+    @ColumnInfo(name = "gun_state") val gunState: Int? = null,
+    @ColumnInfo(name = "detection_source") val detectionSource: String? = null
 )
