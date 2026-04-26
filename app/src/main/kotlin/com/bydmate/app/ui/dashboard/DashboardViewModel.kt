@@ -356,9 +356,11 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch { loadAutoserviceFlag() }
     }
 
-    internal suspend fun loadAutoserviceFlag() {
+    private suspend fun loadAutoserviceFlag() {
         val enabled = settingsRepository.isAutoserviceEnabled()
-        val flag: Boolean? = if (!enabled) null else batteryStateRepository.refresh().autoserviceAvailable
+        val flag: Boolean? = if (!enabled) null else runCatching {
+            batteryStateRepository.refresh().autoserviceAvailable
+        }.getOrDefault(false)
         _uiState.update { it.copy(adbConnected = flag) }
     }
 

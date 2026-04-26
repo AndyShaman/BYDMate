@@ -16,7 +16,6 @@ import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
-import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.BatteryHealthRepository
@@ -35,8 +34,6 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Assert.assertFalse
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -180,13 +177,20 @@ class DashboardViewModelTest {
 
     // --- Tests ---
 
+    private val sampleReading = BatteryReading(
+        sohPercent = 100f,
+        socPercent = 91f,
+        lifetimeKwh = 602f,
+        lifetimeMileageKm = 2091f,
+        voltage12v = 14f,
+        readAtMs = 0L
+    )
+
     @Test
     fun `adbConnected is null when autoservice disabled`() = runTest {
         val vm = buildViewModel(
             autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -197,13 +201,11 @@ class DashboardViewModelTest {
     fun `adbConnected is true when autoservice enabled and connected`() = runTest {
         val vm = buildViewModel(
             autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.adbConnected == true)
+        assertEquals(true, vm.uiState.value.adbConnected)
     }
 
     @Test
@@ -214,7 +216,6 @@ class DashboardViewModelTest {
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.adbConnected == true)
         assertEquals(false, vm.uiState.value.adbConnected)
     }
 }
