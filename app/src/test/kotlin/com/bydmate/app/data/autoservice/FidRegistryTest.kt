@@ -11,8 +11,17 @@ class FidRegistryTest {
     }
 
     @Test
-    fun `Charging device type is 1005`() {
-        assertEquals(1005, FidRegistry.DEV_CHARGING)
+    fun `Charging device type is 1009`() {
+        // Per .research/leopard3-pulled/AUTOSERVICE-CATALOG-2026-04-25.md: 1009=charging.
+        // Earlier 1005 was wrong (1005=power MCU) — readChargingSnapshot returned sentinels.
+        assertEquals(1009, FidRegistry.DEV_CHARGING)
+    }
+
+    @Test
+    fun `Bodywork device type is 1001`() {
+        // Per catalog: 1001=bodywork (12V battery, doors, etc).
+        // Earlier 1003 was wrong (no such device) — voltage12v read always returned sentinel.
+        assertEquals(1001, FidRegistry.DEV_BODYWORK)
     }
 
     @Test
@@ -34,7 +43,7 @@ class FidRegistryTest {
 
     @Test
     fun `Charging gun connect state fid is set`() {
-        assertEquals(1005, FidRegistry.DEV_CHARGING)
+        assertEquals(1009, FidRegistry.DEV_CHARGING)
         // exact fid value asserted to lock the const
         assertEquals(FidRegistry.FID_GUN_CONNECT_STATE, FidRegistry.FID_GUN_CONNECT_STATE)
     }

@@ -36,8 +36,9 @@ class AutoserviceClientImpl @Inject constructor(
                 return false
             }
         }
-        // SoH is the lightest known-good probe — present on every BMS.
-        val soh = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)
+        // SoH is an INT fid (tx=5), raw 0..100. Returns null on sentinel
+        // (FEATURE_LINK_ERROR / NOT_INITIALIZED / wrong-direction).
+        val soh = getInt(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)
         if (soh == null) Log.w(TAG, "isAvailable: SoH probe returned null")
         return soh != null
     }
@@ -63,10 +64,10 @@ class AutoserviceClientImpl @Inject constructor(
     override suspend fun readBatterySnapshot(): BatteryReading? {
         if (!adb.isConnected()) return null
         return BatteryReading(
-            sohPercent = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH),
+            sohPercent = getInt(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOH)?.toFloat(),
             socPercent = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_SOC),
             lifetimeKwh = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_LIFETIME_KWH),
-            lifetimeMileageKm = getFloat(FidRegistry.DEV_STATISTIC, FidRegistry.FID_LIFETIME_MILEAGE),
+            lifetimeMileageKm = getInt(FidRegistry.DEV_STATISTIC, FidRegistry.FID_LIFETIME_MILEAGE)?.let { it / 10f },
             voltage12v = getFloat(FidRegistry.DEV_BODYWORK, FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE),
             readAtMs = System.currentTimeMillis()
         )
