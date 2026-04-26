@@ -254,6 +254,22 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /**
+     * UI entry point for the autoservice toggle. Persists the new value, then
+     * triggers ADB handshake on enable. Single coroutine — no UI race between
+     * persist-reload and connect-reload.
+     */
+    fun enableAutoservice(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsRepository.setAutoserviceEnabled(enabled)
+            _uiState.update { it.copy(autoserviceEnabled = enabled) }
+            if (enabled) {
+                adbOnDeviceClient.connect()
+            }
+            loadAutoserviceState()
+        }
+    }
+
     fun setChargingPromptEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsRepository.setChargingPromptEnabled(enabled)

@@ -45,10 +45,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
-import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontFamily
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -83,7 +81,6 @@ fun SettingsScreen(
     onNavigateToPlaces: () -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
 
     // Recalculate confirmation dialog
     if (state.showRecalcConfirm) {
@@ -329,10 +326,7 @@ fun SettingsScreen(
                             Switch(
                                 checked = state.autoserviceEnabled,
                                 onCheckedChange = { enabled ->
-                                    viewModel.setAutoserviceEnabled(enabled)
-                                    if (enabled) {
-                                        scope.launch { viewModel.tryConnect() }
-                                    }
+                                    viewModel.enableAutoservice(enabled)
                                 },
                                 colors = bydSwitchColors(),
                             )
@@ -839,7 +833,7 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
             markerColor = TextMuted,
             title = "не подключено",
             detail = "проверь что Wi-Fi на DiLink включён",
-            detailColor = TextMuted,
+            detailColor = TextSecondary,
         )
         AutoserviceStatus.AllSentinel -> StatusRow(
             marker = "⚠",
