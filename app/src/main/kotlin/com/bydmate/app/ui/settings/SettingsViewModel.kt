@@ -115,7 +115,6 @@ data class SettingsUiState(
     val dataSource: String = "ENERGYDATA",
     val dataSourceStatus: String? = null,
     val autoserviceEnabled: Boolean = false,
-    val chargingPromptEnabled: Boolean = true,
     val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled
 )
 
@@ -195,7 +194,6 @@ class SettingsViewModel @Inject constructor(
             val dataSource = settingsRepository.getDataSource().name
 
             val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
-            val chargingPromptEnabled = settingsRepository.isChargingPromptEnabled()
 
             _uiState.update {
                 it.copy(
@@ -218,7 +216,6 @@ class SettingsViewModel @Inject constructor(
                     aliceEnabled = aliceEnabled,
                     dataSource = dataSource,
                     autoserviceEnabled = autoserviceEnabled,
-                    chargingPromptEnabled = chargingPromptEnabled
                 )
             }
 
@@ -259,13 +256,6 @@ class SettingsViewModel @Inject constructor(
                 adbOnDeviceClient.connect()
             }
             loadAutoserviceState()
-        }
-    }
-
-    fun setChargingPromptEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setChargingPromptEnabled(enabled)
-            _uiState.update { it.copy(chargingPromptEnabled = enabled) }
         }
     }
 

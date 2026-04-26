@@ -75,7 +75,6 @@ class SettingsViewModelTest {
     private class FakeSettingsDao(autoserviceEnabled: Boolean = false) : SettingsDao {
         val map = mutableMapOf<String, String>(
             SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString(),
-            SettingsRepository.KEY_CHARGING_PROMPT_ENABLED to "true"
         )
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])

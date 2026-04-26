@@ -343,9 +343,26 @@ class ChargesViewModel @Inject constructor(
         _uiState.update { it.copy(editingCharge = null) }
     }
 
+    fun onCreateNewCharge() {
+        val now = System.currentTimeMillis()
+        val draft = ChargeEntity(
+            id = 0L,
+            startTs = now,
+            endTs = now + 3_600_000L,
+            type = "AC",
+            gunState = 2,
+            detectionSource = "manual",
+        )
+        _uiState.update { it.copy(editingCharge = draft) }
+    }
+
     fun onSaveEdit(updated: ChargeEntity) {
         viewModelScope.launch {
-            chargeRepository.updateCharge(updated)
+            if (updated.id == 0L) {
+                chargeRepository.insertCharge(updated)
+            } else {
+                chargeRepository.updateCharge(updated)
+            }
             _uiState.update { it.copy(editingCharge = null) }
         }
     }

@@ -332,24 +332,6 @@ fun SettingsScreen(
                             )
                         }
                         AutoserviceStatusBlock(status = state.autoserviceStatus)
-                        if (state.autoserviceEnabled) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    "Спрашивать после каждой зарядки",
-                                    color = TextSecondary,
-                                    fontSize = 13.sp,
-                                )
-                                Switch(
-                                    checked = state.chargingPromptEnabled,
-                                    onCheckedChange = { viewModel.setChargingPromptEnabled(it) },
-                                    colors = bydSwitchColors(),
-                                )
-                            }
-                        }
                     }
                 }
 

@@ -82,16 +82,34 @@ fun ChargesScreen(
             NotTrackingBanner(onClick = onNavigateSettings)
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            ChargesChip("День", state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
-            ChargesChip("Нед", state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
-            ChargesChip("Мес", state.period == ChargesPeriod.MONTH) { viewModel.setPeriod(ChargesPeriod.MONTH) }
-            ChargesChip("Год", state.period == ChargesPeriod.YEAR) { viewModel.setPeriod(ChargesPeriod.YEAR) }
-            ChargesChip("Всё", state.period == ChargesPeriod.ALL) { viewModel.setPeriod(ChargesPeriod.ALL) }
-            Spacer(modifier = Modifier.width(12.dp))
-            ChargesChip("Все", state.typeFilter == ChargeTypeFilter.ALL) { viewModel.setTypeFilter(ChargeTypeFilter.ALL) }
-            ChargesChip("AC", state.typeFilter == ChargeTypeFilter.AC) { viewModel.setTypeFilter(ChargeTypeFilter.AC) }
-            ChargesChip("DC", state.typeFilter == ChargeTypeFilter.DC) { viewModel.setTypeFilter(ChargeTypeFilter.DC) }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.weight(1f),
+            ) {
+                ChargesChip("День", state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
+                ChargesChip("Нед", state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
+                ChargesChip("Мес", state.period == ChargesPeriod.MONTH) { viewModel.setPeriod(ChargesPeriod.MONTH) }
+                ChargesChip("Год", state.period == ChargesPeriod.YEAR) { viewModel.setPeriod(ChargesPeriod.YEAR) }
+                ChargesChip("Всё", state.period == ChargesPeriod.ALL) { viewModel.setPeriod(ChargesPeriod.ALL) }
+                Spacer(modifier = Modifier.width(12.dp))
+                ChargesChip("Все", state.typeFilter == ChargeTypeFilter.ALL) { viewModel.setTypeFilter(ChargeTypeFilter.ALL) }
+                ChargesChip("AC", state.typeFilter == ChargeTypeFilter.AC) { viewModel.setTypeFilter(ChargeTypeFilter.AC) }
+                ChargesChip("DC", state.typeFilter == ChargeTypeFilter.DC) { viewModel.setTypeFilter(ChargeTypeFilter.DC) }
+            }
+            Box(
+                modifier = Modifier
+                    .background(AccentGreen, RoundedCornerShape(8.dp))
+                    .clickable { viewModel.onCreateNewCharge() }
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text("+ зарядка", color = NavyDark, fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold)
+            }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
