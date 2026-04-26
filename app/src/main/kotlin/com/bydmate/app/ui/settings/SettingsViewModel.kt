@@ -48,7 +48,7 @@ import javax.inject.Inject
  *   `autoserviceAvailable = false` (ADB not connected or service unreachable).
  * - [Connected] — toggle ON and at least one real value was returned.
  *   Individual fields are nullable because partial sentinel responses occur.
- * - [AllSentinel] — toggle ON, but every requested fid returned null/sentinel.
+ * - [AllSentinel] — see KDoc on the object itself.
  */
 sealed class AutoserviceStatus {
     object NotEnabled : AutoserviceStatus()
@@ -59,6 +59,14 @@ sealed class AutoserviceStatus {
         val lifetimeKwh: Float?,
         val sohPercent: Float?
     ) : AutoserviceStatus()
+
+    /**
+     * Toggle ON, autoservice connected, but the battery-trio (SoC, lifetime km,
+     * lifetime kWh) all came back as sentinel/null. Typically happens when the
+     * car is in deep standby — DiLink BMS bus quiet, only 12V + cached SoH
+     * still readable. UI should show "сейчас машина не отвечает" rather than
+     * empty cards.
+     */
     object AllSentinel : AutoserviceStatus()
 }
 
@@ -239,17 +247,17 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun setAutoserviceEnabled(enabled: Boolean) {
-        _uiState.update { it.copy(autoserviceEnabled = enabled) }
         viewModelScope.launch {
             settingsRepository.setAutoserviceEnabled(enabled)
+            _uiState.update { it.copy(autoserviceEnabled = enabled) }
             loadAutoserviceState()
         }
     }
 
     fun setChargingPromptEnabled(enabled: Boolean) {
-        _uiState.update { it.copy(chargingPromptEnabled = enabled) }
         viewModelScope.launch {
             settingsRepository.setChargingPromptEnabled(enabled)
+            _uiState.update { it.copy(chargingPromptEnabled = enabled) }
         }
     }
 
