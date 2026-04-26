@@ -57,6 +57,8 @@ class AutoserviceChargingDetector @Inject constructor(
         const val HEURISTIC_HOURS = 1.0
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
+        // Gun not connected — autoservice gunConnectState value meaning "no gun".
+        private const val GUN_STATE_NONE = 1
     }
 
     private val mutex = Mutex()
@@ -117,7 +119,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 status = "COMPLETED",
                 lifetimeKwhAtStart = baseline,
                 lifetimeKwhAtFinish = lifetimeKwh,
-                gunState = charging?.gunConnectState?.takeIf { it != 1 },
+                gunState = charging?.gunConnectState?.takeIf { it != GUN_STATE_NONE },
                 detectionSource = "autoservice_catchup"
             )
             val chargeId = chargeRepo.insertCharge(charge)

@@ -197,6 +197,8 @@ class AutoserviceChargingDetectorTest {
         // be AC or DC depending on the heuristic — we only assert it's one of them.
         assertTrue(ch.type == "AC" || ch.type == "DC")
         assertNotNull(ch.cost)
+        // AC heuristic → home tariff 0.20 → cost = 8.0 * 0.20 = 1.60
+        assertEquals(1.60, ch.cost!!, 0.01)
     }
 
     @Test
@@ -217,6 +219,8 @@ class AutoserviceChargingDetectorTest {
         val ch = setup.chargeDao.inserted.single()
         assertEquals("DC", ch.type)
         assertEquals(3, ch.gunState)
+        // DC gun → dc tariff 0.73 → cost = 8.0 * 0.73 = 5.84
+        assertEquals(5.84, ch.cost!!, 0.01)
     }
 
     @Test
