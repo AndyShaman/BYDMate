@@ -7,7 +7,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class SettingsRepository @Inject constructor(
+open class SettingsRepository @Inject constructor(
     private val settingsDao: SettingsDao
 ) {
     companion object {
@@ -174,13 +174,13 @@ class SettingsRepository @Inject constructor(
     suspend fun setChargingPromptEnabled(enabled: Boolean) =
         setString(KEY_CHARGING_PROMPT_ENABLED, enabled.toString())
 
-    suspend fun getAutoserviceBaseline(): Pair<Double, Long>? {
+    open suspend fun getAutoserviceBaseline(): Pair<Double, Long>? {
         val kwh = getString(KEY_AUTOSERVICE_BASELINE_KWH, "").toDoubleOrNull() ?: return null
         val ts = getString(KEY_AUTOSERVICE_BASELINE_TS, "0").toLongOrNull() ?: 0L
         return kwh to ts
     }
 
-    suspend fun setAutoserviceBaseline(kwh: Double, ts: Long) {
+    open suspend fun setAutoserviceBaseline(kwh: Double, ts: Long) {
         setString(KEY_AUTOSERVICE_BASELINE_KWH, kwh.toString())
         setString(KEY_AUTOSERVICE_BASELINE_TS, ts.toString())
     }

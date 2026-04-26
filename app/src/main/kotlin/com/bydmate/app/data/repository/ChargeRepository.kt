@@ -43,4 +43,7 @@ class ChargeRepository @Inject constructor(
 
     suspend fun getRecentChargesWithBatteryData(): List<ChargeEntity> =
         chargeDao.getRecentChargesWithBatteryData()
+
+    suspend fun getMaxLifetimeKwhAtFinish(): Double? =
+        chargeDao.getMaxLifetimeKwhAtFinish()
 }
