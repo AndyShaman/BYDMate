@@ -62,9 +62,13 @@ class AutoserviceChargingDetectorTest {
             inserted.filter { it.detectionSource?.startsWith("autoservice_") == true }
         override suspend fun hasLegacyCharges(): Boolean =
             inserted.any { it.detectionSource == null || it.detectionSource?.startsWith("autoservice_") != true }
-        override suspend fun deleteEmpty(): Int = inserted.removeAll {
-            it.kwhCharged == null || (it.kwhCharged ?: 0.0) < 0.05
-        }.let { 0 }
+        override suspend fun deleteEmpty(): Int {
+            val before = inserted.size
+            inserted.removeAll {
+                it.kwhCharged == null || (it.kwhCharged ?: 0.0) < 0.05
+            }
+            return before - inserted.size
+        }
         override suspend fun delete(charge: ChargeEntity) {
             inserted.removeAll { it.id == charge.id }
         }

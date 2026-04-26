@@ -66,12 +66,23 @@ class ChargesViewModelTest {
     }
 
     private class FakeChargeDao(
-        private val chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
+        val chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         private val autoserviceCharges: List<ChargeEntity> = emptyList(),
         private val legacyExists: Boolean = false
     ) : ChargeDao {
-        override suspend fun insert(charge: ChargeEntity): Long = 0L
-        override suspend fun update(charge: ChargeEntity) {}
+        var lastInserted: ChargeEntity? = null
+        var lastUpdated: ChargeEntity? = null
+        override suspend fun insert(charge: ChargeEntity): Long {
+            val newId = (chargesFlow.value.maxOfOrNull { it.id } ?: 0L) + 1L
+            val withId = charge.copy(id = newId)
+            chargesFlow.value = chargesFlow.value + withId
+            lastInserted = withId
+            return newId
+        }
+        override suspend fun update(charge: ChargeEntity) {
+            chargesFlow.value = chargesFlow.value.map { if (it.id == charge.id) charge else it }
+            lastUpdated = charge
+        }
         override fun getAll(): Flow<List<ChargeEntity>> = chargesFlow
         override suspend fun getById(id: Long): ChargeEntity? = null
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> =
@@ -136,7 +147,21 @@ class ChargesViewModelTest {
         autoserviceAvailable: Boolean = true,
         snapshots: List<BatterySnapshotEntity> = emptyList(),
         batteryCapacityKwh: String = "72.9"
-    ): ChargesViewModel {
+    ): ChargesViewModel = buildViewModelAndDao(
+        autoserviceEnabled, chargesFlow, autoserviceCharges, legacyExists,
+        batteryReading, autoserviceAvailable, snapshots, batteryCapacityKwh
+    ).first
+
+    private fun buildViewModelAndDao(
+        autoserviceEnabled: Boolean = false,
+        chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
+        autoserviceCharges: List<ChargeEntity> = emptyList(),
+        legacyExists: Boolean = false,
+        batteryReading: BatteryReading? = null,
+        autoserviceAvailable: Boolean = true,
+        snapshots: List<BatterySnapshotEntity> = emptyList(),
+        batteryCapacityKwh: String = "72.9"
+    ): Pair<ChargesViewModel, FakeChargeDao> {
         val settingsDao = FakeSettingsDao(autoserviceEnabled, batteryCapacityKwh)
         val settingsRepo = SettingsRepository(settingsDao)
 
@@ -148,7 +173,7 @@ class ChargesViewModelTest {
         val batteryHealthRepo = BatteryHealthRepository(snapshotDao)
         val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo, settingsRepo)
 
-        return ChargesViewModel(chargeRepo, snapshotDao, settingsRepo, batteryStateRepo)
+        return ChargesViewModel(chargeRepo, snapshotDao, settingsRepo, batteryStateRepo) to chargeDao
     }
 
     // ─── Helper ───────────────────────────────────────────────────────────────
@@ -481,5 +506,66 @@ class ChargesViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(ChargeTypeFilter.ALL, vm.uiState.value.typeFilter)
+    }
+
+    @Test
+    fun `onCreateNewCharge_setsDraftWithIdZeroAndManualSource`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.onCreateNewCharge()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val draft = vm.uiState.value.editingCharge
+        assertTrue("editingCharge должен быть установлен", draft != null)
+        assertEquals(0L, draft!!.id)
+        assertEquals("manual", draft.detectionSource)
+        assertEquals("AC", draft.type)
+        assertEquals(2, draft.gunState)
+        assertEquals(3_600_000L, draft.endTs!! - draft.startTs)
+    }
+
+    @Test
+    fun `onSaveEdit_idZero_callsInsertAndClearsEditing`() = runTest {
+        val (vm, dao) = buildViewModelAndDao()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val draft = ChargeEntity(
+            id = 0L,
+            startTs = 1_000L,
+            endTs = 4_600_000L,
+            type = "AC",
+            kwhCharged = 12.5,
+            cost = 2.5,
+            detectionSource = "manual"
+        )
+        vm.onSaveEdit(draft)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("insert должен быть вызван", dao.lastInserted != null)
+        assertEquals(12.5, dao.lastInserted!!.kwhCharged!!, 0.0001)
+        assertEquals("manual", dao.lastInserted!!.detectionSource)
+        assertEquals(null, dao.lastUpdated)
+        assertEquals(null, vm.uiState.value.editingCharge)
+    }
+
+    @Test
+    fun `onSaveEdit_idNonZero_callsUpdateAndClearsEditing`() = runTest {
+        val existing = makeCharge(id = 7, startTs = startOfToday(), kwhCharged = 5.0)
+        val (vm, dao) = buildViewModelAndDao(
+            chargesFlow = MutableStateFlow(listOf(existing))
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val edited = existing.copy(kwhCharged = 9.9, type = "DC")
+        vm.onSaveEdit(edited)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("update должен быть вызван", dao.lastUpdated != null)
+        assertEquals(7L, dao.lastUpdated!!.id)
+        assertEquals(9.9, dao.lastUpdated!!.kwhCharged!!, 0.0001)
+        assertEquals("DC", dao.lastUpdated!!.type)
+        assertEquals(null, dao.lastInserted)
+        assertEquals(null, vm.uiState.value.editingCharge)
     }
 }

@@ -106,7 +106,8 @@ fun BatteryHealthDialog(
                             state.minVoltage12v?.let { "%.1fV".format(it) } ?: "—")
                     }
 
-                    val deltaValues = state.charges.reversed().mapNotNull { c ->
+                    val chargesOldestFirst = state.charges.reversed()
+                    val deltaValues = chargesOldestFirst.mapNotNull { c ->
                         if (c.cellVoltageMax != null && c.cellVoltageMin != null)
                             c.cellVoltageMax - c.cellVoltageMin else null
                     }
@@ -120,7 +121,7 @@ fun BatteryHealthDialog(
                         )
                     }
 
-                    val voltage12vValues = state.charges.reversed().mapNotNull { it.voltage12v }
+                    val voltage12vValues = chargesOldestFirst.mapNotNull { it.voltage12v }
                     if (voltage12vValues.size >= 2) {
                         Text("Бортовая сеть 12V", color = TextSecondary, fontSize = 12.sp)
                         LineChart(
