@@ -246,14 +246,6 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(autoserviceStatus = status) }
     }
 
-    fun setAutoserviceEnabled(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoserviceEnabled(enabled)
-            _uiState.update { it.copy(autoserviceEnabled = enabled) }
-            loadAutoserviceState()
-        }
-    }
-
     /**
      * UI entry point for the autoservice toggle. Persists the new value, then
      * triggers ADB handshake on enable. Single coroutine — no UI race between
@@ -791,14 +783,6 @@ class SettingsViewModel @Inject constructor(
     fun setAutoCheckUpdates(enabled: Boolean) {
         UpdateChecker.setAutoCheckEnabled(appContext, enabled)
         _uiState.update { it.copy(autoCheckUpdates = enabled) }
-    }
-
-    suspend fun tryConnect(): Result<Unit> {
-        val result = adbOnDeviceClient.connect()
-        if (result.isSuccess) {
-            loadAutoserviceState()
-        }
-        return result
     }
 
     /** Check for app updates on GitHub. */

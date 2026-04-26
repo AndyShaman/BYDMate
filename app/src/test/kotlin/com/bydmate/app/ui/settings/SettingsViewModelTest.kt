@@ -303,7 +303,7 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `setAutoserviceEnabled_persistsAndReloads`() = runTest {
+    fun `enableAutoservice_persistsAndReloads`() = runTest {
         val vm = buildViewModel(
             autoserviceEnabled = false,
             fakeAutoservice = FakeAutoservice(
@@ -315,7 +315,7 @@ class SettingsViewModelTest {
         assertEquals(AutoserviceStatus.NotEnabled, vm.uiState.value.autoserviceStatus)
         assertFalse(vm.uiState.value.autoserviceEnabled)
 
-        vm.setAutoserviceEnabled(true)
+        vm.enableAutoservice(true)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.uiState.value.autoserviceEnabled)

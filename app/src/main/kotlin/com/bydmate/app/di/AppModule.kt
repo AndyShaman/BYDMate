@@ -292,13 +292,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideAdbKeyStore(
-        @ApplicationContext context: Context
-    ): com.bydmate.app.data.autoservice.AdbKeyStore =
-        com.bydmate.app.data.autoservice.AdbKeyStore(context)
-
-    @Provides
-    @Singleton
     fun provideAdbOnDeviceClient(
         @ApplicationContext context: Context,
         keyStore: com.bydmate.app.data.autoservice.AdbKeyStore
