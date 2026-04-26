@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>BYDMate — батарея: малая карточка + развёрнутый диалог</title>
+<style>
+  :root {
+    --navy-dark: #0A1628;
+    --navy-deep: #050B17;
+    --card-surface: #162032;
+    --card-elevated: #1E2A40;
+    --card-border: #243349;
+    --accent-green: #4ADE80;
+    --accent-blue: #60A5FA;
+    --accent-orange: #FB923C;
+    --soc-red: #EF4444;
+    --soc-yellow: #FBBF24;
+    --text-primary: #E2E8F0;
+    --text-secondary: #94A3B8;
+    --text-muted: #64748B;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: linear-gradient(180deg, var(--navy-dark) 0%, var(--navy-deep) 100%);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    color: var(--text-primary);
+    padding: 24px;
+    min-height: 100vh;
+  }
+  .scene {
+    display: flex;
+    gap: 32px;
+    flex-wrap: wrap;
+    max-width: 1400px;
+    margin: 0 auto;
+  }
+  .panel {
+    flex: 1;
+    min-width: 480px;
+  }
+  .panel-title {
+    color: var(--text-secondary);
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+
+  /* Compact card — как на dashboard сейчас */
+  .compact-card {
+    background: var(--card-surface);
+    border: 1.5px solid var(--accent-green);
+    border-radius: 12px;
+    padding: 12px 16px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 380px;
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+  .compact-card:hover { transform: translateY(-1px); }
+  .compact-section { display: flex; flex-direction: column; gap: 2px; }
+  .compact-section.right { align-items: flex-end; }
+  .compact-value {
+    font-family: 'SF Mono', Menlo, Monaco, monospace;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .compact-label {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .compact-divider {
+    width: 1px;
+    height: 30px;
+    background: var(--card-border);
+  }
+
+  /* Variants of the small card */
+  .variant-row { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+  .variant-label {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 4px;
+  }
+
+  /* Expanded dialog — popover style как у AI Insights */
+  .dialog-stage {
+    background: rgba(0, 0, 0, 0.5);
+    border-radius: 16px;
+    padding: 32px;
+    min-height: 700px;
+    position: relative;
+  }
+  .dialog {
+    background: var(--card-surface);
+    border: 2px solid rgba(74, 222, 128, 0.6);
+    border-radius: 14px;
+    padding: 18px;
+    width: 540px;
+    max-height: 700px;
+    overflow-y: auto;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+  }
+  .dialog-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+  }
+  .dialog-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .dialog-close {
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 18px;
+    line-height: 1;
+  }
+  .dialog-close:hover { color: var(--text-primary); }
+
+  .section-label {
+    color: var(--text-muted);
+    font-size: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin: 14px 0 8px;
+  }
+  .section-label:first-child { margin-top: 0; }
+
+  /* Stats grid 2x2 */
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    background: var(--card-elevated);
+    border-radius: 10px;
+    padding: 12px;
+  }
+  .stats-grid.four {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+  .stat-cell {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 4px 0;
+  }
+  .stat-value {
+    font-family: 'SF Mono', Menlo, Monaco, monospace;
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .stat-value.muted { color: var(--text-muted); }
+  .stat-value.green { color: var(--accent-green); }
+  .stat-label {
+    font-size: 10px;
+    color: var(--text-secondary);
+  }
+
+  /* Sparkline placeholder */
+  .chart {
+    height: 90px;
+    background: var(--card-elevated);
+    border-radius: 8px;
+    padding: 8px 12px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    position: relative;
+    overflow: hidden;
+  }
+  .chart-title {
+    font-size: 11px;
+    color: var(--text-secondary);
+  }
+  .chart-stub {
+    color: var(--text-muted);
+    font-size: 11px;
+    text-align: center;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .chart-svg { width: 100%; height: 50px; }
+
+  /* Annotations */
+  .annotation {
+    background: rgba(96, 165, 250, 0.1);
+    border-left: 3px solid var(--accent-blue);
+    padding: 10px 12px;
+    border-radius: 6px;
+    margin-top: 16px;
+    font-size: 12px;
+    color: var(--text-secondary);
+    line-height: 1.5;
+  }
+  .annotation strong { color: var(--accent-blue); }
+  .annotation code {
+    font-family: 'SF Mono', monospace;
+    background: rgba(0,0,0,0.3);
+    padding: 1px 4px;
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-size: 11px;
+  }
+
+  h1 { font-size: 18px; font-weight: 600; color: var(--text-primary); margin-bottom: 24px; }
+  h1 small { color: var(--text-muted); font-weight: 400; font-size: 13px; }
+</style>
+</head>
+<body>
+
+<h1>BYDMate — батарея <small>v2.4.16, dashboard-карточка + развёрнутый диалог</small></h1>
+
+<div class="scene">
+
+  <!-- LEFT: small card variants -->
+  <div class="panel">
+    <div class="panel-title">Малая карточка на Dashboard</div>
+
+    <div class="variant-row">
+      <div>
+        <div class="variant-label">Сейчас (v2.4.15)</div>
+        <div class="compact-card">
+          <div class="compact-section">
+            <div class="compact-value">5°C</div>
+            <div class="compact-label">батарея</div>
+          </div>
+          <div class="compact-divider"></div>
+          <div class="compact-section right">
+            <div class="compact-value">14.0 В</div>
+            <div class="compact-label">бортовая сеть</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="variant-label">Вариант A — SoH + температура (предлагаю)</div>
+        <div class="compact-card">
+          <div class="compact-section">
+            <div class="compact-value">100%</div>
+            <div class="compact-label">SoH батареи</div>
+          </div>
+          <div class="compact-divider"></div>
+          <div class="compact-section right">
+            <div class="compact-value">5°C</div>
+            <div class="compact-label">темп. батареи</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="variant-label">Вариант B — SoH + 12V</div>
+        <div class="compact-card">
+          <div class="compact-section">
+            <div class="compact-value">100%</div>
+            <div class="compact-label">SoH батареи</div>
+          </div>
+          <div class="compact-divider"></div>
+          <div class="compact-section right">
+            <div class="compact-value">14.0 В</div>
+            <div class="compact-label">бортовая сеть</div>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="variant-label">✓ Вариант C — выбран (три значения, ваш вариант)</div>
+        <div class="compact-card" style="padding: 10px 14px; border-color: var(--accent-green);">
+          <div class="compact-section">
+            <div class="compact-value">100%</div>
+            <div class="compact-label">SoH</div>
+          </div>
+          <div class="compact-divider"></div>
+          <div class="compact-section" style="align-items: center;">
+            <div class="compact-value">5°C</div>
+            <div class="compact-label">темп. батареи</div>
+          </div>
+          <div class="compact-divider"></div>
+          <div class="compact-section right">
+            <div class="compact-value">14.0 В</div>
+            <div class="compact-label">бортовая сеть</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>Цвет рамки</strong> вычисляется по worst-of {SoH, темп. HV, 12V}.<br>
+      <strong>Источник SoH</strong> — autoservice <code>getInt(1014, 1145045032)</code>,
+      live при каждом запуске сервиса.<br>
+      <strong>Темп. HV</strong> (High Voltage = тяговая батарея) — autoservice
+      <code>getInt(1014, 1148190776)</code> ÷ 10. Это средняя температура ячеек,
+      не температура BMS-контроллера.
+    </div>
+  </div>
+
+  <!-- RIGHT: expanded dialog -->
+  <div class="panel">
+    <div class="panel-title">Развёрнутый диалог (по клику на карточку)</div>
+
+    <div class="dialog-stage">
+      <div class="dialog">
+        <div class="dialog-header">
+          <div class="dialog-title">Здоровье батареи</div>
+          <div class="dialog-close">×</div>
+        </div>
+
+        <!-- BMS live -->
+        <div class="section-label">Сейчас от BMS</div>
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <div class="stat-value green">100%</div>
+            <div class="stat-label">SoH</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">2 116.5 км</div>
+            <div class="stat-label">пробег BMS</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">612.6 кВт·ч</div>
+            <div class="stat-label">прокачано всего</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">28.9 кВт·ч</div>
+            <div class="stat-label">расход /100км (наш)</div>
+          </div>
+        </div>
+
+        <!-- Замеры по зарядкам -->
+        <div class="section-label">Замеры по последним зарядкам</div>
+        <div class="stats-grid four">
+          <div class="stat-cell">
+            <div class="stat-value">0.014 В</div>
+            <div class="stat-label">Δ ячеек тек.</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">0.014 В</div>
+            <div class="stat-label">Δ ячеек средн.</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">14.0 В</div>
+            <div class="stat-label">12V тек.</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">14.0 В</div>
+            <div class="stat-label">12V мин.</div>
+          </div>
+        </div>
+
+        <!-- Деградация -->
+        <div class="section-label">Деградация (расчёт по ΔSOC ≥ 10%)</div>
+        <div class="stats-grid">
+          <div class="stat-cell">
+            <div class="stat-value muted">—</div>
+            <div class="stat-label">SoH расчётный</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value muted">—</div>
+            <div class="stat-label">ёмкость</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value">1</div>
+            <div class="stat-label">замеров</div>
+          </div>
+          <div class="stat-cell">
+            <div class="stat-value muted">—</div>
+            <div class="stat-label">тренд</div>
+          </div>
+        </div>
+
+        <!-- Charts -->
+        <div class="section-label">Графики</div>
+        <div class="chart">
+          <div class="chart-title">Баланс ячеек ΔV</div>
+          <svg class="chart-svg" viewBox="0 0 500 50" preserveAspectRatio="none">
+            <polyline fill="none" stroke="#4ADE80" stroke-width="2" points="0,40 80,38 160,42 240,35 320,40 400,38 500,40"/>
+            <circle cx="500" cy="40" r="3" fill="#4ADE80"/>
+          </svg>
+        </div>
+        <div style="height: 8px"></div>
+        <div class="chart">
+          <div class="chart-title">Напряжение 12V</div>
+          <svg class="chart-svg" viewBox="0 0 500 50" preserveAspectRatio="none">
+            <polyline fill="none" stroke="#60A5FA" stroke-width="2" points="0,30 80,25 160,35 240,28 320,32 400,30 500,28"/>
+            <circle cx="500" cy="28" r="3" fill="#60A5FA"/>
+          </svg>
+        </div>
+        <div style="height: 8px"></div>
+        <div class="chart">
+          <div class="chart-title">Ёмкость батареи (кВт·ч)</div>
+          <div class="chart-stub">Недостаточно данных (мин 2 зарядки с ΔSOC ≥ 10%)</div>
+        </div>
+
+      </div>
+    </div>
+
+    <div class="annotation">
+      <strong>Layout:</strong> Dialog с <code>usePlatformDefaultWidth=false</code>, ширина 540px,
+      макс. высота 700px со scroll. Тот же стиль, что у AI Insights — border 2dp,
+      RoundedCornerShape(14), background <code>CardSurface</code>.<br>
+      <strong>Закрытие:</strong> клик на backdrop или на крестик ×.<br>
+      <strong>«Расход /100км (наш)»</strong> — считаем сами:
+      <code>lifetime_kwh ÷ lifetime_km × 100</code> = 612.6 / 2116.5 × 100 = 28.9 кВт·ч/100км.
+      Это честный полный расход (включает HVAC/12V/отопление), а BMS-овый
+      <code>LIFETIME_AVG_PHM</code> = 24.1 — только traction. Не используем китайский fid.
+    </div>
+  </div>
+</div>
+
+</body>
+</html>
