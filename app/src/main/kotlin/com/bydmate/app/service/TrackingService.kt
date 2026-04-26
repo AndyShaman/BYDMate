@@ -63,6 +63,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var odometerBuffer: OdometerConsumptionBuffer
     @Inject lateinit var socInterpolator: SocInterpolator
     @Inject lateinit var rangeCalculator: RangeCalculator
+    @Inject lateinit var autoserviceDetector: com.bydmate.app.data.charging.AutoserviceChargingDetector
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -199,6 +200,15 @@ class TrackingService : Service(), LocationListener {
             try {
                 val result = historyImporter.runSync()
                 Log.i(TAG, "Sync: ${result.details ?: result.error ?: "ok"}")
+                // Autoservice catch-up: synthesizes COMPLETED ChargeEntity records
+                // for charging that happened while DiLink was asleep. Best-effort —
+                // wrapped so a Binder/ADB failure does not break the import chain.
+                try {
+                    val outcome = autoserviceDetector.runCatchUp()
+                    Log.i(TAG, "Autoservice catch-up: ${outcome.outcome}")
+                } catch (e: Exception) {
+                    Log.w(TAG, "Autoservice catch-up failed: ${e.message}")
+                }
                 // AI insights (once per day)
                 insightsManager.refreshIfNeeded()
             } catch (e: Exception) {
@@ -385,6 +395,9 @@ class TrackingService : Service(), LocationListener {
                         // Save SOC for retrospective charge detection
                         data.soc?.let { soc ->
                             settingsRepository.saveLastKnownSoc(soc)
+                            // Also seed AutoserviceChargingDetector so the next catch-up
+                            // can compute SOC delta for the BatterySnapshot capacity calc.
+                            autoserviceDetector.recordLastSeenSoc(soc)
                         }
 
                         // On first data after startup: detect offline charging

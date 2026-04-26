@@ -289,4 +289,18 @@ object AppModule {
             .writeTimeout(15, TimeUnit.SECONDS)
             .build()
     }
+
+    @Provides
+    @Singleton
+    fun provideAdbOnDeviceClient(
+        @ApplicationContext context: Context
+    ): com.bydmate.app.data.autoservice.AdbOnDeviceClient =
+        com.bydmate.app.data.autoservice.AdbOnDeviceClientImpl(context)
+
+    @Provides
+    @Singleton
+    fun provideAutoserviceClient(
+        adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient
+    ): com.bydmate.app.data.autoservice.AutoserviceClient =
+        com.bydmate.app.data.autoservice.AutoserviceClientImpl(adb)
 }
