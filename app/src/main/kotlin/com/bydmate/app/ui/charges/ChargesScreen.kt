@@ -61,24 +61,20 @@ fun ChargesScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Fallback state 1: toggle OFF, no legacy data → onboarding
         if (!state.autoserviceEnabled && !state.hasLegacyCharges) {
             OnboardingEmptyState(onNavigateSettings)
             return@Column
         }
 
-        // Fallback state 4: toggle ON, connected, all sentinel
         if (state.autoserviceEnabled && state.autoserviceAllSentinel) {
             SentinelEmptyState()
             return@Column
         }
 
-        // Fallback state 2: toggle OFF + has legacy data → yellow banner
         if (!state.autoserviceEnabled && state.hasLegacyCharges) {
             NotTrackingBanner(onClick = onNavigateSettings)
         }
 
-        // Chips row: 5 period chips + spacer + 3 type chips
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             ChargesChip("День", state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
             ChargesChip("Нед", state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
@@ -94,7 +90,6 @@ fun ChargesScreen(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxSize()) {
-            // Left 65%: hierarchical month/day/charge list
             if (state.months.isEmpty()) {
                 Column(
                     modifier = Modifier.weight(0.65f).fillMaxHeight(),
@@ -150,7 +145,6 @@ fun ChargesScreen(
                 }
             }
 
-            // Vertical divider
             Box(
                 modifier = Modifier
                     .fillMaxHeight()
@@ -158,7 +152,6 @@ fun ChargesScreen(
                     .background(CardBorder.copy(alpha = 0.5f))
             )
 
-            // Right 35%: stats panel
             ChargesStatsPanel(
                 periodSummary = state.periodSummary,
                 currencySymbol = state.currencySymbol,
@@ -388,8 +381,6 @@ private fun ChargesColumnHeaders(currencySymbol: String) {
 private fun ChargeRow(charge: ChargeEntity, currencySymbol: String) {
     val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
     val startTime = timeFmt.format(Date(charge.startTs))
-    val endTime = charge.endTs?.let { timeFmt.format(Date(it)) } ?: "—"
-    val timeRange = "$startTime – $endTime"
 
     val socText = when {
         charge.socStart != null && charge.socEnd != null -> "${charge.socStart}% → ${charge.socEnd}%"

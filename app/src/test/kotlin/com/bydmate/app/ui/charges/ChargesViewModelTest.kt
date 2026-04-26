@@ -175,11 +175,11 @@ class ChargesViewModelTest {
     @Test
     fun `setPeriod_today_filtersChargesToToday`() = runTest {
         val today = startOfToday() + 3_600_000L
-        val oldTs = startOfToday() - 86_400_000L // yesterday
+        val yesterdayTs = startOfToday() - 3_600_000L // 1 hour before midnight today
 
         val flow = MutableStateFlow(listOf(
             makeCharge(1, today),
-            makeCharge(2, oldTs)
+            makeCharge(2, yesterdayTs)
         ))
         val vm = buildViewModel(chargesFlow = flow)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -188,17 +188,39 @@ class ChargesViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(ChargesPeriod.TODAY, vm.uiState.value.period)
+        val allCharges = vm.uiState.value.months.flatMap { m -> m.days.flatMap { it.charges } }
+        assertEquals(1, allCharges.size)
+        assertEquals(1L, allCharges[0].id)
     }
 
     @Test
-    fun `setPeriod_year_filtersToLast365Days`() = runTest {
-        val vm = buildViewModel()
+    fun `setPeriod_year_excludesChargesOlderThanCalendarYear`() = runTest {
+        // Calendar-year boundaries: Jan 1 of current year. Charge dated 14 months ago
+        // is BEFORE that boundary regardless of when in the year we run.
+        val cal = Calendar.getInstance()
+        cal.add(Calendar.MONTH, -14)
+        val fourteenMonthsAgo = cal.timeInMillis
+        val recentTs = System.currentTimeMillis() - 1_000L
+
+        val flow = MutableStateFlow(listOf(
+            makeCharge(1, recentTs),
+            makeCharge(2, fourteenMonthsAgo)
+        ))
+        val vm = buildViewModel(chargesFlow = flow)
         testDispatcher.scheduler.advanceUntilIdle()
 
         vm.setPeriod(ChargesPeriod.YEAR)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(ChargesPeriod.YEAR, vm.uiState.value.period)
+        val yearCharges = vm.uiState.value.months.flatMap { m -> m.days.flatMap { it.charges } }
+        assertEquals(1, yearCharges.size)
+        assertEquals(1L, yearCharges[0].id)
+
+        vm.setPeriod(ChargesPeriod.ALL)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val allCharges = vm.uiState.value.months.flatMap { m -> m.days.flatMap { it.charges } }
+        assertEquals(2, allCharges.size)
     }
 
     @Test

@@ -91,13 +91,17 @@ class ChargesViewModel @Inject constructor(
     }
 
     fun setPeriod(period: ChargesPeriod) {
-        _uiState.update { it.copy(period = period) }
-        loadAll()
+        _uiState.update {
+            it.copy(period = period, expandedMonths = emptySet(), expandedDays = emptySet())
+        }
+        loadAll(period = period)
     }
 
     fun setTypeFilter(filter: ChargeTypeFilter) {
-        _uiState.update { it.copy(typeFilter = filter) }
-        loadAll()
+        _uiState.update {
+            it.copy(typeFilter = filter, expandedMonths = emptySet(), expandedDays = emptySet())
+        }
+        loadAll(typeFilter = filter)
     }
 
     fun toggleMonth(yearMonth: String) {
@@ -116,17 +120,19 @@ class ChargesViewModel @Inject constructor(
         }
     }
 
-    private fun loadAll() {
+    private fun loadAll(
+        period: ChargesPeriod = _uiState.value.period,
+        typeFilter: ChargeTypeFilter = _uiState.value.typeFilter
+    ) {
         loadJob?.cancel()
         loadJob = viewModelScope.launch {
-            val (from, to) = dateRangeFor(_uiState.value.period)
+            val (from, to) = dateRangeFor(period)
 
-            chargeRepository.getChargesByDateRange(from, to).collect { allCharges ->
-                val typeFilter = _uiState.value.typeFilter
+            chargeRepository.getChargesByDateRange(from, to).collect { rawCharges ->
                 val filtered = when (typeFilter) {
-                    ChargeTypeFilter.ALL -> allCharges
-                    ChargeTypeFilter.AC -> allCharges.filter { it.gunState == 2 }
-                    ChargeTypeFilter.DC -> allCharges.filter { it.gunState in setOf(3, 4) }
+                    ChargeTypeFilter.ALL -> rawCharges
+                    ChargeTypeFilter.AC -> rawCharges.filter { it.gunState == 2 }
+                    ChargeTypeFilter.DC -> rawCharges.filter { it.gunState in setOf(3, 4) }
                 }
 
                 val months = groupChargesByMonthDay(filtered)
@@ -291,13 +297,13 @@ class ChargesViewModel @Inject constructor(
                 cal.timeInMillis to now
             }
             ChargesPeriod.MONTH -> {
-                cal.add(Calendar.DAY_OF_YEAR, -30)
+                cal.set(Calendar.DAY_OF_MONTH, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
                 cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
                 cal.timeInMillis to now
             }
             ChargesPeriod.YEAR -> {
-                cal.add(Calendar.DAY_OF_YEAR, -365)
+                cal.set(Calendar.DAY_OF_YEAR, 1)
                 cal.set(Calendar.HOUR_OF_DAY, 0); cal.set(Calendar.MINUTE, 0)
                 cal.set(Calendar.SECOND, 0); cal.set(Calendar.MILLISECOND, 0)
                 cal.timeInMillis to now
