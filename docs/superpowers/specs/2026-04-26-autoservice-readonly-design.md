@@ -80,11 +80,13 @@ interface AutoserviceClient {
 
 ### 4.2 Слой детекции зарядок (новая методика)
 
+> **Note (v2.4.16):** ACTIVE/live tick path в реализованном коде отсутствует — `runLiveTick` и состояния `ACTIVE/FINALIZING` отменены вместе с Phase 3 (4.3). На проде только `runCatchUp` → `FINALIZE`. AC/DC классификация всегда heuristic (kwh/h), `gun_state` всегда null. Code-level контракт ниже отражает design intent на 2026-04-26, не текущий код.
+
 ```
 data/charging/
-├── AutoserviceChargingDetector.kt  # state machine IDLE → EVALUATE → ACTIVE → FINALIZE
+├── AutoserviceChargingDetector.kt  # IDLE → EVALUATE → FINALIZE (catch-up only, без live)
 ├── ChargingBaselineStore.kt        # абстракция «дай/обнови baseline lifetime_kwh» поверх ChargeRepository
-└── ChargingTypeClassifier.kt       # gun_state → AC/DC/GB_DC; fallback heuristic kwh_per_hour > 20
+└── ChargingTypeClassifier.kt       # heuristic kwh_per_hour > 20 → DC (gun_state всегда null после Phase 3 cancel)
 ```
 
 **`AutoserviceChargingDetector` контракт:**
@@ -97,7 +99,6 @@ class AutoserviceChargingDetector @Inject constructor(
     private val baselineStore: ChargingBaselineStore,
     private val classifier: ChargingTypeClassifier,
     private val settings: SettingsRepository,
-    private val promptBus: ChargingPromptBus           // см. 4.3
 ) {
     /** Single-shot catch-up на service start. Сравнивает текущий lifetime_kwh с baseline. */
     suspend fun runCatchUp(now: Long = System.currentTimeMillis()): CatchUpResult
@@ -128,24 +129,18 @@ IDLE
 **Классификация AC/DC:**
 1. Если `runLiveTick()` поймал `gun_state ∈ {2, 3, 4}` — записываем raw в `ChargeEntity.gun_state`. Тип: 2→"AC", 3→"DC", 4→"DC" (GB_DC объединяем для UI).
 2. Если catch-up и `gun_state == 1` (NONE) на момент чтения — heuristic `kwh_charged / hours > 20 → "DC"`, иначе "AC". `gun_state` в БД остаётся null. `detection_source = "autoservice_catchup"`.
-3. Юзер всегда может изменить вручную через prompt (см. 4.3) → `detection_source = "user_override"`.
+3. Юзер всегда может изменить тип, kWh, тариф вручную через long-press на `ChargeRow` → `ChargeEditDialog` → `detection_source = "user_override"` (v2.4.16).
 
 **Baseline storage (Q1=a — без новой таблицы):**
 - `ChargingBaselineStore.getBaseline()` → `MAX(lifetime_kwh_at_finish) FROM charges WHERE detection_source LIKE 'autoservice%'`
 - Если ни одной autoservice-сессии нет → возвращает `null` → первый catch-up тихо устанавливает baseline без создания сессии (записывает «фантом» baseline в k/v `KEY_AUTOSERVICE_BASELINE_KWH` / `KEY_AUTOSERVICE_BASELINE_TS`)
 - При каждом FINALIZE баseline обновляется через `lifetime_kwh_at_finish` нового ChargeEntity → durable, source-of-truth в БД
 
-### 4.3 Optional finalize prompt (E решение)
+### 4.3 Optional finalize prompt (E решение) — ❌ ОТМЕНЕНО (v2.4.16)
 
-```
-ui/charging/
-├── ChargingFinalizePromptDialog.kt       # после FINALIZE, показывает kWh / SOC start→end / type AC|DC | cost. Поля редактируемы. Save / Discard
-└── ChargingPromptBus.kt                  # Channel<ChargingPromptRequest> между Detector и dashboard/composition
-```
+**Status:** cancelled. Заменено ручной правкой через long-press на `ChargeRow` (см. v2.4.16 моки `2026-04-26-charge-edit.html`).
 
-`ChargingPromptBus` — singleton Channel/SharedFlow для cross-screen триггера. Detector эмитит `ChargingPromptRequest(chargeId)`, MainActivity собирает в Composition и показывает Dialog поверх любого экрана.
-
-Toggle: `KEY_CHARGING_PROMPT_ENABLED` (default `true`) в SettingsRepository.
+**Reason:** на DiLink большой экран спит во время зарядки (`feedback_dilink_charging_behavior.md`), live мониторинг невозможен. Catch-up на старте сервиса всегда даёт корректные данные без подтверждения. Ручная правка покрывает edge case'ы (неправильный AC/DC, кривой тариф) явным жестом юзера.
 
 ### 4.4 Battery state aggregator (combine D+ + autoservice)
 
@@ -165,7 +160,7 @@ domain/battery/
 | `data/local/database/AppDatabase.kt:42` | `version = 11` → `12`. `entities = [...]` без изменений (реюз ChargeEntity/etc) | Q1=a, Q3=да |
 | `di/AppModule.kt:194-209` | Добавить `MIGRATION_11_12` после `MIGRATION_10_11` | Миграция |
 | `di/AppModule.kt:219` | Добавить `MIGRATION_11_12` в `addMigrations(...)` | Регистрация |
-| `di/AppModule.kt` (новые `@Provides`) | `provideAutoserviceClient`, `provideAdbOnDeviceClient`, `provideAutoserviceChargingDetector`, `provideBatteryStateRepository`, `provideChargingPromptBus` | DI |
+| `di/AppModule.kt` (новые `@Provides`) | `provideAutoserviceClient`, `provideAdbOnDeviceClient`, `provideAutoserviceChargingDetector`, `provideBatteryStateRepository` | DI |
 
 **Миграция 11→12 текстом:**
 ```kotlin
@@ -200,7 +195,7 @@ private val MIGRATION_11_12 = object : Migration(11, 12) {
 | `service/TrackingService.kt:215-226` | Заменить блок `serviceScope.launch { historyImporter.runSync(); ...; insightsManager.refreshIfNeeded() }` — добавить вызов `autoserviceChargingDetector.runCatchUp()` после historyImporter, обёрнутый в try/catch (autoservice может быть недоступен, не должен ломать sync) | catch-up trigger |
 | `service/TrackingService.kt` (DiPars polling loop, найти grep'ом по `chargeTracker.onData`) | Удалить вызов | B |
 | `service/TrackingService.kt` (onDestroy/onTaskRemoved) | Удалить `chargeTracker.forceEnd(...)` | B |
-| `service/TrackingService.kt` (новый поле + tick) | Опционально (Phase 2): запустить `autoserviceChargingDetector.runLiveTick()` каждые 10 сек если `settings.isAutoserviceEnabled() && ignition.value == ON && client.isAvailable()` | live ветка |
+| ~~`service/TrackingService.kt` live tick~~ | ❌ ОТМЕНЕНО — DiLink спит во время зарядки, live мониторинг невозможен |
 
 ### 5.3 Welcome / Settings cleanup
 
@@ -245,12 +240,6 @@ Card(
         // 4 status states (см. ниже)
         AutoserviceStatusText(state.autoserviceStatus)
 
-        if (state.autoserviceEnabled) {
-            Row(...) {
-                Text("Спрашивать после каждой зарядки", ...)
-                Switch(checked = state.chargingPromptEnabled, ...)
-            }
-        }
     }
 }
 ```
@@ -268,12 +257,10 @@ Source-of-truth для `connected` / `hasReadings` / `allSentinel` — `BatteryS
 
 **SettingsViewModel** (новые поля в `SettingsUiState`):
 - `autoserviceEnabled: Boolean = false` (из `KEY_AUTOSERVICE_ENABLED`)
-- `chargingPromptEnabled: Boolean = true` (из `KEY_CHARGING_PROMPT_ENABLED`, default true)
 - `autoserviceStatus: AutoserviceStatus` (sealed class A/B/C/D)
 
 **SettingsRepository новые keys:**
 - `KEY_AUTOSERVICE_ENABLED` (default `"false"`)
-- `KEY_CHARGING_PROMPT_ENABLED` (default `"true"`)
 - `KEY_AUTOSERVICE_BASELINE_KWH` / `KEY_AUTOSERVICE_BASELINE_TS` (для cold-start baseline до первой autoservice-сессии в БД)
 - `KEY_LAST_SEEN_SOC` (для delta SOC триггера, обновляется на каждом catch-up)
 
@@ -387,17 +374,14 @@ composable(Screen.Charges.route) { ChargesScreen(onNavigateSettings = { navContr
 
 **Acceptance:** ручной прогон на машине через все 4 fallback состояния (toggle OFF без сессий → OFF с сессиями → ON working → ON sentinel-эмуляция).
 
-### Phase 3 — Optional finalize prompt + live tick (опционально)
-- `ChargingFinalizePromptDialog` + ChargingPromptBus + MainActivity wiring
-- `runLiveTick` с интервалом 10 сек (если ignition ON и client.isAvailable())
-- ChargePoint каждые 30 сек на live ветке
+### ~~Phase 3~~ — ❌ ОТМЕНЕНО (v2.4.16)
 
-**Acceptance:** реальная зарядка от пистолета AC + ignition ON → ACTIVE сессия в БД с ChargePoint'ами + после finalize — диалог с правкой → save.
+Finalize prompt + live tick отменены. См. секцию 4.3 — заменено ручной правкой `ChargeRow` long-press → `ChargeEditDialog`. Live tick невозможен на спящем DiLink.
 
-### Phase 4 — Codex audit + release v2.5.0
+### Phase 3 — Codex audit + release v2.4.16
 - Codex CLI rescue review всей ветки (по `feedback_codex_audit_before_release.md` — ДО релиза)
 - Squash-merge в main
-- Bump version 2.4.12 → 2.5.0 (минор — новая фича)
+- Bump version 2.4.12 → 2.4.16 (catch-up + ручная правка зарядок)
 - APK подпись + GH release с release notes plain text (по `feedback_release_notes_no_markdown.md`, по-русски, без техники)
 
 ## 8. Risk register
@@ -409,8 +393,6 @@ composable(Screen.Charges.route) { ChargesScreen(onNavigateSettings = { navContr
 | `LIFETIME_KWH` нестабилен (как было с `LIFETIME_MILEAGE` в одной из read-сессий) | SentinelDecoder вернёт null → детектор `runCatchUp` залогирует и пропустит. Baseline не обновляется, ждём следующего service start |
 | Catch-up детектит «фантомную» зарядку при первом запуске (до записи baseline) | Cold-start path: если baseline нет в БД и нет в k/v — записываем текущий lifetime_kwh как baseline без создания сессии. Логируем как «baseline init» |
 | Дублирование сессии (юзер отключил toggle, потом включил → catch-up видит большой delta) | Baseline всё равно сохраняется через k/v `KEY_AUTOSERVICE_BASELINE_TS` — при reactivate, если timestamp baseline < N часов, доверяем; иначе — cold-start init |
-| Race между `runCatchUp` и `runLiveTick` | Mutex на `AutoserviceChargingDetector.state`, оба пути идут через одну state-машину |
-| Юзер выключает toggle во время ACTIVE live сессии | onChange → `runLiveTick` job cancel + `finalizeIfActive()` → сессия записывается как обычно |
 | ChargeTracker удаление сломает что-то у юзеров с suspended сессиями в БД | Миграция `DELETE WHERE status IN ('SUSPENDED','ACTIVE')` чистит. Завершённые сохраняются. Андроид Room migration test проверит на dummy данных |
 | Тестовая прошивка обновится и поломает fid'ы | Доминирующий read-only режим + sentinel decoder graceful fallback. `BatteryStateRepository.autoserviceAvailable` станет false → UI вернётся в v2.4.12-mode автоматически |
 
@@ -425,7 +407,7 @@ composable(Screen.Charges.route) { ChargesScreen(onNavigateSettings = { navContr
 - B=выпилить ChargeTracker полностью + миграция cleanup ✅
 - C=5 табов ✅
 - D=кликабельная BatteryCard → BatteryHealthScreen ✅
-- E=toggle prompt в Settings, default ON ✅
+- ~~E=toggle prompt в Settings~~ ❌ отменено в v2.4.16 (см. 4.3) — заменено long-press edit
 - importChargingLog=удалить ✅
 
 ## 10. Self-review checklist (перед началом Phase 1)
