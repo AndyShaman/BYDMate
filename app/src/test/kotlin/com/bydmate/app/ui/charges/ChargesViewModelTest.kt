@@ -149,6 +149,7 @@ class ChargesViewModelTest {
         startTs: Long,
         kwhCharged: Double? = 10.0,
         gunState: Int? = 2,
+        type: String? = when (gunState) { 2 -> "AC"; 3, 4 -> "DC"; else -> null },
         cost: Double? = 2.0,
         detectionSource: String? = "autoservice_detector"
     ) = ChargeEntity(
@@ -157,6 +158,7 @@ class ChargesViewModelTest {
         endTs = startTs + 3_600_000L,
         kwhCharged = kwhCharged,
         gunState = gunState,
+        type = type,
         cost = cost,
         detectionSource = detectionSource
     )
@@ -407,6 +409,22 @@ class ChargesViewModelTest {
         assertEquals(30.0, vm.uiState.value.lifetimeAcKwh, 0.001)
         assertEquals(15.0, vm.uiState.value.lifetimeDcKwh, 0.001)
         assertEquals(45.0, vm.uiState.value.lifetimeTotalKwh, 0.001)
+    }
+
+    @Test
+    fun `loadLifetimeStats_catchUpSessionsWithNullGunState_includedByType`() = runTest {
+        val now = System.currentTimeMillis()
+        val charges = listOf(
+            makeCharge(1, now - 3000, kwhCharged = 25.0, gunState = null, type = "AC"),
+            makeCharge(2, now - 2000, kwhCharged = 50.0, gunState = null, type = "DC"),
+            makeCharge(3, now - 1000, kwhCharged = 10.0, gunState = 2, type = "AC")
+        )
+        val vm = buildViewModel(autoserviceEnabled = true, autoserviceCharges = charges)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(35.0, vm.uiState.value.lifetimeAcKwh, 0.01)
+        assertEquals(50.0, vm.uiState.value.lifetimeDcKwh, 0.01)
+        assertEquals(85.0, vm.uiState.value.lifetimeTotalKwh, 0.01)
     }
 
     @Test

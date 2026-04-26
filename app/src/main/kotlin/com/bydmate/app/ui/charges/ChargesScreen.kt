@@ -162,7 +162,7 @@ fun ChargesScreen(
                 nominalCapacityKwh = state.nominalCapacityKwh,
                 sohSeries = state.sohSeries,
                 capacitySeries = state.capacitySeries,
-                showLifetime = state.autoserviceEnabled && state.autoserviceConnected,
+                showLifetime = state.autoserviceEnabled && state.lifetimeTotalKwh > 0,
                 modifier = Modifier.weight(0.35f).fillMaxHeight()
             )
         }

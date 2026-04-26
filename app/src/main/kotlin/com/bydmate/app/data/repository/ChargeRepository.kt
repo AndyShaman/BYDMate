@@ -56,8 +56,8 @@ class ChargeRepository @Inject constructor(
 
     suspend fun getLifetimeStats(): LifetimeChargingStats {
         val all = chargeDao.getAllAutoserviceCharges()
-        val ac = all.filter { it.gunState == 2 }.sumOf { it.kwhCharged ?: 0.0 }
-        val dc = all.filter { it.gunState in setOf(3, 4) }.sumOf { it.kwhCharged ?: 0.0 }
+        val ac = all.filter { it.type == "AC" }.sumOf { it.kwhCharged ?: 0.0 }
+        val dc = all.filter { it.type == "DC" }.sumOf { it.kwhCharged ?: 0.0 }
         return LifetimeChargingStats(
             totalKwhAdded = ac + dc,
             acKwh = ac,
