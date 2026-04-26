@@ -64,9 +64,9 @@
      A_CNXN = 0x4E584E43 (1314410051)
      A_AUTH = 0x48545541 (1213486401)
      A_OPEN = 0x4E45504F (1313165391)
-     A_OKAY = 0x4F4B4159 (1497451343)  // little-endian → "OKAY"
-     A_CLSE = 0x434C5345 (1163086915)  // little-endian → "CLSE"
-     A_WRTE = 0x57525445 (1163154007)  // little-endian → "WRTE"
+     A_OKAY = 0x59414B4F (1497451343)  // bytes 'O','K','A','Y' little-endian — DECIMAL is the source of truth, hex was byte-swapped in earlier draft
+     A_CLSE = 0x45534C43 (1163086915)  // bytes 'C','L','S','E' little-endian
+     A_WRTE = 0x45545257 (1163154007)  // bytes 'W','R','T','E' little-endian
      A_VERSION_AUTH = 0x01000001 (16777217)
      MAX_PAYLOAD = 262144
      AUTH_TOKEN = 1, AUTH_SIGNATURE = 2, AUTH_RSAPUBLICKEY = 3
