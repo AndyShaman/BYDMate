@@ -51,7 +51,7 @@ fun BatteryHealthScreen(
 
         if (state.charges.isEmpty() && !state.isLoading) {
             Text(
-                "Нет данных. Информация появится после зарядок с подключённым DiPlus.",
+                "Нет данных. Первый замер появится после полной зарядки (при включённых системных данных в Настройках).",
                 color = TextSecondary, fontSize = 14.sp
             )
         } else {
