@@ -17,6 +17,7 @@ import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -38,6 +39,28 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+
+/**
+ * Represents the runtime status of the autoservice data channel.
+ *
+ * - [NotEnabled] — the toggle is OFF; render no status block.
+ * - [Disconnected] — toggle ON, but [BatteryStateRepository.refresh] returned
+ *   `autoserviceAvailable = false` (ADB not connected or service unreachable).
+ * - [Connected] — toggle ON and at least one real value was returned.
+ *   Individual fields are nullable because partial sentinel responses occur.
+ * - [AllSentinel] — toggle ON, but every requested fid returned null/sentinel.
+ */
+sealed class AutoserviceStatus {
+    object NotEnabled : AutoserviceStatus()
+    object Disconnected : AutoserviceStatus()
+    data class Connected(
+        val socNow: Float?,
+        val lifetimeKm: Float?,
+        val lifetimeKwh: Float?,
+        val sohPercent: Float?
+    ) : AutoserviceStatus()
+    object AllSentinel : AutoserviceStatus()
+}
 
 /**
  * UI state for the Settings screen.
@@ -82,7 +105,10 @@ data class SettingsUiState(
     val aliceSaveStatus: String? = null,
     val autoCheckUpdates: Boolean = true,
     val dataSource: String = "ENERGYDATA",
-    val dataSourceStatus: String? = null
+    val dataSourceStatus: String? = null,
+    val autoserviceEnabled: Boolean = false,
+    val chargingPromptEnabled: Boolean = true,
+    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled
 )
 
 @HiltViewModel
@@ -97,7 +123,8 @@ class SettingsViewModel @Inject constructor(
     private val diParsClient: DiParsClient,
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
-    private val adbOnDeviceClient: AdbOnDeviceClient
+    private val adbOnDeviceClient: AdbOnDeviceClient,
+    private val batteryStateRepository: BatteryStateRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsUiState(
@@ -159,6 +186,9 @@ class SettingsViewModel @Inject constructor(
 
             val dataSource = settingsRepository.getDataSource().name
 
+            val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
+            val chargingPromptEnabled = settingsRepository.isChargingPromptEnabled()
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -178,9 +208,48 @@ class SettingsViewModel @Inject constructor(
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
-                    dataSource = dataSource
+                    dataSource = dataSource,
+                    autoserviceEnabled = autoserviceEnabled,
+                    chargingPromptEnabled = chargingPromptEnabled
                 )
             }
+
+            loadAutoserviceState()
+        }
+    }
+
+    internal suspend fun loadAutoserviceState() {
+        val status = if (!settingsRepository.isAutoserviceEnabled()) {
+            AutoserviceStatus.NotEnabled
+        } else {
+            val state = batteryStateRepository.refresh()
+            when {
+                !state.autoserviceAvailable -> AutoserviceStatus.Disconnected
+                state.socNow == null && state.lifetimeKm == null && state.lifetimeKwh == null ->
+                    AutoserviceStatus.AllSentinel
+                else -> AutoserviceStatus.Connected(
+                    socNow = state.socNow,
+                    lifetimeKm = state.lifetimeKm,
+                    lifetimeKwh = state.lifetimeKwh,
+                    sohPercent = state.sohPercent
+                )
+            }
+        }
+        _uiState.update { it.copy(autoserviceStatus = status) }
+    }
+
+    fun setAutoserviceEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(autoserviceEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setAutoserviceEnabled(enabled)
+            loadAutoserviceState()
+        }
+    }
+
+    fun setChargingPromptEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(chargingPromptEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setChargingPromptEnabled(enabled)
         }
     }
 
@@ -700,11 +769,13 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(autoCheckUpdates = enabled) }
     }
 
-    /**
-     * Triggers the ADB-on-device handshake. UI button binding lands in C2;
-     * exposed here so C0 can be smoked manually from a debug entrypoint.
-     */
-    suspend fun tryConnect(): Result<Unit> = adbOnDeviceClient.connect()
+    suspend fun tryConnect(): Result<Unit> {
+        val result = adbOnDeviceClient.connect()
+        if (result.isSuccess) {
+            loadAutoserviceState()
+        }
+        return result
+    }
 
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
