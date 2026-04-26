@@ -171,8 +171,10 @@
 2. `sealed class AutoserviceStatus` (новый, в этом файле):
    - `object NotEnabled` (toggle OFF — рендерим пустой блок)
    - `object Disconnected` (toggle ON, `BatteryState.autoserviceAvailable = false`)
-   - `data class Connected(socNow: Int, lifetimeKm: Float, lifetimeKwh: Float, sohPercent: Float?)` (toggle ON, есть данные)
-   - `object AllSentinel` (toggle ON, все запрошенные fid'ы = 0xFFFF)
+   - `data class Connected(socNow: Float?, lifetimeKm: Float?, lifetimeKwh: Float?, sohPercent: Float?)` (toggle ON, есть данные — поля nullable, бывают частичные ответы где SOC sentinel но lifetime kwh ОК)
+   - `object AllSentinel` (toggle ON, все запрошенные fid'ы = sentinel/null)
+
+   Замечание про типы: `BatteryState.socNow/lifetimeKm/lifetimeKwh` — все `Float?` (см. `BatteryStateRepository.kt`). НЕ `Int` для socNow.
 3. Маппинг логика в `loadAutoserviceState()` (suspend, в init или в onResume-equivalent):
    ```kotlin
    if (!settings.isAutoserviceEnabled()) → NotEnabled
@@ -181,13 +183,13 @@
      when {
        !state.autoserviceAvailable → Disconnected
        state.socNow == null && state.lifetimeKm == null && state.lifetimeKwh == null → AllSentinel
-       else → Connected(socNow, lifetimeKm, lifetimeKwh, sohPercent)
+       else → Connected(state.socNow, state.lifetimeKm, state.lifetimeKwh, state.sohPercent)
      }
    }
    ```
 4. `setAutoserviceEnabled(enabled: Boolean)`: settings.set + reload state.
 5. `setChargingPromptEnabled(enabled: Boolean)`: settings.set.
-6. `tryPair(code: String): Result<Unit>` — делегат к `adbOnDeviceClient.pair(code)`, после успеха reload state.
+6. `suspend fun tryConnect(): Result<Unit>` УЖЕ ДОБАВЛЕН в C0 (строка ~707 SettingsViewModel.kt). C1 wrap'нуть его так чтобы после `Result.success` дёргался `loadAutoserviceState()` для обновления UI status block. Простейший способ — переименовать существующий `suspend fun tryConnect()` в `private suspend fun connectRaw()` и добавить новый публичный `fun tryConnect()` который запускает корутину `viewModelScope.launch { ... result = connectRaw(); if (success) loadAutoserviceState() }`. Либо оставить публичный suspend и в C2 UI вызывать через `viewModelScope.launch { ... }` + reload вручную — на усмотрение implementer'а, но reload должен происходить.
 
 **Tests:**
 - `loadAutoserviceState_toggleOff_returnsNotEnabled`
