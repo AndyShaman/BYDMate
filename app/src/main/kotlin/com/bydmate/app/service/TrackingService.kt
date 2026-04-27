@@ -438,7 +438,11 @@ class TrackingService : Service(), LocationListener {
                                 }
                             }
                         }
-                        prevChargeGunState = curGun
+                        // Only update prev when DiPars actually returned a gun state.
+                        // A null response is a transient read failure, not a transition —
+                        // keeping the previous value lets the disconnect edge fire on the
+                        // next non-null poll instead of being silently swallowed.
+                        if (curGun != null) prevChargeGunState = curGun
 
                         // On first data after startup: detect offline charging
                         if (!firstDataReceived) {

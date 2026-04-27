@@ -58,18 +58,18 @@ class ChargingStateStoreTest {
     }
 
     @Test
-    fun `baseline survives concurrent setLastSeenSoc writes`() = runTest {
+    fun `baseline survives concurrent saveLastKnownSoc writes`() = runTest {
         // Regression: in v2.4.17 ChargingStateStore read socPercent from
-        // KEY_LAST_SEEN_SOC, which TrackingService overwrites every 3s with
-        // the live SOC via recordLastSeenSoc → setLastSeenSoc. That clobbered
-        // the cascade detector's pre-charging baseline. After v2.4.18 the
-        // baseline lives on its own key.
+        // the same key TrackingService overwrites every 3s with the live SOC.
+        // That clobbered the cascade detector's pre-charging baseline. After
+        // v2.4.18 the baseline lives on its own key (KEY_CHARGING_BASELINE_SOC)
+        // and survives polling writes on KEY_LAST_KNOWN_SOC.
         val dao = FakeSettingsDao()
         val settings = SettingsRepository(dao)
         val s = ChargingStateStore(settings)
         s.save(socPercent = 80, mileageKm = 100f, capacityKwh = 5f, ts = 1000L)
-        // Simulate live polling overwriting last_seen_soc as SOC climbs.
-        listOf(81, 82, 83, 84, 85).forEach { settings.setLastSeenSoc(it) }
+        // Simulate live polling overwriting the last-known SOC as SOC climbs.
+        listOf(81, 82, 83, 84, 85).forEach { settings.saveLastKnownSoc(it) }
         val state = s.load()
         assertEquals(80, state.socPercent)
     }

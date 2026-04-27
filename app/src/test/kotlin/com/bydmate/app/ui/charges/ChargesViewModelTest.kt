@@ -285,6 +285,29 @@ class ChargesViewModelTest {
     }
 
     @Test
+    fun `setTypeFilter_DC_filtersOnlyDcCharges_includingSentinelGunState`() = runTest {
+        val now = System.currentTimeMillis()
+        val flow = MutableStateFlow(listOf(
+            makeCharge(1, now - 1000, gunState = 2),                      // AC (gun=2)
+            makeCharge(2, now - 2000, gunState = 3),                      // DC (gun=3)
+            makeCharge(3, now - 3000, gunState = 4),                      // GB_DC (gun=4)
+            makeCharge(4, now - 4000, gunState = -10011, type = "DC")     // DC via observed power (Leopard 3 sentinel)
+        ))
+        val vm = buildViewModel(chargesFlow = flow)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTypeFilter(ChargeTypeFilter.DC)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ChargeTypeFilter.DC, vm.uiState.value.typeFilter)
+        val months = vm.uiState.value.months
+        val allCharges = months.flatMap { m -> m.days.flatMap { it.charges } }
+        // Three DC rows expected: gun=3, gun=4, and sentinel-with-type=DC.
+        assertEquals(3, allCharges.size)
+        assertTrue(allCharges.all { it.type == "DC" })
+    }
+
+    @Test
     fun `groupChargesByMonthDay_groupsCorrectly`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()

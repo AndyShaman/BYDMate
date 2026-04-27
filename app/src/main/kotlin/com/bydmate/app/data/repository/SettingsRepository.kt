@@ -34,14 +34,13 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENABLED = "alice_enabled"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
-        const val KEY_LAST_SEEN_SOC = "last_seen_soc"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"
-        // ChargingStateStore baseline — separate from KEY_LAST_SEEN_SOC because
-        // the latter is overwritten on every DiPars poll (every 3s) by
-        // recordLastSeenSoc, which would clobber the cascade detector's
-        // pre-charging baseline before runCatchUp could compute the SOC delta.
+        // ChargingStateStore baseline. Kept separate from KEY_LAST_KNOWN_SOC
+        // (which TrackingService overwrites on every DiPars poll) so the
+        // cascade detector's pre-charging baseline survives polling and
+        // runCatchUp can compute a real SOC delta on cold start.
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
 
@@ -173,12 +172,6 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setAutoserviceEnabled(enabled: Boolean) =
         setString(KEY_AUTOSERVICE_ENABLED, enabled.toString())
-
-    suspend fun getLastSeenSoc(): Int? =
-        getString(KEY_LAST_SEEN_SOC, "").toIntOrNull()
-
-    suspend fun setLastSeenSoc(soc: Int) =
-        setString(KEY_LAST_SEEN_SOC, soc.toString())
 
     suspend fun getChargingBaselineSoc(): Int? =
         getString(KEY_CHARGING_BASELINE_SOC, "").toIntOrNull()
