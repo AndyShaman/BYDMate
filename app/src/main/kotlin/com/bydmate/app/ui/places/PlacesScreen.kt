@@ -25,8 +25,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,6 +60,18 @@ fun PlacesScreen(
     onBack: () -> Unit = {}
 ) {
     val places by viewModel.places.collectAsStateWithLifecycle()
+    val usageCounts by viewModel.usageCounts.collectAsStateWithLifecycle()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // Collect delete-blocked events and show snackbar.
+    LaunchedEffect(viewModel.deleteBlocked) {
+        viewModel.deleteBlocked.collect { count ->
+            snackbarHostState.showSnackbar(
+                "Место используется в $count автоматизациях. Сначала удалите правила."
+            )
+        }
+    }
 
     // null = not editing; non-null = editing that entity
     var editing by remember { mutableStateOf<PlaceEntity?>(null) }
@@ -82,76 +98,86 @@ fun PlacesScreen(
         )
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-    ) {
-        // Header row: back button + title
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.fillMaxWidth()
+    Box(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
+                .padding(horizontal = 16.dp, vertical = 12.dp)
         ) {
-            IconButton(onClick = onBack) {
-                Icon(
-                    imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                    contentDescription = "Назад",
-                    tint = TextPrimary
-                )
-            }
-            Text(
-                text = "Места",
-                color = TextPrimary,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // Place list or empty state
-        if (places.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
+            // Header row: back button + title
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Мест пока нет. Нажмите «+ Добавить», чтобы создать.",
-                    color = TextMuted,
-                    fontSize = 14.sp
-                )
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(places, key = { it.id }) { place ->
-                    PlaceRow(
-                        place = place,
-                        onEdit = { editing = place },
-                        onDelete = { viewModel.delete(place) }
+                IconButton(onClick = onBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                        contentDescription = "Назад",
+                        tint = TextPrimary
                     )
                 }
+                Text(
+                    text = "Места",
+                    color = TextPrimary,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Place list or empty state
+            if (places.isEmpty()) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "Мест пока нет. Нажмите \"+ Добавить\", чтобы создать.",
+                        color = TextMuted,
+                        fontSize = 14.sp
+                    )
+                }
+            } else {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(places, key = { it.id }) { place ->
+                        PlaceRow(
+                            place = place,
+                            usageCount = usageCounts[place.id] ?: 0,
+                            onEdit = { editing = place },
+                            onDelete = { viewModel.delete(place) }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Add button
+            Button(
+                onClick = { showAddDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text("+ Добавить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }
 
-        Spacer(modifier = Modifier.height(12.dp))
-
-        // Add button
-        Button(
-            onClick = { showAddDialog = true },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = AccentGreen,
-                contentColor = NavyDark
-            )
-        ) {
-            Text("+ Добавить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) { data ->
+            Snackbar(snackbarData = data)
         }
     }
 }
@@ -159,9 +185,11 @@ fun PlacesScreen(
 @Composable
 private fun PlaceRow(
     place: PlaceEntity,
+    usageCount: Int,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val inUse = usageCount > 0
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -188,6 +216,13 @@ private fun PlaceRow(
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
+                if (inUse) {
+                    Text(
+                        text = "используется в $usageCount правилах",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
             }
             Row {
                 IconButton(
@@ -203,12 +238,13 @@ private fun PlaceRow(
                 }
                 IconButton(
                     onClick = onDelete,
+                    enabled = !inUse,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
                         contentDescription = "Удалить",
-                        tint = SocRed,
+                        tint = if (inUse) TextMuted else SocRed,
                         modifier = Modifier.size(18.dp)
                     )
                 }

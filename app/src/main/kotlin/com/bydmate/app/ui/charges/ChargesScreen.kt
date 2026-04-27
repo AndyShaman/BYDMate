@@ -70,6 +70,11 @@ fun ChargesScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
+        if (!state.initialAutoserviceCheckDone) {
+            Box(modifier = Modifier.fillMaxSize())
+            return@Column
+        }
+
         if (!state.autoserviceEnabled && !state.hasLegacyCharges) {
             OnboardingEmptyState(onNavigateSettings)
             return@Column
@@ -667,12 +672,12 @@ private fun ChargesStatsPanel(
         if (cellDeltaSeries.size >= 3) {
             MiniLineChart(series = cellDeltaSeries, title = "Δ ячеек (В)", lineColor = AccentBlue)
         } else {
-            ChartPlaceholder("Δ ячеек — нужно ≥3 замера")
+            ChartPlaceholder("Δ ячеек: будет показано после 3 завершённых зарядок (сейчас: ${cellDeltaSeries.size})")
         }
         if (batTempSeries.size >= 3) {
             MiniLineChart(series = batTempSeries, title = "Темп. батареи (°C)", lineColor = AccentOrange)
         } else {
-            ChartPlaceholder("Температура — нужно ≥3 замера")
+            ChartPlaceholder("Температура: будет показано после 3 завершённых зарядок (сейчас: ${batTempSeries.size})")
         }
     }
 }

@@ -596,4 +596,33 @@ class ChargesViewModelTest {
         assertEquals(null, dao.lastInserted)
         assertEquals(null, vm.uiState.value.editingCharge)
     }
+
+    @Test
+    fun `initialAutoserviceCheckDone_startsAsFalse`() = runTest {
+        val vm = buildViewModel(autoserviceEnabled = false)
+
+        // Before any coroutines run, the flag must still be false (default value).
+        assertFalse(vm.uiState.value.initialAutoserviceCheckDone)
+    }
+
+    @Test
+    fun `initialAutoserviceCheckDone_becomesTrueAfterPhase1_andAutoserviceEnabledMatchesPrefs`() = runTest {
+        // autoserviceEnabled = true in prefs, legacyExists = false
+        val vm = buildViewModel(autoserviceEnabled = true, legacyExists = false)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.initialAutoserviceCheckDone)
+        assertTrue(vm.uiState.value.autoserviceEnabled)
+        assertFalse(vm.uiState.value.hasLegacyCharges)
+    }
+
+    @Test
+    fun `initialAutoserviceCheckDone_disabledWithLegacy_flagTrueAutoserviceEnabledFalse`() = runTest {
+        val vm = buildViewModel(autoserviceEnabled = false, legacyExists = true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.initialAutoserviceCheckDone)
+        assertFalse(vm.uiState.value.autoserviceEnabled)
+        assertTrue(vm.uiState.value.hasLegacyCharges)
+    }
 }

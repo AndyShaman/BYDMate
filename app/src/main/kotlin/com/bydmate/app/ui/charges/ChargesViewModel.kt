@@ -52,6 +52,7 @@ data class ChargesUiState(
     val expandedDays: Set<String> = emptySet(),
     val periodSummary: ChargeSummary = ChargeSummary(0, 0.0, 0.0),
     val currencySymbol: String = "BYN",
+    val initialAutoserviceCheckDone: Boolean = false,
     val autoserviceEnabled: Boolean = false,
     val autoserviceConnected: Boolean = false,
     val autoserviceAllSentinel: Boolean = false,
@@ -254,9 +255,20 @@ class ChargesViewModel @Inject constructor(
 
     private fun loadAutoserviceState() {
         viewModelScope.launch {
+            // Phase 1: fast reads from SharedPrefs/Room — no Binder probe yet.
+            // Setting initialAutoserviceCheckDone = true immediately suppresses the
+            // OnboardingEmptyState flash that was visible during the ~1-2 s Binder probe.
             val enabled = settingsRepository.isAutoserviceEnabled()
             val legacyExists = chargeRepository.hasLegacyCharges()
+            _uiState.update {
+                it.copy(
+                    autoserviceEnabled = enabled,
+                    hasLegacyCharges = legacyExists,
+                    initialAutoserviceCheckDone = true,
+                )
+            }
 
+            // Phase 2: slow Binder probe — updates connection / sentinel / BMS lifetime fields.
             val disconnectedDefault = com.bydmate.app.domain.battery.BatteryState(
                 socNow = null, voltage12v = null, sohPercent = null,
                 lifetimeKm = null, lifetimeKwh = null, autoserviceAvailable = false
@@ -270,10 +282,8 @@ class ChargesViewModel @Inject constructor(
 
             _uiState.update {
                 it.copy(
-                    autoserviceEnabled = enabled,
                     autoserviceConnected = connected,
                     autoserviceAllSentinel = allSentinel,
-                    hasLegacyCharges = legacyExists,
                     bmsLifetimeKm = state.lifetimeKm?.toDouble(),
                     bmsLifetimeKwh = state.lifetimeKwh?.toDouble(),
                 )

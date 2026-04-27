@@ -36,4 +36,14 @@ interface RuleDao {
 
     @Query("SELECT COUNT(*) FROM automation_rules")
     suspend fun getCount(): Int
+
+    // Count rules whose triggers JSON contains a reference to the given placeId.
+    // JSON format: ..., "placeId":123, ... (followed by ',' or '}') — ensures exact numeric match.
+    // Two LIKE variants cover both cases: value is followed by another field (',') or closes the object ('}').
+    @Query("""
+        SELECT COUNT(*) FROM automation_rules
+        WHERE triggers LIKE '%"placeId":' || :placeId || ',%'
+           OR triggers LIKE '%"placeId":' || :placeId || '}%'
+    """)
+    suspend fun countRulesUsingPlace(placeId: Long): Int
 }
