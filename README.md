@@ -11,10 +11,11 @@
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
 [![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/AndyShaman/BYDMate?style=flat-square)](https://github.com/AndyShaman/BYDMate/releases)
+[![Sponsor](https://img.shields.io/badge/Поддержать-FF69B4?style=flat-square&logo=githubsponsors&logoColor=white)](SUPPORT.md)
 
 **Реальный расход, GPS-маршруты, автоматизация, AI-аналитика — локально, без облака.**
 
-[Возможности](#-возможности) | [Скриншоты](#-скриншоты) | [Автоматизация](#-автоматизация) | [AI Инсайты](#-ai-инсайты) | [Установка](#-установка) | [Сборка](#-сборка-из-исходников)
+[Возможности](#-возможности) | [Скриншоты](#-скриншоты) | [Автоматизация](#-автоматизация) | [AI Инсайты](#-ai-инсайты) | [Установка](#-установка) | [Сборка](#-сборка-из-исходников) | [Поддержать](SUPPORT.md)
 
 </div>
 
@@ -32,11 +33,12 @@
 
 | | Функция | Описание |
 |---|---------|----------|
-| **BMS** | Реальный расход | Данные BMS (energydata), не бортовой компьютер |
+| **BMS** | Реальный расход | Данные BMS (energydata), не бортовой компьютер. Тренд по скользящему окну 25 км |
 | **GPS** | Трекинг поездок | GPS-маршруты, дистанция, скорость |
+| **Charge** | Зарядки | Автоматическая запись AC/DC, статистика за период и за всё время, ручное добавление и редактирование |
 | **AI** | AI Инсайты | Анализ вождения через LLM (OpenRouter) |
 | **Idle** | Расход на стоянке | Мониторинг idle drain из energydata |
-| **Bat** | Здоровье батареи | Температура, баланс ячеек, 12V |
+| **Bat** | Здоровье батареи | Температура, SoH (на Leopard 3), баланс ячеек, 12V |
 | **Map** | Карта маршрута | osmdroid (OpenStreetMap) в деталях поездки |
 | **Rules** | Автоматизация | Правила WHEN→THEN: триггеры по параметрам → команды D+ |
 | **Widget** | Плавающий виджет | 7 полей поверх других приложений: SOC, запас хода, расход + тренд, время, t° салона, t° батареи, 12V |
@@ -63,7 +65,7 @@
 
 <img src="docs/screenshots/dashboard-battery.jpg" alt="Battery health" width="800">
 
-*Температура, 12V аккумулятор, баланс ячеек, напряжение*
+*Температура, SoH (на Leopard 3), 12V аккумулятор, баланс ячеек, напряжение*
 
 ### Поездки
 
@@ -168,6 +170,40 @@
 
 ---
 
+## Зарядки
+
+Вкладка **Зарядки** автоматически ведёт журнал реальных пополнений заряда: список зарядок по месяцам, статистика за период и за всё время, фильтры AC и DC. Не каждое подключение пистолета становится записью: запись создаётся только если SoC реально вырос. Если кто-то ткнул пистолет и вынул через минуту, в журнал ничего не попадёт.
+
+### Что засчитывается как зарядка
+
+Запись пишется, если за время сессии у машины выросла либо ёмкость батареи, либо SoC. BYDMate пробует три источника данных по очереди и берёт первое пригодное значение:
+
+1. **Прирост ёмкости** в кВт·ч, если бортовая система сообщила обновлённое значение.
+2. **Прирост SoC** за активную сессию, переведённый в кВт·ч по текущей ёмкости батареи.
+3. **Грубая оценка** по дельте SoC от полной номинальной ёмкости, если первые два варианта пустые.
+
+Если BYDMate работает в момент зарядки, запись появляется сразу. Если подключение случилось до запуска приложения или машина уехала в глубокий сон, BYDMate догоняет запись на следующем старте, как только увидит, что SoC прыгнул вверх по сравнению с тем, что было до зарядки. Поэтому даже offline-зарядки в гараже попадают в журнал.
+
+### Как определяется AC или DC
+
+Тип зарядки определяется по двум сигналам, по приоритету:
+
+1. **Тип разъёма** от бортовой системы: gun-state 2 = AC, 3 или 4 = DC. На некоторых моделях BYD значение приходит не всегда, тогда работает следующий пункт.
+2. **Средняя мощность сессии**: больше 15 кВт = DC, иначе AC. AC-зарядка физически не выдаёт больше 11 кВт, DC-станции стартуют от 22 кВт (CCS slow), поэтому порог 15 кВт уверенно разделяет два режима.
+
+На вкладке Зарядки три фильтра: «Все», «AC», «DC».
+
+### Ручное добавление и редактирование
+
+Если запись не появилась автоматически или цифры выглядят странно:
+
+- **Кнопка `+ зарядка`** в шапке вкладки: добавить сессию вручную с указанием даты, длительности, кВт·ч, тарифа.
+- **Долгое нажатие на запись**: открывается меню «Изменить» / «Удалить». В режиме редактирования можно поправить любое поле уже сохранённой зарядки.
+
+> Функция в активном тестировании. На Leopard 3 пишется стабильно. На других моделях BYD автоматика может сработать неточно: например, бортовая система не сообщит мощность или тип разъёма, тогда AC и DC может определиться неправильно. В таких случаях правьте записи вручную и при возможности присылайте логи в [Issues](https://github.com/AndyShaman/BYDMate/issues).
+
+---
+
 ## Источник данных поездок
 
 BYDMate поддерживает две модели поставки данных — переключается в **Настройки → Источник данных поездок** или на шаге мастера первого запуска.
@@ -182,6 +218,32 @@ BYDMate поддерживает две модели поставки данны
 **Как выбрать:** если после 2–3 поездок на машине список «Поездки» пустой — переключите режим. На Leopard 3 нужен energydata (точнее), на Song и аналогах — TripInfo (единственный доступный источник).
 
 В режиме `DiPlus TripInfo` расход считается по разнице SOC — он на ~1 кВт·ч/100км грубее, чем BMS, но это компенсируется тем, что других данных у машины нет.
+
+---
+
+## Здоровье батареи (SoH)
+
+SoH (State of Health) — это процент «здоровья» тяговой батареи, который рассчитывает сама бортовая система автомобиля по своим внутренним алгоритмам.
+
+На **BYD Leopard 3 (Fangchengbao Bao 3)** BYDMate берёт это значение напрямую из бортовой системы и показывает в карточке «Здоровье батареи». Это **реальный SoH от машины**, а не оценка по разнице SoC: BYDMate просто читает то, что пишет себе сама машина.
+
+На других моделях BYD доступ к этому значению пока не подтверждён, поэтому SoH там не отображается. Остальные показатели карточки (температура батареи, 12V, баланс ячеек, минимальное и максимальное напряжение) работают на всех моделях, у которых есть DiPlus.
+
+Если в вашей машине SoH доступен через DiPlus и вы хотите помочь добавить поддержку, заведите [Issue](https://github.com/AndyShaman/BYDMate/issues) с указанием модели и года выпуска.
+
+---
+
+## Если у вас не Leopard 3
+
+BYDMate разрабатывается и тестируется на BYD Leopard 3 (Fangchengbao Bao 3). На других моделях BYD большинство функций тоже работает, но есть отличия. Перед первым запуском проверьте:
+
+- **Источник данных поездок**: для моделей без встроенной BMS-базы energydata (Song, Yuan и аналоги) переключитесь на режим **DiPlus TripInfo** в Настройках или в мастере первого запуска. См. секцию «Источник данных поездок» выше.
+- **Ёмкость батареи**: по умолчанию 72.9 кВт·ч под Leopard 3. Зайдите в **Настройки → Батарея** и поставьте свою ёмкость. Например, Atto 3 = 60.5 кВт·ч, Seal AWD = 82.5 кВт·ч, Han EV = 85.4 кВт·ч. Без этого расчёт запаса хода и стоимости поездок будет неточным.
+- **SoH**: показывается только на Leopard 3. На других моделях карточка «Здоровье батареи» работает без поля SoH.
+- **Зарядки**: алгоритм AC и DC проектировался под Leopard 3. На других моделях запись может появиться с задержкой или с неточной мощностью, особенно для DC. Используйте ручное добавление и редактирование, если автоматика промахнулась.
+- **Автоматизация и плавающий виджет**: работают одинаково на любой модели, потому что используют DiPlus API.
+
+Если что-то не работает или показывает странное, заведите [Issue](https://github.com/AndyShaman/BYDMate/issues) с указанием модели машины и версии прошивки DiLink. Нам нужны такие отчёты, чтобы расширять поддержку.
 
 ---
 
@@ -359,11 +421,12 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 
 ### Features
 
-- **Real consumption** from BMS energydata (not onboard estimates)
+- **Real consumption** from BMS energydata (not onboard estimates), trend uses a rolling 25 km window
 - **Trip logging** with GPS routes, distance, speed
+- **Charges journal** with automatic AC / DC detection, period and lifetime stats, manual add and edit
 - **AI Insights** — LLM-powered driving analysis via OpenRouter (optional)
 - **Idle drain** monitoring from BMS data
-- **Battery health** — temperature, cell balance, 12V voltage
+- **Battery health** — temperature, real **SoH on Leopard 3** (read from the car), cell balance, 12V voltage
 - **Trip map** with speed-colored routes (osmdroid, no Google Maps)
 - **Automation** — WHEN→THEN rules: triggers on 25 parameters → 41 D+ commands (windows incl. driver/passenger, climate, lights, locks, mirrors) + 8 action kinds (notification, app launch, call, navigate, URL, Yandex Music). Overlay confirmation with 15 s auto-cancel
 - **Floating widget** — draggable 7-field overlay: SOC, range, rolling-25 km consumption + trend arrow vs your 10-trip baseline, ignition-bounded trip time, cabin/battery temp, 12V. Session survives app kill via SharedPreferences anchor
@@ -386,6 +449,26 @@ BYDMate supports two trip data backends, switchable in **Settings → Trip data 
 - **DiPlus TripInfo** — for Song and other models **without** built-in energydata. Reads trips from DiPlus database; consumption is computed from SOC delta (~1 kWh/100km coarser than BMS).
 
 If the Trips list stays empty after 2–3 drives, switch the mode.
+
+### Charges
+
+The **Charges** tab automatically logs every real top-up. A record is created only when SoC actually rose during the session, so brief plug-ins without charging do not pollute the journal. The detector tries three sources in order: capacity delta in kWh, then SoC delta over the active session converted to kWh by current capacity, then a coarse estimate from the SoC delta against nominal capacity. AC / DC is decided first by gun state (2 = AC, 3 / 4 = DC), and falls back to average session power (≥ 15 kW = DC) when the gun state is not reported. Use the **+ зарядка** button at the top of the tab to add a session manually; **long-press** any record to edit or delete it. The feature is in active testing: stable on Leopard 3, may need manual correction on other BYD models.
+
+### Battery health and SoH
+
+On Leopard 3 BYDMate reads the **real SoH** value computed by the car itself and shows it in the Battery health card. On other BYD models the SoH field is hidden until access is confirmed; everything else (temperature, cell balance, 12V) works as usual.
+
+### If you don't have a Leopard 3
+
+BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Bao 3). On other BYD models most features still work, but a few things differ:
+
+- Switch **Trip data source** to DiPlus TripInfo in Settings (energydata is missing on Song, Yuan, etc.)
+- Set the correct **battery capacity** in Settings → Battery (Leopard 3 default is 72.9 kWh; Atto 3 = 60.5, Seal AWD = 82.5, Han EV = 85.4)
+- **SoH** is shown on Leopard 3 only
+- **Charges** auto-detection is tuned for Leopard 3; expect occasional misses or wrong AC / DC on other models — use manual add / edit
+- **Automation** and **floating widget** work the same on any model with DiPlus
+
+If something does not work, please open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with the car model and DiLink firmware version.
 
 ### Installation
 
