@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -181,14 +183,13 @@ fun ChargesScreen(
             ChargesStatsPanel(
                 periodSummary = state.periodSummary,
                 currencySymbol = state.currencySymbol,
-                lifetimeAcKwh = state.lifetimeAcKwh,
-                lifetimeDcKwh = state.lifetimeDcKwh,
-                lifetimeTotalKwh = state.lifetimeTotalKwh,
-                equivCycles = state.equivCycles,
+                autoserviceEnabled = state.autoserviceEnabled,
+                bmsLifetimeKm = state.bmsLifetimeKm,
+                bmsLifetimeKwh = state.bmsLifetimeKwh,
                 nominalCapacityKwh = state.nominalCapacityKwh,
                 sohSeries = state.sohSeries,
-                capacitySeries = state.capacitySeries,
-                showLifetime = state.autoserviceEnabled && state.lifetimeTotalKwh > 0,
+                cellDeltaSeries = state.cellDeltaSeries,
+                batTempSeries = state.batTempSeries,
                 modifier = Modifier.weight(0.35f).fillMaxHeight()
             )
         }
@@ -591,29 +592,22 @@ private fun ChargeRow(
 private fun ChargesStatsPanel(
     periodSummary: ChargeSummary,
     currencySymbol: String,
-    lifetimeAcKwh: Double,
-    lifetimeDcKwh: Double,
-    lifetimeTotalKwh: Double,
-    equivCycles: Double,
+    autoserviceEnabled: Boolean,
+    bmsLifetimeKm: Double?,
+    bmsLifetimeKwh: Double?,
     nominalCapacityKwh: Double,
     sohSeries: List<Float>,
-    capacitySeries: List<Float>,
-    showLifetime: Boolean,
+    cellDeltaSeries: List<Float>,
+    batTempSeries: List<Float>,
     modifier: Modifier = Modifier
 ) {
     Column(
-        modifier = modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp)
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        // Period summary label
-        Text(
-            "За выбранный период",
-            color = TextMuted,
-            fontSize = 11.sp,
-            letterSpacing = 0.3.sp,
-            modifier = Modifier.padding(bottom = 6.dp)
-        )
-
-        // Period summary card
+        SectionLabel("За выбранный период")
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -628,23 +622,11 @@ private fun ChargesStatsPanel(
             StatRow("Стоимость", "%.2f %s".format(periodSummary.totalCost, currencySymbol), TextPrimary)
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
-
-        if (showLifetime) {
-            // Lifetime label
-            Text(
-                "Лайфтайм",
-                color = TextMuted,
-                fontSize = 11.sp,
-                letterSpacing = 0.3.sp,
-                modifier = Modifier.padding(bottom = 6.dp)
-            )
-
-            // Lifetime card
-            val totalForRatio = lifetimeAcKwh + lifetimeDcKwh
-            val acPct = if (totalForRatio > 0) (lifetimeAcKwh / totalForRatio * 100).toInt() else 0
-            val dcPct = if (totalForRatio > 0) 100 - acPct else 0
-
+        SectionLabel("Lifetime (системные данные)")
+        if (autoserviceEnabled && bmsLifetimeKwh != null) {
+            val equiv = if (nominalCapacityKwh > 0) bmsLifetimeKwh / nominalCapacityKwh else 0.0
+            val avgPer100 = if (bmsLifetimeKm != null && bmsLifetimeKm > 0)
+                bmsLifetimeKwh / bmsLifetimeKm * 100.0 else null
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -652,64 +634,85 @@ private fun ChargesStatsPanel(
                     .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("AC / DC", color = TextMuted, fontSize = 11.sp)
-                    Row {
-                        Text("$acPct%", color = AccentGreen, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                        Text(" · ", color = TextMuted, fontSize = 13.sp)
-                        Text("$dcPct%", color = AccentOrange, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-                    }
-                }
+                StatRow("Прокачано всего", "%.0f кВт·ч".format(bmsLifetimeKwh), AccentGreen)
                 Spacer(modifier = Modifier.height(4.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text("Эквив. циклов", color = TextMuted, fontSize = 11.sp)
-                    Text("%.1f".format(equivCycles), color = TextPrimary, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-                }
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    "%.0f кВт·ч ÷ %.1f номинал".format(lifetimeTotalKwh, nominalCapacityKwh),
-                    color = TextMuted,
-                    fontSize = 10.sp,
-                    lineHeight = 13.sp
+                StatRow("Эквив. циклов", "%.1f".format(equiv), TextPrimary)
+                Spacer(modifier = Modifier.height(4.dp))
+                StatRow(
+                    "Пробег BMS",
+                    bmsLifetimeKm?.let { "%.1f км".format(it) } ?: "—",
+                    TextPrimary
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                StatRow(
+                    "/100км lifetime",
+                    avgPer100?.let { "%.1f кВт·ч".format(it) } ?: "—",
+                    AccentBlue
                 )
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Mini SoH chart
             if (sohSeries.size >= 2) {
-                MiniLineChart(
-                    series = sohSeries,
-                    title = "SoH (%)",
-                    lineColor = AccentGreen
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-            }
-
-            // Mini Capacity chart
-            if (capacitySeries.size >= 2) {
-                MiniLineChart(
-                    series = capacitySeries,
-                    title = "Ёмкость (кВт·ч)",
-                    lineColor = AccentBlue
-                )
+                MiniLineChart(series = sohSeries, title = "SoH (%)", lineColor = AccentGreen)
             }
         } else {
-            Text(
-                "Lifetime метрики и SoH тренды доступны после включения «Системные данные»",
-                color = TextMuted,
-                fontSize = 11.sp,
-                lineHeight = 15.sp
+            PlaceholderBlock(
+                if (!autoserviceEnabled)
+                    "Включи «Системные данные» в Настройках, чтобы видеть пробег BMS и прокачано всего от машины."
+                else
+                    "Жду первого ответа от машины…"
             )
         }
+
+        SectionLabel("Динамика")
+        if (cellDeltaSeries.size >= 3) {
+            MiniLineChart(series = cellDeltaSeries, title = "Δ ячеек (В)", lineColor = AccentBlue)
+        } else {
+            ChartPlaceholder("Δ ячеек — нужно ≥3 замера")
+        }
+        if (batTempSeries.size >= 3) {
+            MiniLineChart(series = batTempSeries, title = "Темп. батареи (°C)", lineColor = AccentOrange)
+        } else {
+            ChartPlaceholder("Температура — нужно ≥3 замера")
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String) {
+    Text(
+        text,
+        color = TextMuted,
+        fontSize = 10.sp,
+        fontWeight = FontWeight.SemiBold,
+        letterSpacing = 1.sp
+    )
+}
+
+@Composable
+private fun PlaceholderBlock(text: String) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurface, RoundedCornerShape(10.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+            .padding(horizontal = 10.dp, vertical = 10.dp)
+    ) {
+        Text(text, color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp)
+    }
+}
+
+@Composable
+private fun ChartPlaceholder(text: String) {
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(60.dp)
+            .background(CardSurface, RoundedCornerShape(10.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+            .padding(10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(text, color = TextMuted, fontSize = 11.sp)
     }
 }
 

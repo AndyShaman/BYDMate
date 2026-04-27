@@ -34,9 +34,16 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENABLED = "alice_enabled"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
-        const val KEY_AUTOSERVICE_BASELINE_KWH = "autoservice_baseline_kwh"
-        const val KEY_AUTOSERVICE_BASELINE_TS = "autoservice_baseline_ts"
         const val KEY_LAST_SEEN_SOC = "last_seen_soc"
+        const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
+        const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
+        const val KEY_LAST_STATE_TS = "last_state_ts"
+        // ChargingStateStore baseline — separate from KEY_LAST_SEEN_SOC because
+        // the latter is overwritten on every DiPars poll (every 3s) by
+        // recordLastSeenSoc, which would clobber the cascade detector's
+        // pre-charging baseline before runCatchUp could compute the SOC delta.
+        const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
+        const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -167,20 +174,39 @@ open class SettingsRepository @Inject constructor(
     suspend fun setAutoserviceEnabled(enabled: Boolean) =
         setString(KEY_AUTOSERVICE_ENABLED, enabled.toString())
 
-    open suspend fun getAutoserviceBaseline(): Pair<Double, Long>? {
-        val kwh = getString(KEY_AUTOSERVICE_BASELINE_KWH, "").toDoubleOrNull() ?: return null
-        val ts = getString(KEY_AUTOSERVICE_BASELINE_TS, "0").toLongOrNull() ?: 0L
-        return kwh to ts
-    }
-
-    open suspend fun setAutoserviceBaseline(kwh: Double, ts: Long) {
-        setString(KEY_AUTOSERVICE_BASELINE_KWH, kwh.toString())
-        setString(KEY_AUTOSERVICE_BASELINE_TS, ts.toString())
-    }
-
     suspend fun getLastSeenSoc(): Int? =
         getString(KEY_LAST_SEEN_SOC, "").toIntOrNull()
 
     suspend fun setLastSeenSoc(soc: Int) =
         setString(KEY_LAST_SEEN_SOC, soc.toString())
+
+    suspend fun getChargingBaselineSoc(): Int? =
+        getString(KEY_CHARGING_BASELINE_SOC, "").toIntOrNull()
+
+    suspend fun setChargingBaselineSoc(soc: Int) =
+        setString(KEY_CHARGING_BASELINE_SOC, soc.toString())
+
+    suspend fun getLastMileageKm(): Float? =
+        getString(KEY_LAST_MILEAGE_KM, "").toFloatOrNull()
+
+    suspend fun setLastMileageKm(km: Float?) =
+        setString(KEY_LAST_MILEAGE_KM, km?.toString() ?: "")
+
+    suspend fun getLastCapacityKwh(): Float? =
+        getString(KEY_LAST_CAPACITY_KWH, "").toFloatOrNull()
+
+    suspend fun setLastCapacityKwh(kwh: Float?) =
+        setString(KEY_LAST_CAPACITY_KWH, kwh?.toString() ?: "")
+
+    suspend fun getLastStateTs(): Long =
+        getString(KEY_LAST_STATE_TS, "0").toLongOrNull() ?: 0L
+
+    suspend fun setLastStateTs(ts: Long) =
+        setString(KEY_LAST_STATE_TS, ts.toString())
+
+    suspend fun isMigrationV2_4_17Done(): Boolean =
+        getString(KEY_MIGRATION_V2_4_17, "false") == "true"
+
+    suspend fun setMigrationV2_4_17Done() =
+        setString(KEY_MIGRATION_V2_4_17, "true")
 }

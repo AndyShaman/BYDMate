@@ -14,8 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.SwitchColors
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -95,7 +98,8 @@ fun bydSwitchColors(): SwitchColors = SwitchDefaults.colors(
 @Composable
 fun SocGauge(
     soc: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isCharging: Boolean = false,
 ) {
     val clampedSoc = soc.coerceIn(0, 100)
     val color = socColor(clampedSoc)
@@ -165,6 +169,14 @@ fun SocGauge(
         }
 
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            if (isCharging) {
+                Icon(
+                    imageVector = Icons.Outlined.Bolt,
+                    contentDescription = "Идёт зарядка",
+                    tint = AccentGreen,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             Text(
                 text = "$clampedSoc",
                 color = TextPrimary,

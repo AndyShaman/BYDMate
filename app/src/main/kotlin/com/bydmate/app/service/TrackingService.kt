@@ -82,6 +82,15 @@ class TrackingService : Service(), LocationListener {
     // Odometer reading captured at session-start. current mileage - this = trip distance.
     @Volatile private var sessionStartMileageKm: Double? = null
     private var lastSummaryLogTs: Long = 0L
+    // Live charging-end detector state. The cascade detector ran only on
+    // service start in v2.4.17, missing every charge that completed while
+    // BYDMate was already running (Ready mode). We track gun-connect state
+    // across polls and fire runCatchUp once on the gun: connected→disconnected
+    // edge. observedChargingPowerKwAbs carries the peak |power| seen during
+    // the session so AC/DC classification doesn't have to fall back to the
+    // kwh/hours heuristic for short sessions.
+    @Volatile private var prevChargeGunState: Int? = null
+    @Volatile private var observedChargingPowerKwAbs: Double = 0.0
 
     companion object {
         private const val TAG = "TrackingService"
@@ -405,10 +414,31 @@ class TrackingService : Service(), LocationListener {
                         // Save SOC for retrospective charge detection
                         data.soc?.let { soc ->
                             settingsRepository.saveLastKnownSoc(soc)
-                            // Also seed AutoserviceChargingDetector so the next catch-up
-                            // can compute SOC delta for the BatterySnapshot capacity calc.
-                            autoserviceDetector.recordLastSeenSoc(soc)
                         }
+
+                        // Live end-of-charging detection. Track the connected→disconnected
+                        // edge on chargeGunState. While the gun is connected and energy is
+                        // flowing in (Power < 0), remember the peak |power| for AC/DC.
+                        val curGun = data.chargeGunState
+                        if (curGun == 2 && (data.power ?: 0.0) < 0.0) {
+                            val abs = -(data.power ?: 0.0)
+                            if (abs > observedChargingPowerKwAbs) observedChargingPowerKwAbs = abs
+                        }
+                        if (prevChargeGunState == 2 && curGun != null && curGun != 2) {
+                            val powerForClassify = observedChargingPowerKwAbs.takeIf { it > 0.0 }
+                            observedChargingPowerKwAbs = 0.0
+                            serviceScope.launch {
+                                try {
+                                    val outcome = autoserviceDetector.runCatchUp(
+                                        observedKwAbs = powerForClassify
+                                    )
+                                    Log.i(TAG, "Live end-of-charging catch-up: ${outcome.outcome}")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Live end-of-charging failed: ${e.message}")
+                                }
+                            }
+                        }
+                        prevChargeGunState = curGun
 
                         // On first data after startup: detect offline charging
                         if (!firstDataReceived) {

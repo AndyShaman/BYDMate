@@ -13,6 +13,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.bydmate.app.data.local.DataThinningWorker
 import com.bydmate.app.data.local.HistoryImporter
+import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
@@ -32,6 +33,7 @@ class BYDMateApp : Application(), Configuration.Provider {
     @Inject lateinit var historyImporter: HistoryImporter
     @Inject lateinit var workerFactory: HiltWorkerFactory
     @Inject lateinit var settingsRepository: SettingsRepository
+    @Inject lateinit var chargeDao: ChargeDao
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -44,6 +46,13 @@ class BYDMateApp : Application(), Configuration.Provider {
         super.onCreate()
         initOsmdroid()
         appScope.launch {
+            // One-shot migration: remove phantom autoservice rows created by the
+            // lifetime_kwh driving-counter bug in v2.4.15/v2.4.16.
+            if (!settingsRepository.isMigrationV2_4_17Done()) {
+                val removed = chargeDao.deletePhantomAutoserviceRows()
+                settingsRepository.setMigrationV2_4_17Done()
+                android.util.Log.i("BYDMateApp", "v2.4.17 migration: removed $removed phantom autoservice rows")
+            }
             // One-time cleanup of existing duplicates from v2.0.0
             historyImporter.cleanupDuplicates()
             // Only sync if setup is completed (prevents duplicates during first wizard run)

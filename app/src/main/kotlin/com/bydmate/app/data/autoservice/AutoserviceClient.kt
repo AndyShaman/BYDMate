@@ -90,6 +90,8 @@ class AutoserviceClientImpl @Inject constructor(
             chargingType = getInt(FidRegistry.DEV_CHARGING, FidRegistry.FID_CHARGING_TYPE),
             chargeBatteryVoltV = getInt(FidRegistry.DEV_CHARGING, FidRegistry.FID_CHARGE_BATTERY_VOLT),
             batteryType = getInt(FidRegistry.DEV_CHARGING, FidRegistry.FID_BATTERY_TYPE),
+            chargingCapacityKwh = getFloat(FidRegistry.DEV_CHARGING, FidRegistry.FID_CHARGING_CAPACITY),
+            bmsState = getInt(FidRegistry.DEV_CHARGING, FidRegistry.FID_CHARGING_BMS_STATE),
             readAtMs = System.currentTimeMillis()
         )
     }

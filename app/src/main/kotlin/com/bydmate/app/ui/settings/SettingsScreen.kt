@@ -826,7 +826,7 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
         )
         is AutoserviceStatus.Connected -> {
             val soh = status.sohPercent?.let { "%.0f%%".format(it) } ?: "—"
-            val km = status.lifetimeKm?.let { "%.0f км".format(it) } ?: "—"
+            val km = status.lifetimeKm?.let { "%.1f км".format(it) } ?: "—"
             val kwh = status.lifetimeKwh?.let { "%.0f кВт·ч".format(it) } ?: "—"
             StatusRow(
                 marker = "✓",

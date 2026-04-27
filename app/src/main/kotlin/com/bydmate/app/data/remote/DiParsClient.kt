@@ -60,7 +60,7 @@ data class DiParsData(
 )
 
 @Singleton
-class DiParsClient @Inject constructor(
+open class DiParsClient @Inject constructor(
     private val httpClient: OkHttpClient
 ) {
     companion object {
@@ -90,7 +90,7 @@ class DiParsClient @Inject constructor(
             "|LightLow:{近光灯}|DRL:{日行灯}"
     }
 
-    suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
+    open suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
         try {
             val httpUrl = BASE_URL.toHttpUrl().newBuilder()
                 .addQueryParameter("text", TEMPLATE)

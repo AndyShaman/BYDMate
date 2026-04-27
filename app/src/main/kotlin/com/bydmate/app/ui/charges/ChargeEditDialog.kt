@@ -52,11 +52,12 @@ import com.bydmate.app.ui.theme.TextSecondary
 /**
  * Edit dialog for a charge row (long-press → bottom sheet → "Изменить").
  *
- * Editable fields: type (AC/DC), socStart, socEnd, kwhCharged, tariff per kWh.
- * On save: cost = kwh * tariff; if socEnd > socStart, kwhChargedSoc is recomputed
- * with the configured battery capacity (passed in via `batteryCapacityKwh`).
- *
- * Tariff input is per-kWh, NOT total cost (per spec).
+ * Inputs: type (AC/DC), socStart, socEnd, tariff per kWh.
+ * kWh is derived: when both SOC values are present and socEnd > socStart, it is
+ * computed as (socEnd - socStart) / 100 × batteryCapacityKwh and rendered read-only.
+ * If SOC is incomplete (e.g. DC station with only a kWh readout), kWh becomes
+ * an editable manual input as a fallback.
+ * Cost = finalKwh × tariff, displayed as a computed preview.
  */
 @Composable
 fun ChargeEditDialog(
@@ -102,19 +103,19 @@ fun ChargeEditDialog(
                     indication = null,
                     interactionSource = remember { MutableInteractionSource() }
                 ) { onDismiss() },
-            contentAlignment = Alignment.Center
+            contentAlignment = Alignment.CenterStart
         ) {
             Card(
                 shape = RoundedCornerShape(14.dp),
                 colors = CardDefaults.cardColors(containerColor = CardSurface),
                 border = BorderStroke(1.dp, CardBorder),
                 modifier = Modifier
-                    .padding(horizontal = 32.dp)
+                    .padding(start = 22.dp, end = 16.dp)
                     .fillMaxWidth(0.5f)
                     .clickable(
                         indication = null,
                         interactionSource = remember { MutableInteractionSource() }
-                    ) { /* absorb clicks so scrim dismissal doesn't fire */ }
+                    ) { /* absorb clicks so scrim dismissal doesn't fire — form has inputs */ }
             ) {
                 Column(
                     modifier = Modifier
@@ -141,6 +142,17 @@ fun ChargeEditDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         TypeRadio("DC", type == "DC") { type = "DC" }
                     }
+
+                    // Derived values — SOC drives kWh, kWh × tariff drives cost
+                    val socStart = socStartText.toIntOrNull()
+                    val socEnd = socEndText.toIntOrNull()
+                    val computedKwh = if (socStart != null && socEnd != null && socEnd > socStart)
+                        (socEnd - socStart) / 100.0 * batteryCapacityKwh else null
+                    val kwhEditable = computedKwh == null
+                    val kwhDisplay = computedKwh?.let { "%.2f".format(it) } ?: kwhText
+                    val tariff = tariffText.replace(',', '.').toDoubleOrNull()
+                    val finalKwh = computedKwh ?: kwhText.replace(',', '.').toDoubleOrNull()
+                    val computedCost = if (finalKwh != null && tariff != null) finalKwh * tariff else null
 
                     // SOC start / end
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -174,7 +186,8 @@ fun ChargeEditDialog(
                         )
                     }
 
-                    // kWh
+                    // kWh — computed from SOC × battery capacity when both SOC are filled,
+                    // otherwise editable (DC fallback when station shows kWh but SOC is unknown).
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             "кВт·ч:",
@@ -183,13 +196,26 @@ fun ChargeEditDialog(
                             modifier = Modifier.width(80.dp)
                         )
                         OutlinedTextField(
-                            value = kwhText,
-                            onValueChange = { kwhText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' } },
+                            value = kwhDisplay,
+                            onValueChange = {
+                                if (kwhEditable) {
+                                    kwhText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }
+                                }
+                            },
+                            enabled = kwhEditable,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.width(120.dp),
                             colors = darkFieldColors(),
                             singleLine = true,
                         )
+                        if (!kwhEditable) {
+                            Text(
+                                "из SOC × ${"%.1f".format(batteryCapacityKwh)} кВт·ч",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
                     }
 
                     // Tariff per kWh
@@ -213,6 +239,22 @@ fun ChargeEditDialog(
                         )
                     }
 
+                    // Cost — computed read-only preview
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Стоимость:",
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.width(80.dp)
+                        )
+                        Text(
+                            computedCost?.let { "%.2f $currencySymbol".format(it) } ?: "—",
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
                     // Action buttons
                     Row(
                         modifier = Modifier
@@ -226,21 +268,14 @@ fun ChargeEditDialog(
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
                             onClick = {
-                                val socStart = socStartText.toIntOrNull()
-                                val socEnd = socEndText.toIntOrNull()
-                                val kwh = kwhText.replace(',', '.').toDoubleOrNull()
-                                val tariff = tariffText.replace(',', '.').toDoubleOrNull()
-                                val cost = if (kwh != null && tariff != null) kwh * tariff else null
-                                val kwhSoc = if (socStart != null && socEnd != null && socEnd > socStart)
-                                    (socEnd - socStart) / 100.0 * batteryCapacityKwh else null
                                 onSave(
                                     charge.copy(
                                         type = type,
                                         socStart = socStart,
                                         socEnd = socEnd,
-                                        kwhCharged = kwh,
-                                        kwhChargedSoc = kwhSoc,
-                                        cost = cost,
+                                        kwhCharged = finalKwh,
+                                        kwhChargedSoc = computedKwh,
+                                        cost = computedCost,
                                     )
                                 )
                             },
@@ -285,7 +320,9 @@ private fun TypeRadio(label: String, selected: Boolean, onClick: () -> Unit) {
 private fun darkFieldColors() = OutlinedTextFieldDefaults.colors(
     focusedTextColor = TextPrimary,
     unfocusedTextColor = TextPrimary,
+    disabledTextColor = TextMuted,
     focusedBorderColor = AccentGreen,
     unfocusedBorderColor = CardBorder,
+    disabledBorderColor = CardBorder,
     cursorColor = AccentGreen,
 )

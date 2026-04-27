@@ -135,6 +135,7 @@ class SettingsViewModelTest {
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
+        override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {}
     }
 

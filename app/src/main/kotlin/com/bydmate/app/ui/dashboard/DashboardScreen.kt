@@ -19,11 +19,20 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Route
+import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.TrendingDown
+import androidx.compose.material.icons.outlined.TrendingFlat
+import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.produceState
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -50,10 +59,15 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.DynamicMetric
+import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.ui.widget.TRIP_DISTANCE_TREND_THRESHOLD_KM
+import com.bydmate.app.ui.widget.formatDurationShort
+import com.bydmate.app.ui.widget.formatTripKm
+import kotlinx.coroutines.delay
 
 @Composable
 fun DashboardScreen(
@@ -100,29 +114,121 @@ fun DashboardScreen(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // TOP: SOC gauge + odometer + range
+                    // TOP: SOC gauge + 4 widget-style stats around it (mirrors FloatingWidgetView).
+                    // Two symmetric rows wrap the gauge:
+                    //   row mid    — duration | odometer | inside temp
+                    //   row bottom — trip km | range km + label | consumption + trend
                     Column(
+                        modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        SocGauge(soc = state.soc ?: 0, modifier = Modifier.size(150.dp))
-                        Text(
-                            text = if (state.odometer != null) "%.1f km".format(state.odometer) else "— km",
-                            color = TextSecondary,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            fontFamily = FontFamily.Monospace
+                        SocGauge(
+                            soc = state.soc ?: 0,
+                            modifier = Modifier.size(150.dp),
+                            isCharging = state.isCharging,
                         )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        // Range estimate
-                        val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
-                        Row(verticalAlignment = Alignment.Bottom) {
-                            Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace)
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("км", color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
-                                fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
+
+                        // Live-ticking duration text (refresh every 15s, like in widget).
+                        val durationText by produceState(
+                            initialValue = formatDurationShort(state.sessionStartedAt),
+                            state.sessionStartedAt
+                        ) {
+                            while (true) {
+                                value = formatDurationShort(state.sessionStartedAt)
+                                delay(15_000L)
+                            }
                         }
-                        Text("расчётный пробег", color = TextMuted, fontSize = 12.sp)
+
+                        // Row mid: schedule | odometer | inside temp
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                CornerStat(
+                                    icon = Icons.Outlined.Schedule,
+                                    text = durationText,
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
+                                Text(
+                                    text = if (state.odometer != null) "%.1f km".format(state.odometer) else "— km",
+                                    color = TextSecondary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    fontFamily = FontFamily.Monospace
+                                )
+                            }
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                                CornerStat(
+                                    icon = Icons.Outlined.DirectionsCar,
+                                    text = state.insideTemp?.let { "$it°" } ?: "—",
+                                    iconLast = true,
+                                )
+                            }
+                        }
+
+                        // Row bottom: trip km | range km + label | consumption + trend
+                        // Trend logic mirrors widget: suppress arrow within first 300m of session.
+                        val effectiveTrend = if (
+                            state.sessionStartedAt != null &&
+                            (state.tripDistanceKm ?: 0.0) < TRIP_DISTANCE_TREND_THRESHOLD_KM
+                        ) Trend.NONE else state.consumptionTrend
+                        val trendColor = when (effectiveTrend) {
+                            Trend.DOWN -> AccentGreen
+                            Trend.UP -> SocYellow
+                            Trend.FLAT -> TextPrimary
+                            Trend.NONE -> TextMuted
+                        }
+                        val rangeText = state.estimatedRangeKm?.let { "~${"%.0f".format(it)}" } ?: "—"
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
+                                CornerStat(
+                                    icon = Icons.Outlined.Route,
+                                    text = formatTripKm(state.tripDistanceKm),
+                                )
+                            }
+                            Column(
+                                modifier = Modifier.weight(1f),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                            ) {
+                                Row(verticalAlignment = Alignment.Bottom) {
+                                    Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold,
+                                        fontFamily = FontFamily.Monospace)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("км", color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
+                                        fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
+                                }
+                                Text("расчётный пробег", color = TextMuted, fontSize = 12.sp)
+                            }
+                            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    if (effectiveTrend != Trend.NONE) {
+                                        Icon(
+                                            imageVector = when (effectiveTrend) {
+                                                Trend.DOWN -> Icons.Outlined.TrendingDown
+                                                Trend.UP -> Icons.Outlined.TrendingUp
+                                                else -> Icons.Outlined.TrendingFlat
+                                            },
+                                            contentDescription = null,
+                                            tint = trendColor,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                    }
+                                    Text(
+                                        text = state.consumption?.let { "%.1f".format(it) } ?: "—",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontFamily = FontFamily.Monospace,
+                                        color = if (effectiveTrend == Trend.NONE) TextMuted else trendColor,
+                                    )
+                                }
+                            }
+                        }
                     }
 
                     // 3 compact cards: insight, battery, idle drain
@@ -311,9 +417,14 @@ fun DashboardScreen(
                             else -> AccentGreen
                         }
                         com.bydmate.app.ui.battery.BatteryHealthDialog(
+                            liveSoc = state.soc,
+                            liveCellDelta = state.cellVoltageDelta,
+                            liveBatTemp = state.avgBatTemp,
+                            liveVoltage12v = state.voltage12v,
                             liveSoh = state.currentSoh,
                             liveLifetimeKm = state.currentLifetimeKm,
                             liveLifetimeKwh = state.currentLifetimeKwh,
+                            autoserviceEnabled = state.autoserviceEnabled,
                             borderColor = color,
                             onDismiss = { viewModel.toggleBatteryHealthExpanded() },
                         )
@@ -820,4 +931,43 @@ private fun PlaceholderText(text: String) {
             .padding(vertical = 12.dp),
         fontWeight = FontWeight.Medium
     )
+}
+
+/**
+ * Compact widget-style stat used in the top section of the dashboard left column.
+ * Mirrors the IconText composable in FloatingWidgetView (icon muted gray + monospace value).
+ * Set iconLast=true for the right-aligned variant where the value comes before the icon.
+ */
+@Composable
+private fun CornerStat(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    text: String,
+    iconLast: Boolean = false,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        if (!iconLast) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(14.dp),
+            )
+            Spacer(Modifier.width(5.dp))
+        }
+        Text(
+            text = text,
+            fontSize = 13.sp,
+            fontFamily = FontFamily.Monospace,
+            color = TextPrimary,
+        )
+        if (iconLast) {
+            Spacer(Modifier.width(5.dp))
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                tint = TextMuted,
+                modifier = Modifier.size(14.dp),
+            )
+        }
+    }
 }

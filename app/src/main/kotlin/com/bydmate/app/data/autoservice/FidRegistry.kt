@@ -42,6 +42,12 @@ object FidRegistry {
     const val FID_CHARGE_BATTERY_VOLT = -1442840491
     /** Battery type: 1=IRON/LFP, 2=NCM. */
     const val FID_BATTERY_TYPE = -1442840482
+    /** Per-session charged energy, kWh (transact 7=float). Persists across DiLink
+     *  power-cycle; resets on new charging session (gun reconnect or BMS reset). */
+    const val FID_CHARGING_CAPACITY = 666894360
+    /** BMS charging state: 1=CHARGING, 2=FINISH, 13=PAUSE (other values observed
+     *  but not used). transact 5 (int). */
+    const val FID_CHARGING_BMS_STATE = 876609560
 
     // === Bodywork fids (dev=1001) ===
     /** 12V auxiliary battery voltage, V (transact 7=float). */

@@ -112,7 +112,7 @@ fun FloatingWidgetView(
     }
 }
 
-private const val TRIP_DISTANCE_TREND_THRESHOLD_KM = 0.3
+internal const val TRIP_DISTANCE_TREND_THRESHOLD_KM = 0.3
 
 @Composable
 private fun RowEnergy(
@@ -256,7 +256,7 @@ private fun WidgetDivider() {
     )
 }
 
-private fun formatDurationShort(sessionStartedAt: Long?): String {
+internal fun formatDurationShort(sessionStartedAt: Long?): String {
     if (sessionStartedAt == null) return "—"
     val elapsed = System.currentTimeMillis() - sessionStartedAt
     val totalMin = (elapsed / 60_000L).toInt().coerceAtLeast(0)
@@ -267,7 +267,7 @@ private fun formatDurationShort(sessionStartedAt: Long?): String {
     return if (hours > 0) "${hours}ч ${minutes}м" else "$minutes мин"
 }
 
-private fun formatTripKm(km: Double?): String {
+internal fun formatTripKm(km: Double?): String {
     if (km == null || km.isNaN() || km.isInfinite() || km < 0.0) return "—"
     return if (km < 10.0) "%.1f км".format(km) else "%.0f км".format(km)
 }
