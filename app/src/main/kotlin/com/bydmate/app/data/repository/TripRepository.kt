@@ -57,10 +57,10 @@ class TripRepository @Inject constructor(
      * Exponential Moving Average of consumption (kWh/100km) over recent trips.
      * Reacts to style/season changes without flipping on outliers.
      * Formula: ema_n = alpha * trip_n + (1 - alpha) * ema_{n-1}, oldest → newest.
-     * Excludes trips < 2 km (cold-start bias).
+     * Excludes trips < 1 km and consumption > 50 kWh/100km (sanity ceiling).
      * Cached via @Singleton; invalidated on insertTrip/updateTrip.
      */
-    suspend fun getEmaConsumption(alpha: Double = 0.3, limit: Int = 20): Double = emaMutex.withLock {
+    suspend fun getEmaConsumption(alpha: Double = 0.3, limit: Int = 10): Double = emaMutex.withLock {
         cachedEmaConsumption?.let { return it }
         val trips = tripDao.getRecentForEma(limit)
         if (trips.isEmpty()) {

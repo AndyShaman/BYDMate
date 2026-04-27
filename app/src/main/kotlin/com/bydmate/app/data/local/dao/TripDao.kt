@@ -102,10 +102,12 @@ interface TripDao {
 
     @Query("""
         SELECT * FROM trips
-        WHERE distance_km >= 2 AND kwh_consumed > 0
+        WHERE distance_km >= 1
+          AND kwh_consumed > 0
+          AND (kwh_consumed * 100.0 / distance_km) <= 50
         ORDER BY start_ts DESC LIMIT :limit
     """)
-    suspend fun getRecentForEma(limit: Int = 20): List<TripEntity>
+    suspend fun getRecentForEma(limit: Int = 10): List<TripEntity>
 
     @Query("""
         SELECT * FROM trips

@@ -17,8 +17,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 256
-        versionName = "2.4.16"
+        versionCode = 257
+        versionName = "2.4.17"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -48,10 +48,14 @@ android {
     }
 
     sourceSets {
-        // MigrationTestHelper (Robolectric) resolves schemas via merged debug
-        // assets — not the "test" sourceSet. Adding to "debug" keeps schemas
-        // out of the release APK while making them visible to unit tests.
+        // MigrationTestHelper (Robolectric) resolves schemas via merged variant
+        // assets — not the "test" sourceSet. Both debug and release need them
+        // so testDebugUnitTest AND testReleaseUnitTest can find Migration*Test
+        // schemas. ~50KB extra in release APK is acceptable (sideload only).
         getByName("debug") {
+            assets.srcDirs("$projectDir/schemas")
+        }
+        getByName("release") {
             assets.srcDirs("$projectDir/schemas")
         }
     }
