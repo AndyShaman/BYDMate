@@ -53,7 +53,9 @@
 
 <img src="docs/screenshots/dashboard.jpg" alt="Dashboard" width="800">
 
-*SOC, расчётный пробег, статистика за период, AI-инсайт, здоровье батареи, расход на стоянке, последние поездки*
+Вокруг SOC-кольца расположены четыре значения в стиле плавающего виджета: сверху длительность поездки, одометр и температура в салоне; снизу пробег текущей поездки, расчётный запас хода и расход за последние 25 км пробега со стрелкой тренда. Цвета и логика тренда такие же, как в плавающем виджете, поэтому информация читается одинаково и на главном экране, и поверх других приложений.
+
+Ниже кольца: AI-инсайт, малая карточка здоровья батареи (SoH на Leopard 3, температура, 12V), расход на стоянке, последние поездки, фильтр периода.
 
 ### AI Инсайты (развёрнуто)
 
@@ -422,6 +424,7 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 ### Features
 
 - **Real consumption** from BMS energydata (not onboard estimates), trend uses a rolling 25 km window
+- **Dashboard** with widget-style stats around the SOC ring: trip duration, odometer, cabin temp on top; trip distance, estimated range, rolling-25 km consumption + trend arrow on bottom. Same colors and trend logic as the floating widget
 - **Trip logging** with GPS routes, distance, speed
 - **Charges journal** with automatic AC / DC detection, period and lifetime stats, manual add and edit
 - **AI Insights** — LLM-powered driving analysis via OpenRouter (optional)
