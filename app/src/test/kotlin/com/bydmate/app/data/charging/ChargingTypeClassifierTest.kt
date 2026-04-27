@@ -38,19 +38,19 @@ class ChargingTypeClassifierTest {
     }
 
     @Test
-    fun `heuristic returns DC when kwh per hour exceeds 20`() {
+    fun `heuristic returns DC when kwh per hour exceeds 15`() {
         // 30 kWh in 1 hour = 30 kW avg → clearly DC
         assertEquals("DC", classifier.heuristicByPower(kwhCharged = 30.0, hours = 1.0))
     }
 
     @Test
-    fun `heuristic returns DC at boundary (just above 20 kW per hour)`() {
-        assertEquals("DC", classifier.heuristicByPower(kwhCharged = 21.0, hours = 1.0))
+    fun `heuristic returns DC at boundary (just above 15 kW per hour)`() {
+        assertEquals("DC", classifier.heuristicByPower(kwhCharged = 16.0, hours = 1.0))
     }
 
     @Test
-    fun `heuristic returns AC when kwh per hour is 20 or below`() {
-        assertEquals("AC", classifier.heuristicByPower(kwhCharged = 20.0, hours = 1.0))
+    fun `heuristic returns AC when kwh per hour is 15 or below`() {
+        assertEquals("AC", classifier.heuristicByPower(kwhCharged = 15.0, hours = 1.0))
         assertEquals("AC", classifier.heuristicByPower(kwhCharged = 7.0, hours = 1.0))
     }
 

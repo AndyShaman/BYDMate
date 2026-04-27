@@ -17,8 +17,9 @@ import javax.inject.Singleton
 class ChargingTypeClassifier @Inject constructor() {
 
     companion object {
-        /** kWh-per-hour boundary between AC and DC. */
-        const val DC_AVG_POWER_KW_THRESHOLD = 20.0
+        /** kWh-per-hour boundary between AC and DC. AC physically caps at ~11 kW
+         *  (3-phase 16A); DC starts at 22 kW (CCS slow). 15 kW splits cleanly. */
+        const val DC_AVG_POWER_KW_THRESHOLD = 15.0
     }
 
     /**
@@ -44,5 +45,17 @@ class ChargingTypeClassifier @Inject constructor() {
         if (kwhCharged <= 0.0 || hours <= 0.0) return "AC"
         val avgKw = kwhCharged / hours
         return if (avgKw > DC_AVG_POWER_KW_THRESHOLD) "DC" else "AC"
+    }
+
+    /**
+     * Live path: classify by the directly observed motor power magnitude
+     * (DiPars 发动机功率, kW; negative when energy flows into battery).
+     * Cleaner than the kwh/hours heuristic — works correctly for short
+     * sessions where the heuristic's `HEURISTIC_HOURS=1.0` assumption
+     * underestimates the true power by an order of magnitude.
+     */
+    fun fromObservedPowerKw(observedKwAbs: Double?): String? {
+        if (observedKwAbs == null || observedKwAbs <= 0.0) return null
+        return if (observedKwAbs > DC_AVG_POWER_KW_THRESHOLD) "DC" else "AC"
     }
 }

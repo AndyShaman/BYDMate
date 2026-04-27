@@ -103,6 +103,7 @@ class ChargesViewModelTest {
             chargesFlow.value = after
             return before.size - after.size
         }
+        override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {
             chargesFlow.value = chargesFlow.value.filter { it.id != charge.id }
         }
@@ -263,9 +264,10 @@ class ChargesViewModelTest {
     fun `setTypeFilter_AC_filtersOnlyAcCharges`() = runTest {
         val now = System.currentTimeMillis()
         val flow = MutableStateFlow(listOf(
-            makeCharge(1, now - 1000, gunState = 2),   // AC
-            makeCharge(2, now - 2000, gunState = 3),   // DC
-            makeCharge(3, now - 3000, gunState = 4)    // GB_DC
+            makeCharge(1, now - 1000, gunState = 2),                      // AC (gun=2)
+            makeCharge(2, now - 2000, gunState = 3),                      // DC
+            makeCharge(3, now - 3000, gunState = 4),                      // GB_DC
+            makeCharge(4, now - 4000, gunState = -10011, type = "AC")     // AC via observed power (Leopard 3 sentinel)
         ))
         val vm = buildViewModel(chargesFlow = flow)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -276,7 +278,10 @@ class ChargesViewModelTest {
         assertEquals(ChargeTypeFilter.AC, vm.uiState.value.typeFilter)
         val months = vm.uiState.value.months
         val allCharges = months.flatMap { m -> m.days.flatMap { it.charges } }
-        assertTrue(allCharges.all { it.gunState == 2 })
+        // Filter must match `type` (resolved by classifier), NOT raw gunState which is
+        // closed/sentinel on Leopard 3. Both gun=2 and sentinel-with-type=AC should pass.
+        assertEquals(2, allCharges.size)
+        assertTrue(allCharges.all { it.type == "AC" })
     }
 
     @Test

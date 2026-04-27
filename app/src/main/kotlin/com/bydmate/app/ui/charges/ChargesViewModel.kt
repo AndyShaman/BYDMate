@@ -63,6 +63,12 @@ data class ChargesUiState(
     val nominalCapacityKwh: Double = 72.9,
     val sohSeries: List<Float> = emptyList(),
     val capacitySeries: List<Float> = emptyList(),
+    // BMS lifetime from autoservice — distinct from sum across our charge rows
+    val bmsLifetimeKm: Double? = null,
+    val bmsLifetimeKwh: Double? = null,
+    // Snapshot dynamics (collected at vehicle wake-up; populated by Phase 5 write-path)
+    val cellDeltaSeries: List<Float> = emptyList(),
+    val batTempSeries: List<Float> = emptyList(),
     val selectedChargeForAction: ChargeEntity? = null,
     val editingCharge: ChargeEntity? = null,
     val deleteConfirmCharge: ChargeEntity? = null,
@@ -146,8 +152,11 @@ class ChargesViewModel @Inject constructor(
                 val nonEmpty = rawCharges.filter { (it.kwhCharged ?: 0.0) >= 0.05 }
                 val filtered = when (typeFilter) {
                     ChargeTypeFilter.ALL -> nonEmpty
-                    ChargeTypeFilter.AC -> nonEmpty.filter { it.gunState == 2 }
-                    ChargeTypeFilter.DC -> nonEmpty.filter { it.gunState in setOf(3, 4) }
+                    // gunState is the raw autoservice value and on Leopard 3 returns
+                    // sentinel -10011 (FID_GUN_CONNECT_STATE closed). Filter by `type`
+                    // which the classifier resolves correctly (gun→observed power→heuristic).
+                    ChargeTypeFilter.AC -> nonEmpty.filter { it.type == "AC" }
+                    ChargeTypeFilter.DC -> nonEmpty.filter { it.type == "DC" }
                 }
 
                 val months = groupChargesByMonthDay(filtered)
@@ -264,7 +273,9 @@ class ChargesViewModel @Inject constructor(
                     autoserviceEnabled = enabled,
                     autoserviceConnected = connected,
                     autoserviceAllSentinel = allSentinel,
-                    hasLegacyCharges = legacyExists
+                    hasLegacyCharges = legacyExists,
+                    bmsLifetimeKm = state.lifetimeKm?.toDouble(),
+                    bmsLifetimeKwh = state.lifetimeKwh?.toDouble(),
                 )
             }
         }
@@ -292,7 +303,16 @@ class ChargesViewModel @Inject constructor(
             val snapshots = batterySnapshotDao.getAll().first().reversed()
             val soh = snapshots.mapNotNull { it.sohPercent?.toFloat() }
             val cap = snapshots.mapNotNull { it.calculatedCapacityKwh?.toFloat() }
-            _uiState.update { it.copy(sohSeries = soh, capacitySeries = cap) }
+            val cellDelta = snapshots.mapNotNull { it.cellDeltaV?.toFloat() }
+            val batTemp = snapshots.mapNotNull { it.batTempAvg?.toFloat() }
+            _uiState.update {
+                it.copy(
+                    sohSeries = soh,
+                    capacitySeries = cap,
+                    cellDeltaSeries = cellDelta,
+                    batTempSeries = batTemp,
+                )
+            }
         }
     }
 
@@ -364,6 +384,8 @@ class ChargesViewModel @Inject constructor(
                 chargeRepository.updateCharge(updated)
             }
             _uiState.update { it.copy(editingCharge = null) }
+            loadAll()
+            loadLifetimeStats()
         }
     }
 
@@ -380,6 +402,8 @@ class ChargesViewModel @Inject constructor(
             val charge = _uiState.value.deleteConfirmCharge ?: return@launch
             chargeRepository.deleteCharge(charge)
             _uiState.update { it.copy(deleteConfirmCharge = null) }
+            loadAll()
+            loadLifetimeStats()
         }
     }
 }
