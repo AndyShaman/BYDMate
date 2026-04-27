@@ -25,8 +25,9 @@
 secrets/
 CLAUDE.md
 docs/plans/
+docs/research/
+docs/superpowers/
 screen/
-docs/superpowers/handoff-*
 .superpowers/
 
 .research/
