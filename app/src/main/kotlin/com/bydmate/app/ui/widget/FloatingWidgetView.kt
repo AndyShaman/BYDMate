@@ -269,7 +269,7 @@ internal fun formatDurationShort(sessionStartedAt: Long?): String {
 
 internal fun formatTripKm(km: Double?): String {
     if (km == null || km.isNaN() || km.isInfinite() || km < 0.0) return "—"
-    return if (km < 10.0) "%.1f км".format(km) else "%.0f км".format(km)
+    return "%.1f км".format(km)
 }
 
 // ---- Status model (covered by WidgetStatusTest) ----

@@ -130,6 +130,40 @@ class TripRepository @Inject constructor(
     }
 
     /**
+     * Weighted historical consumption (kWh/100km) over the most recent trips with
+     * distance_km >= [minKm]. Used as the historical component for range estimation.
+     *
+     * Trips are taken newest-first, paired with [weights] in order. If fewer trips
+     * qualify than weights, weights are renormalized over available trips. If no
+     * trips qualify, returns [fallback].
+     *
+     * Default weights 50/30/20 mirror Rivian's published approach.
+     */
+    suspend fun getWeightedHistoricalAvg(
+        minKm: Double = 3.0,
+        weights: List<Double> = listOf(0.5, 0.3, 0.2),
+        fallback: Double = 18.0,
+    ): Double {
+        require(weights.isNotEmpty()) { "weights must not be empty" }
+        val trips = tripDao.getRecentForEmaFiltered(minKm = minKm, limit = weights.size)
+        val tripAvgs = trips.mapNotNull { t ->
+            val km = t.distanceKm ?: return@mapNotNull null
+            val kwh = t.kwhConsumed ?: return@mapNotNull null
+            if (km <= 0.0 || kwh < 0.0) return@mapNotNull null
+            kwh / km * 100.0
+        }
+        if (tripAvgs.isEmpty()) return fallback
+        val active = weights.take(tripAvgs.size)
+        val sumW = active.sum()
+        if (sumW <= 0.0) return fallback
+        var avg = 0.0
+        for (i in tripAvgs.indices) {
+            avg += tripAvgs[i] * (active[i] / sumW)
+        }
+        return avg
+    }
+
+    /**
      * Average consumption (kWh/100km) of the most recent eligible completed trip.
      * Used by the floating widget's big-number when no active trip is in progress
      * and during the first 500 m of a freshly started trip (smooth fade from

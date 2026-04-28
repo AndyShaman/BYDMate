@@ -28,7 +28,9 @@ import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
 import com.bydmate.app.domain.calculator.BigNumberCalculator
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
+import com.bydmate.app.domain.calculator.LiveTripBuffer
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
+import com.bydmate.app.domain.calculator.RangeAvgSource
 import com.bydmate.app.domain.calculator.SocInterpolator
 import com.bydmate.app.domain.calculator.RangeCalculator
 import androidx.work.ExistingWorkPolicy
@@ -62,6 +64,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var automationEngine: AutomationEngine
     @Inject lateinit var alicePollingManager: AlicePollingManager
     @Inject lateinit var odometerBuffer: OdometerConsumptionBuffer
+    @Inject lateinit var liveTripBuffer: LiveTripBuffer
     @Inject lateinit var socInterpolator: SocInterpolator
     @Inject lateinit var rangeCalculator: RangeCalculator
     @Inject lateinit var autoserviceDetector: com.bydmate.app.data.charging.AutoserviceChargingDetector
@@ -344,6 +347,12 @@ class TrackingService : Service(), LocationListener {
             "trend=${state.trend}, " +
             "socCarry=${"%.3f".format(carry)} kWh, " +
             "powerState=${data.powerState}")
+
+        val liveAvg = liveTripBuffer.avgOverLastKm(RangeAvgSource.LIVE_WINDOW_KM)
+        val liveSessionKm = liveTripBuffer.sessionKm()
+        Log.i(TAG, "Range live: sessionKm=${"%.1f".format(liveSessionKm)}, " +
+            "liveAvg=${liveAvg?.let { "%.1f".format(it) } ?: "—"} kWh/100, " +
+            "samples=${liveTripBuffer.sampleCount()}")
     }
 
     override fun onDestroy() {
@@ -493,6 +502,11 @@ class TrackingService : Service(), LocationListener {
                             mileage = data.mileage,
                             totalElec = data.totalElecConsumption,
                             socPercent = data.soc,
+                            sessionId = sessionId,
+                        )
+                        liveTripBuffer.onSample(
+                            mileage = data.mileage,
+                            totalElec = data.totalElecConsumption,
                             sessionId = sessionId,
                         )
                         socInterpolator.onSample(

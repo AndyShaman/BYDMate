@@ -140,7 +140,7 @@
 
 **Центральная строка** (крупно, главные значения):
 - **SOC %** (18sp bold, цветной) — заряд тяговой батареи. Зелёный > 50%, жёлтый 20–50%, красный < 20%
-- **~N км** (28sp белым) — расчётный запас хода: `SOC × ёмкость батареи ÷ baseline-расход × 100`. Тильда подчёркивает что это оценка, не показания БК
+- **~N км** (28sp белым) — расчётный запас хода: `SOC × ёмкость батареи ÷ baseline-расход × 100`. Тильда подчёркивает что это оценка, не показания БК. Подробнее про то, как считается baseline-расход, ниже в разделе «Запас хода»
 - **X.X ↓** (18sp, цветной по тренду) — **расход текущей поездки**, кВт·ч/100км, со стрелкой тренда (см. ниже)
 
 **Нижняя строка** (мелким, 13sp):
@@ -155,7 +155,7 @@
 
 **На стоянке** (зажигание выключено) показывается средний расход прошлой завершённой поездки — то же значение, что было видно в её последний момент.
 
-**Запас хода и тренд** считаются отдельно, по своей шкале: расчёт `~N км` слева и стрелка тренда справа смотрят в скользящее окно последних 25 километров пробега и не зависят от длины текущей поездки.
+**Запас хода** `~N км` считается по смеси: 50% веса берётся от последней завершённой поездки, 30% от предпоследней и 20% от той, что была до неё (короткие поездки до 3 км в расчёт не идут — это не репрезентативный пробег). Когда едешь длинную дорогу, к этой смеси добавляется ещё расход за последние 10 км текущей поездки: его доля растёт от нуля на первых трёх километрах до половины к 25 километрам. Так прогноз быстро подхватывает смену стиля (городской хвост перед трассой, обратно с трассы в город), но не дёргается на коротких заездах и стоянках с климатом.
 
 **Стрелка тренда** появляется после 2 км пробега и сравнивает скользящее 25-километровое среднее с твоим обычным стилем (среднее по последним 10 поездкам):
 
@@ -450,7 +450,7 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 ### Features
 
 - **Real consumption** from BMS energydata (not onboard estimates). Big number = live current-trip average that converges to the recorded trip; trend arrow uses a rolling 25 km window
-- **Dashboard** with widget-style stats around the SOC ring: trip duration, odometer, cabin temp on top; trip distance, estimated range, live trip consumption + trend arrow (still over a rolling 25 km window) on bottom. Same colors and trend logic as the floating widget
+- **Dashboard** with widget-style stats around the SOC ring: trip duration, odometer, cabin temp on top; trip distance, estimated range (Rivian-style 50/30/20 weighted blend of last 3 trips, mixed with current-session sliding 10 km window), live trip consumption + trend arrow (still over a rolling 25 km window) on bottom. Same colors and trend logic as the floating widget
 - **Trip logging** with GPS routes, distance, speed
 - **Charges journal** with automatic AC / DC detection, period and lifetime stats, manual add and edit
 - **AI Insights** — LLM-powered driving analysis via OpenRouter (optional)
@@ -458,7 +458,7 @@ The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads
 - **Battery health** — temperature, real **SoH on Leopard 3** (read from the car), cell balance, 12V voltage
 - **Trip map** with speed-colored routes (osmdroid, no Google Maps)
 - **Automation** — WHEN→THEN rules: triggers on 25 parameters → 41 D+ commands (windows incl. driver/passenger, climate, lights, locks, mirrors) + 8 action kinds (notification, app launch, call, navigate, URL, Yandex Music). Overlay confirmation with 15 s auto-cancel
-- **Floating widget** — draggable 7-field overlay: SOC, range, live trip consumption + trend arrow (still over a rolling 25 km window) vs your 10-trip baseline, ignition-bounded trip time, cabin/battery temp, 12V. Session survives app kill via SharedPreferences anchor
+- **Floating widget** — draggable 7-field overlay: SOC, range (Rivian-style 50/30/20 weighted blend of last 3 trips, mixed with current-session sliding 10 km window), live trip consumption + trend arrow (still over a rolling 25 km window) vs your 10-trip baseline, ignition-bounded trip time, cabin/battery temp, 12V. Session survives app kill via SharedPreferences anchor
 - **Auto-start** via WorkManager on boot
 - **CSV export** for trips and charges
 
