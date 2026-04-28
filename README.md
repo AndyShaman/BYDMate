@@ -303,11 +303,19 @@ DiPlus sendCmd API           ←  AutomationEngine   ←  Rules (Room DB)
 
 ## Установка
 
-### 1. Активация ADB (опционально)
+### 1. Активация ADB
 
-ADB нужен, только если вы хотите устанавливать APK через `adb install` или дёргать систему командами. **Для обычной установки D+ и BYDMate ADB не требуется** — достаточно файлового менеджера или флешки (см. шаг 2).
+Без ADB BYDMate работает в базовом режиме. Включённая ADB-отладка нужна для следующих фич:
 
-- **DiLink 3 / 4** — можно включить самостоятельно: установите [BydDevelopmentTools](https://disk.yandex.by/d/e3gEnY9P2Y9_fQ), зайдите в *Настройки → Version Management*, 10 раз тапните по тексту *Reset to factory default*, активируйте *Debug Mode when USB is Connected* и *Wireless adb debug switch*. На обновлённых прошивках DiLink 3/4 ADB может быть так же закрыт, как на DiLink 5 — тогда придётся идти по пути ниже.
+- **Здоровье батареи (SoH)** — точное значение из BMS вместо прочерка.
+- **Автоматический журнал зарядок** — приложение само фиксирует начало и конец сессии. Без ADB зарядки можно добавлять только вручную.
+- **Автоматизация** — триггеры и действия (управление стёклами, климатом, светом и т.д.). Без ADB вкладка «Автоматизация» не работает.
+
+Без ADB остаются доступны: трекинг поездок и пробега, расход энергии, виджет, AI-инсайты.
+
+Чтобы включить эти фичи, после установки BYDMate откройте **Настройки → «Системные данные (экспериментально)»**. DiLink один раз покажет диалог «Allow ADB debugging» — нажмите **Allow** и поставьте галочку **«Always allow from this computer»**.
+
+- **DiLink 3 / 4** — ADB можно активировать самостоятельно: установите [BydDevelopmentTools](https://disk.yandex.by/d/e3gEnY9P2Y9_fQ), зайдите в *Настройки → Version Management*, 10 раз тапните по тексту *Reset to factory default*, активируйте *Debug Mode when USB is Connected* и *Wireless adb debug switch*. На обновлённых прошивках DiLink 3/4 ADB может быть так же закрыт, как на DiLink 5 — тогда придётся идти по пути ниже.
 - **DiLink 5.0** — ADB-отладка **заблокирована** и открывается только удалённо из Китая. Сделать это можно через продавцов на **TaoBao** (поиск по `DiLink 5.0`, ~40 ¥ внутри Китая / ~80 ¥ извне, оплата через AliPay). Продавец удалённо открывает инженерное меню по присланному QR-коду, после чего ADB включается штатно.
 
   Пошаговая инструкция: [PDF-гайд (русский)](docs/guides/dilink5-adb-activation-ru.pdf) — приложен в репозитории.
@@ -481,7 +489,7 @@ On Leopard 3 BYDMate reads the **real SoH** value computed by the car itself and
 
 ### Enable SoH and automatic charge logging (Leopard 3)
 
-To get SoH and automatic charge entries, open **Settings** and enable **«Системные данные (экспериментально)»**. DiLink will show a one-time system dialog asking to allow ADB debugging. Tap **Allow** (and check **«Always allow from this computer»** so the dialog doesn't appear at every launch). Without this toggle, the rest of BYDMate (trips, consumption, widget, automation) still works; only SoH and automatic charges stay hidden.
+To get SoH, automatic charge entries and Automation tab, open **Settings** and enable **«Системные данные (экспериментально)»**. DiLink will show a one-time system dialog asking to allow ADB debugging. Tap **Allow** (and check **«Always allow from this computer»** so the dialog doesn't appear at every launch). Without this toggle, only the basic features work (trips, consumption, widget, AI insights); SoH, automatic charges and Automation stay disabled.
 
 ### If you don't have a Leopard 3
 
@@ -497,7 +505,7 @@ If something does not work, please open an [Issue](https://github.com/AndyShaman
 
 ### Installation
 
-1. *(Optional)* Enable ADB on your head unit. Not required for installing D+ or BYDMate — only needed if you want to push APKs via `adb install`. On DiLink 3/4 you can enable it yourself; on **DiLink 5.0** ADB is locked and must be unlocked remotely from China via TaoBao sellers (~40–80 ¥). See [PDF guide (RU)](docs/guides/dilink5-adb-activation-ru.pdf) included in the repo.
+1. **Enable ADB on your head unit.** Without ADB, BYDMate runs in basic mode — trips, consumption, widget and AI insights work, but SoH, automatic charge logging and the Automation tab require ADB. On DiLink 3/4 you can enable it yourself; on **DiLink 5.0** ADB is locked and must be unlocked remotely from China via TaoBao sellers (~40–80 ¥). See [PDF guide (RU)](docs/guides/dilink5-adb-activation-ru.pdf) included in the repo.
 2. Install **[DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** on your DiLink head unit — copy the APK via USB stick and open it in the file manager (no ADB needed).
 3. Download BYDMate APK from [Releases](https://github.com/AndyShaman/BYDMate/releases)
 4. Transfer to DiLink via USB and install
