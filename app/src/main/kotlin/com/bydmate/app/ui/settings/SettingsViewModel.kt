@@ -115,7 +115,13 @@ data class SettingsUiState(
     val dataSource: String = "ENERGYDATA",
     val dataSourceStatus: String? = null,
     val autoserviceEnabled: Boolean = false,
-    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled
+    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled,
+    val abrpTelemetryEnabled: Boolean = false,
+    val abrpApiKey: String = "",
+    val abrpUserToken: String = "",
+    val abrpCarModel: String = "",
+    val abrpIntervalSec: String = SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC,
+    val abrpSaveStatus: String? = null,
 )
 
 @HiltViewModel
@@ -195,6 +201,15 @@ class SettingsViewModel @Inject constructor(
 
             val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
 
+            val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
+            val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
+            val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
+            val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val abrpIntervalSec = settingsRepository.getString(
+                SettingsRepository.KEY_ABRP_INTERVAL_SEC,
+                SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC
+            )
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -216,6 +231,11 @@ class SettingsViewModel @Inject constructor(
                     aliceEnabled = aliceEnabled,
                     dataSource = dataSource,
                     autoserviceEnabled = autoserviceEnabled,
+                    abrpTelemetryEnabled = abrpEnabled,
+                    abrpApiKey = abrpApiKey,
+                    abrpUserToken = abrpUserToken,
+                    abrpCarModel = abrpCarModel,
+                    abrpIntervalSec = abrpIntervalSec,
                 )
             }
 
@@ -641,6 +661,51 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(aliceEnabled = enabled) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
+        }
+    }
+
+    fun toggleAbrpTelemetry(enabled: Boolean) {
+        _uiState.update { it.copy(abrpTelemetryEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, enabled.toString())
+        }
+    }
+
+    fun updateAbrpApiKey(value: String) {
+        _uiState.update { it.copy(abrpApiKey = value) }
+    }
+
+    fun updateAbrpUserToken(value: String) {
+        _uiState.update { it.copy(abrpUserToken = value) }
+    }
+
+    fun updateAbrpCarModel(value: String) {
+        _uiState.update { it.copy(abrpCarModel = value) }
+    }
+
+    fun updateAbrpIntervalSec(value: String) {
+        _uiState.update { it.copy(abrpIntervalSec = value.filter { ch -> ch.isDigit() }.take(3)) }
+    }
+
+    fun saveAbrpSettings() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            val interval = state.abrpIntervalSec.toIntOrNull()?.coerceIn(5, 120) ?: 12
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_API_KEY, state.abrpApiKey.trim())
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_USER_TOKEN, state.abrpUserToken.trim())
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_CAR_MODEL, state.abrpCarModel.trim())
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_INTERVAL_SEC, interval.toString())
+            val enabled = state.abrpTelemetryEnabled && state.abrpUserToken.isNotBlank()
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, enabled.toString())
+            _uiState.update {
+                it.copy(
+                    abrpTelemetryEnabled = enabled,
+                    abrpIntervalSec = interval.toString(),
+                    abrpSaveStatus = "Сохранено",
+                )
+            }
+            delay(2000)
+            _uiState.update { it.copy(abrpSaveStatus = null) }
         }
     }
 

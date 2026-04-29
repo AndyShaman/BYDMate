@@ -23,6 +23,7 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
@@ -68,6 +69,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var socInterpolator: SocInterpolator
     @Inject lateinit var rangeCalculator: RangeCalculator
     @Inject lateinit var autoserviceDetector: com.bydmate.app.data.charging.AutoserviceChargingDetector
+    @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -106,6 +108,9 @@ class TrackingService : Service(), LocationListener {
     // kwh/hours heuristic for short sessions.
     @Volatile private var prevChargeGunState: Int? = null
     @Volatile private var observedChargingPowerKwAbs: Double = 0.0
+
+    private val iternioTelemetryLock = Any()
+    @Volatile private var lastIternioTelemetryMs: Long = 0L
 
     companion object {
         private const val TAG = "TrackingService"
@@ -355,6 +360,59 @@ class TrackingService : Service(), LocationListener {
             "samples=${liveTripBuffer.sampleCount()}")
     }
 
+    /**
+     * Отправка в [IternioTelemetryClient] с ограничением частоты, без блокировки цикла опроса.
+     */
+    private fun maybeSendIternioTelemetry(data: DiParsData, loc: Location?, nowMs: Long) {
+        serviceScope.launch {
+            try {
+                if (settingsRepository.getString(
+                        com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_ENABLED,
+                        "false"
+                    ) != "true"
+                ) {
+                    return@launch
+                }
+                val token = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_USER_TOKEN,
+                    ""
+                ).trim()
+                if (token.isEmpty()) return@launch
+
+                val intervalSec = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_INTERVAL_SEC,
+                    com.bydmate.app.data.repository.SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC
+                ).toIntOrNull()?.coerceIn(5, 120) ?: 12
+                val intervalMs = intervalSec * 1000L
+                synchronized(iternioTelemetryLock) {
+                    if (nowMs - lastIternioTelemetryMs < intervalMs) return@launch
+                    lastIternioTelemetryMs = nowMs
+                }
+
+                val apiKey = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_API_KEY,
+                    ""
+                )
+                val carModel = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_CAR_MODEL,
+                    ""
+                ).trim().takeIf { it.isNotEmpty() }
+
+                iternioTelemetryClient.send(
+                    apiKey = apiKey,
+                    userToken = token,
+                    data = data,
+                    location = loc,
+                    carModel = carModel,
+                ).onFailure { e ->
+                    Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+            }
+        }
+    }
+
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         com.bydmate.app.ui.widget.WidgetController.detach()
@@ -562,6 +620,7 @@ class TrackingService : Service(), LocationListener {
                         automationEngine.evaluate(data, sessionId)
                         updateNotification(data)
                         maybeLogSessionSummary(nowMs, data, sessionId)
+                        maybeSendIternioTelemetry(data, loc, nowMs)
                     } else {
                         consecutiveNullCount++
                         if (consecutiveNullCount >= NULL_WARNING_THRESHOLD) {
