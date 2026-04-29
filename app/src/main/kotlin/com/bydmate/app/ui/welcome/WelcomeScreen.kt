@@ -286,10 +286,9 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("1. Settings → Application management", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("2. Нажмите \"Disable self-start\"", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("3. Найдите BYDMate в списке", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("4. Переключатель должен быть ВЫКЛЮЧЕН (OFF)", color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text("1. Нажмите кнопку справа", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("2. Найдите BYDMate в списке", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text("3. Переключатель должен быть ВЫКЛЮЧЕН (OFF)", color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     "OFF = автозапуск РАЗРЕШЁН. Это чёрный список: отключённые в нём приложения МОГУТ запускаться сами.",
@@ -339,19 +338,38 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SectionCard("Системные настройки") {
-                OutlinedButton(
+                Button(
                     onClick = {
-                        try {
-                            val intent = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = android.net.Uri.parse("package:${context.packageName}")
+                        val opened = runCatching {
+                            val intent = Intent(Intent.ACTION_MAIN).apply {
+                                setClassName(
+                                    "com.byd.appstartmanagement",
+                                    "com.byd.appstartmanagement.frame.AppStartManagement"
+                                )
+                                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                             }
                             context.startActivity(intent)
-                        } catch (_: Exception) { }
+                        }.isSuccess
+                        if (!opened) {
+                            runCatching {
+                                val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(fallback)
+                            }
+                            Toast.makeText(
+                                context,
+                                "Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.",
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp)
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                 ) {
-                    Text("Открыть настройки приложения", color = AccentBlue, fontSize = 14.sp)
+                    Text("Открыть настройки автозапуска", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
 

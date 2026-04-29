@@ -1,5 +1,8 @@
 package com.bydmate.app.ui.navigation
 
+import android.content.Intent
+import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -223,6 +226,7 @@ fun AppNavigation(
 
 @Composable
 private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -255,7 +259,33 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                         color = TextSecondary, fontSize = 14.sp
                     )
                     Button(
-                        onClick = onDismiss,
+                        onClick = {
+                            val opened = runCatching {
+                                val intent = Intent(Intent.ACTION_MAIN).apply {
+                                    setClassName(
+                                        "com.byd.appstartmanagement",
+                                        "com.byd.appstartmanagement.frame.AppStartManagement"
+                                    )
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                context.startActivity(intent)
+                            }.isSuccess
+                            if (!opened) {
+                                runCatching {
+                                    val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.parse("package:${context.packageName}")
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(fallback)
+                                }
+                                Toast.makeText(
+                                    context,
+                                    "Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                            onDismiss()
+                        },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
