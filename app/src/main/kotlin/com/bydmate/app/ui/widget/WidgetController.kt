@@ -8,6 +8,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Gravity
 import android.view.MotionEvent
+import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -208,6 +209,12 @@ object WidgetController {
                 consumptionState.value = snap.consumption.displayValue
                 trendState.value = snap.consumption.trend
                 alphaState.value = snap.alpha
+
+                // Hide widget while reverse gear is engaged (issue #5).
+                // DiPars gear: 1=P, 2=R, 3=N, 4=D.
+                val inReverse = snap.data?.gear == 2
+                widgetView?.visibility = if (inReverse) View.GONE else View.VISIBLE
+                if (inReverse) hideTrashZone()
             }
         }
     }
