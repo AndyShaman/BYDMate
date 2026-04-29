@@ -431,6 +431,97 @@ fun SettingsScreen(
                     }
                 }
 
+                SectionHeader(text = "ABRP — телеметрия")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    val context = LocalContext.current
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                                Text(
+                                    "Живые данные → A Better Route Planner",
+                                    color = TextPrimary,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    "Показатели DiPlus и GPS отправляются в Iternio Telemetry API для актуального плана в ABRP.",
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                            Switch(
+                                checked = state.abrpTelemetryEnabled,
+                                onCheckedChange = { viewModel.toggleAbrpTelemetry(it) },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+                        SettingsTextField(
+                            label = "API-ключ Iternio (опционально)",
+                            value = state.abrpApiKey,
+                            onValueChange = { viewModel.updateAbrpApiKey(it) },
+                            keyboardType = KeyboardType.Password
+                        )
+                        SettingsTextField(
+                            label = "Токен живых данных из ABRP",
+                            value = state.abrpUserToken,
+                            onValueChange = { viewModel.updateAbrpUserToken(it) },
+                            keyboardType = KeyboardType.Password
+                        )
+                        SettingsTextField(
+                            label = "Код модели ABRP (опционально)",
+                            value = state.abrpCarModel,
+                            onValueChange = { viewModel.updateAbrpCarModel(it) },
+                            keyboardType = KeyboardType.Text
+                        )
+                        SettingsTextField(
+                            label = "Интервал отправки, сек (5–120)",
+                            value = state.abrpIntervalSec,
+                            onValueChange = { viewModel.updateAbrpIntervalSec(it) },
+                            keyboardType = KeyboardType.Number
+                        )
+                        Button(
+                            onClick = { viewModel.saveAbrpSettings() },
+                            enabled = state.abrpUserToken.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentGreen,
+                                contentColor = NavyDark
+                            )
+                        ) {
+                            Text("Сохранить ABRP", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                        }
+                        state.abrpSaveStatus?.let {
+                            Text(it, color = AccentGreen, fontSize = 12.sp)
+                        }
+                        Text(
+                            "Документация API: Postman → телеметрия Iternio",
+                            color = AccentBlue,
+                            fontSize = 12.sp,
+                            textDecoration = TextDecoration.Underline,
+                            modifier = Modifier.clickable {
+                                context.startActivity(
+                                    Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse("https://documenter.getpostman.com/view/7396339/SWTK5a8w")
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+
                 // --- Плавающий виджет ---
                 val widgetCtx = LocalContext.current
                 val widgetPrefs = remember { WidgetPreferences(widgetCtx) }
