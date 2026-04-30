@@ -68,6 +68,8 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var socInterpolator: SocInterpolator
     @Inject lateinit var rangeCalculator: RangeCalculator
     @Inject lateinit var autoserviceDetector: com.bydmate.app.data.charging.AutoserviceChargingDetector
+    @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
+    @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -155,6 +157,15 @@ class TrackingService : Service(), LocationListener {
         private val _diPlusConnected = MutableStateFlow(true)
         val diPlusConnected: StateFlow<Boolean> = _diPlusConnected
 
+        /**
+         * True while the BYD built-in camera surface (`com.byd.avc`) is in
+         * foreground — covers reverse, slow-forward auto-pop, 360° button and
+         * the parking app. Widget hides itself while this is true so the camera
+         * UI is never occluded.
+         */
+        private val _cameraActive = MutableStateFlow(false)
+        val cameraActive: StateFlow<Boolean> = _cameraActive
+
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
             context.startForegroundService(intent)
@@ -222,6 +233,7 @@ class TrackingService : Service(), LocationListener {
         }
 
         startPolling()
+        startCameraMonitor()
         _isRunning.value = true
         appendChainLog("TrackingService fully started")
 
@@ -389,6 +401,8 @@ class TrackingService : Service(), LocationListener {
         }
 
         alicePollingManager.stop()
+        cameraStateMonitor.stop()
+        _cameraActive.value = false
         automationEngine.shutdown()
         serviceScope.cancel()
 
@@ -650,26 +664,76 @@ class TrackingService : Service(), LocationListener {
         }
     }
 
-    private fun tryLaunchDiPlus() {
-        try {
-            val intent = Intent().apply {
-                setClassName("com.van.diplus", "com.van.diplus.activity.StartMainServiceActivity")
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            startActivity(intent)
-            Log.i(TAG, "Launched DiPlus StartMainServiceActivity")
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to launch DiPlus: ${e.message}")
-            // Try alternative: just launch the main app
+    /**
+     * Grants GET_USAGE_STATS appop via the on-device ADB shell uid (no-op if
+     * already granted) and starts the camera-foreground poller. Mirrors monitor
+     * state into the [cameraActive] companion flow so the widget can react.
+     */
+    private fun startCameraMonitor() {
+        serviceScope.launch {
             try {
-                val launchIntent = packageManager.getLaunchIntentForPackage("com.van.diplus")
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(launchIntent)
-                    Log.i(TAG, "Launched DiPlus via package manager")
+                if (adbOnDeviceClient.connect().isSuccess) {
+                    val granted = adbOnDeviceClient.grantUsageStatsAppop("com.bydmate.app")
+                    Log.i(TAG, "GET_USAGE_STATS appop grant: $granted")
+                } else {
+                    Log.w(TAG, "ADB connect refused — camera detection may be inactive until appop is granted manually")
                 }
-            } catch (e2: Exception) {
-                Log.w(TAG, "Failed to launch DiPlus fallback: ${e2.message}")
+            } catch (e: Exception) {
+                Log.w(TAG, "ADB appop grant failed: ${e.message}")
+            }
+        }
+        cameraStateMonitor.start()
+        serviceScope.launch {
+            cameraStateMonitor.active.collect { _cameraActive.value = it }
+        }
+    }
+
+    private fun tryLaunchDiPlus() {
+        // Primary path: ADB shell uid bypasses BackgroundServiceStartNotAllowedException.
+        // Without this, startActivity(StartMainServiceActivity) crashes inside D+'s
+        // own onCreate when D+'s process is in cached/idle state — happens reliably
+        // when reverse is engaged before DiLink finishes booting.
+        serviceScope.launch {
+            val launched = try {
+                if (!adbOnDeviceClient.isConnected()) {
+                    adbOnDeviceClient.connect()
+                }
+                adbOnDeviceClient.launchDiPlusService()
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "ADB-driven DiPlus launch failed: ${e.message}")
+                false
+            }
+            if (launched) {
+                Log.i(TAG, "Launched DiPlus MainService via ADB shell")
+                return@launch
+            }
+            // Fallback: legacy startActivity path. Works when D+'s process is
+            // already warm; usually fails on cold start in Android 12.
+            try {
+                val intent = Intent().apply {
+                    setClassName("com.van.diplus", "com.van.diplus.activity.StartMainServiceActivity")
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(intent)
+                Log.i(TAG, "Launched DiPlus StartMainServiceActivity (fallback)")
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to launch DiPlus via activity: ${e.message}")
+                try {
+                    val launchIntent = packageManager.getLaunchIntentForPackage("com.van.diplus")
+                    if (launchIntent != null) {
+                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        startActivity(launchIntent)
+                        Log.i(TAG, "Launched DiPlus via package manager")
+                    }
+                } catch (e2: kotlinx.coroutines.CancellationException) {
+                    throw e2
+                } catch (e2: Exception) {
+                    Log.w(TAG, "Failed to launch DiPlus fallback: ${e2.message}")
+                }
             }
         }
     }

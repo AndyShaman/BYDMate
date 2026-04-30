@@ -657,7 +657,12 @@ private fun ChargesStatsPanel(
             }
 
             if (sohSeries.size >= 2) {
-                MiniLineChart(series = sohSeries, title = "SoH (%)", lineColor = AccentGreen)
+                MiniLineChart(
+                    series = sohSeries,
+                    title = "SoH (%)",
+                    lineColor = AccentGreen,
+                    valueFormat = { "%.0f".format(it) }
+                )
             }
         } else {
             PlaceholderBlock(
@@ -670,12 +675,22 @@ private fun ChargesStatsPanel(
 
         SectionLabel("Динамика")
         if (cellDeltaSeries.size >= 3) {
-            MiniLineChart(series = cellDeltaSeries, title = "Δ ячеек (В)", lineColor = AccentBlue)
+            MiniLineChart(
+                series = cellDeltaSeries,
+                title = "Δ ячеек (В)",
+                lineColor = AccentBlue,
+                valueFormat = { "%.3f".format(it) }
+            )
         } else {
             ChartPlaceholder("Δ ячеек: будет показано после 3 завершённых зарядок (сейчас: ${cellDeltaSeries.size})")
         }
         if (batTempSeries.size >= 3) {
-            MiniLineChart(series = batTempSeries, title = "Темп. батареи (°C)", lineColor = AccentOrange)
+            MiniLineChart(
+                series = batTempSeries,
+                title = "Темп. батареи (°C)",
+                lineColor = AccentOrange,
+                valueFormat = { "%.1f".format(it) }
+            )
         } else {
             ChartPlaceholder("Температура: будет показано после 3 завершённых зарядок (сейчас: ${batTempSeries.size})")
         }
@@ -737,8 +752,14 @@ private fun StatRow(label: String, value: String, valueColor: Color) {
 private fun MiniLineChart(
     series: List<Float>,
     title: String,
-    lineColor: Color
+    lineColor: Color,
+    valueFormat: (Float) -> String = { "%.2f".format(it) }
 ) {
+    val minVal = series.min()
+    val maxVal = series.max()
+    val isFlat = maxVal - minVal < 0.005f
+    val latest = series.last()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -746,34 +767,97 @@ private fun MiniLineChart(
             .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
             .padding(10.dp)
     ) {
-        Text(title, color = TextSecondary, fontSize = 11.sp, modifier = Modifier.padding(bottom = 4.dp))
-        Canvas(
+        // Title + latest value on the right.
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
+                .padding(bottom = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            val w = size.width
-            val h = size.height
-            val minVal = series.min()
-            val maxVal = series.max()
-            val range = (maxVal - minVal).coerceAtLeast(0.01f)
-            val pad = 4.dp.toPx()
-
-            // Grid line
-            drawLine(
-                color = ChartGrid,
-                start = Offset(pad, pad),
-                end = Offset(w - pad, pad),
-                strokeWidth = 0.5.dp.toPx()
+            Text(title, color = TextSecondary, fontSize = 11.sp)
+            Text(
+                valueFormat(latest),
+                color = lineColor,
+                fontSize = 11.sp,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = FontWeight.SemiBold
             )
-
-            val path = Path()
-            series.forEachIndexed { index, value ->
-                val x = pad + (index.toFloat() / (series.size - 1)) * (w - pad * 2)
-                val y = pad + (1f - (value - minVal) / range) * (h - pad * 2)
-                if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Y-axis labels: max on top, min on bottom. For a flat series we
+            // collapse to one row centered vertically next to the line.
+            Column(
+                modifier = Modifier
+                    .width(36.dp)
+                    .height(60.dp),
+                verticalArrangement = if (isFlat) Arrangement.Center else Arrangement.SpaceBetween,
+                horizontalAlignment = Alignment.End
+            ) {
+                if (isFlat) {
+                    Text(
+                        valueFormat(latest),
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                } else {
+                    Text(
+                        valueFormat(maxVal),
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                    Text(
+                        valueFormat(minVal),
+                        color = TextMuted,
+                        fontSize = 9.sp,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
             }
-            drawPath(path, lineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            Spacer(modifier = Modifier.width(6.dp))
+            Canvas(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(60.dp)
+            ) {
+                val w = size.width
+                val h = size.height
+                val pad = 4.dp.toPx()
+
+                // Top + bottom grid lines so the chart has a clear frame.
+                drawLine(
+                    color = ChartGrid,
+                    start = Offset(pad, pad),
+                    end = Offset(w - pad, pad),
+                    strokeWidth = 0.5.dp.toPx()
+                )
+                drawLine(
+                    color = ChartGrid,
+                    start = Offset(pad, h - pad),
+                    end = Offset(w - pad, h - pad),
+                    strokeWidth = 0.5.dp.toPx()
+                )
+
+                val path = Path()
+                series.forEachIndexed { index, value ->
+                    val x = pad + (index.toFloat() / (series.size - 1)) * (w - pad * 2)
+                    val y = if (isFlat) {
+                        // Constant series: draw line at vertical center instead
+                        // of pinning it to the bottom (range≈0 collapses y to h-pad).
+                        h / 2f
+                    } else {
+                        val range = maxVal - minVal
+                        pad + (1f - (value - minVal) / range) * (h - pad * 2)
+                    }
+                    if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                }
+                drawPath(path, lineColor, style = Stroke(2.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            }
         }
     }
 }

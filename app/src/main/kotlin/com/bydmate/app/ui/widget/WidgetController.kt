@@ -218,12 +218,13 @@ object WidgetController {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
-        // alpha + scale into one Triple so we stay under the limit.
+        // alpha + scale + cameraActive into one UiBundle so we stay under the limit.
         val uiFlow = combine(
             ConsumptionAggregator.state,
             prefsAlphaFlow,
             prefsScaleFlow,
-        ) { c, a, s -> Triple(c, a, s) }
+            TrackingService.cameraActive,
+        ) { c, a, s, cam -> UiBundle(c, a, s, cam) }
         dataJob = scope.launch {
             combine(
                 TrackingService.lastData,
@@ -237,9 +238,10 @@ object WidgetController {
                     range = range,
                     sessionStartedAt = sessionStart,
                     tripDistanceKm = tripDist,
-                    consumption = bundled.first,
-                    alpha = bundled.second,
-                    scale = bundled.third,
+                    consumption = bundled.consumption,
+                    alpha = bundled.alpha,
+                    scale = bundled.scale,
+                    cameraActive = bundled.cameraActive,
                 )
             }.collect { snap ->
                 socState.value = snap.data?.soc
@@ -258,11 +260,11 @@ object WidgetController {
                     applyScaleChange(snap.scale)
                 }
 
-                // Hide widget while reverse gear is engaged (issue #5).
-                // DiPars gear: 1=P, 2=R, 3=N, 4=D.
-                val inReverse = snap.data?.gear == 2
-                widgetView?.visibility = if (inReverse) View.GONE else View.VISIBLE
-                if (inReverse) hideTrashZone()
+                // Hide widget while the BYD camera surface is up (rear, front
+                // auto-pop, 360°, parking app — all map to com.byd.avc).
+                val hideForCamera = snap.cameraActive
+                widgetView?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
+                if (hideForCamera) hideTrashZone()
             }
         }
     }
@@ -308,6 +310,14 @@ object WidgetController {
         val consumption: ConsumptionState,
         val alpha: Float,
         val scale: Float,
+        val cameraActive: Boolean,
+    )
+
+    private data class UiBundle(
+        val consumption: ConsumptionState,
+        val alpha: Float,
+        val scale: Float,
+        val cameraActive: Boolean,
     )
 
     // --- Trash zone ---

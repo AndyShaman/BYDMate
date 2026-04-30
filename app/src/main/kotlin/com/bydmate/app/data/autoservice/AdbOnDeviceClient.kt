@@ -30,6 +30,21 @@ interface AdbOnDeviceClient {
     suspend fun isConnected(): Boolean
     /** Executes a one-shot shell command and returns stdout, or null on failure. */
     suspend fun exec(cmd: String): String?
+    /**
+     * Grants PACKAGE_USAGE_STATS appop to our own package via shell uid. The
+     * only non-autoservice write we permit through this client — needed so
+     * UsageStatsManager.queryEvents returns data for camera-overlay detection.
+     * No-op effect if already granted. Returns true on success.
+     */
+    suspend fun grantUsageStatsAppop(packageName: String): Boolean
+    /**
+     * Starts D+ MainService directly via shell uid `am start-foreground-service`.
+     * Used by the watchdog when D+ has gone silent — `startActivity` against
+     * StartMainServiceActivity crashes on Android 12+ due to background-service
+     * restrictions in cached/idle state, but the shell-uid path bypasses them.
+     * Returns true when am succeeded.
+     */
+    suspend fun launchDiPlusService(): Boolean
     /** Closes any underlying socket. Idempotent. */
     suspend fun shutdown()
 }
@@ -84,6 +99,38 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
     }
 
+    override suspend fun grantUsageStatsAppop(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        // Only permit our own package — never grant appops to anything else.
+        require(packageName.matches(PACKAGE_NAME_REGEX)) {
+            "grantUsageStatsAppop: refused package $packageName"
+        }
+        val cmd = "appops set $packageName GET_USAGE_STATS allow"
+        val p = protocol ?: return@withContext false
+        try {
+            // appops prints nothing on success; null means transport error.
+            // Treat any non-null output as failure (e.g. "Bad permission") too.
+            val out = p.exec(cmd) ?: return@withContext false
+            out.isBlank()
+        } catch (e: Exception) {
+            Log.w(TAG, "grantUsageStatsAppop failed: ${e.message}")
+            false
+        }
+    }
+
+    override suspend fun launchDiPlusService(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: return@withContext false
+        try {
+            // am start-foreground-service prints "Starting service: Intent { ... }"
+            // on success and "Error: ..." on failure. Treat any output starting
+            // with "Error" as a failure.
+            val out = p.exec(LAUNCH_DIPLUS_CMD) ?: return@withContext false
+            !out.trimStart().startsWith("Error")
+        } catch (e: Exception) {
+            Log.w(TAG, "launchDiPlusService failed: ${e.message}")
+            false
+        }
+    }
+
     override suspend fun shutdown() {
         withContext(Dispatchers.IO) {
             try {
@@ -100,5 +147,12 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Allow only: service call autoservice <5|7|9> i32 <dev> i32 <fid>
         // Rejects tx=6 (setInt), tx=8 (setBuffer), and arbitrary shell.
         private val WRITE_BARRIER_REGEX = Regex("""^service call autoservice [579] i32 \d+ i32 -?\d+$""")
+
+        // Narrow whitelist for grantUsageStatsAppop — only our own package.
+        private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
+
+        // Hardcoded — no params, so no injection surface.
+        private const val LAUNCH_DIPLUS_CMD =
+            "am start-foreground-service -n com.van.diplus/com.van.diplus.service.MainService"
     }
 }
