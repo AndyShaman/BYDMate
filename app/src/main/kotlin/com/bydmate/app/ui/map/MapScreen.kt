@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.ui.components.LocalConsumptionThresholds
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.ui.theme.*
@@ -239,6 +240,7 @@ private fun PeriodChip(label: String, selected: Boolean, onClick: () -> Unit) {
 @Composable
 private fun OsmdroidMapView(state: MapUiState) {
     val context = LocalContext.current
+    val thresholds = LocalConsumptionThresholds.current
 
     val lastPoint = remember(state.tripRoutes) {
         state.tripRoutes.lastOrNull()?.points?.lastOrNull()?.let {
@@ -276,7 +278,9 @@ private fun OsmdroidMapView(state: MapUiState) {
             for (route in state.tripRoutes) {
                 if (route.points.size < 2) continue
 
-                val routeColor = route.kwhPer100km?.let { consumptionColor(it) } ?: AccentGreen
+                val routeColor = route.kwhPer100km?.let {
+                    consumptionColor(it, thresholds.good, thresholds.bad)
+                } ?: AccentGreen
 
                 val polyline = Polyline().apply {
                     outlinePaint.color = routeColor.toArgb()

@@ -26,6 +26,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,10 +58,30 @@ fun socColor(soc: Int): Color = when {
     else -> SocRed
 }
 
-fun consumptionColor(kwhPer100km: Double): Color = when {
-    kwhPer100km < 20.0 -> ConsumptionGood
-    kwhPer100km <= 30.0 -> ConsumptionMid
+data class ConsumptionThresholds(val good: Double, val bad: Double) {
+    companion object {
+        val Default = ConsumptionThresholds(good = 20.0, bad = 30.0)
+    }
+}
+
+// Provided by MainActivity / WidgetController from SettingsRepository so user-edited
+// thresholds in Settings actually recolor every screen and the floating widget.
+val LocalConsumptionThresholds = compositionLocalOf { ConsumptionThresholds.Default }
+
+// Pure helper — testable without Compose runtime.
+fun consumptionColor(kwhPer100km: Double, good: Double, bad: Double): Color = when {
+    kwhPer100km < good -> ConsumptionGood
+    kwhPer100km <= bad -> ConsumptionMid
     else -> ConsumptionBad
+}
+
+// Composable overload — reads thresholds from CompositionLocal so existing
+// `consumptionColor(value)` callsites pick up the user-configured values.
+@Composable
+@ReadOnlyComposable
+fun consumptionColor(kwhPer100km: Double): Color {
+    val t = LocalConsumptionThresholds.current
+    return consumptionColor(kwhPer100km, t.good, t.bad)
 }
 
 fun formatTime(ts: Long): String {

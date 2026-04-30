@@ -3,6 +3,8 @@ package com.bydmate.app.data.repository
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -108,6 +110,16 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun getConsumptionBadThreshold(): Double =
         getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).toDoubleOrNull() ?: 30.0
+
+    /** Live (good, bad) pair for UI coloring. Emits on every Settings edit. */
+    fun observeConsumptionThresholds(): Flow<Pair<Double, Double>> = combine(
+        observeString(KEY_CONSUMPTION_GOOD).map {
+            it?.toDoubleOrNull() ?: DEFAULT_CONSUMPTION_GOOD.toDouble()
+        },
+        observeString(KEY_CONSUMPTION_BAD).map {
+            it?.toDoubleOrNull() ?: DEFAULT_CONSUMPTION_BAD.toDouble()
+        },
+    ) { good, bad -> good to bad }
 
     suspend fun saveLastKnownSoc(soc: Int) {
         setString(KEY_LAST_KNOWN_SOC, soc.toString())

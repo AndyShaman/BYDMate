@@ -8,11 +8,16 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.service.UpdateChecker
+import com.bydmate.app.ui.components.ConsumptionThresholds
+import com.bydmate.app.ui.components.LocalConsumptionThresholds
 import com.bydmate.app.ui.navigation.AppNavigation
 import com.bydmate.app.ui.theme.BYDMateTheme
 import dagger.hilt.android.AndroidEntryPoint
@@ -36,11 +41,18 @@ class MainActivity : ComponentActivity() {
         requestPermissionsIfNeeded()
 
         setContent {
+            val thresholds by produceState(initialValue = ConsumptionThresholds.Default) {
+                settingsRepository.observeConsumptionThresholds().collect { (good, bad) ->
+                    value = ConsumptionThresholds(good = good, bad = bad)
+                }
+            }
             BYDMateTheme {
-                AppNavigation(
-                    settingsRepository = settingsRepository,
-                    updateChecker = updateChecker,
-                )
+                CompositionLocalProvider(LocalConsumptionThresholds provides thresholds) {
+                    AppNavigation(
+                        settingsRepository = settingsRepository,
+                        updateChecker = updateChecker,
+                    )
+                }
             }
         }
     }
