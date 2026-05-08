@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.ui.components.socColor as componentsSocColor
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.SocRed
@@ -315,9 +316,9 @@ private fun severity(s: Status): Int = when (s) {
     Status.CRIT -> 2
 }
 
-private fun socColor(soc: Int?): Color = when {
-    soc == null -> TextMuted
-    soc < 15 -> SocRed
-    soc < 30 -> SocYellow
-    else -> AccentGreen
-}
+// Mirrors DashboardScreen's SOC ring coloring (>50 green, >=20 yellow, <20 red).
+// Was a private widget-local function with different thresholds (>=30 green,
+// >=15 yellow) — split coloring between the two surfaces was confusing because
+// the same SOC value rendered green on the widget but yellow on the dashboard.
+private fun socColor(soc: Int?): Color =
+    if (soc == null) TextMuted else componentsSocColor(soc)
