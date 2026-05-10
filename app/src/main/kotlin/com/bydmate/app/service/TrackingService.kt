@@ -464,6 +464,7 @@ class TrackingService : Service(), LocationListener {
                     apiKey = apiKey,
                     userToken = token,
                     data = data,
+                    nominalCapacityKwh = settingsRepository.getBatteryCapacity(),
                     battery = battery,
                     charging = charging,
                     carModel = carModel,

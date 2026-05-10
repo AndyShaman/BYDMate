@@ -94,7 +94,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        val r = client.send(apiKey = "k", userToken = "  ", data = drivingData(), battery = null, charging = null, carModel = null)
+        val r = client.send(apiKey = "k", userToken = "  ", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue(r.isFailure)
         assertNull("must not hit network on empty token", capt.lastRequest)
@@ -106,7 +106,7 @@ class IternioTelemetryClientTest {
         val client = makeClient(capt)
 
         val data = drivingData(soc = null)
-        val r = client.send(apiKey = "k", userToken = "tok", data = data, battery = null, charging = null, carModel = null)
+        val r = client.send(apiKey = "k", userToken = "tok", data = data, nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue("must report failure when SOC unavailable", r.isFailure)
         assertNull("must not send a payload without SOC", capt.lastRequest)
@@ -117,7 +117,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        client.send(apiKey = "appkey", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        client.send(apiKey = "appkey", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         val url = capt.lastRequest!!.url
         assertEquals("api.iternio.com", url.host)
@@ -132,7 +132,7 @@ class IternioTelemetryClientTest {
 
         // Empty string from settings — Iternio rejects with HTTP 401 if api_key
         // is missing, so the client must send DEFAULT_API_KEY instead.
-        client.send(apiKey = "", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        client.send(apiKey = "", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         val url = capt.lastRequest!!.url
         assertEquals(IternioTelemetryClient.DEFAULT_API_KEY, url.queryParameter("api_key"))
@@ -143,7 +143,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertFalse("lat must not be sent", tlm.has("lat"))
@@ -156,17 +156,19 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        // power=-15.0 (negative = charging in DiPars convention, matches Iternio "input is negative")
+        // BYD instantaneous power matches Iternio convention: positive = consumption,
+        // negative = charging/regen. Pass through without inverting.
         client.send(
             apiKey = "k", userToken = "tok",
             data = drivingData(soc = 50, speed = 0, power = -15.0, chargeGunState = 2, chargingStatus = 1, gear = 1),
-            battery = null, charging = null, carModel = null
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null
         )
 
         val tlm = capt.lastTlmJson!!
         assertEquals(50, tlm.getInt("soc"))
         assertEquals(0, tlm.getInt("speed"))
         assertEquals(-15.0, tlm.getDouble("power"), 0.001)
+        assertEquals(72.9, tlm.getDouble("capacity"), 0.001)
         assertEquals(1, tlm.getInt("is_charging"))
         assertEquals(1, tlm.getInt("is_parked"))
         assertNotNull(tlm.opt("utc"))
@@ -182,7 +184,7 @@ class IternioTelemetryClientTest {
             chargingType = 3, chargeBatteryVoltV = 400, batteryType = 1,
             chargingCapacityKwh = 7.2f, bmsState = 1, readAtMs = 0L
         )
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = charging, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = charging, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertEquals(1, tlm.getInt("is_dcfc"))
@@ -199,7 +201,7 @@ class IternioTelemetryClientTest {
             chargingType = 2, chargeBatteryVoltV = 0, batteryType = 1,
             chargingCapacityKwh = 3.5f, bmsState = 1, readAtMs = 0L
         )
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = charging, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = charging, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertEquals(0, tlm.getInt("is_dcfc"))
@@ -215,7 +217,7 @@ class IternioTelemetryClientTest {
             sohPercent = 92f, socPercent = 73f, lifetimeKwh = 1234f,
             lifetimeMileageKm = 11000f, voltage12v = 12.6f, readAtMs = 0L
         )
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = battery, charging = null, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =battery, charging = null, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertEquals(92.0, tlm.getDouble("soh"), 0.01)
@@ -226,7 +228,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertFalse("is_dcfc must be absent without ChargingReading", tlm.has("is_dcfc"))
@@ -243,7 +245,7 @@ class IternioTelemetryClientTest {
             gunConnectState = 1, chargingType = 1, chargeBatteryVoltV = 0, batteryType = 1,
             chargingCapacityKwh = -1.0f, bmsState = null, readAtMs = 0L
         )
-        client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = charging, carModel = null)
+        client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = charging, carModel = null)
 
         val tlm = capt.lastTlmJson!!
         assertFalse("negative sentinel must not be sent as kwh_charged", tlm.has("kwh_charged"))
@@ -254,7 +256,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor(responseCode = 500, responseBody = "server error")
         val client = makeClient(capt)
 
-        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue(r.isFailure)
     }
@@ -264,7 +266,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor(responseBody = """{"status":"error","reason":"bad token"}""")
         val client = makeClient(capt)
 
-        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue(r.isFailure)
     }
@@ -274,7 +276,7 @@ class IternioTelemetryClientTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
 
-        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), battery = null, charging = null, carModel = null)
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue(r.isSuccess)
     }

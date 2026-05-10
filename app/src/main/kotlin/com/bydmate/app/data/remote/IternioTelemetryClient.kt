@@ -22,8 +22,9 @@ import javax.inject.Singleton
  * Body: `application/x-www-form-urlencoded` with `token` (user) + `tlm` (JSON).
  * `api_key` (developer) is sent as a query parameter.
  *
- * Power sign: Iternio expects "input is negative", same as DiPars convention,
- * so we pass the value through without inverting.
+ * Power sign: BYD instantaneous power matches Iternio convention.
+ * Positive = consumption (battery → motor/HVAC), negative = regen/charging
+ * (motor/grid → battery). Pass through without inverting.
  *
  * GPS (lat/lon/elevation) is intentionally NOT sent — ABRP runs as a native
  * Android app on DiLink and reads location from the OS itself; sending GPS
@@ -55,6 +56,11 @@ class IternioTelemetryClient @Inject constructor(
      * @param userToken Per-vehicle live-data token from ABRP "Generic" provider.
      * @param data Live DiPars snapshot. SOC must be present — without it the
      *             call returns a failure without hitting the network.
+     * @param nominalCapacityKwh Nominal battery capacity (user setting; 72.9 on
+     *                           Leopard 3). Sent as Iternio `capacity` so ABRP
+     *                           can translate SOC% to kWh. We do NOT use the
+     *                           DiPars `batteryCapacityKwh` field — on Leopard
+     *                           3 it returns ~4.5 (not nominal capacity).
      * @param battery Optional autoservice battery snapshot (Leopard 3 only).
      *                Adds `soh` when SoH is readable.
      * @param charging Optional autoservice charging snapshot (Leopard 3 only).
@@ -65,6 +71,7 @@ class IternioTelemetryClient @Inject constructor(
         apiKey: String,
         userToken: String,
         data: DiParsData,
+        nominalCapacityKwh: Double,
         battery: BatteryReading?,
         charging: ChargingReading?,
         carModel: String?,
@@ -85,7 +92,7 @@ class IternioTelemetryClient @Inject constructor(
 
             data.avgBatTemp?.let { telemetry.put("batt_temp", it) }
             data.exteriorTemp?.let { telemetry.put("ext_temp", it) }
-            data.batteryCapacityKwh?.let { telemetry.put("capacity", it) }
+            telemetry.put("capacity", nominalCapacityKwh)
             data.mileage?.let { telemetry.put("odometer", it) }
             data.insideTemp?.let { telemetry.put("cabin_temp", it) }
             data.tirePressFL?.let { telemetry.put("tire_pressure_fl", it) }
@@ -135,16 +142,22 @@ class IternioTelemetryClient @Inject constructor(
             httpClient.newCall(request).execute().use { response ->
                 val body = response.body?.string().orEmpty()
                 if (!response.isSuccessful) {
-                    Log.w(TAG, "HTTP ${response.code}: $body")
+                    // Don't log raw body — Iternio may echo credentials back.
+                    Log.w(TAG, "HTTP ${response.code}")
                     return@withContext Result.failure(
                         IllegalStateException("HTTP ${response.code}")
                     )
                 }
                 try {
-                    val status = JSONObject(body).optString("status")
+                    val json = JSONObject(body)
+                    val status = json.optString("status")
                     if (status.isNotBlank() && !status.equals("ok", ignoreCase = true)) {
-                        Log.w(TAG, "API error: $body")
-                        return@withContext Result.failure(IllegalStateException(body))
+                        // Iternio response may echo back token/api_key in error
+                        // body — never propagate the raw body. Only surface the
+                        // sanitized status code; full body stays in private logs.
+                        val reason = json.optString("reason").ifBlank { status }
+                        Log.w(TAG, "API status=$status reason=$reason")
+                        return@withContext Result.failure(IllegalStateException("Iternio status=$status"))
                     }
                 } catch (_: Exception) { /* пустой или не-JSON ответ считаем успехом при HTTP 2xx */ }
             }
@@ -156,21 +169,21 @@ class IternioTelemetryClient @Inject constructor(
     }
 
     /**
-     * Charging detection cascades: autoservice gun-state is the strongest
-     * signal (set by physical contact regardless of BMS phase), then DiPars
-     * gun-state/power/chargingStatus heuristics (works on non-Leopard 3).
+     * Charging detection: only physical-gun signals. Whitelist autoservice
+     * `gunConnectState` to {2=AC, 3=DC, 4=AC_DC, 5=VTOL} — anything else
+     * (incl. 0 sentinel from cold-start window and 1=NONE) means not plugged
+     * in. DiPars `chargeGunState == 2` is the same physical signal on
+     * non-Leopard 3 builds.
+     *
+     * We deliberately do NOT use `power < 0` (regenerative braking gives
+     * negative motor power but is not charging) or `chargingStatus > 0`
+     * (firmware-specific values that fire spuriously on idle).
      */
     private fun isCharging(data: DiParsData, charging: ChargingReading?): Boolean {
         charging?.gunConnectState?.let { gun ->
-            // 1=NONE → not charging. Any other known state = something is plugged in.
-            if (gun != 1 && gun != 0) return true
+            if (gun in DCFC_GUN_STATES || gun == 2) return true
         }
         if (data.chargeGunState == 2) return true
-        val p = data.power
-        if (p != null && p < 0) return true
-        // chargingStatus values vary across firmwares, treat any active code softly.
-        val cs = data.chargingStatus
-        if (cs != null && cs > 0) return true
         return false
     }
 }
