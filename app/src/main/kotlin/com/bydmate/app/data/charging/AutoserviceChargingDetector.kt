@@ -74,6 +74,17 @@ class AutoserviceChargingDetector @Inject constructor(
         // session; anything longer is multi-day idle and we'd rather bias
         // toward AC tariff anyway (cheaper for the user when uncertain).
         const val MAX_ELAPSED_HOURS = 16.0
+        // BMS chargingCapacityKwh sanity gate. The per-session counter has been
+        // observed to under-report on overnight AC (counter resets across BMS
+        // pause/resume sub-phases — caught a 51% SOC charge as 21.5 kWh in
+        // v2.5.15). Compare any cap-derived candidate (Gate A delta or Gate B
+        // session) to socDelta × nominalCapacity. When the ratio falls outside
+        // [LOW..HIGH] the BMS counter is treated as broken and we fall back to
+        // the SOC estimate. LOW=0.70 tolerates a fresh-battery efficiency tax
+        // and SoH down to ~70% before false-positives. HIGH=1.30 catches stale
+        // baselines and counter overruns.
+        const val SOC_SANITY_RATIO_LOW = 0.70
+        const val SOC_SANITY_RATIO_HIGH = 1.30
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
@@ -202,34 +213,51 @@ class AutoserviceChargingDetector @Inject constructor(
                 return CatchUpResult(CatchUpOutcome.NO_DELTA)
             }
 
-            // Step 6: resolve kWh delta via cascade A → B → C
+            // Step 6: resolve kWh delta via cascade A → B → C with SOC sanity check
             val currentCap = charging?.chargingCapacityKwh?.toDouble()
             val prevCap = prev.capacityKwh?.toDouble()
+            val nominalCapacity = settings.getBatteryCapacity()
+            val socEstimate = (socDelta / 100.0) * nominalCapacity
 
             val delta: Double
             val detectionSource: String
 
             val capDelta = if (currentCap != null && prevCap != null) currentCap - prevCap else null
 
-            when {
-                // Gate A: cap delta is positive and plausible
-                capDelta != null && capDelta in MIN_DELTA_KWH..200.0 -> {
-                    delta = capDelta
-                    detectionSource = "autoservice_cap_delta"
-                    android.util.Log.i(TAG, "runCatchUp: Gate A — cap_delta=${"%.3f".format(delta)} kWh")
-                }
-                // Gate B: cap counter reset (or prev unavailable) — use current value if plausible
-                currentCap != null && currentCap in MIN_DELTA_KWH..200.0 -> {
-                    delta = currentCap
-                    detectionSource = "autoservice_cap_session"
-                    android.util.Log.i(TAG, "runCatchUp: Gate B — cap_session=${"%.3f".format(delta)} kWh")
-                }
-                // Gate C: fallback to SOC estimate
-                else -> {
-                    val nominalCapacity = settings.getBatteryCapacity()
-                    delta = (socDelta / 100.0) * nominalCapacity
-                    detectionSource = "autoservice_soc_estimate"
-                    android.util.Log.i(TAG, "runCatchUp: Gate C — soc_estimate=${"%.3f".format(delta)} kWh (socDelta=$socDelta)")
+            // Pick the BMS-derived candidate (Gate A preferred, Gate B fallback).
+            val capCandidate: Pair<Double, String>? = when {
+                capDelta != null && capDelta in MIN_DELTA_KWH..200.0 ->
+                    capDelta to "autoservice_cap_delta"
+                currentCap != null && currentCap in MIN_DELTA_KWH..200.0 ->
+                    currentCap to "autoservice_cap_session"
+                else -> null
+            }
+
+            // Sanity-gate the BMS counter against the SOC-derived estimate.
+            // Diverging values mean the per-session counter is broken (sub-phase
+            // reset, stale baseline, residue from a previous session). Trust SOC
+            // in that case — coarser but always-monotonic.
+            if (capCandidate == null) {
+                delta = socEstimate
+                detectionSource = "autoservice_soc_estimate"
+                android.util.Log.i(TAG, "runCatchUp: Gate C — soc_estimate=${"%.3f".format(delta)} kWh (socDelta=$socDelta)")
+            } else {
+                val (capValue, capSource) = capCandidate
+                val ratio = if (socEstimate > 0.0) capValue / socEstimate else Double.NaN
+                if (ratio.isFinite() && ratio in SOC_SANITY_RATIO_LOW..SOC_SANITY_RATIO_HIGH) {
+                    delta = capValue
+                    detectionSource = capSource
+                    android.util.Log.i(
+                        TAG,
+                        "runCatchUp: $capSource — kwh=${"%.3f".format(delta)} ratio=${"%.2f".format(ratio)} (socEstimate=${"%.3f".format(socEstimate)})"
+                    )
+                } else {
+                    delta = socEstimate
+                    detectionSource = "autoservice_soc_fallback"
+                    android.util.Log.i(
+                        TAG,
+                        "runCatchUp: SOC fallback — bms=${"%.3f".format(capValue)} socEstimate=${"%.3f".format(socEstimate)} ratio=${"%.2f".format(ratio)} ($capSource diverged)"
+                    )
                 }
             }
 
@@ -264,10 +292,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 socStart = socStart,
                 socEnd = socEnd,
                 kwhCharged = delta,
-                kwhChargedSoc = run {
-                    val cap = settings.getBatteryCapacity()
-                    (socEnd - socStart) / 100.0 * cap
-                },
+                kwhChargedSoc = (socEnd - socStart) / 100.0 * nominalCapacity,
                 type = type,
                 cost = cost,
                 status = "COMPLETED",
