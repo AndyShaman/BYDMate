@@ -28,7 +28,8 @@ class IternioTelemetryClientTest {
      */
     private class CapturingInterceptor(
         private val responseCode: Int = 200,
-        private val responseBody: String = """{"status":"ok"}"""
+        private val responseBody: String = """{"status":"ok"}""",
+        private val responseHeaders: Map<String, String> = emptyMap(),
     ) : Interceptor {
         var lastRequest: Request? = null
         var lastFormBody: String? = null
@@ -49,13 +50,14 @@ class IternioTelemetryClientTest {
                     ?.let { java.net.URLDecoder.decode(it, "UTF-8") }
                 if (tlmRaw != null) lastTlmJson = JSONObject(tlmRaw)
             }
-            return Response.Builder()
+            val builder = Response.Builder()
                 .request(req)
                 .protocol(Protocol.HTTP_1_1)
                 .code(responseCode)
                 .message(if (responseCode == 200) "OK" else "Error")
                 .body(responseBody.toResponseBody("application/json".toMediaType()))
-                .build()
+            responseHeaders.forEach { (k, v) -> builder.header(k, v) }
+            return builder.build()
         }
     }
 
@@ -272,6 +274,26 @@ class IternioTelemetryClientTest {
     }
 
     @Test
+    fun `utc field uses sampleTimeMs param when provided - snapshot timestamp not send time`() = runTest {
+        // ABRP plots samples on a timeline. At 8 s charging cadence the
+        // ADB+HTTP round-trip can push the wall-clock by ~500 ms, which
+        // smears the visible curve. Caller passes the moment of sampling
+        // (snapshotMs) and the client uses that for the `utc` field.
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        val knownEpochMs = 1_700_000_000_000L
+        client.send(
+            apiKey = "k", userToken = "tok", data = drivingData(),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            sampleTimeMs = knownEpochMs,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals(knownEpochMs / 1000L, tlm.getLong("utc"))
+    }
+
+    @Test
     fun `successful send returns success`() = runTest {
         val capt = CapturingInterceptor()
         val client = makeClient(capt)
@@ -279,5 +301,220 @@ class IternioTelemetryClientTest {
         val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery =null, charging = null, carModel = null)
 
         assertTrue(r.isSuccess)
+    }
+
+    // === Patch A: live battery power via autoservice ENG_POW ===
+    //
+    // ENG_POW (fid 339738656, dev=1012, tx=5) returns raw signed kW directly
+    // (see reference_eng_pow_fid.md, validated 2026-05-11). It must take
+    // priority over the DiPars `data.power` field, which on Leopard 3 often
+    // arrives null in reduced-payload mode or reports motor mechanical power
+    // (not battery-side draw).
+
+    @Test
+    fun `enginePowerKw from autoservice takes priority over DiPars power`() = runTest {
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = 12.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 5,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals(5.0, tlm.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `enginePowerKw null falls back to DiPars data power`() = runTest {
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = 7.5),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = null,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals(7.5, tlm.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `enginePowerKw out of plausible range is rejected and falls back to DiPars`() = runTest {
+        // Sanity gate per reference_eng_pow_fid.md: [-300, +500] kW covers the
+        // worst-case Leopard 3 envelope (max DC charge ~150 kW, max discharge
+        // ~250 kW during launch). Anything outside that window is a sentinel
+        // or a Parcel parse glitch — drop it and try the next source.
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = 7.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 999,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals("must fall back to DiPars on out-of-range autoservice value",
+            7.0, tlm.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `enginePowerKw deeply negative out of range falls back to zero when DiPars absent`() = runTest {
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = null),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = -1000,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals(0.0, tlm.getDouble("power"), 0.001)
+    }
+
+    @Test
+    fun `enginePowerKw at range boundary minus 300 is accepted`() = runTest {
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = 99.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = -300,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertEquals(-300.0, tlm.getDouble("power"), 0.001)
+    }
+
+    // === Patch A: rate-limit / server-error signaling ===
+    //
+    // Iternio doesn't publish a strict QPS limit, but their CDN returns
+    // 429 with Retry-After during burst events and 5xx during deploys.
+    // We surface both as typed exceptions so TrackingService can stop
+    // hammering when the upstream asks us to.
+
+    @Test
+    fun `HTTP 429 surfaces IternioRateLimitException with Retry-After value`() = runTest {
+        val capt = CapturingInterceptor(
+            responseCode = 429,
+            responseBody = "rate limited",
+            responseHeaders = mapOf("Retry-After" to "42"),
+        )
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        assertTrue(r.isFailure)
+        val ex = r.exceptionOrNull()
+        assertTrue("expected IternioRateLimitException, got ${ex?.javaClass}", ex is IternioRateLimitException)
+        assertEquals(42, (ex as IternioRateLimitException).retryAfterSec)
+    }
+
+    @Test
+    fun `HTTP 429 without Retry-After header still surfaces IternioRateLimitException`() = runTest {
+        val capt = CapturingInterceptor(responseCode = 429, responseBody = "rate limited")
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        assertTrue(r.isFailure)
+        val ex = r.exceptionOrNull()
+        assertTrue("expected IternioRateLimitException, got ${ex?.javaClass}", ex is IternioRateLimitException)
+        // Null means "no upstream hint" — caller picks its own backoff.
+        assertEquals(null, (ex as IternioRateLimitException).retryAfterSec)
+    }
+
+    @Test
+    fun `429 Retry-After as HTTP-date in the past returns 0 seconds`() = runTest {
+        // RFC 7231 allows Retry-After in HTTP-date format. A date already
+        // elapsed means "OK to retry now" — surface 0.
+        val capt = CapturingInterceptor(
+            responseCode = 429, responseBody = "rl",
+            responseHeaders = mapOf("Retry-After" to "Sun, 01 Jan 2000 00:00:00 GMT"),
+        )
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        val ex = r.exceptionOrNull() as? IternioRateLimitException
+        assertNotNull(ex)
+        assertEquals(0, ex!!.retryAfterSec)
+    }
+
+    @Test
+    fun `429 Retry-After as HTTP-date far in future returns null retryAfterSec`() = runTest {
+        // Server told us to wait years — clearly broken. Return null so the
+        // caller picks its own bounded backoff instead of cooling for an hour.
+        val capt = CapturingInterceptor(
+            responseCode = 429, responseBody = "rl",
+            responseHeaders = mapOf("Retry-After" to "Sun, 01 Jan 2099 00:00:00 GMT"),
+        )
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        val ex = r.exceptionOrNull() as? IternioRateLimitException
+        assertNotNull(ex)
+        assertEquals(null, ex!!.retryAfterSec)
+    }
+
+    @Test
+    fun `429 Retry-After garbage value returns null retryAfterSec`() = runTest {
+        val capt = CapturingInterceptor(
+            responseCode = 429, responseBody = "rl",
+            responseHeaders = mapOf("Retry-After" to "not-a-date-or-number"),
+        )
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        val ex = r.exceptionOrNull() as? IternioRateLimitException
+        assertNotNull(ex)
+        assertEquals(null, ex!!.retryAfterSec)
+    }
+
+    @Test
+    fun `HTTP 503 surfaces IternioServerErrorException with status code`() = runTest {
+        val capt = CapturingInterceptor(responseCode = 503, responseBody = "down")
+        val client = makeClient(capt)
+
+        val r = client.send(apiKey = "k", userToken = "tok", data = drivingData(), nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null)
+
+        assertTrue(r.isFailure)
+        val ex = r.exceptionOrNull()
+        assertTrue("expected IternioServerErrorException, got ${ex?.javaClass}", ex is IternioServerErrorException)
+        assertEquals(503, (ex as IternioServerErrorException).httpStatus)
+    }
+
+    @Test
+    fun `power always present even when both autoservice and DiPars null - sends 0`() = runTest {
+        // ABRP calibration ranks data sources by what arrives at >= 1 sample
+        // per 10 seconds. Skipping `power` when sources are dead pulls our
+        // score below 12% — the only way to keep ABRP confident is to send
+        // 0 explicitly. The signal lives in upstream logs (power_source
+        // metric); the payload itself must always carry `power`.
+        val capt = CapturingInterceptor()
+        val client = makeClient(capt)
+
+        client.send(
+            apiKey = "k", userToken = "tok",
+            data = drivingData(power = null),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = null,
+        )
+
+        val tlm = capt.lastTlmJson!!
+        assertTrue("power must always be present in payload", tlm.has("power"))
+        assertEquals(0.0, tlm.getDouble("power"), 0.001)
     }
 }

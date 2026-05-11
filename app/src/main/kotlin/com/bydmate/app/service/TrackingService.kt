@@ -23,6 +23,9 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.remote.IternioIntervalPolicy
+import com.bydmate.app.data.remote.IternioRateLimitException
+import com.bydmate.app.data.remote.IternioServerErrorException
 import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.TripState
@@ -136,6 +139,14 @@ class TrackingService : Service(), LocationListener {
 
     private val iternioTelemetryLock = Any()
     @Volatile private var lastIternioTelemetryMs: Long = 0L
+    // Prevents two telemetry sends from overlapping: a slow ADB read can take
+    // hundreds of ms, and stacking sends would burn the same in-flight ENG_POW
+    // read across two parallel coroutines.
+    private val iternioInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+    // Upstream cooldown: bumped when Iternio returns 429 (Retry-After) or 5xx
+    // (exponential backoff). We refuse to send until `now >= iternioCooldownUntilMs`.
+    @Volatile private var iternioCooldownUntilMs: Long = 0L
+    @Volatile private var iternioConsecutive5xx: Int = 0
 
     companion object {
         private const val TAG = "TrackingService"
@@ -407,14 +418,22 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
-     * Отправка в [IternioTelemetryClient] с ограничением частоты, без блокировки цикла опроса.
+     * Отправка в [IternioTelemetryClient] с адаптивной частотой (см.
+     * [IternioIntervalPolicy]): 1 с в движении, 8 с при зарядке, 30 с на
+     * парковке. Бессмысленно слать с одинаковым ритмом — ABRP калибрует
+     * точность по плотности сэмплов за 10 секунд, и единственное окно где
+     * нам нужен 1 Гц — это движение.
      *
-     * Throttle обновляется только при успешной отправке — иначе пара флапающих
-     * запросов могла бы заморозить телеметрию на полный интервал. GPS не
-     * передаётся: ABRP крутится как Android-приложение на DiLink и сам читает
-     * Location через системный API.
+     * Single-flight на [iternioInFlight] не даёт двум tick'ам пересекаться:
+     * ADB-чтение ENG_POW может занять несколько сотен мс, а очередь параллельных
+     * отправок забила бы канал и спутала throttle. На 429/5xx взводим
+     * [iternioCooldownUntilMs] и тихо пропускаем тики пока не остынет.
      */
     private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long) {
+        if (!iternioInFlight.compareAndSet(false, true)) return
+        // Capture the snapshot timestamp BEFORE the network round-trip so the
+        // `utc` field upstream matches the moment of sampling, not delivery.
+        val snapshotMs = nowMs
         serviceScope.launch {
             try {
                 if (settingsRepository.getString(
@@ -430,16 +449,15 @@ class TrackingService : Service(), LocationListener {
                 ).trim()
                 if (token.isEmpty()) return@launch
 
-                val intervalSec = settingsRepository.getString(
-                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_INTERVAL_SEC,
-                    com.bydmate.app.data.repository.SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC
-                ).toIntOrNull()?.coerceIn(
-                    com.bydmate.app.data.repository.SettingsRepository.MIN_ABRP_INTERVAL_SEC,
-                    com.bydmate.app.data.repository.SettingsRepository.MAX_ABRP_INTERVAL_SEC
-                ) ?: com.bydmate.app.data.repository.SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC.toInt()
-                val intervalMs = intervalSec * 1000L
+                if (snapshotMs < iternioCooldownUntilMs) {
+                    Log.d(TAG, "Iternio cooldown active, skip (until ${iternioCooldownUntilMs - snapshotMs}ms)")
+                    return@launch
+                }
+
+                val state = IternioIntervalPolicy.classifyFromDiPars(data)
+                val intervalMs = IternioIntervalPolicy.intervalSec(state) * 1000L
                 synchronized(iternioTelemetryLock) {
-                    if (nowMs - lastIternioTelemetryMs < intervalMs) return@launch
+                    if (snapshotMs - lastIternioTelemetryMs < intervalMs) return@launch
                 }
 
                 val apiKey = settingsRepository.getString(
@@ -451,13 +469,27 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
-                // Best-effort autoservice enrichment. Returns null on non-Leopard 3
-                // firmwares — client handles missing snapshots gracefully.
-                val battery = if (settingsRepository.isAutoserviceEnabled()) {
+                val autoserviceOn = settingsRepository.isAutoserviceEnabled()
+                // Best-effort autoservice enrichment. Snapshots are heavier
+                // (multiple fids) — only read them in CHARGING window where
+                // is_dcfc / kwh_charged actually matter. In DRIVING we still
+                // want ENG_POW every tick.
+                val readSnapshots = autoserviceOn && state == IternioIntervalPolicy.TelemetryState.CHARGING
+                val battery = if (readSnapshots) {
                     runCatching { autoserviceClient.readBatterySnapshot() }.getOrNull()
                 } else null
-                val charging = if (settingsRepository.isAutoserviceEnabled()) {
+                val charging = if (readSnapshots) {
                     runCatching { autoserviceClient.readChargingSnapshot() }.getOrNull()
+                } else null
+                // ENG_POW: tight timeout — at 1 Hz drive cadence a 900 ms budget
+                // covers a healthy ADB read but won't pile up if autoservice
+                // stalls. Null on timeout/error → client falls back to DiPars.
+                val enginePowerKw: Int? = if (autoserviceOn) {
+                    runCatching {
+                        kotlinx.coroutines.withTimeoutOrNull(900L) {
+                            autoserviceClient.getEnginePowerKw()
+                        }
+                    }.getOrNull()
                 } else null
 
                 iternioTelemetryClient.send(
@@ -468,15 +500,42 @@ class TrackingService : Service(), LocationListener {
                     battery = battery,
                     charging = charging,
                     carModel = carModel,
+                    enginePowerKw = enginePowerKw,
+                    sampleTimeMs = snapshotMs,
                 ).onSuccess {
                     synchronized(iternioTelemetryLock) {
-                        lastIternioTelemetryMs = nowMs
+                        lastIternioTelemetryMs = snapshotMs
                     }
+                    iternioConsecutive5xx = 0
                 }.onFailure { e ->
-                    Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                    when (e) {
+                        is IternioRateLimitException -> {
+                            // Upstream said wait. Honor Retry-After if present;
+                            // fall back to 5 min when the header was missing —
+                            // long enough that we're not part of the storm,
+                            // short enough that the user gets data back once
+                            // the burst clears.
+                            val backoffSec = e.retryAfterSec ?: 300
+                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                            Log.w(TAG, "Iternio 429, cooldown ${backoffSec}s")
+                        }
+                        is IternioServerErrorException -> {
+                            // 5xx exponential backoff: 8 → 16 → 32 → 64 → 128 → 256 s
+                            // (capped at 300 s). We don't bump throttle on success
+                            // failures the user can't influence — wait for the
+                            // CDN to recover.
+                            iternioConsecutive5xx = (iternioConsecutive5xx + 1).coerceAtMost(6)
+                            val backoffSec = (8 shl (iternioConsecutive5xx - 1)).coerceAtMost(300)
+                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                            Log.w(TAG, "Iternio ${e.httpStatus}, cooldown ${backoffSec}s (n=$iternioConsecutive5xx)")
+                        }
+                        else -> Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                    }
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+            } finally {
+                iternioInFlight.set(false)
             }
         }
     }

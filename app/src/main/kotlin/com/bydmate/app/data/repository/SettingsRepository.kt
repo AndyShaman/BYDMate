@@ -42,11 +42,6 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ABRP_USER_TOKEN = "abrp_user_token"
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
-        /** Интервал между отправками телеметрии, секунды. */
-        const val KEY_ABRP_INTERVAL_SEC = "abrp_interval_sec"
-        const val DEFAULT_ABRP_INTERVAL_SEC = "12"
-        const val MIN_ABRP_INTERVAL_SEC = 5
-        const val MAX_ABRP_INTERVAL_SEC = 120
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"

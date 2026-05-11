@@ -120,7 +120,6 @@ data class SettingsUiState(
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
-    val abrpIntervalSec: String = SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC,
     val abrpSaveStatus: String? = null,
 )
 
@@ -205,10 +204,6 @@ class SettingsViewModel @Inject constructor(
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
-            val abrpIntervalSec = settingsRepository.getString(
-                SettingsRepository.KEY_ABRP_INTERVAL_SEC,
-                SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC
-            )
 
             _uiState.update {
                 it.copy(
@@ -235,7 +230,6 @@ class SettingsViewModel @Inject constructor(
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
-                    abrpIntervalSec = abrpIntervalSec,
                 )
             }
 
@@ -687,26 +681,17 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(abrpCarModel = value) }
     }
 
-    fun updateAbrpIntervalSec(value: String) {
-        _uiState.update { it.copy(abrpIntervalSec = value.filter { ch -> ch.isDigit() }.take(3)) }
-    }
-
     fun saveAbrpSettings() {
         val state = _uiState.value
         viewModelScope.launch {
-            val interval = state.abrpIntervalSec.toIntOrNull()
-                ?.coerceIn(SettingsRepository.MIN_ABRP_INTERVAL_SEC, SettingsRepository.MAX_ABRP_INTERVAL_SEC)
-                ?: SettingsRepository.DEFAULT_ABRP_INTERVAL_SEC.toInt()
             settingsRepository.setString(SettingsRepository.KEY_ABRP_API_KEY, state.abrpApiKey.trim())
             settingsRepository.setString(SettingsRepository.KEY_ABRP_USER_TOKEN, state.abrpUserToken.trim())
             settingsRepository.setString(SettingsRepository.KEY_ABRP_CAR_MODEL, state.abrpCarModel.trim())
-            settingsRepository.setString(SettingsRepository.KEY_ABRP_INTERVAL_SEC, interval.toString())
             val enabled = state.abrpTelemetryEnabled && state.abrpUserToken.isNotBlank()
             settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, enabled.toString())
             _uiState.update {
                 it.copy(
                     abrpTelemetryEnabled = enabled,
-                    abrpIntervalSec = interval.toString(),
                     abrpSaveStatus = "Сохранено",
                 )
             }

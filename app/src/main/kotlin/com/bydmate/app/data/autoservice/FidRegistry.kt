@@ -20,6 +20,7 @@ object FidRegistry {
     const val DEV_STATISTIC = 1014   // BMS lifetime statistics
     const val DEV_CHARGING = 1009    // Charging gun + charger state
     const val DEV_BODYWORK = 1001    // 12V battery voltage on bodywork
+    const val DEV_ENGINE = 1012      // Engine controller (live battery power)
 
     // === Statistic fids (dev=1014) ===
     /** BMS State of Health, percent (transact 5=int, raw 0..100). */
@@ -57,4 +58,14 @@ object FidRegistry {
     // === Bodywork fids (dev=1001) ===
     /** 12V auxiliary battery voltage, V (transact 7=float). */
     const val FID_OTA_BATTERY_POWER_VOLTAGE = 1128267816
+
+    // === Engine fids (dev=1012) ===
+    /**
+     * Live battery power, signed int kW (transact 5). Positive = consumption,
+     * negative = regen/charging. Raw int = kW directly (no scaling).
+     * Validated on Leopard 3 2026-05-11: ENG_POW=1→1kW, ENG_POW=3→3kW.
+     * Drive probe range -26..+101 matched dashboard observations.
+     * See memory `reference_eng_pow_fid.md`.
+     */
+    const val FID_ENGINE_POWER = 339738656
 }

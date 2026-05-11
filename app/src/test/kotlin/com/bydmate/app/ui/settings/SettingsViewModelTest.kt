@@ -179,6 +179,7 @@ class SettingsViewModelTest {
         override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
         override suspend fun readChargingSnapshot(): ChargingReading? = null
+        override suspend fun getEnginePowerKw(): Int? = null
     }
 
     private class FakeAdbClient : AdbOnDeviceClient {

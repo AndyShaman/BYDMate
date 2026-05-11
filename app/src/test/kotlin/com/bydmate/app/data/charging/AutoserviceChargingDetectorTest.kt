@@ -35,6 +35,7 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
         override suspend fun readChargingSnapshot(): ChargingReading? = charging
+        override suspend fun getEnginePowerKw(): Int? = null
     }
 
     private class RecordingDao : ChargeDao {

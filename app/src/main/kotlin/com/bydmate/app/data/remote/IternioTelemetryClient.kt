@@ -47,6 +47,11 @@ class IternioTelemetryClient @Inject constructor(
         // their own developer key. Custom key from Settings still takes
         // precedence when set.
         const val DEFAULT_API_KEY = "32b2162f-9599-4647-8139-66e9f9528370"
+        // Sanity envelope for ENG_POW. Leopard 3 worst case: ~250 kW discharge
+        // on launch, ~150 kW DC charge. [-300, +500] covers it with margin;
+        // anything beyond is a sentinel or Parcel parse glitch.
+        private const val POWER_MIN_KW = -300
+        private const val POWER_MAX_KW = 500
     }
 
     /**
@@ -66,6 +71,17 @@ class IternioTelemetryClient @Inject constructor(
      * @param charging Optional autoservice charging snapshot (Leopard 3 only).
      *                 Adds `is_dcfc` and `kwh_charged` when readable.
      * @param carModel Optional ABRP car-model code from settings.
+     * @param enginePowerKw Optional live battery power from autoservice ENG_POW
+     *                     (fid 339738656, dev=1012, tx=5). When present takes
+     *                     priority over `data.power` — autoservice reads
+     *                     battery-side draw directly, while DiPars `power` is
+     *                     motor mechanical and often null in reduced-payload
+     *                     mode on Leopard 3.
+     * @param sampleTimeMs Wall-clock time at which the snapshot was captured
+     *                    (epoch millis). Used for the `utc` field so ABRP
+     *                    plots samples at the moment of measurement, not at
+     *                    the moment our HTTP call lands. Defaults to now when
+     *                    null (call-time fallback).
      */
     suspend fun send(
         apiKey: String,
@@ -75,6 +91,8 @@ class IternioTelemetryClient @Inject constructor(
         battery: BatteryReading?,
         charging: ChargingReading?,
         carModel: String?,
+        enginePowerKw: Int? = null,
+        sampleTimeMs: Long? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = userToken.trim()
         if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
@@ -84,11 +102,27 @@ class IternioTelemetryClient @Inject constructor(
 
         try {
             val telemetry = JSONObject()
-            telemetry.put("utc", System.currentTimeMillis() / 1000)
+            val utc = (sampleTimeMs ?: System.currentTimeMillis()) / 1000L
+            telemetry.put("utc", utc)
             telemetry.put("soc", soc)
 
             data.speed?.let { telemetry.put("speed", it) }
-            data.power?.let { telemetry.put("power", it) }
+            // Power priority: autoservice ENG_POW > DiPars data.power > 0.
+            // ABRP rates data accuracy by samples-per-10s of each field;
+            // dropping `power` when both sources are dead pulls accuracy to
+            // ~12%. We always send the field (0 when sources are unavailable)
+            // and tag the chosen source in logcat so a missing live source
+            // shows up as `power_source=zero_fallback`, distinct from a
+            // genuine 0 kW snapshot during coast/standstill.
+            val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
+            val powerKw: Double = sanePower?.toDouble() ?: data.power ?: 0.0
+            val powerSource = when {
+                sanePower != null -> "autoservice"
+                data.power != null -> "diplus"
+                else -> "zero_fallback"
+            }
+            telemetry.put("power", powerKw)
+            Log.d(TAG, "power=$powerKw source=$powerSource")
 
             data.avgBatTemp?.let { telemetry.put("batt_temp", it) }
             data.exteriorTemp?.let { telemetry.put("ext_temp", it) }
@@ -144,9 +178,7 @@ class IternioTelemetryClient @Inject constructor(
                 if (!response.isSuccessful) {
                     // Don't log raw body — Iternio may echo credentials back.
                     Log.w(TAG, "HTTP ${response.code}")
-                    return@withContext Result.failure(
-                        IllegalStateException("HTTP ${response.code}")
-                    )
+                    return@withContext Result.failure(mapErrorResponse(response.code, response.header("Retry-After")))
                 }
                 try {
                     val json = JSONObject(body)
@@ -165,6 +197,54 @@ class IternioTelemetryClient @Inject constructor(
         } catch (e: Exception) {
             Log.w(TAG, "отправка не удалась: ${e.message}")
             Result.failure(e)
+        }
+    }
+
+    /**
+     * Map HTTP status to a typed exception so the caller (TrackingService) can
+     * apply different cooldowns for "slow down" vs "outage" without parsing
+     * status codes itself. 4xx other than 429 fall through to the generic
+     * IllegalStateException — they signal misconfiguration (bad token, wrong
+     * URL) and won't recover with backoff.
+     */
+    private fun mapErrorResponse(httpCode: Int, retryAfterHeader: String?): Throwable = when {
+        httpCode == 429 -> IternioRateLimitException(parseRetryAfter(retryAfterHeader))
+        httpCode in 500..599 -> IternioServerErrorException(httpCode)
+        else -> IllegalStateException("HTTP $httpCode")
+    }
+
+    /**
+     * RFC 7231 §7.1.3 — Retry-After is either delta-seconds OR an HTTP-date.
+     * We honor both, but cap at 3600 s; anything longer is almost certainly a
+     * misconfigured upstream (we'd rather try again sooner than wait an hour).
+     * Past dates yield 0. Unparseable input yields null so the caller picks
+     * its own bounded backoff.
+     */
+    internal fun parseRetryAfter(header: String?): Int? {
+        val raw = header?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        // delta-seconds path
+        raw.toIntOrNull()?.let { return it.takeIf { v -> v in 0..3600 } }
+        // HTTP-date path. java.time.RFC_1123_DATE_TIME has known issues with
+        // the leading-zero day-of-month that HTTP servers actually emit
+        // ("Sun, 01 Jan 2026 ..." instead of "Sun, 1 Jan 2026 ..."), so use
+        // SimpleDateFormat with explicit pattern and forced English locale.
+        return try {
+            val fmt = java.text.SimpleDateFormat("EEE, dd MMM yyyy HH:mm:ss zzz", java.util.Locale.US)
+            fmt.timeZone = java.util.TimeZone.getTimeZone("GMT")
+            // Lenient: don't reject if day-of-week disagrees with the date.
+            // Real servers stamp HTTP dates programmatically so the day name
+            // will match, but our test fixtures use arbitrary dates and we
+            // don't care about the prefix anyway.
+            fmt.isLenient = true
+            val whenMs = fmt.parse(raw)?.time ?: return null
+            val deltaSec = (whenMs - System.currentTimeMillis()) / 1000L
+            when {
+                deltaSec <= 0L -> 0
+                deltaSec > 3600L -> null
+                else -> deltaSec.toInt()
+            }
+        } catch (_: Exception) {
+            null
         }
     }
 
