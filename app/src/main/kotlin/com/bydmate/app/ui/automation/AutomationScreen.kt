@@ -89,6 +89,7 @@ import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
+import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 import org.json.JSONArray
@@ -1475,6 +1476,7 @@ private fun AppLaunchActionControls(
     modifier: Modifier = Modifier
 ) {
     var editing by remember { mutableStateOf(false) }
+    var pendingMinimize by remember(action) { mutableStateOf(action.appLaunchMinimize()) }
     val pkg = action.appLaunchPackageName()
     val label = action.appLaunchLabel()
     val preview = when {
@@ -1509,131 +1511,16 @@ private fun AppLaunchActionControls(
     if (editing) {
         AppLaunchPickerDialog(
             currentPackage = pkg,
-            currentMinimize = action.appLaunchMinimize(),
+            showMinimizeToggle = true,
+            initialMinimize = pendingMinimize,
+            onMinimizeChanged = { pendingMinimize = it },
             onDismiss = { editing = false },
-            onSelect = { newPkg, newLabel, newMinimize ->
-                onUpdate(action.withAppLaunch(newPkg, newLabel, newMinimize))
+            onSelect = { newPkg, newLabel ->
+                onUpdate(action.withAppLaunch(newPkg, newLabel, pendingMinimize))
                 editing = false
-            }
+            },
         )
     }
-}
-
-private data class InstalledApp(val packageName: String, val label: String)
-
-@Composable
-private fun AppLaunchPickerDialog(
-    currentPackage: String,
-    currentMinimize: Boolean,
-    onDismiss: () -> Unit,
-    onSelect: (pkg: String, label: String, minimize: Boolean) -> Unit
-) {
-    val context = LocalContext.current
-    val apps = remember { queryLaunchableApps(context) }
-    var search by remember { mutableStateOf("") }
-    var minimize by remember { mutableStateOf(currentMinimize) }
-
-    val filtered = remember(search, apps) {
-        val q = search.trim().lowercase()
-        if (q.isEmpty()) apps
-        else apps.filter { it.label.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
-    }
-
-    val fieldColors = OutlinedTextFieldDefaults.colors(
-        focusedTextColor = TextPrimary,
-        unfocusedTextColor = TextPrimary,
-        focusedBorderColor = AccentGreen,
-        unfocusedBorderColor = CardBorder,
-        focusedLabelColor = AccentGreen,
-        unfocusedLabelColor = TextSecondary,
-        cursorColor = AccentGreen
-    )
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        containerColor = CardSurface,
-        title = { Text("Выбор приложения", color = TextPrimary, fontSize = 16.sp) },
-        text = {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                OutlinedTextField(
-                    value = search,
-                    onValueChange = { search = it },
-                    label = { Text("Поиск") },
-                    singleLine = true,
-                    shape = RoundedCornerShape(8.dp),
-                    colors = fieldColors,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { minimize = !minimize }
-                        .padding(vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Checkbox(
-                        checked = minimize,
-                        onCheckedChange = { minimize = it },
-                        colors = CheckboxDefaults.colors(
-                            checkedColor = AccentGreen,
-                            uncheckedColor = CardBorder,
-                            checkmarkColor = TextPrimary
-                        )
-                    )
-                    Text(
-                        "Свернуть после запуска (через 3 сек)",
-                        fontSize = 13.sp,
-                        color = TextPrimary
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                LazyColumn(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(320.dp)
-                ) {
-                    items(filtered, key = { it.packageName }) { app ->
-                        val selected = app.packageName == currentPackage
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onSelect(app.packageName, app.label, minimize) }
-                                .background(if (selected) AccentGreen.copy(alpha = 0.1f) else Color.Transparent)
-                                .padding(horizontal = 8.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(app.label, fontSize = 14.sp, color = TextPrimary, maxLines = 1)
-                                Text(app.packageName, fontSize = 11.sp, color = TextMuted, maxLines = 1)
-                            }
-                        }
-                    }
-                    if (filtered.isEmpty()) {
-                        item {
-                            Text("Ничего не найдено", color = TextMuted, fontSize = 13.sp, modifier = Modifier.padding(8.dp))
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть", color = TextSecondary) }
-        }
-    )
-}
-
-private fun queryLaunchableApps(context: android.content.Context): List<InstalledApp> {
-    val pm = context.packageManager
-    val intent = android.content.Intent(android.content.Intent.ACTION_MAIN).apply {
-        addCategory(android.content.Intent.CATEGORY_LAUNCHER)
-    }
-    val resolved = pm.queryIntentActivities(intent, 0)
-    val self = context.packageName
-    return resolved
-        .map { InstalledApp(it.activityInfo.packageName, it.loadLabel(pm).toString()) }
-        .filter { it.packageName != self }
-        .distinctBy { it.packageName }
-        .sortedBy { it.label.lowercase() }
 }
 
 // --- Call Action Controls ---
