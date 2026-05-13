@@ -26,11 +26,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.*
 
 sealed class UpdateState {
@@ -76,8 +78,8 @@ fun UpdateDialog(
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    Text("Обновления", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text("Текущая версия: v$currentVersion", color = TextSecondary, fontSize = 14.sp)
+                    Text(stringResource(R.string.settings_update_dialog_title), color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.settings_update_current_version, currentVersion), color = TextSecondary, fontSize = 14.sp)
 
                     Spacer(modifier = Modifier.height(4.dp))
 
@@ -89,7 +91,7 @@ fun UpdateDialog(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                             ) {
-                                Text("Проверить обновления", color = Color.White)
+                                Text(stringResource(R.string.settings_update_check_now_button), color = Color.White)
                             }
                         }
                         is UpdateState.Checking -> {
@@ -99,16 +101,17 @@ fun UpdateDialog(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 CircularProgressIndicator(color = AccentBlue, modifier = Modifier.padding(8.dp))
-                                Text("Проверка...", color = TextSecondary, fontSize = 14.sp)
+                                Text(stringResource(R.string.settings_update_checking), color = TextSecondary, fontSize = 14.sp)
                             }
                         }
                         is UpdateState.UpToDate -> {
-                            Text("✓ Установлена последняя версия", color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                            Text(stringResource(R.string.settings_update_up_to_date), color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                         }
                         is UpdateState.Available -> {
-                            Text("Доступна версия: v${state.version}", color = AccentGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text(stringResource(R.string.settings_update_available_version, state.version), color = AccentGreen, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                             if (state.notes.isNotBlank()) {
-                                Text("Что нового:", color = TextSecondary, fontSize = 13.sp)
+                                Text(stringResource(R.string.settings_update_whats_new_label), color = TextSecondary, fontSize = 13.sp)
+                                // Release notes body stays as-is (user-facing Russian plain text from GitHub)
                                 Text(state.notes, color = TextPrimary, fontSize = 13.sp)
                             }
                             Button(
@@ -117,12 +120,12 @@ fun UpdateDialog(
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
                             ) {
-                                Text("Скачать и установить", color = Color.White, fontWeight = FontWeight.Bold)
+                                Text(stringResource(R.string.settings_update_install_button), color = Color.White, fontWeight = FontWeight.Bold)
                             }
                         }
                         is UpdateState.Downloading -> {
                             Text(
-                                "Скачивается v${state.version}",
+                                stringResource(R.string.settings_update_downloading, state.version),
                                 color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium
                             )
                             Text(state.progress, color = AccentBlue, fontSize = 14.sp)
@@ -133,14 +136,14 @@ fun UpdateDialog(
                             )
                         }
                         is UpdateState.Error -> {
-                            Text("Ошибка: ${state.message}", color = SocRed, fontSize = 13.sp)
+                            Text(stringResource(R.string.settings_update_error, state.message), color = SocRed, fontSize = 13.sp)
                             Button(
                                 onClick = onCheck,
                                 modifier = Modifier.fillMaxWidth(),
                                 shape = RoundedCornerShape(8.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                             ) {
-                                Text("Попробовать снова", color = Color.White)
+                                Text(stringResource(R.string.settings_update_retry_button), color = Color.White)
                             }
                         }
                     }
@@ -151,7 +154,7 @@ fun UpdateDialog(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Закрыть", color = TextSecondary)
+                        Text(stringResource(R.string.settings_update_close_button), color = TextSecondary)
                     }
                 }
             }

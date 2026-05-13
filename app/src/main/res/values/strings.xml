@@ -3,6 +3,123 @@
     <string name="app_name">BYDMate</string>
     <string name="settings_language_title">Язык</string>
 
+    <!-- Settings: Navigation rail -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_rail_sections_label">Разделы</string>
+
+    <!-- Settings: Section labels (left pane) -->
+    <string name="settings_section_auto_battery_title">Авто и батарея</string>
+    <string name="settings_section_trips_title">Поездки</string>
+    <string name="settings_section_integrations_title">Интеграции</string>
+    <string name="settings_section_widget_title">Виджет</string>
+    <string name="settings_section_places_title">Места</string>
+    <string name="settings_section_application_title">Приложение</string>
+    <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
+    <string name="settings_smart_home_section_title">Умный дом</string>
+
+    <!-- Settings: Auto and battery section -->
+    <string name="settings_battery_section_header">Батарея и тарифы</string>
+    <string name="settings_battery_capacity_label">Ёмкость батареи (кВт·ч)</string>
+    <string name="settings_tariff_home_label">Тариф дома (%1$s/кВт·ч)</string>
+    <string name="settings_tariff_dc_label">Тариф DC (%1$s/кВт·ч)</string>
+    <string name="settings_tariff_trip_label">Тариф поездок</string>
+    <string name="settings_tariff_custom_label">Свой тариф (%1$s/кВт·ч)</string>
+    <string name="settings_save_tariffs_button">Сохранить тарифы</string>
+    <string name="settings_tariff_future_note">Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.</string>
+    <string name="settings_recalc_all_button">Пересчитать все поездки</string>
+    <string name="settings_recalc_note">Пересчитает стоимость всех поездок\nпо текущему тарифу.</string>
+    <string name="settings_consumption_section_header">Пороги расхода</string>
+    <string name="settings_consumption_good_label">Хороший &lt; (кВт·ч/100км)</string>
+    <string name="settings_consumption_bad_label">Плохой &gt; (кВт·ч/100км)</string>
+
+    <!-- Settings: Recalculate confirmation dialog -->
+    <string name="settings_recalc_dialog_title">Пересчитать стоимость?</string>
+    <string name="settings_recalc_dialog_text">Все поездки будут пересчитаны по тарифу %1$s %2$s/кВт·ч.\nУже посчитанные значения будут заменены.</string>
+    <string name="settings_recalc_confirm_button">Пересчитать</string>
+    <string name="settings_cancel_button">Отмена</string>
+
+    <!-- Settings: Trips section -->
+    <string name="settings_trips_datasource_header">Источник данных поездок</string>
+    <string name="settings_trips_datasource_note">Leopard 3 — BYD energydata.\nSong и другие без встроенной базы — DiPlus TripInfo.</string>
+    <string name="settings_trips_datasource_hint">Если после 2-3 поездок список пустой — переключи режим.</string>
+    <string name="settings_trips_system_header">Системные данные (экспериментально)</string>
+    <string name="settings_trips_system_note">Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.</string>
+    <string name="settings_trips_system_enable_label">Включить</string>
+
+    <!-- Settings: Integrations section -->
+    <string name="settings_abrp_section_header">ABRP — телеметрия</string>
+    <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
+    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся — ABRP читает координаты сам.</string>
+    <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
+    <string name="settings_abrp_save_button">Сохранить ABRP</string>
+    <string name="settings_ai_section_header">AI Инсайты</string>
+    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
+    <string name="settings_openrouter_model_selected">Модель: %1$s</string>
+    <string name="settings_openrouter_model_pick">Выбрать модель</string>
+    <string name="settings_ai_loading_label">Загрузка...</string>
+    <string name="settings_ai_save_button">Сохранить и получить инсайт</string>
+
+    <!-- Settings: Model picker dialog -->
+    <string name="settings_model_picker_title">Выбор модели</string>
+    <string name="settings_model_picker_search_label">Поиск</string>
+    <string name="settings_model_picker_loading">Загрузка моделей...</string>
+
+    <!-- Settings: Widget section -->
+    <string name="settings_widget_section_header">Плавающий виджет</string>
+    <string name="settings_widget_show_soc_label">Показывать виджет SOC</string>
+    <string name="settings_widget_hints">• Долгий тап на виджете — скрыть до следующего открытия BYDMate.\n• Перетащить в корзину внизу — выключить совсем.\n• Обычный тап — открыть BYDMate.</string>
+    <string name="settings_widget_reset_position_button">Сбросить позицию</string>
+    <string name="settings_widget_opacity_label">Прозрачность</string>
+    <string name="settings_widget_scale_label">Размер</string>
+    <string name="settings_widget_tap_section_header">Тап по виджету</string>
+    <string name="settings_widget_left_tap_zoning_label">Зонирование тапов</string>
+    <string name="settings_widget_left_tap_zoning_description">Левая 1/3 — открывает выбранное приложение; остальное — BYDMate.</string>
+    <string name="settings_widget_left_tap_label">Приложение для левого тапа</string>
+    <string name="settings_widget_left_tap_description">По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.</string>
+
+    <!-- Settings: Places section -->
+    <string name="settings_places_section_header">Места</string>
+    <string name="settings_places_entry_title">Точки для автоматизации</string>
+    <string name="settings_places_entry_description">Дом, работа, любимые места — триггеры «Въезд» / «Выезд»</string>
+
+    <!-- Settings: Application section -->
+    <string name="settings_app_units_header">Единицы и валюта</string>
+    <string name="settings_app_distance_label">Расстояние</string>
+    <string name="settings_app_currency_label">Валюта</string>
+    <string name="settings_app_data_header">Данные</string>
+    <string name="settings_export_csv_button">Экспорт CSV</string>
+    <string name="settings_log_recording_start_button">Запись логов</string>
+    <string name="settings_log_recording_stop_button">Остановить запись</string>
+    <string name="settings_about_header">О приложении</string>
+    <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
+    <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
+    <string name="settings_update_check_toggle_label">Проверять обновления</string>
+    <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и предлагать обновиться</string>
+    <string name="settings_update_check_button">Проверить обновления сейчас</string>
+
+    <!-- Settings: Autoservice status -->
+    <string name="settings_autoservice_disconnected_title">не подключено</string>
+    <string name="settings_autoservice_disconnected_detail">перезапусти приложение, если ADB включён в Настройках разработчика</string>
+    <string name="settings_autoservice_sentinel_title">подключено, но данные не читаются</string>
+    <string name="settings_autoservice_sentinel_detail">возможно функция работает только на Leopard 3</string>
+    <string name="settings_autoservice_connected_title">подключено</string>
+    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
+
+    <!-- Settings: Update dialog -->
+    <string name="settings_update_dialog_title">Обновления</string>
+    <string name="settings_update_current_version">Текущая версия: v%1$s</string>
+    <string name="settings_update_check_now_button">Проверить обновления</string>
+    <string name="settings_update_checking">Проверка...</string>
+    <string name="settings_update_up_to_date">Установлена последняя версия</string>
+    <string name="settings_update_available_version">Доступна версия: v%1$s</string>
+    <string name="settings_update_whats_new_label">Что нового:</string>
+    <string name="settings_update_install_button">Скачать и установить</string>
+    <string name="settings_update_downloading">Скачивается v%1$s</string>
+    <string name="settings_update_error">Ошибка: %1$s</string>
+    <string name="settings_update_retry_button">Попробовать снова</string>
+    <string name="settings_update_close_button">Закрыть</string>
+
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>

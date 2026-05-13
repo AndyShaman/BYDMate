@@ -78,6 +78,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.collectAsState
+import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
@@ -86,14 +87,14 @@ import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 
-private enum class SettingsSection(val label: String, val icon: ImageVector) {
-    BATTERY("Авто и батарея", Icons.Outlined.BatteryChargingFull),
-    TRIPS("Поездки", Icons.Outlined.DirectionsCar),
-    INTEGRATIONS("Интеграции", Icons.Outlined.Link),
-    WIDGET("Виджет", Icons.Outlined.PhoneAndroid),
-    PLACES("Места", Icons.Outlined.Place),
-    APP("Приложение", Icons.Outlined.Settings),
-    SMART_HOME("Умный дом", Icons.Outlined.Home),
+private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
+    BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
+    TRIPS(R.string.settings_section_trips_title, Icons.Outlined.DirectionsCar),
+    INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
+    WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
+    PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
+    APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
+    SMART_HOME(R.string.settings_smart_home_section_title, Icons.Outlined.Home),
 }
 
 private val PrimaryColor = AccentGreen
@@ -114,21 +115,21 @@ fun SettingsScreen(
         }
         AlertDialog(
             onDismissRequest = { viewModel.hideRecalcConfirm() },
-            title = { Text("Пересчитать стоимость?", color = TextPrimary) },
+            title = { Text(stringResource(R.string.settings_recalc_dialog_title), color = TextPrimary) },
             text = {
                 Text(
-                    "Все поездки будут пересчитаны по тарифу $tariffLabel ${state.currencySymbol}/кВт·ч.\nУже посчитанные значения будут заменены.",
+                    stringResource(R.string.settings_recalc_dialog_text, tariffLabel, state.currencySymbol),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmRecalc() }) {
-                    Text("Пересчитать", color = AccentOrange)
+                    Text(stringResource(R.string.settings_recalc_confirm_button), color = AccentOrange)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideRecalcConfirm() }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
                 }
             },
             containerColor = CardSurface
@@ -172,7 +173,7 @@ fun SettingsScreen(
             .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
-            text = "Настройки",
+            text = stringResource(R.string.settings_title),
             color = TextPrimary,
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
@@ -242,7 +243,7 @@ private fun SettingsRail(
     ) {
         Column(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 8.dp)) {
             Text(
-                "Разделы",
+                stringResource(R.string.settings_rail_sections_label),
                 color = TextMuted,
                 fontSize = 10.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -310,7 +311,7 @@ private fun RailItem(
         )
         Spacer(modifier = Modifier.width(12.dp))
         Text(
-            text = section.label,
+            text = stringResource(section.labelRes),
             color = fg,
             fontSize = 14.sp,
             fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
@@ -320,7 +321,7 @@ private fun RailItem(
 
 @Composable
 private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = "Батарея и тарифы")
+    SectionHeader(text = stringResource(R.string.settings_battery_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -331,24 +332,24 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             SettingsTextField(
-                label = "Ёмкость батареи (кВт·ч)",
+                label = stringResource(R.string.settings_battery_capacity_label),
                 value = state.batteryCapacity,
                 onValueChange = { viewModel.saveBatteryCapacity(it) },
                 keyboardType = KeyboardType.Decimal
             )
             SettingsTextField(
-                label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
+                label = stringResource(R.string.settings_tariff_home_label, state.currencySymbol),
                 value = state.homeTariff,
                 onValueChange = { viewModel.updateHomeTariff(it) },
                 keyboardType = KeyboardType.Decimal
             )
             SettingsTextField(
-                label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
+                label = stringResource(R.string.settings_tariff_dc_label, state.currencySymbol),
                 value = state.dcTariff,
                 onValueChange = { viewModel.updateDcTariff(it) },
                 keyboardType = KeyboardType.Decimal
             )
-            Text("Тариф поездок", color = TextSecondary, fontSize = 14.sp)
+            Text(stringResource(R.string.settings_tariff_trip_label), color = TextSecondary, fontSize = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
                 UnitChip("DC", state.tripCostTariff == "dc") { viewModel.saveTripCostTariff("dc") }
@@ -358,7 +359,7 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
             }
             if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
                 SettingsTextField(
-                    label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
+                    label = stringResource(R.string.settings_tariff_custom_label, state.currencySymbol),
                     value = state.tripCostTariff,
                     onValueChange = { viewModel.saveTripCostTariff(it) },
                     keyboardType = KeyboardType.Decimal
@@ -372,13 +373,13 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
             ) {
-                Text("Сохранить тарифы", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_save_tariffs_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
             state.tariffSaveStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
             }
             Text(
-                "Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.",
+                stringResource(R.string.settings_tariff_future_note),
                 color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
             )
 
@@ -392,19 +393,19 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentOrange),
                 border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.4f))
             ) {
-                Text("Пересчитать все поездки", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_recalc_all_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
             state.recalcStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
             }
             Text(
-                "Пересчитает стоимость всех поездок\nпо текущему тарифу.",
+                stringResource(R.string.settings_recalc_note),
                 color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
             )
         }
     }
 
-    SectionHeader(text = "Пороги расхода")
+    SectionHeader(text = stringResource(R.string.settings_consumption_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -415,13 +416,13 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             SettingsTextField(
-                label = "Хороший < (кВт·ч/100км)",
+                label = stringResource(R.string.settings_consumption_good_label),
                 value = state.consumptionGood,
                 onValueChange = { viewModel.saveConsumptionGood(it) },
                 keyboardType = KeyboardType.Decimal
             )
             SettingsTextField(
-                label = "Плохой > (кВт·ч/100км)",
+                label = stringResource(R.string.settings_consumption_bad_label),
                 value = state.consumptionBad,
                 onValueChange = { viewModel.saveConsumptionBad(it) },
                 keyboardType = KeyboardType.Decimal
@@ -432,7 +433,7 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
 
 @Composable
 private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = "Источник данных поездок")
+    SectionHeader(text = stringResource(R.string.settings_trips_datasource_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -443,7 +444,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Text(
-                text = "Leopard 3 — BYD energydata.\nSong и другие без встроенной базы — DiPlus TripInfo.",
+                text = stringResource(R.string.settings_trips_datasource_note),
                 color = TextSecondary,
                 fontSize = 11.sp,
             )
@@ -458,7 +459,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 onClick = { viewModel.setDataSource("DIPLUS") },
             )
             Text(
-                text = "Если после 2–3 поездок список пустой — переключи режим.",
+                text = stringResource(R.string.settings_trips_datasource_hint),
                 color = TextSecondary,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp),
@@ -473,7 +474,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         }
     }
 
-    SectionHeader(text = "Системные данные (экспериментально)")
+    SectionHeader(text = stringResource(R.string.settings_trips_system_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -484,7 +485,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.",
+                text = stringResource(R.string.settings_trips_system_note),
                 color = TextSecondary,
                 fontSize = 12.sp,
             )
@@ -493,7 +494,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Включить", color = TextPrimary, fontSize = 14.sp)
+                Text(stringResource(R.string.settings_trips_system_enable_label), color = TextPrimary, fontSize = 14.sp)
                 Switch(
                     checked = state.autoserviceEnabled,
                     onCheckedChange = { enabled ->
@@ -509,7 +510,7 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
 
 @Composable
 private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = "ABRP — телеметрия")
+    SectionHeader(text = stringResource(R.string.settings_abrp_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -526,13 +527,13 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
                     Text(
-                        "Живые данные → A Better Route Planner",
+                        stringResource(R.string.settings_abrp_telemetry_label),
                         color = TextPrimary,
                         fontSize = 14.sp,
                         fontWeight = FontWeight.Medium
                     )
                     Text(
-                        "Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся — ABRP читает координаты сам.",
+                        stringResource(R.string.settings_abrp_telemetry_description),
                         color = TextSecondary,
                         fontSize = 12.sp,
                     )
@@ -544,7 +545,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 )
             }
             SettingsTextField(
-                label = "Токен живых данных из ABRP",
+                label = stringResource(R.string.settings_abrp_token_label),
                 value = state.abrpUserToken,
                 onValueChange = { viewModel.updateAbrpUserToken(it) },
                 keyboardType = KeyboardType.Password
@@ -558,7 +559,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                     contentColor = NavyDark
                 )
             ) {
-                Text("Сохранить ABRP", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_abrp_save_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
             state.abrpSaveStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
@@ -566,7 +567,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
-    SectionHeader(text = "AI Инсайты")
+    SectionHeader(text = stringResource(R.string.settings_ai_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -577,7 +578,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             SettingsTextField(
-                label = "OpenRouter API Key",
+                label = stringResource(R.string.settings_openrouter_api_key_label),
                 value = state.openRouterApiKey,
                 onValueChange = { viewModel.saveOpenRouterApiKey(it) },
                 keyboardType = KeyboardType.Password
@@ -594,8 +595,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             ) {
                 Text(
                     if (state.openRouterModelName.isNotBlank())
-                        "Модель: ${state.openRouterModelName}"
-                    else "Выбрать модель",
+                        stringResource(R.string.settings_openrouter_model_selected, state.openRouterModelName)
+                    else stringResource(R.string.settings_openrouter_model_pick),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1
@@ -614,8 +615,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 )
             ) {
                 Text(
-                    if (state.aiSaveStatus == "Загрузка инсайта...") "Загрузка..."
-                    else "Сохранить и получить инсайт",
+                    if (state.aiSaveStatus == "Загрузка инсайта...") stringResource(R.string.settings_ai_loading_label)
+                    else stringResource(R.string.settings_ai_save_button),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -658,7 +659,7 @@ private fun WidgetSection() {
     )
     var showLeftTapPicker by remember { mutableStateOf(false) }
 
-    SectionHeader(text = "Плавающий виджет")
+    SectionHeader(text = stringResource(R.string.settings_widget_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -673,7 +674,7 @@ private fun WidgetSection() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Показывать виджет SOC",
+                    text = stringResource(R.string.settings_widget_show_soc_label),
                     color = TextPrimary,
                     fontSize = 13.sp,
                     modifier = Modifier.weight(1f),
@@ -701,9 +702,7 @@ private fun WidgetSection() {
                 )
             }
             Text(
-                text = "• Долгий тап на виджете — скрыть до следующего открытия BYDMate.\n" +
-                        "• Перетащить в корзину внизу — выключить совсем.\n" +
-                        "• Обычный тап — открыть BYDMate.",
+                text = stringResource(R.string.settings_widget_hints),
                 color = TextSecondary,
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
@@ -720,7 +719,7 @@ private fun WidgetSection() {
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
             ) {
-                Text("Сбросить позицию", fontSize = 13.sp, color = TextPrimary)
+                Text(stringResource(R.string.settings_widget_reset_position_button), fontSize = 13.sp, color = TextPrimary)
             }
             Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
                 Row(
@@ -728,7 +727,7 @@ private fun WidgetSection() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Прозрачность",
+                        text = stringResource(R.string.settings_widget_opacity_label),
                         color = TextPrimary,
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
@@ -763,7 +762,7 @@ private fun WidgetSection() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = "Размер",
+                        text = stringResource(R.string.settings_widget_scale_label),
                         color = TextPrimary,
                         fontSize = 13.sp,
                         modifier = Modifier.weight(1f),
@@ -795,7 +794,7 @@ private fun WidgetSection() {
         }
     }
 
-    SectionHeader(text = "Тап по виджету")
+    SectionHeader(text = stringResource(R.string.settings_widget_tap_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -811,12 +810,12 @@ private fun WidgetSection() {
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Зонирование тапов",
+                        text = stringResource(R.string.settings_widget_left_tap_zoning_label),
                         color = TextPrimary,
                         fontSize = 13.sp,
                     )
                     Text(
-                        text = "Левая 1/3 — открывает выбранное приложение; остальное — BYDMate.",
+                        text = stringResource(R.string.settings_widget_left_tap_zoning_description),
                         color = TextSecondary,
                         fontSize = 11.sp,
                     )
@@ -834,9 +833,9 @@ private fun WidgetSection() {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Приложение для левого тапа", color = TextPrimary, fontSize = 13.sp)
+                    Text(stringResource(R.string.settings_widget_left_tap_label), color = TextPrimary, fontSize = 13.sp)
                     Text(
-                        text = "По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.",
+                        text = stringResource(R.string.settings_widget_left_tap_description),
                         color = TextSecondary,
                         fontSize = 11.sp,
                     )
@@ -878,7 +877,7 @@ private fun WidgetSection() {
 
 @Composable
 private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
-    SectionHeader(text = "Места")
+    SectionHeader(text = stringResource(R.string.settings_places_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -898,8 +897,8 @@ private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
                 tint = AccentGreen,
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Точки для автоматизации", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("Дом, работа, любимые места — триггеры «Въезд» / «Выезд»", color = TextSecondary, fontSize = 12.sp)
+                Text(stringResource(R.string.settings_places_entry_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_places_entry_description), color = TextSecondary, fontSize = 12.sp)
             }
         }
     }
@@ -910,7 +909,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     val lang by viewModel.appLanguage.collectAsState()
     LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
 
-    SectionHeader(text = "Единицы и валюта")
+    SectionHeader(text = stringResource(R.string.settings_app_units_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -920,13 +919,13 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Расстояние", color = TextSecondary, fontSize = 14.sp)
+            Text(stringResource(R.string.settings_app_distance_label), color = TextSecondary, fontSize = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 UnitChip("км", state.units == "km") { viewModel.saveUnits("km") }
                 UnitChip("мили", state.units == "miles") { viewModel.saveUnits("miles") }
             }
             Spacer(modifier = Modifier.height(4.dp))
-            Text("Валюта", color = TextSecondary, fontSize = 14.sp)
+            Text(stringResource(R.string.settings_app_currency_label), color = TextSecondary, fontSize = 14.sp)
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.horizontalScroll(rememberScrollState())
@@ -942,7 +941,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         }
     }
 
-    SectionHeader(text = "Данные")
+    SectionHeader(text = stringResource(R.string.settings_app_data_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -958,7 +957,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = Color.White)
             ) {
-                Text("Экспорт CSV", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_export_csv_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
             if (state.exportStatus != null) {
                 Text(
@@ -982,7 +981,8 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 )
             ) {
                 Text(
-                    if (state.isRecordingLogs) "⏺ Остановить запись" else "Запись логов",
+                    if (state.isRecordingLogs) stringResource(R.string.settings_log_recording_stop_button)
+                    else stringResource(R.string.settings_log_recording_start_button),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
@@ -997,7 +997,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         }
     }
 
-    SectionHeader(text = "О приложении")
+    SectionHeader(text = stringResource(R.string.settings_about_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -1014,16 +1014,16 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
             )
-            Text("© 2026 AndyShaman", color = TextSecondary, fontSize = 14.sp)
+            Text(stringResource(R.string.settings_copyright), color = TextSecondary, fontSize = 14.sp)
             if (state.lastBootInfo != null) {
                 Text(
-                    "Автозапуск: ${state.lastBootInfo}",
+                    stringResource(R.string.settings_autostart_recorded, state.lastBootInfo!!),
                     color = AccentGreen,
                     fontSize = 12.sp
                 )
             } else {
                 Text(
-                    "Автозапуск: не зафиксирован",
+                    stringResource(R.string.settings_autostart_not_recorded),
                     color = SocRed,
                     fontSize = 12.sp
                 )
@@ -1045,9 +1045,9 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                    Text("Проверять обновления", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_update_check_toggle_label), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                     Text(
-                        "Через 30 секунд после запуска проверять GitHub и предлагать обновиться",
+                        stringResource(R.string.settings_update_check_toggle_description),
                         color = TextSecondary, fontSize = 12.sp
                     )
                 }
@@ -1064,7 +1064,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
             ) {
-                Text("Проверить обновления сейчас", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_update_check_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }
     }
@@ -1208,15 +1208,15 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
         AutoserviceStatus.Disconnected -> StatusRow(
             marker = "✗",
             markerColor = TextMuted,
-            title = "не подключено",
-            detail = "перезапусти приложение, если ADB включён в Настройках разработчика",
+            title = stringResource(R.string.settings_autoservice_disconnected_title),
+            detail = stringResource(R.string.settings_autoservice_disconnected_detail),
             detailColor = TextSecondary,
         )
         AutoserviceStatus.AllSentinel -> StatusRow(
             marker = "⚠",
             markerColor = SocYellow,
-            title = "подключено, но данные не читаются",
-            detail = "возможно функция работает только на Leopard 3",
+            title = stringResource(R.string.settings_autoservice_sentinel_title),
+            detail = stringResource(R.string.settings_autoservice_sentinel_detail),
             detailColor = SocYellow,
         )
         is AutoserviceStatus.Connected -> {
@@ -1226,8 +1226,8 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
             StatusRow(
                 marker = "✓",
                 markerColor = AccentGreen,
-                title = "подключено",
-                detail = "SoH $soh • lifetime $km / $kwh",
+                title = stringResource(R.string.settings_autoservice_connected_title),
+                detail = stringResource(R.string.settings_autoservice_connected_detail, soh, km, kwh),
                 detailColor = AccentGreen,
             )
         }
@@ -1343,13 +1343,13 @@ private fun ModelPickerDialog(
                 .padding(16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Выбор модели", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_model_picker_title), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Поиск") },
+                    label = { Text(stringResource(R.string.settings_model_picker_search_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -1367,7 +1367,7 @@ private fun ModelPickerDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (loading) {
-                    Text("Загрузка моделей...", color = TextSecondary, fontSize = 14.sp)
+                    Text(stringResource(R.string.settings_model_picker_loading), color = TextSecondary, fontSize = 14.sp)
                 } else {
                     val filtered = if (searchQuery.isBlank()) models
                     else models.filter { it.name.contains(searchQuery, ignoreCase = true) ||
