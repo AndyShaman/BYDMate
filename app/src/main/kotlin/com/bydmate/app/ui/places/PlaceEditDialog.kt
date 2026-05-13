@@ -30,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.window.DialogProperties
 import android.widget.Toast
+import androidx.compose.ui.res.stringResource
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.theme.AccentGreen
@@ -102,7 +104,7 @@ fun PlaceEditDialog(
         containerColor = CardSurface,
         title = {
             Text(
-                text = if (initial == null) "Новое место" else "Редактировать место",
+                text = if (initial == null) stringResource(R.string.place_edit_dialog_title_new) else stringResource(R.string.place_edit_dialog_title_edit),
                 color = TextPrimary,
                 fontSize = 16.sp
             )
@@ -113,7 +115,7 @@ fun PlaceEditDialog(
                 OutlinedTextField(
                     value = nameText,
                     onValueChange = { if (it.length <= 40) nameText = it },
-                    label = { Text("Название") },
+                    label = { Text(stringResource(R.string.place_edit_name_label)) },
                     singleLine = true,
                     isError = nameText.isNotEmpty() && !nameValid,
                     shape = RoundedCornerShape(8.dp),
@@ -140,7 +142,7 @@ fun PlaceEditDialog(
                     OutlinedTextField(
                         value = latText,
                         onValueChange = { latText = it },
-                        label = { Text("Широта") },
+                        label = { Text(stringResource(R.string.place_edit_lat_label)) },
                         singleLine = true,
                         isError = latText.isNotEmpty() && !latValid,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -151,7 +153,7 @@ fun PlaceEditDialog(
                     OutlinedTextField(
                         value = lonText,
                         onValueChange = { lonText = it },
-                        label = { Text("Долгота") },
+                        label = { Text(stringResource(R.string.place_edit_lon_label)) },
                         singleLine = true,
                         isError = lonText.isNotEmpty() && !lonValid,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
@@ -167,7 +169,7 @@ fun PlaceEditDialog(
                 OutlinedTextField(
                     value = radiusText,
                     onValueChange = { radiusText = it },
-                    label = { Text("Радиус, м") },
+                    label = { Text(stringResource(R.string.place_edit_radius_label)) },
                     singleLine = true,
                     isError = radiusText.isNotEmpty() && !radiusValid,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -182,7 +184,7 @@ fun PlaceEditDialog(
                     if (canSave) {
                         val raw = radiusText.toInt()
                         if (raw < 20) {
-                            Toast.makeText(context, "Минимальный радиус 20 м", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, context.getString(R.string.place_edit_error_min_radius), Toast.LENGTH_SHORT).show()
                         }
                         val radius = raw.coerceIn(20, 500)
                         onSave(initial?.id, nameText.trim(), latValue!!, lonValue!!, radius)
@@ -190,12 +192,12 @@ fun PlaceEditDialog(
                 },
                 enabled = canSave
             ) {
-                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+                Text(stringResource(R.string.charges_edit_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
             }
         }
     )

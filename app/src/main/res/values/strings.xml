@@ -339,6 +339,26 @@
     <!-- Journal relative time -->
     <string name="automation_time_yesterday">вчера %1$s</string>
 
+    <!-- Places screen -->
+    <string name="places_tab_title">Места</string>
+    <string name="places_back_content_description">Назад</string>
+    <string name="places_add_button">+ Добавить</string>
+    <string name="places_empty">Мест пока нет. Нажмите \"+ Добавить\", чтобы создать.</string>
+    <string name="places_row_coords">%1$.5f, %2$.5f · %3$d м</string>
+    <string name="places_row_in_use">используется в %1$d правилах</string>
+    <string name="places_edit_content_description">Редактировать</string>
+    <string name="places_delete_content_description">Удалить</string>
+    <string name="places_delete_blocked_message">Место используется в %1$d автоматизациях. Сначала удалите правила.</string>
+
+    <!-- Place edit dialog -->
+    <string name="place_edit_dialog_title_new">Новое место</string>
+    <string name="place_edit_dialog_title_edit">Редактировать место</string>
+    <string name="place_edit_name_label">Название</string>
+    <string name="place_edit_lat_label">Широта</string>
+    <string name="place_edit_lon_label">Долгота</string>
+    <string name="place_edit_radius_label">Радиус, м</string>
+    <string name="place_edit_error_min_radius">Минимальный радиус 20 м</string>
+
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
