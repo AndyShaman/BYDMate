@@ -120,6 +120,42 @@
     <string name="settings_update_retry_button">Попробовать снова</string>
     <string name="settings_update_close_button">Закрыть</string>
 
+    <!-- Trips screen -->
+    <string name="trips_filter_all">Все</string>
+    <string name="trips_filter_trips_only">Поездки</string>
+    <string name="trips_filter_stops_only">Стоянки</string>
+    <string name="trips_empty">Нет данных за выбранный период</string>
+    <string name="trips_col_time">время</string>
+    <string name="trips_col_duration">длит.</string>
+    <string name="trips_col_km">км</string>
+    <string name="trips_col_kwh">кВт·ч</string>
+    <string name="trips_chart_kwh_chip">кВтч</string>
+    <string name="trips_chart_no_data">Нет данных</string>
+    <string name="trips_chart_tooltip_count">%1$s · %2$d поезд.</string>
+    <!-- Formatted value labels used in month/day summary rows -->
+    <string name="trips_km_value">%1$.0f км</string>
+    <string name="trips_kwh_value">%1$.0f кВт·ч</string>
+    <string name="trips_km_decimal_value">%1$.1f км</string>
+    <string name="trips_kwh_decimal_value">%1$.1f кВт·ч</string>
+
+    <!-- TripDetailDialog -->
+    <string name="trip_detail_title_trip">Поездка</string>
+    <string name="trip_detail_title_stop">Стоянка</string>
+    <string name="trip_detail_stats_header">Статистика</string>
+    <string name="trip_detail_gps_unavailable">GPS-данные недоступны</string>
+    <string name="trip_detail_distance_label">Дистанция</string>
+    <string name="trip_detail_distance_value">%1$.1f км</string>
+    <string name="trip_detail_duration_label">Длительность</string>
+    <string name="trip_detail_avg_speed_label">Ср. скорость</string>
+    <string name="trip_detail_speed_value">%1$.0f км/ч</string>
+    <string name="trip_detail_max_speed_label">Макс. скорость</string>
+    <string name="trip_detail_consumption_label">Потребление</string>
+    <string name="trip_detail_consumption_value">%1$.1f кВт·ч</string>
+    <string name="trip_detail_efficiency_label">Расход</string>
+    <string name="trip_detail_cost_label">Стоимость</string>
+    <string name="trip_detail_temp_label">Темп.</string>
+    <string name="trip_detail_max_speed_histogram">макс %1$d км/ч</string>
+
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>

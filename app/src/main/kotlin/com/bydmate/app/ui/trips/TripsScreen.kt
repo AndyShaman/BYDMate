@@ -38,8 +38,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatDuration
@@ -64,15 +66,15 @@ fun TripsScreen(
     ) {
         // Period chips
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TripsChip("День", state.period == TripPeriod.TODAY) { viewModel.setPeriod(TripPeriod.TODAY) }
-            TripsChip("Нед", state.period == TripPeriod.WEEK) { viewModel.setPeriod(TripPeriod.WEEK) }
-            TripsChip("Мес", state.period == TripPeriod.MONTH) { viewModel.setPeriod(TripPeriod.MONTH) }
-            TripsChip("Год", state.period == TripPeriod.YEAR) { viewModel.setPeriod(TripPeriod.YEAR) }
-            TripsChip("Всё", state.period == TripPeriod.ALL) { viewModel.setPeriod(TripPeriod.ALL) }
+            TripsChip(stringResource(R.string.dashboard_period_day), state.period == TripPeriod.TODAY) { viewModel.setPeriod(TripPeriod.TODAY) }
+            TripsChip(stringResource(R.string.dashboard_period_week), state.period == TripPeriod.WEEK) { viewModel.setPeriod(TripPeriod.WEEK) }
+            TripsChip(stringResource(R.string.dashboard_period_month), state.period == TripPeriod.MONTH) { viewModel.setPeriod(TripPeriod.MONTH) }
+            TripsChip(stringResource(R.string.dashboard_period_year), state.period == TripPeriod.YEAR) { viewModel.setPeriod(TripPeriod.YEAR) }
+            TripsChip(stringResource(R.string.dashboard_period_all), state.period == TripPeriod.ALL) { viewModel.setPeriod(TripPeriod.ALL) }
             Spacer(modifier = Modifier.width(12.dp))
-            TripsChip("Все", state.filter == TripFilter.ALL) { viewModel.setFilter(TripFilter.ALL) }
-            TripsChip("Поездки", state.filter == TripFilter.TRIPS_ONLY) { viewModel.setFilter(TripFilter.TRIPS_ONLY) }
-            TripsChip("Стоянки", state.filter == TripFilter.STOPS_ONLY) { viewModel.setFilter(TripFilter.STOPS_ONLY) }
+            TripsChip(stringResource(R.string.trips_filter_all), state.filter == TripFilter.ALL) { viewModel.setFilter(TripFilter.ALL) }
+            TripsChip(stringResource(R.string.trips_filter_trips_only), state.filter == TripFilter.TRIPS_ONLY) { viewModel.setFilter(TripFilter.TRIPS_ONLY) }
+            TripsChip(stringResource(R.string.trips_filter_stops_only), state.filter == TripFilter.STOPS_ONLY) { viewModel.setFilter(TripFilter.STOPS_ONLY) }
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -85,7 +87,7 @@ fun TripsScreen(
                     verticalArrangement = Arrangement.Center,
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Text("Нет данных за выбранный период", color = TextSecondary, fontSize = 16.sp)
+                    Text(stringResource(R.string.trips_empty), color = TextSecondary, fontSize = 16.sp)
                 }
             } else {
                 LazyColumn(
@@ -184,10 +186,10 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("%.0f км".format(month.totalKm), color = TextSecondary, fontSize = 12.sp,
+            Text(stringResource(R.string.trips_km_value, month.totalKm), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(80.dp))
-            Text("%.0f кВт·ч".format(month.totalKwh), color = TextSecondary, fontSize = 12.sp,
+            Text(stringResource(R.string.trips_kwh_value, month.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
             Text("%.1f/100".format(month.avgConsumption),
@@ -222,10 +224,10 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("%.1f км".format(day.totalKm), color = TextSecondary, fontSize = 12.sp,
+            Text(stringResource(R.string.trips_km_decimal_value, day.totalKm), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(80.dp))
-            Text("%.1f кВт·ч".format(day.totalKwh), color = TextSecondary, fontSize = 12.sp,
+            Text(stringResource(R.string.trips_kwh_decimal_value, day.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
             Text("%.1f/100".format(day.avgConsumption),
@@ -249,10 +251,10 @@ private fun ColumnHeaders(currencySymbol: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
-        Text("длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
-        Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
-        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
+        Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text(stringResource(R.string.trips_col_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+        Text(stringResource(R.string.trips_col_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
     }
@@ -373,7 +375,7 @@ private fun ChartPanel(
         ) {
             Spacer(modifier = Modifier.weight(1f))
             MetricChip("/100", ChartMetric.PER_100, metric, enabled = !stopsOnly, onMetricChange)
-            MetricChip("кВтч", ChartMetric.KWH, metric, enabled = true, onMetricChange)
+            MetricChip(stringResource(R.string.trips_chart_kwh_chip), ChartMetric.KWH, metric, enabled = true, onMetricChange)
             MetricChip(currencySymbol, ChartMetric.COST, metric, enabled = true, onMetricChange)
             Spacer(modifier = Modifier.weight(1f))
         }
@@ -385,7 +387,7 @@ private fun ChartPanel(
                 modifier = Modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
-                Text("Нет данных", color = TextMuted, fontSize = 13.sp)
+                Text(stringResource(R.string.trips_chart_no_data), color = TextMuted, fontSize = 13.sp)
             }
         } else {
             BarChart(
@@ -442,6 +444,10 @@ private fun BarChart(
     modifier: Modifier = Modifier
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current.density
+
+    // Hoist localized strings for use inside Canvas (non-composable scope)
+    val tooltipCountFormat = stringResource(R.string.trips_chart_tooltip_count)
+    val kwhLabel = stringResource(R.string.trips_chart_kwh_chip)
 
     val yLabelPaint = remember {
         AndroidPaint().apply {
@@ -571,10 +577,10 @@ private fun BarChart(
 
                 val valueText = when (metric) {
                     ChartMetric.PER_100 -> "%.1f /100".format(bar.value)
-                    ChartMetric.KWH -> "%.1f кВтч".format(bar.value)
+                    ChartMetric.KWH -> "%.1f $kwhLabel".format(bar.value)
                     ChartMetric.COST -> "%.2f $currencySymbol".format(bar.value)
                 }
-                val countText = "${bar.label} · ${bar.tripCount} поезд."
+                val countText = tooltipCountFormat.format(bar.label, bar.tripCount)
 
                 val tooltipW = 150f * d
                 val tooltipH = 48f * d
