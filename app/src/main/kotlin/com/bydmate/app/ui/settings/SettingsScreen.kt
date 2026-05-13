@@ -77,6 +77,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.res.stringResource
+import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
@@ -904,6 +907,9 @@ private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
 
 @Composable
 private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val lang by viewModel.appLanguage.collectAsState()
+    LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
+
     SectionHeader(text = "Единицы и валюта")
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -1116,6 +1122,44 @@ private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewMode
                 "Polling опрашивает Worker каждую секунду\nи выполняет команды через D+ API",
                 color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
             )
+        }
+    }
+}
+
+@Composable
+private fun LanguageBlock(
+    currentLang: String,
+    onLanguageChange: (String) -> Unit
+) {
+    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(
+                text = stringResource(R.string.settings_language_title),
+                style = androidx.compose.material3.MaterialTheme.typography.titleMedium
+            )
+            Spacer(Modifier.height(8.dp))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onLanguageChange("ru") }
+                    .padding(vertical = 4.dp)
+            ) {
+                RadioButton(selected = currentLang == "ru", onClick = { onLanguageChange("ru") })
+                Spacer(Modifier.width(8.dp))
+                Text("Русский")
+            }
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onLanguageChange("en") }
+                    .padding(vertical = 4.dp)
+            ) {
+                RadioButton(selected = currentLang == "en", onClick = { onLanguageChange("en") })
+                Spacer(Modifier.width(8.dp))
+                Text("English")
+            }
         }
     }
 }

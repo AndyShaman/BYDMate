@@ -238,7 +238,8 @@ class SettingsViewModelTest {
             idleDrainDao = idleDrainDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
-            batteryStateRepository = batteryStateRepo
+            batteryStateRepository = batteryStateRepo,
+            localePreferences = LocalePreferences(ctx)
         )
     }
 

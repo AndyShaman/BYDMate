@@ -4,12 +4,15 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Environment
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.InsightsManager
@@ -136,8 +139,18 @@ class SettingsViewModel @Inject constructor(
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
-    private val batteryStateRepository: BatteryStateRepository
+    private val batteryStateRepository: BatteryStateRepository,
+    private val localePreferences: LocalePreferences
 ) : ViewModel() {
+
+    private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    fun setAppLanguage(lang: String) {
+        localePreferences.setLanguage(lang)
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang))
+        _appLanguage.value = lang
+    }
 
     private val _uiState = MutableStateFlow(SettingsUiState(
         appVersion = getVersion(),

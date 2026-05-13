@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BYDMate</string>
-    <string name="settings_language_title">Язык</string>
+    <string name="settings_language_title">Language</string>
 </resources>
