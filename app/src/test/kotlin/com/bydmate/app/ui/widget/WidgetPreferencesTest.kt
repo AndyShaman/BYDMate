@@ -99,6 +99,50 @@ class WidgetPreferencesTest {
         assertFalse(prefs.isHiddenUntilAppLaunch())
     }
 
+    @Test fun `leftTapZoning defaults to false`() {
+        assertFalse(prefs.isLeftTapZoningEnabled())
+    }
+
+    @Test fun `setLeftTapZoning true is persisted`() {
+        prefs.setLeftTapZoningEnabled(true)
+        assertTrue(prefs.isLeftTapZoningEnabled())
+    }
+
+    @Test fun `leftTapAppPackage defaults to Yandex Navigator`() {
+        assertEquals("ru.yandex.yandexnavi", prefs.getLeftTapAppPackage())
+    }
+
+    @Test fun `leftTapAppLabel defaults to Russian name`() {
+        assertEquals("Яндекс.Навигатор", prefs.getLeftTapAppLabel())
+    }
+
+    @Test fun `setLeftTapApp stores both package and label`() {
+        prefs.setLeftTapApp("com.spotify.music", "Spotify")
+        assertEquals("com.spotify.music", prefs.getLeftTapAppPackage())
+        assertEquals("Spotify", prefs.getLeftTapAppLabel())
+    }
+
+    @Test fun `migration copies legacy true to new key and removes legacy`() {
+        store[WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR] = true
+        val migrated = WidgetPreferences(fakeSharedPrefs(store))
+        assertTrue(migrated.isLeftTapZoningEnabled())
+        assertFalse(store.containsKey(WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR))
+    }
+
+    @Test fun `migration copies legacy false to new key and removes legacy`() {
+        store[WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR] = false
+        val migrated = WidgetPreferences(fakeSharedPrefs(store))
+        assertFalse(migrated.isLeftTapZoningEnabled())
+        assertFalse(store.containsKey(WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR))
+    }
+
+    @Test fun `migration is no-op when legacy key absent`() {
+        assertFalse(store.containsKey(WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR))
+        val fresh = WidgetPreferences(fakeSharedPrefs(store))
+        assertFalse(fresh.isLeftTapZoningEnabled())
+        assertFalse(store.containsKey(WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR))
+    }
+
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
     private fun fakeSharedPrefs(backing: MutableMap<String, Any?>): SharedPreferences {
         return object : SharedPreferences {

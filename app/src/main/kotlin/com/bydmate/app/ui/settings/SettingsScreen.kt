@@ -73,6 +73,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 
@@ -494,7 +495,14 @@ fun SettingsScreen(
                 val widgetEnabled by widgetPrefs.enabledFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isEnabled())
                 val widgetAlpha by widgetPrefs.alphaFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.getAlpha())
                 val widgetScale by widgetPrefs.scaleFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.getScale())
-                val widgetLeftTapNav by widgetPrefs.leftTapNavigatorFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isLeftTapNavigatorEnabled())
+                val widgetLeftTapApp by widgetPrefs.leftTapAppFlow().collectAsStateWithLifecycle(
+                    initialValue = WidgetPreferences.LeftTapAppState(
+                        enabled = widgetPrefs.isLeftTapZoningEnabled(),
+                        packageName = widgetPrefs.getLeftTapAppPackage(),
+                        label = widgetPrefs.getLeftTapAppLabel(),
+                    ),
+                )
+                var showLeftTapPicker by remember { mutableStateOf(false) }
 
                 // Drop preview-mode when this screen leaves composition (back / tab switch)
                 // OR when the app goes to background, so an overlay never gets stranded
@@ -654,21 +662,65 @@ fun SettingsScreen(
                             ) {
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(
-                                        text = "Левая треть — Яндекс Навигатор",
+                                        text = "Зонирование тапов",
                                         color = TextPrimary,
                                         fontSize = 13.sp,
                                     )
                                     Text(
-                                        text = "Тап по левой части виджета открывает Навигатор, остальное — BYDMate.",
+                                        text = "Левая 1/3 — открывает выбранное приложение; остальное — BYDMate.",
                                         color = TextSecondary,
                                         fontSize = 11.sp,
                                     )
                                 }
                                 Switch(
-                                    checked = widgetLeftTapNav,
-                                    onCheckedChange = { widgetPrefs.setLeftTapNavigatorEnabled(it) },
+                                    checked = widgetLeftTapApp.enabled,
+                                    onCheckedChange = { widgetPrefs.setLeftTapZoningEnabled(it) },
                                     enabled = widgetEnabled,
                                     colors = bydSwitchColors(),
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text("Приложение для левого тапа", color = TextPrimary, fontSize = 13.sp)
+                                    Text(
+                                        text = "По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.",
+                                        color = TextSecondary,
+                                        fontSize = 11.sp,
+                                    )
+                                }
+                                Row(
+                                    modifier = Modifier
+                                        .clickable(enabled = widgetLeftTapApp.enabled && widgetEnabled) {
+                                            showLeftTapPicker = true
+                                        }
+                                        .background(
+                                            color = if (widgetLeftTapApp.enabled && widgetEnabled) CardSurfaceElevated else CardSurface,
+                                            shape = RoundedCornerShape(999.dp),
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Text(
+                                        text = widgetLeftTapApp.label,
+                                        color = if (widgetLeftTapApp.enabled && widgetEnabled) TextPrimary else TextMuted,
+                                        fontSize = 12.sp,
+                                    )
+                                }
+                            }
+
+                            if (showLeftTapPicker) {
+                                AppLaunchPickerDialog(
+                                    currentPackage = widgetLeftTapApp.packageName,
+                                    onDismiss = { showLeftTapPicker = false },
+                                    onSelect = { pkg, label ->
+                                        widgetPrefs.setLeftTapApp(pkg, label)
+                                        showLeftTapPicker = false
+                                    },
+                                    showMinimizeToggle = false,
                                 )
                             }
                         }

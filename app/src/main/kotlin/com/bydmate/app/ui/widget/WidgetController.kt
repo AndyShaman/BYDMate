@@ -45,11 +45,10 @@ object WidgetController {
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
     private const val LONG_PRESS_MS = 1500L
-    // Tap on the left third of the widget launches Yandex Navigator if
-    // installed; the right two thirds keep the historical behaviour
-    // (open BYDMate). Threshold uses the live view width, so it stays
-    // proportional across the 70-200% widget size range.
-    private const val YANDEX_NAVI_PACKAGE = "ru.yandex.yandexnavi"
+    // Tap on the left third of the widget launches the user-configured app
+    // (default Yandex Navigator) when zoning is enabled in WidgetPreferences;
+    // the right two thirds always open BYDMate. Threshold uses the live view
+    // width, so it stays proportional across the 70-200% widget size range.
     private const val LEFT_TAP_FRACTION = 1f / 3f
 
     @Volatile private var appForegrounded: Boolean = false
@@ -533,11 +532,11 @@ object WidgetController {
                         // touched view, so the boundary follows the live widget
                         // size after the user's resize setting.
                         val width = v.width
-                        val isLeftTap = prefs.isLeftTapNavigatorEnabled() &&
+                        val isLeftTap = prefs.isLeftTapZoningEnabled() &&
                             width > 0 && event.x < width * LEFT_TAP_FRACTION
                         try {
                             val intent: Intent? = if (isLeftTap) {
-                                context.packageManager.getLaunchIntentForPackage(YANDEX_NAVI_PACKAGE)
+                                context.packageManager.getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
                             } else {
                                 Intent(context, MainActivity::class.java)
                             }

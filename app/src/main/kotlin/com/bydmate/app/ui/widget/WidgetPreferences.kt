@@ -17,6 +17,8 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     )
 
+    init { migrateLegacyLeftTapKey() }
+
     fun isEnabled(): Boolean = prefs.getBoolean(KEY_ENABLED, false)
 
     fun setEnabled(enabled: Boolean) {
@@ -88,24 +90,62 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
     }
 
     /**
-     * When true, a short tap on the LEFT third of the widget launches Yandex
-     * Navigator (if installed); the rest opens BYDMate. When false (default),
-     * a tap anywhere on the widget opens BYDMate — the historical behaviour.
+     * When true, the LEFT third of the widget launches the configured app
+     * (default Yandex Navigator). The rest opens BYDMate. When false, a tap
+     * anywhere opens BYDMate — historical behaviour.
      */
-    fun isLeftTapNavigatorEnabled(): Boolean =
-        prefs.getBoolean(KEY_LEFT_TAP_NAVIGATOR, false)
+    fun isLeftTapZoningEnabled(): Boolean =
+        prefs.getBoolean(KEY_LEFT_TAP_ZONING, false)
 
-    fun setLeftTapNavigatorEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_LEFT_TAP_NAVIGATOR, enabled).apply()
+    fun setLeftTapZoningEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LEFT_TAP_ZONING, enabled).apply()
     }
 
-    fun leftTapNavigatorFlow(): Flow<Boolean> = callbackFlow {
+    fun getLeftTapAppPackage(): String =
+        prefs.getString(KEY_LEFT_TAP_APP_PKG, DEFAULT_LEFT_TAP_APP_PKG) ?: DEFAULT_LEFT_TAP_APP_PKG
+
+    fun getLeftTapAppLabel(): String =
+        prefs.getString(KEY_LEFT_TAP_APP_LABEL, DEFAULT_LEFT_TAP_APP_LABEL) ?: DEFAULT_LEFT_TAP_APP_LABEL
+
+    fun setLeftTapApp(packageName: String, label: String) {
+        prefs.edit()
+            .putString(KEY_LEFT_TAP_APP_PKG, packageName)
+            .putString(KEY_LEFT_TAP_APP_LABEL, label)
+            .apply()
+    }
+
+    data class LeftTapAppState(
+        val enabled: Boolean,
+        val packageName: String,
+        val label: String,
+    )
+
+    fun leftTapAppFlow(): Flow<LeftTapAppState> = callbackFlow {
+        fun snapshot() = LeftTapAppState(
+            enabled = isLeftTapZoningEnabled(),
+            packageName = getLeftTapAppPackage(),
+            label = getLeftTapAppLabel(),
+        )
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
-            if (changedKey == KEY_LEFT_TAP_NAVIGATOR) trySend(isLeftTapNavigatorEnabled())
+            if (changedKey == KEY_LEFT_TAP_ZONING ||
+                changedKey == KEY_LEFT_TAP_APP_PKG ||
+                changedKey == KEY_LEFT_TAP_APP_LABEL
+            ) {
+                trySend(snapshot())
+            }
         }
-        trySend(isLeftTapNavigatorEnabled())
+        trySend(snapshot())
         prefs.registerOnSharedPreferenceChangeListener(listener)
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
+    private fun migrateLegacyLeftTapKey() {
+        if (!prefs.contains(LEGACY_KEY_LEFT_TAP_NAVIGATOR)) return
+        val legacy = prefs.getBoolean(LEGACY_KEY_LEFT_TAP_NAVIGATOR, false)
+        prefs.edit()
+            .putBoolean(KEY_LEFT_TAP_ZONING, legacy)
+            .remove(LEGACY_KEY_LEFT_TAP_NAVIGATOR)
+            .apply()
     }
 
     companion object {
@@ -116,7 +156,12 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_ALPHA = "widget_alpha"
         const val KEY_SCALE = "widget_scale"
         const val KEY_HIDDEN_UNTIL_LAUNCH = "widget_hidden_until_launch"
-        const val KEY_LEFT_TAP_NAVIGATOR = "widget_left_tap_navigator"
+        const val LEGACY_KEY_LEFT_TAP_NAVIGATOR = "widget_left_tap_navigator"
+        const val KEY_LEFT_TAP_ZONING = "widget_left_tap_zoning"
+        const val KEY_LEFT_TAP_APP_PKG = "widget_left_tap_app_pkg"
+        const val KEY_LEFT_TAP_APP_LABEL = "widget_left_tap_app_label"
+        const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
+        const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
         const val SCALE_MIN = 0.7f
         const val SCALE_MAX = 2.0f
     }
