@@ -2,4 +2,60 @@
 <resources>
     <string name="app_name">BYDMate</string>
     <string name="settings_language_title">Язык</string>
+
+    <!-- Dashboard -->
+    <!-- Top bar -->
+    <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
+    <string name="dashboard_adb_offline">ADB не отвечает</string>
+    <string name="dashboard_status_online">Online</string>
+    <string name="dashboard_status_offline">Offline</string>
+
+    <!-- Left column - live stats -->
+    <string name="dashboard_unit_km">км</string>
+    <string name="dashboard_unit_kwh">кВт·ч</string>
+    <string name="dashboard_range_label">расчётный пробег</string>
+    <string name="dashboard_idle_time_min">%1$.0f мин</string>
+    <string name="dashboard_idle_time_hours">%1$.1f ч</string>
+
+    <!-- Idle drain card -->
+    <string name="dashboard_idle_drain_parking_label">стоянка</string>
+    <string name="dashboard_idle_drain_title">Расход на стоянке</string>
+    <string name="dashboard_idle_drain_rate_label">Скорость</string>
+    <string name="dashboard_idle_drain_rate_value">%1$.2f кВт·ч/час</string>
+    <string name="dashboard_idle_drain_week_label">За 7 дней</string>
+    <string name="dashboard_idle_drain_week_value">%1$.1f кВт·ч</string>
+    <string name="dashboard_idle_drain_avg_day_label">Ср. в день</string>
+
+    <!-- Battery card -->
+    <string name="dashboard_battery_temp_label">темп. бат.</string>
+    <string name="dashboard_battery_voltage_label">борт. сеть</string>
+
+    <!-- AI Insight card -->
+    <string name="dashboard_insight_loading">Анализ...</string>
+    <string name="dashboard_insight_setup_prompt">AI Инсайты - Настройте OpenRouter →</string>
+    <string name="dashboard_insight_refresh">Обновить</string>
+    <string name="dashboard_insight_refreshing">Обновление...</string>
+    <string name="dashboard_insight_no_api_key">Для AI-инсайтов настройте OpenRouter API в Настройках</string>
+    <string name="dashboard_insight_no_data">Мало данных для анализа</string>
+
+    <!-- Period chips -->
+    <string name="dashboard_period_day">День</string>
+    <string name="dashboard_period_week">Нед</string>
+    <string name="dashboard_period_month">Мес</string>
+    <string name="dashboard_period_year">Год</string>
+    <string name="dashboard_period_all">Всё</string>
+
+    <!-- Stat cards -->
+    <string name="dashboard_stat_distance">Пробег</string>
+    <string name="dashboard_stat_energy">Энергия</string>
+    <string name="dashboard_stat_consumption">Расход</string>
+    <string name="dashboard_stat_cost">Стоимость</string>
+    <string name="dashboard_trip_count">%1$d поездок</string>
+
+    <!-- Recent trips section -->
+    <string name="dashboard_recent_trips_title">Последние поездки</string>
+    <string name="dashboard_col_time">время</string>
+    <string name="dashboard_col_duration">длит.</string>
+    <string name="dashboard_col_per100">/100</string>
+    <string name="dashboard_empty_no_trips">Поездок пока нет</string>
 </resources>

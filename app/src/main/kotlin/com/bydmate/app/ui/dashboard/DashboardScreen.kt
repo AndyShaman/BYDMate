@@ -46,6 +46,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -199,10 +200,10 @@ fun DashboardScreen(
                                     Text(rangeText, color = AccentGreen, fontSize = 32.sp, fontWeight = FontWeight.Bold,
                                         fontFamily = FontFamily.Monospace)
                                     Spacer(modifier = Modifier.width(4.dp))
-                                    Text("км", color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
+                                    Text(stringResource(R.string.dashboard_unit_km), color = AccentGreen.copy(alpha = 0.7f), fontSize = 18.sp,
                                         fontWeight = FontWeight.Medium, modifier = Modifier.padding(bottom = 4.dp))
                                 }
-                                Text("расчётный пробег", color = TextMuted, fontSize = 12.sp)
+                                Text(stringResource(R.string.dashboard_range_label), color = TextMuted, fontSize = 12.sp)
                             }
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -287,13 +288,13 @@ fun DashboardScreen(
                         // Idle drain card — hidden in DiPlus mode (no zero-km records)
                         if (state.idleDrainAvailable) {
                             val idleTimeStr = if (state.idleDrainHours < 1.0)
-                                "%.0f".format(state.idleDrainHours * 60) + " мин"
-                            else "%.1f".format(state.idleDrainHours) + " ч"
+                                stringResource(R.string.dashboard_idle_time_min, state.idleDrainHours * 60)
+                            else stringResource(R.string.dashboard_idle_time_hours, state.idleDrainHours)
                             CompactCard(
                                 leftValue = "%.1f".format(state.idleDrainKwhToday),
-                                leftLabel = "кВт·ч",
+                                leftLabel = stringResource(R.string.dashboard_unit_kwh),
                                 rightValue = idleTimeStr,
-                                rightLabel = "стоянка",
+                                rightLabel = stringResource(R.string.dashboard_idle_drain_parking_label),
                                 borderColor = when {
                                     state.idleDrainPercent > 5.0 -> SocRed
                                     state.idleDrainPercent > 2.0 -> SocYellow
@@ -388,7 +389,7 @@ fun DashboardScreen(
                                         )
                                     ) {
                                         Text(
-                                            if (state.insightLoading) "Обновление..." else "Обновить",
+                                            if (state.insightLoading) stringResource(R.string.dashboard_insight_refreshing) else stringResource(R.string.dashboard_insight_refresh),
                                             fontSize = 13.sp,
                                             fontWeight = FontWeight.Medium
                                         )
@@ -396,12 +397,12 @@ fun DashboardScreen(
                                 }
                             } else if (!state.hasApiKey) {
                                 Text(
-                                    "Для AI-инсайтов настройте OpenRouter API в Настройках",
+                                    stringResource(R.string.dashboard_insight_no_api_key),
                                     color = TextSecondary,
                                     fontSize = 13.sp
                                 )
                             } else {
-                                Text("Мало данных для анализа", color = TextMuted, fontSize = 13.sp)
+                                Text(stringResource(R.string.dashboard_insight_no_data), color = TextMuted, fontSize = 13.sp)
                             }
                         }
                     }
@@ -436,16 +437,16 @@ fun DashboardScreen(
                             else -> AccentGreen
                         }
                         CardDetailDialog(
-                            title = "Расход на стоянке",
+                            title = stringResource(R.string.dashboard_idle_drain_title),
                             borderColor = color,
                             onDismiss = { viewModel.toggleIdleDrainExpanded() }
                         ) {
                             if (state.idleDrainRate > 0) {
-                                DetailRow("Скорость", "${"%.2f".format(state.idleDrainRate)} кВт·ч/час", color)
+                                DetailRow(stringResource(R.string.dashboard_idle_drain_rate_label), stringResource(R.string.dashboard_idle_drain_rate_value, state.idleDrainRate), color)
                             }
-                            DetailRow("За 7 дней", "${"%.1f".format(state.idleDrainKwhWeek)} кВт·ч", TextPrimary)
+                            DetailRow(stringResource(R.string.dashboard_idle_drain_week_label), stringResource(R.string.dashboard_idle_drain_week_value, state.idleDrainKwhWeek), TextPrimary)
                             if (state.idleDrainKwhWeek > 0) {
-                                DetailRow("Ср. в день", "${"%.1f".format(state.idleDrainKwhWeek / 7.0)} кВт·ч", TextPrimary)
+                                DetailRow(stringResource(R.string.dashboard_idle_drain_avg_day_label), stringResource(R.string.dashboard_idle_drain_week_value, state.idleDrainKwhWeek / 7.0), TextPrimary)
                             }
                         }
                     }
@@ -459,11 +460,11 @@ fun DashboardScreen(
             ) {
                 // Period chips
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    DashboardPeriodChip("День", state.period == DashboardPeriod.TODAY) { viewModel.setPeriod(DashboardPeriod.TODAY) }
-                    DashboardPeriodChip("Нед", state.period == DashboardPeriod.WEEK) { viewModel.setPeriod(DashboardPeriod.WEEK) }
-                    DashboardPeriodChip("Мес", state.period == DashboardPeriod.MONTH) { viewModel.setPeriod(DashboardPeriod.MONTH) }
-                    DashboardPeriodChip("Год", state.period == DashboardPeriod.YEAR) { viewModel.setPeriod(DashboardPeriod.YEAR) }
-                    DashboardPeriodChip("Всё", state.period == DashboardPeriod.ALL) { viewModel.setPeriod(DashboardPeriod.ALL) }
+                    DashboardPeriodChip(stringResource(R.string.dashboard_period_day), state.period == DashboardPeriod.TODAY) { viewModel.setPeriod(DashboardPeriod.TODAY) }
+                    DashboardPeriodChip(stringResource(R.string.dashboard_period_week), state.period == DashboardPeriod.WEEK) { viewModel.setPeriod(DashboardPeriod.WEEK) }
+                    DashboardPeriodChip(stringResource(R.string.dashboard_period_month), state.period == DashboardPeriod.MONTH) { viewModel.setPeriod(DashboardPeriod.MONTH) }
+                    DashboardPeriodChip(stringResource(R.string.dashboard_period_year), state.period == DashboardPeriod.YEAR) { viewModel.setPeriod(DashboardPeriod.YEAR) }
+                    DashboardPeriodChip(stringResource(R.string.dashboard_period_all), state.period == DashboardPeriod.ALL) { viewModel.setPeriod(DashboardPeriod.ALL) }
                 }
 
                 // 4 stat cards
@@ -471,23 +472,23 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatCard("Пробег", "%.1f км".format(state.totalKm), "${state.tripCount} поездок", Color.White, Modifier.weight(1f))
-                    StatCard("Энергия", "%.1f кВт·ч".format(state.totalKwh), null, AccentBlue, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_distance), "%.1f км".format(state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_energy), "%.1f кВт·ч".format(state.totalKwh), null, AccentBlue, Modifier.weight(1f))
                     val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
-                    StatCard("Расход", if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
-                    StatCard("Стоимость", "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
                 }
 
-                SectionHeader(text = "Последние поездки")
+                SectionHeader(text = stringResource(R.string.dashboard_recent_trips_title))
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
-                    Text("длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
-                    Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dashboard_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.weight(2.5f))
+                    Text(stringResource(R.string.dashboard_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    Text(stringResource(R.string.dashboard_col_per100), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                     Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
@@ -501,7 +502,7 @@ fun DashboardScreen(
                         }
                     }
                 } else {
-                    PlaceholderText(text = "Поездок пока нет")
+                    PlaceholderText(text = stringResource(R.string.dashboard_empty_no_trips))
                 }
             }
         }
@@ -528,14 +529,14 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean, adbConne
         ) {
             if (isServiceRunning && !diPlusConnected) {
                 Text(
-                    text = "DiPlus не отвечает",
+                    text = stringResource(R.string.dashboard_diplus_offline),
                     color = SocYellow,
                     fontSize = 12.sp
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
             if (isServiceRunning && adbConnected == false) {
-                Text("ADB не отвечает", color = SocYellow, fontSize = 12.sp)
+                Text(stringResource(R.string.dashboard_adb_offline), color = SocYellow, fontSize = 12.sp)
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Box(
@@ -545,7 +546,7 @@ private fun TopBar(isServiceRunning: Boolean, diPlusConnected: Boolean, adbConne
                     .background(if (isServiceRunning) AccentGreen else TextMuted)
             )
             Text(
-                text = if (isServiceRunning) "Online" else "Offline",
+                text = if (isServiceRunning) stringResource(R.string.dashboard_status_online) else stringResource(R.string.dashboard_status_offline),
                 color = TextSecondary,
                 fontSize = 12.sp
             )
@@ -586,7 +587,7 @@ private fun InsightCard(
             Text("✦", fontSize = 16.sp, color = if (hasApiKey && title != null) borderColor else TextMuted)
             Spacer(modifier = Modifier.width(8.dp))
             if (loading) {
-                Text("Анализ...", color = TextSecondary, fontSize = 13.sp)
+                Text(stringResource(R.string.dashboard_insight_loading), color = TextSecondary, fontSize = 13.sp)
             } else if (title != null && hasApiKey) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
@@ -607,7 +608,7 @@ private fun InsightCard(
                 }
             } else {
                 Text(
-                    "AI Инсайты — Настройте OpenRouter →",
+                    stringResource(R.string.dashboard_insight_setup_prompt),
                     color = TextMuted,
                     fontSize = 12.sp
                 )
@@ -684,8 +685,8 @@ private fun BatteryCompactCard(
             horizontalArrangement = Arrangement.SpaceEvenly
         ) {
             BatteryCell(value = sohText, label = "SoH", color = sohColor)
-            BatteryCell(value = tempText, label = "темп. бат.", color = tempColor)
-            BatteryCell(value = voltageText, label = "борт. сеть", color = voltageColor)
+            BatteryCell(value = tempText, label = stringResource(R.string.dashboard_battery_temp_label), color = tempColor)
+            BatteryCell(value = voltageText, label = stringResource(R.string.dashboard_battery_voltage_label), color = voltageColor)
         }
     }
 }
