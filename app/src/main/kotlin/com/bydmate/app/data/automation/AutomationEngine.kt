@@ -20,6 +20,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.R
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -448,8 +449,8 @@ class AutomationEngine @Inject constructor(
             .setContentTitle(rule.name)
             .setContentText(summary)
             .setStyle(NotificationCompat.BigTextStyle().bigText(summary))
-            .addAction(android.R.drawable.ic_menu_send, "Выполнить", confirmPI)
-            .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Отмена", cancelPI)
+            .addAction(android.R.drawable.ic_menu_send, context.getString(R.string.service_confirm_action_yes), confirmPI)
+            .addAction(android.R.drawable.ic_menu_close_clear_cancel, context.getString(R.string.service_confirm_action_no), cancelPI)
             .setAutoCancel(true)
             .setTimeoutAfter(CONFIRM_TIMEOUT_MS)
             .setPriority(NotificationCompat.PRIORITY_HIGH)

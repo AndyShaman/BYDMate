@@ -19,6 +19,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
+import com.bydmate.app.R
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.remote.DiParsClient
@@ -221,7 +222,7 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onCreate: starting TrackingService")
         appendChainLog("TrackingService onCreate")
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Запуск…"))
+        startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.service_foreground_content_starting)))
         appendChainLog("startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
@@ -1061,13 +1062,13 @@ class TrackingService : Service(), LocationListener {
         // Block 1: запас (SOC + оценка km) + t°бат
         val socStr = data.soc?.let { "$it%" } ?: "—"
         val rangeKm = _lastRangeKm.value
-        val rangeStr = rangeKm?.let { " ~${"%.0f".format(it)} км" } ?: ""
-        val tempStr = data.avgBatTemp?.let { " | t°бат: ${it}°C" } ?: ""
-        parts += "запас: $socStr$rangeStr$tempStr"
+        val rangeStr = rangeKm?.let { getString(R.string.service_notification_range_suffix, it) } ?: ""
+        val tempStr = data.avgBatTemp?.let { getString(R.string.service_notification_bat_temp_suffix, it) } ?: ""
+        parts += getString(R.string.service_notification_soc_line, socStr, rangeStr, tempStr)
 
         // Block 2: 12V
         data.voltage12v?.let {
-            parts += "борт.сеть: ${"%.1f".format(it)} В"
+            parts += getString(R.string.service_notification_voltage, it)
         }
 
         val text = parts.joinToString(" | ")

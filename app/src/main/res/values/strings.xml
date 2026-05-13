@@ -397,6 +397,20 @@
     <string name="welcome_updating_data_status">Обновление данных...</string>
     <string name="welcome_importing_trips_status">Импорт поездок...</string>
 
+    <!-- Service & Notifications -->
+    <string name="service_foreground_content_starting">Запуск…</string>
+    <!-- Foreground notification live text. soc_line: %1$s=SOC string, %2$s=range suffix (or empty), %3$s=bat-temp suffix (or empty) -->
+    <string name="service_notification_soc_line">запас: %1$s%2$s%3$s</string>
+    <!-- %1$.0f = range km -->
+    <string name="service_notification_range_suffix"> ~%1$.0f км</string>
+    <!-- %1$d = battery temperature °C -->
+    <string name="service_notification_bat_temp_suffix"> | t°бат: %1$d°C</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="service_notification_voltage">борт.сеть: %1$.1f В</string>
+    <!-- Automation confirm notification action buttons -->
+    <string name="service_confirm_action_yes">Выполнить</string>
+    <string name="service_confirm_action_no">Отмена</string>
+
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
