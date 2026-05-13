@@ -197,9 +197,9 @@ fun SettingsScreen(
                         SettingsSection.TRIPS -> TripsSection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
-                        SettingsSection.PLACES -> Text("Места — TODO", color = TextMuted)
-                        SettingsSection.APP -> Text("Приложение — TODO", color = TextMuted)
-                        SettingsSection.SMART_HOME -> Text("Умный дом — TODO", color = TextMuted)
+                        SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
+                        SettingsSection.APP -> AppSection(state, viewModel)
+                        SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
                     }
                 }
             }
@@ -868,6 +868,253 @@ private fun WidgetSection() {
             },
             showMinimizeToggle = false,
         )
+    }
+}
+
+@Composable
+private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
+    SectionHeader(text = "Места")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onNavigateToPlaces() }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Outlined.Place,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Точки для автоматизации", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Дом, работа, любимые места — триггеры «Въезд» / «Выезд»", color = TextSecondary, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = "Единицы и валюта")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("Расстояние", color = TextSecondary, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip("км", state.units == "km") { viewModel.saveUnits("km") }
+                UnitChip("мили", state.units == "miles") { viewModel.saveUnits("miles") }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("Валюта", color = TextSecondary, fontSize = 14.sp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                SettingsRepository.CURRENCIES.forEach { currency ->
+                    UnitChip(
+                        label = "${currency.symbol} ${currency.label}",
+                        selected = state.currency == currency.code,
+                        onClick = { viewModel.saveCurrency(currency.code) }
+                    )
+                }
+            }
+        }
+    }
+
+    SectionHeader(text = "Данные")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { viewModel.exportCsv() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = Color.White)
+            ) {
+                Text("Экспорт CSV", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            if (state.exportStatus != null) {
+                Text(
+                    state.exportStatus!!,
+                    color = if (state.exportStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                    fontSize = 12.sp
+                )
+            }
+
+            // Log recording start/stop
+            Button(
+                onClick = {
+                    if (state.isRecordingLogs) viewModel.stopLogRecording()
+                    else viewModel.startLogRecording()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (state.isRecordingLogs) SocRed else AccentPurple,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    if (state.isRecordingLogs) "⏺ Остановить запись" else "Запись логов",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (state.logSaveStatus != null) {
+                Text(
+                    state.logSaveStatus!!,
+                    color = if (state.logSaveStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
+    SectionHeader(text = "О приложении")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        val context = LocalContext.current
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "BYDMate v${state.appVersion}",
+                color = TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text("© 2026 AndyShaman", color = TextSecondary, fontSize = 14.sp)
+            if (state.lastBootInfo != null) {
+                Text(
+                    "Автозапуск: ${state.lastBootInfo}",
+                    color = AccentGreen,
+                    fontSize = 12.sp
+                )
+            } else {
+                Text(
+                    "Автозапуск: не зафиксирован",
+                    color = SocRed,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = "github.com/AndyShaman/BYDMate",
+                color = AccentBlue,
+                fontSize = 14.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://github.com/AndyShaman/BYDMate")))
+                }
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text("Проверять обновления", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        "Через 30 секунд после запуска проверять GitHub и предлагать обновиться",
+                        color = TextSecondary, fontSize = 12.sp
+                    )
+                }
+                Switch(
+                    checked = state.autoCheckUpdates,
+                    onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+
+            Button(
+                onClick = { viewModel.showUpdateDialog() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
+            ) {
+                Text("Проверить обновления сейчас", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = "Умный дом")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Polling", color = TextPrimary, fontSize = 14.sp)
+                Switch(
+                    checked = state.aliceEnabled,
+                    onCheckedChange = { viewModel.toggleAlice(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+            SettingsTextField(
+                label = "Endpoint URL",
+                value = state.aliceEndpoint,
+                onValueChange = { viewModel.updateAliceEndpoint(it) },
+                keyboardType = KeyboardType.Uri
+            )
+            SettingsTextField(
+                label = "API Key",
+                value = state.aliceApiKey,
+                onValueChange = { viewModel.updateAliceApiKey(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.saveAliceSettings() },
+                enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
+            ) {
+                Text("Сохранить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.aliceSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+            Text(
+                "Polling опрашивает Worker каждую секунду\nи выполняет команды через D+ API",
+                color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+            )
+        }
     }
 }
 
