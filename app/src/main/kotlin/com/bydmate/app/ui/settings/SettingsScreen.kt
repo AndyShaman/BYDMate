@@ -195,7 +195,7 @@ fun SettingsScreen(
                     when (selected) {
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.TRIPS -> TripsSection(state, viewModel)
-                        SettingsSection.INTEGRATIONS -> Text("Интеграции — TODO", color = TextMuted)
+                        SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> Text("Виджет — TODO", color = TextMuted)
                         SettingsSection.PLACES -> Text("Места — TODO", color = TextMuted)
                         SettingsSection.APP -> Text("Приложение — TODO", color = TextMuted)
@@ -485,6 +485,141 @@ private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             }
             AutoserviceStatusBlock(status = state.autoserviceStatus)
         }
+    }
+}
+
+@Composable
+private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = "ABRP — телеметрия")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        "Живые данные → A Better Route Planner",
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        "Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся — ABRP читает координаты сам.",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = state.abrpTelemetryEnabled,
+                    onCheckedChange = { viewModel.toggleAbrpTelemetry(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+            SettingsTextField(
+                label = "Токен живых данных из ABRP",
+                value = state.abrpUserToken,
+                onValueChange = { viewModel.updateAbrpUserToken(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.saveAbrpSettings() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text("Сохранить ABRP", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.abrpSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+        }
+    }
+
+    SectionHeader(text = "AI Инсайты")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsTextField(
+                label = "OpenRouter API Key",
+                value = state.openRouterApiKey,
+                onValueChange = { viewModel.saveOpenRouterApiKey(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.showModelPicker() },
+                enabled = state.openRouterApiKey.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentBlue,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    if (state.openRouterModelName.isNotBlank())
+                        "Модель: ${state.openRouterModelName}"
+                    else "Выбрать модель",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+            Button(
+                onClick = { viewModel.saveAiSettings() },
+                enabled = state.openRouterApiKey.isNotBlank() &&
+                    state.openRouterModel.isNotBlank() &&
+                    state.aiSaveStatus != "Загрузка инсайта...",
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = Color.White
+                )
+            ) {
+                Text(
+                    if (state.aiSaveStatus == "Загрузка инсайта...") "Загрузка..."
+                    else "Сохранить и получить инсайт",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (state.aiSaveStatus != null && state.aiSaveStatus != "Загрузка инсайта...") {
+                Text(
+                    state.aiSaveStatus!!,
+                    color = if (state.aiSaveStatus!!.startsWith("Ошибка")) SocRed else AccentGreen,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
+    // Model picker dialog
+    if (state.showModelPicker) {
+        ModelPickerDialog(
+            models = state.availableModels,
+            loading = state.modelsLoading,
+            selectedId = state.openRouterModel,
+            onSelect = { viewModel.selectModel(it) },
+            onDismiss = { viewModel.hideModelPicker() }
+        )
     }
 }
 
