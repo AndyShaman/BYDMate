@@ -197,6 +197,148 @@
     <string name="charges_edit_tariff_label">%1$s/кВт·ч:</string>
     <string name="charges_edit_save_button">Сохранить</string>
 
+    <!-- Automation screen -->
+    <string name="automation_tab_title">Автоматизация</string>
+
+    <!-- Filter chips -->
+    <string name="automation_filter_all">Все</string>
+    <string name="automation_filter_active">Активные</string>
+    <string name="automation_filter_disabled">Выключенные</string>
+
+    <!-- Header buttons -->
+    <string name="automation_journal_button">Журнал</string>
+    <string name="automation_create_button">+ Создать</string>
+
+    <!-- Rule card context menu -->
+    <string name="automation_menu_edit">Редактировать</string>
+    <string name="automation_menu_duplicate">Дублировать</string>
+    <string name="automation_menu_delete">Удалить</string>
+
+    <!-- Delete confirmation dialog -->
+    <string name="automation_delete_confirm_title">Удалить правило?</string>
+    <string name="automation_delete_confirm_text">Это действие нельзя отменить.</string>
+    <string name="automation_delete_button">Удалить</string>
+    <string name="automation_cancel_button">Отмена</string>
+
+    <!-- Rule card stats -->
+    <string name="automation_rule_triggered_count">Сработало: %1$d</string>
+    <string name="automation_rule_last_trigger">Последний: %1$s</string>
+    <string name="automation_rule_cooldown">Пауза: %1$d сек</string>
+    <string name="automation_rule_logic_and"> И </string>
+    <string name="automation_rule_logic_or"> ИЛИ </string>
+
+    <!-- Editor dialog -->
+    <string name="automation_editor_new_rule_title">Новое правило</string>
+    <string name="automation_rule_name_placeholder">Название правила</string>
+    <string name="automation_section_when">КОГДА (условия)</string>
+    <string name="automation_section_then">ТОГДА (действия)</string>
+    <string name="automation_section_settings">НАСТРОЙКИ</string>
+    <string name="automation_logic_and">И (AND)</string>
+    <string name="automation_logic_or">ИЛИ (OR)</string>
+
+    <!-- Settings section in editor -->
+    <string name="automation_setting_cooldown">Пауза между срабатываниями</string>
+    <string name="automation_setting_unit_sec">сек</string>
+    <string name="automation_setting_park_only">Только на парковке (P)</string>
+    <string name="automation_setting_confirm_before">Спрашивать перед выполнением</string>
+    <string name="automation_setting_once_per_trip">Выполнить один раз за поездку</string>
+
+    <!-- Editor footer buttons -->
+    <string name="automation_save_button">Сохранить</string>
+
+    <!-- Trigger controls -->
+    <string name="automation_trigger_place_deleted">Место удалено</string>
+    <string name="automation_trigger_place_enter_label">Въезд</string>
+    <string name="automation_trigger_place_exit_label">Выезд</string>
+    <string name="automation_trigger_place_enter_prefix">Въезд в</string>
+    <string name="automation_trigger_place_exit_prefix">Выезд из</string>
+    <string name="automation_trigger_place_deleted_placeholder">&lt;удалено&gt;</string>
+    <string name="automation_trigger_time_of_day_label">Время суток:</string>
+    <string name="automation_trigger_day">День</string>
+    <string name="automation_trigger_night">Ночь</string>
+    <string name="automation_trigger_dawn">Рассвет</string>
+    <string name="automation_trigger_dusk">Закат</string>
+    <string name="automation_trigger_service_start">Запуск BYDMate</string>
+    <string name="automation_trigger_internet">Доступен интернет</string>
+
+    <!-- Add trigger button -->
+    <string name="automation_add_condition_button">+ Добавить условие</string>
+    <string name="automation_trigger_type_param">Параметр</string>
+    <string name="automation_trigger_type_place">Место</string>
+    <string name="automation_trigger_type_place_empty_hint">Сначала создайте место в настройках</string>
+    <string name="automation_trigger_type_time_of_day">Время суток</string>
+    <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
+    <string name="automation_trigger_type_internet">Доступен интернет</string>
+
+    <!-- Action row: delay -->
+    <string name="automation_action_delay_label">Пауза</string>
+    <string name="automation_delay_0_5s">0,5 сек</string>
+    <string name="automation_delay_1s">1 сек</string>
+    <string name="automation_delay_2s">2 сек</string>
+    <string name="automation_delay_3s">3 сек</string>
+    <string name="automation_delay_5s">5 сек</string>
+    <string name="automation_delay_10s">10 сек</string>
+    <string name="automation_delay_display_name">Пауза %1$s</string>
+
+    <!-- Add action button -->
+    <string name="automation_add_action_button">+ Добавить действие</string>
+    <string name="automation_action_dplus_command">D+ команда</string>
+    <string name="automation_action_notification_silent">Уведомление (без звука)</string>
+    <string name="automation_action_notification_sound">Уведомление (звук)</string>
+    <string name="automation_action_app_launch">Запуск приложения</string>
+    <string name="automation_action_yandex_music">Яндекс.Музыка</string>
+    <string name="automation_action_call">Звонок</string>
+    <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
+    <string name="automation_action_url">Открыть URL</string>
+    <string name="automation_action_delay">Пауза</string>
+
+    <!-- Overlay permission dialog -->
+    <string name="automation_overlay_permission_title">Нужно разрешение</string>
+    <string name="automation_overlay_permission_text">Звуковые уведомления показываются как всплывающее окно поверх других приложений. Откройте системные настройки и включите \"Поверх других окон\" для BYDMate.</string>
+    <string name="automation_overlay_open_settings">Открыть настройки</string>
+    <string name="automation_overlay_later">Позже</string>
+
+    <!-- Action controls: preview placeholders -->
+    <string name="automation_tap_to_configure">Нажмите для настройки…</string>
+    <string name="automation_tap_to_pick_app">Нажмите, чтобы выбрать приложение…</string>
+    <string name="automation_tap_to_set_phone">Нажмите, чтобы задать номер…</string>
+    <string name="automation_tap_to_pick_place">Нажмите, чтобы выбрать место…</string>
+    <string name="automation_tap_to_set_url">Нажмите, чтобы задать URL…</string>
+
+    <!-- Notification edit dialog -->
+    <string name="automation_notification_title_label">Заголовок</string>
+    <string name="automation_notification_body_label">Текст (опционально)</string>
+
+    <!-- Call edit dialog -->
+    <string name="automation_call_dialog_title">Позвонить</string>
+    <string name="automation_call_name_label">Имя (необязательно)</string>
+    <string name="automation_call_phone_label">Номер телефона</string>
+    <string name="automation_call_auto_dial_label">Звонить автоматически</string>
+    <string name="automation_call_auto_dial_hint">Без нажатия зелёной кнопки</string>
+
+    <!-- Navigate edit dialog -->
+    <string name="automation_navigate_dialog_title">Маршрут в Я.Навигаторе</string>
+    <string name="automation_navigate_no_places_hint">Сначала добавьте место в Настройки → Места</string>
+    <string name="automation_navigate_pick_place_placeholder">Выберите место…</string>
+
+    <!-- URL edit dialog -->
+    <string name="automation_url_dialog_title">Открыть URL</string>
+    <string name="automation_url_field_label">URL</string>
+    <string name="automation_url_minimize_label">Свернуть после запуска (через 3 сек)</string>
+
+    <!-- Yandex Music edit dialog -->
+    <string name="automation_music_dialog_title">Яндекс.Музыка</string>
+    <string name="automation_music_what_to_play">Что запустить:</string>
+    <string name="automation_music_my_wave">Моя Волна</string>
+    <string name="automation_music_minimize_label">Свернуть после запуска (через 3 сек)</string>
+
+    <!-- Journal dialog -->
+    <string name="automation_journal_title">Журнал срабатываний</string>
+    <string name="automation_journal_empty">Журнал пуст</string>
+
+    <!-- Journal relative time -->
+    <string name="automation_time_yesterday">вчера %1$s</string>
+
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>

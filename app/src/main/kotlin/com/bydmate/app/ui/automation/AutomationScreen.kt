@@ -82,8 +82,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
@@ -123,26 +125,26 @@ fun AutomationScreen(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("Автоматизация", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+            Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
             Spacer(Modifier.width(16.dp))
-            AutoChip("Все", state.filter == RuleFilter.ALL) { viewModel.setFilter(RuleFilter.ALL) }
+            AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL) { viewModel.setFilter(RuleFilter.ALL) }
             Spacer(Modifier.width(4.dp))
-            AutoChip("Активные", state.filter == RuleFilter.ENABLED) { viewModel.setFilter(RuleFilter.ENABLED) }
+            AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED) { viewModel.setFilter(RuleFilter.ENABLED) }
             Spacer(Modifier.width(4.dp))
-            AutoChip("Выключенные", state.filter == RuleFilter.DISABLED) { viewModel.setFilter(RuleFilter.DISABLED) }
+            AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED) { viewModel.setFilter(RuleFilter.DISABLED) }
             Spacer(Modifier.weight(1f))
             Button(
                 onClick = { viewModel.showJournal() },
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
                 shape = RoundedCornerShape(8.dp),
                 modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-            ) { Text("Журнал", fontSize = 13.sp) }
+            ) { Text(stringResource(R.string.automation_journal_button), fontSize = 13.sp) }
             Spacer(Modifier.width(8.dp))
             Button(
                 onClick = { viewModel.openNewRule() },
                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
                 shape = RoundedCornerShape(8.dp)
-            ) { Text("+ Создать", fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            ) { Text(stringResource(R.string.automation_create_button), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -189,16 +191,16 @@ fun AutomationScreen(
     state.showDeleteConfirm?.let {
         AlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
-            title = { Text("Удалить правило?", color = TextPrimary) },
-            text = { Text("Это действие нельзя отменить.", color = TextSecondary) },
+            title = { Text(stringResource(R.string.automation_delete_confirm_title), color = TextPrimary) },
+            text = { Text(stringResource(R.string.automation_delete_confirm_text), color = TextSecondary) },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmDelete() }) {
-                    Text("Удалить", color = Color(0xFFEF4444))
+                    Text(stringResource(R.string.automation_delete_button), color = Color(0xFFEF4444))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.cancelDelete() }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
                 }
             },
             containerColor = CardSurface
@@ -259,17 +261,17 @@ private fun RuleCard(
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
                         DropdownMenuItem(
-                            text = { Text("Редактировать") },
+                            text = { Text(stringResource(R.string.automation_menu_edit)) },
                             onClick = { menuExpanded = false; onEdit() },
                             leadingIcon = { Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(18.dp)) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Дублировать") },
+                            text = { Text(stringResource(R.string.automation_menu_duplicate)) },
                             onClick = { menuExpanded = false; onDuplicate() },
                             leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp)) }
                         )
                         DropdownMenuItem(
-                            text = { Text("Удалить", color = Color(0xFFEF4444)) },
+                            text = { Text(stringResource(R.string.automation_menu_delete), color = Color(0xFFEF4444)) },
                             onClick = { menuExpanded = false; onDelete() },
                             leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)) }
                         )
@@ -280,12 +282,14 @@ private fun RuleCard(
             Spacer(Modifier.height(4.dp))
 
             // Trigger → Action summary
+            val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
+            val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
             Text(
                 buildAnnotatedString {
                     triggers.forEachIndexed { i, t ->
                         if (i > 0) {
                             withStyle(SpanStyle(color = TextMuted, fontWeight = FontWeight.SemiBold, fontSize = 11.sp)) {
-                                append(if (rule.triggerLogic == "AND") " И " else " ИЛИ ")
+                                append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
                         withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
@@ -306,14 +310,12 @@ private fun RuleCard(
 
             // Stats
             Spacer(Modifier.height(4.dp))
-            val statsText = buildString {
-                append("Сработало: ${rule.triggerCount}")
-                rule.lastTriggeredAt?.let { ts ->
-                    append(" · Последний: ${formatRelativeTime(ts)}")
-                }
-                append(" · Пауза: ${rule.cooldownSeconds} сек")
-            }
-            Text(statsText, fontSize = 11.sp, color = TextMuted)
+            val triggeredLabel = stringResource(R.string.automation_rule_triggered_count, rule.triggerCount)
+            val lastLabel = rule.lastTriggeredAt?.let { ts ->
+                " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts))
+            } ?: ""
+            val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
+            Text(triggeredLabel + lastLabel + cooldownLabel, fontSize = 11.sp, color = TextMuted)
         }
     }
 }
@@ -351,7 +353,7 @@ private fun EditorDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    if (editing.isNew) "Новое правило" else editing.name,
+                    if (editing.isNew) stringResource(R.string.automation_editor_new_rule_title) else editing.name,
                     fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                     modifier = Modifier.weight(1f)
                 )
@@ -374,7 +376,7 @@ private fun EditorDialog(
                     OutlinedTextField(
                         value = editing.name,
                         onValueChange = { v -> onUpdate { copy(name = v) } },
-                        placeholder = { Text("Название правила", color = TextMuted) },
+                        placeholder = { Text(stringResource(R.string.automation_rule_name_placeholder), color = TextMuted) },
                         modifier = Modifier.fillMaxWidth(),
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = AccentGreen,
@@ -387,14 +389,14 @@ private fun EditorDialog(
                         textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     )
                     Spacer(Modifier.height(14.dp))
-                    SectionHeader("КОГДА (условия)")
+                    SectionHeader(stringResource(R.string.automation_section_when))
 
                     // AND/OR toggle
                     Row {
-                        LogicChip("И (AND)", editing.triggerLogic == "AND") {
+                        LogicChip(stringResource(R.string.automation_logic_and), editing.triggerLogic == "AND") {
                             onUpdate { copy(triggerLogic = "AND") }
                         }
-                        LogicChip("ИЛИ (OR)", editing.triggerLogic == "OR") {
+                        LogicChip(stringResource(R.string.automation_logic_or), editing.triggerLogic == "OR") {
                             onUpdate { copy(triggerLogic = "OR") }
                         }
                     }
@@ -460,7 +462,7 @@ private fun EditorDialog(
                         .verticalScroll(rememberScrollState())
                         .padding(16.dp, 12.dp)
                 ) {
-                    SectionHeader("ТОГДА (действия)")
+                    SectionHeader(stringResource(R.string.automation_section_then))
 
                     editing.actions.forEachIndexed { idx, action ->
                         ActionRow(
@@ -512,10 +514,10 @@ private fun EditorDialog(
                     }
 
                     Spacer(Modifier.height(20.dp))
-                    SectionHeader("НАСТРОЙКИ")
+                    SectionHeader(stringResource(R.string.automation_section_settings))
 
                     // Cooldown
-                    SettingRow("Пауза между срабатываниями") {
+                    SettingRow(stringResource(R.string.automation_setting_cooldown)) {
                         OutlinedTextField(
                             value = editing.cooldownSeconds.toString(),
                             onValueChange = { v ->
@@ -531,12 +533,12 @@ private fun EditorDialog(
                             textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
                         )
                         Spacer(Modifier.width(4.dp))
-                        Text("сек", fontSize = 12.sp, color = TextMuted)
+                        Text(stringResource(R.string.automation_setting_unit_sec), fontSize = 12.sp, color = TextMuted)
                     }
                     Spacer(Modifier.height(4.dp))
 
                     // Require park
-                    SettingRow("Только на парковке (P)") {
+                    SettingRow(stringResource(R.string.automation_setting_park_only)) {
                         Switch(
                             checked = editing.requirePark,
                             onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
@@ -545,7 +547,7 @@ private fun EditorDialog(
                     }
 
                     // Confirm before execute
-                    SettingRow("Спрашивать перед выполнением") {
+                    SettingRow(stringResource(R.string.automation_setting_confirm_before)) {
                         Switch(
                             checked = editing.confirmBeforeExecute,
                             onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
@@ -554,7 +556,7 @@ private fun EditorDialog(
                     }
 
                     // Fire once per trip
-                    SettingRow("Выполнить один раз за поездку") {
+                    SettingRow(stringResource(R.string.automation_setting_once_per_trip)) {
                         Switch(
                             checked = editing.fireOncePerTrip,
                             onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
@@ -588,14 +590,14 @@ private fun EditorDialog(
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
                         shape = RoundedCornerShape(8.dp),
                         modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                    ) { Text("Отмена") }
+                    ) { Text(stringResource(R.string.automation_cancel_button)) }
                     Spacer(Modifier.width(10.dp))
                     Button(
                         onClick = onSave,
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
                         shape = RoundedCornerShape(8.dp),
                         enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
-                    ) { Text("Сохранить", fontWeight = FontWeight.SemiBold) }
+                    ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
                 }
             }
         }
@@ -756,7 +758,7 @@ private fun PlaceTriggerControls(
     if (isStale || (trigger.placeId == null && places.isEmpty())) {
         // Show warning when the referenced place was deleted
         Text(
-            "Место удалено",
+            stringResource(R.string.automation_trigger_place_deleted),
             fontSize = 13.sp,
             color = Color(0xFFEF4444),
             modifier = Modifier
@@ -767,9 +769,10 @@ private fun PlaceTriggerControls(
     } else {
         // Place-name dropdown
         var placeExpanded by remember { mutableStateOf(false) }
+        val deletedPlaceholder = stringResource(R.string.automation_trigger_place_deleted_placeholder)
         Box(modifier = Modifier.width(150.dp)) {
             Text(
-                trigger.placeName ?: "<удалено>",
+                trigger.placeName ?: deletedPlaceholder,
                 fontSize = 13.sp, color = TextPrimary,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -779,13 +782,15 @@ private fun PlaceTriggerControls(
                     .padding(8.dp, 7.dp),
                 maxLines = 1
             )
+            val enterPrefix = stringResource(R.string.automation_trigger_place_enter_prefix)
+            val exitPrefix = stringResource(R.string.automation_trigger_place_exit_prefix)
             DropdownMenu(expanded = placeExpanded, onDismissRequest = { placeExpanded = false }) {
                 places.forEach { place ->
                     DropdownMenuItem(
                         text = { Text(place.name, fontSize = 13.sp) },
                         onClick = {
                             placeExpanded = false
-                            val kindLabel = if (trigger.kind == "place_enter") "Въезд в" else "Выезд из"
+                            val kindLabel = if (trigger.kind == "place_enter") enterPrefix else exitPrefix
                             onUpdate(trigger.copy(
                                 placeId = place.id,
                                 placeName = place.name,
@@ -801,14 +806,18 @@ private fun PlaceTriggerControls(
 
     // Kind toggle pill: Въезд / Выезд
     val isEnter = trigger.kind == "place_enter"
-    val label = if (isEnter) "Въезд" else "Выезд"
+    val enterLabel = stringResource(R.string.automation_trigger_place_enter_label)
+    val exitLabel = stringResource(R.string.automation_trigger_place_exit_label)
+    val enterPrefix2 = stringResource(R.string.automation_trigger_place_enter_prefix)
+    val exitPrefix2 = stringResource(R.string.automation_trigger_place_exit_prefix)
+    val label = if (isEnter) enterLabel else exitLabel
     Box(
         modifier = Modifier
             .background(CardSurface, RoundedCornerShape(6.dp))
             .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
             .clickable {
                 val newKind = if (isEnter) "place_exit" else "place_enter"
-                val kindLabel = if (newKind == "place_enter") "Въезд в" else "Выезд из"
+                val kindLabel = if (newKind == "place_enter") enterPrefix2 else exitPrefix2
                 onUpdate(trigger.copy(
                     kind = newKind,
                     displayName = "$kindLabel «${trigger.placeName ?: "?"}»"
@@ -825,11 +834,15 @@ private fun TimeOfDayTriggerControls(
     trigger: TriggerDef,
     onUpdate: (TriggerDef) -> Unit
 ) {
-    val phases = listOf("DAY" to "День", "NIGHT" to "Ночь", "DAWN" to "Рассвет", "DUSK" to "Закат")
+    val dayLabel = stringResource(R.string.automation_trigger_day)
+    val nightLabel = stringResource(R.string.automation_trigger_night)
+    val dawnLabel = stringResource(R.string.automation_trigger_dawn)
+    val duskLabel = stringResource(R.string.automation_trigger_dusk)
+    val phases = listOf("DAY" to dayLabel, "NIGHT" to nightLabel, "DAWN" to dawnLabel, "DUSK" to duskLabel)
     val current = phases.find { it.first == trigger.value.uppercase() } ?: phases[1]
     var expanded by remember { mutableStateOf(false) }
 
-    Text("Время суток:", fontSize = 12.sp, color = TextMuted)
+    Text(stringResource(R.string.automation_trigger_time_of_day_label), fontSize = 12.sp, color = TextMuted)
     Spacer(Modifier.width(4.dp))
     Box {
         Text(
@@ -867,7 +880,7 @@ private fun ServiceStartTriggerControls() {
     )
     Spacer(Modifier.width(6.dp))
     Text(
-        "Запуск BYDMate",
+        stringResource(R.string.automation_trigger_service_start),
         fontSize = 13.sp,
         color = AccentGreen,
         fontWeight = FontWeight.Bold
@@ -884,7 +897,7 @@ private fun NetworkAvailableTriggerControls() {
     )
     Spacer(Modifier.width(6.dp))
     Text(
-        "Доступен интернет",
+        stringResource(R.string.automation_trigger_internet),
         fontSize = 13.sp,
         color = AccentGreen,
         fontWeight = FontWeight.Bold
@@ -956,14 +969,8 @@ private fun ParamActionControls(
     )
 }
 
-private val DELAY_OPTIONS = listOf(
-    500L to "0,5 сек",
-    1000L to "1 сек",
-    2000L to "2 сек",
-    3000L to "3 сек",
-    5000L to "5 сек",
-    10000L to "10 сек"
-)
+// Delay option keys — labels are resolved at runtime via stringResource
+private val DELAY_OPTION_MS = listOf(500L, 1000L, 2000L, 3000L, 5000L, 10000L)
 
 @Composable
 private fun DelayActionControls(
@@ -972,7 +979,25 @@ private fun DelayActionControls(
     modifier: Modifier = Modifier
 ) {
     val currentMs = action.payload?.toLongOrNull() ?: 1000L
-    val currentLabel = DELAY_OPTIONS.find { it.first == currentMs }?.second ?: "$currentMs мс"
+    val label0_5s = stringResource(R.string.automation_delay_0_5s)
+    val label1s = stringResource(R.string.automation_delay_1s)
+    val label2s = stringResource(R.string.automation_delay_2s)
+    val label3s = stringResource(R.string.automation_delay_3s)
+    val label5s = stringResource(R.string.automation_delay_5s)
+    val label10s = stringResource(R.string.automation_delay_10s)
+    val delayLabels = listOf(
+        500L to label0_5s,
+        1000L to label1s,
+        2000L to label2s,
+        3000L to label3s,
+        5000L to label5s,
+        10000L to label10s
+    )
+    // Pre-build display names for onClick lambdas (stringResource cannot be called in non-Composable onClick)
+    val delayDisplayNames = delayLabels.associate { (ms, lbl) ->
+        ms to stringResource(R.string.automation_delay_display_name, lbl)
+    }
+    val currentLabel = delayLabels.find { it.first == currentMs }?.second ?: "${currentMs}ms"
     var expanded by remember { mutableStateOf(false) }
 
     Row(
@@ -986,7 +1011,7 @@ private fun DelayActionControls(
             modifier = Modifier.size(16.dp)
         )
         Spacer(Modifier.width(6.dp))
-        Text("Пауза", fontSize = 13.sp, color = TextMuted)
+        Text(stringResource(R.string.automation_action_delay_label), fontSize = 13.sp, color = TextMuted)
         Spacer(Modifier.width(6.dp))
         Box {
             Text(
@@ -1001,14 +1026,14 @@ private fun DelayActionControls(
                     .padding(8.dp, 6.dp)
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                DELAY_OPTIONS.forEach { (ms, label) ->
+                delayLabels.forEach { (ms, label) ->
                     DropdownMenuItem(
                         text = { Text(label, fontSize = 13.sp) },
                         onClick = {
                             expanded = false
                             onUpdate(action.copy(
                                 payload = ms.toString(),
-                                displayName = "Пауза $label"
+                                displayName = delayDisplayNames[ms] ?: label
                             ))
                         }
                     )
@@ -1085,7 +1110,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
                 modifier = Modifier.fillMaxWidth().padding(14.dp, 12.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Журнал срабатываний", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                Text(stringResource(R.string.automation_journal_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
                     modifier = Modifier.weight(1f))
                 IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
                     Icon(Icons.Outlined.Close, "close", tint = TextMuted)
@@ -1095,7 +1120,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
 
             if (logs.isEmpty()) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text("Журнал пуст", color = TextMuted, fontSize = 14.sp)
+                    Text(stringResource(R.string.automation_journal_empty), color = TextMuted, fontSize = 14.sp)
                 }
             } else {
                 LazyColumn(modifier = Modifier.padding(8.dp)) {
@@ -1265,19 +1290,19 @@ private fun AddActionButton(
                 .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("+ Добавить действие", fontSize = 12.sp, color = TextMuted)
+            Text(stringResource(R.string.automation_add_action_button), fontSize = 12.sp, color = TextMuted)
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             DropdownMenuItem(
-                text = { Text("D+ команда", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_dplus_command), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddParam() }
             )
             DropdownMenuItem(
-                text = { Text("Уведомление (без звука)", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_notification_silent), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddNotification(true) }
             )
             DropdownMenuItem(
-                text = { Text("Уведомление (звук)", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_notification_sound), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
                     onAddNotification(false)
@@ -1287,27 +1312,27 @@ private fun AddActionButton(
                 }
             )
             DropdownMenuItem(
-                text = { Text("Запуск приложения", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_app_launch), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddAppLaunch() }
             )
             DropdownMenuItem(
-                text = { Text("Яндекс.Музыка", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_yandex_music), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddYandexMusic() }
             )
             DropdownMenuItem(
-                text = { Text("Звонок", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_call), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddCall() }
             )
             DropdownMenuItem(
-                text = { Text("Маршрут в Я.Навигаторе", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_navigate), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddNavigate() }
             )
             DropdownMenuItem(
-                text = { Text("Открыть URL", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_url), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddUrl() }
             )
             DropdownMenuItem(
-                text = { Text("Пауза", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddDelay() }
             )
         }
@@ -1317,10 +1342,10 @@ private fun AddActionButton(
         AlertDialog(
             onDismissRequest = { showOverlayPrompt = false },
             containerColor = CardSurface,
-            title = { Text("Нужно разрешение", color = TextPrimary, fontSize = 16.sp) },
+            title = { Text(stringResource(R.string.automation_overlay_permission_title), color = TextPrimary, fontSize = 16.sp) },
             text = {
                 Text(
-                    "Звуковые уведомления показываются как всплывающее окно поверх других приложений. Откройте системные настройки и включите \"Поверх других окон\" для BYDMate.",
+                    stringResource(R.string.automation_overlay_permission_text),
                     fontSize = 13.sp,
                     color = TextPrimary
                 )
@@ -1334,12 +1359,12 @@ private fun AddActionButton(
                     ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
                     try { context.startActivity(intent) } catch (_: Exception) {}
                 }) {
-                    Text("Открыть настройки", color = AccentGreen)
+                    Text(stringResource(R.string.automation_overlay_open_settings), color = AccentGreen)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showOverlayPrompt = false }) {
-                    Text("Позже", color = TextSecondary)
+                    Text(stringResource(R.string.automation_overlay_later), color = TextSecondary)
                 }
             }
         )
@@ -1360,7 +1385,7 @@ private fun NotificationActionControls(
         title.isNotBlank() && text.isNotBlank() -> "$title — $text"
         title.isNotBlank() -> title
         text.isNotBlank() -> text
-        else -> "Нажмите для настройки…"
+        else -> stringResource(R.string.automation_tap_to_configure)
     }
 
     Row(
@@ -1427,7 +1452,7 @@ private fun NotificationEditDialog(
         containerColor = CardSurface,
         title = {
             Text(
-                text = if (silent) "Уведомление (без звука)" else "Уведомление (звук)",
+                text = if (silent) stringResource(R.string.automation_action_notification_silent) else stringResource(R.string.automation_action_notification_sound),
                 color = TextPrimary,
                 fontSize = 16.sp
             )
@@ -1437,7 +1462,7 @@ private fun NotificationEditDialog(
                 OutlinedTextField(
                     value = titleText,
                     onValueChange = { if (it.length <= 40) titleText = it },
-                    label = { Text("Заголовок") },
+                    label = { Text(stringResource(R.string.automation_notification_title_label)) },
                     singleLine = true,
                     isError = titleText.isNotEmpty() && !canSave,
                     shape = RoundedCornerShape(8.dp),
@@ -1447,7 +1472,7 @@ private fun NotificationEditDialog(
                 OutlinedTextField(
                     value = bodyText,
                     onValueChange = { if (it.length <= 200) bodyText = it },
-                    label = { Text("Текст (опционально)") },
+                    label = { Text(stringResource(R.string.automation_notification_body_label)) },
                     maxLines = 3,
                     shape = RoundedCornerShape(8.dp),
                     colors = fieldColors,
@@ -1457,12 +1482,12 @@ private fun NotificationEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (canSave) onSave(titleText.trim(), bodyText.trim()) }, enabled = canSave) {
-                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         }
     )
@@ -1483,7 +1508,7 @@ private fun AppLaunchActionControls(
     val preview = when {
         label.isNotBlank() -> label
         pkg.isNotBlank() -> pkg
-        else -> "Нажмите, чтобы выбрать приложение…"
+        else -> stringResource(R.string.automation_tap_to_pick_app)
     }
 
     Row(
@@ -1541,7 +1566,7 @@ private fun CallActionControls(
     val preview = when {
         name.isNotBlank() && phone.isNotBlank() -> "$name — $phone"
         phone.isNotBlank() -> phone
-        else -> "Нажмите, чтобы задать номер…"
+        else -> stringResource(R.string.automation_tap_to_set_phone)
     }
 
     Row(
@@ -1608,13 +1633,13 @@ private fun CallEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
-        title = { Text("Позвонить", color = TextPrimary, fontSize = 16.sp) },
+        title = { Text(stringResource(R.string.automation_call_dialog_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             Column {
                 OutlinedTextField(
                     value = nameText,
                     onValueChange = { nameText = it },
-                    label = { Text("Имя (необязательно)") },
+                    label = { Text(stringResource(R.string.automation_call_name_label)) },
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
                     colors = fieldColors,
@@ -1624,7 +1649,7 @@ private fun CallEditDialog(
                 OutlinedTextField(
                     value = phoneText,
                     onValueChange = { phoneText = it },
-                    label = { Text("Номер телефона") },
+                    label = { Text(stringResource(R.string.automation_call_phone_label)) },
                     singleLine = true,
                     isError = phoneText.isNotBlank() && !canSave,
                     shape = RoundedCornerShape(8.dp),
@@ -1651,9 +1676,9 @@ private fun CallEditDialog(
                     )
                     Spacer(Modifier.width(4.dp))
                     Column {
-                        Text("Звонить автоматически", color = TextPrimary, fontSize = 13.sp)
+                        Text(stringResource(R.string.automation_call_auto_dial_label), color = TextPrimary, fontSize = 13.sp)
                         Text(
-                            "Без нажатия зелёной кнопки",
+                            stringResource(R.string.automation_call_auto_dial_hint),
                             color = TextMuted,
                             fontSize = 11.sp
                         )
@@ -1666,12 +1691,12 @@ private fun CallEditDialog(
                 onClick = { if (canSave) onSave(trimmedPhone, nameText.trim(), autoDial) },
                 enabled = canSave
             ) {
-                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         }
     )
@@ -1688,7 +1713,7 @@ private fun NavigateActionControls(
 ) {
     var editing by remember { mutableStateOf(false) }
     val name = action.navigateName()
-    val preview = if (name.isNotBlank()) name else "Нажмите, чтобы выбрать место…"
+    val preview = if (name.isNotBlank()) name else stringResource(R.string.automation_tap_to_pick_place)
 
     Row(
         modifier = modifier
@@ -1761,11 +1786,11 @@ private fun NavigateEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
-        title = { Text("Маршрут в Я.Навигаторе", color = TextPrimary, fontSize = 16.sp) },
+        title = { Text(stringResource(R.string.automation_navigate_dialog_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             if (places.isEmpty()) {
                 Text(
-                    text = "Сначала добавьте место в Настройки → Места",
+                    text = stringResource(R.string.automation_navigate_no_places_hint),
                     fontSize = 13.sp,
                     color = TextMuted
                 )
@@ -1773,7 +1798,7 @@ private fun NavigateEditDialog(
                 Column {
                     Box(modifier = Modifier.fillMaxWidth()) {
                         Text(
-                            text = selectedPlace?.name ?: "Выберите место…",
+                            text = selectedPlace?.name ?: stringResource(R.string.automation_navigate_pick_place_placeholder),
                             fontSize = 13.sp,
                             color = if (selectedPlace == null) TextMuted else TextPrimary,
                             modifier = Modifier
@@ -1807,12 +1832,12 @@ private fun NavigateEditDialog(
                 },
                 enabled = canSave
             ) {
-                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         }
     )
@@ -1828,7 +1853,7 @@ private fun UrlActionControls(
 ) {
     var editing by remember { mutableStateOf(false) }
     val url = action.urlString()
-    val preview = if (url.isNotBlank()) url else "Нажмите, чтобы задать URL…"
+    val preview = if (url.isNotBlank()) url else stringResource(R.string.automation_tap_to_set_url)
 
     Row(
         modifier = modifier
@@ -1894,13 +1919,13 @@ private fun UrlEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
-        title = { Text("Открыть URL", color = TextPrimary, fontSize = 16.sp) },
+        title = { Text(stringResource(R.string.automation_url_dialog_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             Column {
                 OutlinedTextField(
                     value = urlText,
                     onValueChange = { urlText = it },
-                    label = { Text("URL") },
+                    label = { Text(stringResource(R.string.automation_url_field_label)) },
                     singleLine = true,
                     isError = urlText.isNotBlank() && !urlValid,
                     shape = RoundedCornerShape(8.dp),
@@ -1926,7 +1951,7 @@ private fun UrlEditDialog(
                         )
                     )
                     Text(
-                        "Свернуть после запуска (через 3 сек)",
+                        stringResource(R.string.automation_url_minimize_label),
                         fontSize = 13.sp,
                         color = TextPrimary
                     )
@@ -1935,12 +1960,12 @@ private fun UrlEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (canSave) onSave(trimmed, minimize) }, enabled = canSave) {
-                Text("Сохранить", color = if (canSave) AccentGreen else TextMuted)
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         }
     )
@@ -1956,9 +1981,11 @@ private fun YandexMusicActionControls(
 ) {
     var editing by remember { mutableStateOf(false) }
     val mode = action.yandexMusicMode()
+    val myWaveLabel = stringResource(R.string.automation_music_my_wave)
+    val tapToConfigureLabel = stringResource(R.string.automation_tap_to_configure)
     val preview = when (mode) {
-        "mybeat" -> "Моя Волна"
-        else -> "Нажмите для настройки…"
+        "mybeat" -> myWaveLabel
+        else -> tapToConfigureLabel
     }
     val minimize = action.yandexMusicMinimize()
 
@@ -2003,7 +2030,8 @@ private fun YandexMusicEditDialog(
     onDismiss: () -> Unit,
     onSave: (mode: String, minimize: Boolean) -> Unit
 ) {
-    val modes = listOf("mybeat" to "Моя Волна")
+    val myWaveLabel = stringResource(R.string.automation_music_my_wave)
+    val modes = listOf("mybeat" to myWaveLabel)
     var selectedMode by remember { mutableStateOf(initialMode) }
     var minimize by remember { mutableStateOf(initialMinimize) }
     var dropdownExpanded by remember { mutableStateOf(false) }
@@ -2011,10 +2039,10 @@ private fun YandexMusicEditDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
-        title = { Text("Яндекс.Музыка", color = TextPrimary, fontSize = 16.sp) },
+        title = { Text(stringResource(R.string.automation_music_dialog_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             Column {
-                Text("Что запустить:", fontSize = 12.sp, color = TextMuted)
+                Text(stringResource(R.string.automation_music_what_to_play), fontSize = 12.sp, color = TextMuted)
                 Spacer(Modifier.height(4.dp))
                 Box {
                     val label = modes.find { it.first == selectedMode }?.second ?: selectedMode
@@ -2063,7 +2091,7 @@ private fun YandexMusicEditDialog(
                         )
                     )
                     Text(
-                        "Свернуть после запуска (через 3 сек)",
+                        stringResource(R.string.automation_music_minimize_label),
                         fontSize = 13.sp,
                         color = TextPrimary
                     )
@@ -2072,12 +2100,12 @@ private fun YandexMusicEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { onSave(selectedMode, minimize) }) {
-                Text("Сохранить", color = AccentGreen)
+                Text(stringResource(R.string.automation_save_button), color = AccentGreen)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена", color = TextSecondary)
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
             }
         }
     )
@@ -2102,22 +2130,22 @@ private fun AddTriggerButton(
                 .padding(8.dp),
             contentAlignment = Alignment.Center
         ) {
-            Text("+ Добавить условие", fontSize = 12.sp, color = TextMuted)
+            Text(stringResource(R.string.automation_add_condition_button), fontSize = 12.sp, color = TextMuted)
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
             DropdownMenuItem(
-                text = { Text("Параметр", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_trigger_type_param), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddParam() }
             )
             val firstPlace = places.firstOrNull()
             DropdownMenuItem(
                 text = {
                     if (firstPlace != null) {
-                        Text("Место", fontSize = 13.sp)
+                        Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp)
                     } else {
                         Column {
-                            Text("Место", fontSize = 13.sp, color = TextSecondary)
-                            Text("Сначала создайте место в настройках", fontSize = 11.sp, color = TextMuted)
+                            Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp, color = TextSecondary)
+                            Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 11.sp, color = TextMuted)
                         }
                     }
                 },
@@ -2130,21 +2158,21 @@ private fun AddTriggerButton(
                 enabled = firstPlace != null
             )
             DropdownMenuItem(
-                text = { Text("Время суток", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_trigger_type_time_of_day), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
                     onAddTimeOfDay()
                 }
             )
             DropdownMenuItem(
-                text = { Text("Запуск BYDMate", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
                     onAddServiceStart()
                 }
             )
             DropdownMenuItem(
-                text = { Text("Доступен интернет", fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_trigger_type_internet), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
                     onAddNetworkAvailable()
