@@ -196,7 +196,7 @@ fun SettingsScreen(
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.TRIPS -> TripsSection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
-                        SettingsSection.WIDGET -> Text("Виджет — TODO", color = TextMuted)
+                        SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.PLACES -> Text("Места — TODO", color = TextMuted)
                         SettingsSection.APP -> Text("Приложение — TODO", color = TextMuted)
                         SettingsSection.SMART_HOME -> Text("Умный дом — TODO", color = TextMuted)
@@ -619,6 +619,254 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             selectedId = state.openRouterModel,
             onSelect = { viewModel.selectModel(it) },
             onDismiss = { viewModel.hideModelPicker() }
+        )
+    }
+}
+
+@Composable
+private fun WidgetSection() {
+    val context = LocalContext.current
+    val prefs = remember { WidgetPreferences(context) }
+    val enabled by prefs.enabledFlow().collectAsStateWithLifecycle(initialValue = prefs.isEnabled())
+    val alpha by prefs.alphaFlow().collectAsStateWithLifecycle(initialValue = prefs.getAlpha())
+    val scale by prefs.scaleFlow().collectAsStateWithLifecycle(initialValue = prefs.getScale())
+    val leftTapApp by prefs.leftTapAppFlow().collectAsStateWithLifecycle(
+        initialValue = WidgetPreferences.LeftTapAppState(
+            enabled = prefs.isLeftTapZoningEnabled(),
+            packageName = prefs.getLeftTapAppPackage(),
+            label = prefs.getLeftTapAppLabel(),
+        ),
+    )
+    var showLeftTapPicker by remember { mutableStateOf(false) }
+
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                WidgetController.setPreviewMode(context, false)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            WidgetController.setPreviewMode(context, false)
+        }
+    }
+
+    SectionHeader(text = "Плавающий виджет")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Показывать виджет SOC",
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { requested ->
+                        if (requested) {
+                            if (AndroidSettings.canDrawOverlays(context)) {
+                                prefs.setEnabled(true)
+                                WidgetController.attach(context)
+                            } else {
+                                val intent = Intent(
+                                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}"),
+                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                                context.startActivity(intent)
+                            }
+                        } else {
+                            prefs.setEnabled(false)
+                            WidgetController.detach()
+                        }
+                    },
+                    colors = bydSwitchColors(),
+                )
+            }
+            Text(
+                text = "• Долгий тап на виджете — скрыть до следующего открытия BYDMate.\n" +
+                        "• Перетащить в корзину внизу — выключить совсем.\n" +
+                        "• Обычный тап — открыть BYDMate.",
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+            )
+            Button(
+                onClick = {
+                    prefs.resetPosition()
+                    if (enabled && AndroidSettings.canDrawOverlays(context)) {
+                        WidgetController.detach()
+                        WidgetController.attach(context)
+                    }
+                },
+                enabled = enabled,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+            ) {
+                Text("Сбросить позицию", fontSize = 13.sp, color = TextPrimary)
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Прозрачность",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${(alpha * 100).toInt()}%",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Slider(
+                    value = alpha,
+                    onValueChange = {
+                        if (enabled) WidgetController.setPreviewMode(context, true)
+                        prefs.setAlpha(it)
+                    },
+                    valueRange = 0.3f..1.0f,
+                    enabled = enabled,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentGreen,
+                        activeTrackColor = AccentGreen,
+                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
+                        disabledThumbColor = TextMuted,
+                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
+                    ),
+                )
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Размер",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${(scale * 100).toInt()}%",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Slider(
+                    value = scale,
+                    onValueChange = {
+                        if (enabled) WidgetController.setPreviewMode(context, true)
+                        prefs.setScale(it)
+                    },
+                    valueRange = WidgetPreferences.SCALE_MIN..WidgetPreferences.SCALE_MAX,
+                    enabled = enabled,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentGreen,
+                        activeTrackColor = AccentGreen,
+                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
+                        disabledThumbColor = TextMuted,
+                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
+                    ),
+                )
+            }
+        }
+    }
+
+    SectionHeader(text = "Тап по виджету")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Зонирование тапов",
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                    )
+                    Text(
+                        text = "Левая 1/3 — открывает выбранное приложение; остальное — BYDMate.",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+                Switch(
+                    checked = leftTapApp.enabled,
+                    onCheckedChange = { prefs.setLeftTapZoningEnabled(it) },
+                    enabled = enabled,
+                    colors = bydSwitchColors(),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Приложение для левого тапа", color = TextPrimary, fontSize = 13.sp)
+                    Text(
+                        text = "По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.",
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .clickable(enabled = leftTapApp.enabled && enabled) {
+                            showLeftTapPicker = true
+                        }
+                        .background(
+                            color = if (leftTapApp.enabled && enabled) CardSurfaceElevated else CardSurface,
+                            shape = RoundedCornerShape(999.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = leftTapApp.label,
+                        color = if (leftTapApp.enabled && enabled) TextPrimary else TextMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showLeftTapPicker) {
+        AppLaunchPickerDialog(
+            currentPackage = leftTapApp.packageName,
+            onDismiss = { showLeftTapPicker = false },
+            onSelect = { pkg, label ->
+                prefs.setLeftTapApp(pkg, label)
+                showLeftTapPicker = false
+            },
+            showMinimizeToggle = false,
         )
     }
 }
