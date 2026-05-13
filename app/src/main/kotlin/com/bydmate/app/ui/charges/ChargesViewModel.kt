@@ -1,7 +1,9 @@
 package com.bydmate.app.ui.charges
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.R
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
@@ -9,6 +11,7 @@ import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -79,6 +82,7 @@ data class ChargesUiState(
 
 @HiltViewModel
 class ChargesViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val chargeRepository: ChargeRepository,
     private val batterySnapshotDao: BatterySnapshotDao,
     private val settingsRepository: SettingsRepository,
@@ -186,10 +190,11 @@ class ChargesViewModel @Inject constructor(
     }
 
     internal fun groupChargesByMonthDay(charges: List<ChargeEntity>): List<ChargesMonthGroup> {
+        val appLocale = appContext.resources.configuration.locales[0]
         val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
         val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-        val dayOfWeekFmt = SimpleDateFormat("EEE", Locale("ru"))
-        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", Locale("ru"))
+        val dayOfWeekFmt = SimpleDateFormat("EEE", appLocale)
+        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", appLocale)
 
         val todayCal = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0)
@@ -223,10 +228,10 @@ class ChargesViewModel @Inject constructor(
                     .map { (dayKey, dayCharges) ->
                         val dow = dayOfWeekFmt.format(Date(dayCharges.first().startTs))
                         val dayLabel = when (dayKey) {
-                            todayKey -> "сегодня ($dow)"
-                            yesterdayKey -> "вчера"
+                            todayKey -> appContext.getString(R.string.charges_day_today, dow)
+                            yesterdayKey -> appContext.getString(R.string.charges_day_yesterday)
                             else -> {
-                                val ddMmm = SimpleDateFormat("dd MMM", Locale("ru")).format(Date(dayCharges.first().startTs))
+                                val ddMmm = SimpleDateFormat("dd MMM", appLocale).format(Date(dayCharges.first().startTs))
                                 "$ddMmm ($dow)"
                             }
                         }

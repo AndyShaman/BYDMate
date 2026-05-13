@@ -39,9 +39,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.ui.theme.*
@@ -194,7 +196,7 @@ fun SocGauge(
             if (isCharging) {
                 Icon(
                     imageVector = Icons.Outlined.Bolt,
-                    contentDescription = "Идёт зарядка",
+                    contentDescription = stringResource(R.string.battery_health_charging_cd),
                     tint = AccentGreen,
                     modifier = Modifier.size(18.dp)
                 )
@@ -396,22 +398,22 @@ fun SummaryRow(
     ) {
         SummaryStatBox(
             value = "%.1f".format(totalKm),
-            unit = "км",
-            label = "Пробег",
+            unit = stringResource(R.string.summary_unit_km),
+            label = stringResource(R.string.summary_label_mileage),
             valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
         SummaryStatBox(
             value = "%.1f".format(totalKwh),
-            unit = "кВт·ч",
-            label = "Энергия",
+            unit = stringResource(R.string.summary_unit_kwh),
+            label = stringResource(R.string.summary_label_energy),
             valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
         SummaryStatBox(
             value = "%.1f".format(avgKwhPer100km),
-            unit = "кВт·ч/100км",
-            label = "Расход",
+            unit = stringResource(R.string.summary_unit_kwh_per_100km),
+            label = stringResource(R.string.summary_label_consumption),
             valueColor = consumptionColor(avgKwhPer100km),
             modifier = Modifier.weight(1f)
         )
@@ -419,7 +421,7 @@ fun SummaryRow(
             SummaryStatBox(
                 value = "%.0f".format(totalCost),
                 unit = currencySymbol,
-                label = "Стоимость",
+                label = stringResource(R.string.summary_label_cost),
                 valueColor = AccentGreen,
                 modifier = Modifier.weight(1f)
             )

@@ -482,4 +482,113 @@
     <string name="dashboard_col_duration">длит.</string>
     <string name="dashboard_col_per100">/100</string>
     <string name="dashboard_empty_no_trips">Поездок пока нет</string>
+
+    <!-- Dashboard: inline format values (stat cards, voltage) -->
+    <!-- %1$.1f = distance km -->
+    <string name="dashboard_stat_km_value">%1$.1f км</string>
+    <!-- %1$.1f = energy kWh -->
+    <string name="dashboard_stat_kwh_value">%1$.1f кВт·ч</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="dashboard_voltage_value">%1$.1fВ</string>
+    <!-- Insight refresh error (shown in insight card) -->
+    <string name="dashboard_insight_refresh_error">Не удалось обновить</string>
+
+    <!-- Navigation bar tab labels -->
+    <string name="nav_tab_dashboard">Главная</string>
+    <string name="nav_tab_trips">Поездки</string>
+    <string name="nav_tab_charges">Зарядки</string>
+    <string name="nav_tab_automation">Автоматизация</string>
+    <string name="nav_tab_settings">Настройки</string>
+
+    <!-- Post-install autostart hint dialog -->
+    <string name="nav_autostart_dialog_title">BYDMate обновлён до v%1$s</string>
+    <string name="nav_autostart_dialog_body">Проверьте, что фоновая работа не заблокирована:\n\nНастройки DiLink - General - Disable background Apps - BYDMate - OFF\n\nЕсли переключатель включён (ON), DiLink может прибить сервис BYDMate - тогда поездки и GPS не будут писаться.</string>
+    <string name="nav_autostart_dialog_button">Понятно</string>
+    <string name="nav_autostart_open_settings_error">Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.</string>
+
+    <!-- AppLaunchPicker dialog -->
+    <string name="applauncher_title">Выбор приложения</string>
+    <string name="applauncher_search_label">Поиск</string>
+    <string name="applauncher_minimize_label">Свернуть после запуска (через 3 сек)</string>
+    <string name="applauncher_empty">Ничего не найдено</string>
+    <string name="applauncher_close_button">Закрыть</string>
+
+    <!-- SOC ring: charging icon content description -->
+    <string name="battery_health_charging_cd">Идёт зарядка</string>
+
+    <!-- Battery health dialog -->
+    <string name="battery_health_dialog_title">Здоровье батареи</string>
+    <string name="battery_health_now_header">Сейчас (от машины, live)</string>
+    <string name="battery_health_lifetime_header">Lifetime (системные данные)</string>
+    <string name="battery_health_cell_delta_label">Δ ячеек</string>
+    <!-- %1$.3f = delta volts -->
+    <string name="battery_health_cell_delta_value">%1$.3f В</string>
+    <string name="battery_health_bat_temp_label">темп. батареи</string>
+    <string name="battery_health_12v_label">бортовая сеть</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="battery_health_12v_value">%1$.1f В</string>
+    <string name="battery_health_bms_mileage_label">пробег BMS</string>
+    <!-- %1$.1f = mileage km -->
+    <string name="battery_health_bms_mileage_value">%1$.1f км</string>
+    <string name="battery_health_pumped_label">прокачано</string>
+    <!-- %1$.0f = kWh -->
+    <string name="battery_health_pumped_value">%1$.0f кВт·ч</string>
+    <string name="battery_health_disabled_title">Системные данные выключены</string>
+    <string name="battery_health_disabled_hint">Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.</string>
+
+    <!-- Shared summary row (Components.kt SummaryRow) -->
+    <string name="summary_unit_km">км</string>
+    <string name="summary_label_mileage">Пробег</string>
+    <string name="summary_unit_kwh">кВт·ч</string>
+    <string name="summary_label_energy">Энергия</string>
+    <string name="summary_unit_kwh_per_100km">кВт·ч/100км</string>
+    <string name="summary_label_consumption">Расход</string>
+    <string name="summary_label_cost">Стоимость</string>
+
+    <!-- Settings: unit chips and language labels -->
+    <string name="settings_tariff_trip_custom_chip">Свой</string>
+    <string name="settings_unit_km">км</string>
+    <string name="settings_unit_miles">мили</string>
+    <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
+    <string name="settings_lang_russian">Русский</string>
+
+    <!-- Settings: ViewModel status strings (user-visible feedback) -->
+    <string name="settings_saved">Сохранено</string>
+    <string name="settings_datasource_switching">Переключение...</string>
+    <string name="settings_datasource_done">Готово</string>
+    <!-- %1$d = trip count -->
+    <string name="settings_recalc_done">Пересчитано: %1$d поездок</string>
+    <string name="settings_export_in_progress">Экспорт...</string>
+    <!-- %1$d = trip count, %2$d = charge count -->
+    <string name="settings_export_done">Экспортировано: %1$d поездок, %2$d зарядок</string>
+    <!-- Generic error with message: %1$s = error text -->
+    <string name="settings_error_with_message">Ошибка: %1$s</string>
+    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
+    <string name="settings_error_prefix">Ошибка</string>
+    <!-- %1$s = file path -->
+    <string name="settings_log_recording_started">Запись (авто-стоп через 2ч)... - %1$s</string>
+    <!-- %1$s = file path, %2$d = size KB -->
+    <string name="settings_log_saved">Сохранено: %1$s (%2$d КБ)</string>
+    <string name="settings_log_error_no_fs_access">Ошибка: нет доступа к файловой системе</string>
+    <string name="settings_update_check_in_progress">Проверка...</string>
+    <!-- %1$s = version string -->
+    <string name="settings_update_available_short">Доступна v%1$s</string>
+    <string name="settings_ai_no_key_model">Укажите API-ключ и модель</string>
+    <string name="settings_ai_done">Готово! Переключитесь на Главную</string>
+    <string name="settings_ai_fetch_error">Ошибка получения инсайта</string>
+
+    <!-- UpdateChecker: download progress strings (passed via callback) -->
+    <string name="update_downloading_progress">Скачивание: %1$d%%</string>
+    <string name="update_downloading_done">Скачано. Установка...</string>
+    <string name="update_downloading_paused">Пауза...</string>
+    <!-- %1$d = DownloadManager error code -->
+    <string name="update_download_error">Ошибка скачивания (код %1$d)</string>
+    <string name="update_download_notification_description">Обновление BYDMate</string>
+    <!-- Initial 0% progress string -->
+    <string name="update_downloading_start">Скачивание: 0%%</string>
+
+    <!-- Charges: day group labels -->
+    <!-- %1$s = day-of-week abbreviation -->
+    <string name="charges_day_today">сегодня (%1$s)</string>
+    <string name="charges_day_yesterday">вчера</string>
 </resources>

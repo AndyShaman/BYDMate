@@ -353,7 +353,7 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
                 UnitChip("DC", state.tripCostTariff == "dc") { viewModel.saveTripCostTariff("dc") }
-                UnitChip("Свой", state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                UnitChip(stringResource(R.string.settings_tariff_trip_custom_chip), state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
                     viewModel.saveTripCostTariff(state.homeTariff)
                 }
             }
@@ -602,11 +602,12 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                     maxLines = 1
                 )
             }
+            val aiLoadingLabel = stringResource(R.string.settings_ai_loading_label)
             Button(
                 onClick = { viewModel.saveAiSettings() },
                 enabled = state.openRouterApiKey.isNotBlank() &&
                     state.openRouterModel.isNotBlank() &&
-                    state.aiSaveStatus != "Загрузка инсайта...",
+                    state.aiSaveStatus != aiLoadingLabel,
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(
@@ -615,16 +616,16 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 )
             ) {
                 Text(
-                    if (state.aiSaveStatus == "Загрузка инсайта...") stringResource(R.string.settings_ai_loading_label)
+                    if (state.aiSaveStatus == aiLoadingLabel) aiLoadingLabel
                     else stringResource(R.string.settings_ai_save_button),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
             }
-            if (state.aiSaveStatus != null && state.aiSaveStatus != "Загрузка инсайта...") {
+            if (state.aiSaveStatus != null && state.aiSaveStatus != aiLoadingLabel) {
                 Text(
                     state.aiSaveStatus!!,
-                    color = if (state.aiSaveStatus!!.startsWith("Ошибка")) SocRed else AccentGreen,
+                    color = if (state.aiSaveStatus!!.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
                     fontSize = 12.sp
                 )
             }
@@ -921,8 +922,8 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         ) {
             Text(stringResource(R.string.settings_app_distance_label), color = TextSecondary, fontSize = 14.sp)
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                UnitChip("км", state.units == "km") { viewModel.saveUnits("km") }
-                UnitChip("мили", state.units == "miles") { viewModel.saveUnits("miles") }
+                UnitChip(stringResource(R.string.settings_unit_km), state.units == "km") { viewModel.saveUnits("km") }
+                UnitChip(stringResource(R.string.settings_unit_miles), state.units == "miles") { viewModel.saveUnits("miles") }
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(stringResource(R.string.settings_app_currency_label), color = TextSecondary, fontSize = 14.sp)
@@ -959,10 +960,11 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             ) {
                 Text(stringResource(R.string.settings_export_csv_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
+            val errorPrefix = stringResource(R.string.settings_error_prefix)
             if (state.exportStatus != null) {
                 Text(
                     state.exportStatus!!,
-                    color = if (state.exportStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                    color = if (state.exportStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
                     fontSize = 12.sp
                 )
             }
@@ -990,7 +992,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             if (state.logSaveStatus != null) {
                 Text(
                     state.logSaveStatus!!,
-                    color = if (state.logSaveStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
+                    color = if (state.logSaveStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
                     fontSize = 12.sp
                 )
             }
@@ -1147,7 +1149,7 @@ private fun LanguageBlock(
             ) {
                 RadioButton(selected = currentLang == "ru", onClick = { onLanguageChange("ru") })
                 Spacer(Modifier.width(8.dp))
-                Text("Русский")
+                Text(stringResource(R.string.settings_lang_russian))
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,

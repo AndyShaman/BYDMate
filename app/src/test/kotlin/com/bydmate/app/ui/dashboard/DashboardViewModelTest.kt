@@ -170,6 +170,7 @@ class DashboardViewModelTest {
         val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
 
         return DashboardViewModel(
+            appContext = ctx,
             tripRepository = tripRepo,
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,

@@ -22,6 +22,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
+import com.bydmate.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -289,11 +290,11 @@ class SettingsViewModel @Inject constructor(
     fun setDataSource(value: String) {
         if (value == _uiState.value.dataSource) return
         val target = runCatching { SettingsRepository.DataSource.valueOf(value) }.getOrNull() ?: return
-        _uiState.update { it.copy(dataSource = value, dataSourceStatus = "Переключение...") }
+        _uiState.update { it.copy(dataSource = value, dataSourceStatus = appContext.getString(R.string.settings_datasource_switching)) }
         viewModelScope.launch {
             settingsRepository.setDataSource(target)
             val r = historyImporter.runSync()
-            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: "Готово") }
+            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: appContext.getString(R.string.settings_datasource_done)) }
         }
     }
 
@@ -322,7 +323,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
             val tariff = settingsRepository.getTripCostTariff()
             historyImporter.calculateMissingCosts(tariff)
-            _uiState.update { it.copy(tariffSaveStatus = "Сохранено") }
+            _uiState.update { it.copy(tariffSaveStatus = appContext.getString(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(tariffSaveStatus = null) }
         }
@@ -339,7 +340,7 @@ class SettingsViewModel @Inject constructor(
                 tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
                 count++
             }
-            _uiState.update { it.copy(recalcStatus = "Пересчитано: $count поездок") }
+            _uiState.update { it.copy(recalcStatus = appContext.getString(R.string.settings_recalc_done, count)) }
             delay(3000)
             _uiState.update { it.copy(recalcStatus = null) }
         }
@@ -384,7 +385,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportCsv() {
         viewModelScope.launch {
-            _uiState.update { it.copy(exportStatus = "Экспорт...") }
+            _uiState.update { it.copy(exportStatus = appContext.getString(R.string.settings_export_in_progress)) }
 
             try {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(
@@ -436,12 +437,12 @@ class SettingsViewModel @Inject constructor(
                 val chargeCount = charges.size
                 _uiState.update {
                     it.copy(
-                        exportStatus = "Экспортировано: $tripCount поездок, $chargeCount зарядок\n→ ${downloadsDir.absolutePath}"
+                        exportStatus = appContext.getString(R.string.settings_export_done, tripCount, chargeCount) + "\n-> ${downloadsDir.absolutePath}"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(exportStatus = "Ошибка: ${e.message}")
+                    it.copy(exportStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -613,16 +614,18 @@ class SettingsViewModel @Inject constructor(
         val apiKey = _uiState.value.openRouterApiKey
         val model = _uiState.value.openRouterModel
         if (apiKey.isBlank() || model.isBlank()) {
-            _uiState.update { it.copy(aiSaveStatus = "Укажите API-ключ и модель") }
+            _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_no_key_model)) }
             return
         }
-        _uiState.update { it.copy(aiSaveStatus = "Загрузка инсайта...") }
+        // "Загрузка инсайта..." is a programmatic state key used in SettingsScreen for comparison
+        // AND as display text; keep in sync with R.string.settings_ai_loading_label
+        _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_loading_label)) }
         viewModelScope.launch {
             val insight = insightsManager.refresh()
             if (insight != null) {
-                _uiState.update { it.copy(aiSaveStatus = "Готово! Переключитесь на Главную") }
+                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_done)) }
             } else {
-                _uiState.update { it.copy(aiSaveStatus = "Ошибка получения инсайта") }
+                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_fetch_error)) }
             }
         }
     }
@@ -658,7 +661,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_ALICE_API_KEY, state.aliceApiKey)
             val enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank()
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = "Сохранено") }
+            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = appContext.getString(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(aliceSaveStatus = null) }
         }
@@ -705,7 +708,7 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     abrpTelemetryEnabled = enabled,
-                    abrpSaveStatus = "Сохранено",
+                    abrpSaveStatus = appContext.getString(R.string.settings_saved),
                 )
             }
             delay(2000)
@@ -751,7 +754,7 @@ class SettingsViewModel @Inject constructor(
                 }
 
                 if (saveDir == null) {
-                    _uiState.update { it.copy(logSaveStatus = "Ошибка: нет доступа к файловой системе") }
+                    _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_log_error_no_fs_access)) }
                     return@launch
                 }
 
@@ -798,10 +801,10 @@ class SettingsViewModel @Inject constructor(
                 }
 
                 _uiState.update {
-                    it.copy(isRecordingLogs = true, logSaveStatus = "Запись (авто-стоп через 2ч)... → ${logFile?.absolutePath}")
+                    it.copy(isRecordingLogs = true, logSaveStatus = appContext.getString(R.string.settings_log_recording_started, logFile?.absolutePath ?: "?"))
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(logSaveStatus = "Ошибка: ${e.message}") }
+                _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")) }
             }
         }
     }
@@ -820,12 +823,12 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isRecordingLogs = false,
-                        logSaveStatus = "Сохранено: ${file?.absolutePath} (${sizeKb} КБ)"
+                        logSaveStatus = appContext.getString(R.string.settings_log_saved, file?.absolutePath ?: "?", sizeKb)
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isRecordingLogs = false, logSaveStatus = "Ошибка: ${e.message}")
+                    it.copy(isRecordingLogs = false, logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -847,7 +850,7 @@ class SettingsViewModel @Inject constructor(
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = "Проверка...") }
+            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = appContext.getString(R.string.settings_update_check_in_progress)) }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
@@ -857,14 +860,14 @@ class SettingsViewModel @Inject constructor(
                                 version = update.version,
                                 notes = update.releaseNotes ?: ""
                             ),
-                            updateStatus = "Доступна v${update.version}"
+                            updateStatus = appContext.getString(R.string.settings_update_available_short, update.version)
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             updateDialogState = UpdateState.UpToDate,
-                            updateStatus = "Установлена последняя версия"
+                            updateStatus = appContext.getString(R.string.settings_update_up_to_date)
                         )
                     }
                 }
@@ -872,7 +875,7 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         updateDialogState = UpdateState.Error(e.message ?: "Unknown error"),
-                        updateStatus = "Ошибка: ${e.message}"
+                        updateStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")
                     )
                 }
             }
@@ -885,7 +888,7 @@ class SettingsViewModel @Inject constructor(
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
                     _uiState.update {
-                        it.copy(updateDialogState = UpdateState.Downloading(update.version, "Скачивание: 0%"))
+                        it.copy(updateDialogState = UpdateState.Downloading(update.version, appContext.getString(R.string.update_downloading_start)))
                     }
                     updateChecker.downloadAndInstall(appContext, update) { progress ->
                         _uiState.update {

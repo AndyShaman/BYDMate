@@ -311,8 +311,9 @@ private fun RuleCard(
             // Stats
             Spacer(Modifier.height(4.dp))
             val triggeredLabel = stringResource(R.string.automation_rule_triggered_count, rule.triggerCount)
+            val localContext = LocalContext.current
             val lastLabel = rule.lastTriggeredAt?.let { ts ->
-                " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts))
+                " · " + stringResource(R.string.automation_rule_last_trigger, formatRelativeTime(ts, localContext))
             } ?: ""
             val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
             Text(triggeredLabel + lastLabel + cooldownLabel, fontSize = 11.sp, color = TextMuted)
@@ -1188,7 +1189,7 @@ private fun LogItem(log: RuleLogEntity) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text(log.ruleName, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = TextPrimary)
                 Text(
-                    formatRelativeTime(log.triggeredAt),
+                    formatRelativeTime(log.triggeredAt, LocalContext.current),
                     fontSize = 11.sp, fontFamily = FontFamily.Monospace, color = TextMuted
                 )
             }
@@ -2237,7 +2238,7 @@ private fun newTimeOfDayTrigger(): TriggerDef {
 
 // --- Helpers ---
 
-private fun formatRelativeTime(ts: Long): String {
+private fun formatRelativeTime(ts: Long, context: android.content.Context): String {
     val now = System.currentTimeMillis()
     val diff = now - ts
     val sdf = SimpleDateFormat("HH:mm", Locale.getDefault())
@@ -2245,7 +2246,7 @@ private fun formatRelativeTime(ts: Long): String {
 
     return when {
         diff < 24 * 60 * 60 * 1000L -> sdf.format(Date(ts))
-        diff < 48 * 60 * 60 * 1000L -> "вчера ${sdf.format(Date(ts))}"
+        diff < 48 * 60 * 60 * 1000L -> context.getString(R.string.automation_time_yesterday, sdf.format(Date(ts)))
         else -> dateSdf.format(Date(ts))
     }
 }

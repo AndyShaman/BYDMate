@@ -19,6 +19,12 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import android.content.Context
+import android.content.res.Configuration
+import android.content.res.Resources
+import android.os.LocaleList
+import io.mockk.every
+import java.util.Locale
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
@@ -177,7 +183,16 @@ class ChargesViewModelTest {
         val batteryHealthRepo = BatteryHealthRepository(snapshotDao)
         val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo, settingsRepo)
 
-        return ChargesViewModel(chargeRepo, snapshotDao, settingsRepo, batteryStateRepo) to chargeDao
+        // Minimal Context mock — only locale lookup used in ChargesViewModel.groupChargesByMonthDay.
+        val mockLocaleList = mockk<LocaleList> { every { get(0) } returns Locale("ru") }
+        val config = mockk<Configuration> { every { locales } returns mockLocaleList }
+        val res = mockk<Resources>(relaxed = true) { every { configuration } returns config }
+        val ctx = mockk<Context>(relaxed = true) {
+            every { resources } returns res
+            every { getString(any()) } returns ""
+            every { getString(any(), any()) } returns ""
+        }
+        return ChargesViewModel(ctx, chargeRepo, snapshotDao, settingsRepo, batteryStateRepo) to chargeDao
     }
 
     // ─── Helper ───────────────────────────────────────────────────────────────

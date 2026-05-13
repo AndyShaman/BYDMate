@@ -29,8 +29,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
@@ -78,13 +80,13 @@ fun AppLaunchPickerDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
-        title = { Text("Выбор приложения", color = TextPrimary, fontSize = 16.sp) },
+        title = { Text(stringResource(R.string.applauncher_title), color = TextPrimary, fontSize = 16.sp) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
-                    label = { Text("Поиск") },
+                    label = { Text(stringResource(R.string.applauncher_search_label)) },
                     singleLine = true,
                     shape = RoundedCornerShape(8.dp),
                     colors = fieldColors,
@@ -113,7 +115,7 @@ fun AppLaunchPickerDialog(
                                 checkmarkColor = TextPrimary,
                             ),
                         )
-                        Text("Свернуть после запуска (через 3 сек)", fontSize = 13.sp, color = TextPrimary)
+                        Text(stringResource(R.string.applauncher_minimize_label), fontSize = 13.sp, color = TextPrimary)
                     }
                 }
                 Spacer(Modifier.height(8.dp))
@@ -141,7 +143,7 @@ fun AppLaunchPickerDialog(
                     if (filtered.isEmpty()) {
                         item {
                             Text(
-                                "Ничего не найдено",
+                                stringResource(R.string.applauncher_empty),
                                 color = TextMuted,
                                 fontSize = 13.sp,
                                 modifier = Modifier.padding(8.dp),
@@ -152,7 +154,7 @@ fun AppLaunchPickerDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Закрыть", color = TextSecondary) }
+            TextButton(onClick = onDismiss) { Text(stringResource(R.string.applauncher_close_button), color = TextSecondary) }
         },
     )
 }

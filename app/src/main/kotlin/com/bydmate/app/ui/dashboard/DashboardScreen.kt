@@ -282,7 +282,7 @@ fun DashboardScreen(
                             sohColor = sohColor,
                             tempText = state.avgBatTemp?.let { "${it}°" } ?: "—",
                             tempColor = tempColor,
-                            voltageText = state.voltage12v?.let { "%.1fВ".format(it) } ?: "—",
+                            voltageText = state.voltage12v?.let { stringResource(R.string.dashboard_voltage_value, it) } ?: "—",
                             voltageColor = voltageColor,
                             borderColor = worstColor,
                             onClick = { viewModel.toggleBatteryHealthExpanded() }
@@ -474,8 +474,8 @@ fun DashboardScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    StatCard(stringResource(R.string.dashboard_stat_distance), "%.1f км".format(state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
-                    StatCard(stringResource(R.string.dashboard_stat_energy), "%.1f кВт·ч".format(state.totalKwh), null, AccentBlue, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_distance), stringResource(R.string.dashboard_stat_km_value, state.totalKm), stringResource(R.string.dashboard_trip_count, state.tripCount), Color.White, Modifier.weight(1f))
+                    StatCard(stringResource(R.string.dashboard_stat_energy), stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh), null, AccentBlue, Modifier.weight(1f))
                     val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
                     StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
                     StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))

@@ -1,7 +1,9 @@
 package com.bydmate.app.ui.dashboard
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DynamicMetric
@@ -14,6 +16,7 @@ import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -93,6 +96,7 @@ data class DashboardUiState(
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context,
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao,
@@ -384,7 +388,7 @@ class DashboardViewModel @Inject constructor(
             } else {
                 _uiState.update { it.copy(
                     insightLoading = false,
-                    insightError = "Не удалось обновить"
+                    insightError = appContext.getString(R.string.dashboard_insight_refresh_error)
                 ) }
             }
         }

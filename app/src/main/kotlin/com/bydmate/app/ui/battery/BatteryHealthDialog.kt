@@ -25,8 +25,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
@@ -93,13 +95,13 @@ fun BatteryHealthDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Здоровье батареи",
+                        stringResource(R.string.battery_health_dialog_title),
                         color = borderColor,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
 
-                    SectionHeader("Сейчас (от машины, live)")
+                    SectionHeader(stringResource(R.string.battery_health_now_header))
                     LiveBlock(
                         soc = liveSoc,
                         cellDelta = liveCellDelta,
@@ -107,7 +109,7 @@ fun BatteryHealthDialog(
                         voltage12v = liveVoltage12v
                     )
 
-                    SectionHeader("Lifetime (системные данные)")
+                    SectionHeader(stringResource(R.string.battery_health_lifetime_header))
                     if (autoserviceEnabled) {
                         LifetimeBlock(
                             soh = liveSoh,
@@ -150,12 +152,12 @@ private fun LiveBlock(
     ) {
         StatCell("SoC", soc?.let { "$it%" } ?: "—", TextPrimary)
         StatCell(
-            "Δ ячеек",
-            cellDelta?.let { "%.3f В".format(it) } ?: "—",
+            stringResource(R.string.battery_health_cell_delta_label),
+            cellDelta?.let { stringResource(R.string.battery_health_cell_delta_value, it) } ?: "—",
             cellDeltaColor(cellDelta)
         )
-        StatCell("темп. батареи", batTemp?.let { "$it°C" } ?: "—", TextPrimary)
-        StatCell("бортовая сеть", voltage12v?.let { "%.1f В".format(it) } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_bat_temp_label), batTemp?.let { "$it°C" } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_12v_label), voltage12v?.let { stringResource(R.string.battery_health_12v_value, it) } ?: "—", TextPrimary)
     }
 }
 
@@ -175,8 +177,8 @@ private fun LifetimeBlock(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         StatCell("SoH", soh?.let { "%.0f%%".format(it) } ?: "—", AccentGreen)
-        StatCell("пробег BMS", lifetimeKm?.let { "%.1f км".format(it) } ?: "—", TextPrimary)
-        StatCell("прокачано", lifetimeKwh?.let { "%.0f кВт·ч".format(it) } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_bms_mileage_label), lifetimeKm?.let { stringResource(R.string.battery_health_bms_mileage_value, it) } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_pumped_label), lifetimeKwh?.let { stringResource(R.string.battery_health_pumped_value, it) } ?: "—", TextPrimary)
         StatCell(
             "/100км lifetime",
             avgPer100?.let { "%.1f".format(it) } ?: "—",
@@ -195,13 +197,13 @@ private fun LifetimeDisabledBlock() {
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         Text(
-            "Системные данные выключены",
+            stringResource(R.string.battery_health_disabled_title),
             color = TextSecondary,
             fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
         Text(
-            "Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.",
+            stringResource(R.string.battery_health_disabled_hint),
             color = TextMuted,
             fontSize = 11.sp,
             lineHeight = 15.sp
