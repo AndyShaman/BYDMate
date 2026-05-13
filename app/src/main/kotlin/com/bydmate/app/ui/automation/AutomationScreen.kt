@@ -1514,7 +1514,10 @@ private fun AppLaunchActionControls(
             showMinimizeToggle = true,
             initialMinimize = pendingMinimize,
             onMinimizeChanged = { pendingMinimize = it },
-            onDismiss = { editing = false },
+            onDismiss = {
+                pendingMinimize = action.appLaunchMinimize()
+                editing = false
+            },
             onSelect = { newPkg, newLabel ->
                 onUpdate(action.withAppLaunch(newPkg, newLabel, pendingMinimize))
                 editing = false
