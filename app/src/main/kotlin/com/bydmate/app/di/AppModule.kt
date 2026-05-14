@@ -225,6 +225,16 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Hot-path indices: byd_id is looked up per record in HistoryImporter's
+            // sync loop; trip_points.timestamp is used by attachToTrip and the
+            // GPS-thinning query.
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -233,7 +243,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
             .build()
     }
 

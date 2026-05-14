@@ -22,4 +22,11 @@ object AppModuleMigrationsForTest {
             db.execSQL("DELETE FROM charges WHERE status IN ('SUSPENDED', 'ACTIVE')")
         }
     }
+
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
+        }
+    }
 }
