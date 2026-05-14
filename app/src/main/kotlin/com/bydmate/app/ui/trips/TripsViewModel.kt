@@ -218,7 +218,7 @@ class TripsViewModel @Inject constructor(
 
         val timeFmt = SimpleDateFormat("HH:mm", Locale.US)
         val dayFmt = SimpleDateFormat("dd.MM", Locale.US)
-        val monthShortFmt = SimpleDateFormat("MMM", Locale("ru"))
+        val monthShortFmt = SimpleDateFormat("MMM", Locale.getDefault())
         val monthYearFmt = SimpleDateFormat("MM.yy", Locale.US)
         val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
         val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
@@ -280,8 +280,8 @@ class TripsViewModel @Inject constructor(
     private fun groupIntoMonths(trips: List<TripEntity>): List<MonthGroup> {
         val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
         val dayKeyFmt = SimpleDateFormat("dd.MM", Locale.US)
-        val dayOfWeekFmt = SimpleDateFormat("EEE", Locale("ru"))
-        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", Locale("ru"))
+        val dayOfWeekFmt = SimpleDateFormat("EEE", Locale.getDefault())
+        val monthLabelFmt = SimpleDateFormat("LLLL yyyy", Locale.getDefault())
 
         val monthMap = linkedMapOf<String, MutableList<TripEntity>>()
         for (trip in trips) {

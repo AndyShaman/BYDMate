@@ -57,11 +57,15 @@ class HistoryImporter @Inject constructor(
             return ImportResult(trips = 0, details = "Синхронизация уже идёт")
         }
         return try {
-            if (!energyDataReader.hasSourceChanged(context)) {
+            if (!energyDataReader.peekSourceChanged(context)) {
                 Log.d(TAG, "syncFromEnergyData: source unchanged, skipping")
                 return ImportResult(trips = 0, details = "Без изменений")
             }
-            doSync()
+            val result = doSync()
+            // Mark only on success — a thrown EnergyDataException leaves the
+            // watermark untouched so the next event retries this file.
+            if (!result.isError) energyDataReader.markSourceProcessed(context)
+            result
         } catch (e: EnergyDataException) {
             Log.w(TAG, "syncFromEnergyData failed: ${e.message}", e)
             ImportResult(trips = 0, error = e.message)
@@ -429,6 +433,10 @@ class HistoryImporter @Inject constructor(
             // Reset import timestamp so energydata records are re-processed.
             // Non-zero trips won't duplicate (bydId check), only deleted zero-km ones re-import.
             settingsRepository.setLastEnergyImportTs(0L)
+            // Force change-detector to fire on next sync — otherwise the gate in
+            // syncFromEnergyData() skips this run when the source file did not
+            // change since the previous successful sync, leaving idle drains gone.
+            energyDataReader.resetWatermark(context)
 
             settingsRepository.setIdleDrainV2CleanupDone()
             Log.i(TAG, "cleanupIdleDrainV2: cleared idle_drains, deleted $deleted zero-km trips, reset import ts")
@@ -469,7 +477,9 @@ class HistoryImporter @Inject constructor(
                 )
                 if (existing != null) { skippedDup++; continue }
 
-                val kwhPer100km = if (d.kwhConsumed > 0) d.kwhConsumed / d.mileage * 100.0 else null
+                val kwhPer100km = if (d.kwhConsumed > 0 && d.mileage > 0) {
+                    d.kwhConsumed / d.mileage * 100.0
+                } else null
 
                 tripRepository.insertTrip(
                     TripEntity(

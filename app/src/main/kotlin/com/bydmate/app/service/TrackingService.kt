@@ -570,7 +570,10 @@ class TrackingService : Service(), LocationListener {
         cameraStateMonitor.stop()
         _cameraActive.value = false
         networkAvailableMonitor.stop()
-        automationEngine.shutdown()
+        // AutomationEngine is @Singleton — its scope must outlive the service
+        // (WorkManager restarts the service into the same process, reusing the
+        // singleton). Cancelling here left confirm-action callbacks dead until
+        // process death.
         serviceScope.cancel()
 
         // Remove GPS listener to prevent leak

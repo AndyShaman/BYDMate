@@ -27,7 +27,6 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -394,12 +393,6 @@ class AutomationEngine @Inject constructor(
             )
         )
         Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
-    }
-
-    fun shutdown() {
-        scope.cancel()
-        pendingConfirmations.clear()
-        lastEvalResults.clear()
     }
 
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {

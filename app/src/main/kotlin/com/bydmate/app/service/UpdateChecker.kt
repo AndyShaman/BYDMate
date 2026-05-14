@@ -69,12 +69,12 @@ class UpdateChecker @Inject constructor(
             .header("Accept", "application/vnd.github+json")
             .header("User-Agent", "BYDMate-UpdateCheck")
             .build()
-        val response = httpClient.newCall(request).execute()
-        if (!response.isSuccessful) {
-            throw Exception("GitHub API: HTTP ${response.code}")
+        val body = httpClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw Exception("GitHub API: HTTP ${response.code}")
+            }
+            response.body?.string() ?: throw Exception("Пустой ответ от GitHub")
         }
-        val body = response.body?.string()
-            ?: throw Exception("Пустой ответ от GitHub")
 
         val json = JSONObject(body)
         val tagName = json.optString("tag_name", "").removePrefix("v")

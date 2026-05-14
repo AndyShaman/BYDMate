@@ -81,15 +81,16 @@ class AlicePollingManager @Inject constructor(
             .build()
 
         val t0 = System.currentTimeMillis()
-        val response = pollClient.newCall(request).execute()
-        val elapsed = System.currentTimeMillis() - t0
-        if (!response.isSuccessful) {
-            Log.w(TAG, "Poll HTTP ${response.code} (${elapsed}ms)")
-            return
+        val (elapsed, commands) = pollClient.newCall(request).execute().use { response ->
+            val ms = System.currentTimeMillis() - t0
+            if (!response.isSuccessful) {
+                Log.w(TAG, "Poll HTTP ${response.code} (${ms}ms)")
+                return
+            }
+            val body = response.body?.string() ?: return
+            val json = JSONObject(body)
+            ms to (json.optJSONArray("commands") ?: return)
         }
-        val body = response.body?.string() ?: return
-        val json = JSONObject(body)
-        val commands = json.optJSONArray("commands") ?: return
 
         if (commands.length() == 0) {
             Log.d(TAG, "Poll OK (${elapsed}ms) - empty")
@@ -140,7 +141,7 @@ class AlicePollingManager @Inject constructor(
                 .header("X-Api-Key", apiKey)
                 .post(json.toString().toRequestBody("application/json".toMediaType()))
                 .build()
-            pollClient.newCall(request).execute()
+            pollClient.newCall(request).execute().close()
             Log.d(TAG, "State reported")
         } catch (e: Exception) {
             Log.e(TAG, "State report failed: ${e.message}")
@@ -157,7 +158,7 @@ class AlicePollingManager @Inject constructor(
                 .header("X-Api-Key", apiKey)
                 .post(json.toString().toRequestBody("application/json".toMediaType()))
                 .build()
-            pollClient.newCall(request).execute()
+            pollClient.newCall(request).execute().close()
             Log.i(TAG, "Acked ${ids.size} command(s)")
         } catch (e: Exception) {
             Log.e(TAG, "Ack failed: ${e.message}")
