@@ -1,6 +1,5 @@
 package com.bydmate.app.ui.settings
 
-import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
@@ -1134,15 +1133,11 @@ private fun LanguageBlock(
     currentLang: String,
     onLanguageChange: (String) -> Unit
 ) {
-    val context = LocalContext.current
-    // Activity.recreate() after locale change forces every Compose screen to
-    // resolve resources with the new locale immediately; without it the user
-    // has to switch tabs before strings repaint.
+    // No Activity.recreate(): MainActivity listens to LocalePreferences,
+    // mutates Resources.configuration in place, and re-provides
+    // LocalConfiguration so every stringResource recomposes on next frame.
     val applyLang: (String) -> Unit = { lang ->
-        if (lang != currentLang) {
-            onLanguageChange(lang)
-            (context as? Activity)?.recreate()
-        }
+        if (lang != currentLang) onLanguageChange(lang)
     }
 
     SectionHeader(text = stringResource(R.string.settings_language_title))
