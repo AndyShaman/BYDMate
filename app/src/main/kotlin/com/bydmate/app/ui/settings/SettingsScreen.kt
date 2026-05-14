@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.settings
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
@@ -933,7 +934,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             ) {
                 SettingsRepository.CURRENCIES.forEach { currency ->
                     UnitChip(
-                        label = "${currency.symbol} ${currency.label}",
+                        label = currency.code,
                         selected = state.currency == currency.code,
                         onClick = { viewModel.saveCurrency(currency.code) }
                     )
@@ -1133,36 +1134,64 @@ private fun LanguageBlock(
     currentLang: String,
     onLanguageChange: (String) -> Unit
 ) {
-    Card(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.settings_language_title),
-                style = androidx.compose.material3.MaterialTheme.typography.titleMedium
-            )
-            Spacer(Modifier.height(8.dp))
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onLanguageChange("ru") }
-                    .padding(vertical = 4.dp)
-            ) {
-                RadioButton(selected = currentLang == "ru", onClick = { onLanguageChange("ru") })
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.settings_lang_russian))
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onLanguageChange("en") }
-                    .padding(vertical = 4.dp)
-            ) {
-                RadioButton(selected = currentLang == "en", onClick = { onLanguageChange("en") })
-                Spacer(Modifier.width(8.dp))
-                Text("English")
-            }
+    val context = LocalContext.current
+    // Activity.recreate() after locale change forces every Compose screen to
+    // resolve resources with the new locale immediately; without it the user
+    // has to switch tabs before strings repaint.
+    val applyLang: (String) -> Unit = { lang ->
+        if (lang != currentLang) {
+            onLanguageChange(lang)
+            (context as? Activity)?.recreate()
         }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_language_title))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            LanguageOption(
+                label = stringResource(R.string.settings_lang_russian),
+                selected = currentLang == "ru",
+                onClick = { applyLang("ru") },
+            )
+            LanguageOption(
+                label = "English",
+                selected = currentLang == "en",
+                onClick = { applyLang("en") },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = AccentGreen,
+                unselectedColor = TextMuted,
+            ),
+        )
+        Text(
+            text = label,
+            color = TextPrimary,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(start = 4.dp),
+        )
     }
 }
 

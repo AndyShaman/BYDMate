@@ -66,17 +66,17 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_CONSUMPTION_BAD = "30"
 
         val CURRENCIES = listOf(
-            Currency("BYN", "BYN", "Бел. руб."),
-            Currency("RUB", "₽", "Рос. руб."),
-            Currency("UAH", "₴", "Гривна"),
-            Currency("KZT", "₸", "Тенге"),
-            Currency("USD", "$", "Доллар"),
-            Currency("EUR", "€", "Евро"),
-            Currency("CNY", "¥", "Юань"),
+            Currency("BYN", "BYN"),
+            Currency("RUB", "₽"),
+            Currency("UAH", "₴"),
+            Currency("KZT", "₸"),
+            Currency("USD", "$"),
+            Currency("EUR", "€"),
+            Currency("CNY", "¥"),
         )
     }
 
-    data class Currency(val code: String, val symbol: String, val label: String)
+    data class Currency(val code: String, val symbol: String)
 
     enum class DataSource { ENERGYDATA, DIPLUS }
 

@@ -207,7 +207,7 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 ) {
                     SettingsRepository.CURRENCIES.forEach { currency ->
                         WelcomeChip(
-                            label = "${currency.symbol} ${currency.label}",
+                            label = currency.code,
                             selected = state.currency == currency.code,
                             onClick = { viewModel.setCurrency(currency.code) }
                         )

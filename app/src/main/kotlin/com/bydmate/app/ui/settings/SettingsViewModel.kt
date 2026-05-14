@@ -37,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.bydmate.app.service.BootReceiver
+import com.bydmate.app.ui.widget.WidgetController
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -151,6 +152,10 @@ class SettingsViewModel @Inject constructor(
         localePreferences.setLanguage(lang)
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang))
         _appLanguage.value = lang
+        // Force overlay teardown so the next attach picks up the new locale.
+        // applicationContext keeps a stale Configuration after setApplicationLocales,
+        // which leaves the floating widget rendering against the old language.
+        WidgetController.relocale()
     }
 
     private val _uiState = MutableStateFlow(SettingsUiState(

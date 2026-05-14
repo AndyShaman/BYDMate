@@ -2,6 +2,7 @@ package com.bydmate.app.ui.widget
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
 import android.util.DisplayMetrics
@@ -18,8 +19,10 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -97,17 +100,24 @@ object WidgetController {
         // long-press hid widget until user opens MainActivity (preview wins)
         if (prefs.isHiddenUntilAppLaunch() && !previewMode) return
 
+        // AppCompatDelegate.setApplicationLocales does not always refresh the
+        // applicationContext's Configuration, so the overlay's ComposeView ends
+        // up resolving stringResource against a stale locale. Wrap appCtx with
+        // an explicit locale context so the widget always matches the user's
+        // chosen language.
+        val viewCtx = localizedContext(appCtx)
+
         val windowManager = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = windowManager
 
         prefsAlphaFlow = prefs.alphaFlow()
         prefsScaleFlow = prefs.scaleFlow()
-        val metrics = appCtx.resources.displayMetrics
+        val metrics = viewCtx.resources.displayMetrics
 
         val initialScale = prefs.getScale()
         scaleState.value = initialScale
-        val widgetWpx = (dp(appCtx, WIDGET_WIDTH_DP) * initialScale).toInt()
-        val widgetHpx = (dp(appCtx, WIDGET_HEIGHT_DP) * initialScale).toInt()
+        val widgetWpx = (dp(viewCtx, WIDGET_WIDTH_DP) * initialScale).toInt()
+        val widgetHpx = (dp(viewCtx, WIDGET_HEIGHT_DP) * initialScale).toInt()
         currentWidgetWpx = widgetWpx
         currentWidgetHpx = widgetHpx
         val (startX, startY) = resolveStartPosition(prefs, metrics, widgetWpx, widgetHpx)
@@ -133,7 +143,7 @@ object WidgetController {
         val lifecycleOwner = OverlayLifecycleOwner().also { it.onCreate() }
         widgetLifecycle = lifecycleOwner
 
-        val compose = ComposeView(appCtx).apply {
+        val compose = ComposeView(viewCtx).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -152,7 +162,7 @@ object WidgetController {
                     scaleFactor = scaleState.value,
                 )
             }
-            setOnTouchListener(WidgetTouchListener(appCtx, prefs, metrics))
+            setOnTouchListener(WidgetTouchListener(viewCtx, prefs, metrics))
         }
         widgetView = compose
 
@@ -414,6 +424,25 @@ object WidgetController {
                 screenHeight = metrics.heightPixels,
             )
         }
+    }
+
+    /**
+     * Called from SettingsViewModel after the user switches app language.
+     * Detaches the overlay so the next attach (driven by ActivityLifecycle
+     * callbacks when the user leaves Settings) recreates ComposeView against
+     * the freshly-localized Configuration context.
+     */
+    @Synchronized
+    fun relocale() {
+        if (widgetView != null) detach()
+    }
+
+    private fun localizedContext(appCtx: Context): Context {
+        val lang = LocalePreferences(appCtx).getLanguage() ?: return appCtx
+        val config = Configuration(appCtx.resources.configuration).apply {
+            setLocale(Locale.forLanguageTag(lang))
+        }
+        return appCtx.createConfigurationContext(config)
     }
 
     private fun dp(context: Context, dp: Int): Int =
