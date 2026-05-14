@@ -753,50 +753,49 @@ class SettingsViewModel @Inject constructor(
      * underlying BYD energydata / DiPlus databases are reachable.
      */
     private suspend fun writeDiagnosticHeader(file: File) = withContext(Dispatchers.IO) {
-        try {
-            val pkg = appContext.packageName
-            val pi = appContext.packageManager.getPackageInfo(pkg, 0)
-            val versionName = pi.versionName ?: "?"
-            val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
-                pi.longVersionCode.toString()
-            else
-                @Suppress("DEPRECATION") pi.versionCode.toString()
-
-            val dataSource = runCatching { settingsRepository.getDataSource().name }.getOrDefault("?")
-            val capacityRaw = runCatching {
-                settingsRepository.getString(SettingsRepository.KEY_BATTERY_CAPACITY, "")
-            }.getOrDefault("?")
-            val capacityParsed = runCatching { settingsRepository.getBatteryCapacity() }.getOrDefault(-1.0)
-            val autoservice = runCatching { settingsRepository.isAutoserviceEnabled() }.getOrDefault(false)
-            val abrpEnabled = runCatching {
-                settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
-            }.getOrDefault(false)
-            val abrpTokenLen = runCatching {
-                settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
-            }.getOrDefault(0)
-            val abrpCarModel = runCatching {
-                settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
-            }.getOrDefault("")
-            val locale = Locale.getDefault().toLanguageTag()
-            val appLang = localePreferences.getLanguage() ?: "(unset)"
-
-            val energyDb = File("/storage/emulated/0/energydata")
-            val diplusDb = File("/storage/emulated/0/vandiplus/db/van_bm_db")
-
-            val header = buildString {
-                appendLine("=== BYDMate diagnostic dump ===")
+        // Build the header. Each piece is independently caught so a single
+        // failing getter doesn't drop the whole header.
+        val header = buildString {
+            appendLine("=== BYDMate diagnostic dump ===")
+            try {
+                val pkg = appContext.packageName
+                val pi = appContext.packageManager.getPackageInfo(pkg, 0)
+                val versionName = pi.versionName ?: "?"
+                val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                    pi.longVersionCode.toString()
+                else
+                    @Suppress("DEPRECATION") pi.versionCode.toString()
                 appendLine("timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
                 appendLine("app: $pkg v$versionName (code=$versionCode)")
                 appendLine("device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
                 appendLine("android: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})")
                 appendLine("fingerprint: ${android.os.Build.FINGERPRINT}")
-                appendLine("locale: jvm=$locale app=$appLang")
-                appendLine("--- settings ---")
+                appendLine("locale: jvm=${Locale.getDefault().toLanguageTag()} app=${localePreferences.getLanguage() ?: "(unset)"}")
+            } catch (e: Exception) {
+                appendLine("(failed to gather app/device metadata: ${e.message})")
+            }
+
+            appendLine("--- settings ---")
+            try {
+                val dataSource = settingsRepository.getDataSource().name
+                val capacityRaw = settingsRepository.getString(SettingsRepository.KEY_BATTERY_CAPACITY, "")
+                val capacityParsed = settingsRepository.getBatteryCapacity()
+                val autoservice = settingsRepository.isAutoserviceEnabled()
+                val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
+                val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
+                val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
                 appendLine("autoservice_enabled: $autoservice")
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
-                appendLine("--- vehicle data sources ---")
+            } catch (e: Exception) {
+                appendLine("(failed to gather settings: ${e.message})")
+            }
+
+            appendLine("--- vehicle data sources ---")
+            try {
+                val energyDb = File("/storage/emulated/0/energydata")
+                val diplusDb = File("/storage/emulated/0/vandiplus/db/van_bm_db")
                 appendLine("energydata dir: exists=${energyDb.exists()} isDir=${energyDb.isDirectory}")
                 if (energyDb.exists() && energyDb.isDirectory) {
                     val files = energyDb.listFiles()
@@ -807,17 +806,16 @@ class SettingsViewModel @Inject constructor(
                     }
                 }
                 appendLine("DiPlus van_bm_db: exists=${diplusDb.exists()} size=${if (diplusDb.exists()) diplusDb.length() else 0}B mtime=${if (diplusDb.exists()) diplusDb.lastModified() else 0}")
-                appendLine("===============================")
-                appendLine()
+            } catch (e: Exception) {
+                appendLine("(failed to gather vehicle data sources: ${e.message})")
             }
-            FileWriter(file, false).use { it.write(header) }
-        } catch (e: Exception) {
-            try {
-                FileWriter(file, false).use {
-                    it.write("=== diag header failed: ${e.message} ===\n\n")
-                }
-            } catch (_: Exception) {}
+            appendLine("===============================")
+            appendLine()
         }
+
+        // File-write failures must surface so the user sees a meaningful
+        // error instead of a "запись начата" status next to an empty file.
+        FileWriter(file, false).use { it.write(header) }
     }
 
     fun startLogRecording() {
@@ -860,15 +858,19 @@ class SettingsViewModel @Inject constructor(
                     "ChargesViewModel:*", "ChargeRepository:*"
                 ))
 
-                // Background thread to pipe logcat to file with size limit
+                // Background thread to pipe logcat to file with size limit.
+                // Open in append mode so the diagnostic header written by
+                // writeDiagnosticHeader() is preserved instead of overwritten.
                 Thread {
                     try {
                         logProcess?.inputStream?.bufferedReader()?.use { reader ->
-                            logFile?.bufferedWriter()?.use { writer ->
+                            val target = logFile ?: return@Thread
+                            java.io.FileOutputStream(target, /* append = */ true)
+                                .bufferedWriter().use { writer ->
                                 var line = reader.readLine()
                                 while (line != null) {
                                     // Stop if file exceeds size limit
-                                    if ((logFile?.length() ?: 0) > LOG_MAX_SIZE_BYTES) {
+                                    if (target.length() > LOG_MAX_SIZE_BYTES) {
                                         writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
                                         writer.newLine()
                                         break
