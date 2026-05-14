@@ -259,7 +259,7 @@ class HistoryImporter @Inject constructor(
 
                 // Find matching live trip (startTs within ±5 min)
                 val match = liveTrips.firstOrNull { live ->
-                    kotlin.math.abs(live.startTs - startTsMs) < 300_000L
+                    kotlin.math.abs(live.startTs - startTsMs) < DEDUP_WINDOW_MS
                 }
 
                 if (match != null) {
@@ -522,10 +522,4 @@ class HistoryImporter @Inject constructor(
         }
     }
 
-    /**
-     * Legacy sync method (backward compat for Settings import button).
-     */
-    suspend fun sync(): ImportResult = runSync()
-
-    suspend fun forceImport(): ImportResult = runSync()
 }

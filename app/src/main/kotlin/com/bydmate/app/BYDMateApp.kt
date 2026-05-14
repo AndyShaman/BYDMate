@@ -70,7 +70,7 @@ class BYDMateApp : Application(), Configuration.Provider {
             historyImporter.cleanupDuplicates()
             // Only sync if setup is completed (prevents duplicates during first wizard run)
             if (settingsRepository.isSetupCompleted()) {
-                historyImporter.sync()
+                historyImporter.runSync()
             }
         }
         scheduleDataThinning()

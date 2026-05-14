@@ -462,7 +462,7 @@ class SettingsViewModel @Inject constructor(
     fun importBydHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(importStatus = "Импорт...") }
-            val result = historyImporter.forceImport()
+            val result = historyImporter.runSync()
             if (result.isError) {
                 _uiState.update {
                     it.copy(importStatus = "Ошибка: ${result.error}")
@@ -770,7 +770,7 @@ class SettingsViewModel @Inject constructor(
 
                 logProcess = Runtime.getRuntime().exec(arrayOf(
                     "logcat", "-v", "time",
-                    "-s", "BootReceiver:*", "SilentStartActivity:*",
+                    "-s", "BootReceiver:*",
                     "DiParsClient:*", "TrackingService:*", "TripTracker:*",
                     "DiPlusDbReader:*",
                     "HistoryImporter:*", "EnergyDataReader:*"

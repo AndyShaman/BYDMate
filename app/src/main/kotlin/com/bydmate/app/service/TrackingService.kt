@@ -51,7 +51,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 
@@ -220,10 +219,10 @@ class TrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
-        appendChainLog("TrackingService onCreate")
+        ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
         startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.service_foreground_content_starting)))
-        appendChainLog("startForeground OK")
+        ChainLog.append(this, "startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
 
@@ -279,7 +278,7 @@ class TrackingService : Service(), LocationListener {
         startPolling()
         startCameraMonitor()
         _isRunning.value = true
-        appendChainLog("TrackingService fully started")
+        ChainLog.append(this, "TrackingService fully started")
 
         // Start Smart Home polling if configured
         serviceScope.launch {
@@ -544,7 +543,7 @@ class TrackingService : Service(), LocationListener {
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         com.bydmate.app.ui.widget.WidgetController.detach()
-        appendChainLog("TrackingService onDestroy")
+        ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
         ConsumptionAggregator.reset()
         // NOTE: do NOT null out _sessionStartedAt or clear SessionPersistence here.
@@ -604,7 +603,7 @@ class TrackingService : Service(), LocationListener {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         Log.i(TAG, "onTaskRemoved: scheduling restart via WorkManager")
-        appendChainLog("onTaskRemoved → restart")
+        ChainLog.append(this, "onTaskRemoved → restart")
         try {
             val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
             WorkManager.getInstance(this).enqueueUniqueWork(
@@ -1042,18 +1041,6 @@ class TrackingService : Service(), LocationListener {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
-    }
-
-    private fun appendChainLog(entry: String) {
-        try {
-            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-            val ts = sdf.format(java.util.Date())
-            val prefs = getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
-            val existing = prefs.getString(BootReceiver.KEY_CHAIN_LOG, "") ?: ""
-            val lines = existing.lines().takeLast(19)
-            val updated = (lines + "$ts $entry").joinToString("\n")
-            prefs.edit().putString(BootReceiver.KEY_CHAIN_LOG, updated).apply()
-        } catch (_: Exception) {}
     }
 
     private fun updateNotification(data: DiParsData) {
