@@ -13,6 +13,8 @@
 [![GitHub release](https://img.shields.io/github/v/release/AndyShaman/BYDMate?style=flat-square)](https://github.com/AndyShaman/BYDMate/releases)
 [![Sponsor](https://img.shields.io/badge/Поддержать-FF69B4?style=flat-square&logo=githubsponsors&logoColor=white)](SUPPORT.md)
 
+[English](README.en.md) | **Русский**
+
 **Реальный расход, GPS-маршруты, автоматизация, AI-аналитика — локально, без облака.**
 
 [Возможности](#-возможности) | [Скриншоты](#-скриншоты) | [Автоматизация](#-автоматизация) | [AI Инсайты](#-ai-инсайты) | [ABRP](#-abrp--live-телеметрия) | [Установка](#-установка) | [Сборка](#-сборка-из-исходников) | [Поддержать](SUPPORT.md)
@@ -487,106 +489,4 @@ Copyright (C) 2026 [AndyShaman](https://github.com/AndyShaman)
 
 ---
 
-<details>
-<summary><b>English version</b></summary>
-
-## What is BYDMate?
-
-BYDMate is an Android app for BYD vehicles with DiLink 5.0 head unit (Leopard 3 / Fangchengbao Bao 3). It logs trips, GPS routes, real energy consumption from BMS, and provides AI-powered driving analytics — all locally on the head unit.
-
-### Why?
-
-The BYD onboard computer **underestimates consumption by 10-30%**. BYDMate reads real consumption data from the BMS (energydata SQLite database) and shows information not available in the stock system: idle drain, cell balance, trip costs, AI driving insights.
-
-### Features
-
-- **Real consumption** from BMS energydata (not onboard estimates). Big number = live current-trip average that converges to the recorded trip; trend arrow uses a rolling 25 km window
-- **Dashboard** with widget-style stats around the SOC ring: trip duration, odometer, cabin temp on top; trip distance, estimated range (Rivian-style 50/30/20 weighted blend of last 3 trips, mixed with current-session sliding 10 km window), live trip consumption + trend arrow (still over a rolling 25 km window) on bottom. Same colors and trend logic as the floating widget
-- **Trip logging** with GPS routes, distance, speed
-- **Charges journal** with automatic AC / DC detection, period and lifetime stats, manual add and edit
-- **AI Insights** — LLM-powered driving analysis via OpenRouter (optional)
-- **Idle drain** monitoring from BMS data
-- **Battery health** — temperature, real **SoH on Leopard 3** (read from the car), cell balance, 12V voltage
-- **Trip map** with speed-colored routes (osmdroid, no Google Maps)
-- **Automation** — WHEN→THEN rules: triggers on 25 parameters → 41 D+ commands (windows incl. driver/passenger, climate, lights, locks, mirrors) + 8 action kinds (notification, app launch, call, navigate, URL, Yandex Music). Overlay confirmation with 15 s auto-cancel
-- **Floating widget** — draggable 7-field overlay: SOC, range (Rivian-style 50/30/20 weighted blend of last 3 trips, mixed with current-session sliding 10 km window), live trip consumption + trend arrow (still over a rolling 25 km window) vs your 10-trip baseline, ignition-bounded trip time, cabin/battery temp, 12V. Session survives app kill via SharedPreferences anchor
-- **Auto-start** via WorkManager on boot
-- **CSV export** for trips and charges
-
-### How it works
-
-BYDMate reads vehicle data from two sources:
-- **BYD energydata** (built-in BMS SQLite database) — accurate per-trip consumption
-- **DiPlus** app's local API (`localhost:8988`) — live SOC, speed, temperatures, cell voltages
-
-No OBD adapter needed. No cloud/server — everything stays on the head unit (except optional AI via OpenRouter).
-
-### Trip data source (Leopard 3 vs Song)
-
-BYDMate supports two trip data backends, switchable in **Settings → Trip data source** or during the first-run wizard:
-
-- **BYD energydata** — for Leopard 3 (Fangchengbao Bao 3) and other models that ship the built-in BMS database. Most accurate per-trip consumption.
-- **DiPlus TripInfo** — for Song and other models **without** built-in energydata. Reads trips from DiPlus database; consumption is computed from SOC delta (~1 kWh/100km coarser than BMS).
-
-If the Trips list stays empty after 2–3 drives, switch the mode.
-
-### Charges
-
-The **Charges** tab automatically logs every real top-up. A record is created only when SoC actually rose during the session, so brief plug-ins without charging do not pollute the journal. The detector tries three sources in order: capacity delta in kWh, then SoC delta over the active session converted to kWh by current capacity, then a coarse estimate from the SoC delta against nominal capacity. AC / DC is decided first by gun state (2 = AC, 3 / 4 = DC), and falls back to average session power (≥ 15 kW = DC) when the gun state is not reported. Use the **+ зарядка** button at the top of the tab to add a session manually; **long-press** any record to edit or delete it. The feature is in active testing: stable on Leopard 3, may need manual correction on other BYD models.
-
-### Battery health and SoH
-
-On Leopard 3 BYDMate reads the **real SoH** value computed by the car itself and shows it in the Battery health card. On other BYD models the SoH field is hidden until access is confirmed; everything else (temperature, cell balance, 12V) works as usual.
-
-### Enable SoH and automatic charge logging (Leopard 3)
-
-To get SoH, automatic charge entries and Automation tab, open **Settings** and enable **«Системные данные (экспериментально)»**. DiLink will show a one-time system dialog asking to allow ADB debugging. Tap **Allow** (and check **«Always allow from this computer»** so the dialog doesn't appear at every launch). Without this toggle, only the basic features work (trips, consumption, widget, AI insights); SoH, automatic charges and Automation stay disabled.
-
-### If you don't have a Leopard 3
-
-BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Bao 3). On other BYD models most features still work, but a few things differ:
-
-- Switch **Trip data source** to DiPlus TripInfo in Settings (energydata is missing on Song, Yuan, etc.)
-- Set the correct **battery capacity** in Settings → Battery (Leopard 3 default is 72.9 kWh; Atto 3 = 60.5, Seal AWD = 82.5, Han EV = 85.4)
-- **SoH** is shown on Leopard 3 only
-- **Charges** auto-detection is tuned for Leopard 3; expect occasional misses or wrong AC / DC on other models — use manual add / edit
-- **Automation** and **floating widget** work the same on any model with DiPlus
-
-If something does not work, please open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with the car model and DiLink firmware version.
-
-### Installation
-
-1. **Enable ADB on your head unit.** Without ADB, BYDMate runs in basic mode — trips, consumption, widget and AI insights work, but SoH, automatic charge logging and the Automation tab require ADB. On DiLink 3/4 you can enable it yourself; on **DiLink 5.0** ADB is locked and must be unlocked remotely from China via TaoBao sellers (~40–80 ¥). See [PDF guide (RU)](docs/guides/dilink5-adb-activation-ru.pdf) included in the repo.
-2. Install **[DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** on your DiLink head unit — copy the APK via USB stick and open it in the file manager (no ADB needed).
-3. Download BYDMate APK from [Releases](https://github.com/AndyShaman/BYDMate/releases)
-4. Transfer to DiLink via USB and install
-5. Grant location + storage permissions
-6. Disable "Disable background Apps" for BYDMate in DiLink Settings
-
-### AI Insights
-
-1. Get an API key from [OpenRouter](https://openrouter.ai/) (free models available)
-2. Enter the key in BYDMate Settings and select a model
-3. Click "Save and get insight"
-
-AI analyzes 7-day and 30-day driving stats. Key metrics (consumption trends, short trips ratio, idle drain) are calculated deterministically. LLM provides correlations, anomalies, and behavioral advice in Russian.
-
-### Building
-
-```bash
-# Requirements: JDK 17, Android SDK 34
-git clone https://github.com/AndyShaman/BYDMate.git
-cd BYDMate
-./gradlew assembleDebug
-```
-
-### Credits
-
-- **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** by jayb — original DiLink trip app, inspiration for BYDMate
-- **[DiPlus](https://www.dilink.cn/)** by Van Design — local vehicle data API bridge
-
-### License
-
-GPLv3 with attribution. See [LICENSE](LICENSE).
-
-</details>
+English version: [README.en.md](README.en.md)
