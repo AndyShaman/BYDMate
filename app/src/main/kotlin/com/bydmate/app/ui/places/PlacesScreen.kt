@@ -38,10 +38,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.ui.theme.AccentGreen
@@ -63,12 +66,13 @@ fun PlacesScreen(
     val usageCounts by viewModel.usageCounts.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
+    val context = LocalContext.current
 
     // Collect delete-blocked events and show snackbar.
     LaunchedEffect(viewModel.deleteBlocked) {
         viewModel.deleteBlocked.collect { count ->
             snackbarHostState.showSnackbar(
-                "Место используется в $count автоматизациях. Сначала удалите правила."
+                context.getString(R.string.places_delete_blocked_message, count)
             )
         }
     }
@@ -113,12 +117,12 @@ fun PlacesScreen(
                 IconButton(onClick = onBack) {
                     Icon(
                         imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Назад",
+                        contentDescription = stringResource(R.string.places_back_content_description),
                         tint = TextPrimary
                     )
                 }
                 Text(
-                    text = "Места",
+                    text = stringResource(R.string.places_tab_title),
                     color = TextPrimary,
                     fontSize = 18.sp,
                     fontWeight = FontWeight.Bold
@@ -136,7 +140,7 @@ fun PlacesScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "Мест пока нет. Нажмите \"+ Добавить\", чтобы создать.",
+                        text = stringResource(R.string.places_empty),
                         color = TextMuted,
                         fontSize = 14.sp
                     )
@@ -169,7 +173,7 @@ fun PlacesScreen(
                     contentColor = NavyDark
                 )
             ) {
-                Text("+ Добавить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.places_add_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
             }
         }
 
@@ -212,13 +216,13 @@ private fun PlaceRow(
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = "${"%.5f".format(place.lat)}, ${"%.5f".format(place.lon)} · ${place.radiusM} м",
+                    text = stringResource(R.string.places_row_coords, place.lat, place.lon, place.radiusM),
                     color = TextSecondary,
                     fontSize = 12.sp
                 )
                 if (inUse) {
                     Text(
-                        text = "используется в $usageCount правилах",
+                        text = stringResource(R.string.places_row_in_use, usageCount),
                         color = TextMuted,
                         fontSize = 11.sp
                     )
@@ -231,7 +235,7 @@ private fun PlaceRow(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Edit,
-                        contentDescription = "Редактировать",
+                        contentDescription = stringResource(R.string.places_edit_content_description),
                         tint = AccentGreen,
                         modifier = Modifier.size(18.dp)
                     )
@@ -243,7 +247,7 @@ private fun PlaceRow(
                 ) {
                     Icon(
                         imageVector = Icons.Outlined.Delete,
-                        contentDescription = "Удалить",
+                        contentDescription = stringResource(R.string.places_delete_content_description),
                         tint = if (inUse) TextMuted else SocRed,
                         modifier = Modifier.size(18.dp)
                     )

@@ -45,7 +45,9 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.R
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.NavHost
@@ -66,12 +68,12 @@ import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
 
-enum class Screen(val route: String, val label: String, val icon: ImageVector) {
-    Dashboard("dashboard", "Главная", Icons.Outlined.Home),
-    Trips("trips", "Поездки", Icons.Outlined.DirectionsCar),
-    Charges("charges", "Зарядки", Icons.Outlined.BatteryChargingFull),
-    Automation("automation", "Автоматизация", Icons.Outlined.Bolt),
-    Settings("settings", "Настройки", Icons.Outlined.Settings)
+enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
+    Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
+    Trips("trips", R.string.nav_tab_trips, Icons.Outlined.DirectionsCar),
+    Charges("charges", R.string.nav_tab_charges, Icons.Outlined.BatteryChargingFull),
+    Automation("automation", R.string.nav_tab_automation, Icons.Outlined.Bolt),
+    Settings("settings", R.string.nav_tab_settings, Icons.Outlined.Settings)
 }
 
 @Composable
@@ -118,7 +120,7 @@ fun AppNavigation(
             state = dialogState,
             onCheck = {
                 val info = autoUpdateInfo ?: return@UpdateDialog
-                autoUpdateState = UpdateState.Downloading(info.version, "Скачивание: 0%")
+                autoUpdateState = UpdateState.Downloading(info.version, autoCheckContext.getString(R.string.update_downloading_start))
                 autoCheckScope.launch {
                     try {
                         updateChecker.downloadAndInstall(autoCheckContext, info) { progress ->
@@ -169,10 +171,10 @@ fun AppNavigation(
                             icon = {
                                 Icon(
                                     imageVector = screen.icon,
-                                    contentDescription = screen.label
+                                    contentDescription = stringResource(screen.labelRes)
                                 )
                             },
-                            label = { Text(screen.label) },
+                            label = { Text(stringResource(screen.labelRes)) },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                             onClick = {
                                 navController.navigate(screen.route) {
@@ -251,11 +253,9 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                     modifier = Modifier.padding(20.dp),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Text("BYDMate обновлён до v$version", color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.nav_autostart_dialog_title, version), color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     Text(
-                        "Проверьте, что фоновая работа не заблокирована:\n\n" +
-                            "Настройки DiLink → General → Disable background Apps → BYDMate → OFF\n\n" +
-                            "Если переключатель включён (ON), DiLink может прибить сервис BYDMate — тогда поездки и GPS не будут писаться.",
+                        stringResource(R.string.nav_autostart_dialog_body),
                         color = TextSecondary, fontSize = 14.sp
                     )
                     Button(
@@ -280,7 +280,7 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                                 }
                                 Toast.makeText(
                                     context,
-                                    "Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.",
+                                    context.getString(R.string.nav_autostart_open_settings_error),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -290,7 +290,7 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
                     ) {
-                        Text("Понятно", color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.nav_autostart_dialog_button), color = Color.Black, fontWeight = FontWeight.Bold)
                     }
                 }
             }

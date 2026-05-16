@@ -2,6 +2,8 @@ package com.bydmate.app.data.remote
 
 import android.content.Context
 import android.util.Log
+import androidx.annotation.VisibleForTesting
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.repository.SettingsRepository
@@ -23,7 +25,8 @@ class InsightsManager @Inject constructor(
     private val openRouterClient: OpenRouterClient,
     private val tripDao: TripDao,
     private val idleDrainDao: IdleDrainDao,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val localePreferences: LocalePreferences = LocalePreferences(context)
 ) {
     companion object {
         private const val TAG = "InsightsManager"
@@ -33,10 +36,14 @@ class InsightsManager @Inject constructor(
         private const val KEY_MODELS_JSON = "models_json"
         private const val KEY_MODELS_DATE = "models_date"
         private const val KEY_V12_HISTORY = "v12_history"   // JSON array of {date:"yyyy-MM-dd", volts:Double}, max 7 entries
+        private val LANGUAGE_CACHE_KEY = Regex("^insight_\\d{4}-\\d{2}-\\d{2}_[a-z]{2}$")
 
-        private const val SYSTEM_PROMPT_TEMPLATE = """You are an EV / plug-in hybrid driving analyst for %s.
+        @JvmStatic
+        fun cacheKey(date: String, lang: String): String = "insight_${date}_${lang}"
 
-Analyze the provided driving statistics and return actionable insights in Russian.
+        private const val SYSTEM_PROMPT_RU = """You are an EV / plug-in hybrid driving analyst for BYD vehicles.
+
+Analyze the provided driving statistics and return actionable insights in Russian. Respond only на русском.
 
 Focus on:
 - Electric and fuel consumption patterns and trends (week-over-week AND month-over-month)
@@ -71,6 +78,43 @@ Anti-hallucination rules (CRITICAL):
 - If the data block shows fewer than 5 trips, fewer than 2 days of 12V history, or a section is entirely missing — do NOT invent trends, percentages, or correlations for that aspect. Either omit that topic or say data is insufficient.
 - Never quote numbers the data block does not contain. If you are uncertain about a figure, do not mention it.
 - If the data is too thin overall, return {"title":"Данных мало для анализа","summary":"Нужно больше поездок на неделе","insights":[],"tone":"good"} and nothing else."""
+
+        private const val SYSTEM_PROMPT_EN = """You are an EV driving analyst for BYD Leopard 3 (Fangchengbao Bao 3), a plug-in hybrid SUV with a 72.9 kWh LFP Blade Battery.
+
+Analyze the provided driving statistics and return actionable insights in English. Respond only in English.
+
+Focus on:
+- Consumption patterns and trends (week-over-week AND month-over-month)
+- Cost optimization opportunities
+- Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
+- Driving habit impact (short trips vs long, speed impact on consumption)
+- Seasonal/temperature effects on range and consumption
+- Correlations the user would not notice (time of day vs efficiency, temperature vs consumption)
+
+IMPORTANT about "Stationary consumption":
+This is energy used while the vehicle is RUNNING but NOT MOVING - engine warmup, waiting with A/C on, configuring the car, etc. This is NORMAL behavior, NOT a parasitic drain or anomaly. Do NOT recommend checking remote access, alarm systems, or parking mode settings. Only mention it if the proportion is notably high compared to driving consumption, and frame advice as "reduce idle time" not "diagnose a problem".
+
+Be specific - reference actual numbers from the data. Give practical advice.
+Do NOT mention SoH percentage or battery capacity estimation - we cannot measure it accurately.
+
+Key metrics and dynamics (consumption, mileage, trends) are shown separately in the UI - do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
+
+Return ONLY valid JSON (no markdown, no code fences):
+{"title":"key change in 3-5 words","summary":"cause or advice, max 60 chars","insights":["insight 1","insight 2","insight 3"],"tone":"good|warning|critical"}
+
+title: the most important change or finding, e.g. "Consumption up 8%" or "Battery looks normal". NEVER write generic titles like "Efficiency analysis", "Statistics overview", or "Weekly summary". Always state the key finding with a number.
+summary: the cause or actionable advice, max 60 chars.
+Each insight: 1-2 sentences in English. Start with the key finding. Reference specific numbers. Max 3 insights.
+
+tone guidelines:
+- "good": everything looks normal or improving
+- "warning": notable degradation or concerning pattern
+- "critical": anomaly that needs immediate attention
+
+Anti-hallucination rules (CRITICAL):
+- If the data block shows fewer than 5 trips, fewer than 2 days of 12V history, or a section is entirely missing, do NOT invent trends, percentages, or correlations for that aspect. Either omit that topic or say data is insufficient.
+- Never quote numbers the data block does not contain. If you are uncertain about a figure, do not mention it.
+- If the data is too thin overall, return {"title":"Not enough data","summary":"More weekly trips are needed","insights":[],"tone":"good"} and nothing else."""
     }
 
     private val prefs by lazy {
@@ -78,18 +122,47 @@ Anti-hallucination rules (CRITICAL):
     }
 
     fun getCachedInsight(): InsightData? {
-        val json = prefs.getString(KEY_INSIGHT_JSON, null) ?: return null
+        val json = prefs.getString(cacheKey(todayString(), currentLanguage()), null) ?: return null
         return parseInsight(json)
     }
 
-    fun getCachedDate(): String? = prefs.getString(KEY_INSIGHT_DATE, null)
+    fun getCachedDate(): String? {
+        val today = todayString()
+        return if (prefs.contains(cacheKey(today, currentLanguage()))) today else null
+    }
 
     private fun todayString(): String =
         SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
 
+    private fun currentLanguage(): String =
+        when (localePreferences.getLanguage()) {
+            "en" -> "en"
+            else -> "ru"
+        }
+
+    private fun buildPrompt(lang: String): String =
+        when (lang) {
+            "en" -> SYSTEM_PROMPT_EN
+            else -> SYSTEM_PROMPT_RU
+        }
+
+    @VisibleForTesting
+    @Suppress("UNUSED_PARAMETER")
+    fun buildPromptForTest(data: InsightData, lang: String): String = buildPrompt(lang)
+
     fun needsRefresh(): Boolean {
-        val lastDate = prefs.getString(KEY_INSIGHT_DATE, null)
-        return lastDate != todayString()
+        return !prefs.contains(cacheKey(todayString(), currentLanguage()))
+    }
+
+    fun migrateLegacyCache() {
+        val keysToRemove = prefs.all.keys.filter { key ->
+            key.startsWith("insight_") && !LANGUAGE_CACHE_KEY.matches(key)
+        }
+        if (keysToRemove.isEmpty()) return
+
+        val editor = prefs.edit()
+        keysToRemove.forEach { editor.remove(it) }
+        editor.apply()
     }
 
     suspend fun refreshIfNeeded(): InsightData? {
@@ -130,27 +203,14 @@ Anti-hallucination rules (CRITICAL):
         if (modelId.isBlank()) return null
 
         return try {
+            val lang = currentLanguage()
             val dataPrompt = buildDataPrompt()
             if (dataPrompt == null) {
                 Log.d(TAG, "Not enough data for insights")
                 return null
             }
 
-            val vehicle = settingsRepository.getVehicleProfile()
-            val vehicleDescription = buildString {
-                append(vehicle.label)
-                vehicle.batteryCapacityKwh?.let {
-                    append(", a BYD plug-in hybrid / EV with a ")
-                    append(SettingsRepository.formatCapacity(it))
-                    append(" kWh LFP Blade Battery")
-                }
-            }
-            val response = openRouterClient.chat(
-                apiKey,
-                modelId,
-                SYSTEM_PROMPT_TEMPLATE.replace("%s", vehicleDescription),
-                dataPrompt
-            )
+            val response = openRouterClient.chat(apiKey, modelId, buildPrompt(lang), dataPrompt)
             if (response == null) {
                 Log.w(TAG, "No response from OpenRouter")
                 return getCachedInsight()
@@ -165,7 +225,7 @@ Anti-hallucination rules (CRITICAL):
                 .trim()
 
             // Build deterministic dynamics from actual data (not LLM)
-            val dynamics = buildDynamics()
+            val dynamics = buildDynamics(lang)
 
             // Serialize dynamics into JSON array for caching
             val dynamicsArr = org.json.JSONArray()
@@ -177,6 +237,7 @@ Anti-hallucination rules (CRITICAL):
                     if (m.changePct != null) put("changePct", m.changePct)
                     put("sentiment", m.sentiment)
                     if (m.section != null) put("section", m.section)
+                    if (m.kind.isNotEmpty()) put("kind", m.kind)
                 })
             }
 
@@ -196,9 +257,9 @@ Anti-hallucination rules (CRITICAL):
 
             val insight = parseInsight(mergedJson)
             if (insight != null) {
+                val today = todayString()
                 prefs.edit()
-                    .putString(KEY_INSIGHT_JSON, mergedJson)
-                    .putString(KEY_INSIGHT_DATE, todayString())
+                    .putString(cacheKey(today, lang), mergedJson)
                     .apply()
                 Log.i(TAG, "Insight refreshed: ${insight.title}")
             } else {
@@ -211,7 +272,14 @@ Anti-hallucination rules (CRITICAL):
         }
     }
 
-    private suspend fun buildDynamics(): List<DynamicMetric> = withContext(Dispatchers.IO) {
+    private fun localizedResources(lang: String): android.content.res.Resources {
+        val config = android.content.res.Configuration(context.resources.configuration)
+        config.setLocale(Locale(lang))
+        return context.createConfigurationContext(config).resources
+    }
+
+    private suspend fun buildDynamics(lang: String): List<DynamicMetric> = withContext(Dispatchers.IO) {
+        val res = localizedResources(lang)
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance()
 
@@ -245,12 +313,13 @@ Anti-hallucination rules (CRITICAL):
         if (recentCons > 0) {
             val pct = if (prevCons > 0) (recentCons - prevCons) / prevCons * 100 else null
             metrics.add(DynamicMetric(
-                label = "Электрорасход",
-                current = "%.1f кВтч/100".format(recentCons),
-                previous = if (prevCons > 0) "%.1f".format(prevCons) else null,
+                label = res.getString(com.bydmate.app.R.string.insight_metric_consumption),
+                current = res.getString(com.bydmate.app.R.string.insight_unit_kwh_per_100, recentCons),
+                previous = if (prevCons > 0) res.getString(com.bydmate.app.R.string.insight_unit_kwh_per_100_prev, prevCons) else null,
                 changePct = pct,
                 sentiment = consumptionSentiment(pct),
-                section = "Неделя к неделе"
+                section = res.getString(com.bydmate.app.R.string.insight_section_week_to_week),
+                kind = "consumption"
             ))
         }
 
@@ -262,7 +331,8 @@ Anti-hallucination rules (CRITICAL):
                 previous = if (prevFuelCons > 0) "%.1f".format(prevFuelCons) else null,
                 changePct = pct,
                 sentiment = consumptionSentiment(pct),
-                section = "Неделя к неделе"
+                section = res.getString(com.bydmate.app.R.string.insight_section_week_to_week),
+                kind = "fuel"
             ))
         }
 
@@ -271,11 +341,12 @@ Anti-hallucination rules (CRITICAL):
             val pct = if (prevTrips.isNotEmpty())
                 (recentTrips.size - prevTrips.size).toDouble() / prevTrips.size * 100 else null
             metrics.add(DynamicMetric(
-                label = "Поездки",
-                current = "${recentTrips.size} · ${"%.0f".format(recentKm)} км",
-                previous = if (prevTrips.isNotEmpty()) "${prevTrips.size} · ${"%.0f".format(prevKm)} км" else null,
+                label = res.getString(com.bydmate.app.R.string.insight_metric_trips),
+                current = res.getString(com.bydmate.app.R.string.insight_trips_value, recentTrips.size, "%.0f".format(recentKm)),
+                previous = if (prevTrips.isNotEmpty()) res.getString(com.bydmate.app.R.string.insight_trips_prev, prevTrips.size, "%.0f".format(prevKm)) else null,
                 changePct = pct,
-                sentiment = "neutral"
+                sentiment = "neutral",
+                kind = "trips"
             ))
         }
 
@@ -291,11 +362,12 @@ Anti-hallucination rules (CRITICAL):
 
             if (pctNow > 0) {
                 metrics.add(DynamicMetric(
-                    label = "Короткие < 5 км",
-                    current = "$pctNow% ($shortNow/${recentTrips.size})",
-                    previous = if (pctPrev != null) "$pctPrev%" else null,
+                    label = res.getString(com.bydmate.app.R.string.insight_metric_short_trips),
+                    current = res.getString(com.bydmate.app.R.string.insight_short_value, pctNow, shortNow, recentTrips.size),
+                    previous = if (pctPrev != null) res.getString(com.bydmate.app.R.string.insight_short_prev, pctPrev) else null,
                     changePct = changePct,
-                    sentiment = consumptionSentiment(changePct)
+                    sentiment = consumptionSentiment(changePct),
+                    kind = "short_trips"
                 ))
             }
         }
@@ -309,11 +381,12 @@ Anti-hallucination rules (CRITICAL):
                 (avgDistNow - avgDistPrev) / avgDistPrev * 100 else null
 
             metrics.add(DynamicMetric(
-                label = "Ср. дистанция",
-                current = "%.1f км".format(avgDistNow),
+                label = res.getString(com.bydmate.app.R.string.insight_metric_avg_distance),
+                current = res.getString(com.bydmate.app.R.string.insight_avg_distance_value, "%.1f".format(avgDistNow)),
                 previous = if (avgDistPrev != null) "%.1f".format(avgDistPrev) else null,
                 changePct = pct,
-                sentiment = efficiencySentiment(pct)
+                sentiment = efficiencySentiment(pct),
+                kind = "avg_distance"
             ))
         }
 
@@ -328,13 +401,15 @@ Anti-hallucination rules (CRITICAL):
                 (drainKwh - prevDrainKwh) / prevDrainKwh * 100 else null
 
             val drainTimeStr = if (drainHours < 1.0)
-                "${"%.0f".format(drainHours * 60)} мин" else "${"%.1f".format(drainHours)} ч"
+                res.getString(com.bydmate.app.R.string.insight_idle_minutes, "%.0f".format(drainHours * 60))
+            else res.getString(com.bydmate.app.R.string.insight_idle_hours, "%.1f".format(drainHours))
             metrics.add(DynamicMetric(
-                label = "Стоянка",
-                current = "${"%.1f".format(drainKwh)} кВтч · $drainTimeStr",
-                previous = if (prevDrainKwh > 0.1) "${"%.1f".format(prevDrainKwh)} кВтч" else null,
+                label = res.getString(com.bydmate.app.R.string.insight_metric_idle),
+                current = res.getString(com.bydmate.app.R.string.insight_idle_value, "%.1f".format(drainKwh), drainTimeStr),
+                previous = if (prevDrainKwh > 0.1) res.getString(com.bydmate.app.R.string.insight_idle_prev, "%.1f".format(prevDrainKwh)) else null,
                 changePct = pct,
-                sentiment = consumptionSentiment(pct)
+                sentiment = consumptionSentiment(pct),
+                kind = "idle"
             ))
         }
 
@@ -343,7 +418,7 @@ Anti-hallucination rules (CRITICAL):
 
     // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
-        val consumption = dynamics.firstOrNull { it.label == "Электрорасход" }
+        val consumption = dynamics.firstOrNull { it.kind == "consumption" }
         return com.bydmate.app.data.automation.InsightToneLogic.consumptionTone(consumption?.changePct)
     }
 
@@ -581,7 +656,8 @@ Anti-hallucination rules (CRITICAL):
                         previous = d.optString("previous", null),
                         changePct = if (d.has("changePct")) d.getDouble("changePct") else null,
                         sentiment = d.optString("sentiment", "neutral"),
-                        section = d.optString("section", null)
+                        section = d.optString("section", null),
+                        kind = d.optString("kind", "")
                     ))
                 }
             }

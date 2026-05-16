@@ -5,13 +5,19 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Link
+import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -20,6 +26,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -37,11 +45,9 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -58,7 +64,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -76,10 +81,25 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import androidx.compose.runtime.collectAsState
+import androidx.annotation.StringRes
+import androidx.compose.ui.res.stringResource
+import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
+
+private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
+    BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
+    TRIPS(R.string.settings_section_trips_title, Icons.Outlined.DirectionsCar),
+    INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
+    WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
+    PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
+    APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
+    SMART_HOME(R.string.settings_smart_home_section_title, Icons.Outlined.Home),
+}
 
 private val PrimaryColor = AccentGreen
 
@@ -99,21 +119,21 @@ fun SettingsScreen(
         }
         AlertDialog(
             onDismissRequest = { viewModel.hideRecalcConfirm() },
-            title = { Text("Пересчитать стоимость?", color = TextPrimary) },
+            title = { Text(stringResource(R.string.settings_recalc_dialog_title), color = TextPrimary) },
             text = {
                 Text(
-                    "Все поездки будут пересчитаны по тарифу $tariffLabel ${state.currencySymbol}/кВт·ч.\nУже посчитанные значения будут заменены.",
+                    stringResource(R.string.settings_recalc_dialog_text, tariffLabel, state.currencySymbol),
                     color = TextSecondary
                 )
             },
             confirmButton = {
                 TextButton(onClick = { viewModel.confirmRecalc() }) {
-                    Text("Пересчитать", color = AccentOrange)
+                    Text(stringResource(R.string.settings_recalc_confirm_button), color = AccentOrange)
                 }
             },
             dismissButton = {
                 TextButton(onClick = { viewModel.hideRecalcConfirm() }) {
-                    Text("Отмена", color = TextSecondary)
+                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
                 }
             },
             containerColor = CardSurface
@@ -135,762 +155,1124 @@ fun SettingsScreen(
         )
     }
 
+    val previewContext = LocalContext.current
+    val previewLifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(previewLifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) {
+                WidgetController.setPreviewMode(previewContext, false)
+            }
+        }
+        previewLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            previewLifecycleOwner.lifecycle.removeObserver(observer)
+            WidgetController.setPreviewMode(previewContext, false)
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
-            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
     ) {
         Text(
-            text = "Настройки",
+            text = stringResource(R.string.settings_title),
             color = TextPrimary,
             fontSize = 18.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
         )
 
         Spacer(modifier = Modifier.height(12.dp))
 
-        // Two-column layout
+        var selected by rememberSaveable { mutableStateOf(SettingsSection.BATTERY) }
+        val safeSelected = if (selected == SettingsSection.SMART_HOME && !state.devModeUnlocked) {
+            SettingsSection.BATTERY
+        } else {
+            selected
+        }
+
         Row(
             modifier = Modifier.weight(1f).fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            // LEFT COLUMN: Battery & tariffs + Data
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+            SettingsRail(
+                selected = safeSelected,
+                smartHomeUnlocked = state.devModeUnlocked,
+                appVersion = state.appVersion,
+                onSelect = { selected = it },
+                onVersionTap = { viewModel.onVersionTap() },
+                modifier = Modifier.width(260.dp).fillMaxSize(),
+            )
+
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier.weight(1f).fillMaxSize(),
             ) {
-                SectionHeader(text = "Автомобиль")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "Профиль задаёт источник поездок и номинальную ёмкость батареи.",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                        )
-                        VehicleProfileDropdown(
-                            selectedProfileId = state.vehicleProfileId,
-                            onProfileSelected = viewModel::setVehicleProfile,
-                            modifier = Modifier.fillMaxWidth(),
-                        )
-                    }
-                }
-
-                SectionHeader(text = "Батарея и тарифы")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        SettingsTextField(
-                            label = "Ёмкость батареи (кВт·ч)",
-                            value = state.batteryCapacity,
-                            onValueChange = { viewModel.saveBatteryCapacity(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                        SettingsTextField(
-                            label = "Тариф дома (${state.currencySymbol}/кВт·ч)",
-                            value = state.homeTariff,
-                            onValueChange = { viewModel.updateHomeTariff(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                        SettingsTextField(
-                            label = "Тариф DC (${state.currencySymbol}/кВт·ч)",
-                            value = state.dcTariff,
-                            onValueChange = { viewModel.updateDcTariff(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                        if (state.isHybridProfile) {
-                            SettingsTextField(
-                                label = "Топливо (${state.currencySymbol}/л)",
-                                value = state.fuelPricePerLiter,
-                                onValueChange = { viewModel.updateFuelPricePerLiter(it) },
-                                keyboardType = KeyboardType.Decimal
-                            )
-                            Text(
-                                "Средняя цена за литр для расчёта бензиновой части поездок.",
-                                color = TextMuted,
-                                fontSize = 11.sp,
-                                lineHeight = 15.sp
-                            )
-                        }
-                        Text("Тариф поездок", color = TextSecondary, fontSize = 14.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
-                            UnitChip("DC", state.tripCostTariff == "dc") { viewModel.saveTripCostTariff("dc") }
-                            UnitChip("Свой", state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
-                                viewModel.saveTripCostTariff(state.homeTariff)
-                            }
-                        }
-                        if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
-                            SettingsTextField(
-                                label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
-                                value = state.tripCostTariff,
-                                onValueChange = { viewModel.saveTripCostTariff(it) },
-                                keyboardType = KeyboardType.Decimal
-                            )
-                        }
-
-                        // Save tariffs button
-                        Button(
-                            onClick = { viewModel.saveTariffs() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
-                        ) {
-                            Text("Сохранить тарифы", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        state.tariffSaveStatus?.let {
-                            Text(it, color = AccentGreen, fontSize = 12.sp)
-                        }
-                        Text(
-                            "Новые тарифы применяются к будущим поездкам.\nУже посчитанные поездки не изменятся.",
-                            color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
-                        )
-
-                        HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
-
-                        // Recalculate all trips button
-                        Button(
-                            onClick = { viewModel.showRecalcConfirm() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentOrange),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.4f))
-                        ) {
-                            Text("Пересчитать все поездки", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        state.recalcStatus?.let {
-                            Text(it, color = AccentGreen, fontSize = 12.sp)
-                        }
-                        Text(
-                            "Пересчитает стоимость всех поездок\nпо текущему тарифу.",
-                            color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
-                        )
-                    }
-                }
-
-                SectionHeader(text = "Пороги расхода")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SettingsTextField(
-                            label = "Хороший < (кВт·ч/100км)",
-                            value = state.consumptionGood,
-                            onValueChange = { viewModel.saveConsumptionGood(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                        SettingsTextField(
-                            label = "Плохой > (кВт·ч/100км)",
-                            value = state.consumptionBad,
-                            onValueChange = { viewModel.saveConsumptionBad(it) },
-                            keyboardType = KeyboardType.Decimal
-                        )
-                    }
-                }
-
-                SectionHeader(text = "Источник данных поездок")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "Для ${state.vehicleProfileName}: ${if (state.dataSource == "DIPLUS") "DiPlus TripInfo" else "BYD energydata"}.\nSong L DM-i 112 km (2024) должен работать через DiPlus TripInfo.",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                        )
-                        DataSourceOption(
-                            label = "BYD energydata",
-                            selected = state.dataSource == "ENERGYDATA",
-                            onClick = { viewModel.setDataSource("ENERGYDATA") },
-                        )
-                        DataSourceOption(
-                            label = "DiPlus TripInfo",
-                            selected = state.dataSource == "DIPLUS",
-                            onClick = { viewModel.setDataSource("DIPLUS") },
-                        )
-                        Text(
-                            text = "Если после 2–3 поездок список пустой — переключи режим.",
-                            color = TextSecondary,
-                            fontSize = 11.sp,
-                            modifier = Modifier.padding(top = 2.dp),
-                        )
-                        if (state.dataSourceStatus != null) {
-                            Text(
-                                state.dataSourceStatus!!,
-                                color = PrimaryColor,
-                                fontSize = 11.sp,
-                            )
-                        }
-                    }
-                }
-
-                SectionHeader(text = "Системные данные (экспериментально)")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = "Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.",
-                            color = TextSecondary,
-                            fontSize = 12.sp,
-                        )
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text("Включить", color = TextPrimary, fontSize = 14.sp)
-                            Switch(
-                                checked = state.autoserviceEnabled,
-                                onCheckedChange = { enabled ->
-                                    viewModel.enableAutoservice(enabled)
-                                },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-                        AutoserviceStatusBlock(status = state.autoserviceStatus)
-                    }
-                }
-
-                SectionHeader(text = "Данные")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = { viewModel.exportCsv() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = Color.White)
-                        ) {
-                            Text("Экспорт CSV", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                        if (state.exportStatus != null) {
-                            Text(
-                                state.exportStatus!!,
-                                color = if (state.exportStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
-                                fontSize = 12.sp
-                            )
-                        }
-
-                        // Log recording start/stop
-                        Button(
-                            onClick = {
-                                if (state.isRecordingLogs) viewModel.stopLogRecording()
-                                else viewModel.startLogRecording()
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = if (state.isRecordingLogs) SocRed else AccentPurple,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                if (state.isRecordingLogs) "⏺ Остановить запись" else "Запись логов",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        if (state.logSaveStatus != null) {
-                            Text(
-                                state.logSaveStatus!!,
-                                color = if (state.logSaveStatus!!.startsWith("Ошибка")) SocRed else PrimaryColor,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-            }
-
-            // RIGHT COLUMN: Units & currency + Consumption thresholds + About
-            Column(
-                modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                SectionHeader(text = "Единицы и валюта")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text("Расстояние", color = TextSecondary, fontSize = 14.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            UnitChip("км", state.units == "km") { viewModel.saveUnits("km") }
-                            UnitChip("мили", state.units == "miles") { viewModel.saveUnits("miles") }
-                        }
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("Валюта", color = TextSecondary, fontSize = 14.sp)
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.horizontalScroll(rememberScrollState())
-                        ) {
-                            SettingsRepository.CURRENCIES.forEach { currency ->
-                                UnitChip(
-                                    label = "${currency.symbol} ${currency.label}",
-                                    selected = state.currency == currency.code,
-                                    onClick = { viewModel.saveCurrency(currency.code) }
-                                )
-                            }
-                        }
-                    }
-                }
-
-                // --- Плавающий виджет ---
-                val widgetCtx = LocalContext.current
-                val widgetPrefs = remember { WidgetPreferences(widgetCtx) }
-                val widgetEnabled by widgetPrefs.enabledFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isEnabled())
-                val widgetAlpha by widgetPrefs.alphaFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.getAlpha())
-                val widgetScale by widgetPrefs.scaleFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.getScale())
-                val widgetLeftTapNav by widgetPrefs.leftTapNavigatorFlow().collectAsStateWithLifecycle(initialValue = widgetPrefs.isLeftTapNavigatorEnabled())
-
-                // Drop preview-mode when this screen leaves composition (back / tab switch)
-                // OR when the app goes to background, so an overlay never gets stranded
-                // visible after the user navigated away.
-                val lifecycleOwner = LocalLifecycleOwner.current
-                DisposableEffect(lifecycleOwner) {
-                    val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_PAUSE) {
-                            WidgetController.setPreviewMode(widgetCtx, false)
-                        }
-                    }
-                    lifecycleOwner.lifecycle.addObserver(observer)
-                    onDispose {
-                        lifecycleOwner.lifecycle.removeObserver(observer)
-                        WidgetController.setPreviewMode(widgetCtx, false)
-                    }
-                }
-
-                SectionHeader(text = "Плавающий виджет")
-                Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 0.dp, vertical = 0.dp)) {
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardSurface),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Text(
-                                    text = "Показывать виджет SOC",
-                                    color = TextPrimary,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.weight(1f),
-                                )
-                                Switch(
-                                    checked = widgetEnabled,
-                                    onCheckedChange = { requested ->
-                                        if (requested) {
-                                            if (AndroidSettings.canDrawOverlays(widgetCtx)) {
-                                                widgetPrefs.setEnabled(true)
-                                                WidgetController.attach(widgetCtx)
-                                            } else {
-                                                val intent = Intent(
-                                                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                                    Uri.parse("package:${widgetCtx.packageName}"),
-                                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
-                                                widgetCtx.startActivity(intent)
-                                            }
-                                        } else {
-                                            widgetPrefs.setEnabled(false)
-                                            WidgetController.detach()
-                                        }
-                                    },
-                                    colors = bydSwitchColors(),
-                                )
-                            }
-                            Text(
-                                text = "• Долгий тап на виджете — скрыть до следующего открытия BYDMate.\n" +
-                                        "• Перетащить в корзину внизу — выключить совсем.\n" +
-                                        "• Обычный тап — открыть BYDMate.",
-                                color = TextSecondary,
-                                fontSize = 11.sp,
-                                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
-                            )
-                            Button(
-                                onClick = {
-                                    widgetPrefs.resetPosition()
-                                    if (widgetEnabled && AndroidSettings.canDrawOverlays(widgetCtx)) {
-                                        WidgetController.detach()
-                                        WidgetController.attach(widgetCtx)
-                                    }
-                                },
-                                enabled = widgetEnabled,
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
-                            ) {
-                                Text("Сбросить позицию", fontSize = 13.sp, color = TextPrimary)
-                            }
-                            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = "Прозрачность",
-                                        color = TextPrimary,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        text = "${(widgetAlpha * 100).toInt()}%",
-                                        color = TextMuted,
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                    )
-                                }
-                                Slider(
-                                    value = widgetAlpha,
-                                    onValueChange = {
-                                        if (widgetEnabled) WidgetController.setPreviewMode(widgetCtx, true)
-                                        widgetPrefs.setAlpha(it)
-                                    },
-                                    valueRange = 0.3f..1.0f,
-                                    enabled = widgetEnabled,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = AccentGreen,
-                                        activeTrackColor = AccentGreen,
-                                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
-                                        disabledThumbColor = TextMuted,
-                                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
-                                    ),
-                                )
-                            }
-                            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Text(
-                                        text = "Размер",
-                                        color = TextPrimary,
-                                        fontSize = 13.sp,
-                                        modifier = Modifier.weight(1f),
-                                    )
-                                    Text(
-                                        text = "${(widgetScale * 100).toInt()}%",
-                                        color = TextMuted,
-                                        fontSize = 12.sp,
-                                        fontFamily = FontFamily.Monospace,
-                                    )
-                                }
-                                Slider(
-                                    value = widgetScale,
-                                    onValueChange = {
-                                        if (widgetEnabled) WidgetController.setPreviewMode(widgetCtx, true)
-                                        widgetPrefs.setScale(it)
-                                    },
-                                    valueRange = WidgetPreferences.SCALE_MIN..WidgetPreferences.SCALE_MAX,
-                                    enabled = widgetEnabled,
-                                    colors = SliderDefaults.colors(
-                                        thumbColor = AccentGreen,
-                                        activeTrackColor = AccentGreen,
-                                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
-                                        disabledThumbColor = TextMuted,
-                                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
-                                    ),
-                                )
-                            }
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Левая треть — Яндекс Навигатор",
-                                        color = TextPrimary,
-                                        fontSize = 13.sp,
-                                    )
-                                    Text(
-                                        text = "Тап по левой части виджета открывает Навигатор, остальное — BYDMate.",
-                                        color = TextSecondary,
-                                        fontSize = 11.sp,
-                                    )
-                                }
-                                Switch(
-                                    checked = widgetLeftTapNav,
-                                    onCheckedChange = { widgetPrefs.setLeftTapNavigatorEnabled(it) },
-                                    enabled = widgetEnabled,
-                                    colors = bydSwitchColors(),
-                                )
-                            }
-                        }
-                    }
-                }
-
-                SectionHeader(text = "AI Инсайты")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        SettingsTextField(
-                            label = "OpenRouter API Key",
-                            value = state.openRouterApiKey,
-                            onValueChange = { viewModel.saveOpenRouterApiKey(it) },
-                            keyboardType = KeyboardType.Password
-                        )
-                        Button(
-                            onClick = { viewModel.showModelPicker() },
-                            enabled = state.openRouterApiKey.isNotBlank(),
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentBlue,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                if (state.openRouterModelName.isNotBlank())
-                                    "Модель: ${state.openRouterModelName}"
-                                else "Выбрать модель",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                maxLines = 1
-                            )
-                        }
-                        Button(
-                            onClick = { viewModel.saveAiSettings() },
-                            enabled = state.openRouterApiKey.isNotBlank() &&
-                                state.openRouterModel.isNotBlank() &&
-                                state.aiSaveStatus != "Загрузка инсайта...",
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = AccentGreen,
-                                contentColor = Color.White
-                            )
-                        ) {
-                            Text(
-                                if (state.aiSaveStatus == "Загрузка инсайта...") "Загрузка..."
-                                else "Сохранить и получить инсайт",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                        }
-                        if (state.aiSaveStatus != null && state.aiSaveStatus != "Загрузка инсайта...") {
-                            Text(
-                                state.aiSaveStatus!!,
-                                color = if (state.aiSaveStatus!!.startsWith("Ошибка")) SocRed else AccentGreen,
-                                fontSize = 12.sp
-                            )
-                        }
-                    }
-                }
-
-                // Model picker dialog
-                if (state.showModelPicker) {
-                    ModelPickerDialog(
-                        models = state.availableModels,
-                        loading = state.modelsLoading,
-                        selectedId = state.openRouterModel,
-                        onSelect = { viewModel.selectModel(it) },
-                        onDismiss = { viewModel.hideModelPicker() }
-                    )
-                }
-
-                SectionHeader(text = "Места")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onNavigateToPlaces() }
-                            .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Outlined.Place,
-                            contentDescription = null,
-                            tint = AccentGreen,
-                        )
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text("Точки для автоматизации", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            Text("Дом, работа, любимые места — триггеры «Въезд» / «Выезд»", color = TextSecondary, fontSize = 12.sp)
-                        }
-                    }
-                }
-
-                SectionHeader(text = "О приложении")
-                Card(
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.cardColors(containerColor = CardSurface),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    val context = LocalContext.current
-                    Column(
-                        modifier = Modifier.padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            "BYDMate v${state.appVersion}",
-                            color = TextPrimary,
-                            fontSize = 16.sp,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.clickable { viewModel.onVersionTap() }
-                        )
-                        Text("\u00A9 2026 AndyShaman", color = TextSecondary, fontSize = 14.sp)
-                        if (state.lastBootInfo != null) {
-                            Text(
-                                "Автозапуск: ${state.lastBootInfo}",
-                                color = AccentGreen,
-                                fontSize = 12.sp
-                            )
-                        } else {
-                            Text(
-                                "Автозапуск: не зафиксирован",
-                                color = SocRed,
-                                fontSize = 12.sp
-                            )
-                        }
-                        Text(
-                            text = "github.com/AndyShaman/BYDMate",
-                            color = AccentBlue,
-                            fontSize = 14.sp,
-                            textDecoration = TextDecoration.Underline,
-                            modifier = Modifier.clickable {
-                                context.startActivity(Intent(Intent.ACTION_VIEW,
-                                    Uri.parse("https://github.com/AndyShaman/BYDMate")))
-                            }
-                        )
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
-                                Text("Проверять обновления", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                                Text(
-                                    "Через 30 секунд после запуска проверять GitHub и предлагать обновиться",
-                                    color = TextSecondary, fontSize = 12.sp
-                                )
-                            }
-                            Switch(
-                                checked = state.autoCheckUpdates,
-                                onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
-                                colors = bydSwitchColors(),
-                            )
-                        }
-
-                        Button(
-                            onClick = { viewModel.showUpdateDialog() },
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = Color.White)
-                        ) {
-                            Text("Проверить обновления сейчас", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                        }
-                    }
-                }
-
-                // Hidden Smart Home section — unlocked by tapping version 7 times
-                if (state.devModeUnlocked) {
-                    SectionHeader(text = "Умный дом")
-                    Card(
-                        shape = RoundedCornerShape(12.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardSurface),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text("Polling", color = TextPrimary, fontSize = 14.sp)
-                                Switch(
-                                    checked = state.aliceEnabled,
-                                    onCheckedChange = { viewModel.toggleAlice(it) },
-                                    colors = bydSwitchColors(),
-                                )
-                            }
-                            SettingsTextField(
-                                label = "Endpoint URL",
-                                value = state.aliceEndpoint,
-                                onValueChange = { viewModel.updateAliceEndpoint(it) },
-                                keyboardType = KeyboardType.Uri
-                            )
-                            SettingsTextField(
-                                label = "API Key",
-                                value = state.aliceApiKey,
-                                onValueChange = { viewModel.updateAliceApiKey(it) },
-                                keyboardType = KeyboardType.Password
-                            )
-                            Button(
-                                onClick = { viewModel.saveAliceSettings() },
-                                enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank(),
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
-                            ) {
-                                Text("Сохранить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                            }
-                            state.aliceSaveStatus?.let {
-                                Text(it, color = AccentGreen, fontSize = 12.sp)
-                            }
-                            Text(
-                                "Polling опрашивает Worker каждую секунду\nи выполняет команды через D+ API",
-                                color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
-                            )
-                        }
+                    when (safeSelected) {
+                        SettingsSection.BATTERY -> BatterySection(state, viewModel)
+                        SettingsSection.TRIPS -> TripsSection(state, viewModel)
+                        SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
+                        SettingsSection.WIDGET -> WidgetSection()
+                        SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
+                        SettingsSection.APP -> AppSection(state, viewModel)
+                        SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SettingsRail(
+    selected: SettingsSection,
+    smartHomeUnlocked: Boolean,
+    appVersion: String,
+    onSelect: (SettingsSection) -> Unit,
+    onVersionTap: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurface),
+        modifier = modifier,
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 8.dp)) {
+            Text(
+                stringResource(R.string.settings_rail_sections_label),
+                color = TextMuted,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            )
+
+            SettingsSection.entries.forEach { section ->
+                val isHidden = section == SettingsSection.SMART_HOME
+                if (isHidden && !smartHomeUnlocked) return@forEach
+                RailItem(
+                    section = section,
+                    isActive = section == selected,
+                    isHidden = isHidden,
+                    onClick = { onSelect(section) },
+                )
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+            HorizontalDivider(color = CardBorder)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                    .clickable { onVersionTap() },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "v$appVersion",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RailItem(
+    section: SettingsSection,
+    isActive: Boolean,
+    isHidden: Boolean,
+    onClick: () -> Unit,
+) {
+    val activeColor = if (isHidden) AccentOrange else AccentGreen
+    val bg = if (isActive) activeColor.copy(alpha = 0.12f) else Color.Transparent
+    val fg = when {
+        isActive -> activeColor
+        isHidden -> AccentOrange
+        else -> TextSecondary
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 2.dp, vertical = 2.dp)
+            .background(bg, shape = RoundedCornerShape(10.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 14.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = section.icon,
+            contentDescription = null,
+            tint = fg,
+            modifier = Modifier.size(22.dp),
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Text(
+            text = stringResource(section.labelRes),
+            color = fg,
+            fontSize = 14.sp,
+            fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
+        )
+    }
+}
+
+@Composable
+private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = stringResource(R.string.settings_battery_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            VehicleProfileDropdown(
+                selectedProfileId = state.vehicleProfileId,
+                onProfileSelected = viewModel::setVehicleProfile,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Text(
+                SettingsRepository.vehicleProfileById(state.vehicleProfileId).note,
+                color = TextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_battery_capacity_label),
+                value = state.batteryCapacity,
+                onValueChange = { viewModel.saveBatteryCapacity(it) },
+                keyboardType = KeyboardType.Decimal
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_tariff_home_label, state.currencySymbol),
+                value = state.homeTariff,
+                onValueChange = { viewModel.updateHomeTariff(it) },
+                keyboardType = KeyboardType.Decimal
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_tariff_dc_label, state.currencySymbol),
+                value = state.dcTariff,
+                onValueChange = { viewModel.updateDcTariff(it) },
+                keyboardType = KeyboardType.Decimal
+            )
+            if (state.isHybridProfile) {
+                SettingsTextField(
+                    label = "Топливо (${state.currencySymbol}/л)",
+                    value = state.fuelPricePerLiter,
+                    onValueChange = { viewModel.updateFuelPricePerLiter(it) },
+                    keyboardType = KeyboardType.Decimal
+                )
+                Text(
+                    "Средняя цена за литр для расчёта бензиновой части поездок.",
+                    color = TextMuted,
+                    fontSize = 11.sp,
+                    lineHeight = 15.sp
+                )
+            }
+            Text(stringResource(R.string.settings_tariff_trip_label), color = TextSecondary, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
+                UnitChip("DC", state.tripCostTariff == "dc") { viewModel.saveTripCostTariff("dc") }
+                UnitChip(stringResource(R.string.settings_tariff_trip_custom_chip), state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                    viewModel.saveTripCostTariff(state.homeTariff)
+                }
+            }
+            if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
+                SettingsTextField(
+                    label = stringResource(R.string.settings_tariff_custom_label, state.currencySymbol),
+                    value = state.tripCostTariff,
+                    onValueChange = { viewModel.saveTripCostTariff(it) },
+                    keyboardType = KeyboardType.Decimal
+                )
+            }
+
+            // Save tariffs button
+            Button(
+                onClick = { viewModel.saveTariffs() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
+            ) {
+                Text(stringResource(R.string.settings_save_tariffs_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.tariffSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+            Text(
+                stringResource(R.string.settings_tariff_future_note),
+                color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+            )
+
+            HorizontalDivider(color = CardBorder, modifier = Modifier.padding(vertical = 4.dp))
+
+            // Recalculate all trips button
+            Button(
+                onClick = { viewModel.showRecalcConfirm() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentOrange),
+                border = androidx.compose.foundation.BorderStroke(1.dp, AccentOrange.copy(alpha = 0.4f))
+            ) {
+                Text(stringResource(R.string.settings_recalc_all_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.recalcStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+            Text(
+                stringResource(R.string.settings_recalc_note),
+                color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+            )
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_consumption_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsTextField(
+                label = stringResource(R.string.settings_consumption_good_label),
+                value = state.consumptionGood,
+                onValueChange = { viewModel.saveConsumptionGood(it) },
+                keyboardType = KeyboardType.Decimal
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_consumption_bad_label),
+                value = state.consumptionBad,
+                onValueChange = { viewModel.saveConsumptionBad(it) },
+                keyboardType = KeyboardType.Decimal
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VehicleProfileDropdown(
+    selectedProfileId: String,
+    onProfileSelected: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selected = SettingsRepository.vehicleProfileById(selectedProfileId)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
+    ) {
+        OutlinedTextField(
+            value = selected.label,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Автомобиль") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+                focusedBorderColor = AccentGreen,
+                unfocusedBorderColor = CardBorder,
+                focusedLabelColor = AccentGreen,
+                unfocusedLabelColor = TextMuted,
+                cursorColor = AccentGreen
+            ),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            containerColor = CardSurfaceElevated
+        ) {
+            SettingsRepository.VEHICLE_PROFILES.forEach { profile ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(profile.label, color = TextPrimary, fontSize = 14.sp)
+                            Text(profile.note, color = TextMuted, fontSize = 11.sp)
+                        }
+                    },
+                    onClick = {
+                        onProfileSelected(profile.id)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = stringResource(R.string.settings_trips_datasource_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_trips_datasource_note),
+                color = TextSecondary,
+                fontSize = 11.sp,
+            )
+            DataSourceOption(
+                label = "BYD energydata",
+                selected = state.dataSource == "ENERGYDATA",
+                onClick = { viewModel.setDataSource("ENERGYDATA") },
+            )
+            DataSourceOption(
+                label = "DiPlus TripInfo",
+                selected = state.dataSource == "DIPLUS",
+                onClick = { viewModel.setDataSource("DIPLUS") },
+            )
+            Text(
+                text = stringResource(R.string.settings_trips_datasource_hint),
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            if (state.dataSourceStatus != null) {
+                Text(
+                    state.dataSourceStatus!!,
+                    color = PrimaryColor,
+                    fontSize = 11.sp,
+                )
+            }
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_trips_system_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.settings_trips_system_note),
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.settings_trips_system_enable_label), color = TextPrimary, fontSize = 14.sp)
+                Switch(
+                    checked = state.autoserviceEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.enableAutoservice(enabled)
+                    },
+                    colors = bydSwitchColors(),
+                )
+            }
+            AutoserviceStatusBlock(status = state.autoserviceStatus)
+        }
+    }
+}
+
+@Composable
+private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = stringResource(R.string.settings_abrp_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_abrp_telemetry_label),
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                    Text(
+                        stringResource(R.string.settings_abrp_telemetry_description),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = state.abrpTelemetryEnabled,
+                    onCheckedChange = { viewModel.toggleAbrpTelemetry(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+            SettingsTextField(
+                label = stringResource(R.string.settings_abrp_token_label),
+                value = state.abrpUserToken,
+                onValueChange = { viewModel.updateAbrpUserToken(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.saveAbrpSettings() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text(stringResource(R.string.settings_abrp_save_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.abrpSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_ai_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsTextField(
+                label = stringResource(R.string.settings_openrouter_api_key_label),
+                value = state.openRouterApiKey,
+                onValueChange = { viewModel.saveOpenRouterApiKey(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.showModelPicker() },
+                enabled = state.openRouterApiKey.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentBlue,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text(
+                    if (state.openRouterModelName.isNotBlank())
+                        stringResource(R.string.settings_openrouter_model_selected, state.openRouterModelName)
+                    else stringResource(R.string.settings_openrouter_model_pick),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1
+                )
+            }
+            val aiLoadingLabel = stringResource(R.string.settings_ai_loading_label)
+            Button(
+                onClick = { viewModel.saveAiSettings() },
+                enabled = state.openRouterApiKey.isNotBlank() &&
+                    state.openRouterModel.isNotBlank() &&
+                    state.aiSaveStatus != aiLoadingLabel,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text(
+                    if (state.aiSaveStatus == aiLoadingLabel) aiLoadingLabel
+                    else stringResource(R.string.settings_ai_save_button),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (state.aiSaveStatus != null && state.aiSaveStatus != aiLoadingLabel) {
+                Text(
+                    state.aiSaveStatus!!,
+                    color = if (state.aiSaveStatus!!.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
+    // Model picker dialog
+    if (state.showModelPicker) {
+        ModelPickerDialog(
+            models = state.availableModels,
+            loading = state.modelsLoading,
+            selectedId = state.openRouterModel,
+            onSelect = { viewModel.selectModel(it) },
+            onDismiss = { viewModel.hideModelPicker() }
+        )
+    }
+}
+
+@Composable
+private fun WidgetSection() {
+    val context = LocalContext.current
+    val prefs = remember { WidgetPreferences(context) }
+    val enabled by prefs.enabledFlow().collectAsStateWithLifecycle(initialValue = prefs.isEnabled())
+    val alpha by prefs.alphaFlow().collectAsStateWithLifecycle(initialValue = prefs.getAlpha())
+    val scale by prefs.scaleFlow().collectAsStateWithLifecycle(initialValue = prefs.getScale())
+    val leftTapApp by prefs.leftTapAppFlow().collectAsStateWithLifecycle(
+        initialValue = WidgetPreferences.LeftTapAppState(
+            enabled = prefs.isLeftTapZoningEnabled(),
+            packageName = prefs.getLeftTapAppPackage(),
+            label = prefs.getLeftTapAppLabel(),
+        ),
+    )
+    var showLeftTapPicker by remember { mutableStateOf(false) }
+
+    SectionHeader(text = stringResource(R.string.settings_widget_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_widget_show_soc_label),
+                    color = TextPrimary,
+                    fontSize = 13.sp,
+                    modifier = Modifier.weight(1f),
+                )
+                Switch(
+                    checked = enabled,
+                    onCheckedChange = { requested ->
+                        if (requested) {
+                            if (AndroidSettings.canDrawOverlays(context)) {
+                                prefs.setEnabled(true)
+                                WidgetController.attach(context)
+                            } else {
+                                val intent = Intent(
+                                    AndroidSettings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                    Uri.parse("package:${context.packageName}"),
+                                ).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) }
+                                context.startActivity(intent)
+                            }
+                        } else {
+                            prefs.setEnabled(false)
+                            WidgetController.detach()
+                        }
+                    },
+                    colors = bydSwitchColors(),
+                )
+            }
+            Text(
+                text = stringResource(R.string.settings_widget_hints),
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
+            )
+            Button(
+                onClick = {
+                    prefs.resetPosition()
+                    if (enabled && AndroidSettings.canDrawOverlays(context)) {
+                        WidgetController.detach()
+                        WidgetController.attach(context)
+                    }
+                },
+                enabled = enabled,
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+            ) {
+                Text(stringResource(R.string.settings_widget_reset_position_button), fontSize = 13.sp, color = TextPrimary)
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_widget_opacity_label),
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${(alpha * 100).toInt()}%",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Slider(
+                    value = alpha,
+                    onValueChange = {
+                        if (enabled) WidgetController.setPreviewMode(context, true)
+                        prefs.setAlpha(it)
+                    },
+                    valueRange = 0.3f..1.0f,
+                    enabled = enabled,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentGreen,
+                        activeTrackColor = AccentGreen,
+                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
+                        disabledThumbColor = TextMuted,
+                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
+                    ),
+                )
+            }
+            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = stringResource(R.string.settings_widget_scale_label),
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    Text(
+                        text = "${(scale * 100).toInt()}%",
+                        color = TextMuted,
+                        fontSize = 12.sp,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+                Slider(
+                    value = scale,
+                    onValueChange = {
+                        if (enabled) WidgetController.setPreviewMode(context, true)
+                        prefs.setScale(it)
+                    },
+                    valueRange = WidgetPreferences.SCALE_MIN..WidgetPreferences.SCALE_MAX,
+                    enabled = enabled,
+                    colors = SliderDefaults.colors(
+                        thumbColor = AccentGreen,
+                        activeTrackColor = AccentGreen,
+                        inactiveTrackColor = TextMuted.copy(alpha = 0.3f),
+                        disabledThumbColor = TextMuted,
+                        disabledActiveTrackColor = TextMuted.copy(alpha = 0.4f),
+                    ),
+                )
+            }
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_widget_tap_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = stringResource(R.string.settings_widget_left_tap_zoning_label),
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_widget_left_tap_zoning_description),
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+                Switch(
+                    checked = leftTapApp.enabled,
+                    onCheckedChange = { prefs.setLeftTapZoningEnabled(it) },
+                    enabled = enabled,
+                    colors = bydSwitchColors(),
+                )
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_widget_left_tap_label), color = TextPrimary, fontSize = 13.sp)
+                    Text(
+                        text = stringResource(R.string.settings_widget_left_tap_description),
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+                Row(
+                    modifier = Modifier
+                        .clickable(enabled = leftTapApp.enabled && enabled) {
+                            showLeftTapPicker = true
+                        }
+                        .background(
+                            color = if (leftTapApp.enabled && enabled) CardSurfaceElevated else CardSurface,
+                            shape = RoundedCornerShape(999.dp),
+                        )
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = leftTapApp.label,
+                        color = if (leftTapApp.enabled && enabled) TextPrimary else TextMuted,
+                        fontSize = 12.sp,
+                    )
+                }
+            }
+        }
+    }
+
+    if (showLeftTapPicker) {
+        AppLaunchPickerDialog(
+            currentPackage = leftTapApp.packageName,
+            onDismiss = { showLeftTapPicker = false },
+            onSelect = { pkg, label ->
+                prefs.setLeftTapApp(pkg, label)
+                showLeftTapPicker = false
+            },
+            showMinimizeToggle = false,
+        )
+    }
+}
+
+@Composable
+private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
+    SectionHeader(text = stringResource(R.string.settings_places_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clickable { onNavigateToPlaces() }
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = androidx.compose.material.icons.Icons.Outlined.Place,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_places_entry_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_places_entry_description), color = TextSecondary, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val lang by viewModel.appLanguage.collectAsState()
+    LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
+
+    SectionHeader(text = stringResource(R.string.settings_app_units_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(stringResource(R.string.settings_app_distance_label), color = TextSecondary, fontSize = 14.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip(stringResource(R.string.settings_unit_km), state.units == "km") { viewModel.saveUnits("km") }
+                UnitChip(stringResource(R.string.settings_unit_miles), state.units == "miles") { viewModel.saveUnits("miles") }
+            }
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(stringResource(R.string.settings_app_currency_label), color = TextSecondary, fontSize = 14.sp)
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                SettingsRepository.CURRENCIES.forEach { currency ->
+                    UnitChip(
+                        label = currency.code,
+                        selected = state.currency == currency.code,
+                        onClick = { viewModel.saveCurrency(currency.code) }
+                    )
+                }
+            }
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_app_data_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Button(
+                onClick = { viewModel.exportCsv() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = NavyDark)
+            ) {
+                Text(stringResource(R.string.settings_export_csv_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            val errorPrefix = stringResource(R.string.settings_error_prefix)
+            if (state.exportStatus != null) {
+                Text(
+                    state.exportStatus!!,
+                    color = if (state.exportStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
+                    fontSize = 12.sp
+                )
+            }
+
+            // Log recording start/stop
+            Button(
+                onClick = {
+                    if (state.isRecordingLogs) viewModel.stopLogRecording()
+                    else viewModel.startLogRecording()
+                },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (state.isRecordingLogs) SocRed else AccentPurple,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text(
+                    if (state.isRecordingLogs) stringResource(R.string.settings_log_recording_stop_button)
+                    else stringResource(R.string.settings_log_recording_start_button),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+            if (state.logSaveStatus != null) {
+                Text(
+                    state.logSaveStatus!!,
+                    color = if (state.logSaveStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_about_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        val context = LocalContext.current
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                "BYDMate v${state.appVersion}",
+                color = TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            Text(stringResource(R.string.settings_copyright), color = TextSecondary, fontSize = 14.sp)
+            if (state.lastBootInfo != null) {
+                Text(
+                    stringResource(R.string.settings_autostart_recorded, state.lastBootInfo!!),
+                    color = AccentGreen,
+                    fontSize = 12.sp
+                )
+            } else {
+                Text(
+                    stringResource(R.string.settings_autostart_not_recorded),
+                    color = SocRed,
+                    fontSize = 12.sp
+                )
+            }
+            Text(
+                text = "github.com/AndyShaman/BYDMate",
+                color = AccentBlue,
+                fontSize = 14.sp,
+                textDecoration = TextDecoration.Underline,
+                modifier = Modifier.clickable {
+                    context.startActivity(Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://github.com/AndyShaman/BYDMate")))
+                }
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(stringResource(R.string.settings_update_check_toggle_label), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(
+                        stringResource(R.string.settings_update_check_toggle_description),
+                        color = TextSecondary, fontSize = 12.sp
+                    )
+                }
+                Switch(
+                    checked = state.autoCheckUpdates,
+                    onCheckedChange = { viewModel.setAutoCheckUpdates(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+
+            Button(
+                onClick = { viewModel.showUpdateDialog() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = NavyDark)
+            ) {
+                Text(stringResource(R.string.settings_update_check_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    SectionHeader(text = "Умный дом")
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Polling", color = TextPrimary, fontSize = 14.sp)
+                Switch(
+                    checked = state.aliceEnabled,
+                    onCheckedChange = { viewModel.toggleAlice(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+            SettingsTextField(
+                label = "Endpoint URL",
+                value = state.aliceEndpoint,
+                onValueChange = { viewModel.updateAliceEndpoint(it) },
+                keyboardType = KeyboardType.Uri
+            )
+            SettingsTextField(
+                label = "API Key",
+                value = state.aliceApiKey,
+                onValueChange = { viewModel.updateAliceApiKey(it) },
+                keyboardType = KeyboardType.Password
+            )
+            Button(
+                onClick = { viewModel.saveAliceSettings() },
+                enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
+            ) {
+                Text("Сохранить", fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.aliceSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+            Text(
+                "Polling опрашивает Worker каждую секунду\nи выполняет команды через D+ API",
+                color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageBlock(
+    currentLang: String,
+    onLanguageChange: (String) -> Unit
+) {
+    // No Activity.recreate(): MainActivity listens to LocalePreferences,
+    // mutates Resources.configuration in place, and re-provides
+    // LocalConfiguration so every stringResource recomposes on next frame.
+    val applyLang: (String) -> Unit = { lang ->
+        if (lang != currentLang) onLanguageChange(lang)
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_language_title))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            LanguageOption(
+                label = stringResource(R.string.settings_lang_russian),
+                selected = currentLang == "ru",
+                onClick = { applyLang("ru") },
+            )
+            LanguageOption(
+                label = "English",
+                selected = currentLang == "en",
+                onClick = { applyLang("en") },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = selected,
+            onClick = onClick,
+            colors = RadioButtonDefaults.colors(
+                selectedColor = AccentGreen,
+                unselectedColor = TextMuted,
+            ),
+        )
+        Text(
+            text = label,
+            color = TextPrimary,
+            fontSize = 14.sp,
+            modifier = Modifier.padding(start = 4.dp),
+        )
     }
 }
 
@@ -902,84 +1284,6 @@ private fun SectionHeader(text: String) {
         fontSize = 16.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun VehicleProfileDropdown(
-    selectedProfileId: String,
-    onProfileSelected: (String) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val selectedProfile = SettingsRepository.vehicleProfileById(selectedProfileId)
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it },
-        modifier = modifier,
-    ) {
-        OutlinedTextField(
-            value = selectedProfile.label,
-            onValueChange = {},
-            readOnly = true,
-            label = { Text("Модель") },
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
-                focusedBorderColor = AccentGreen,
-                unfocusedBorderColor = CardBorder,
-                focusedLabelColor = AccentGreen,
-                unfocusedLabelColor = TextSecondary,
-                focusedTrailingIconColor = AccentGreen,
-                unfocusedTrailingIconColor = TextSecondary,
-                cursorColor = AccentGreen,
-            ),
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-        ) {
-            SettingsRepository.VEHICLE_PROFILES.forEach { profile ->
-                DropdownMenuItem(
-                    text = {
-                        Column {
-                            Text(
-                                text = profile.label,
-                                color = TextPrimary,
-                                fontSize = 13.sp,
-                                fontWeight = if (profile.id == selectedProfile.id) {
-                                    FontWeight.SemiBold
-                                } else {
-                                    FontWeight.Normal
-                                },
-                            )
-                            Text(
-                                text = profile.note,
-                                color = TextSecondary,
-                                fontSize = 11.sp,
-                            )
-                        }
-                    },
-                    onClick = {
-                        expanded = false
-                        onProfileSelected(profile.id)
-                    },
-                )
-            }
-        }
-    }
-    Text(
-        text = selectedProfile.note,
-        color = AccentGreen,
-        fontSize = 11.sp,
-        modifier = Modifier.padding(top = 4.dp),
     )
 }
 
@@ -1016,15 +1320,15 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
         AutoserviceStatus.Disconnected -> StatusRow(
             marker = "✗",
             markerColor = TextMuted,
-            title = "не подключено",
-            detail = "перезапусти приложение, если ADB включён в Настройках разработчика",
+            title = stringResource(R.string.settings_autoservice_disconnected_title),
+            detail = stringResource(R.string.settings_autoservice_disconnected_detail),
             detailColor = TextSecondary,
         )
         AutoserviceStatus.AllSentinel -> StatusRow(
             marker = "⚠",
             markerColor = SocYellow,
-            title = "подключено, но данные не читаются",
-            detail = "возможно функция работает только на Leopard 3",
+            title = stringResource(R.string.settings_autoservice_sentinel_title),
+            detail = stringResource(R.string.settings_autoservice_sentinel_detail),
             detailColor = SocYellow,
         )
         is AutoserviceStatus.Connected -> {
@@ -1034,8 +1338,8 @@ private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
             StatusRow(
                 marker = "✓",
                 markerColor = AccentGreen,
-                title = "подключено",
-                detail = "SoH $soh • lifetime $km / $kwh",
+                title = stringResource(R.string.settings_autoservice_connected_title),
+                detail = stringResource(R.string.settings_autoservice_connected_detail, soh, km, kwh),
                 detailColor = AccentGreen,
             )
         }
@@ -1151,13 +1455,13 @@ private fun ModelPickerDialog(
                 .padding(16.dp)
         ) {
             Column(modifier = Modifier.padding(16.dp)) {
-                Text("Выбор модели", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.settings_model_picker_title), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    label = { Text("Поиск") },
+                    label = { Text(stringResource(R.string.settings_model_picker_search_label)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(8.dp),
@@ -1175,7 +1479,7 @@ private fun ModelPickerDialog(
                 Spacer(modifier = Modifier.height(8.dp))
 
                 if (loading) {
-                    Text("Загрузка моделей...", color = TextSecondary, fontSize = 14.sp)
+                    Text(stringResource(R.string.settings_model_picker_loading), color = TextSecondary, fontSize = 14.sp)
                 } else {
                     val filtered = if (searchQuery.isBlank()) models
                     else models.filter { it.name.contains(searchQuery, ignoreCase = true) ||

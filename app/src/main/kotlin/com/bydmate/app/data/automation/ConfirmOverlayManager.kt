@@ -38,6 +38,7 @@ import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
+import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
@@ -165,10 +166,10 @@ object ConfirmOverlayManager {
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = SocRed,
-                            contentColor = Color.White,
+                            contentColor = NavyDark,
                         ),
                     ) {
-                        Text("Отмена", fontSize = 14.sp)
+                        Text(context.getString(com.bydmate.app.R.string.confirm_overlay_cancel), fontSize = 14.sp)
                     }
                     Button(
                         onClick = { dismiss("confirm") },
@@ -176,10 +177,10 @@ object ConfirmOverlayManager {
                         shape = RoundedCornerShape(8.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = AccentGreen,
-                            contentColor = Color.White,
+                            contentColor = NavyDark,
                         ),
                     ) {
-                        Text("Выполнить", fontSize = 14.sp)
+                        Text(context.getString(com.bydmate.app.R.string.confirm_overlay_run), fontSize = 14.sp)
                     }
                 }
             }

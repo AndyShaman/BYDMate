@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 13,
-    "identityHash": "ef19f1e883628c80b5a8c61fdc2b67b3",
+    "identityHash": "3b474c4a0cb03c8aa6f3265b188e4f54",
     "entities": [
       {
         "tableName": "trips",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `start_ts` INTEGER NOT NULL, `end_ts` INTEGER, `distance_km` REAL, `kwh_consumed` REAL, `kwh_per_100km` REAL, `soc_start` INTEGER, `soc_end` INTEGER, `temp_avg_c` REAL, `avg_speed_kmh` REAL, `bat_temp_avg` REAL, `bat_temp_max` REAL, `bat_temp_min` REAL, `cost` REAL, `fuel_liters` REAL, `fuel_l_per_100km` REAL, `electricity_cost` REAL, `fuel_cost` REAL, `exterior_temp` INTEGER, `source` TEXT NOT NULL DEFAULT 'live', `byd_id` INTEGER)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `start_ts` INTEGER NOT NULL, `end_ts` INTEGER, `distance_km` REAL, `kwh_consumed` REAL, `kwh_per_100km` REAL, `soc_start` INTEGER, `soc_end` INTEGER, `temp_avg_c` REAL, `avg_speed_kmh` REAL, `bat_temp_avg` REAL, `bat_temp_max` REAL, `bat_temp_min` REAL, `cost` REAL, `exterior_temp` INTEGER, `source` TEXT NOT NULL DEFAULT 'live', `byd_id` INTEGER)",
         "fields": [
           {
             "fieldPath": "id",
@@ -93,30 +93,6 @@
             "notNull": false
           },
           {
-            "fieldPath": "fuelLiters",
-            "columnName": "fuel_liters",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "fuelLPer100km",
-            "columnName": "fuel_l_per_100km",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "electricityCost",
-            "columnName": "electricity_cost",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "fuelCost",
-            "columnName": "fuel_cost",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
             "fieldPath": "exteriorTemp",
             "columnName": "exterior_temp",
             "affinity": "INTEGER",
@@ -151,6 +127,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_start_ts` ON `${TABLE_NAME}` (`start_ts`)"
+          },
+          {
+            "name": "index_trips_byd_id",
+            "unique": false,
+            "columnNames": [
+              "byd_id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trips_byd_id` ON `${TABLE_NAME}` (`byd_id`)"
           }
         ],
         "foreignKeys": []
@@ -211,6 +196,15 @@
             ],
             "orders": [],
             "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_points_trip_id` ON `${TABLE_NAME}` (`trip_id`)"
+          },
+          {
+            "name": "index_trip_points_timestamp",
+            "unique": false,
+            "columnNames": [
+              "timestamp"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_trip_points_timestamp` ON `${TABLE_NAME}` (`timestamp`)"
           }
         ],
         "foreignKeys": []
@@ -933,7 +927,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ef19f1e883628c80b5a8c61fdc2b67b3')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3b474c4a0cb03c8aa6f3265b188e4f54')"
     ]
   }
 }

@@ -33,9 +33,10 @@ class DiPlusDbReader @Inject constructor() {
     suspend fun readTripInfo(): List<DiPlusTripRecord> = withContext(Dispatchers.IO) {
         val dbFile = File(DIPLUS_DB_PATH)
         if (!dbFile.exists()) {
-            Log.w(TAG, "DiPlus DB not found: $DIPLUS_DB_PATH")
+            Log.w(TAG, "DiPlus DB not found: $DIPLUS_DB_PATH (DiPlus installed? user granted storage?)")
             return@withContext emptyList()
         }
+        Log.i(TAG, "DiPlus DB: path=$DIPLUS_DB_PATH size=${dbFile.length()}B mtime=${dbFile.lastModified()}")
 
         val results = mutableListOf<DiPlusTripRecord>()
         val db = SQLiteDatabase.openDatabase(dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
@@ -46,7 +47,7 @@ class DiPlusDbReader @Inject constructor() {
             )
             if (!tableCursor.moveToFirst()) {
                 tableCursor.close()
-                Log.w(TAG, "TripInfo table not found")
+                Log.w(TAG, "TripInfo table not found (DiPlus DB schema changed?)")
                 return@withContext emptyList()
             }
             tableCursor.close()
@@ -100,7 +101,14 @@ class DiPlusDbReader @Inject constructor() {
             db.close()
         }
 
-        Log.d(TAG, "readTripInfo: ${results.size} records")
+        Log.i(TAG, "readTripInfo: ${results.size} records read from TripInfo")
+        if (results.isNotEmpty()) {
+            // Last 3 trips help diagnose "long trip missing" reports without flooding
+            results.takeLast(3).forEach { r ->
+                Log.d(TAG, "trip start=${r.timeStart} end=${r.timeEnd} km=${r.mileage} " +
+                    "soc=${r.socStart}->${r.socEnd} kWh=${r.kwhConsumed} odo=${r.odometerStart}->${r.odometerEnd}")
+            }
+        }
         results
     }
 

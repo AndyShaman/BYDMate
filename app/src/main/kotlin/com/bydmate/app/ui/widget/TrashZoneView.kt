@@ -17,9 +17,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextMuted
 
@@ -66,7 +68,8 @@ fun TrashZoneView(active: Boolean) {
         }
         Spacer(Modifier.height(8.dp))
         Text(
-            text = if (active) "отпустить — виджет скрыт" else "перетащить сюда, чтобы скрыть",
+            text = if (active) stringResource(R.string.widget_trash_release)
+                   else stringResource(R.string.widget_trash_hint),
             fontSize = 11.sp,
             color = if (active) SocRed else TextMuted,
             fontFamily = FontFamily.Monospace,

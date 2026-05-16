@@ -11,7 +11,9 @@ import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.repository.SettingsRepository
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -35,6 +37,7 @@ class AutoserviceChargingDetectorTest {
         override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
         override suspend fun readChargingSnapshot(): ChargingReading? = charging
+        override suspend fun getEnginePowerKw(): Int? = null
     }
 
     private class RecordingDao : ChargeDao {
@@ -140,6 +143,7 @@ class AutoserviceChargingDetectorTest {
         ),
         prevSoc: Int? = null,
         prevCapacityKwh: Float? = null,
+        prevTs: Long? = null,
         autoserviceAvailable: Boolean = true,
         homeTariff: Double = 0.20,
         dcTariff: Double = 0.73,
@@ -152,6 +156,7 @@ class AutoserviceChargingDetectorTest {
         val healthRepo = BatteryHealthRepository(snapshotDao)
 
         val initialMap = buildMap {
+            put(SettingsRepository.KEY_BATTERY_CAPACITY, "72.9")
             put(SettingsRepository.KEY_HOME_TARIFF, homeTariff.toString())
             put(SettingsRepository.KEY_DC_TARIFF, dcTariff.toString())
             if (prevSoc != null) {
@@ -160,9 +165,12 @@ class AutoserviceChargingDetectorTest {
             if (prevCapacityKwh != null) {
                 put(SettingsRepository.KEY_LAST_CAPACITY_KWH, prevCapacityKwh.toString())
             }
+            if (prevTs != null) {
+                put(SettingsRepository.KEY_LAST_STATE_TS, prevTs.toString())
+            }
         }
         val settingsDao = FakeSettingsDao(initialMap)
-        val settings = SettingsRepository(settingsDao)
+        val settings = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
         val stateStore = ChargingStateStore(settings)
         val classifier = ChargingTypeClassifier()
         val detector = AutoserviceChargingDetector(
@@ -294,8 +302,8 @@ class AutoserviceChargingDetectorTest {
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         assertEquals(1, setup.chargeDao.inserted.size)
         val ch = setup.chargeDao.inserted.single()
-        // Song L DM-i 112 default: (91-80)/100 * 18.3 = 2.013
-        assertEquals(2.013, ch.kwhCharged!!, 0.01)
+        // Test fixture uses Leopard capacity: (91-80)/100 * 72.9 = 8.019
+        assertEquals(8.019, ch.kwhCharged!!, 0.01)
         assertEquals("autoservice_soc_estimate", ch.detectionSource)
     }
 
@@ -331,9 +339,9 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `gate A cap delta below MIN_DELTA_KWH falls through to gate B`() = runTest {
-        // prevCap=7.0, currentCap=7.2, delta=0.2 < 0.5 → Gate A skipped
-        // Gate B: currentCap=7.2 in range → row with kwhCharged=7.2
+    fun `gate A cap delta below MIN_DELTA_KWH falls back to SOC when gate B diverges`() = runTest {
+        // prevCap=7.0, currentCap=7.2, delta=0.2 < 0.5 → Gate A skipped.
+        // Gate B candidate=7.2 vs socEstimate=5/100*72.9=3.645 → ratio 1.97 → SOC fallback.
         val setup = build(
             battery = battery(soc = 65f),
             charging = charging(capKwh = 7.2f),
@@ -345,15 +353,15 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(7.2, ch.kwhCharged!!, 0.01)
-        assertEquals("autoservice_cap_session", ch.detectionSource)
+        assertEquals(3.645, ch.kwhCharged!!, 0.01)
+        assertEquals("autoservice_soc_fallback", ch.detectionSource)
     }
 
     @Test
     fun `gate A cap delta above 200 falls through to gate C`() = runTest {
         // prevCap=0.5, currentCap=250 → delta=249.5 > 200 → Gate A fails plausibility
         // Gate B: currentCap=250 > 200 → Gate B also fails plausibility
-        // Gate C: SOC estimate using Song L DM-i 112 default: (91-80)/100 * 18.3 = 2.013
+        // Gate C: SOC estimate using test fixture capacity: (91-80)/100 * 72.9 = 8.019
         val setup = build(
             battery = battery(soc = 91f),
             charging = charging(capKwh = 250.0f),
@@ -365,8 +373,69 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(2.013, ch.kwhCharged!!, 0.01)
+        assertEquals(8.019, ch.kwhCharged!!, 0.01)
         assertEquals("autoservice_soc_estimate", ch.detectionSource)
+    }
+
+    @Test
+    fun `gate A cap delta underreports versus SOC falls back to SOC estimate`() = runTest {
+        // Real-world v2.5.15 regression: overnight AC 48→99 (51%), BMS counter
+        // shows only 21.5 kWh because the per-session counter resets across
+        // BMS pause/resume sub-phases. socEstimate = 51/100 * 72.9 = 37.179.
+        // Ratio 21.5/37.179 = 0.578 < SOC_SANITY_RATIO_LOW(0.70) → SOC fallback.
+        val setup = build(
+            battery = battery(soc = 99f),
+            charging = charging(capKwh = 21.5f),
+            prevSoc = 48,
+            prevCapacityKwh = 0.0f
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(37.179, ch.kwhCharged!!, 0.01)
+        assertEquals("autoservice_soc_fallback", ch.detectionSource)
+        assertEquals(48, ch.socStart)
+        assertEquals(99, ch.socEnd)
+    }
+
+    @Test
+    fun `gate B cap session overreports versus SOC falls back to SOC estimate`() = runTest {
+        // BMS counter overruns SOC: 80→82 (2%), but cap=12 (likely stale residue).
+        // socEstimate = 2/100 * 72.9 = 1.458. Ratio 12/1.458 = 8.23 → fallback.
+        val setup = build(
+            battery = battery(soc = 82f),
+            charging = charging(capKwh = 12.0f),
+            prevSoc = 80,
+            prevCapacityKwh = null
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(1.458, ch.kwhCharged!!, 0.01)
+        assertEquals("autoservice_soc_fallback", ch.detectionSource)
+    }
+
+    @Test
+    fun `gate A cap delta within sanity ratio low boundary still trusts BMS`() = runTest {
+        // socEstimate = 10/100 * 72.9 = 7.29. capDelta = 7.29 * 0.71 = 5.176 → ratio 0.71
+        // just above LOW(0.70) → trust BMS.
+        val setup = build(
+            battery = battery(soc = 90f),
+            charging = charging(capKwh = 5.176f),
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(5.176, ch.kwhCharged!!, 0.01)
+        assertEquals("autoservice_cap_delta", ch.detectionSource)
     }
 
     @Test
@@ -528,20 +597,21 @@ class AutoserviceChargingDetectorTest {
         assertEquals(8.0, r1.deltaKwh!!, 0.01)
 
         // After first session, state is (soc=91, cap=8.0)
-        // Second session: SOC 91→95, cap 8.0→10.0 → Gate A: delta=2.0
+        // Second session: SOC 91→95, cap 8.0→10.92 → Gate A: delta=2.92
+        // socEstimate=4/100*72.9=2.916 → ratio 1.001, BMS trusted.
         setup.auto.battery = battery(soc = 95f)
-        setup.auto.charging = charging(capKwh = 10.0f)
+        setup.auto.charging = charging(capKwh = 10.92f)
 
         val r2 = setup.detector.runCatchUp(now = 2500L)
         assertEquals(CatchUpOutcome.SESSION_CREATED, r2.outcome)
         assertEquals(2, setup.chargeDao.inserted.size)
         val second = setup.chargeDao.inserted[1]
-        assertEquals(2.0, second.kwhCharged!!, 0.01)
+        assertEquals(2.92, second.kwhCharged!!, 0.01)
         assertEquals("autoservice_cap_delta", second.detectionSource)
-        // State should now be (soc=95, cap=10.0)
+        // State should now be (soc=95, cap=10.92)
         val state = setup.stateStore.load()
         assertEquals(95, state.socPercent)
-        assertEquals(10.0f, state.capacityKwh!!, 0.01f)
+        assertEquals(10.92f, state.capacityKwh!!, 0.01f)
     }
 
     @Test
@@ -717,6 +787,120 @@ class AutoserviceChargingDetectorTest {
 
         val ch = setup.chargeDao.inserted.single()
         assertEquals("AC", ch.type)
+    }
+
+    @Test
+    fun `overnight AC catch-up uses real elapsed time and classifies as AC`() = runTest {
+        // The exact scenario reported by users: car off in the evening, plugged
+        // into AC overnight, woken up in the morning at 100%, gun pulled before
+        // any DiPars power sample lands in observedKwAbs. Old code divided 30 kWh
+        // by the fixed 1h heuristic → 30 kW → false DC. The fix divides by the
+        // real elapsed time (8h here) → ~3.75 kW → AC.
+        val eightHoursMs = 8L * 3_600_000L
+        val now = 100L + eightHoursMs
+        val setup = build(
+            battery = battery(soc = 100f),
+            charging = charging(capKwh = 30.0f, gunState = 1),
+            prevSoc = 60,
+            prevCapacityKwh = 0.0f,
+            prevTs = 100L
+        )
+
+        setup.detector.runCatchUp(now = now)
+
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals("AC", ch.type)
+    }
+
+    @Test
+    fun `short DC catch-up uses real elapsed time and classifies as DC`() = runTest {
+        // Inverse of the overnight scenario: 40 kWh charged in 30 minutes —
+        // unmistakably DC. Real elapsed time keeps the classification correct
+        // even though no live observedKwAbs is supplied.
+        val halfHourMs = 30L * 60_000L
+        val now = 100L + halfHourMs
+        val setup = build(
+            battery = battery(soc = 90f),
+            charging = charging(capKwh = 40.0f, gunState = 1),
+            prevSoc = 30,
+            prevCapacityKwh = 0.0f,
+            prevTs = 100L
+        )
+
+        setup.detector.runCatchUp(now = now)
+
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals("DC", ch.type)
+    }
+
+    @Test
+    fun `clock skew with prevTs in the future falls back to 1h heuristic`() = runTest {
+        // User corrected the system clock backward between sessions →
+        // raw elapsed becomes negative. We must not treat that as "almost
+        // zero hours" (which would force false DC); fall back to the 1h
+        // baseline so behavior matches a fresh cold start.
+        val setup = build(
+            battery = battery(soc = 90f),
+            charging = charging(capKwh = 5.0f, gunState = 1),
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f,
+            prevTs = 10_000L
+        )
+
+        // now < prevTs by 1s → rawElapsed = -1s/3.6M = negative
+        setup.detector.runCatchUp(now = 9_000L)
+
+        val ch = setup.chargeDao.inserted.single()
+        // 5 kWh / 1h = 5 kW → AC. If clock-skew handling were missing this
+        // would be 5 kWh / 0.05h = 100 kW → false DC.
+        assertEquals("AC", ch.type)
+    }
+
+    @Test
+    fun `multi-day idle then DC charge is capped at MAX_ELAPSED_HOURS`() = runTest {
+        // Pathological case: car sat 48h then took a 30 kWh DC charge.
+        // Without an upper clamp, 30/48 = 0.625 kW → false AC. With the
+        // 16h ceiling, 30/16 = 1.875 kW → still AC by the 15 kW threshold,
+        // but any DC session above ~240 kWh in 16h would correctly land
+        // as DC. Conservative cap intentionally biases toward the cheaper
+        // AC tariff when uncertain — the user can override via the row dialog.
+        val twoDaysMs = 48L * 3_600_000L
+        val now = 100L + twoDaysMs
+        val setup = build(
+            battery = battery(soc = 90f),
+            charging = charging(capKwh = 250.0f, gunState = 1),
+            prevSoc = 30,
+            prevCapacityKwh = 0.0f,
+            prevTs = 100L
+        )
+
+        setup.detector.runCatchUp(now = now)
+
+        val ch = setup.chargeDao.inserted.single()
+        // 200 kWh from cap delta / 16h capped = 12.5 kW → AC. Matches the
+        // documented conservative bias; full DC scenario above 240 kWh in
+        // <16h would still classify as DC.
+        assertEquals("AC", ch.type)
+    }
+
+    @Test
+    fun `cold start with no prevTs falls back to 1h heuristic`() = runTest {
+        // First catch-up after a fresh install or store wipe — prev.ts = 0L.
+        // We can't compute elapsed hours, so the legacy 1h fallback is used.
+        // 30 kWh / 1h = 30 kW → DC. Documented edge: this is the only path
+        // that can still mis-classify, but it's a one-time first-run case.
+        val setup = build(
+            battery = battery(soc = 90f),
+            charging = charging(capKwh = 30.0f, gunState = 1),
+            prevSoc = 30,
+            prevCapacityKwh = 0.0f
+            // prevTs intentionally null → defaults to 0L
+        )
+
+        setup.detector.runCatchUp(now = 1500L)
+
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals("DC", ch.type)
     }
 
     @Test

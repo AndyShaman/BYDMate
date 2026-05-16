@@ -25,10 +25,34 @@ object AppModuleMigrationsForTest {
 
     val MIGRATION_12_13 = object : Migration(12, 13) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_liters REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN electricity_cost REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
         }
+    }
+
+    val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            addColumnIfMissing(db, "trips", "fuel_liters", "ALTER TABLE trips ADD COLUMN fuel_liters REAL")
+            addColumnIfMissing(db, "trips", "fuel_l_per_100km", "ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
+            addColumnIfMissing(db, "trips", "electricity_cost", "ALTER TABLE trips ADD COLUMN electricity_cost REAL")
+            addColumnIfMissing(db, "trips", "fuel_cost", "ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
+        }
+    }
+
+    private fun addColumnIfMissing(
+        db: SupportSQLiteDatabase,
+        tableName: String,
+        columnName: String,
+        alterSql: String
+    ) {
+        db.query("PRAGMA table_info($tableName)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == columnName) return
+            }
+        }
+        db.execSQL(alterSql)
     }
 }

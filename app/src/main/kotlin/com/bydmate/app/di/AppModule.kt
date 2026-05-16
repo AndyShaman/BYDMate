@@ -16,6 +16,7 @@ import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
 import com.bydmate.app.domain.calculator.RangeAvgSource
 import com.bydmate.app.domain.calculator.RangeCalculator
@@ -226,11 +227,38 @@ object AppModule {
 
     private val MIGRATION_12_13 = object : Migration(12, 13) {
         override fun migrate(db: SupportSQLiteDatabase) {
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_liters REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN electricity_cost REAL")
-            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            // Hot-path indices: byd_id is looked up per record in HistoryImporter's
+            // sync loop; trip_points.timestamp is used by attachToTrip and the
+            // GPS-thinning query.
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
         }
+    }
+
+    private val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            addColumnIfMissing(db, "trips", "fuel_liters", "ALTER TABLE trips ADD COLUMN fuel_liters REAL")
+            addColumnIfMissing(db, "trips", "fuel_l_per_100km", "ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
+            addColumnIfMissing(db, "trips", "electricity_cost", "ALTER TABLE trips ADD COLUMN electricity_cost REAL")
+            addColumnIfMissing(db, "trips", "fuel_cost", "ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
+        }
+    }
+
+    private fun addColumnIfMissing(
+        db: SupportSQLiteDatabase,
+        tableName: String,
+        columnName: String,
+        alterSql: String
+    ) {
+        db.query("PRAGMA table_info($tableName)").use { cursor ->
+            val nameIndex = cursor.getColumnIndex("name")
+            while (cursor.moveToNext()) {
+                if (cursor.getString(nameIndex) == columnName) return
+            }
+        }
+        db.execSQL(alterSql)
     }
 
     @Provides
@@ -241,7 +269,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14)
             .build()
     }
 
@@ -289,6 +317,11 @@ object AppModule {
         capacityProvider = { settingsRepository.getBatteryCapacity() },
         socInterpolator = socInterpolator,
     )
+
+    @Provides
+    @Singleton
+    fun provideLocalePreferences(@ApplicationContext context: Context): LocalePreferences =
+        LocalePreferences(context)
 
     @Provides
     @Singleton

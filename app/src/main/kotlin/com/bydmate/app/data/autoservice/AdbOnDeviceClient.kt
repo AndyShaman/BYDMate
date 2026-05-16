@@ -92,7 +92,14 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
         val p = protocol ?: return@withContext null
         try {
-            p.exec(cmd)
+            // runInterruptible bridges coroutine cancellation to the blocking
+            // ADB socket read: a parent withTimeout/withTimeoutOrNull will
+            // post a Thread.interrupt(), which the socket implementation
+            // raises as InterruptedIOException and unwinds out of p.exec.
+            // Without this wrapper, withTimeoutOrNull(900ms) abandons the
+            // coroutine but the socket read keeps blocking up to 5 s
+            // (SOCKET_TIMEOUT_MS), pinning single-flight in TrackingService.
+            kotlinx.coroutines.runInterruptible { p.exec(cmd) }
         } catch (e: Exception) {
             Log.w(TAG, "exec failed: ${e.message}")
             null

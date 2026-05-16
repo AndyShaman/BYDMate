@@ -51,7 +51,7 @@ class ChargingTypeClassifier @Inject constructor() {
      * Live path: classify by the directly observed motor power magnitude
      * (DiPars 发动机功率, kW; negative when energy flows into battery).
      * Cleaner than the kwh/hours heuristic — works correctly for short
-     * sessions where the heuristic's `HEURISTIC_HOURS=1.0` assumption
+     * sessions where the kwh/hours heuristic's elapsed-time fallback
      * underestimates the true power by an order of magnitude.
      */
     fun fromObservedPowerKw(observedKwAbs: Double?): String? {

@@ -32,7 +32,6 @@ import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
-import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -44,6 +43,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.stringResource
+import com.bydmate.app.R
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -83,7 +84,7 @@ fun WelcomeScreen(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            "Шаг ${state.step} из 3",
+            stringResource(R.string.welcome_step_indicator, state.step),
             color = TextSecondary,
             fontSize = 14.sp
         )
@@ -103,21 +104,21 @@ private fun ModelStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SectionCard("Профиль автомобиля") {
+        SectionCard(stringResource(R.string.welcome_model_step_title)) {
             Text(
-                "Для Song L DM-i BYDMate использует DiPlus TripInfo и ёмкость батареи выбранной версии.",
+                stringResource(R.string.welcome_model_step_description),
                 color = TextSecondary,
                 fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
-            VehicleProfileDropdown(
+            WelcomeVehicleProfileDropdown(
                 selectedProfileId = state.vehicleProfileId,
                 onProfileSelected = viewModel::setVehicleProfile,
                 modifier = Modifier.fillMaxWidth()
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Выбрано по умолчанию: BYD Song L DM-i 112 km (2024). Можно поменять позже в настройках.",
+                SettingsRepository.vehicleProfileById(state.vehicleProfileId).note,
                 color = TextMuted,
                 fontSize = 11.sp
             )
@@ -131,20 +132,20 @@ private fun ModelStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             shape = RoundedCornerShape(12.dp),
             colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
         ) {
-            Text("Далее →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun VehicleProfileDropdown(
+private fun WelcomeVehicleProfileDropdown(
     selectedProfileId: String,
     onProfileSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selectedProfile = SettingsRepository.vehicleProfileById(selectedProfileId)
+    val selected = SettingsRepository.vehicleProfileById(selectedProfileId)
 
     ExposedDropdownMenuBox(
         expanded = expanded,
@@ -152,66 +153,80 @@ private fun VehicleProfileDropdown(
         modifier = modifier
     ) {
         OutlinedTextField(
-            value = selectedProfile.label,
+            value = selected.label,
             onValueChange = {},
             readOnly = true,
-            label = { Text("Модель") },
+            label = { Text("Автомобиль") },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
-                .fillMaxWidth(),
-            shape = RoundedCornerShape(8.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedTextColor = Color.White,
-                unfocusedTextColor = Color.White,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
                 focusedBorderColor = AccentGreen,
                 unfocusedBorderColor = CardBorder,
                 focusedLabelColor = AccentGreen,
-                unfocusedLabelColor = TextSecondary,
-                focusedTrailingIconColor = AccentGreen,
-                unfocusedTrailingIconColor = TextSecondary,
+                unfocusedLabelColor = TextMuted,
                 cursorColor = AccentGreen
-            )
+            ),
+            modifier = Modifier
+                .menuAnchor()
+                .fillMaxWidth()
         )
         ExposedDropdownMenu(
             expanded = expanded,
-            onDismissRequest = { expanded = false }
+            onDismissRequest = { expanded = false },
+            containerColor = CardSurfaceElevated
         ) {
             SettingsRepository.VEHICLE_PROFILES.forEach { profile ->
                 DropdownMenuItem(
                     text = {
                         Column {
-                            Text(
-                                text = profile.label,
-                                color = TextPrimary,
-                                fontSize = 14.sp,
-                                fontWeight = if (profile.id == selectedProfile.id) {
-                                    FontWeight.SemiBold
-                                } else {
-                                    FontWeight.Normal
-                                }
-                            )
-                            Text(
-                                text = profile.note,
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
+                            Text(profile.label, color = TextPrimary, fontSize = 14.sp)
+                            Text(profile.note, color = TextMuted, fontSize = 11.sp)
                         }
                     },
                     onClick = {
-                        expanded = false
                         onProfileSelected(profile.id)
+                        expanded = false
                     }
                 )
             }
         }
     }
-    Text(
-        selectedProfile.note,
-        color = AccentGreen,
-        fontSize = 11.sp,
-        modifier = Modifier.padding(top = 4.dp)
-    )
+}
+
+@Composable
+private fun ModelButton(
+    label: String,
+    sublabel: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) AccentGreen else CardSurfaceElevated
+        ),
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp).fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                label,
+                color = if (selected) Color.White else TextPrimary,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                sublabel,
+                color = if (selected) Color.White else TextSecondary,
+                fontSize = 11.sp
+            )
+        }
+    }
 }
 
 @Composable
@@ -225,32 +240,27 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionCard("Батарея") {
+            SectionCard(stringResource(R.string.welcome_battery_section_title)) {
                 WelcomeTextField(
-                    label = "Ёмкость батареи (кВт·ч)",
+                    label = stringResource(R.string.settings_battery_capacity_label),
                     value = state.batteryCapacity,
                     onValueChange = { viewModel.setBatteryCapacity(it) }
                 )
                 Text(
-                    "Leopard 3: 72.9 кВт·ч (BEV) или 31.8 кВт·ч (PHEV)",
+                    stringResource(R.string.welcome_battery_capacity_hint),
                     color = TextMuted,
-                    fontSize = 11.sp
-                )
-                Text(
-                    "Song L DM-i 112 km (2024): 18.3 кВт·ч",
-                    color = AccentGreen,
                     fontSize = 11.sp
                 )
             }
 
-            SectionCard("Валюта") {
+            SectionCard(stringResource(R.string.settings_app_currency_label)) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     modifier = Modifier.horizontalScroll(rememberScrollState())
                 ) {
                     SettingsRepository.CURRENCIES.forEach { currency ->
                         WelcomeChip(
-                            label = "${currency.symbol} ${currency.label}",
+                            label = currency.code,
                             selected = state.currency == currency.code,
                             onClick = { viewModel.setCurrency(currency.code) }
                         )
@@ -264,14 +274,14 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionCard("Тарифы") {
+            SectionCard(stringResource(R.string.welcome_tariff_section_title)) {
                 WelcomeTextField(
-                    label = "Домашняя зарядка (${state.currencySymbol}/кВт·ч)",
+                    label = stringResource(R.string.welcome_tariff_home_label, state.currencySymbol),
                     value = state.homeTariff,
                     onValueChange = { viewModel.setHomeTariff(it) }
                 )
                 WelcomeTextField(
-                    label = "Быстрая зарядка DC (${state.currencySymbol}/кВт·ч)",
+                    label = stringResource(R.string.welcome_tariff_dc_label, state.currencySymbol),
                     value = state.dcTariff,
                     onValueChange = { viewModel.setDcTariff(it) }
                 )
@@ -281,29 +291,24 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                         value = state.fuelPricePerLiter,
                         onValueChange = { viewModel.setFuelPricePerLiter(it) }
                     )
-                    Text(
-                        "Укажите среднюю цену за литр — BYDMate посчитает бензиновую часть поездок.",
-                        color = TextMuted,
-                        fontSize = 11.sp
-                    )
                 }
             }
 
-            SectionCard("Расчёт стоимости поездок") {
+            SectionCard(stringResource(R.string.welcome_tariff_cost_section_title)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WelcomeChip("Домашний", state.tripCostMode == "home") { viewModel.setTripCostMode("home") }
+                    WelcomeChip(stringResource(R.string.welcome_tariff_home_chip), state.tripCostMode == "home") { viewModel.setTripCostMode("home") }
                     WelcomeChip("DC", state.tripCostMode == "dc") { viewModel.setTripCostMode("dc") }
-                    WelcomeChip("Свой", state.tripCostMode == "custom") { viewModel.setTripCostMode("custom") }
+                    WelcomeChip(stringResource(R.string.welcome_tariff_custom_chip), state.tripCostMode == "custom") { viewModel.setTripCostMode("custom") }
                 }
                 if (state.tripCostMode == "custom") {
                     WelcomeTextField(
-                        label = "Свой тариф (${state.currencySymbol}/кВт·ч)",
+                        label = stringResource(R.string.settings_tariff_custom_label, state.currencySymbol),
                         value = state.customTariff,
                         onValueChange = { viewModel.setCustomTariff(it) }
                     )
                 }
                 Text(
-                    "Стоимость = потребление × тариф. Можно изменить позже в настройках.",
+                    stringResource(R.string.welcome_tariff_cost_note),
                     color = TextMuted,
                     fontSize = 11.sp
                 )
@@ -317,7 +322,7 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
             ) {
-                Text("Далее →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -336,39 +341,40 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionCard("Автозапуск на DiLink") {
+            SectionCard(stringResource(R.string.welcome_autostart_step_title)) {
                 Text(
-                    "Чтобы BYDMate запускался автоматически при включении магнитолы:",
+                    stringResource(R.string.welcome_autostart_step_description),
                     color = TextSecondary,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("1. Нажмите кнопку справа", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("2. Найдите BYDMate в списке", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-                Text("3. Переключатель должен быть ВЫКЛЮЧЕН (OFF)", color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(R.string.welcome_autostart_instruction_1), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.welcome_autostart_instruction_2), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.welcome_autostart_instruction_3), color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "OFF = автозапуск РАЗРЕШЁН. Это чёрный список: отключённые в нём приложения МОГУТ запускаться сами.",
+                    stringResource(R.string.welcome_autostart_off_note),
                     color = TextMuted,
                     fontSize = 11.sp
                 )
                 Text(
-                    "⚠ После обновления APK проверьте эту настройку!",
+                    stringResource(R.string.welcome_autostart_apk_update_warning),
                     color = SocYellow,
                     fontSize = 12.sp
                 )
             }
 
-            SectionCard("Альтернатива: через DiLink+ (Di+)") {
+            SectionCard(stringResource(R.string.welcome_autostart_dilink_section_title)) {
                 Text(
-                    "Если автозапуск не сработал — добавьте в Di+:",
+                    stringResource(R.string.welcome_autostart_dilink_hint),
                     color = TextSecondary,
                     fontSize = 13.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
-                Text("Di+ → Predefined → Startup tasks", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.welcome_autostart_dilink_instruction), color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
                 Spacer(modifier = Modifier.height(2.dp))
                 val dilinkCommand = "打开应用com.bydmate.app"
+                val copiedToast = stringResource(R.string.welcome_autostart_command_copied_toast)
                 Text(
                     dilinkCommand,
                     color = AccentGreen,
@@ -377,12 +383,12 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                     modifier = Modifier.clickable {
                         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                         clipboard.setPrimaryClip(ClipData.newPlainText("DiLink+ command", dilinkCommand))
-                        Toast.makeText(context, "Скопировано!", Toast.LENGTH_SHORT).show()
+                        Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
                     }
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    "打开应用 = \"открыть приложение\" + имя пакета.\nДля двух приложений через точку с запятой:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app",
+                    stringResource(R.string.welcome_autostart_command_explanation),
                     color = TextMuted,
                     fontSize = 10.sp
                 )
@@ -394,7 +400,8 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            SectionCard("Системные настройки") {
+            val openSettingsError = stringResource(R.string.welcome_autostart_open_settings_error)
+            SectionCard(stringResource(R.string.welcome_system_settings_section_title)) {
                 Button(
                     onClick = {
                         val opened = runCatching {
@@ -417,7 +424,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                             }
                             Toast.makeText(
                                 context,
-                                "Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.",
+                                openSettingsError,
                                 Toast.LENGTH_LONG
                             ).show()
                         }
@@ -426,7 +433,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                     shape = RoundedCornerShape(8.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = AccentBlue)
                 ) {
-                    Text("Открыть настройки автозапуска", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Text(stringResource(R.string.welcome_autostart_open_settings_button), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 }
             }
 
@@ -436,7 +443,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.fillMaxWidth()) {
                     CircularProgressIndicator(color = AccentGreen)
                     Spacer(modifier = Modifier.height(8.dp))
-                    Text(state.importStatus ?: "Загрузка...", color = TextSecondary, fontSize = 14.sp)
+                    Text(state.importStatus ?: stringResource(R.string.welcome_loading_default), color = TextSecondary, fontSize = 14.sp)
                 }
             } else {
                 Row(
@@ -448,7 +455,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("← Назад", color = TextSecondary, fontSize = 14.sp)
+                        Text(stringResource(R.string.welcome_back_button), color = TextSecondary, fontSize = 14.sp)
                     }
                     Button(
                         onClick = { viewModel.startBydMate() },
@@ -456,7 +463,7 @@ private fun AutoStartStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
                     ) {
-                        Text("Запустить BYDMate", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.welcome_done_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }

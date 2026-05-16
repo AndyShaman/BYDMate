@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -44,6 +45,7 @@ import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatDuration
 import com.bydmate.app.ui.components.formatTime
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.*
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
@@ -58,6 +60,7 @@ fun TripDetailDialog(
     currencySymbol: String,
     onDismiss: () -> Unit
 ) {
+    val ctx = LocalContext.current
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -93,7 +96,7 @@ fun TripDetailDialog(
                     ) {
                         // Header
                         Text(
-                            if (isStop) "Стоянка" else "Поездка",
+                            if (isStop) stringResource(R.string.trip_detail_title_stop) else stringResource(R.string.trip_detail_title_trip),
                             color = AccentGreen,
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold
@@ -125,7 +128,7 @@ fun TripDetailDialog(
                                     .background(NavyDark, RoundedCornerShape(8.dp)),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text("GPS-данные недоступны", color = TextMuted, fontSize = 13.sp)
+                                Text(stringResource(R.string.trip_detail_gps_unavailable), color = TextMuted, fontSize = 13.sp)
                             }
                         }
 
@@ -149,23 +152,23 @@ fun TripDetailDialog(
                             .padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
-                        Text("Статистика", color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.trip_detail_stats_header), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
 
-                        trip.distanceKm?.let { DetailRow("Дистанция", "%.1f км".format(it)) }
-                        if (trip.endTs != null) DetailRow("Длительность", formatDuration(trip.startTs, trip.endTs))
-                        trip.avgSpeedKmh?.let { DetailRow("Ср. скорость", "%.0f км/ч".format(it)) }
+                        trip.distanceKm?.let { DetailRow(stringResource(R.string.trip_detail_distance_label), stringResource(R.string.trip_detail_distance_value, it)) }
+                        if (trip.endTs != null) DetailRow(stringResource(R.string.trip_detail_duration_label), formatDuration(ctx, trip.startTs, trip.endTs))
+                        trip.avgSpeedKmh?.let { DetailRow(stringResource(R.string.trip_detail_avg_speed_label), stringResource(R.string.trip_detail_speed_value, it)) }
                         if (points.isNotEmpty()) {
                             val maxSpeed = points.maxOfOrNull { it.speedKmh ?: 0.0 } ?: 0.0
-                            if (maxSpeed > 0) DetailRow("Макс. скорость", "%.0f км/ч".format(maxSpeed))
+                            if (maxSpeed > 0) DetailRow(stringResource(R.string.trip_detail_max_speed_label), stringResource(R.string.trip_detail_speed_value, maxSpeed))
                         }
                         trip.kwhConsumed?.let {
-                            DetailRow("Потребление", "%.1f кВт·ч".format(it))
+                            DetailRow(stringResource(R.string.trip_detail_consumption_label), stringResource(R.string.trip_detail_consumption_value, it))
                             trip.kwhPer100km?.let { per100 ->
-                                DetailRow("Расход электро", "%.1f кВт·ч/100".format(per100), consumptionColor(per100))
+                                DetailRow(stringResource(R.string.trip_detail_efficiency_label), "%.1f/100".format(per100), consumptionColor(per100))
                             }
                         }
                         trip.fuelLiters?.let {
-                            DetailRow("Топливо", "%.1f л".format(it))
+                            DetailRow("Топливо", "%.1f л".format(it), AccentOrange)
                             trip.fuelLPer100km?.let { per100 ->
                                 DetailRow("Расход топлива", "%.1f л/100".format(per100), AccentOrange)
                             }
@@ -173,10 +176,12 @@ fun TripDetailDialog(
                         if (trip.socStart != null && trip.socEnd != null) {
                             DetailRow("SOC", "${trip.socStart}% → ${trip.socEnd}%")
                         }
-                        trip.electricityCost?.let { DetailRow("Электричество", "%.2f %s".format(it, currencySymbol), AccentBlue) }
-                        trip.fuelCost?.let { DetailRow("Топливо", "%.2f %s".format(it, currencySymbol), AccentOrange) }
-                        trip.cost?.let { DetailRow("Стоимость", "%.2f %s".format(it, currencySymbol), AccentGreen) }
-                        trip.exteriorTemp?.let { DetailRow("Темп.", "${it}°C") }
+                        if (trip.electricityCost != null || trip.fuelCost != null) {
+                            trip.electricityCost?.let { DetailRow("Электричество", "%.2f %s".format(it, currencySymbol), AccentBlue) }
+                            trip.fuelCost?.let { DetailRow("Топливо ₽", "%.2f %s".format(it, currencySymbol), AccentOrange) }
+                        }
+                        trip.cost?.let { DetailRow(stringResource(R.string.trip_detail_cost_label), "%.2f %s".format(it, currencySymbol), AccentGreen) }
+                        trip.exteriorTemp?.let { DetailRow(stringResource(R.string.trip_detail_temp_label), "${it}°C") }
                     }
                 }
             }
@@ -280,6 +285,9 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
     if (speeds.isEmpty()) return
     val maxSpeed = speeds.max()
 
+    // Hoist localized string for use inside Canvas (non-composable scope)
+    val maxSpeedLabel = stringResource(R.string.trip_detail_max_speed_histogram, maxSpeed.toInt())
+
     Canvas(modifier = modifier) {
         if (maxSpeed <= 0.0) return@Canvas
 
@@ -305,7 +313,7 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
         }
 
         drawContext.canvas.nativeCanvas.drawText(
-            "макс ${maxSpeed.toInt()} км/ч",
+            maxSpeedLabel,
             size.width - 8f,
             16f,
             Paint().apply {

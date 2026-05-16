@@ -39,9 +39,11 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.ui.theme.*
@@ -94,11 +96,12 @@ fun formatDateTime(ts: Long): String {
     return sdf.format(Date(ts))
 }
 
-fun formatDuration(startTs: Long, endTs: Long): String {
+fun formatDuration(context: android.content.Context, startTs: Long, endTs: Long): String {
     val durationMs = endTs - startTs
     val hours = TimeUnit.MILLISECONDS.toHours(durationMs)
     val minutes = TimeUnit.MILLISECONDS.toMinutes(durationMs) % 60
-    return if (hours > 0) "$hours ч $minutes мин" else "$minutes мин"
+    return if (hours > 0) context.getString(R.string.common_duration_hours_minutes, hours.toInt(), minutes.toInt())
+    else context.getString(R.string.common_duration_minutes, minutes.toInt())
 }
 
 // Единый стиль Switch по всему приложению:
@@ -194,7 +197,7 @@ fun SocGauge(
             if (isCharging) {
                 Icon(
                     imageVector = Icons.Outlined.Bolt,
-                    contentDescription = "Идёт зарядка",
+                    contentDescription = stringResource(R.string.battery_health_charging_cd),
                     tint = AccentGreen,
                     modifier = Modifier.size(18.dp)
                 )
@@ -229,6 +232,7 @@ fun TripCard(
     modifier: Modifier = Modifier,
     currencySymbol: String = "BYN"
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     // Compact single-row trip card with weight-based columns
     Row(
         modifier = modifier
@@ -249,7 +253,7 @@ fun TripCard(
 
         // Duration (2nd column)
         Text(
-            text = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "…",
+            text = if (trip.endTs != null) formatDuration(ctx, trip.startTs, trip.endTs) else "…",
             color = TextMuted, fontSize = 12.sp, fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
@@ -309,6 +313,7 @@ fun ChargeCard(
     modifier: Modifier = Modifier,
     currencySymbol: String = "BYN"
 ) {
+    val ctx = androidx.compose.ui.platform.LocalContext.current
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
@@ -363,7 +368,7 @@ fun ChargeCard(
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (charge.endTs != null) {
-                    Text(text = formatDuration(charge.startTs, charge.endTs), color = TextSecondary, fontSize = 14.sp)
+                    Text(text = formatDuration(ctx, charge.startTs, charge.endTs), color = TextSecondary, fontSize = 14.sp)
                 }
 
                 if (charge.avgPowerKw != null) {
@@ -402,22 +407,22 @@ fun SummaryRow(
     ) {
         SummaryStatBox(
             value = "%.1f".format(totalKm),
-            unit = "км",
-            label = "Пробег",
+            unit = stringResource(R.string.summary_unit_km),
+            label = stringResource(R.string.summary_label_mileage),
             valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
         SummaryStatBox(
             value = "%.1f".format(totalKwh),
-            unit = "кВт·ч",
-            label = "Энергия",
+            unit = stringResource(R.string.summary_unit_kwh),
+            label = stringResource(R.string.summary_label_energy),
             valueColor = TextPrimary,
             modifier = Modifier.weight(1f)
         )
         SummaryStatBox(
             value = "%.1f".format(avgKwhPer100km),
-            unit = "кВт·ч/100км",
-            label = "Расход",
+            unit = stringResource(R.string.summary_unit_kwh_per_100km),
+            label = stringResource(R.string.summary_label_consumption),
             valueColor = consumptionColor(avgKwhPer100km),
             modifier = Modifier.weight(1f)
         )
@@ -425,7 +430,7 @@ fun SummaryRow(
             SummaryStatBox(
                 value = "%.0f".format(totalCost),
                 unit = currencySymbol,
-                label = "Стоимость",
+                label = stringResource(R.string.summary_label_cost),
                 valueColor = AccentGreen,
                 modifier = Modifier.weight(1f)
             )

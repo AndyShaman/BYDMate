@@ -34,12 +34,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
+import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
@@ -124,7 +126,7 @@ fun ChargeEditDialog(
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Text(
-                        "Изменить зарядку",
+                        stringResource(R.string.charges_edit_dialog_title),
                         color = TextPrimary,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
@@ -133,7 +135,7 @@ fun ChargeEditDialog(
                     // Type radio
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Тип:",
+                            stringResource(R.string.charges_edit_type_label),
                             color = TextSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.width(80.dp)
@@ -190,7 +192,7 @@ fun ChargeEditDialog(
                     // otherwise editable (DC fallback when station shows kWh but SOC is unknown).
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "кВт·ч:",
+                            stringResource(R.string.charges_edit_kwh_label),
                             color = TextSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.width(80.dp)
@@ -210,7 +212,7 @@ fun ChargeEditDialog(
                         )
                         if (!kwhEditable) {
                             Text(
-                                "из SOC × ${"%.1f".format(batteryCapacityKwh)} кВт·ч",
+                                stringResource(R.string.charges_edit_kwh_from_soc, batteryCapacityKwh),
                                 color = TextMuted,
                                 fontSize = 11.sp,
                                 modifier = Modifier.padding(start = 8.dp)
@@ -221,7 +223,7 @@ fun ChargeEditDialog(
                     // Tariff per kWh
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "$currencySymbol/кВт·ч:",
+                            stringResource(R.string.charges_edit_tariff_label, currencySymbol),
                             color = TextSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.width(80.dp)
@@ -242,7 +244,7 @@ fun ChargeEditDialog(
                     // Cost — computed read-only preview
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            "Стоимость:",
+                            stringResource(R.string.charges_edit_cost_label),
                             color = TextSecondary,
                             fontSize = 13.sp,
                             modifier = Modifier.width(80.dp)
@@ -263,7 +265,7 @@ fun ChargeEditDialog(
                         horizontalArrangement = Arrangement.End
                     ) {
                         TextButton(onClick = onDismiss) {
-                            Text("Отмена", color = TextSecondary, fontSize = 14.sp)
+                            Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
                         }
                         Spacer(modifier = Modifier.width(8.dp))
                         Button(
@@ -283,7 +285,7 @@ fun ChargeEditDialog(
                             colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
                         ) {
                             Text(
-                                "Сохранить",
+                                stringResource(R.string.charges_edit_save_button),
                                 color = NavyDark,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold

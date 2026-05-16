@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
@@ -36,6 +37,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Before
 import org.junit.Test
+import io.mockk.mockk
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -141,6 +143,7 @@ class DashboardViewModelTest {
         override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
         override suspend fun readChargingSnapshot(): ChargingReading? = null
+        override suspend fun getEnginePowerKw(): Int? = null
     }
 
     // --- Factory ---
@@ -152,7 +155,7 @@ class DashboardViewModelTest {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
         val settingsDao = FakeSettingsDao(autoserviceEnabled)
-        val settingsRepo = SettingsRepository(settingsDao)
+        val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
         val tripPointDao = StubTripPointDao()
@@ -167,6 +170,7 @@ class DashboardViewModelTest {
         val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
 
         return DashboardViewModel(
+            appContext = ctx,
             tripRepository = tripRepo,
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,

@@ -1,7 +1,9 @@
 package com.bydmate.app.data.charging
 
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.repository.SettingsRepository
+import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -22,7 +24,7 @@ class ChargingStateStoreTest {
 
     private fun store(initial: Map<String, String> = emptyMap()): ChargingStateStore {
         val dao = FakeSettingsDao(initial)
-        val settings = SettingsRepository(dao)
+        val settings = SettingsRepository(dao, mockk(relaxed = true))
         return ChargingStateStore(settings)
     }
 
@@ -65,7 +67,7 @@ class ChargingStateStoreTest {
         // v2.4.18 the baseline lives on its own key (KEY_CHARGING_BASELINE_SOC)
         // and survives polling writes on KEY_LAST_KNOWN_SOC.
         val dao = FakeSettingsDao()
-        val settings = SettingsRepository(dao)
+        val settings = SettingsRepository(dao, mockk(relaxed = true))
         val s = ChargingStateStore(settings)
         s.save(socPercent = 80, mileageKm = 100f, capacityKwh = 5f, ts = 1000L)
         // Simulate live polling overwriting the last-known SOC as SOC climbs.

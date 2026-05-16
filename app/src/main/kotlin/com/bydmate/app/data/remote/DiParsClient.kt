@@ -120,7 +120,7 @@ open class DiParsClient @Inject constructor(
         }
     }
 
-    private fun parse(raw: String): DiParsData {
+    internal fun parse(raw: String): DiParsData {
         val map = mutableMapOf<String, String>()
         raw.split("|").forEach { part ->
             val colonIdx = part.indexOf(':')
@@ -146,9 +146,21 @@ open class DiParsClient @Inject constructor(
             else -> v12Raw                       // already in volts
         }
 
-        Log.d(TAG, "Raw DiPlus: MaxCellV=${map["MaxCellV"]}, MinCellV=${map["MinCellV"]}, " +
-            "Voltage12V=${map["Voltage12V"]}, ExtTemp=${map["ExtTemp"]}, " +
-            "BatCapacity=${map["BatCapacity"]}, AvgBatTemp=${map["AvgBatTemp"]}")
+        // Sentinel guard: on some models (Song Plus, issue #19) DiPlus returns
+        // bogus values like -2000 for unavailable temperatures. Drop anything
+        // outside physically plausible ranges.
+        fun Int?.cabin() = this?.takeIf { it in -50..80 }
+        fun Int?.batTemp() = this?.takeIf { it in -40..80 }
+
+        // Raw debug line dumps the source values BEFORE sanitization so that
+        // a recorded log file from any car shows exactly what DiPlus emitted.
+        Log.d(TAG, "Raw DiPlus: SOC=${map["SOC"]}, Speed=${map["Speed"]}, Mileage=${map["Mileage"]}, " +
+            "Gear=${map["Gear"]}, Power=${map["Power"]}, ChargeGun=${map["ChargeGun"]}, " +
+            "InsideTemp=${map["InsideTemp"]}, ExtTemp=${map["ExtTemp"]}, " +
+            "MaxBatTemp=${map["MaxBatTemp"]}, AvgBatTemp=${map["AvgBatTemp"]}, MinBatTemp=${map["MinBatTemp"]}, " +
+            "ACStatus=${map["ACStatus"]}, ACTemp=${map["ACTemp"]}, FanLevel=${map["FanLevel"]}, " +
+            "MaxCellV=${map["MaxCellV"]}, MinCellV=${map["MinCellV"]}, Voltage12V=${map["Voltage12V"]}, " +
+            "BatCapacity=${map["BatCapacity"]}, TotalElecCon=${map["TotalElecCon"]}")
         Log.d(TAG, "Parsed: maxCell=$maxCell, minCell=$minCell, v12=$v12")
 
         return DiParsData(
@@ -157,19 +169,19 @@ open class DiParsClient @Inject constructor(
             mileage = map["Mileage"]?.toDoubleOrNull()?.let { it / 10.0 },
             power = map["Power"]?.toDoubleOrNull(),
             chargeGunState = map["ChargeGun"]?.toIntOrNull(),
-            maxBatTemp = map["MaxBatTemp"]?.toIntOrNull(),
-            avgBatTemp = map["AvgBatTemp"]?.toIntOrNull(),
-            minBatTemp = map["MinBatTemp"]?.toIntOrNull(),
+            maxBatTemp = map["MaxBatTemp"]?.toIntOrNull().batTemp(),
+            avgBatTemp = map["AvgBatTemp"]?.toIntOrNull().batTemp(),
+            minBatTemp = map["MinBatTemp"]?.toIntOrNull().batTemp(),
             chargingStatus = map["ChargingStatus"]?.toIntOrNull(),
             batteryCapacityKwh = map["BatCapacity"]?.toDoubleOrNull(),
             totalElecConsumption = map["TotalElecCon"]?.toDoubleOrNull(),
             voltage12v = v12,
             maxCellVoltage = maxCell,
             minCellVoltage = minCell,
-            exteriorTemp = map["ExtTemp"]?.toIntOrNull(),
+            exteriorTemp = map["ExtTemp"]?.toIntOrNull().cabin(),
             gear = map["Gear"]?.toIntOrNull(),
             powerState = map["PowerState"]?.toIntOrNull(),
-            insideTemp = map["InsideTemp"]?.toIntOrNull(),
+            insideTemp = map["InsideTemp"]?.toIntOrNull().cabin(),
             acStatus = map["ACStatus"]?.toIntOrNull(),
             acTemp = map["ACTemp"]?.toIntOrNull(),
             fanLevel = map["FanLevel"]?.toIntOrNull(),

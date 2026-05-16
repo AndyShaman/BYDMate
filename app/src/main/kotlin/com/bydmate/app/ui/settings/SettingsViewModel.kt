@@ -4,12 +4,15 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Environment
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
+import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.InsightsManager
@@ -19,6 +22,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
+import com.bydmate.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +37,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.bydmate.app.service.BootReceiver
+import com.bydmate.app.ui.widget.WidgetController
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -119,7 +124,12 @@ data class SettingsUiState(
     val dataSource: String = SettingsRepository.DataSource.DIPLUS.name,
     val dataSourceStatus: String? = null,
     val autoserviceEnabled: Boolean = false,
-    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled
+    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled,
+    val abrpTelemetryEnabled: Boolean = false,
+    val abrpApiKey: String = "",
+    val abrpUserToken: String = "",
+    val abrpCarModel: String = "",
+    val abrpSaveStatus: String? = null,
 )
 
 @HiltViewModel
@@ -135,8 +145,22 @@ class SettingsViewModel @Inject constructor(
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
-    private val batteryStateRepository: BatteryStateRepository
+    private val batteryStateRepository: BatteryStateRepository,
+    private val localePreferences: LocalePreferences
 ) : ViewModel() {
+
+    private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
+    val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    fun setAppLanguage(lang: String) {
+        localePreferences.setLanguage(lang)
+        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang))
+        _appLanguage.value = lang
+        // Force overlay teardown so the next attach picks up the new locale.
+        // applicationContext keeps a stale Configuration after setApplicationLocales,
+        // which leaves the floating widget rendering against the old language.
+        WidgetController.relocale()
+    }
 
     private val _uiState = MutableStateFlow(SettingsUiState(
         appVersion = getVersion(),
@@ -204,6 +228,11 @@ class SettingsViewModel @Inject constructor(
 
             val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
 
+            val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
+            val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
+            val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
+            val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+
             _uiState.update {
                 it.copy(
                     batteryCapacity = capacity,
@@ -229,6 +258,10 @@ class SettingsViewModel @Inject constructor(
                     isHybridProfile = vehicleProfile.isHybrid,
                     dataSource = dataSource,
                     autoserviceEnabled = autoserviceEnabled,
+                    abrpTelemetryEnabled = abrpEnabled,
+                    abrpApiKey = abrpApiKey,
+                    abrpUserToken = abrpUserToken,
+                    abrpCarModel = abrpCarModel,
                 )
             }
 
@@ -275,11 +308,11 @@ class SettingsViewModel @Inject constructor(
     fun setDataSource(value: String) {
         if (value == _uiState.value.dataSource) return
         val target = runCatching { SettingsRepository.DataSource.valueOf(value) }.getOrNull() ?: return
-        _uiState.update { it.copy(dataSource = value, dataSourceStatus = "Переключение...") }
+        _uiState.update { it.copy(dataSource = value, dataSourceStatus = appContext.getString(R.string.settings_datasource_switching)) }
         viewModelScope.launch {
             settingsRepository.setDataSource(target)
             val r = historyImporter.runSync()
-            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: "Готово") }
+            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: appContext.getString(R.string.settings_datasource_done)) }
         }
     }
 
@@ -334,7 +367,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, state.fuelPricePerLiter)
             val tariff = settingsRepository.getTripCostTariff()
             historyImporter.calculateMissingCosts(tariff)
-            _uiState.update { it.copy(tariffSaveStatus = "Сохранено") }
+            _uiState.update { it.copy(tariffSaveStatus = appContext.getString(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(tariffSaveStatus = null) }
         }
@@ -359,7 +392,11 @@ class SettingsViewModel @Inject constructor(
                 ))
                 count++
             }
-            _uiState.update { it.copy(recalcStatus = "Обновлено Di+: $enriched, пересчитано: $count") }
+            _uiState.update {
+                it.copy(
+                    recalcStatus = "${appContext.getString(R.string.settings_recalc_done, count)} · Di+: $enriched"
+                )
+            }
             delay(3000)
             _uiState.update { it.copy(recalcStatus = null) }
         }
@@ -404,7 +441,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportCsv() {
         viewModelScope.launch {
-            _uiState.update { it.copy(exportStatus = "Экспорт...") }
+            _uiState.update { it.copy(exportStatus = appContext.getString(R.string.settings_export_in_progress)) }
 
             try {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(
@@ -458,12 +495,12 @@ class SettingsViewModel @Inject constructor(
                 val chargeCount = charges.size
                 _uiState.update {
                     it.copy(
-                        exportStatus = "Экспортировано: $tripCount поездок, $chargeCount зарядок\n→ ${downloadsDir.absolutePath}"
+                        exportStatus = appContext.getString(R.string.settings_export_done, tripCount, chargeCount) + "\n-> ${downloadsDir.absolutePath}"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(exportStatus = "Ошибка: ${e.message}")
+                    it.copy(exportStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -478,7 +515,7 @@ class SettingsViewModel @Inject constructor(
     fun importBydHistory() {
         viewModelScope.launch {
             _uiState.update { it.copy(importStatus = "Импорт...") }
-            val result = historyImporter.forceImport()
+            val result = historyImporter.runSync()
             if (result.isError) {
                 _uiState.update {
                     it.copy(importStatus = "Ошибка: ${result.error}")
@@ -636,16 +673,18 @@ class SettingsViewModel @Inject constructor(
         val apiKey = _uiState.value.openRouterApiKey
         val model = _uiState.value.openRouterModel
         if (apiKey.isBlank() || model.isBlank()) {
-            _uiState.update { it.copy(aiSaveStatus = "Укажите API-ключ и модель") }
+            _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_no_key_model)) }
             return
         }
-        _uiState.update { it.copy(aiSaveStatus = "Загрузка инсайта...") }
+        // "Загрузка инсайта..." is a programmatic state key used in SettingsScreen for comparison
+        // AND as display text; keep in sync with R.string.settings_ai_loading_label
+        _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_loading_label)) }
         viewModelScope.launch {
             val insight = insightsManager.refresh()
             if (insight != null) {
-                _uiState.update { it.copy(aiSaveStatus = "Готово! Переключитесь на Главную") }
+                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_done)) }
             } else {
-                _uiState.update { it.copy(aiSaveStatus = "Ошибка получения инсайта") }
+                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_fetch_error)) }
             }
         }
     }
@@ -681,7 +720,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_ALICE_API_KEY, state.aliceApiKey)
             val enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank()
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = "Сохранено") }
+            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = appContext.getString(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(aliceSaveStatus = null) }
         }
@@ -691,6 +730,48 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(aliceEnabled = enabled) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
+        }
+    }
+
+    fun toggleAbrpTelemetry(enabled: Boolean) {
+        // Switching ON without a user token is meaningless — Iternio rejects the
+        // call and we'd just spam failed requests. UI also gates on this flag,
+        // but enforce here so programmatic callers can't bypass it.
+        val effective = enabled && _uiState.value.abrpUserToken.isNotBlank()
+        _uiState.update { it.copy(abrpTelemetryEnabled = effective) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, effective.toString())
+        }
+    }
+
+    fun updateAbrpApiKey(value: String) {
+        _uiState.update { it.copy(abrpApiKey = value) }
+    }
+
+    fun updateAbrpUserToken(value: String) {
+        _uiState.update { it.copy(abrpUserToken = value) }
+    }
+
+    fun updateAbrpCarModel(value: String) {
+        _uiState.update { it.copy(abrpCarModel = value) }
+    }
+
+    fun saveAbrpSettings() {
+        val state = _uiState.value
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_API_KEY, state.abrpApiKey.trim())
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_USER_TOKEN, state.abrpUserToken.trim())
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_CAR_MODEL, state.abrpCarModel.trim())
+            val enabled = state.abrpTelemetryEnabled && state.abrpUserToken.isNotBlank()
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, enabled.toString())
+            _uiState.update {
+                it.copy(
+                    abrpTelemetryEnabled = enabled,
+                    abrpSaveStatus = appContext.getString(R.string.settings_saved),
+                )
+            }
+            delay(2000)
+            _uiState.update { it.copy(abrpSaveStatus = null) }
         }
     }
 
@@ -717,6 +798,80 @@ class SettingsViewModel @Inject constructor(
         private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
     }
 
+    /**
+     * Writes a diagnostic header to the recording file before piping logcat.
+     * Captures app / device / setting context that issue reports (e.g. #19)
+     * routinely lack: which battery capacity the user typed (raw + parsed,
+     * which surfaces the comma-decimal bug immediately), which data source mode
+     * is selected, whether autoservice / ABRP are configured, and whether the
+     * underlying BYD energydata / DiPlus databases are reachable.
+     */
+    private suspend fun writeDiagnosticHeader(file: File) = withContext(Dispatchers.IO) {
+        // Build the header. Each piece is independently caught so a single
+        // failing getter doesn't drop the whole header.
+        val header = buildString {
+            appendLine("=== BYDMate diagnostic dump ===")
+            try {
+                val pkg = appContext.packageName
+                val pi = appContext.packageManager.getPackageInfo(pkg, 0)
+                val versionName = pi.versionName ?: "?"
+                val versionCode = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P)
+                    pi.longVersionCode.toString()
+                else
+                    @Suppress("DEPRECATION") pi.versionCode.toString()
+                appendLine("timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+                appendLine("app: $pkg v$versionName (code=$versionCode)")
+                appendLine("device: ${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}")
+                appendLine("android: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})")
+                appendLine("fingerprint: ${android.os.Build.FINGERPRINT}")
+                appendLine("locale: jvm=${Locale.getDefault().toLanguageTag()} app=${localePreferences.getLanguage() ?: "(unset)"}")
+            } catch (e: Exception) {
+                appendLine("(failed to gather app/device metadata: ${e.message})")
+            }
+
+            appendLine("--- settings ---")
+            try {
+                val dataSource = settingsRepository.getDataSource().name
+                val capacityRaw = settingsRepository.getString(SettingsRepository.KEY_BATTERY_CAPACITY, "")
+                val capacityParsed = settingsRepository.getBatteryCapacity()
+                val autoservice = settingsRepository.isAutoserviceEnabled()
+                val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
+                val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
+                val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+                appendLine("data_source: $dataSource")
+                appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
+                appendLine("autoservice_enabled: $autoservice")
+                appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
+            } catch (e: Exception) {
+                appendLine("(failed to gather settings: ${e.message})")
+            }
+
+            appendLine("--- vehicle data sources ---")
+            try {
+                val energyDb = File("/storage/emulated/0/energydata")
+                val diplusDb = File("/storage/emulated/0/vandiplus/db/van_bm_db")
+                appendLine("energydata dir: exists=${energyDb.exists()} isDir=${energyDb.isDirectory}")
+                if (energyDb.exists() && energyDb.isDirectory) {
+                    val files = energyDb.listFiles()
+                    if (files == null) {
+                        appendLine("  listFiles: null (permission?)")
+                    } else {
+                        files.forEach { appendLine("  ${it.name} (${it.length()}B, mtime=${it.lastModified()})") }
+                    }
+                }
+                appendLine("DiPlus van_bm_db: exists=${diplusDb.exists()} size=${if (diplusDb.exists()) diplusDb.length() else 0}B mtime=${if (diplusDb.exists()) diplusDb.lastModified() else 0}")
+            } catch (e: Exception) {
+                appendLine("(failed to gather vehicle data sources: ${e.message})")
+            }
+            appendLine("===============================")
+            appendLine()
+        }
+
+        // File-write failures must surface so the user sees a meaningful
+        // error instead of a "запись начата" status next to an empty file.
+        FileWriter(file, false).use { it.write(header) }
+    }
+
     fun startLogRecording() {
         viewModelScope.launch(Dispatchers.IO) {
             try {
@@ -732,32 +887,44 @@ class SettingsViewModel @Inject constructor(
                 }
 
                 if (saveDir == null) {
-                    _uiState.update { it.copy(logSaveStatus = "Ошибка: нет доступа к файловой системе") }
+                    _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_log_error_no_fs_access)) }
                     return@launch
                 }
 
                 logFile = File(saveDir, fileName)
+
+                // Diagnostic header — written directly to the file before the
+                // logcat pipe so issue #19-style reports include device / setting
+                // context up front instead of being buried in logcat noise.
+                writeDiagnosticHeader(logFile!!)
 
                 // Clear logcat buffer and start continuous recording
                 Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
 
                 logProcess = Runtime.getRuntime().exec(arrayOf(
                     "logcat", "-v", "time",
-                    "-s", "BootReceiver:*", "SilentStartActivity:*",
+                    "-s", "BootReceiver:*",
                     "DiParsClient:*", "TrackingService:*", "TripTracker:*",
                     "DiPlusDbReader:*",
-                    "HistoryImporter:*", "EnergyDataReader:*"
+                    "HistoryImporter:*", "EnergyDataReader:*",
+                    "AutoserviceClient:*", "AdbOnDeviceClient:*",
+                    "IternioTelemetryClient:*", "BatteryHealthRepository:*",
+                    "ChargesViewModel:*", "ChargeRepository:*"
                 ))
 
-                // Background thread to pipe logcat to file with size limit
+                // Background thread to pipe logcat to file with size limit.
+                // Open in append mode so the diagnostic header written by
+                // writeDiagnosticHeader() is preserved instead of overwritten.
                 Thread {
                     try {
                         logProcess?.inputStream?.bufferedReader()?.use { reader ->
-                            logFile?.bufferedWriter()?.use { writer ->
+                            val target = logFile ?: return@Thread
+                            java.io.FileOutputStream(target, /* append = */ true)
+                                .bufferedWriter().use { writer ->
                                 var line = reader.readLine()
                                 while (line != null) {
                                     // Stop if file exceeds size limit
-                                    if ((logFile?.length() ?: 0) > LOG_MAX_SIZE_BYTES) {
+                                    if (target.length() > LOG_MAX_SIZE_BYTES) {
                                         writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
                                         writer.newLine()
                                         break
@@ -779,10 +946,10 @@ class SettingsViewModel @Inject constructor(
                 }
 
                 _uiState.update {
-                    it.copy(isRecordingLogs = true, logSaveStatus = "Запись (авто-стоп через 2ч)... → ${logFile?.absolutePath}")
+                    it.copy(isRecordingLogs = true, logSaveStatus = appContext.getString(R.string.settings_log_recording_started, logFile?.absolutePath ?: "?"))
                 }
             } catch (e: Exception) {
-                _uiState.update { it.copy(logSaveStatus = "Ошибка: ${e.message}") }
+                _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")) }
             }
         }
     }
@@ -801,12 +968,12 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         isRecordingLogs = false,
-                        logSaveStatus = "Сохранено: ${file?.absolutePath} (${sizeKb} КБ)"
+                        logSaveStatus = appContext.getString(R.string.settings_log_saved, file?.absolutePath ?: "?", sizeKb)
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isRecordingLogs = false, logSaveStatus = "Ошибка: ${e.message}")
+                    it.copy(isRecordingLogs = false, logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -828,7 +995,7 @@ class SettingsViewModel @Inject constructor(
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = "Проверка...") }
+            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = appContext.getString(R.string.settings_update_check_in_progress)) }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
@@ -838,14 +1005,14 @@ class SettingsViewModel @Inject constructor(
                                 version = update.version,
                                 notes = update.releaseNotes ?: ""
                             ),
-                            updateStatus = "Доступна v${update.version}"
+                            updateStatus = appContext.getString(R.string.settings_update_available_short, update.version)
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             updateDialogState = UpdateState.UpToDate,
-                            updateStatus = "Установлена последняя версия"
+                            updateStatus = appContext.getString(R.string.settings_update_up_to_date)
                         )
                     }
                 }
@@ -853,7 +1020,7 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         updateDialogState = UpdateState.Error(e.message ?: "Unknown error"),
-                        updateStatus = "Ошибка: ${e.message}"
+                        updateStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")
                     )
                 }
             }
@@ -866,7 +1033,7 @@ class SettingsViewModel @Inject constructor(
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
                     _uiState.update {
-                        it.copy(updateDialogState = UpdateState.Downloading(update.version, "Скачивание: 0%"))
+                        it.copy(updateDialogState = UpdateState.Downloading(update.version, appContext.getString(R.string.update_downloading_start)))
                     }
                     updateChecker.downloadAndInstall(appContext, update) { progress ->
                         _uiState.update {

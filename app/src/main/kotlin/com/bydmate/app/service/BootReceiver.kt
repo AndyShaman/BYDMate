@@ -7,9 +7,6 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /**
  * Auto-start on boot — uses WorkManager (like BydConnect).
@@ -43,12 +40,12 @@ class BootReceiver : BroadcastReceiver() {
         if (intent.action !in validActions) return
 
         Log.i(TAG, "Boot/user event: ${intent.action}")
-        appendChainLog(context, "BootReceiver: ${intent.action}")
+        ChainLog.append(context, "BootReceiver: ${intent.action}")
 
         // Skip USER_PRESENT if service is already running
         if (intent.action == Intent.ACTION_USER_PRESENT && TrackingService.isRunning.value) {
             Log.d(TAG, "Service already running, ignoring USER_PRESENT")
-            appendChainLog(context, "USER_PRESENT skipped (service running)")
+            ChainLog.append(context, "USER_PRESENT skipped (service running)")
             return
         }
 
@@ -63,22 +60,22 @@ class BootReceiver : BroadcastReceiver() {
                 request
             )
             updateBootMethod(context, "WorkManager")
-            appendChainLog(context, "WorkManager enqueued OK")
+            ChainLog.append(context, "WorkManager enqueued OK")
             Log.i(TAG, "WorkManager enqueued ServiceStartWorker")
         } catch (e: Exception) {
             Log.e(TAG, "WorkManager enqueue failed: ${e.message}", e)
-            appendChainLog(context, "WorkManager FAILED: ${e.message}")
+            ChainLog.append(context, "WorkManager FAILED: ${e.message}")
             updateBootMethod(context, "FAILED: ${e.message}")
 
             // Last resort fallback: direct start
             try {
                 TrackingService.start(context)
                 updateBootMethod(context, "DirectFallback")
-                appendChainLog(context, "DirectFallback OK")
+                ChainLog.append(context, "DirectFallback OK")
                 Log.i(TAG, "Direct startForegroundService fallback OK")
             } catch (e2: Exception) {
                 updateBootMethod(context, "FAILED: ${e2.message}")
-                appendChainLog(context, "DirectFallback FAILED: ${e2.message}")
+                ChainLog.append(context, "DirectFallback FAILED: ${e2.message}")
                 Log.e(TAG, "All start methods failed: ${e2.message}", e2)
             }
         }
@@ -105,19 +102,4 @@ class BootReceiver : BroadcastReceiver() {
         }
     }
 
-    /** Append timestamped entry to chain log (persists in SharedPreferences, survives logcat rollover) */
-    fun appendChainLog(context: Context, entry: String) {
-        try {
-            val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-            val ts = sdf.format(Date())
-            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            val existing = prefs.getString(KEY_CHAIN_LOG, "") ?: ""
-            // Keep last 20 entries max
-            val lines = existing.lines().takeLast(19)
-            val updated = (lines + "$ts $entry").joinToString("\n")
-            prefs.edit().putString(KEY_CHAIN_LOG, updated).apply()
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to append chain log: ${e.message}")
-        }
-    }
 }

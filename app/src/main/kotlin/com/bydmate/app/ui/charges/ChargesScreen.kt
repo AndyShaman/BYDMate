@@ -43,6 +43,7 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -50,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.R
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.ui.theme.*
@@ -97,13 +99,13 @@ fun ChargesScreen(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 modifier = Modifier.weight(1f),
             ) {
-                ChargesChip("День", state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
-                ChargesChip("Нед", state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
-                ChargesChip("Мес", state.period == ChargesPeriod.MONTH) { viewModel.setPeriod(ChargesPeriod.MONTH) }
-                ChargesChip("Год", state.period == ChargesPeriod.YEAR) { viewModel.setPeriod(ChargesPeriod.YEAR) }
-                ChargesChip("Всё", state.period == ChargesPeriod.ALL) { viewModel.setPeriod(ChargesPeriod.ALL) }
+                ChargesChip(stringResource(R.string.dashboard_period_day), state.period == ChargesPeriod.TODAY) { viewModel.setPeriod(ChargesPeriod.TODAY) }
+                ChargesChip(stringResource(R.string.dashboard_period_week), state.period == ChargesPeriod.WEEK) { viewModel.setPeriod(ChargesPeriod.WEEK) }
+                ChargesChip(stringResource(R.string.dashboard_period_month), state.period == ChargesPeriod.MONTH) { viewModel.setPeriod(ChargesPeriod.MONTH) }
+                ChargesChip(stringResource(R.string.dashboard_period_year), state.period == ChargesPeriod.YEAR) { viewModel.setPeriod(ChargesPeriod.YEAR) }
+                ChargesChip(stringResource(R.string.dashboard_period_all), state.period == ChargesPeriod.ALL) { viewModel.setPeriod(ChargesPeriod.ALL) }
                 Spacer(modifier = Modifier.width(12.dp))
-                ChargesChip("Все", state.typeFilter == ChargeTypeFilter.ALL) { viewModel.setTypeFilter(ChargeTypeFilter.ALL) }
+                ChargesChip(stringResource(R.string.charges_filter_all), state.typeFilter == ChargeTypeFilter.ALL) { viewModel.setTypeFilter(ChargeTypeFilter.ALL) }
                 ChargesChip("AC", state.typeFilter == ChargeTypeFilter.AC) { viewModel.setTypeFilter(ChargeTypeFilter.AC) }
                 ChargesChip("DC", state.typeFilter == ChargeTypeFilter.DC) { viewModel.setTypeFilter(ChargeTypeFilter.DC) }
             }
@@ -114,7 +116,7 @@ fun ChargesScreen(
                     .padding(horizontal = 12.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+ зарядка", color = NavyDark, fontSize = 13.sp,
+                Text(stringResource(R.string.charges_add_button), color = NavyDark, fontSize = 13.sp,
                     fontWeight = FontWeight.SemiBold)
             }
         }
@@ -129,7 +131,7 @@ fun ChargesScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        "Нет зарядок за выбранный период",
+                        stringResource(R.string.charges_empty),
                         color = TextSecondary,
                         fontSize = 14.sp
                     )
@@ -221,18 +223,18 @@ fun ChargesScreen(
         state.deleteConfirmCharge?.let { charge ->
             AlertDialog(
                 onDismissRequest = { viewModel.onDismissDeleteConfirm() },
-                title = { Text("Удалить зарядку?") },
+                title = { Text(stringResource(R.string.charges_delete_dialog_title)) },
                 text = {
-                    Text("${charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"} кВт·ч • восстановить будет нельзя.")
+                    Text(stringResource(R.string.charges_delete_dialog_text, charge.kwhCharged?.let { "%.1f".format(it) } ?: "-"))
                 },
                 confirmButton = {
                     TextButton(onClick = { viewModel.onConfirmDelete() }) {
-                        Text("Удалить", color = SocRed)
+                        Text(stringResource(R.string.charges_action_delete), color = SocRed)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { viewModel.onDismissDeleteConfirm() }) {
-                        Text("Отмена")
+                        Text(stringResource(R.string.settings_cancel_button))
                     }
                 },
                 containerColor = CardSurface,
@@ -269,13 +271,13 @@ private fun ChargeActionSheet(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Изменить", color = TextPrimary, fontSize = 16.sp)
+                Text(stringResource(R.string.charges_action_edit), color = TextPrimary, fontSize = 16.sp)
             }
             Row(
                 modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Text("Удалить", color = SocRed, fontSize = 16.sp)
+                Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
             }
             Spacer(modifier = Modifier.height(8.dp))
         }
@@ -295,7 +297,7 @@ private fun OnboardingEmptyState(onNavigateSettings: () -> Unit) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = "Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки — включи «Системные данные» в Настройках.",
+                text = stringResource(R.string.charges_onboarding_empty_text),
                 color = TextSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
@@ -309,7 +311,7 @@ private fun OnboardingEmptyState(onNavigateSettings: () -> Unit) {
                     contentColor = NavyDark
                 )
             ) {
-                Text("Перейти в Настройки", fontWeight = FontWeight.SemiBold)
+                Text(stringResource(R.string.charges_go_to_settings_button), fontWeight = FontWeight.SemiBold)
             }
         }
     }
@@ -325,7 +327,7 @@ private fun SentinelEmptyState() {
                 .padding(horizontal = 32.dp, vertical = 60.dp)
         ) {
             Text(
-                text = "На вашей модели машины статистика зарядок недоступна — диагностические данные не читаются. SoH тоже не показывается.",
+                text = stringResource(R.string.charges_sentinel_empty_text),
                 color = TextSecondary,
                 fontSize = 14.sp,
                 textAlign = TextAlign.Center,
@@ -350,14 +352,14 @@ private fun NotTrackingBanner(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = "Новые зарядки сейчас не отслеживаются.",
+            text = stringResource(R.string.charges_not_tracking_banner),
             color = SocYellow,
             fontSize = 12.sp,
             modifier = Modifier.weight(1f)
         )
         Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = "Включить →",
+            text = stringResource(R.string.charges_enable_tracking_button),
             color = AccentGreen,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium,
@@ -402,7 +404,7 @@ private fun ChargesMonthHeader(
                 modifier = Modifier.width(36.dp)
             )
             Text(
-                "%.1f кВт·ч".format(month.totalKwh),
+                stringResource(R.string.trips_kwh_decimal_value, month.totalKwh),
                 color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.End,
@@ -452,7 +454,7 @@ private fun ChargesDayHeader(
                 modifier = Modifier.width(36.dp)
             )
             Text(
-                "%.1f кВт·ч".format(day.totalKwh),
+                stringResource(R.string.trips_kwh_decimal_value, day.totalKwh),
                 color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.End,
@@ -478,9 +480,9 @@ private fun ChargesColumnHeaders(currencySymbol: String) {
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text("время", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(100.dp))
+        Text(stringResource(R.string.charges_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(100.dp))
         Text("SOC", color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(80.dp))
-        Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
+        Text(stringResource(R.string.charges_col_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
         Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
     }
     HorizontalDivider(
@@ -612,7 +614,7 @@ private fun ChargesStatsPanel(
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 8.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        SectionLabel("За выбранный период")
+        SectionLabel(stringResource(R.string.charges_stats_period_label))
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -620,14 +622,14 @@ private fun ChargesStatsPanel(
                 .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
-            StatRow("Сессий", "${periodSummary.sessionCount}", TextPrimary)
+            StatRow(stringResource(R.string.charges_stats_sessions), "${periodSummary.sessionCount}", TextPrimary)
             Spacer(modifier = Modifier.height(4.dp))
-            StatRow("кВт·ч", "%.1f".format(periodSummary.totalKwh), AccentGreen)
+            StatRow(stringResource(R.string.charges_col_kwh), "%.1f".format(periodSummary.totalKwh), AccentGreen)
             Spacer(modifier = Modifier.height(4.dp))
-            StatRow("Стоимость", "%.2f %s".format(periodSummary.totalCost, currencySymbol), TextPrimary)
+            StatRow(stringResource(R.string.charges_stats_cost), "%.2f %s".format(periodSummary.totalCost, currencySymbol), TextPrimary)
         }
 
-        SectionLabel("Lifetime (системные данные)")
+        SectionLabel(stringResource(R.string.charges_stats_lifetime_label))
         if (autoserviceEnabled && bmsLifetimeKwh != null) {
             val equiv = if (nominalCapacityKwh > 0) bmsLifetimeKwh / nominalCapacityKwh else 0.0
             val avgPer100 = if (bmsLifetimeKm != null && bmsLifetimeKm > 0)
@@ -639,19 +641,19 @@ private fun ChargesStatsPanel(
                     .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
                     .padding(horizontal = 10.dp, vertical = 8.dp)
             ) {
-                StatRow("Прокачано всего", "%.0f кВт·ч".format(bmsLifetimeKwh), AccentGreen)
+                StatRow(stringResource(R.string.charges_stats_pumped_total), stringResource(R.string.charges_kwh_value, bmsLifetimeKwh), AccentGreen)
                 Spacer(modifier = Modifier.height(4.dp))
-                StatRow("Эквив. циклов", "%.1f".format(equiv), TextPrimary)
+                StatRow(stringResource(R.string.charges_stats_equiv_cycles), "%.1f".format(equiv), TextPrimary)
                 Spacer(modifier = Modifier.height(4.dp))
                 StatRow(
-                    "Пробег BMS",
-                    bmsLifetimeKm?.let { "%.1f км".format(it) } ?: "—",
+                    stringResource(R.string.charges_stats_bms_mileage),
+                    bmsLifetimeKm?.let { stringResource(R.string.trips_km_decimal_value, it) } ?: "-",
                     TextPrimary
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 StatRow(
-                    "/100км lifetime",
-                    avgPer100?.let { "%.1f кВт·ч".format(it) } ?: "—",
+                    stringResource(R.string.charges_stats_per100km),
+                    avgPer100?.let { stringResource(R.string.trips_kwh_decimal_value, it) } ?: "-",
                     AccentBlue
                 )
             }
@@ -667,32 +669,32 @@ private fun ChargesStatsPanel(
         } else {
             PlaceholderBlock(
                 if (!autoserviceEnabled)
-                    "Включи «Системные данные» в Настройках, чтобы видеть пробег BMS и прокачано всего от машины."
+                    stringResource(R.string.charges_lifetime_enable_hint)
                 else
-                    "Жду первого ответа от машины…"
+                    stringResource(R.string.charges_lifetime_waiting)
             )
         }
 
-        SectionLabel("Динамика")
+        SectionLabel(stringResource(R.string.charges_stats_dynamics_label))
         if (cellDeltaSeries.size >= 3) {
             MiniLineChart(
                 series = cellDeltaSeries,
-                title = "Δ ячеек (В)",
+                title = stringResource(R.string.charges_chart_cell_delta_title),
                 lineColor = AccentBlue,
                 valueFormat = { "%.3f".format(it) }
             )
         } else {
-            ChartPlaceholder("Δ ячеек: будет показано после 3 завершённых зарядок (сейчас: ${cellDeltaSeries.size})")
+            ChartPlaceholder(stringResource(R.string.charges_chart_cell_delta_placeholder, cellDeltaSeries.size))
         }
         if (batTempSeries.size >= 3) {
             MiniLineChart(
                 series = batTempSeries,
-                title = "Темп. батареи (°C)",
+                title = stringResource(R.string.charges_chart_bat_temp_title),
                 lineColor = AccentOrange,
                 valueFormat = { "%.1f".format(it) }
             )
         } else {
-            ChartPlaceholder("Температура: будет показано после 3 завершённых зарядок (сейчас: ${batTempSeries.size})")
+            ChartPlaceholder(stringResource(R.string.charges_chart_bat_temp_placeholder, batTempSeries.size))
         }
     }
 }

@@ -2,6 +2,7 @@ package com.bydmate.app.ui.widget
 
 import android.content.Context
 import android.content.Intent
+import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
 import android.util.DisplayMetrics
@@ -18,12 +19,15 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
+import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import com.bydmate.app.R
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
@@ -45,11 +49,10 @@ object WidgetController {
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
     private const val LONG_PRESS_MS = 1500L
-    // Tap on the left third of the widget launches Yandex Navigator if
-    // installed; the right two thirds keep the historical behaviour
-    // (open BYDMate). Threshold uses the live view width, so it stays
-    // proportional across the 70-200% widget size range.
-    private const val YANDEX_NAVI_PACKAGE = "ru.yandex.yandexnavi"
+    // Tap on the left third of the widget launches the user-configured app
+    // (default Yandex Navigator) when zoning is enabled in WidgetPreferences;
+    // the right two thirds always open BYDMate. Threshold uses the live view
+    // width, so it stays proportional across the 70-200% widget size range.
     private const val LEFT_TAP_FRACTION = 1f / 3f
 
     @Volatile private var appForegrounded: Boolean = false
@@ -97,17 +100,24 @@ object WidgetController {
         // long-press hid widget until user opens MainActivity (preview wins)
         if (prefs.isHiddenUntilAppLaunch() && !previewMode) return
 
+        // AppCompatDelegate.setApplicationLocales does not always refresh the
+        // applicationContext's Configuration, so the overlay's ComposeView ends
+        // up resolving stringResource against a stale locale. Wrap appCtx with
+        // an explicit locale context so the widget always matches the user's
+        // chosen language.
+        val viewCtx = localizedContext(appCtx)
+
         val windowManager = appCtx.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = windowManager
 
         prefsAlphaFlow = prefs.alphaFlow()
         prefsScaleFlow = prefs.scaleFlow()
-        val metrics = appCtx.resources.displayMetrics
+        val metrics = viewCtx.resources.displayMetrics
 
         val initialScale = prefs.getScale()
         scaleState.value = initialScale
-        val widgetWpx = (dp(appCtx, WIDGET_WIDTH_DP) * initialScale).toInt()
-        val widgetHpx = (dp(appCtx, WIDGET_HEIGHT_DP) * initialScale).toInt()
+        val widgetWpx = (dp(viewCtx, WIDGET_WIDTH_DP) * initialScale).toInt()
+        val widgetHpx = (dp(viewCtx, WIDGET_HEIGHT_DP) * initialScale).toInt()
         currentWidgetWpx = widgetWpx
         currentWidgetHpx = widgetHpx
         val (startX, startY) = resolveStartPosition(prefs, metrics, widgetWpx, widgetHpx)
@@ -133,7 +143,7 @@ object WidgetController {
         val lifecycleOwner = OverlayLifecycleOwner().also { it.onCreate() }
         widgetLifecycle = lifecycleOwner
 
-        val compose = ComposeView(appCtx).apply {
+        val compose = ComposeView(viewCtx).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -152,7 +162,7 @@ object WidgetController {
                     scaleFactor = scaleState.value,
                 )
             }
-            setOnTouchListener(WidgetTouchListener(appCtx, prefs, metrics))
+            setOnTouchListener(WidgetTouchListener(viewCtx, prefs, metrics))
         }
         widgetView = compose
 
@@ -416,6 +426,25 @@ object WidgetController {
         }
     }
 
+    /**
+     * Called from SettingsViewModel after the user switches app language.
+     * Detaches the overlay so the next attach (driven by ActivityLifecycle
+     * callbacks when the user leaves Settings) recreates ComposeView against
+     * the freshly-localized Configuration context.
+     */
+    @Synchronized
+    fun relocale() {
+        if (widgetView != null) detach()
+    }
+
+    private fun localizedContext(appCtx: Context): Context {
+        val lang = LocalePreferences(appCtx).getLanguage() ?: return appCtx
+        val config = Configuration(appCtx.resources.configuration).apply {
+            setLocale(Locale.forLanguageTag(lang))
+        }
+        return appCtx.createConfigurationContext(config)
+    }
+
     private fun dp(context: Context, dp: Int): Int =
         (dp * context.resources.displayMetrics.density).toInt()
 
@@ -466,7 +495,7 @@ object WidgetController {
                         try {
                             android.widget.Toast.makeText(
                                 context,
-                                "Виджет скрыт. Откройте BYDMate — вернётся.",
+                                context.getString(R.string.widget_toast_hidden),
                                 android.widget.Toast.LENGTH_SHORT,
                             ).show()
                         } catch (_: Exception) {}
@@ -533,11 +562,11 @@ object WidgetController {
                         // touched view, so the boundary follows the live widget
                         // size after the user's resize setting.
                         val width = v.width
-                        val isLeftTap = prefs.isLeftTapNavigatorEnabled() &&
+                        val isLeftTap = prefs.isLeftTapZoningEnabled() &&
                             width > 0 && event.x < width * LEFT_TAP_FRACTION
                         try {
                             val intent: Intent? = if (isLeftTap) {
-                                context.packageManager.getLaunchIntentForPackage(YANDEX_NAVI_PACKAGE)
+                                context.packageManager.getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
                             } else {
                                 Intent(context, MainActivity::class.java)
                             }

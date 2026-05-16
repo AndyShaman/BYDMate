@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.widget
 
+import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -34,13 +35,17 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.ui.components.socColor as componentsSocColor
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.SocRed
@@ -161,7 +166,7 @@ private fun RowEnergy(
             )
             Spacer(Modifier.width(3.dp))
             Text(
-                text = "км",
+                text = stringResource(R.string.widget_unit_km),
                 fontSize = 18.sp,
                 fontWeight = FontWeight.SemiBold,
                 fontFamily = FontFamily.Monospace,
@@ -200,9 +205,10 @@ private fun RowTrip(
     tripDistanceKm: Double?,
     insideTemp: Int?,
 ) {
-    val durationText by produceState(initialValue = formatDurationShort(sessionStartedAt), sessionStartedAt) {
+    val context = LocalContext.current
+    val durationText by produceState(initialValue = formatDurationShort(context, sessionStartedAt), sessionStartedAt) {
         while (true) {
-            value = formatDurationShort(sessionStartedAt)
+            value = formatDurationShort(context, sessionStartedAt)
             delay(15_000L)
         }
     }
@@ -215,7 +221,7 @@ private fun RowTrip(
             IconText(icon = Icons.Outlined.Schedule, text = durationText)
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.Center) {
-            IconText(icon = Icons.Outlined.Route, text = formatTripKm(tripDistanceKm))
+            IconText(icon = Icons.Outlined.Route, text = formatTripKm(context, tripDistanceKm))
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
             IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
@@ -228,13 +234,16 @@ private fun RowService(
     batTemp: Int?,
     voltage12v: Double?,
 ) {
+    val context = LocalContext.current
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconText(icon = Icons.Outlined.Battery6Bar, text = batTemp?.let { "$it°" } ?: "—")
-        IconText(icon = Icons.Outlined.Bolt, text = voltage12v?.let { "${"%.1f".format(it)} В" } ?: "—")
+        IconText(icon = Icons.Outlined.Bolt, text = voltage12v?.let {
+            context.getString(R.string.widget_voltage_value, it)
+        } ?: "—")
     }
 }
 
@@ -268,7 +277,7 @@ private fun WidgetDivider() {
     )
 }
 
-internal fun formatDurationShort(sessionStartedAt: Long?): String {
+internal fun formatDurationShort(context: Context, sessionStartedAt: Long?): String {
     if (sessionStartedAt == null) return "—"
     val elapsed = System.currentTimeMillis() - sessionStartedAt
     val totalMin = (elapsed / 60_000L).toInt().coerceAtLeast(0)
@@ -276,12 +285,16 @@ internal fun formatDurationShort(sessionStartedAt: Long?): String {
     val minutes = totalMin % 60
     // Compact form in hours mode ("1ч 25м") keeps label narrow enough to fit in
     // the top row's 1/3-width slot alongside trip distance and cabin temp.
-    return if (hours > 0) "${hours}ч ${minutes}м" else "$minutes мин"
+    return if (hours > 0) {
+        context.getString(R.string.widget_duration_hours, hours, minutes)
+    } else {
+        context.getString(R.string.widget_duration_minutes, minutes)
+    }
 }
 
-internal fun formatTripKm(km: Double?): String {
+internal fun formatTripKm(context: Context, km: Double?): String {
     if (km == null || km.isNaN() || km.isInfinite() || km < 0.0) return "—"
-    return "%.1f км".format(km)
+    return context.getString(R.string.widget_trip_km_value, km)
 }
 
 // ---- Status model (covered by WidgetStatusTest) ----
@@ -315,9 +328,9 @@ private fun severity(s: Status): Int = when (s) {
     Status.CRIT -> 2
 }
 
-private fun socColor(soc: Int?): Color = when {
-    soc == null -> TextMuted
-    soc < 15 -> SocRed
-    soc < 30 -> SocYellow
-    else -> AccentGreen
-}
+// Mirrors DashboardScreen's SOC ring coloring (>50 green, >=20 yellow, <20 red).
+// Was a private widget-local function with different thresholds (>=30 green,
+// >=15 yellow) — split coloring between the two surfaces was confusing because
+// the same SOC value rendered green on the widget but yellow on the dashboard.
+private fun socColor(soc: Int?): Color =
+    if (soc == null) TextMuted else componentsSocColor(soc)

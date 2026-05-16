@@ -19,10 +19,15 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
+import com.bydmate.app.R
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.remote.IternioIntervalPolicy
+import com.bydmate.app.data.remote.IternioRateLimitException
+import com.bydmate.app.data.remote.IternioServerErrorException
+import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
@@ -46,7 +51,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
 
@@ -72,6 +76,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var autoserviceClient: com.bydmate.app.data.autoservice.AutoserviceClient
     @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
+    @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -131,6 +136,17 @@ class TrackingService : Service(), LocationListener {
     // transition (gunEdgeDetector.onSample is not synchronized — @Volatile
     // gives visibility, not atomicity).
     private val pollGunInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+
+    private val iternioTelemetryLock = Any()
+    @Volatile private var lastIternioTelemetryMs: Long = 0L
+    // Prevents two telemetry sends from overlapping: a slow ADB read can take
+    // hundreds of ms, and stacking sends would burn the same in-flight ENG_POW
+    // read across two parallel coroutines.
+    private val iternioInFlight = java.util.concurrent.atomic.AtomicBoolean(false)
+    // Upstream cooldown: bumped when Iternio returns 429 (Retry-After) or 5xx
+    // (exponential backoff). We refuse to send until `now >= iternioCooldownUntilMs`.
+    @Volatile private var iternioCooldownUntilMs: Long = 0L
+    @Volatile private var iternioConsecutive5xx: Int = 0
 
     companion object {
         private const val TAG = "TrackingService"
@@ -203,10 +219,10 @@ class TrackingService : Service(), LocationListener {
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate: starting TrackingService")
-        appendChainLog("TrackingService onCreate")
+        ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification("Запуск…"))
-        appendChainLog("startForeground OK")
+        startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.service_foreground_content_starting)))
+        ChainLog.append(this, "startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
 
@@ -262,7 +278,7 @@ class TrackingService : Service(), LocationListener {
         startPolling()
         startCameraMonitor()
         _isRunning.value = true
-        appendChainLog("TrackingService fully started")
+        ChainLog.append(this, "TrackingService fully started")
 
         // Start Smart Home polling if configured
         serviceScope.launch {
@@ -401,10 +417,133 @@ class TrackingService : Service(), LocationListener {
             "samples=${liveTripBuffer.sampleCount()}")
     }
 
+    /**
+     * Отправка в [IternioTelemetryClient] с адаптивной частотой (см.
+     * [IternioIntervalPolicy]): 1 с в движении, 8 с при зарядке, 30 с на
+     * парковке. Бессмысленно слать с одинаковым ритмом — ABRP калибрует
+     * точность по плотности сэмплов за 10 секунд, и единственное окно где
+     * нам нужен 1 Гц — это движение.
+     *
+     * Single-flight на [iternioInFlight] не даёт двум tick'ам пересекаться:
+     * ADB-чтение ENG_POW может занять несколько сотен мс, а очередь параллельных
+     * отправок забила бы канал и спутала throttle. На 429/5xx взводим
+     * [iternioCooldownUntilMs] и тихо пропускаем тики пока не остынет.
+     */
+    private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long) {
+        if (!iternioInFlight.compareAndSet(false, true)) return
+        // Capture the snapshot timestamp BEFORE the network round-trip so the
+        // `utc` field upstream matches the moment of sampling, not delivery.
+        val snapshotMs = nowMs
+        serviceScope.launch {
+            try {
+                if (settingsRepository.getString(
+                        com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_ENABLED,
+                        "false"
+                    ) != "true"
+                ) {
+                    return@launch
+                }
+                val token = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_USER_TOKEN,
+                    ""
+                ).trim()
+                if (token.isEmpty()) return@launch
+
+                if (snapshotMs < iternioCooldownUntilMs) {
+                    Log.d(TAG, "Iternio cooldown active, skip (until ${iternioCooldownUntilMs - snapshotMs}ms)")
+                    return@launch
+                }
+
+                val state = IternioIntervalPolicy.classifyFromDiPars(data)
+                val intervalMs = IternioIntervalPolicy.intervalSec(state) * 1000L
+                synchronized(iternioTelemetryLock) {
+                    if (snapshotMs - lastIternioTelemetryMs < intervalMs) return@launch
+                }
+
+                val apiKey = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_API_KEY,
+                    ""
+                )
+                val carModel = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_CAR_MODEL,
+                    ""
+                ).trim().takeIf { it.isNotEmpty() }
+
+                val autoserviceOn = settingsRepository.isAutoserviceEnabled()
+                // Best-effort autoservice enrichment. Snapshots are heavier
+                // (multiple fids) — only read them in CHARGING window where
+                // is_dcfc / kwh_charged actually matter. In DRIVING we still
+                // want ENG_POW every tick.
+                val readSnapshots = autoserviceOn && state == IternioIntervalPolicy.TelemetryState.CHARGING
+                val battery = if (readSnapshots) {
+                    runCatching { autoserviceClient.readBatterySnapshot() }.getOrNull()
+                } else null
+                val charging = if (readSnapshots) {
+                    runCatching { autoserviceClient.readChargingSnapshot() }.getOrNull()
+                } else null
+                // ENG_POW: tight timeout — at 1 Hz drive cadence a 900 ms budget
+                // covers a healthy ADB read but won't pile up if autoservice
+                // stalls. Null on timeout/error → client falls back to DiPars.
+                val enginePowerKw: Int? = if (autoserviceOn) {
+                    runCatching {
+                        kotlinx.coroutines.withTimeoutOrNull(900L) {
+                            autoserviceClient.getEnginePowerKw()
+                        }
+                    }.getOrNull()
+                } else null
+
+                iternioTelemetryClient.send(
+                    apiKey = apiKey,
+                    userToken = token,
+                    data = data,
+                    nominalCapacityKwh = settingsRepository.getBatteryCapacity(),
+                    battery = battery,
+                    charging = charging,
+                    carModel = carModel,
+                    enginePowerKw = enginePowerKw,
+                    sampleTimeMs = snapshotMs,
+                ).onSuccess {
+                    synchronized(iternioTelemetryLock) {
+                        lastIternioTelemetryMs = snapshotMs
+                    }
+                    iternioConsecutive5xx = 0
+                }.onFailure { e ->
+                    when (e) {
+                        is IternioRateLimitException -> {
+                            // Upstream said wait. Honor Retry-After if present;
+                            // fall back to 5 min when the header was missing —
+                            // long enough that we're not part of the storm,
+                            // short enough that the user gets data back once
+                            // the burst clears.
+                            val backoffSec = e.retryAfterSec ?: 300
+                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                            Log.w(TAG, "Iternio 429, cooldown ${backoffSec}s")
+                        }
+                        is IternioServerErrorException -> {
+                            // 5xx exponential backoff: 8 → 16 → 32 → 64 → 128 → 256 s
+                            // (capped at 300 s). We don't bump throttle on success
+                            // failures the user can't influence — wait for the
+                            // CDN to recover.
+                            iternioConsecutive5xx = (iternioConsecutive5xx + 1).coerceAtMost(6)
+                            val backoffSec = (8 shl (iternioConsecutive5xx - 1)).coerceAtMost(300)
+                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                            Log.w(TAG, "Iternio ${e.httpStatus}, cooldown ${backoffSec}s (n=$iternioConsecutive5xx)")
+                        }
+                        else -> Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+            } finally {
+                iternioInFlight.set(false)
+            }
+        }
+    }
+
     override fun onDestroy() {
         Log.i(TAG, "onDestroy: stopping TrackingService")
         com.bydmate.app.ui.widget.WidgetController.detach()
-        appendChainLog("TrackingService onDestroy")
+        ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
         ConsumptionAggregator.reset()
         // NOTE: do NOT null out _sessionStartedAt or clear SessionPersistence here.
@@ -431,7 +570,10 @@ class TrackingService : Service(), LocationListener {
         cameraStateMonitor.stop()
         _cameraActive.value = false
         networkAvailableMonitor.stop()
-        automationEngine.shutdown()
+        // AutomationEngine is @Singleton — its scope must outlive the service
+        // (WorkManager restarts the service into the same process, reusing the
+        // singleton). Cancelling here left confirm-action callbacks dead until
+        // process death.
         serviceScope.cancel()
 
         // Remove GPS listener to prevent leak
@@ -464,7 +606,7 @@ class TrackingService : Service(), LocationListener {
     override fun onTaskRemoved(rootIntent: Intent?) {
         super.onTaskRemoved(rootIntent)
         Log.i(TAG, "onTaskRemoved: scheduling restart via WorkManager")
-        appendChainLog("onTaskRemoved → restart")
+        ChainLog.append(this, "onTaskRemoved → restart")
         try {
             val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
             WorkManager.getInstance(this).enqueueUniqueWork(
@@ -611,6 +753,7 @@ class TrackingService : Service(), LocationListener {
                         automationEngine.evaluate(data, sessionId)
                         updateNotification(data)
                         maybeLogSessionSummary(nowMs, data, sessionId)
+                        maybeSendIternioTelemetry(data, nowMs)
                     } else {
                         consecutiveNullCount++
                         if (consecutiveNullCount >= NULL_WARNING_THRESHOLD) {
@@ -903,31 +1046,19 @@ class TrackingService : Service(), LocationListener {
             .build()
     }
 
-    private fun appendChainLog(entry: String) {
-        try {
-            val sdf = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.getDefault())
-            val ts = sdf.format(java.util.Date())
-            val prefs = getSharedPreferences(BootReceiver.PREFS_NAME, Context.MODE_PRIVATE)
-            val existing = prefs.getString(BootReceiver.KEY_CHAIN_LOG, "") ?: ""
-            val lines = existing.lines().takeLast(19)
-            val updated = (lines + "$ts $entry").joinToString("\n")
-            prefs.edit().putString(BootReceiver.KEY_CHAIN_LOG, updated).apply()
-        } catch (_: Exception) {}
-    }
-
     private fun updateNotification(data: DiParsData) {
         val parts = mutableListOf<String>()
 
         // Block 1: запас (SOC + оценка km) + t°бат
         val socStr = data.soc?.let { "$it%" } ?: "—"
         val rangeKm = _lastRangeKm.value
-        val rangeStr = rangeKm?.let { " ~${"%.0f".format(it)} км" } ?: ""
-        val tempStr = data.avgBatTemp?.let { " | t°бат: ${it}°C" } ?: ""
-        parts += "запас: $socStr$rangeStr$tempStr"
+        val rangeStr = rangeKm?.let { getString(R.string.service_notification_range_suffix, it) } ?: ""
+        val tempStr = data.avgBatTemp?.let { getString(R.string.service_notification_bat_temp_suffix, it) } ?: ""
+        parts += getString(R.string.service_notification_soc_line, socStr, rangeStr, tempStr)
 
         // Block 2: 12V
         data.voltage12v?.let {
-            parts += "борт.сеть: ${"%.1f".format(it)} В"
+            parts += getString(R.string.service_notification_voltage, it)
         }
 
         val text = parts.joinToString(" | ")

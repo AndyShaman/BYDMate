@@ -3,6 +3,7 @@ package com.bydmate.app.ui.welcome
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.R
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -77,7 +78,7 @@ class WelcomeViewModel @Inject constructor(
 
     fun startBydMate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, importStatus = "Сохранение настроек...") }
+            _uiState.update { it.copy(isLoading = true, importStatus = appContext.getString(R.string.welcome_saving_settings_status)) }
 
             // Save all settings
             val state = _uiState.value
@@ -101,7 +102,12 @@ class WelcomeViewModel @Inject constructor(
             val tripCount = tripRepository.getTripCount()
             val isUpgrade = tripCount > 0
 
-            _uiState.update { it.copy(importStatus = if (isUpgrade) "Обновление данных..." else "Импорт поездок...") }
+            _uiState.update {
+                it.copy(importStatus = if (isUpgrade)
+                    appContext.getString(R.string.welcome_updating_data_status)
+                else
+                    appContext.getString(R.string.welcome_importing_trips_status))
+            }
 
             if (isUpgrade && settingsRepository.getDataSource() == SettingsRepository.DataSource.ENERGYDATA) {
                 historyImporter.deduplicateWithExisting()

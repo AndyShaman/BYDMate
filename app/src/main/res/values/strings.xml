@@ -1,4 +1,620 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BYDMate</string>
+    <string name="settings_language_title">Язык</string>
+
+    <!-- Settings: Navigation rail -->
+    <string name="settings_title">Настройки</string>
+    <string name="settings_rail_sections_label">Разделы</string>
+
+    <!-- Settings: Section labels (left pane) -->
+    <string name="settings_section_auto_battery_title">Авто и батарея</string>
+    <string name="settings_section_trips_title">Поездки</string>
+    <string name="settings_section_integrations_title">Интеграции</string>
+    <string name="settings_section_widget_title">Виджет</string>
+    <string name="settings_section_places_title">Места</string>
+    <string name="settings_section_application_title">Приложение</string>
+    <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
+    <string name="settings_smart_home_section_title">Умный дом</string>
+
+    <!-- Settings: Auto and battery section -->
+    <string name="settings_battery_section_header">Батарея и тарифы</string>
+    <string name="settings_battery_capacity_label">Ёмкость батареи (кВт·ч)</string>
+    <string name="settings_tariff_home_label">Тариф дома (%1$s/кВт·ч)</string>
+    <string name="settings_tariff_dc_label">Тариф DC (%1$s/кВт·ч)</string>
+    <string name="settings_tariff_trip_label">Тариф поездок</string>
+    <string name="settings_tariff_custom_label">Свой тариф (%1$s/кВт·ч)</string>
+    <string name="settings_save_tariffs_button">Сохранить тарифы</string>
+    <string name="settings_tariff_future_note">Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.</string>
+    <string name="settings_recalc_all_button">Пересчитать все поездки</string>
+    <string name="settings_recalc_note">Пересчитает стоимость всех поездок\nпо текущему тарифу.</string>
+    <string name="settings_consumption_section_header">Пороги расхода</string>
+    <string name="settings_consumption_good_label">Хороший &lt; (кВт·ч/100км)</string>
+    <string name="settings_consumption_bad_label">Плохой &gt; (кВт·ч/100км)</string>
+
+    <!-- Settings: Recalculate confirmation dialog -->
+    <string name="settings_recalc_dialog_title">Пересчитать стоимость?</string>
+    <string name="settings_recalc_dialog_text">Все поездки будут пересчитаны по тарифу %1$s %2$s/кВт·ч.\nУже посчитанные значения будут заменены.</string>
+    <string name="settings_recalc_confirm_button">Пересчитать</string>
+    <string name="settings_cancel_button">Отмена</string>
+
+    <!-- Settings: Trips section -->
+    <string name="settings_trips_datasource_header">Источник данных поездок</string>
+    <string name="settings_trips_datasource_note">Leopard 3 - BYD energydata.\nSong и другие без встроенной базы - DiPlus TripInfo.</string>
+    <string name="settings_trips_datasource_hint">Если после 2-3 поездок список пустой - переключи режим.</string>
+    <string name="settings_trips_system_header">Системные данные (экспериментально)</string>
+    <string name="settings_trips_system_note">Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.</string>
+    <string name="settings_trips_system_enable_label">Включить</string>
+
+    <!-- Settings: Integrations section -->
+    <string name="settings_abrp_section_header">ABRP - телеметрия</string>
+    <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
+    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся - ABRP читает координаты сам.</string>
+    <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
+    <string name="settings_abrp_save_button">Сохранить ABRP</string>
+    <string name="settings_ai_section_header">AI Инсайты</string>
+    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
+    <string name="settings_openrouter_model_selected">Модель: %1$s</string>
+    <string name="settings_openrouter_model_pick">Выбрать модель</string>
+    <string name="settings_ai_loading_label">Загрузка...</string>
+    <string name="settings_ai_save_button">Сохранить и получить инсайт</string>
+
+    <!-- Settings: Model picker dialog -->
+    <string name="settings_model_picker_title">Выбор модели</string>
+    <string name="settings_model_picker_search_label">Поиск</string>
+    <string name="settings_model_picker_loading">Загрузка моделей...</string>
+
+    <!-- Settings: Widget section -->
+    <string name="settings_widget_section_header">Плавающий виджет</string>
+    <string name="settings_widget_show_soc_label">Показывать виджет SOC</string>
+    <string name="settings_widget_hints">• Долгий тап на виджете - скрыть до следующего открытия BYDMate.\n• Перетащить в корзину внизу - выключить совсем.\n• Обычный тап - открыть BYDMate.</string>
+    <string name="settings_widget_reset_position_button">Сбросить позицию</string>
+    <string name="settings_widget_opacity_label">Прозрачность</string>
+    <string name="settings_widget_scale_label">Размер</string>
+    <string name="settings_widget_tap_section_header">Тап по виджету</string>
+    <string name="settings_widget_left_tap_zoning_label">Зонирование тапов</string>
+    <string name="settings_widget_left_tap_zoning_description">Левая 1/3 - открывает выбранное приложение; остальное - BYDMate.</string>
+    <string name="settings_widget_left_tap_label">Приложение для левого тапа</string>
+    <string name="settings_widget_left_tap_description">По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.</string>
+
+    <!-- Settings: Places section -->
+    <string name="settings_places_section_header">Места</string>
+    <string name="settings_places_entry_title">Точки для автоматизации</string>
+    <string name="settings_places_entry_description">Дом, работа, любимые места - триггеры «Въезд» / «Выезд»</string>
+
+    <!-- Settings: Application section -->
+    <string name="settings_app_units_header">Единицы и валюта</string>
+    <string name="settings_app_distance_label">Расстояние</string>
+    <string name="settings_app_currency_label">Валюта</string>
+    <string name="settings_app_data_header">Данные</string>
+    <string name="settings_export_csv_button">Экспорт CSV</string>
+    <string name="settings_log_recording_start_button">Запись логов</string>
+    <string name="settings_log_recording_stop_button">Остановить запись</string>
+    <string name="settings_about_header">О приложении</string>
+    <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
+    <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
+    <string name="settings_update_check_toggle_label">Проверять обновления</string>
+    <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и предлагать обновиться</string>
+    <string name="settings_update_check_button">Проверить обновления сейчас</string>
+
+    <!-- Settings: Autoservice status -->
+    <string name="settings_autoservice_disconnected_title">не подключено</string>
+    <string name="settings_autoservice_disconnected_detail">перезапусти приложение, если ADB включён в Настройках разработчика</string>
+    <string name="settings_autoservice_sentinel_title">подключено, но данные не читаются</string>
+    <string name="settings_autoservice_sentinel_detail">возможно функция работает только на Leopard 3</string>
+    <string name="settings_autoservice_connected_title">подключено</string>
+    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
+
+    <!-- Settings: Update dialog -->
+    <string name="settings_update_dialog_title">Обновления</string>
+    <string name="settings_update_current_version">Текущая версия: v%1$s</string>
+    <string name="settings_update_check_now_button">Проверить обновления</string>
+    <string name="settings_update_checking">Проверка...</string>
+    <string name="settings_update_up_to_date">Установлена последняя версия</string>
+    <string name="settings_update_available_version">Доступна версия: v%1$s</string>
+    <string name="settings_update_whats_new_label">Что нового:</string>
+    <string name="settings_update_install_button">Скачать и установить</string>
+    <string name="settings_update_downloading">Скачивается v%1$s</string>
+    <string name="settings_update_error">Ошибка: %1$s</string>
+    <string name="settings_update_retry_button">Попробовать снова</string>
+    <string name="settings_update_close_button">Закрыть</string>
+
+    <!-- Trips screen -->
+    <string name="trips_filter_all">Все</string>
+    <string name="trips_filter_trips_only">Поездки</string>
+    <string name="trips_filter_stops_only">Стоянки</string>
+    <string name="trips_empty">Нет данных за выбранный период</string>
+    <string name="trips_col_time">время</string>
+    <string name="trips_col_duration">длит.</string>
+    <string name="trips_col_km">км</string>
+    <string name="trips_col_kwh">кВт·ч</string>
+    <string name="trips_chart_kwh_chip">кВтч</string>
+    <string name="trips_chart_no_data">Нет данных</string>
+    <string name="trips_chart_tooltip_count">%1$s · %2$d поезд.</string>
+    <!-- Formatted value labels used in month/day summary rows -->
+    <string name="trips_km_value">%1$.0f км</string>
+    <string name="trips_kwh_value">%1$.0f кВт·ч</string>
+    <string name="trips_km_decimal_value">%1$.1f км</string>
+    <string name="trips_kwh_decimal_value">%1$.1f кВт·ч</string>
+
+    <!-- TripDetailDialog -->
+    <string name="trip_detail_title_trip">Поездка</string>
+    <string name="trip_detail_title_stop">Стоянка</string>
+    <string name="trip_detail_stats_header">Статистика</string>
+    <string name="trip_detail_gps_unavailable">GPS-данные недоступны</string>
+    <string name="trip_detail_distance_label">Дистанция</string>
+    <string name="trip_detail_distance_value">%1$.1f км</string>
+    <string name="trip_detail_duration_label">Длительность</string>
+    <string name="trip_detail_avg_speed_label">Ср. скорость</string>
+    <string name="trip_detail_speed_value">%1$.0f км/ч</string>
+    <string name="trip_detail_max_speed_label">Макс. скорость</string>
+    <string name="trip_detail_consumption_label">Потребление</string>
+    <string name="trip_detail_consumption_value">%1$.1f кВт·ч</string>
+    <string name="trip_detail_efficiency_label">Расход</string>
+    <string name="trip_detail_cost_label">Стоимость</string>
+    <string name="trip_detail_temp_label">Темп.</string>
+    <string name="trip_detail_max_speed_histogram">макс %1$d км/ч</string>
+
+    <!-- Charges screen -->
+    <string name="charges_filter_all">Все</string>
+    <string name="charges_add_button">+ зарядка</string>
+    <string name="charges_empty">Нет зарядок за выбранный период</string>
+    <string name="charges_col_time">время</string>
+    <string name="charges_col_kwh">кВт·ч</string>
+    <string name="charges_kwh_value">%1$.0f кВт·ч</string>
+    <string name="charges_action_edit">Изменить</string>
+    <string name="charges_action_delete">Удалить</string>
+    <string name="charges_delete_dialog_title">Удалить зарядку?</string>
+    <string name="charges_delete_dialog_text">%1$s кВт·ч - восстановить будет нельзя.</string>
+    <string name="charges_onboarding_empty_text">Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки - включи «Системные данные» в Настройках.</string>
+    <string name="charges_go_to_settings_button">Перейти в Настройки</string>
+    <string name="charges_sentinel_empty_text">На вашей модели машины статистика зарядок недоступна - диагностические данные не читаются. SoH тоже не показывается.</string>
+    <string name="charges_not_tracking_banner">Новые зарядки сейчас не отслеживаются.</string>
+    <string name="charges_enable_tracking_button">Включить →</string>
+    <string name="charges_stats_period_label">За выбранный период</string>
+    <string name="charges_stats_sessions">Сессий</string>
+    <string name="charges_stats_cost">Стоимость</string>
+    <string name="charges_stats_lifetime_label">Lifetime (системные данные)</string>
+    <string name="charges_stats_pumped_total">Прокачано всего</string>
+    <string name="charges_stats_equiv_cycles">Эквив. циклов</string>
+    <string name="charges_stats_bms_mileage">Пробег BMS</string>
+    <string name="charges_stats_per100km">/100км lifetime</string>
+    <string name="charges_lifetime_enable_hint">Включи «Системные данные» в Настройках, чтобы видеть пробег BMS и прокачано всего от машины.</string>
+    <string name="charges_lifetime_waiting">Жду первого ответа от машины…</string>
+    <string name="charges_stats_dynamics_label">Динамика</string>
+    <string name="charges_chart_cell_delta_title">Δ ячеек (В)</string>
+    <string name="charges_chart_cell_delta_placeholder">Δ ячеек: будет показано после 3 завершённых зарядок (сейчас: %1$d)</string>
+    <string name="charges_chart_bat_temp_title">Темп. батареи (°C)</string>
+    <string name="charges_chart_bat_temp_placeholder">Температура: будет показано после 3 завершённых зарядок (сейчас: %1$d)</string>
+
+    <!-- Charge edit dialog -->
+    <string name="charges_edit_dialog_title">Изменить зарядку</string>
+    <string name="charges_edit_type_label">Тип:</string>
+    <string name="charges_edit_kwh_label">кВт·ч:</string>
+    <string name="charges_edit_kwh_from_soc">из SOC × %1$.1f кВт·ч</string>
+    <string name="charges_edit_cost_label">Стоимость:</string>
+    <string name="charges_edit_tariff_label">%1$s/кВт·ч:</string>
+    <string name="charges_edit_save_button">Сохранить</string>
+
+    <!-- Automation screen -->
+    <string name="automation_tab_title">Автоматизация</string>
+
+    <!-- Filter chips -->
+    <string name="automation_filter_all">Все</string>
+    <string name="automation_filter_active">Активные</string>
+    <string name="automation_filter_disabled">Выключенные</string>
+
+    <!-- Header buttons -->
+    <string name="automation_journal_button">Журнал</string>
+    <string name="automation_create_button">+ Создать</string>
+
+    <!-- Rule card context menu -->
+    <string name="automation_menu_edit">Редактировать</string>
+    <string name="automation_menu_duplicate">Дублировать</string>
+    <string name="automation_menu_delete">Удалить</string>
+
+    <!-- Delete confirmation dialog -->
+    <string name="automation_delete_confirm_title">Удалить правило?</string>
+    <string name="automation_delete_confirm_text">Это действие нельзя отменить.</string>
+    <string name="automation_delete_button">Удалить</string>
+    <string name="automation_cancel_button">Отмена</string>
+
+    <!-- Rule card stats -->
+    <string name="automation_rule_triggered_count">Сработало: %1$d</string>
+    <string name="automation_rule_last_trigger">Последний: %1$s</string>
+    <string name="automation_rule_cooldown">Пауза: %1$d сек</string>
+    <string name="automation_rule_logic_and"> И </string>
+    <string name="automation_rule_logic_or"> ИЛИ </string>
+
+    <!-- Editor dialog -->
+    <string name="automation_editor_new_rule_title">Новое правило</string>
+    <string name="automation_rule_name_placeholder">Название правила</string>
+    <string name="automation_section_when">КОГДА (условия)</string>
+    <string name="automation_section_then">ТОГДА (действия)</string>
+    <string name="automation_section_settings">НАСТРОЙКИ</string>
+    <string name="automation_logic_and">И (AND)</string>
+    <string name="automation_logic_or">ИЛИ (OR)</string>
+
+    <!-- Settings section in editor -->
+    <string name="automation_setting_cooldown">Пауза между срабатываниями</string>
+    <string name="automation_setting_unit_sec">сек</string>
+    <string name="automation_setting_park_only">Только на парковке (P)</string>
+    <string name="automation_setting_confirm_before">Спрашивать перед выполнением</string>
+    <string name="automation_setting_once_per_trip">Выполнить один раз за поездку</string>
+
+    <!-- Editor footer buttons -->
+    <string name="automation_save_button">Сохранить</string>
+
+    <!-- Trigger controls -->
+    <string name="automation_trigger_place_deleted">Место удалено</string>
+    <string name="automation_trigger_place_enter_label">Въезд</string>
+    <string name="automation_trigger_place_exit_label">Выезд</string>
+    <string name="automation_trigger_place_enter_prefix">Въезд в</string>
+    <string name="automation_trigger_place_exit_prefix">Выезд из</string>
+    <string name="automation_trigger_place_deleted_placeholder">&lt;удалено&gt;</string>
+    <string name="automation_trigger_time_of_day_label">Время суток:</string>
+    <string name="automation_trigger_day">День</string>
+    <string name="automation_trigger_night">Ночь</string>
+    <string name="automation_trigger_dawn">Рассвет</string>
+    <string name="automation_trigger_dusk">Закат</string>
+    <string name="automation_trigger_service_start">Запуск BYDMate</string>
+    <string name="automation_trigger_internet">Доступен интернет</string>
+
+    <!-- Add trigger button -->
+    <string name="automation_add_condition_button">+ Добавить условие</string>
+    <string name="automation_trigger_type_param">Параметр</string>
+    <string name="automation_trigger_type_place">Место</string>
+    <string name="automation_trigger_type_place_empty_hint">Сначала создайте место в настройках</string>
+    <string name="automation_trigger_type_time_of_day">Время суток</string>
+    <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
+    <string name="automation_trigger_type_internet">Доступен интернет</string>
+
+    <!-- Action row: delay -->
+    <string name="automation_action_delay_label">Пауза</string>
+    <string name="automation_delay_0_5s">0,5 сек</string>
+    <string name="automation_delay_1s">1 сек</string>
+    <string name="automation_delay_2s">2 сек</string>
+    <string name="automation_delay_3s">3 сек</string>
+    <string name="automation_delay_5s">5 сек</string>
+    <string name="automation_delay_10s">10 сек</string>
+    <string name="automation_delay_display_name">Пауза %1$s</string>
+
+    <!-- Add action button -->
+    <string name="automation_add_action_button">+ Добавить действие</string>
+    <string name="automation_action_dplus_command">D+ команда</string>
+    <string name="automation_action_notification_silent">Уведомление (без звука)</string>
+    <string name="automation_action_notification_sound">Уведомление (звук)</string>
+    <string name="automation_action_app_launch">Запуск приложения</string>
+    <string name="automation_action_yandex_music">Яндекс.Музыка</string>
+    <string name="automation_action_call">Звонок</string>
+    <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
+    <string name="automation_action_url">Открыть URL</string>
+    <string name="automation_action_delay">Пауза</string>
+
+    <!-- Overlay permission dialog -->
+    <string name="automation_overlay_permission_title">Нужно разрешение</string>
+    <string name="automation_overlay_permission_text">Звуковые уведомления показываются как всплывающее окно поверх других приложений. Откройте системные настройки и включите \"Поверх других окон\" для BYDMate.</string>
+    <string name="automation_overlay_open_settings">Открыть настройки</string>
+    <string name="automation_overlay_later">Позже</string>
+
+    <!-- Action controls: preview placeholders -->
+    <string name="automation_tap_to_configure">Нажмите для настройки…</string>
+    <string name="automation_tap_to_pick_app">Нажмите, чтобы выбрать приложение…</string>
+    <string name="automation_tap_to_set_phone">Нажмите, чтобы задать номер…</string>
+    <string name="automation_tap_to_pick_place">Нажмите, чтобы выбрать место…</string>
+    <string name="automation_tap_to_set_url">Нажмите, чтобы задать URL…</string>
+
+    <!-- Notification edit dialog -->
+    <string name="automation_notification_title_label">Заголовок</string>
+    <string name="automation_notification_body_label">Текст (опционально)</string>
+
+    <!-- Call edit dialog -->
+    <string name="automation_call_dialog_title">Позвонить</string>
+    <string name="automation_call_name_label">Имя (необязательно)</string>
+    <string name="automation_call_phone_label">Номер телефона</string>
+    <string name="automation_call_auto_dial_label">Звонить автоматически</string>
+    <string name="automation_call_auto_dial_hint">Без нажатия зелёной кнопки</string>
+
+    <!-- Navigate edit dialog -->
+    <string name="automation_navigate_dialog_title">Маршрут в Я.Навигаторе</string>
+    <string name="automation_navigate_no_places_hint">Сначала добавьте место в Настройки → Места</string>
+    <string name="automation_navigate_pick_place_placeholder">Выберите место…</string>
+
+    <!-- URL edit dialog -->
+    <string name="automation_url_dialog_title">Открыть URL</string>
+    <string name="automation_url_field_label">URL</string>
+    <string name="automation_url_minimize_label">Свернуть после запуска (через 3 сек)</string>
+
+    <!-- Yandex Music edit dialog -->
+    <string name="automation_music_dialog_title">Яндекс.Музыка</string>
+    <string name="automation_music_what_to_play">Что запустить:</string>
+    <string name="automation_music_my_wave">Моя Волна</string>
+    <string name="automation_music_minimize_label">Свернуть после запуска (через 3 сек)</string>
+
+    <!-- Journal dialog -->
+    <string name="automation_journal_title">Журнал срабатываний</string>
+    <string name="automation_journal_empty">Журнал пуст</string>
+
+    <!-- Journal relative time -->
+    <string name="automation_time_yesterday">вчера %1$s</string>
+
+    <!-- Places screen -->
+    <string name="places_tab_title">Места</string>
+    <string name="places_back_content_description">Назад</string>
+    <string name="places_add_button">+ Добавить</string>
+    <string name="places_empty">Мест пока нет. Нажмите \"+ Добавить\", чтобы создать.</string>
+    <string name="places_row_coords">%1$.5f, %2$.5f · %3$d м</string>
+    <string name="places_row_in_use">используется в %1$d правилах</string>
+    <string name="places_edit_content_description">Редактировать</string>
+    <string name="places_delete_content_description">Удалить</string>
+    <string name="places_delete_blocked_message">Место используется в %1$d автоматизациях. Сначала удалите правила.</string>
+
+    <!-- Place edit dialog -->
+    <string name="place_edit_dialog_title_new">Новое место</string>
+    <string name="place_edit_dialog_title_edit">Редактировать место</string>
+    <string name="place_edit_name_label">Название</string>
+    <string name="place_edit_lat_label">Широта</string>
+    <string name="place_edit_lon_label">Долгота</string>
+    <string name="place_edit_radius_label">Радиус, м</string>
+    <string name="place_edit_error_min_radius">Минимальный радиус 20 м</string>
+
+    <!-- Welcome Wizard -->
+    <string name="welcome_step_indicator">Шаг %1$d из 3</string>
+    <string name="welcome_model_step_title">Какая у тебя модель BYD?</string>
+    <string name="welcome_model_step_description">От этого зависит источник данных о поездках.\nLeopard 3 хранит их во встроенной базе BYD (energydata).\nSong и другие модели - только в DiPlus.</string>
+    <string name="welcome_model_song_label">Song / другая</string>
+    <string name="welcome_model_change_later">Можно поменять позже в настройках.</string>
+    <string name="welcome_next_button">Далее</string>
+    <string name="welcome_battery_section_title">Батарея</string>
+    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 кВт·ч (BEV) или 31.8 кВт·ч (PHEV)</string>
+    <string name="welcome_tariff_section_title">Тарифы</string>
+    <string name="welcome_tariff_home_label">Домашняя зарядка (%1$s/кВт·ч)</string>
+    <string name="welcome_tariff_dc_label">Быстрая зарядка DC (%1$s/кВт·ч)</string>
+    <string name="welcome_tariff_cost_section_title">Расчёт стоимости поездок</string>
+    <string name="welcome_tariff_home_chip">Домашний</string>
+    <string name="welcome_tariff_custom_chip">Свой</string>
+    <string name="welcome_tariff_cost_note">Стоимость = потребление × тариф. Можно изменить позже в настройках.</string>
+    <string name="welcome_autostart_step_title">Автозапуск на DiLink</string>
+    <string name="welcome_autostart_step_description">Чтобы BYDMate запускался автоматически при включении магнитолы:</string>
+    <string name="welcome_autostart_instruction_1">1. Нажмите кнопку справа</string>
+    <string name="welcome_autostart_instruction_2">2. Найдите BYDMate в списке</string>
+    <string name="welcome_autostart_instruction_3">3. Переключатель должен быть ВЫКЛЮЧЕН (OFF)</string>
+    <string name="welcome_autostart_off_note">OFF = автозапуск РАЗРЕШЁН. Это чёрный список: отключённые в нём приложения МОГУТ запускаться сами.</string>
+    <string name="welcome_autostart_apk_update_warning">После обновления APK проверьте эту настройку!</string>
+    <string name="welcome_autostart_dilink_section_title">Альтернатива: через DiLink+ (Di+)</string>
+    <string name="welcome_autostart_dilink_hint">Если автозапуск не сработал, добавьте в Di+:</string>
+    <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
+    <string name="welcome_autostart_command_copied_toast">Скопировано!</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = «открыть приложение» + имя пакета.\nДля двух приложений через точку с запятой:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_system_settings_section_title">Системные настройки</string>
+    <string name="welcome_autostart_open_settings_button">Открыть настройки автозапуска</string>
+    <string name="welcome_autostart_open_settings_error">Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.</string>
+    <string name="welcome_loading_default">Загрузка...</string>
+    <string name="welcome_back_button">Назад</string>
+    <string name="welcome_done_button">Запустить BYDMate</string>
+    <string name="welcome_saving_settings_status">Сохранение настроек...</string>
+    <string name="welcome_updating_data_status">Обновление данных...</string>
+    <string name="welcome_importing_trips_status">Импорт поездок...</string>
+
+    <!-- Service & Notifications -->
+    <string name="service_foreground_content_starting">Запуск…</string>
+    <!-- Foreground notification live text. soc_line: %1$s=SOC string, %2$s=range suffix (or empty), %3$s=bat-temp suffix (or empty) -->
+    <string name="service_notification_soc_line">запас: %1$s%2$s%3$s</string>
+    <!-- %1$.0f = range km -->
+    <string name="service_notification_range_suffix"> ~%1$.0f км</string>
+    <!-- %1$d = battery temperature °C -->
+    <string name="service_notification_bat_temp_suffix"> | t°бат: %1$d°C</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="service_notification_voltage">борт.сеть: %1$.1f В</string>
+    <!-- Automation confirm notification action buttons -->
+    <string name="service_confirm_action_yes">Выполнить</string>
+    <string name="service_confirm_action_no">Отмена</string>
+
+    <!-- Floating widget -->
+    <string name="widget_unit_km">км</string>
+    <!-- Duration compact formats: hours mode and minutes-only mode -->
+    <string name="widget_duration_hours">%1$dч %2$dм</string>
+    <string name="widget_duration_minutes">%1$d мин</string>
+    <!-- Trip distance value with unit -->
+    <string name="widget_trip_km_value">%1$.1f км</string>
+    <!-- Voltage value with unit: %.1f V -->
+    <string name="widget_voltage_value">%1$.1f В</string>
+    <!-- Long-press toast -->
+    <string name="widget_toast_hidden">Виджет скрыт. Откройте BYDMate - вернётся.</string>
+    <!-- Trash zone labels -->
+    <string name="widget_trash_release">отпустить - виджет скрыт</string>
+    <string name="widget_trash_hint">перетащить сюда, чтобы скрыть</string>
+
+    <!-- Dashboard -->
+    <!-- Top bar -->
+    <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
+    <string name="dashboard_adb_offline">ADB не отвечает</string>
+    <string name="dashboard_status_online">Online</string>
+    <string name="dashboard_status_offline">Offline</string>
+
+    <!-- Left column - live stats -->
+    <string name="dashboard_unit_km">км</string>
+    <string name="dashboard_unit_kwh">кВт·ч</string>
+    <string name="dashboard_range_label">расчётный пробег</string>
+    <string name="dashboard_idle_time_min">%1$.0f мин</string>
+    <string name="dashboard_idle_time_hours">%1$.1f ч</string>
+
+    <!-- Idle drain card -->
+    <string name="dashboard_idle_drain_parking_label">стоянка</string>
+    <string name="dashboard_idle_drain_title">Расход на стоянке</string>
+    <string name="dashboard_idle_drain_rate_label">Скорость</string>
+    <string name="dashboard_idle_drain_rate_value">%1$.2f кВт·ч/час</string>
+    <string name="dashboard_idle_drain_week_label">За 7 дней</string>
+    <string name="dashboard_idle_drain_week_value">%1$.1f кВт·ч</string>
+    <string name="dashboard_idle_drain_avg_day_label">Ср. в день</string>
+
+    <!-- Battery card -->
+    <string name="dashboard_battery_temp_label">темп. бат.</string>
+    <string name="dashboard_battery_voltage_label">борт. сеть</string>
+
+    <!-- AI Insight card -->
+    <string name="dashboard_insight_loading">Анализ...</string>
+    <string name="dashboard_insight_setup_prompt">AI Инсайты - Настройте OpenRouter →</string>
+    <string name="dashboard_insight_refresh">Обновить</string>
+    <string name="dashboard_insight_refreshing">Обновление...</string>
+    <string name="dashboard_insight_no_api_key">Для AI-инсайтов настройте OpenRouter API в Настройках</string>
+    <string name="dashboard_insight_no_data">Мало данных для анализа</string>
+
+    <!-- Period chips -->
+    <string name="dashboard_period_day">День</string>
+    <string name="dashboard_period_week">Нед</string>
+    <string name="dashboard_period_month">Мес</string>
+    <string name="dashboard_period_year">Год</string>
+    <string name="dashboard_period_all">Всё</string>
+
+    <!-- Stat cards -->
+    <string name="dashboard_stat_distance">Пробег</string>
+    <string name="dashboard_stat_energy">Энергия</string>
+    <string name="dashboard_stat_consumption">Расход</string>
+    <string name="dashboard_stat_cost">Стоимость</string>
+    <string name="dashboard_trip_count">%1$d поездок</string>
+
+    <!-- Recent trips section -->
+    <string name="dashboard_recent_trips_title">Последние поездки</string>
+    <string name="dashboard_col_time">время</string>
+    <string name="dashboard_col_duration">длит.</string>
+    <string name="dashboard_col_per100">/100</string>
+    <string name="dashboard_empty_no_trips">Поездок пока нет</string>
+
+    <!-- Dashboard: inline format values (stat cards, voltage) -->
+    <!-- %1$.1f = distance km -->
+    <string name="dashboard_stat_km_value">%1$.1f км</string>
+    <!-- %1$.1f = energy kWh -->
+    <string name="dashboard_stat_kwh_value">%1$.1f кВт·ч</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="dashboard_voltage_value">%1$.1fВ</string>
+    <!-- Insight refresh error (shown in insight card) -->
+    <string name="dashboard_insight_refresh_error">Не удалось обновить</string>
+
+    <!-- Navigation bar tab labels -->
+    <string name="nav_tab_dashboard">Главная</string>
+    <string name="nav_tab_trips">Поездки</string>
+    <string name="nav_tab_charges">Зарядки</string>
+    <string name="nav_tab_automation">Автоматизация</string>
+    <string name="nav_tab_settings">Настройки</string>
+
+    <!-- Post-install autostart hint dialog -->
+    <string name="nav_autostart_dialog_title">BYDMate обновлён до v%1$s</string>
+    <string name="nav_autostart_dialog_body">Проверьте, что фоновая работа не заблокирована:\n\nНастройки DiLink - General - Disable background Apps - BYDMate - OFF\n\nЕсли переключатель включён (ON), DiLink может прибить сервис BYDMate - тогда поездки и GPS не будут писаться.</string>
+    <string name="nav_autostart_dialog_button">Понятно</string>
+    <string name="nav_autostart_open_settings_error">Не удалось открыть настройки автозапуска DiLink. Открыты настройки приложения.</string>
+
+    <!-- AppLaunchPicker dialog -->
+    <string name="applauncher_title">Выбор приложения</string>
+    <string name="applauncher_search_label">Поиск</string>
+    <string name="applauncher_minimize_label">Свернуть после запуска (через 3 сек)</string>
+    <string name="applauncher_empty">Ничего не найдено</string>
+    <string name="applauncher_close_button">Закрыть</string>
+
+    <!-- SOC ring: charging icon content description -->
+    <string name="battery_health_charging_cd">Идёт зарядка</string>
+
+    <!-- Battery health dialog -->
+    <string name="battery_health_dialog_title">Здоровье батареи</string>
+    <string name="battery_health_now_header">Сейчас (от машины, live)</string>
+    <string name="battery_health_lifetime_header">Lifetime (системные данные)</string>
+    <string name="battery_health_cell_delta_label">Δ ячеек</string>
+    <!-- %1$.3f = delta volts -->
+    <string name="battery_health_cell_delta_value">%1$.3f В</string>
+    <string name="battery_health_bat_temp_label">темп. батареи</string>
+    <string name="battery_health_12v_label">бортовая сеть</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="battery_health_12v_value">%1$.1f В</string>
+    <string name="battery_health_bms_mileage_label">пробег BMS</string>
+    <!-- %1$.1f = mileage km -->
+    <string name="battery_health_bms_mileage_value">%1$.1f км</string>
+    <string name="battery_health_pumped_label">прокачано</string>
+    <!-- %1$.0f = kWh -->
+    <string name="battery_health_pumped_value">%1$.0f кВт·ч</string>
+    <string name="battery_health_disabled_title">Системные данные выключены</string>
+    <string name="battery_health_disabled_hint">Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.</string>
+
+    <!-- Shared summary row (Components.kt SummaryRow) -->
+    <string name="summary_unit_km">км</string>
+    <string name="summary_label_mileage">Пробег</string>
+    <string name="summary_unit_kwh">кВт·ч</string>
+    <string name="summary_label_energy">Энергия</string>
+    <string name="summary_unit_kwh_per_100km">кВт·ч/100км</string>
+    <string name="summary_label_consumption">Расход</string>
+    <string name="summary_label_cost">Стоимость</string>
+
+    <!-- Settings: unit chips and language labels -->
+    <string name="settings_tariff_trip_custom_chip">Свой</string>
+    <string name="settings_unit_km">км</string>
+    <string name="settings_unit_miles">мили</string>
+    <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
+    <string name="settings_lang_russian">Русский</string>
+
+    <!-- Settings: ViewModel status strings (user-visible feedback) -->
+    <string name="settings_saved">Сохранено</string>
+    <string name="settings_datasource_switching">Переключение...</string>
+    <string name="settings_datasource_done">Готово</string>
+    <!-- %1$d = trip count -->
+    <string name="settings_recalc_done">Пересчитано: %1$d поездок</string>
+    <string name="settings_export_in_progress">Экспорт...</string>
+    <!-- %1$d = trip count, %2$d = charge count -->
+    <string name="settings_export_done">Экспортировано: %1$d поездок, %2$d зарядок</string>
+    <!-- Generic error with message: %1$s = error text -->
+    <string name="settings_error_with_message">Ошибка: %1$s</string>
+    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
+    <string name="settings_error_prefix">Ошибка</string>
+    <!-- %1$s = file path -->
+    <string name="settings_log_recording_started">Запись (авто-стоп через 2ч)... - %1$s</string>
+    <!-- %1$s = file path, %2$d = size KB -->
+    <string name="settings_log_saved">Сохранено: %1$s (%2$d КБ)</string>
+    <string name="settings_log_error_no_fs_access">Ошибка: нет доступа к файловой системе</string>
+    <string name="settings_update_check_in_progress">Проверка...</string>
+    <!-- %1$s = version string -->
+    <string name="settings_update_available_short">Доступна v%1$s</string>
+    <string name="settings_ai_no_key_model">Укажите API-ключ и модель</string>
+    <string name="settings_ai_done">Готово! Переключитесь на Главную</string>
+    <string name="settings_ai_fetch_error">Ошибка получения инсайта</string>
+
+    <!-- UpdateChecker: download progress strings (passed via callback) -->
+    <string name="update_downloading_progress">Скачивание: %1$d%%</string>
+    <string name="update_downloading_done">Скачано. Установка...</string>
+    <string name="update_downloading_paused">Пауза...</string>
+    <!-- %1$d = DownloadManager error code -->
+    <string name="update_download_error">Ошибка скачивания (код %1$d)</string>
+    <string name="update_download_notification_description">Обновление BYDMate</string>
+    <!-- Initial 0% progress string -->
+    <string name="update_downloading_start">Скачивание: 0%%</string>
+
+    <!-- Charges: day group labels -->
+    <!-- %1$s = day-of-week abbreviation -->
+    <string name="charges_day_today">сегодня (%1$s)</string>
+    <string name="charges_day_yesterday">вчера</string>
+
+    <!-- Common duration formats -->
+    <string name="common_duration_hours_minutes">%1$d ч %2$d мин</string>
+    <string name="common_duration_minutes">%1$d мин</string>
+
+    <!-- Automation confirm overlay buttons -->
+    <string name="confirm_overlay_cancel">Отмена</string>
+    <string name="confirm_overlay_run">Выполнить</string>
+
+    <!-- AI insight dynamic metric labels -->
+    <string name="insight_metric_consumption">Расход</string>
+    <string name="insight_metric_trips">Поездки</string>
+    <string name="insight_metric_short_trips">Короткие &lt; 5 км</string>
+    <string name="insight_metric_avg_distance">Ср. дистанция</string>
+    <string name="insight_metric_idle">Стоянка</string>
+    <string name="insight_section_week_to_week">Неделя к неделе</string>
+    <string name="insight_unit_kwh_per_100">%.1f кВтч/100</string>
+    <string name="insight_unit_kwh_per_100_prev">%.1f</string>
+    <string name="insight_trips_value">%1$d · %2$s км</string>
+    <string name="insight_trips_prev">%1$d · %2$s км</string>
+    <string name="insight_short_value">%1$d%% (%2$d/%3$d)</string>
+    <string name="insight_short_prev">%1$d%%</string>
+    <string name="insight_avg_distance_value">%1$s км</string>
+    <string name="insight_idle_value">%1$s кВтч · %2$s</string>
+    <string name="insight_idle_prev">%1$s кВтч</string>
+    <string name="insight_idle_minutes">%1$s мин</string>
+    <string name="insight_idle_hours">%1$s ч</string>
 </resources>

@@ -1,5 +1,6 @@
 package com.bydmate.app.data.repository
 
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
 import kotlinx.coroutines.flow.Flow
@@ -8,9 +9,16 @@ import kotlinx.coroutines.flow.map
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// Russian numeric keyboards emit "71,8" — bare toDoubleOrNull() returns null
+// on the comma and we fall back to the default. That made ABRP / Charges /
+// SoH read the default 72.9 instead of the user's setting (issue #19).
+internal fun String.parseNumericSetting(): Double? =
+    replace(',', '.').trim().toDoubleOrNull()
+
 @Singleton
 open class SettingsRepository @Inject constructor(
-    private val settingsDao: SettingsDao
+    private val settingsDao: SettingsDao,
+    private val localePreferences: LocalePreferences,
 ) {
     companion object {
         const val KEY_BATTERY_CAPACITY = "battery_capacity_kwh"
@@ -35,6 +43,14 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
+        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). GPS не передаётся. */
+        const val KEY_ABRP_ENABLED = "abrp_telemetry_enabled"
+        /** API-ключ приложения Iternio ([abetterrouteplanner.com/resources/api](https://abetterrouteplanner.com/resources/api)). */
+        const val KEY_ABRP_API_KEY = "abrp_api_key"
+        /** Токен живых данных автомобиля из ABRP. */
+        const val KEY_ABRP_USER_TOKEN = "abrp_user_token"
+        /** Необязательный код модели автомобиля из библиотеки ABRP. */
+        const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
@@ -47,6 +63,7 @@ open class SettingsRepository @Inject constructor(
         // runCatchUp can compute a real SOC delta on cold start.
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
+        const val KEY_INSIGHT_CACHE_V2_MIGRATION_DONE = "insight_cache_v2_migration_done"
 
         const val DEFAULT_BATTERY_CAPACITY = "18.3"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -59,13 +76,13 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_VEHICLE_PROFILE = "SONG_L_DMI_112"
 
         val CURRENCIES = listOf(
-            Currency("BYN", "BYN", "Бел. руб."),
-            Currency("RUB", "₽", "Рос. руб."),
-            Currency("UAH", "₴", "Гривна"),
-            Currency("KZT", "₸", "Тенге"),
-            Currency("USD", "$", "Доллар"),
-            Currency("EUR", "€", "Евро"),
-            Currency("CNY", "¥", "Юань"),
+            Currency("BYN", "BYN"),
+            Currency("RUB", "₽"),
+            Currency("UAH", "₴"),
+            Currency("KZT", "₸"),
+            Currency("USD", "$"),
+            Currency("EUR", "€"),
+            Currency("CNY", "¥"),
         )
 
         val VEHICLE_PROFILES = listOf(
@@ -141,7 +158,7 @@ open class SettingsRepository @Inject constructor(
             if (capacityKwh % 1.0 == 0.0) "%.0f".format(capacityKwh) else "%.1f".format(capacityKwh)
     }
 
-    data class Currency(val code: String, val symbol: String, val label: String)
+    data class Currency(val code: String, val symbol: String)
 
     enum class DataSource { ENERGYDATA, DIPLUS }
 
@@ -164,16 +181,16 @@ open class SettingsRepository @Inject constructor(
         settingsDao.set(SettingEntity(key, value))
 
     suspend fun getBatteryCapacity(): Double =
-        getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).toDoubleOrNull() ?: 18.3
+        getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).parseNumericSetting() ?: 18.3
 
     suspend fun getHomeTariff(): Double =
-        getString(KEY_HOME_TARIFF, DEFAULT_HOME_TARIFF).toDoubleOrNull() ?: 0.20
+        getString(KEY_HOME_TARIFF, DEFAULT_HOME_TARIFF).parseNumericSetting() ?: 0.20
 
     suspend fun getDcTariff(): Double =
-        getString(KEY_DC_TARIFF, DEFAULT_DC_TARIFF).toDoubleOrNull() ?: 0.73
+        getString(KEY_DC_TARIFF, DEFAULT_DC_TARIFF).parseNumericSetting() ?: 0.73
 
     suspend fun getFuelPricePerLiter(): Double =
-        getString(KEY_FUEL_PRICE_PER_LITER, DEFAULT_FUEL_PRICE_PER_LITER).toDoubleOrNull() ?: 0.0
+        getString(KEY_FUEL_PRICE_PER_LITER, DEFAULT_FUEL_PRICE_PER_LITER).parseNumericSetting() ?: 0.0
 
     suspend fun getCurrency(): Currency {
         val code = getString(KEY_CURRENCY, DEFAULT_CURRENCY)
@@ -187,7 +204,7 @@ open class SettingsRepository @Inject constructor(
         return when (raw) {
             "home" -> getHomeTariff()
             "dc" -> getDcTariff()
-            else -> raw.toDoubleOrNull() ?: getHomeTariff()
+            else -> raw.parseNumericSetting() ?: getHomeTariff()
         }
     }
 
@@ -195,18 +212,18 @@ open class SettingsRepository @Inject constructor(
         getString(KEY_TRIP_COST_TARIFF, "home")
 
     suspend fun getConsumptionGoodThreshold(): Double =
-        getString(KEY_CONSUMPTION_GOOD, DEFAULT_CONSUMPTION_GOOD).toDoubleOrNull() ?: 20.0
+        getString(KEY_CONSUMPTION_GOOD, DEFAULT_CONSUMPTION_GOOD).parseNumericSetting() ?: 20.0
 
     suspend fun getConsumptionBadThreshold(): Double =
-        getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).toDoubleOrNull() ?: 30.0
+        getString(KEY_CONSUMPTION_BAD, DEFAULT_CONSUMPTION_BAD).parseNumericSetting() ?: 30.0
 
     /** Live (good, bad) pair for UI coloring. Emits on every Settings edit. */
     fun observeConsumptionThresholds(): Flow<Pair<Double, Double>> = combine(
         observeString(KEY_CONSUMPTION_GOOD).map {
-            it?.toDoubleOrNull() ?: DEFAULT_CONSUMPTION_GOOD.toDouble()
+            it?.parseNumericSetting() ?: DEFAULT_CONSUMPTION_GOOD.toDouble()
         },
         observeString(KEY_CONSUMPTION_BAD).map {
-            it?.toDoubleOrNull() ?: DEFAULT_CONSUMPTION_BAD.toDouble()
+            it?.parseNumericSetting() ?: DEFAULT_CONSUMPTION_BAD.toDouble()
         },
     ) { good, bad -> good to bad }
 
@@ -230,8 +247,10 @@ open class SettingsRepository @Inject constructor(
     suspend fun isSetupCompleted(): Boolean =
         getString(KEY_SETUP_COMPLETED, "false") == "true"
 
-    suspend fun setSetupCompleted() =
+    suspend fun setSetupCompleted() {
         setString(KEY_SETUP_COMPLETED, "true")
+        localePreferences.markSetupCompletedMirror()  // sync mirror
+    }
 
     suspend fun isDedupCleanupDone(): Boolean =
         getString(KEY_DEDUP_CLEANUP_DONE, "false") == "true"
@@ -314,4 +333,10 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setMigrationV2_4_17Done() =
         setString(KEY_MIGRATION_V2_4_17, "true")
+
+    suspend fun isInsightCacheV2MigrationDone(): Boolean =
+        getString(KEY_INSIGHT_CACHE_V2_MIGRATION_DONE, "false") == "true"
+
+    suspend fun setInsightCacheV2MigrationDone() =
+        setString(KEY_INSIGHT_CACHE_V2_MIGRATION_DONE, "true")
 }
