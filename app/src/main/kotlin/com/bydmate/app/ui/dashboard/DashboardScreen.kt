@@ -61,6 +61,7 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.DynamicMetric
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
@@ -77,6 +78,7 @@ fun DashboardScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val isHybridProfile = SettingsRepository.vehicleProfileById(state.vehicleProfileId).isHybrid
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -484,10 +486,19 @@ fun DashboardScreen(
                     StatCard(
                         stringResource(R.string.dashboard_stat_energy),
                         stringResource(R.string.dashboard_stat_kwh_value, state.totalKwh),
-                        state.totalFuelLiters.takeIf { it > 0.0 }?.let { "%.1f л".format(it) },
+                        null,
                         AccentBlue,
                         Modifier.weight(1f)
                     )
+                    if (isHybridProfile) {
+                        StatCard(
+                            "Топливо",
+                            state.totalFuelLiters.takeIf { it > 0.0 }?.let { "%.1f л".format(it) } ?: "—",
+                            null,
+                            AccentOrange,
+                            Modifier.weight(1f)
+                        )
+                    }
                     val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
                     StatCard(
                         stringResource(R.string.dashboard_stat_consumption),
@@ -508,6 +519,9 @@ fun DashboardScreen(
                     Text(stringResource(R.string.dashboard_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                     Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                     Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    if (isHybridProfile) {
+                        Text("л", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
+                    }
                     Text(stringResource(R.string.dashboard_col_per100), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                     Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                 }
@@ -517,7 +531,8 @@ fun DashboardScreen(
                             TripCard(
                                 trip = trip,
                                 onClick = { },
-                                currencySymbol = state.currencySymbol
+                                currencySymbol = state.currencySymbol,
+                                showFuelColumn = isHybridProfile
                             )
                         }
                     }

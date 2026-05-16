@@ -365,8 +365,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
             settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
             settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, state.fuelPricePerLiter)
-            val tariff = settingsRepository.getTripCostTariff()
-            historyImporter.calculateMissingCosts(tariff)
+            recalculateTripCosts(enrichWithDiPlus = true)
             _uiState.update { it.copy(tariffSaveStatus = appContext.getString(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(tariffSaveStatus = null) }
@@ -376,30 +375,40 @@ class SettingsViewModel @Inject constructor(
     /** Re-enrich historical trips from DiPlus and recalculate cost for ALL trips using current tariffs. */
     fun recalculateAllCosts() {
         viewModelScope.launch {
-            val enriched = historyImporter.enrichWithDiPlus()
-            val tariff = settingsRepository.getTripCostTariff()
-            val fuelPrice = settingsRepository.getFuelPricePerLiter()
-            val allTrips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
-            var count = 0
-            for (trip in allTrips) {
-                val electricityCost = trip.kwhConsumed?.let { it * tariff }
-                val fuelCost = trip.fuelLiters?.let { it * fuelPrice }
-                if (electricityCost == null && fuelCost == null) continue
-                tripRepository.updateTrip(trip.copy(
-                    electricityCost = electricityCost,
-                    fuelCost = fuelCost,
-                    cost = (electricityCost ?: 0.0) + (fuelCost ?: 0.0)
-                ))
-                count++
-            }
+            val result = recalculateTripCosts(enrichWithDiPlus = true)
             _uiState.update {
                 it.copy(
-                    recalcStatus = "${appContext.getString(R.string.settings_recalc_done, count)} · Di+: $enriched"
+                    recalcStatus = "${appContext.getString(R.string.settings_recalc_done, result.recalculated)} · Di+: ${result.enriched}"
                 )
             }
             delay(3000)
             _uiState.update { it.copy(recalcStatus = null) }
         }
+    }
+
+    private data class CostRecalculationResult(
+        val enriched: Int,
+        val recalculated: Int
+    )
+
+    private suspend fun recalculateTripCosts(enrichWithDiPlus: Boolean): CostRecalculationResult {
+        val enriched = if (enrichWithDiPlus) historyImporter.enrichWithDiPlus() else 0
+        val tariff = settingsRepository.getTripCostTariff()
+        val fuelPrice = settingsRepository.getFuelPricePerLiter()
+        val allTrips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
+        var count = 0
+        for (trip in allTrips) {
+            val electricityCost = trip.kwhConsumed?.let { it * tariff }
+            val fuelCost = trip.fuelLiters?.let { it * fuelPrice }
+            if (electricityCost == null && fuelCost == null) continue
+            tripRepository.updateTrip(trip.copy(
+                electricityCost = electricityCost,
+                fuelCost = fuelCost,
+                cost = (electricityCost ?: 0.0) + (fuelCost ?: 0.0)
+            ))
+            count++
+        }
+        return CostRecalculationResult(enriched = enriched, recalculated = count)
     }
 
     /** Save distance units preference (km or miles). */

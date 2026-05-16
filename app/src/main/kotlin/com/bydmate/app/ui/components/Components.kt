@@ -230,7 +230,8 @@ fun TripCard(
     trip: TripEntity,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    currencySymbol: String = "BYN"
+    currencySymbol: String = "BYN",
+    showFuelColumn: Boolean = false
 ) {
     val ctx = androidx.compose.ui.platform.LocalContext.current
     // Compact single-row trip card with weight-based columns
@@ -270,20 +271,23 @@ fun TripCard(
 
         // kWh
         Text(
-            text = buildString {
-                append(trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—")
-                trip.fuelLiters?.takeIf { it > 0.0 }?.let { append(" / %.1fл".format(it)) }
-            },
+            text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
             color = AccentBlue, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
 
-        // Consumption — color-coded
-        val consumptionText = buildString {
-            append(trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—")
-            trip.fuelLPer100km?.takeIf { it > 0.0 }?.let { append(" / %.1fл".format(it)) }
+        if (showFuelColumn) {
+            Text(
+                text = trip.fuelLiters?.takeIf { it > 0.0 }?.let { "%.1f".format(it) } ?: "—",
+                color = AccentOrange, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End,
+                modifier = Modifier.weight(1f)
+            )
         }
+
+        // Consumption — color-coded
+        val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
         Text(
             text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,
