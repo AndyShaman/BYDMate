@@ -294,8 +294,8 @@ class AutoserviceChargingDetectorTest {
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         assertEquals(1, setup.chargeDao.inserted.size)
         val ch = setup.chargeDao.inserted.single()
-        // (91-80)/100 * 72.9 = 8.019
-        assertEquals(8.019, ch.kwhCharged!!, 0.01)
+        // Song L DM-i 112 default: (91-80)/100 * 18.3 = 2.013
+        assertEquals(2.013, ch.kwhCharged!!, 0.01)
         assertEquals("autoservice_soc_estimate", ch.detectionSource)
     }
 
@@ -353,7 +353,7 @@ class AutoserviceChargingDetectorTest {
     fun `gate A cap delta above 200 falls through to gate C`() = runTest {
         // prevCap=0.5, currentCap=250 → delta=249.5 > 200 → Gate A fails plausibility
         // Gate B: currentCap=250 > 200 → Gate B also fails plausibility
-        // Gate C: SOC estimate (91-80)/100 * 72.9 = 8.019
+        // Gate C: SOC estimate using Song L DM-i 112 default: (91-80)/100 * 18.3 = 2.013
         val setup = build(
             battery = battery(soc = 91f),
             charging = charging(capKwh = 250.0f),
@@ -365,7 +365,7 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(8.019, ch.kwhCharged!!, 0.01)
+        assertEquals(2.013, ch.kwhCharged!!, 0.01)
         assertEquals("autoservice_soc_estimate", ch.detectionSource)
     }
 

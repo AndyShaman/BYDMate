@@ -18,12 +18,14 @@ import javax.inject.Inject
 
 data class WelcomeUiState(
     val step: Int = 1,
-    val dataSource: String = "ENERGYDATA", // "ENERGYDATA" or "DIPLUS"
+    val vehicleProfileId: String = SettingsRepository.DEFAULT_VEHICLE_PROFILE,
+    val dataSource: String = SettingsRepository.DataSource.DIPLUS.name, // "ENERGYDATA" or "DIPLUS"
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
+    val fuelPricePerLiter: String = SettingsRepository.DEFAULT_FUEL_PRICE_PER_LITER,
     val tripCostMode: String = "home", // "home", "dc", "custom"
     val customTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val isLoading: Boolean = false,
@@ -45,8 +47,22 @@ class WelcomeViewModel @Inject constructor(
     fun setBatteryCapacity(value: String) = _uiState.update { it.copy(batteryCapacity = value) }
     fun setHomeTariff(value: String) = _uiState.update { it.copy(homeTariff = value) }
     fun setDcTariff(value: String) = _uiState.update { it.copy(dcTariff = value) }
+    fun setFuelPricePerLiter(value: String) = _uiState.update { it.copy(fuelPricePerLiter = value) }
     fun setCustomTariff(value: String) = _uiState.update { it.copy(customTariff = value) }
     fun setTripCostMode(mode: String) = _uiState.update { it.copy(tripCostMode = mode) }
+
+    fun setVehicleProfile(profileId: String) {
+        val profile = SettingsRepository.vehicleProfileById(profileId)
+        _uiState.update {
+            it.copy(
+                vehicleProfileId = profile.id,
+                dataSource = profile.dataSource.name,
+                batteryCapacity = profile.batteryCapacityKwh
+                    ?.let(SettingsRepository::formatCapacity)
+                    ?: it.batteryCapacity
+            )
+        }
+    }
 
     fun setCurrency(code: String) {
         val currency = SettingsRepository.CURRENCIES.find { it.code == code }
@@ -65,13 +81,14 @@ class WelcomeViewModel @Inject constructor(
 
             // Save all settings
             val state = _uiState.value
-            val dataSource = runCatching { SettingsRepository.DataSource.valueOf(state.dataSource) }
-                .getOrDefault(SettingsRepository.DataSource.ENERGYDATA)
-            settingsRepository.setDataSource(dataSource)
+            val profile = SettingsRepository.vehicleProfileById(state.vehicleProfileId)
+            settingsRepository.setString(SettingsRepository.KEY_VEHICLE_PROFILE, profile.id)
+            settingsRepository.setDataSource(profile.dataSource)
             settingsRepository.setString(SettingsRepository.KEY_BATTERY_CAPACITY, state.batteryCapacity)
             settingsRepository.setString(SettingsRepository.KEY_CURRENCY, state.currency)
             settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
             settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
+            settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, state.fuelPricePerLiter)
 
             val tariffValue = when (state.tripCostMode) {
                 "home" -> "home"

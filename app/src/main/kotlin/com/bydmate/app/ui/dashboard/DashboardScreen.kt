@@ -74,6 +74,11 @@ fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val carImageRes = if (state.vehicleProfileId.startsWith("SONG_L_DMI")) {
+        R.drawable.song_l_dmi
+    } else {
+        R.drawable.leopard3
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -99,7 +104,7 @@ fun DashboardScreen(
             Box(modifier = Modifier.weight(0.4f)) {
                 // Ghost car background
                 Image(
-                    painter = painterResource(R.drawable.leopard3),
+                    painter = painterResource(carImageRes),
                     contentDescription = null,
                     modifier = Modifier
                         .fillMaxSize()
@@ -472,9 +477,21 @@ fun DashboardScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     StatCard("Пробег", "%.1f км".format(state.totalKm), "${state.tripCount} поездок", Color.White, Modifier.weight(1f))
-                    StatCard("Энергия", "%.1f кВт·ч".format(state.totalKwh), null, AccentBlue, Modifier.weight(1f))
+                    StatCard(
+                        "Энергия",
+                        "%.1f кВт·ч".format(state.totalKwh),
+                        state.totalFuelLiters.takeIf { it > 0.0 }?.let { "%.1f л".format(it) },
+                        AccentBlue,
+                        Modifier.weight(1f)
+                    )
                     val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
-                    StatCard("Расход", if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
+                    StatCard(
+                        "Расход",
+                        if (state.avgConsumption > 0) "%.1f кВт·ч/100".format(state.avgConsumption) else "—",
+                        state.avgFuelConsumption.takeIf { it > 0.0 }?.let { "%.1f л/100".format(it) },
+                        consColor,
+                        Modifier.weight(1f)
+                    )
                     StatCard("Стоимость", "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
                 }
 

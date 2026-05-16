@@ -29,6 +29,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
@@ -37,6 +41,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -155,6 +160,29 @@ fun SettingsScreen(
                 modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                SectionHeader(text = "Автомобиль")
+                Card(
+                    shape = RoundedCornerShape(12.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "Профиль задаёт источник поездок и номинальную ёмкость батареи.",
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                        )
+                        VehicleProfileDropdown(
+                            selectedProfileId = state.vehicleProfileId,
+                            onProfileSelected = viewModel::setVehicleProfile,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+
                 SectionHeader(text = "Батарея и тарифы")
                 Card(
                     shape = RoundedCornerShape(12.dp),
@@ -183,6 +211,20 @@ fun SettingsScreen(
                             onValueChange = { viewModel.updateDcTariff(it) },
                             keyboardType = KeyboardType.Decimal
                         )
+                        if (state.isHybridProfile) {
+                            SettingsTextField(
+                                label = "Топливо (${state.currencySymbol}/л)",
+                                value = state.fuelPricePerLiter,
+                                onValueChange = { viewModel.updateFuelPricePerLiter(it) },
+                                keyboardType = KeyboardType.Decimal
+                            )
+                            Text(
+                                "Средняя цена за литр для расчёта бензиновой части поездок.",
+                                color = TextMuted,
+                                fontSize = 11.sp,
+                                lineHeight = 15.sp
+                            )
+                        }
                         Text("Тариф поездок", color = TextSecondary, fontSize = 14.sp)
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             UnitChip("AC", state.tripCostTariff == "home") { viewModel.saveTripCostTariff("home") }
@@ -213,7 +255,7 @@ fun SettingsScreen(
                             Text(it, color = AccentGreen, fontSize = 12.sp)
                         }
                         Text(
-                            "Новый тариф применяется к будущим поездкам.\nУже посчитанные поездки не изменятся.",
+                            "Новые тарифы применяются к будущим поездкам.\nУже посчитанные поездки не изменятся.",
                             color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp
                         )
 
@@ -275,7 +317,7 @@ fun SettingsScreen(
                         verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = "Leopard 3 — BYD energydata.\nSong и другие без встроенной базы — DiPlus TripInfo.",
+                            text = "Для ${state.vehicleProfileName}: ${if (state.dataSource == "DIPLUS") "DiPlus TripInfo" else "BYD energydata"}.\nSong L DM-i 112 km (2024) должен работать через DiPlus TripInfo.",
                             color = TextSecondary,
                             fontSize = 11.sp,
                         )
@@ -863,6 +905,84 @@ private fun SectionHeader(text: String) {
     )
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun VehicleProfileDropdown(
+    selectedProfileId: String,
+    onProfileSelected: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val selectedProfile = SettingsRepository.vehicleProfileById(selectedProfileId)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier,
+    ) {
+        OutlinedTextField(
+            value = selectedProfile.label,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Модель") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = AccentGreen,
+                unfocusedBorderColor = CardBorder,
+                focusedLabelColor = AccentGreen,
+                unfocusedLabelColor = TextSecondary,
+                focusedTrailingIconColor = AccentGreen,
+                unfocusedTrailingIconColor = TextSecondary,
+                cursorColor = AccentGreen,
+            ),
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+        ) {
+            SettingsRepository.VEHICLE_PROFILES.forEach { profile ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = profile.label,
+                                color = TextPrimary,
+                                fontSize = 13.sp,
+                                fontWeight = if (profile.id == selectedProfile.id) {
+                                    FontWeight.SemiBold
+                                } else {
+                                    FontWeight.Normal
+                                },
+                            )
+                            Text(
+                                text = profile.note,
+                                color = TextSecondary,
+                                fontSize = 11.sp,
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onProfileSelected(profile.id)
+                    },
+                )
+            }
+        }
+    }
+    Text(
+        text = selectedProfile.note,
+        color = AccentGreen,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+}
+
 @Composable
 private fun DataSourceOption(label: String, selected: Boolean, onClick: () -> Unit) {
     Row(
@@ -1101,4 +1221,3 @@ private fun ModelPickerDialog(
         }
     }
 }
-

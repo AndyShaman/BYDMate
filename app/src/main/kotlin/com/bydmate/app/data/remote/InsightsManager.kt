@@ -34,17 +34,18 @@ class InsightsManager @Inject constructor(
         private const val KEY_MODELS_DATE = "models_date"
         private const val KEY_V12_HISTORY = "v12_history"   // JSON array of {date:"yyyy-MM-dd", volts:Double}, max 7 entries
 
-        private const val SYSTEM_PROMPT = """You are an EV driving analyst for BYD Leopard 3 (Fangchengbao Bao 3), a plug-in hybrid SUV with a 72.9 kWh LFP Blade Battery.
+        private const val SYSTEM_PROMPT_TEMPLATE = """You are an EV / plug-in hybrid driving analyst for %s.
 
 Analyze the provided driving statistics and return actionable insights in Russian.
 
 Focus on:
-- Consumption patterns and trends (week-over-week AND month-over-month)
+- Electric and fuel consumption patterns and trends (week-over-week AND month-over-month)
 - Cost optimization opportunities
 - Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
 - Driving habit impact (short trips vs long, speed impact on consumption)
 - Seasonal/temperature effects on range and consumption
 - Correlations the user wouldn't notice (time of day vs efficiency, temperature vs consumption)
+- For hybrids, compare electric vs fuel use and mention fuel only when fuel data is present
 
 IMPORTANT about "Stationary consumption":
 This is energy used while the vehicle is RUNNING but NOT MOVING — engine warmup, waiting with A/C on, configuring the car, etc. This is NORMAL behavior, NOT a parasitic drain or anomaly. Do NOT recommend checking remote access, alarm systems, or parking mode settings. Only mention it if the proportion is notably high compared to driving consumption, and frame advice as "reduce idle time" not "diagnose a problem".
@@ -52,7 +53,7 @@ This is energy used while the vehicle is RUNNING but NOT MOVING — engine warmu
 Be specific — reference actual numbers from the data. Give practical advice.
 Do NOT mention SoH percentage or battery capacity estimation — we cannot measure it accurately.
 
-Key metrics and dynamics (consumption, mileage, trends) are shown separately in the UI — do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
+Key metrics and dynamics (electric consumption, fuel consumption, mileage, trends) are shown separately in the UI — do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
 
 Return ONLY valid JSON (no markdown, no code fences):
 {"title":"key change in 3-5 words","summary":"cause or advice, max 60 chars","insights":["insight 1","insight 2","insight 3"],"tone":"good|warning|critical"}
@@ -135,7 +136,21 @@ Anti-hallucination rules (CRITICAL):
                 return null
             }
 
-            val response = openRouterClient.chat(apiKey, modelId, SYSTEM_PROMPT, dataPrompt)
+            val vehicle = settingsRepository.getVehicleProfile()
+            val vehicleDescription = buildString {
+                append(vehicle.label)
+                vehicle.batteryCapacityKwh?.let {
+                    append(", a BYD plug-in hybrid / EV with a ")
+                    append(SettingsRepository.formatCapacity(it))
+                    append(" kWh LFP Blade Battery")
+                }
+            }
+            val response = openRouterClient.chat(
+                apiKey,
+                modelId,
+                SYSTEM_PROMPT_TEMPLATE.replace("%s", vehicleDescription),
+                dataPrompt
+            )
             if (response == null) {
                 Log.w(TAG, "No response from OpenRouter")
                 return getCachedInsight()
@@ -218,17 +233,33 @@ Anti-hallucination rules (CRITICAL):
         val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
         val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
         val recentCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+        val recentFuel = recentTrips.sumOf { it.fuelLiters ?: 0.0 }
+        val recentFuelCons = if (recentKm > 0) recentFuel / recentKm * 100 else 0.0
 
         val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
         val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
         val prevCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+        val prevFuel = prevTrips.sumOf { it.fuelLiters ?: 0.0 }
+        val prevFuelCons = if (prevKm > 0) prevFuel / prevKm * 100 else 0.0
 
         if (recentCons > 0) {
             val pct = if (prevCons > 0) (recentCons - prevCons) / prevCons * 100 else null
             metrics.add(DynamicMetric(
-                label = "Расход",
+                label = "Электрорасход",
                 current = "%.1f кВтч/100".format(recentCons),
                 previous = if (prevCons > 0) "%.1f".format(prevCons) else null,
+                changePct = pct,
+                sentiment = consumptionSentiment(pct),
+                section = "Неделя к неделе"
+            ))
+        }
+
+        if (recentFuelCons > 0) {
+            val pct = if (prevFuelCons > 0) (recentFuelCons - prevFuelCons) / prevFuelCons * 100 else null
+            metrics.add(DynamicMetric(
+                label = "Топливо",
+                current = "%.1f л/100".format(recentFuelCons),
+                previous = if (prevFuelCons > 0) "%.1f".format(prevFuelCons) else null,
                 changePct = pct,
                 sentiment = consumptionSentiment(pct),
                 section = "Неделя к неделе"
@@ -312,7 +343,7 @@ Anti-hallucination rules (CRITICAL):
 
     // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
-        val consumption = dynamics.firstOrNull { it.label == "Расход" }
+        val consumption = dynamics.firstOrNull { it.label == "Электрорасход" }
         return com.bydmate.app.data.automation.InsightToneLogic.consumptionTone(consumption?.changePct)
     }
 
@@ -367,15 +398,24 @@ Anti-hallucination rules (CRITICAL):
         // Recent period stats
         val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
         val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
+        val recentFuel = recentTrips.sumOf { it.fuelLiters ?: 0.0 }
         val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+        val recentAvgFuel = if (recentKm > 0) recentFuel / recentKm * 100 else 0.0
         val recentAvgSpeed = recentTrips.mapNotNull { it.avgSpeedKmh }.let {
             if (it.isNotEmpty()) it.average() else 0.0
         }
         val shortTrips = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
 
         sb.appendLine("=== Last 7 days ===")
-        sb.appendLine("Trips: ${recentTrips.size}, Total: %.1f km, %.1f kWh".format(recentKm, recentKwh))
-        sb.appendLine("Avg consumption: %.1f kWh/100km, Avg speed: %.0f km/h".format(recentAvgCons, recentAvgSpeed))
+        sb.appendLine("Trips: ${recentTrips.size}, Total: %.1f km, %.1f kWh%s".format(
+            recentKm,
+            recentKwh,
+            if (recentFuel > 0) ", %.1f L fuel".format(recentFuel) else ""
+        ))
+        sb.appendLine("Avg electric consumption: %.1f kWh/100km, Avg speed: %.0f km/h".format(recentAvgCons, recentAvgSpeed))
+        if (recentFuel > 0) {
+            sb.appendLine("Avg fuel consumption: %.1f L/100km".format(recentAvgFuel))
+        }
         sb.appendLine("Short trips (<5km): $shortTrips of ${recentTrips.size}")
 
         // Best/worst trip
@@ -386,35 +426,70 @@ Anti-hallucination rules (CRITICAL):
         tripsWithCons.maxByOrNull { it.kwhPer100km!! }?.let {
             sb.appendLine("Worst trip: %.1f/100 (%.1f km, %.0f km/h)".format(it.kwhPer100km, it.distanceKm, it.avgSpeedKmh ?: 0.0))
         }
+        val tripsWithFuel = recentTrips.filter { (it.fuelLPer100km ?: 0.0) > 0 && (it.distanceKm ?: 0.0) > 1.0 }
+        tripsWithFuel.minByOrNull { it.fuelLPer100km!! }?.let {
+            sb.appendLine("Best fuel trip: %.1f L/100 (%.1f km, %.0f km/h)".format(it.fuelLPer100km, it.distanceKm, it.avgSpeedKmh ?: 0.0))
+        }
+        tripsWithFuel.maxByOrNull { it.fuelLPer100km!! }?.let {
+            sb.appendLine("Worst fuel trip: %.1f L/100 (%.1f km, %.0f km/h)".format(it.fuelLPer100km, it.distanceKm, it.avgSpeedKmh ?: 0.0))
+        }
 
         // Cost
         val recentCost = recentTrips.sumOf { it.cost ?: 0.0 }
+        val recentElectricityCost = recentTrips.sumOf { it.electricityCost ?: 0.0 }
+        val recentFuelCost = recentTrips.sumOf { it.fuelCost ?: 0.0 }
         val currency = settingsRepository.getCurrency()
         if (recentCost > 0) {
             sb.appendLine("Cost: %.2f %s (%.2f %s/km)".format(recentCost, currency.code,
                 if (recentKm > 0) recentCost / recentKm else 0.0, currency.code))
+            if (recentElectricityCost > 0 || recentFuelCost > 0) {
+                sb.appendLine("Cost split: electricity %.2f %s, fuel %.2f %s".format(
+                    recentElectricityCost,
+                    currency.code,
+                    recentFuelCost,
+                    currency.code
+                ))
+            }
         }
 
         // Previous period comparison
         if (prevTrips.isNotEmpty()) {
             val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
             val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val prevFuel = prevTrips.sumOf { it.fuelLiters ?: 0.0 }
             val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+            val prevAvgFuel = if (prevKm > 0) prevFuel / prevKm * 100 else 0.0
             sb.appendLine("\n=== Previous 7 days (comparison) ===")
-            sb.appendLine("Trips: ${prevTrips.size}, Total: %.1f km, %.1f kWh".format(prevKm, prevKwh))
-            sb.appendLine("Avg consumption: %.1f kWh/100km".format(prevAvgCons))
+            sb.appendLine("Trips: ${prevTrips.size}, Total: %.1f km, %.1f kWh%s".format(
+                prevKm,
+                prevKwh,
+                if (prevFuel > 0) ", %.1f L fuel".format(prevFuel) else ""
+            ))
+            sb.appendLine("Avg electric consumption: %.1f kWh/100km".format(prevAvgCons))
+            if (prevFuel > 0) {
+                sb.appendLine("Avg fuel consumption: %.1f L/100km".format(prevAvgFuel))
+            }
         }
 
         // Monthly summary (30 days)
         if (monthTrips.size > recentTrips.size) {
             val monthKm = monthTrips.sumOf { it.distanceKm ?: 0.0 }
             val monthKwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val monthFuel = monthTrips.sumOf { it.fuelLiters ?: 0.0 }
             val monthAvgCons = if (monthKm > 0) monthKwh / monthKm * 100 else 0.0
+            val monthAvgFuel = if (monthKm > 0) monthFuel / monthKm * 100 else 0.0
             val monthCost = monthTrips.sumOf { it.cost ?: 0.0 }
             val monthShort = monthTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
             sb.appendLine("\n=== Last 30 days (monthly) ===")
-            sb.appendLine("Trips: ${monthTrips.size}, Total: %.1f km, %.1f kWh".format(monthKm, monthKwh))
-            sb.appendLine("Avg consumption: %.1f kWh/100km".format(monthAvgCons))
+            sb.appendLine("Trips: ${monthTrips.size}, Total: %.1f km, %.1f kWh%s".format(
+                monthKm,
+                monthKwh,
+                if (monthFuel > 0) ", %.1f L fuel".format(monthFuel) else ""
+            ))
+            sb.appendLine("Avg electric consumption: %.1f kWh/100km".format(monthAvgCons))
+            if (monthFuel > 0) {
+                sb.appendLine("Avg fuel consumption: %.1f L/100km".format(monthAvgFuel))
+            }
             sb.appendLine("Short trips (<5km): $monthShort of ${monthTrips.size}")
             if (monthCost > 0) {
                 sb.appendLine("Total cost: %.2f %s".format(monthCost, currency.code))

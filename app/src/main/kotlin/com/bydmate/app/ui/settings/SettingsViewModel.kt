@@ -78,6 +78,7 @@ data class SettingsUiState(
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
+    val fuelPricePerLiter: String = SettingsRepository.DEFAULT_FUEL_PRICE_PER_LITER,
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
@@ -112,7 +113,10 @@ data class SettingsUiState(
     val aliceEnabled: Boolean = false,
     val aliceSaveStatus: String? = null,
     val autoCheckUpdates: Boolean = true,
-    val dataSource: String = "ENERGYDATA",
+    val vehicleProfileId: String = SettingsRepository.DEFAULT_VEHICLE_PROFILE,
+    val vehicleProfileName: String = SettingsRepository.vehicleProfileById(SettingsRepository.DEFAULT_VEHICLE_PROFILE).label,
+    val isHybridProfile: Boolean = SettingsRepository.vehicleProfileById(SettingsRepository.DEFAULT_VEHICLE_PROFILE).isHybrid,
+    val dataSource: String = SettingsRepository.DataSource.DIPLUS.name,
     val dataSourceStatus: String? = null,
     val autoserviceEnabled: Boolean = false,
     val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled
@@ -163,6 +167,10 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.KEY_DC_TARIFF,
                 SettingsRepository.DEFAULT_DC_TARIFF
             )
+            val fuelPrice = settingsRepository.getString(
+                SettingsRepository.KEY_FUEL_PRICE_PER_LITER,
+                SettingsRepository.DEFAULT_FUEL_PRICE_PER_LITER
+            )
             val units = settingsRepository.getString(
                 SettingsRepository.KEY_UNITS,
                 SettingsRepository.DEFAULT_UNITS
@@ -192,6 +200,7 @@ class SettingsViewModel @Inject constructor(
             val aliceEnabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
 
             val dataSource = settingsRepository.getDataSource().name
+            val vehicleProfile = settingsRepository.getVehicleProfile()
 
             val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
 
@@ -200,6 +209,7 @@ class SettingsViewModel @Inject constructor(
                     batteryCapacity = capacity,
                     homeTariff = homeTariff,
                     dcTariff = dcTariff,
+                    fuelPricePerLiter = fuelPrice,
                     units = units,
                     currency = currency.code,
                     currencySymbol = currency.symbol,
@@ -214,6 +224,9 @@ class SettingsViewModel @Inject constructor(
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
+                    vehicleProfileId = vehicleProfile.id,
+                    vehicleProfileName = vehicleProfile.label,
+                    isHybridProfile = vehicleProfile.isHybrid,
                     dataSource = dataSource,
                     autoserviceEnabled = autoserviceEnabled,
                 )
@@ -270,6 +283,27 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun setVehicleProfile(profileId: String) {
+        val profile = SettingsRepository.vehicleProfileById(profileId)
+        _uiState.update {
+            it.copy(
+                vehicleProfileId = profile.id,
+                vehicleProfileName = profile.label,
+                isHybridProfile = profile.isHybrid,
+                dataSource = profile.dataSource.name,
+                batteryCapacity = profile.batteryCapacityKwh
+                    ?.let(SettingsRepository::formatCapacity)
+                    ?: it.batteryCapacity,
+                dataSourceStatus = "Профиль: ${profile.label}"
+            )
+        }
+        viewModelScope.launch {
+            settingsRepository.setVehicleProfile(profile)
+            val r = historyImporter.runSync()
+            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: "Готово") }
+        }
+    }
+
     /** Save battery capacity setting. */
     fun saveBatteryCapacity(value: String) {
         _uiState.update { it.copy(batteryCapacity = value) }
@@ -287,12 +321,17 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(dcTariff = value) }
     }
 
+    fun updateFuelPricePerLiter(value: String) {
+        _uiState.update { it.copy(fuelPricePerLiter = value) }
+    }
+
     /** Save tariffs to DB and calculate costs for new trips. */
     fun saveTariffs() {
         val state = _uiState.value
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
             settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
+            settingsRepository.setString(SettingsRepository.KEY_FUEL_PRICE_PER_LITER, state.fuelPricePerLiter)
             val tariff = settingsRepository.getTripCostTariff()
             historyImporter.calculateMissingCosts(tariff)
             _uiState.update { it.copy(tariffSaveStatus = "Сохранено") }
@@ -301,18 +340,26 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Recalculate cost for ALL trips using current tariff. */
+    /** Re-enrich historical trips from DiPlus and recalculate cost for ALL trips using current tariffs. */
     fun recalculateAllCosts() {
         viewModelScope.launch {
+            val enriched = historyImporter.enrichWithDiPlus()
             val tariff = settingsRepository.getTripCostTariff()
+            val fuelPrice = settingsRepository.getFuelPricePerLiter()
             val allTrips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
             var count = 0
             for (trip in allTrips) {
-                val kwh = trip.kwhConsumed ?: continue
-                tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
+                val electricityCost = trip.kwhConsumed?.let { it * tariff }
+                val fuelCost = trip.fuelLiters?.let { it * fuelPrice }
+                if (electricityCost == null && fuelCost == null) continue
+                tripRepository.updateTrip(trip.copy(
+                    electricityCost = electricityCost,
+                    fuelCost = fuelCost,
+                    cost = (electricityCost ?: 0.0) + (fuelCost ?: 0.0)
+                ))
                 count++
             }
-            _uiState.update { it.copy(recalcStatus = "Пересчитано: $count поездок") }
+            _uiState.update { it.copy(recalcStatus = "Обновлено Di+: $enriched, пересчитано: $count") }
             delay(3000)
             _uiState.update { it.copy(recalcStatus = null) }
         }
@@ -373,15 +420,17 @@ class SettingsViewModel @Inject constructor(
                 val trips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
                 val tripsFile = File(downloadsDir, "bydmate_trips_$timestamp.csv")
                 FileWriter(tripsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost,exterior_temp\n")
+                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,fuel_liters,fuel_l_per_100km,electricity_cost,fuel_cost,cost,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,exterior_temp\n")
                     for (trip in trips) {
                         writer.append("${trip.id},${trip.startTs},${trip.endTs ?: ""},")
                         writer.append("${trip.distanceKm ?: ""},${trip.kwhConsumed ?: ""},")
-                        writer.append("${trip.kwhPer100km ?: ""},${trip.socStart ?: ""},")
+                        writer.append("${trip.kwhPer100km ?: ""},${trip.fuelLiters ?: ""},")
+                        writer.append("${trip.fuelLPer100km ?: ""},${trip.electricityCost ?: ""},")
+                        writer.append("${trip.fuelCost ?: ""},${trip.cost ?: ""},${trip.socStart ?: ""},")
                         writer.append("${trip.socEnd ?: ""},${trip.tempAvgC ?: ""},")
                         writer.append("${trip.avgSpeedKmh ?: ""},${trip.batTempAvg ?: ""},")
                         writer.append("${trip.batTempMax ?: ""},${trip.batTempMin ?: ""},")
-                        writer.append("${trip.cost ?: ""},${trip.exteriorTemp ?: ""}\n")
+                        writer.append("${trip.exteriorTemp ?: ""}\n")
                     }
                 }
 
@@ -492,6 +541,7 @@ class SettingsViewModel @Inject constructor(
                         val endFmt = t.endTs?.let { sdf.format(Date(it)) } ?: "null"
                         sb.appendLine("#${t.id}: $startFmt – $endFmt")
                         sb.appendLine("  km=${t.distanceKm ?: "-"}, kwh=${t.kwhConsumed ?: "-"}, " +
+                            "fuel=${t.fuelLiters ?: "-"}, " +
                             "soc=${t.socStart ?: "-"}→${t.socEnd ?: "-"}, " +
                             "speed=${t.avgSpeedKmh?.let { "%.0f".format(it) } ?: "-"}")
                         sb.appendLine("  raw: start=${t.startTs}, end=${t.endTs ?: "null"}")

@@ -266,14 +266,20 @@ fun TripCard(
 
         // kWh
         Text(
-            text = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—",
+            text = buildString {
+                append(trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—")
+                trip.fuelLiters?.takeIf { it > 0.0 }?.let { append(" / %.1fл".format(it)) }
+            },
             color = AccentBlue, fontSize = 14.sp, fontFamily = FontFamily.Monospace,
             textAlign = TextAlign.End,
             modifier = Modifier.weight(1f)
         )
 
         // Consumption — color-coded
-        val consumptionText = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
+        val consumptionText = buildString {
+            append(trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—")
+            trip.fuelLPer100km?.takeIf { it > 0.0 }?.let { append(" / %.1fл".format(it)) }
+        }
         val consumptionClr = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
         Text(
             text = consumptionText, color = consumptionClr, fontSize = 14.sp, fontWeight = FontWeight.Bold,

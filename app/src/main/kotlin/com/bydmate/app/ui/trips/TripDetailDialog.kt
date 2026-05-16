@@ -161,12 +161,20 @@ fun TripDetailDialog(
                         trip.kwhConsumed?.let {
                             DetailRow("Потребление", "%.1f кВт·ч".format(it))
                             trip.kwhPer100km?.let { per100 ->
-                                DetailRow("Расход", "%.1f/100".format(per100), consumptionColor(per100))
+                                DetailRow("Расход электро", "%.1f кВт·ч/100".format(per100), consumptionColor(per100))
+                            }
+                        }
+                        trip.fuelLiters?.let {
+                            DetailRow("Топливо", "%.1f л".format(it))
+                            trip.fuelLPer100km?.let { per100 ->
+                                DetailRow("Расход топлива", "%.1f л/100".format(per100), AccentOrange)
                             }
                         }
                         if (trip.socStart != null && trip.socEnd != null) {
                             DetailRow("SOC", "${trip.socStart}% → ${trip.socEnd}%")
                         }
+                        trip.electricityCost?.let { DetailRow("Электричество", "%.2f %s".format(it, currencySymbol), AccentBlue) }
+                        trip.fuelCost?.let { DetailRow("Топливо", "%.2f %s".format(it, currencySymbol), AccentOrange) }
                         trip.cost?.let { DetailRow("Стоимость", "%.2f %s".format(it, currencySymbol), AccentGreen) }
                         trip.exteriorTemp?.let { DetailRow("Темп.", "${it}°C") }
                     }

@@ -27,6 +27,7 @@ interface TripDao {
     @Query("""
         SELECT COALESCE(SUM(distance_km), 0.0) as totalKm,
                COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
+               COALESCE(SUM(fuel_liters), 0.0) as totalFuelLiters,
                COUNT(*) as tripCount,
                COALESCE(SUM(cost), 0.0) as totalCost
         FROM trips
@@ -49,12 +50,13 @@ interface TripDao {
     @Query("SELECT * FROM trips WHERE soc_start IS NULL AND source = 'energydata'")
     suspend fun getTripsWithoutSoc(): List<TripEntity>
 
-    @Query("SELECT * FROM trips WHERE cost IS NULL AND kwh_consumed IS NOT NULL")
+    @Query("SELECT * FROM trips WHERE cost IS NULL AND (kwh_consumed IS NOT NULL OR fuel_liters IS NOT NULL)")
     suspend fun getTripsWithoutCost(): List<TripEntity>
 
     @Query("""
         SELECT COALESCE(SUM(distance_km), 0.0) as totalKm,
                COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
+               COALESCE(SUM(fuel_liters), 0.0) as totalFuelLiters,
                COUNT(*) as tripCount,
                COALESCE(SUM(cost), 0.0) as totalCost
         FROM trips
@@ -90,10 +92,11 @@ interface TripDao {
     @Query("""
         SELECT COALESCE(SUM(kwh_consumed), 0.0) as totalKwh,
                COALESCE(SUM(distance_km), 0.0) as totalKm,
+               COALESCE(SUM(fuel_liters), 0.0) as totalFuelLiters,
                COUNT(*) as tripCount,
                COALESCE(SUM(cost), 0.0) as totalCost
         FROM (
-            SELECT kwh_consumed, distance_km, cost FROM trips
+            SELECT kwh_consumed, distance_km, fuel_liters, cost FROM trips
             WHERE distance_km > 0 AND kwh_consumed > 0
             ORDER BY start_ts DESC LIMIT :maxTrips
         )
@@ -127,6 +130,7 @@ interface TripDao {
 data class TripSummary(
     val totalKm: Double,
     val totalKwh: Double,
+    val totalFuelLiters: Double = 0.0,
     val tripCount: Int = 0,
     val totalCost: Double = 0.0
 )

@@ -26,8 +26,13 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.MenuAnchorType
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -35,6 +40,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -95,32 +103,21 @@ private fun ModelStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
         modifier = Modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        SectionCard("Какая у тебя модель BYD?") {
+        SectionCard("Профиль автомобиля") {
             Text(
-                "От этого зависит источник данных о поездках.\nLeopard 3 хранит их в встроенной базе BYD (energydata).\nSong и другие модели — только в DiPlus.",
+                "Для Song L DM-i BYDMate использует DiPlus TripInfo и ёмкость батареи выбранной версии.",
                 color = TextSecondary,
                 fontSize = 13.sp
             )
             Spacer(modifier = Modifier.height(8.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-                ModelButton(
-                    label = "Leopard 3",
-                    sublabel = "BYD energydata",
-                    selected = state.dataSource == "ENERGYDATA",
-                    onClick = { viewModel.setDataSource("ENERGYDATA") },
-                    modifier = Modifier.weight(1f)
-                )
-                ModelButton(
-                    label = "Song / другая",
-                    sublabel = "DiPlus TripInfo",
-                    selected = state.dataSource == "DIPLUS",
-                    onClick = { viewModel.setDataSource("DIPLUS") },
-                    modifier = Modifier.weight(1f)
-                )
-            }
+            VehicleProfileDropdown(
+                selectedProfileId = state.vehicleProfileId,
+                onProfileSelected = viewModel::setVehicleProfile,
+                modifier = Modifier.fillMaxWidth()
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                "Можно поменять позже в настройках.",
+                "Выбрано по умолчанию: BYD Song L DM-i 112 km (2024). Можно поменять позже в настройках.",
                 color = TextMuted,
                 fontSize = 11.sp
             )
@@ -139,39 +136,82 @@ private fun ModelStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ModelButton(
-    label: String,
-    sublabel: String,
-    selected: Boolean,
-    onClick: () -> Unit,
+private fun VehicleProfileDropdown(
+    selectedProfileId: String,
+    onProfileSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = if (selected) AccentGreen else CardSurfaceElevated
-        ),
-        modifier = modifier.clickable(onClick = onClick)
+    var expanded by remember { mutableStateOf(false) }
+    val selectedProfile = SettingsRepository.vehicleProfileById(selectedProfileId)
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it },
+        modifier = modifier
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp).fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        OutlinedTextField(
+            value = selectedProfile.label,
+            onValueChange = {},
+            readOnly = true,
+            label = { Text("Модель") },
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .menuAnchor(MenuAnchorType.PrimaryNotEditable, enabled = true)
+                .fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = Color.White,
+                unfocusedTextColor = Color.White,
+                focusedBorderColor = AccentGreen,
+                unfocusedBorderColor = CardBorder,
+                focusedLabelColor = AccentGreen,
+                unfocusedLabelColor = TextSecondary,
+                focusedTrailingIconColor = AccentGreen,
+                unfocusedTrailingIconColor = TextSecondary,
+                cursorColor = AccentGreen
+            )
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
         ) {
-            Text(
-                label,
-                color = if (selected) Color.White else TextPrimary,
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                sublabel,
-                color = if (selected) Color.White else TextSecondary,
-                fontSize = 11.sp
-            )
+            SettingsRepository.VEHICLE_PROFILES.forEach { profile ->
+                DropdownMenuItem(
+                    text = {
+                        Column {
+                            Text(
+                                text = profile.label,
+                                color = TextPrimary,
+                                fontSize = 14.sp,
+                                fontWeight = if (profile.id == selectedProfile.id) {
+                                    FontWeight.SemiBold
+                                } else {
+                                    FontWeight.Normal
+                                }
+                            )
+                            Text(
+                                text = profile.note,
+                                color = TextSecondary,
+                                fontSize = 11.sp
+                            )
+                        }
+                    },
+                    onClick = {
+                        expanded = false
+                        onProfileSelected(profile.id)
+                    }
+                )
+            }
         }
     }
+    Text(
+        selectedProfile.note,
+        color = AccentGreen,
+        fontSize = 11.sp,
+        modifier = Modifier.padding(top = 4.dp)
+    )
 }
 
 @Composable
@@ -194,6 +234,11 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 Text(
                     "Leopard 3: 72.9 кВт·ч (BEV) или 31.8 кВт·ч (PHEV)",
                     color = TextMuted,
+                    fontSize = 11.sp
+                )
+                Text(
+                    "Song L DM-i 112 km (2024): 18.3 кВт·ч",
+                    color = AccentGreen,
                     fontSize = 11.sp
                 )
             }
@@ -230,6 +275,18 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                     value = state.dcTariff,
                     onValueChange = { viewModel.setDcTariff(it) }
                 )
+                if (SettingsRepository.vehicleProfileById(state.vehicleProfileId).isHybrid) {
+                    WelcomeTextField(
+                        label = "Топливо (${state.currencySymbol}/л)",
+                        value = state.fuelPricePerLiter,
+                        onValueChange = { viewModel.setFuelPricePerLiter(it) }
+                    )
+                    Text(
+                        "Укажите среднюю цену за литр — BYDMate посчитает бензиновую часть поездок.",
+                        color = TextMuted,
+                        fontSize = 11.sp
+                    )
+                }
             }
 
             SectionCard("Расчёт стоимости поездок") {

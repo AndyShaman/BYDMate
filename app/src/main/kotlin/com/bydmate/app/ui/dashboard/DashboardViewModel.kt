@@ -37,7 +37,9 @@ data class DashboardUiState(
     val period: DashboardPeriod = DashboardPeriod.WEEK,
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
+    val totalFuelLiters: Double = 0.0,
     val avgConsumption: Double = 0.0,
+    val avgFuelConsumption: Double = 0.0,
     val totalCost: Double = 0.0,
     val tripCount: Int = 0,
     // Legacy aliases for backward compat
@@ -82,6 +84,7 @@ data class DashboardUiState(
     val currentLifetimeKm: Float? = null,
     val currentLifetimeKwh: Float? = null,
     val autoserviceEnabled: Boolean = false,
+    val vehicleProfileId: String = SettingsRepository.DEFAULT_VEHICLE_PROFILE,
     // Widget-style stats around SOC ring (mirror FloatingWidgetView bindings).
     val insideTemp: Int? = null,
     val tripDistanceKm: Double? = null,
@@ -112,6 +115,7 @@ class DashboardViewModel @Inject constructor(
         loadInsight()
         loadPeriodSummary()
         viewModelScope.launch { loadAutoserviceFlag() }
+        observeVehicleProfile()
     }
 
     fun setPeriod(period: DashboardPeriod) {
@@ -232,11 +236,23 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
             val dataSource = settingsRepository.getDataSource()
+            val vehicleProfile = settingsRepository.getVehicleProfile()
             _uiState.update {
                 it.copy(
                     currencySymbol = symbol,
-                    idleDrainAvailable = dataSource == SettingsRepository.DataSource.ENERGYDATA
+                    idleDrainAvailable = dataSource == SettingsRepository.DataSource.ENERGYDATA,
+                    vehicleProfileId = vehicleProfile.id
                 )
+            }
+        }
+    }
+
+    private fun observeVehicleProfile() {
+        viewModelScope.launch {
+            settingsRepository.observeString(SettingsRepository.KEY_VEHICLE_PROFILE).collect { id ->
+                _uiState.update {
+                    it.copy(vehicleProfileId = id ?: SettingsRepository.DEFAULT_VEHICLE_PROFILE)
+                }
             }
         }
     }
@@ -247,6 +263,7 @@ class DashboardViewModel @Inject constructor(
             val (from, to) = periodRange(period)
             val summary = tripRepository.getPeriodSummary(from, to)
             val avg = if (summary.totalKm > 0) summary.totalKwh / summary.totalKm * 100.0 else 0.0
+            val avgFuel = if (summary.totalKm > 0) summary.totalFuelLiters / summary.totalKm * 100.0 else 0.0
 
             // Idle drain always uses today
             val (dayStart, dayEnd) = todayRange()
@@ -264,7 +281,9 @@ class DashboardViewModel @Inject constructor(
                 it.copy(
                     totalKm = summary.totalKm,
                     totalKwh = summary.totalKwh,
+                    totalFuelLiters = summary.totalFuelLiters,
                     avgConsumption = avg,
+                    avgFuelConsumption = avgFuel,
                     totalCost = summary.totalCost,
                     tripCount = summary.tripCount,
                     totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,

@@ -253,12 +253,12 @@ SoH и автоматическая запись зарядок на Leopard 3 �
 
 ---
 
-## Если у вас не Leopard 3
+## Профили автомобилей
 
-BYDMate разрабатывается и тестируется на BYD Leopard 3 (Fangchengbao Bao 3). На других моделях BYD большинство функций тоже работает, но есть отличия. Перед первым запуском проверьте:
+По умолчанию BYDMate настроен под **BYD Song L DM-i 112 km (2024)**: источник поездок **DiPlus TripInfo**, ёмкость батареи **18.3 кВт·ч**. В мастере первого запуска и в **Настройки → Автомобиль** можно выбрать другой профиль: Song L DM-i 75 / 112 / 160, Song L DM-i 2026 130 / 200, Leopard 3 или ручной профиль.
 
-- **Источник данных поездок**: для моделей без встроенной BMS-базы energydata (Song, Yuan и аналоги) переключитесь на режим **DiPlus TripInfo** в Настройках или в мастере первого запуска. См. секцию «Источник данных поездок» выше.
-- **Ёмкость батареи**: по умолчанию 72.9 кВт·ч под Leopard 3. Зайдите в **Настройки → Батарея** и поставьте свою ёмкость. Например, Atto 3 = 60.5 кВт·ч, Seal AWD = 82.5 кВт·ч, Han EV = 85.4 кВт·ч. Без этого расчёт запаса хода и стоимости поездок будет неточным.
+- **Источник данных поездок**: для Song, Yuan и аналогов нужен **DiPlus TripInfo**; для Leopard 3 — **BYD energydata**.
+- **Ёмкость батареи**: профиль выставляет её автоматически. Для ручного профиля зайдите в **Настройки → Батарея** и поставьте свою ёмкость.
 - **SoH**: показывается только на Leopard 3. На других моделях карточка «Здоровье батареи» работает без поля SoH.
 - **Зарядки**: алгоритм AC и DC проектировался под Leopard 3. На других моделях запись может появиться с задержкой или с неточной мощностью, особенно для DC. Используйте ручное добавление и редактирование, если автоматика промахнулась.
 - **Автоматизация и плавающий виджет**: работают одинаково на любой модели, потому что используют DiPlus API.
@@ -364,7 +364,7 @@ IP-адрес DiLink можно найти в настройках Wi-Fi на г
 ### 6. Настройка (опционально)
 
 В **Настройках** можно изменить:
-- **Ёмкость батареи** — по умолчанию 72.9 кВт·ч (Leopard 3)
+- **Профиль автомобиля и ёмкость батареи** — по умолчанию Song L DM-i 112 km (18.3 кВт·ч)
 - **Тарифы** — домашний (AC) и быстрая зарядка (DC), валюта
 - **Пороги расхода** — границы для цветовой индикации (зелёный/жёлтый/красный)
 
@@ -491,12 +491,12 @@ On Leopard 3 BYDMate reads the **real SoH** value computed by the car itself and
 
 To get SoH, automatic charge entries and Automation tab, open **Settings** and enable **«Системные данные (экспериментально)»**. DiLink will show a one-time system dialog asking to allow ADB debugging. Tap **Allow** (and check **«Always allow from this computer»** so the dialog doesn't appear at every launch). Without this toggle, only the basic features work (trips, consumption, widget, AI insights); SoH, automatic charges and Automation stay disabled.
 
-### If you don't have a Leopard 3
+### Vehicle profiles
 
-BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Bao 3). On other BYD models most features still work, but a few things differ:
+BYDMate defaults to **BYD Song L DM-i 112 km (2024)**: **DiPlus TripInfo** for trips and **18.3 kWh** battery capacity. The first-run wizard and **Settings → Автомобиль** let you switch to Song L DM-i 75 / 112 / 160, Song L DM-i 2026 130 / 200, Leopard 3, or a custom profile.
 
-- Switch **Trip data source** to DiPlus TripInfo in Settings (energydata is missing on Song, Yuan, etc.)
-- Set the correct **battery capacity** in Settings → Battery (Leopard 3 default is 72.9 kWh; Atto 3 = 60.5, Seal AWD = 82.5, Han EV = 85.4)
+- Song / Yuan-style models should use **DiPlus TripInfo**; Leopard 3 should use **BYD energydata**
+- The profile sets battery capacity automatically; custom profiles can still edit it in Settings → Battery
 - **SoH** is shown on Leopard 3 only
 - **Charges** auto-detection is tuned for Leopard 3; expect occasional misses or wrong AC / DC on other models — use manual add / edit
 - **Automation** and **floating widget** work the same on any model with DiPlus

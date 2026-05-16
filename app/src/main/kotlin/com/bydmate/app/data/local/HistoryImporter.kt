@@ -8,6 +8,7 @@ import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.DiPlusDbReader
+import com.bydmate.app.data.remote.DiPlusTripRecord
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -168,37 +169,58 @@ class HistoryImporter @Inject constructor(
     }
 
     /**
-     * Enrich trips that lack SOC data with DiPlus TripInfo matches.
+     * Enrich existing trips with DiPlus TripInfo matches.
+     *
+     * DiPlus has the richest hybrid data source: SOC, avg speed and fuel counters.
+     * Run this for all historical trips so old energydata/live rows can receive
+     * real fuel usage after the app is upgraded to hybrid-aware storage.
      */
-    suspend fun enrichWithDiPlus() {
+    suspend fun enrichWithDiPlus(): Int {
         try {
             val diplusTrips = diPlusDbReader.readTripInfo()
             if (diplusTrips.isEmpty()) {
                 Log.d(TAG, "enrichWithDiPlus: no DiPlus trips available")
-                return
+                return 0
             }
 
-            val tripsWithoutSoc = tripDao.getTripsWithoutSoc()
+            val trips = tripDao.getAllSnapshot()
 
             var enriched = 0
-            for (trip in tripsWithoutSoc) {
+            for (trip in trips) {
                 val endTs = trip.endTs ?: continue
                 val match = diPlusDbReader.findMatchingTrip(diplusTrips, trip.startTs, endTs) ?: continue
-
-                // DiPlus provides SOC + avgSpeed only.
-                // kwhConsumed/kwhPer100km stay from energydata (BMS — more accurate than SOC delta).
-                tripRepository.updateTrip(trip.copy(
-                    socStart = match.socStart.toInt(),
-                    socEnd = match.socEnd.toInt(),
-                    avgSpeedKmh = if (match.avgSpeed > 0) match.avgSpeed else trip.avgSpeedKmh
-                ))
-                enriched++
+                val enrichedTrip = trip.withDiPlus(match)
+                if (enrichedTrip != trip) {
+                    tripRepository.updateTrip(enrichedTrip)
+                    enriched++
+                }
             }
 
-            Log.d(TAG, "enrichWithDiPlus: enriched $enriched/${tripsWithoutSoc.size} trips")
+            Log.d(TAG, "enrichWithDiPlus: enriched $enriched/${trips.size} trips")
+            return enriched
         } catch (e: Exception) {
             Log.e(TAG, "enrichWithDiPlus failed", e)
+            return 0
         }
+    }
+
+    private fun TripEntity.withDiPlus(match: DiPlusTripRecord): TripEntity {
+        val matchKwhPer100km = if (match.kwhConsumed > 0 && match.mileage > 0.1) {
+            match.kwhConsumed / match.mileage * 100.0
+        } else {
+            null
+        }
+        return copy(
+            endTs = endTs ?: match.timeEnd,
+            distanceKm = distanceKm ?: match.mileage,
+            kwhConsumed = kwhConsumed ?: match.kwhConsumed.takeIf { it > 0.0 },
+            kwhPer100km = kwhPer100km ?: matchKwhPer100km,
+            fuelLiters = fuelLiters ?: match.fuelLiters.takeIf { it > 0.0 },
+            fuelLPer100km = fuelLPer100km ?: match.fuelLPer100km,
+            socStart = socStart ?: match.socStart.toInt(),
+            socEnd = socEnd ?: match.socEnd.toInt(),
+            avgSpeedKmh = avgSpeedKmh ?: match.avgSpeed.takeIf { it > 0.0 }
+        )
     }
 
     /**
@@ -208,12 +230,20 @@ class HistoryImporter @Inject constructor(
         try {
             val trips = tripDao.getTripsWithoutCost()
             var calculated = 0
+            val fuelPrice = settingsRepository.getFuelPricePerLiter()
             for (trip in trips) {
-                val kwh = trip.kwhConsumed ?: continue
-                tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
+                val electricityCost = trip.kwhConsumed?.let { it * tariff }
+                val fuelCost = trip.fuelLiters?.let { it * fuelPrice }
+                val totalCost = (electricityCost ?: 0.0) + (fuelCost ?: 0.0)
+                if (electricityCost == null && fuelCost == null) continue
+                tripRepository.updateTrip(trip.copy(
+                    electricityCost = electricityCost,
+                    fuelCost = fuelCost,
+                    cost = totalCost
+                ))
                 calculated++
             }
-            Log.d(TAG, "calculateMissingCosts: $calculated trips, tariff=$tariff")
+            Log.d(TAG, "calculateMissingCosts: $calculated trips, tariff=$tariff, fuelPrice=$fuelPrice")
         } catch (e: Exception) {
             Log.e(TAG, "calculateMissingCosts failed", e)
         }
@@ -467,9 +497,20 @@ class HistoryImporter @Inject constructor(
                     d.timeStart - DEDUP_WINDOW_MS,
                     d.timeStart + DEDUP_WINDOW_MS
                 )
-                if (existing != null) { skippedDup++; continue }
+                if (existing != null) {
+                    val enrichedTrip = existing.withDiPlus(d)
+                    if (enrichedTrip != existing) {
+                        tripRepository.updateTrip(enrichedTrip)
+                    }
+                    skippedDup++
+                    continue
+                }
 
-                val kwhPer100km = if (d.kwhConsumed > 0) d.kwhConsumed / d.mileage * 100.0 else null
+                val kwhPer100km = if (d.kwhConsumed > 0 && d.mileage > 0.1) {
+                    d.kwhConsumed / d.mileage * 100.0
+                } else {
+                    null
+                }
 
                 tripRepository.insertTrip(
                     TripEntity(
@@ -478,6 +519,8 @@ class HistoryImporter @Inject constructor(
                         distanceKm = d.mileage,
                         kwhConsumed = if (d.kwhConsumed > 0) d.kwhConsumed else null,
                         kwhPer100km = kwhPer100km,
+                        fuelLiters = d.fuelLiters.takeIf { it > 0.0 },
+                        fuelLPer100km = d.fuelLPer100km,
                         socStart = d.socStart.toInt(),
                         socEnd = d.socEnd.toInt(),
                         avgSpeedKmh = if (d.avgSpeed > 0) d.avgSpeed else null,

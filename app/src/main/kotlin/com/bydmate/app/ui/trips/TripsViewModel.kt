@@ -23,7 +23,7 @@ import javax.inject.Inject
 enum class TripPeriod { TODAY, WEEK, MONTH, YEAR, ALL }
 enum class TripFilter { ALL, TRIPS_ONLY, STOPS_ONLY }
 
-enum class ChartMetric { PER_100, KWH, COST }
+enum class ChartMetric { PER_100, KWH, FUEL, COST }
 
 data class ChartBar(
     val label: String,      // "08.04", "Мар", "09:36"
@@ -36,7 +36,9 @@ data class MonthGroup(
     val label: String,         // "Март 2026"
     val totalKm: Double,
     val totalKwh: Double,
+    val totalFuelLiters: Double,
     val avgConsumption: Double,
+    val avgFuelConsumption: Double,
     val totalCost: Double,
     val days: List<DayGroup>
 )
@@ -46,7 +48,9 @@ data class DayGroup(
     val dayOfWeek: String,     // "Пн"
     val totalKm: Double,
     val totalKwh: Double,
+    val totalFuelLiters: Double,
     val avgConsumption: Double,
+    val avgFuelConsumption: Double,
     val totalCost: Double,
     val trips: List<TripEntity>
 )
@@ -67,7 +71,9 @@ data class TripsUiState(
     val trips: List<TripEntity> = emptyList(),
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
+    val totalFuelLiters: Double = 0.0,
     val avgConsumption: Double = 0.0,
+    val avgFuelConsumption: Double = 0.0,
     val totalCost: Double = 0.0,
     val periodLabel: String = "",
     val expandedTripId: Long? = null,
@@ -176,7 +182,9 @@ class TripsViewModel @Inject constructor(
                 val months = groupIntoMonths(filtered)
                 val totalKm = filtered.sumOf { it.distanceKm ?: 0.0 }
                 val totalKwh = filtered.sumOf { it.kwhConsumed ?: 0.0 }
+                val totalFuel = filtered.sumOf { it.fuelLiters ?: 0.0 }
                 val avgConsumption = if (totalKm > 0) totalKwh / totalKm * 100.0 else 0.0
+                val avgFuel = if (totalKm > 0) totalFuel / totalKm * 100.0 else 0.0
                 val totalCost = filtered.sumOf { it.cost ?: 0.0 }
 
                 // Auto-expand first month and first day
@@ -189,7 +197,9 @@ class TripsViewModel @Inject constructor(
                         trips = filtered,
                         totalKm = totalKm,
                         totalKwh = totalKwh,
+                        totalFuelLiters = totalFuel,
                         avgConsumption = avgConsumption,
+                        avgFuelConsumption = avgFuel,
                         totalCost = totalCost,
                         expandedMonths = if (s.expandedMonths.isEmpty() && autoExpandMonth != null)
                             setOf(autoExpandMonth) else s.expandedMonths,
@@ -263,10 +273,12 @@ class TripsViewModel @Inject constructor(
             .map { group ->
                 val totalKm = group.trips.sumOf { it.distanceKm ?: 0.0 }
                 val totalKwh = group.trips.sumOf { it.kwhConsumed ?: 0.0 }
+                val totalFuel = group.trips.sumOf { it.fuelLiters ?: 0.0 }
                 val totalCost = group.trips.sumOf { it.cost ?: 0.0 }
                 val value = when (effectiveMetric) {
                     ChartMetric.PER_100 -> if (totalKm > 0) totalKwh / totalKm * 100.0 else 0.0
                     ChartMetric.KWH -> totalKwh
+                    ChartMetric.FUEL -> totalFuel
                     ChartMetric.COST -> totalCost
                 }
                 ChartBar(
@@ -299,12 +311,15 @@ class TripsViewModel @Inject constructor(
             val days = dayMap.map { (dayKey, dayTrips) ->
                 val km = dayTrips.sumOf { it.distanceKm ?: 0.0 }
                 val kwh = dayTrips.sumOf { it.kwhConsumed ?: 0.0 }
+                val fuel = dayTrips.sumOf { it.fuelLiters ?: 0.0 }
                 DayGroup(
                     date = dayKey,
                     dayOfWeek = dayOfWeekFmt.format(Date(dayTrips.first().startTs)),
                     totalKm = km,
                     totalKwh = kwh,
+                    totalFuelLiters = fuel,
                     avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
+                    avgFuelConsumption = if (km > 0) fuel / km * 100.0 else 0.0,
                     totalCost = dayTrips.sumOf { it.cost ?: 0.0 },
                     trips = dayTrips
                 )
@@ -312,13 +327,16 @@ class TripsViewModel @Inject constructor(
 
             val km = monthTrips.sumOf { it.distanceKm ?: 0.0 }
             val kwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
+            val fuel = monthTrips.sumOf { it.fuelLiters ?: 0.0 }
             MonthGroup(
                 yearMonth = monthKey,
                 label = monthLabelFmt.format(Date(monthTrips.first().startTs))
                     .replaceFirstChar { it.uppercase() },
                 totalKm = km,
                 totalKwh = kwh,
+                totalFuelLiters = fuel,
                 avgConsumption = if (km > 0) kwh / km * 100.0 else 0.0,
+                avgFuelConsumption = if (km > 0) fuel / km * 100.0 else 0.0,
                 totalCost = monthTrips.sumOf { it.cost ?: 0.0 },
                 days = days
             )

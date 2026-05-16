@@ -190,6 +190,9 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
             Text("%.0f кВт·ч".format(month.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
+            Text("%.1f л".format(month.totalFuelLiters), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(64.dp))
             Text("%.1f/100".format(month.avgConsumption),
                 color = consumptionColor(month.avgConsumption), fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
@@ -228,6 +231,9 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
             Text("%.1f кВт·ч".format(day.totalKwh), color = TextSecondary, fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
                 maxLines = 1, modifier = Modifier.width(104.dp))
+            Text("%.1f л".format(day.totalFuelLiters), color = TextSecondary, fontSize = 12.sp,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
+                maxLines = 1, modifier = Modifier.width(64.dp))
             Text("%.1f/100".format(day.avgConsumption),
                 color = consumptionColor(day.avgConsumption), fontSize = 12.sp,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.End,
@@ -253,6 +259,7 @@ private fun ColumnHeaders(currencySymbol: String) {
         Text("длит.", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text("км", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
         Text("кВт·ч", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+        Text("л", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(36.dp))
         Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
     }
@@ -268,6 +275,7 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
     val dist = trip.distanceKm?.let { "%.1f".format(it) } ?: "—"
     val dur = if (trip.endTs != null) formatDuration(trip.startTs, trip.endTs) else "—"
     val kwh = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—"
+    val fuel = trip.fuelLiters?.let { "%.1f".format(it) } ?: "—"
     val per100 = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
     val cost = trip.cost?.let { "%.2f".format(it) } ?: "—"
     val consColor = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
@@ -306,6 +314,9 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
             Text(kwh, color = if (isStop) TextMuted else TextSecondary,
                 fontSize = 14.sp, fontFamily = FontFamily.Monospace,
                 textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
+            Text(fuel, color = if (isStop) TextMuted else TextSecondary,
+                fontSize = 14.sp, fontFamily = FontFamily.Monospace,
+                textAlign = TextAlign.End, modifier = Modifier.width(36.dp))
             // /100
             Text(
                 if (isStop) "—" else per100,
@@ -374,6 +385,7 @@ private fun ChartPanel(
             Spacer(modifier = Modifier.weight(1f))
             MetricChip("/100", ChartMetric.PER_100, metric, enabled = !stopsOnly, onMetricChange)
             MetricChip("кВтч", ChartMetric.KWH, metric, enabled = true, onMetricChange)
+            MetricChip("л", ChartMetric.FUEL, metric, enabled = true, onMetricChange)
             MetricChip(currencySymbol, ChartMetric.COST, metric, enabled = true, onMetricChange)
             Spacer(modifier = Modifier.weight(1f))
         }
@@ -572,6 +584,7 @@ private fun BarChart(
                 val valueText = when (metric) {
                     ChartMetric.PER_100 -> "%.1f /100".format(bar.value)
                     ChartMetric.KWH -> "%.1f кВтч".format(bar.value)
+                    ChartMetric.FUEL -> "%.1f л".format(bar.value)
                     ChartMetric.COST -> "%.2f $currencySymbol".format(bar.value)
                 }
                 val countText = "${bar.label} · ${bar.tripCount} поезд."

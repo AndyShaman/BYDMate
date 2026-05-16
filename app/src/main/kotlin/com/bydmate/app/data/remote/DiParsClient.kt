@@ -56,7 +56,9 @@ data class DiParsData(
     val autoPark: Int?,           // 0=disabled, 1=standby, 2=active
     val rain: Int?,
     val lightLow: Int?,           // 0=OFF, 1=ON
-    val drl: Int?                 // 0=invalid, 1=ON, 2=OFF
+    val drl: Int?,                // 0=invalid, 1=ON, 2=OFF
+    val turnLeft: Int? = null,    // 0=OFF, 1=ON
+    val turnRight: Int? = null    // 0=OFF, 1=ON
 )
 
 @Singleton
@@ -87,7 +89,8 @@ open class DiParsClient @Inject constructor(
             "|TirePressRL:{左后轮气压}|TirePressRR:{右后轮气压}" +
             "|DriveMode:{整车运行模式}|WorkMode:{整车工作模式}" +
             "|AutoPark:{自动驻车}|Rain:{雨量}" +
-            "|LightLow:{近光灯}|DRL:{日行灯}"
+            "|LightLow:{近光灯}|DRL:{日行灯}" +
+            "|TurnLeft:{左转向灯状态}|TurnRight:{右转向灯状态}"
     }
 
     open suspend fun fetch(): DiParsData? = withContext(Dispatchers.IO) {
@@ -193,7 +196,9 @@ open class DiParsClient @Inject constructor(
             autoPark = map["AutoPark"]?.toIntOrNull(),
             rain = map["Rain"]?.toIntOrNull(),
             lightLow = map["LightLow"]?.toIntOrNull(),
-            drl = map["DRL"]?.toIntOrNull()
+            drl = map["DRL"]?.toIntOrNull(),
+            turnLeft = map["TurnLeft"]?.toIntOrNull(),
+            turnRight = map["TurnRight"]?.toIntOrNull()
         )
     }
 }

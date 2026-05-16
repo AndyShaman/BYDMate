@@ -19,6 +19,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_UNITS = "units" // "km" or "miles"
         const val KEY_CURRENCY = "currency" // "BYN", "RUB", "USD", "EUR", "CNY"
         const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
+        const val KEY_FUEL_PRICE_PER_LITER = "fuel_price_per_liter"
         const val KEY_CONSUMPTION_GOOD = "consumption_good_threshold"
         const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
         const val KEY_LAST_KNOWN_SOC = "last_known_soc"
@@ -35,6 +36,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
         const val KEY_DATA_SOURCE = "data_source"
+        const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
@@ -46,13 +48,15 @@ open class SettingsRepository @Inject constructor(
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
 
-        const val DEFAULT_BATTERY_CAPACITY = "72.9"
+        const val DEFAULT_BATTERY_CAPACITY = "18.3"
         const val DEFAULT_HOME_TARIFF = "0.20"
         const val DEFAULT_DC_TARIFF = "0.73"
+        const val DEFAULT_FUEL_PRICE_PER_LITER = "0"
         const val DEFAULT_UNITS = "km"
         const val DEFAULT_CURRENCY = "BYN"
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
+        const val DEFAULT_VEHICLE_PROFILE = "SONG_L_DMI_112"
 
         val CURRENCIES = listOf(
             Currency("BYN", "BYN", "Бел. руб."),
@@ -63,11 +67,93 @@ open class SettingsRepository @Inject constructor(
             Currency("EUR", "€", "Евро"),
             Currency("CNY", "¥", "Юань"),
         )
+
+        val VEHICLE_PROFILES = listOf(
+            VehicleProfile(
+                id = "SONG_L_DMI_112",
+                label = "Song L DM-i 112 km (2024)",
+                shortLabel = "Song 112",
+                batteryCapacityKwh = 18.3,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "DiPlus TripInfo, батарея 18.3 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "SONG_L_DMI_75",
+                label = "Song L DM-i 75 km (2024)",
+                shortLabel = "Song 75",
+                batteryCapacityKwh = 12.9,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "DiPlus TripInfo, батарея 12.9 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "SONG_L_DMI_160",
+                label = "Song L DM-i 160 km (2024)",
+                shortLabel = "Song 160",
+                batteryCapacityKwh = 26.6,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "DiPlus TripInfo, батарея 26.6 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "SONG_L_DMI_2026_130",
+                label = "Song L DM-i 130 km (2026)",
+                shortLabel = "Song 130",
+                batteryCapacityKwh = 18.3,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "DiPlus TripInfo, батарея 18.3 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "SONG_L_DMI_2026_200",
+                label = "Song L DM-i 200 km (2026)",
+                shortLabel = "Song 200",
+                batteryCapacityKwh = 26.6,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "DiPlus TripInfo, батарея 26.6 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "LEOPARD_3_BEV",
+                label = "Leopard 3 BEV",
+                shortLabel = "Leopard 3",
+                batteryCapacityKwh = 72.9,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, батарея 72.9 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "CUSTOM",
+                label = "Другая BYD",
+                shortLabel = "Custom",
+                batteryCapacityKwh = null,
+                dataSource = DataSource.DIPLUS,
+                isHybrid = true,
+                note = "ручная ёмкость, DiPlus TripInfo"
+            ),
+        )
+
+        fun vehicleProfileById(id: String?): VehicleProfile =
+            VEHICLE_PROFILES.firstOrNull { it.id == id } ?: vehicleProfileById(DEFAULT_VEHICLE_PROFILE)
+
+        fun formatCapacity(capacityKwh: Double): String =
+            if (capacityKwh % 1.0 == 0.0) "%.0f".format(capacityKwh) else "%.1f".format(capacityKwh)
     }
 
     data class Currency(val code: String, val symbol: String, val label: String)
 
     enum class DataSource { ENERGYDATA, DIPLUS }
+
+    data class VehicleProfile(
+        val id: String,
+        val label: String,
+        val shortLabel: String,
+        val batteryCapacityKwh: Double?,
+        val dataSource: DataSource,
+        val isHybrid: Boolean,
+        val note: String
+    )
 
     suspend fun getString(key: String, default: String): String =
         settingsDao.get(key) ?: default
@@ -78,13 +164,16 @@ open class SettingsRepository @Inject constructor(
         settingsDao.set(SettingEntity(key, value))
 
     suspend fun getBatteryCapacity(): Double =
-        getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).toDoubleOrNull() ?: 72.9
+        getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).toDoubleOrNull() ?: 18.3
 
     suspend fun getHomeTariff(): Double =
         getString(KEY_HOME_TARIFF, DEFAULT_HOME_TARIFF).toDoubleOrNull() ?: 0.20
 
     suspend fun getDcTariff(): Double =
         getString(KEY_DC_TARIFF, DEFAULT_DC_TARIFF).toDoubleOrNull() ?: 0.73
+
+    suspend fun getFuelPricePerLiter(): Double =
+        getString(KEY_FUEL_PRICE_PER_LITER, DEFAULT_FUEL_PRICE_PER_LITER).toDoubleOrNull() ?: 0.0
 
     suspend fun getCurrency(): Currency {
         val code = getString(KEY_CURRENCY, DEFAULT_CURRENCY)
@@ -169,7 +258,7 @@ open class SettingsRepository @Inject constructor(
         setString(KEY_IDLE_DRAIN_V2_CLEANUP, "true")
 
     suspend fun getDataSource(): DataSource =
-        when (getString(KEY_DATA_SOURCE, "ENERGYDATA")) {
+        when (getString(KEY_DATA_SOURCE, DataSource.DIPLUS.name)) {
             "DIPLUS" -> DataSource.DIPLUS
             else -> DataSource.ENERGYDATA
         }
@@ -178,6 +267,17 @@ open class SettingsRepository @Inject constructor(
         setString(KEY_DATA_SOURCE, source.name)
 
     fun observeDataSource(): Flow<String?> = observeString(KEY_DATA_SOURCE)
+
+    suspend fun getVehicleProfile(): VehicleProfile =
+        vehicleProfileById(getString(KEY_VEHICLE_PROFILE, DEFAULT_VEHICLE_PROFILE))
+
+    suspend fun setVehicleProfile(profile: VehicleProfile) {
+        setString(KEY_VEHICLE_PROFILE, profile.id)
+        setDataSource(profile.dataSource)
+        profile.batteryCapacityKwh?.let {
+            setString(KEY_BATTERY_CAPACITY, formatCapacity(it))
+        }
+    }
 
     suspend fun isAutoserviceEnabled(): Boolean =
         getString(KEY_AUTOSERVICE_ENABLED, "false") == "true"

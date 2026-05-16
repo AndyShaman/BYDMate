@@ -22,4 +22,13 @@ object AppModuleMigrationsForTest {
             db.execSQL("DELETE FROM charges WHERE status IN ('SUSPENDED', 'ACTIVE')")
         }
     }
+
+    val MIGRATION_12_13 = object : Migration(12, 13) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_liters REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN electricity_cost REAL")
+            db.execSQL("ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+        }
+    }
 }

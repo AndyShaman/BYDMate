@@ -17,6 +17,8 @@ data class DiPlusTripRecord(
     val socStart: Double,      // %
     val socEnd: Double,        // %
     val kwhConsumed: Double,   // elecCon_end - elecCon_start
+    val fuelLiters: Double,    // fuelCon_end - fuelCon_start
+    val fuelLPer100km: Double?,
     val odometerStart: Double, // km (mileage_start / 10)
     val odometerEnd: Double    // km (mileage_end / 10)
 )
@@ -52,6 +54,7 @@ class DiPlusDbReader @Inject constructor() {
             val cursor = db.rawQuery(
                 """SELECT time_start, time_end, mileage, travelTime, avgSpeed,
                           elecPer_start, elecPer_end, elecCon_start, elecCon_end,
+                          fuelCon_start, fuelCon_end,
                           mileage_start, mileage_end
                    FROM TripInfo ORDER BY time_start""", null
             )
@@ -65,8 +68,11 @@ class DiPlusDbReader @Inject constructor() {
                 val socEnd = cursor.getDouble(6)
                 val elecConStart = cursor.getDouble(7)
                 val elecConEnd = cursor.getDouble(8)
-                val mileageStart = cursor.getDouble(9) / 10.0
-                val mileageEnd = cursor.getDouble(10) / 10.0
+                val fuelConStart = cursor.getDouble(9)
+                val fuelConEnd = cursor.getDouble(10)
+                val mileageStart = cursor.getDouble(11) / 10.0
+                val mileageEnd = cursor.getDouble(12) / 10.0
+                val fuelLiters = (fuelConEnd - fuelConStart).coerceAtLeast(0.0)
 
                 results.add(DiPlusTripRecord(
                     timeStart = timeStart,
@@ -77,6 +83,12 @@ class DiPlusDbReader @Inject constructor() {
                     socStart = socStart,
                     socEnd = socEnd,
                     kwhConsumed = elecConEnd - elecConStart,
+                    fuelLiters = fuelLiters,
+                    fuelLPer100km = if (mileage > 0.1 && fuelLiters > 0.0) {
+                        fuelLiters / mileage * 100.0
+                    } else {
+                        null
+                    },
                     odometerStart = mileageStart,
                     odometerEnd = mileageEnd
                 ))
@@ -97,8 +109,13 @@ class DiPlusDbReader @Inject constructor() {
         startTs: Long,
         endTs: Long
     ): DiPlusTripRecord? {
-        return diplusTrips.firstOrNull { diplus ->
-            kotlin.math.abs(diplus.timeEnd - endTs) < 120_000L
+        return diplusTrips
+            .filter { diplus ->
+                kotlin.math.abs(diplus.timeEnd - endTs) < 120_000L ||
+                    kotlin.math.abs(diplus.timeStart - startTs) < 300_000L
+            }
+            .minByOrNull { diplus ->
+                kotlin.math.abs(diplus.timeEnd - endTs) + kotlin.math.abs(diplus.timeStart - startTs)
         }
     }
 }
