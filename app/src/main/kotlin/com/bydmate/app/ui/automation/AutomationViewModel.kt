@@ -3,6 +3,7 @@ package com.bydmate.app.ui.automation
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
@@ -26,120 +27,160 @@ data class TriggerParamOption(
     val param: String,
     val chineseName: String,
     val displayName: String,
+    val englishName: String = displayName,
     val unit: String = "",
     val category: String,
+    val chineseCategory: String = category,
+    val englishCategory: String = category,
     val enumValues: List<Pair<String, String>>? = null // value to label
 )
 
 data class ActionOption(
     val command: String,
     val displayName: String,
-    val category: String
+    val chineseName: String = displayName,
+    val englishName: String = displayName,
+    val category: String,
+    val chineseCategory: String = category,
+    val englishCategory: String = category
 )
 
+internal fun currentLang(context: Context): String =
+    LocalePreferences(context).getLanguage() ?: "en"
+
+internal fun localized(zh: String, en: String, ru: String, context: Context): String =
+    when (currentLang(context)) { "zh" -> zh; "en" -> en; else -> ru }
+
+fun TriggerParamOption.localizedName(context: Context): String =
+    when (currentLang(context)) {
+        "zh" -> chineseName
+        "en" -> englishName
+        else -> displayName
+    }
+
+fun TriggerParamOption.localizedCategory(context: Context): String =
+    when (currentLang(context)) {
+        "zh" -> chineseCategory
+        "en" -> englishCategory
+        else -> category
+    }
+
+fun ActionOption.localizedName(context: Context): String =
+    when (currentLang(context)) {
+        "zh" -> chineseName
+        "en" -> englishName
+        else -> displayName
+    }
+
+fun ActionOption.localizedCategory(context: Context): String =
+    when (currentLang(context)) {
+        "zh" -> chineseCategory
+        "en" -> englishCategory
+        else -> category
+    }
+
 val TRIGGER_PARAMS = listOf(
-    TriggerParamOption("Speed", "车速", "Скорость", "км/ч", "Движение"),
-    TriggerParamOption("Gear", "档位", "Передача", "", "Движение",
+    TriggerParamOption("Speed", "车速", "Скорость", "Speed", "км/ч", "Движение", "行驶", "Driving"),
+    TriggerParamOption("Gear", "档位", "Передача", "Gear", "", "Движение", "行驶", "Driving",
         enumValues = listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D")),
-    TriggerParamOption("DriveMode", "整车运行模式", "Режим вождения", "", "Движение",
+    TriggerParamOption("DriveMode", "整车运行模式", "Режим вождения", "Drive Mode", "", "Движение", "行驶", "Driving",
         enumValues = listOf("0" to "NORMAL", "1" to "ECO", "2" to "SPORT", "4" to "SNOW")),
-    TriggerParamOption("SOC", "电量百分比", "SOC", "%", "Энергия"),
-    TriggerParamOption("ChargingStatus", "充电状态", "Статус зарядки", "", "Энергия",
+    TriggerParamOption("SOC", "电量百分比", "SOC", "SOC", "%", "Энергия", "能源", "Energy"),
+    TriggerParamOption("ChargingStatus", "充电状态", "Статус зарядки", "Charging Status", "", "Энергия", "能源", "Energy",
         enumValues = listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается")),
-    TriggerParamOption("PowerState", "电源状态", "Питание", "", "Энергия",
+    TriggerParamOption("PowerState", "电源状态", "Питание", "Power State", "", "Энергия", "能源", "Energy",
         enumValues = listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE")),
-    TriggerParamOption("Voltage12V", "蓄电池电压", "12V аккумулятор", "В", "Энергия"),
-    TriggerParamOption("ExtTemp", "车外温度", "Темп. снаружи", "°C", "Температура"),
-    TriggerParamOption("InsideTemp", "车内温度", "Темп. салона", "°C", "Температура"),
-    TriggerParamOption("AvgBatTemp", "平均电池温度", "Темп. батареи", "°C", "Температура"),
-    TriggerParamOption("WindowFL", "主驾车窗打开百分比", "Окно водителя", "% откр.", "Кузов"),
-    TriggerParamOption("WindowFR", "副驾车窗打开百分比", "Окно пассажира", "% откр.", "Кузов"),
-    TriggerParamOption("WindowRL", "左后车窗打开百分比", "Окно ЛЗ", "% откр.", "Кузов"),
-    TriggerParamOption("WindowRR", "右后车窗打开百分比", "Окно ПЗ", "% откр.", "Кузов"),
-    TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "% откр.", "Кузов"),
-    TriggerParamOption("DoorFL", "主驾车门", "Дверь водителя", "", "Кузов",
+    TriggerParamOption("Voltage12V", "蓄电池电压", "12V аккумулятор", "12V Battery", "В", "Энергия", "能源", "Energy"),
+    TriggerParamOption("ExtTemp", "车外温度", "Темп. снаружи", "Outside Temp", "°C", "Температура", "温度", "Temperature"),
+    TriggerParamOption("InsideTemp", "车内温度", "Темп. салона", "Cabin Temp", "°C", "Температура", "温度", "Temperature"),
+    TriggerParamOption("AvgBatTemp", "平均电池温度", "Темп. батареи", "Battery Temp", "°C", "Температура", "温度", "Temperature"),
+    TriggerParamOption("WindowFL", "主驾车窗打开百分比", "Окно водителя", "Driver Window", "% откр.", "Кузов", "车身", "Body"),
+    TriggerParamOption("WindowFR", "副驾车窗打开百分比", "Окно пассажира", "Passenger Window", "% откр.", "Кузов", "车身", "Body"),
+    TriggerParamOption("WindowRL", "左后车窗打开百分比", "Окно ЛЗ", "Rear Left Window", "% откр.", "Кузов", "车身", "Body"),
+    TriggerParamOption("WindowRR", "右后车窗打开百分比", "Окно ПЗ", "Rear Right Window", "% откр.", "Кузов", "车身", "Body"),
+    TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "Sunroof", "% откр.", "Кузов", "车身", "Body"),
+    TriggerParamOption("DoorFL", "主驾车门", "Дверь водителя", "Driver Door", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorFR", "副驾车门", "Дверь пассажира", "", "Кузов",
+    TriggerParamOption("DoorFR", "副驾车门", "Дверь пассажира", "Passenger Door", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorRL", "左后车门", "Дверь ЛЗ", "", "Кузов",
+    TriggerParamOption("DoorRL", "左后车门", "Дверь ЛЗ", "Rear Left Door", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorRR", "右后车门", "Дверь ПЗ", "", "Кузов",
+    TriggerParamOption("DoorRR", "右后车门", "Дверь ПЗ", "Rear Right Door", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("Hood", "引擎盖", "Капот", "", "Кузов",
+    TriggerParamOption("Hood", "引擎盖", "Капот", "Hood", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
-    TriggerParamOption("LockFL", "主驾车门锁", "Замок двери водителя", "", "Кузов",
+    TriggerParamOption("LockFL", "主驾车门锁", "Замок двери водителя", "Driver Door Lock", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Разблокирован", "1" to "Заблокирован")),
-    TriggerParamOption("Trunk", "后备箱门", "Багажник", "", "Кузов",
+    TriggerParamOption("Trunk", "后备箱门", "Багажник", "Trunk", "", "Кузов", "车身", "Body",
         enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
-    TriggerParamOption("ACStatus", "空调状态", "Кондиционер", "", "Климат",
-        enumValues = listOf("0" to "Выкл", "1" to "Вкл")),
-    TriggerParamOption("ACCirc", "空调循环方式", "Режим циркуляции", "", "Климат",
+    TriggerParamOption("ACStatus", "空调状态", "Кондиционер", "AC Status", "", "Климат", "空调", "Climate"),
+    TriggerParamOption("ACCirc", "空调循环方式", "Режим циркуляции", "AC Circulation", "", "Климат", "空调", "Climate",
         enumValues = listOf("0" to "Внешний воздух", "1" to "Внутренний воздух")),
-    TriggerParamOption("ACTemp", "主驾驶空调温度", "Темп. AC", "°C", "Климат"),
-    TriggerParamOption("FanLevel", "风量档位", "Вентилятор", "", "Климат"),
-    TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", "Ремень водителя", "", "Безопасность",
+    TriggerParamOption("ACTemp", "主驾驶空调温度", "Темп. AC", "AC Temp", "°C", "Климат", "空调", "Climate"),
+    TriggerParamOption("FanLevel", "风量档位", "Вентилятор", "Fan Level", "", "Климат", "空调", "Climate"),
+    TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", "Ремень водителя", "Driver Seatbelt", "", "Безопасность", "安全", "Safety",
         enumValues = listOf("0" to "Не пристёгнут", "1" to "Пристёгнут")),
-    TriggerParamOption("TirePressFL", "左前轮气压", "Давление ЛП шины", "кПа", "Безопасность"),
-    TriggerParamOption("TirePressFR", "右前轮气压", "Давление ПП шины", "кПа", "Безопасность"),
-    TriggerParamOption("TirePressRL", "左后轮气压", "Давление ЛЗ шины", "кПа", "Безопасность"),
-    TriggerParamOption("TirePressRR", "右后轮气压", "Давление ПЗ шины", "кПа", "Безопасность"),
-    TriggerParamOption("Rain", "雨量", "Датчик дождя", "(0=сухо)", "Безопасность"),
-    TriggerParamOption("LightLow", "近光灯", "Ближний свет", "", "Свет",
+    TriggerParamOption("TirePressFL", "左前轮气压", "Давление ЛП шины", "FL Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
+    TriggerParamOption("TirePressFR", "右前轮气压", "Давление ПП шины", "FR Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
+    TriggerParamOption("TirePressRL", "左后轮气压", "Давление ЛЗ шины", "RL Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
+    TriggerParamOption("TirePressRR", "右后轮气压", "Давление ПЗ шины", "RR Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
+    TriggerParamOption("Rain", "雨量", "Датчик дождя", "Rain Sensor", "(0=сухо)", "Безопасность", "安全", "Safety"),
+    TriggerParamOption("LightLow", "近光灯", "Ближний свет", "Low Beam", "", "Свет", "灯光", "Light",
         enumValues = listOf("0" to "Выкл", "1" to "Вкл")),
-    TriggerParamOption("DRL", "日行灯", "Дневные ходовые", "", "Свет",
+    TriggerParamOption("DRL", "日行灯", "Дневные ходовые", "DRL", "", "Свет", "灯光", "Light",
         enumValues = listOf("0" to "Нет", "1" to "Вкл", "2" to "Выкл"))
 )
 
 val ACTION_COMMANDS = listOf(
-    ActionOption("车窗通风", "Проветривание", "Окна"),
-    ActionOption("车窗关闭", "Закрыть все окна", "Окна"),
-    ActionOption("车窗全开", "Открыть все окна", "Окна"),
-    ActionOption("车窗半开", "Все окна на 50%", "Окна"),
-    ActionOption("前排车窗关闭", "Закрыть передние", "Окна"),
-    ActionOption("后排车窗关闭", "Закрыть задние", "Окна"),
-    ActionOption("前排车窗全开", "Открыть передние", "Окна"),
-    ActionOption("后排车窗全开", "Открыть задние", "Окна"),
-    ActionOption("主驾打开100", "Открыть окно водителя", "Окна"),
-    ActionOption("主驾打开0", "Закрыть окно водителя", "Окна"),
-    ActionOption("副驾打开100", "Открыть окно пассажира", "Окна"),
-    ActionOption("副驾打开0", "Закрыть окно пассажира", "Окна"),
-    ActionOption("自动空调", "Авто AC", "Климат"),
-    ActionOption("打开空调通风", "Обдув без AC", "Климат"),
-    ActionOption("设置温度18", "Темп. 18°C", "Климат"),
-    ActionOption("设置温度20", "Темп. 20°C", "Климат"),
-    ActionOption("设置温度22", "Темп. 22°C", "Климат"),
-    ActionOption("设置温度25", "Темп. 25°C", "Климат"),
-    ActionOption("内循环", "Циркуляция внутр.", "Климат"),
-    ActionOption("外循环", "Циркуляция внешн.", "Климат"),
-    ActionOption("吹前挡", "Обдув лобового вкл", "Климат"),
-    ActionOption("关闭吹前挡", "Обдув лобового выкл", "Климат"),
-    ActionOption("主驾座椅加热1档", "Подогрев водителя 1", "Сиденья"),
-    ActionOption("主驾座椅加热2档", "Подогрев водителя 2", "Сиденья"),
-    ActionOption("主驾座椅加热关闭", "Подогрев водителя выкл", "Сиденья"),
-    ActionOption("副驾座椅加热1档", "Подогрев пассажира 1", "Сиденья"),
-    ActionOption("副驾座椅加热2档", "Подогрев пассажира 2", "Сиденья"),
-    ActionOption("副驾座椅加热关闭", "Подогрев пассажира выкл", "Сиденья"),
-    ActionOption("主驾座椅通风1档", "Вентиляция водителя 1", "Сиденья"),
-    ActionOption("主驾座椅通风2档", "Вентиляция водителя 2", "Сиденья"),
-    ActionOption("主驾座椅通风关闭", "Вентиляция водителя выкл", "Сиденья"),
-    ActionOption("副驾座椅通风1档", "Вентиляция пассажира 1", "Сиденья"),
-    ActionOption("副驾座椅通风2档", "Вентиляция пассажира 2", "Сиденья"),
-    ActionOption("副驾座椅通风关闭", "Вентиляция пассажира выкл", "Сиденья"),
-    ActionOption("后视镜加热", "Подогрев зеркал вкл", "Зеркала"),
-    ActionOption("关闭后视镜加热", "Подогрев зеркал выкл", "Зеркала"),
-    ActionOption("氛围灯打开", "Амбиент вкл", "Свет"),
-    ActionOption("氛围灯关闭", "Амбиент выкл", "Свет"),
-    ActionOption("打开日行灯", "ДХО вкл", "Свет"),
-    ActionOption("关闭日行灯", "ДХО выкл", "Свет"),
-    ActionOption("打开车内灯", "Салонный свет вкл", "Свет"),
-    ActionOption("关闭车内灯", "Салонный свет выкл", "Свет"),
-    ActionOption("车门上锁", "Заблокировать", "Замки"),
-    ActionOption("车门解锁", "Разблокировать", "Замки"),
-    ActionOption("天窗打开100", "Люк открыть 100%", "Люк"),
-    ActionOption("天窗打开50", "Люк открыть 50%", "Люк"),
-    ActionOption("天窗打开0", "Люк закрыть", "Люк"),
-    ActionOption("遮阳帘打开", "Шторка открыть", "Люк"),
-    ActionOption("遮阳帘关闭", "Шторка закрыть", "Люк")
+    ActionOption("车窗通风", "Проветривание", "车窗通风", "Vent Windows", "Окна", "车窗", "Windows"),
+    ActionOption("车窗关闭", "Закрыть все окна", "关闭所有车窗", "Close All Windows", "Окна", "车窗", "Windows"),
+    ActionOption("车窗全开", "Открыть все окна", "打开所有车窗", "Open All Windows", "Окна", "车窗", "Windows"),
+    ActionOption("车窗半开", "Все окна на 50%", "所有车窗半开", "All Windows 50%", "Окна", "车窗", "Windows"),
+    ActionOption("前排车窗关闭", "Закрыть передние", "关闭前排车窗", "Close Front Windows", "Окна", "车窗", "Windows"),
+    ActionOption("后排车窗关闭", "Закрыть задние", "关闭后排车窗", "Close Rear Windows", "Окна", "车窗", "Windows"),
+    ActionOption("前排车窗全开", "Открыть передние", "打开前排车窗", "Open Front Windows", "Окна", "车窗", "Windows"),
+    ActionOption("后排车窗全开", "Открыть задние", "打开后排车窗", "Open Rear Windows", "Окна", "车窗", "Windows"),
+    ActionOption("主驾打开100", "Открыть окно водителя", "打开主驾车窗", "Open Driver Window", "Окна", "车窗", "Windows"),
+    ActionOption("主驾打开0", "Закрыть окно водителя", "关闭主驾车窗", "Close Driver Window", "Окна", "车窗", "Windows"),
+    ActionOption("副驾打开100", "Открыть окно пассажира", "打开副驾车窗", "Open Passenger Window", "Окна", "车窗", "Windows"),
+    ActionOption("副驾打开0", "Закрыть окно пассажира", "关闭副驾车窗", "Close Passenger Window", "Окна", "车窗", "Windows"),
+    ActionOption("自动空调", "Авто AC", "自动空调", "Auto AC", "Климат", "空调", "Climate"),
+    ActionOption("打开空调通风", "Обдув без AC", "通风（不开AC）", "Ventilation (no AC)", "Климат", "空调", "Climate"),
+    ActionOption("设置温度18", "Темп. 18°C", "温度 18°C", "Temp 18°C", "Климат", "空调", "Climate"),
+    ActionOption("设置温度20", "Темп. 20°C", "温度 20°C", "Temp 20°C", "Климат", "空调", "Climate"),
+    ActionOption("设置温度22", "Темп. 22°C", "温度 22°C", "Temp 22°C", "Климат", "空调", "Climate"),
+    ActionOption("设置温度25", "Темп. 25°C", "温度 25°C", "Temp 25°C", "Климат", "空调", "Climate"),
+    ActionOption("内循环", "Циркуляция внутр.", "内循环", "Recirculation", "Климат", "空调", "Climate"),
+    ActionOption("外循环", "Циркуляция внешн.", "外循环", "Fresh Air", "Климат", "空调", "Climate"),
+    ActionOption("吹前挡", "Обдув лобового вкл", "前挡风除雾开", "Windshield Defog On", "Климат", "空调", "Climate"),
+    ActionOption("关闭吹前挡", "Обдув лобового выкл", "前挡风除雾关", "Windshield Defog Off", "Климат", "空调", "Climate"),
+    ActionOption("主驾座椅加热1档", "Подогрев водителя 1", "主驾座椅加热1档", "Driver Heat 1", "Сиденья", "座椅", "Seats"),
+    ActionOption("主驾座椅加热2档", "Подогрев водителя 2", "主驾座椅加热2档", "Driver Heat 2", "Сиденья", "座椅", "Seats"),
+    ActionOption("主驾座椅加热关闭", "Подогрев водителя выкл", "主驾座椅加热关", "Driver Heat Off", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅加热1档", "Подогрев пассажира 1", "副驾座椅加热1档", "Passenger Heat 1", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅加热2档", "Подогрев пассажира 2", "副驾座椅加热2档", "Passenger Heat 2", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅加热关闭", "Подогрев пассажира выкл", "副驾座椅加热关", "Passenger Heat Off", "Сиденья", "座椅", "Seats"),
+    ActionOption("主驾座椅通风1档", "Вентиляция водителя 1", "主驾座椅通风1档", "Driver Vent 1", "Сиденья", "座椅", "Seats"),
+    ActionOption("主驾座椅通风2档", "Вентиляция водителя 2", "主驾座椅通风2档", "Driver Vent 2", "Сиденья", "座椅", "Seats"),
+    ActionOption("主驾座椅通风关闭", "Вентиляция водителя выкл", "主驾座椅通风关", "Driver Vent Off", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅通风1档", "Вентиляция пассажира 1", "副驾座椅通风1档", "Passenger Vent 1", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅通风2档", "Вентиляция пассажира 2", "副驾座椅通风2档", "Passenger Vent 2", "Сиденья", "座椅", "Seats"),
+    ActionOption("副驾座椅通风关闭", "Вентиляция пассажира выкл", "副驾座椅通风关", "Passenger Vent Off", "Сиденья", "座椅", "Seats"),
+    ActionOption("后视镜加热", "Подогрев зеркал вкл", "后视镜加热开", "Mirror Heat On", "Зеркала", "后视镜", "Mirrors"),
+    ActionOption("关闭后视镜加热", "Подогрев зеркал выкл", "后视镜加热关", "Mirror Heat Off", "Зеркала", "后视镜", "Mirrors"),
+    ActionOption("氛围灯打开", "Амбиент вкл", "氛围灯开", "Ambient Light On", "Свет", "灯光", "Light"),
+    ActionOption("氛围灯关闭", "Амбиент выкл", "氛围灯关", "Ambient Light Off", "Свет", "灯光", "Light"),
+    ActionOption("打开日行灯", "ДХО вкл", "日行灯开", "DRL On", "Свет", "灯光", "Light"),
+    ActionOption("关闭日行灯", "ДХО выкл", "日行灯关", "DRL Off", "Свет", "灯光", "Light"),
+    ActionOption("打开车内灯", "Салонный свет вкл", "车内灯开", "Interior Light On", "Свет", "灯光", "Light"),
+    ActionOption("关闭车内灯", "Салонный свет выкл", "车内灯关", "Interior Light Off", "Свет", "灯光", "Light"),
+    ActionOption("车门上锁", "Заблокировать", "车门上锁", "Lock Doors", "Замки", "门锁", "Locks"),
+    ActionOption("车门解锁", "Разблокировать", "车门解锁", "Unlock Doors", "Замки", "门锁", "Locks"),
+    ActionOption("天窗打开100", "Люк открыть 100%", "天窗全开", "Sunroof Open 100%", "Люк", "天窗", "Sunroof"),
+    ActionOption("天窗打开50", "Люк открыть 50%", "天窗半开", "Sunroof Open 50%", "Люк", "天窗", "Sunroof"),
+    ActionOption("天窗打开0", "Люк закрыть", "天窗关闭", "Sunroof Close", "Люк", "天窗", "Sunroof"),
+    ActionOption("遮阳帘打开", "Шторка открыть", "遮阳帘打开", "Sunshade Open", "Люк", "天窗", "Sunroof"),
+    ActionOption("遮阳帘关闭", "Шторка закрыть", "遮阳帘关闭", "Sunshade Close", "Люк", "天窗", "Sunroof")
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -259,35 +300,35 @@ class AutomationViewModel @Inject constructor(
             val n = idx + 1
             when (a.kind) {
                 "param" -> {
-                    if (a.command.isBlank()) return "Действие #$n: команда не задана"
+                    if (a.command.isBlank()) return localized("动作 #$n：未指定命令", "Action #$n: command not set", "Действие #$n: команда не задана", context)
                 }
                 "notification_silent", "notification_sound" -> {
-                    if (a.notificationTitle().isBlank()) return "Действие #$n: заголовок уведомления пуст"
+                    if (a.notificationTitle().isBlank()) return localized("动作 #$n：通知标题为空", "Action #$n: notification title is empty", "Действие #$n: заголовок уведомления пуст", context)
                 }
                 "app_launch" -> {
-                    if (a.appLaunchPackageName().isBlank()) return "Действие #$n: приложение не выбрано"
+                    if (a.appLaunchPackageName().isBlank()) return localized("动作 #$n：未选择应用", "Action #$n: app not selected", "Действие #$n: приложение не выбрано", context)
                 }
                 "call" -> {
                     val phone = a.callPhone().trim()
-                    if (phone.length !in 5..20) return "Действие #$n: номер телефона некорректен"
+                    if (phone.length !in 5..20) return localized("动作 #$n：电话号码不正确", "Action #$n: phone number is invalid", "Действие #$n: номер телефона некорректен", context)
                 }
                 "navigate" -> {
                     val lat = a.navigateLat()
                     val lon = a.navigateLon()
                     if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
-                        return "Действие #$n: место для маршрута не выбрано"
+                        return localized("动作 #$n：未选择导航目的地", "Action #$n: navigation destination not selected", "Действие #$n: место для маршрута не выбрано", context)
                     }
                 }
                 "url" -> {
                     val u = a.urlString().trim()
-                    if (u.isEmpty()) return "Действие #$n: URL пустой"
+                    if (u.isEmpty()) return localized("动作 #$n：URL 为空", "Action #$n: URL is empty", "Действие #$n: URL пустой", context)
                     // Allow any scheme: http(s)://, yandexmusic://, tel:, intent://, geo:, etc.
                     if (!u.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))) {
-                        return "Действие #$n: URL должен содержать схему (http://, yandexmusic://, tel:, ...)"
+                        return localized("动作 #$n：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）", "Action #$n: URL must contain a scheme (http://, yandexmusic://, tel:, ...)", "Действие #$n: URL должен содержать схему (http://, yandexmusic://, tel:, ...)", context)
                     }
                 }
                 "yandex_music" -> {
-                    if (a.yandexMusicMode().isBlank()) return "Действие #$n: режим Я.Музыки не выбран"
+                    if (a.yandexMusicMode().isBlank()) return localized("动作 #$n：未选择 Yandex 音乐模式", "Action #$n: Yandex Music mode not selected", "Действие #$n: режим Я.Музыки не выбран", context)
                 }
             }
         }
@@ -297,7 +338,9 @@ class AutomationViewModel @Inject constructor(
     fun saveRule() {
         val e = _uiState.value.editing
         if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) {
-            _uiState.value = _uiState.value.copy(editorError = "Название и хотя бы одно условие и действие обязательны")
+            _uiState.value = _uiState.value.copy(editorError =
+                localized("名称和至少一个条件及动作是必需的", "Name and at least one condition and action are required", "Название и хотя бы одно условие и действие обязательны", context)
+            )
             return
         }
         val actionError = validateActions(e.actions)
@@ -334,7 +377,7 @@ class AutomationViewModel @Inject constructor(
             ruleDao.insert(
                 rule.copy(
                     id = 0,
-                    name = "${rule.name} (копия)",
+                    name = "${rule.name} (${localized("副本", "copy", "копия", context)})",
                     enabled = false,
                     lastTriggeredAt = null,
                     triggerCount = 0,
@@ -371,82 +414,101 @@ class AutomationViewModel @Inject constructor(
         val prefs = context.getSharedPreferences("automation", Context.MODE_PRIVATE)
         if (prefs.getBoolean("templates_inserted", false)) return
 
+        val lang = currentLang(context)
+        fun tName(zh: String, en: String, ru: String): String = when (lang) { "zh" -> zh; "en" -> en; else -> ru }
+
         val templates = listOf(
             RuleEntity(
-                name = "Закрыть окна на трассе",
+                name = tName("高速关窗", "Close windows on highway", "Закрыть окна на трассе"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("Speed", "车速", ">", "100", "Скорость > 100 км/ч")
+                    TriggerDef("Speed", "车速", ">", "100",
+                        tName("车速 > 100 km/h", "Speed > 100 km/h", "Скорость > 100 км/ч"))
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("车窗关闭", "Закрыть все окна")
+                    ActionDef("车窗关闭",
+                        tName("关闭所有车窗", "Close All Windows", "Закрыть все окна"))
                 )),
                 cooldownSeconds = 60
             ),
             RuleEntity(
-                name = "Зимний старт",
+                name = tName("冬季启动", "Winter start", "Зимний старт"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ExtTemp", "车外温度", "<", "0", "Темп. снаружи < 0°C"),
-                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
+                    TriggerDef("ExtTemp", "车外温度", "<", "0",
+                        tName("车外温度 < 0°C", "Outside Temp < 0°C", "Темп. снаружи < 0°C")),
+                    TriggerDef("PowerState", "电源状态", "==", "2",
+                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅加热2档", "Подогрев водителя 2"),
-                    ActionDef("后视镜加热", "Подогрев зеркал вкл")
+                    ActionDef("主驾座椅加热2档",
+                        tName("主驾座椅加热2档", "Driver Heat 2", "Подогрев водителя 2")),
+                    ActionDef("后视镜加热",
+                        tName("后视镜加热开", "Mirror Heat On", "Подогрев зеркал вкл"))
                 )),
                 cooldownSeconds = 600
             ),
             RuleEntity(
-                name = "Эко при низком заряде",
+                name = tName("低电量ECO", "ECO at low SOC", "Эко при низком заряде"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
                     TriggerDef("SOC", "电量百分比", "<", "15", "SOC < 15%")
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("ECO模式", "ECO режим")
+                    ActionDef("ECO模式", tName("ECO 模式", "ECO Mode", "ECO режим"))
                 )),
                 cooldownSeconds = 300
             ),
             RuleEntity(
-                name = "Летнее охлаждение",
+                name = tName("夏季制冷", "Summer cooling", "Летнее охлаждение"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("InsideTemp", "车内温度", ">", "30", "Темп. салона > 30°C"),
-                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
+                    TriggerDef("InsideTemp", "车内温度", ">", "30",
+                        tName("车内温度 > 30°C", "Cabin Temp > 30°C", "Темп. салона > 30°C")),
+                    TriggerDef("PowerState", "电源状态", "==", "2",
+                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("主驾座椅通风1档", "Вентиляция водителя 1"),
-                    ActionDef("自动空调", "Авто AC")
+                    ActionDef("主驾座椅通风1档",
+                        tName("主驾座椅通风1档", "Driver Vent 1", "Вентиляция водителя 1")),
+                    ActionDef("自动空调",
+                        tName("自动空调", "Auto AC", "Авто AC"))
                 )),
                 cooldownSeconds = 600
             ),
             RuleEntity(
-                name = "Шторка при движении",
+                name = tName("行驶开遮阳帘", "Sunshade while driving", "Шторка при движении"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("PowerState", "电源状态", "==", "2", "Питание = DRIVE")
+                    TriggerDef("PowerState", "电源状态", "==", "2",
+                        tName("电源状态 = DRIVE", "Power State = DRIVE", "Питание = DRIVE"))
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("遮阳帘打开", "Открыть шторку")
+                    ActionDef("遮阳帘打开",
+                        tName("遮阳帘打开", "Sunshade Open", "Открыть шторку"))
                 )),
                 cooldownSeconds = 600
             ),
             RuleEntity(
-                name = "Климат при зарядке",
+                name = tName("充电时空调", "Climate while charging", "Климат при зарядке"),
                 enabled = false,
                 triggerLogic = "AND",
                 triggers = TriggerDef.listToJson(listOf(
-                    TriggerDef("ChargingStatus", "充电状态", "==", "2", "Зарядка = Начата"),
-                    TriggerDef("ExtTemp", "车外温度", "<", "5", "Темп. снаружи < 5°C")
+                    TriggerDef("ChargingStatus", "充电状态", "==", "2",
+                        tName("充电状态 = 充电中", "Charging Status = Charging", "Зарядка = Начата")),
+                    TriggerDef("ExtTemp", "车外温度", "<", "5",
+                        tName("车外温度 < 5°C", "Outside Temp < 5°C", "Темп. снаружи < 5°C"))
                 )),
                 actions = ActionDef.listToJson(listOf(
-                    ActionDef("自动空调", "Авто AC"),
-                    ActionDef("主驾座椅加热1档", "Подогрев водителя 1")
+                    ActionDef("自动空调",
+                        tName("自动空调", "Auto AC", "Авто AC")),
+                    ActionDef("主驾座椅加热1档",
+                        tName("主驾座椅加热1档", "Driver Heat 1", "Подогрев водителя 1"))
                 )),
                 cooldownSeconds = 600
             )
@@ -459,12 +521,18 @@ class AutomationViewModel @Inject constructor(
 
 // --- Action kind helpers (v2.3.0) ---
 
-fun newNotificationAction(silent: Boolean): ActionDef = ActionDef(
-    command = "",
-    displayName = if (silent) "Уведомление (без звука)" else "Уведомление (звук)",
-    kind = if (silent) "notification_silent" else "notification_sound",
-    payload = """{"title":"","text":""}"""
-)
+fun newNotificationAction(silent: Boolean, context: Context): ActionDef {
+    val name = if (silent)
+        localized("通知（静音）", "Notification (silent)", "Уведомление (без звука)", context)
+    else
+        localized("通知（带声音）", "Notification (sound)", "Уведомление (звук)", context)
+    return ActionDef(
+        command = "",
+        displayName = name,
+        kind = if (silent) "notification_silent" else "notification_sound",
+        payload = """{"title":"","text":""}"""
+    )
+}
 
 fun ActionDef.notificationTitle(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("title")
@@ -483,9 +551,9 @@ fun ActionDef.withNotification(title: String, text: String): ActionDef = copy(
 
 // --- App launch helpers (v2.3.0) ---
 
-fun newAppLaunchAction(): ActionDef = ActionDef(
+fun newAppLaunchAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = "Запуск приложения",
+    displayName = localized("启动应用", "Launch app", "Запуск приложения", context),
     kind = "app_launch",
     payload = """{"packageName":"","appLabel":""}"""
 )
@@ -512,9 +580,9 @@ fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boo
 
 // --- Call helpers (v2.3.0) ---
 
-fun newCallAction(): ActionDef = ActionDef(
+fun newCallAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = "Звонок",
+    displayName = localized("拨打电话", "Call", "Звонок", context),
     kind = "call",
     payload = """{"phone":""}"""
 )
@@ -541,9 +609,9 @@ fun ActionDef.withCall(phone: String, name: String, autoDial: Boolean): ActionDe
 
 // --- Navigate helpers (v2.3.0) ---
 
-fun newNavigateAction(): ActionDef = ActionDef(
+fun newNavigateAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = "Маршрут в Я.Навигаторе",
+    displayName = localized("Yandex 导航路线", "Route in Y.Navigator", "Маршрут в Я.Навигаторе", context),
     kind = "navigate",
     payload = """{"lat":0,"lon":0,"name":""}"""
 )
@@ -572,9 +640,9 @@ fun ActionDef.withNavigate(lat: Double, lon: Double, name: String): ActionDef = 
 
 // --- URL helpers (v2.3.0) ---
 
-fun newUrlAction(): ActionDef = ActionDef(
+fun newUrlAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = "Открыть URL",
+    displayName = localized("打开 URL", "Open URL", "Открыть URL", context),
     kind = "url",
     payload = """{"url":""}"""
 )
@@ -596,9 +664,9 @@ fun ActionDef.withUrl(url: String, minimize: Boolean): ActionDef = copy(
 
 // --- Yandex Music helpers (v2.3.0) ---
 
-fun newYandexMusicAction(): ActionDef = ActionDef(
+fun newYandexMusicAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = "Яндекс.Музыка",
+    displayName = localized("Yandex 音乐", "Yandex Music", "Яндекс.Музыка", context),
     kind = "yandex_music",
     payload = """{"mode":"mybeat","minimize":true}"""
 )

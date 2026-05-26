@@ -1,0 +1,586 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BYDMate</string>
+    <string name="settings_language_title">语言</string>
+
+    <!-- Settings: Navigation rail -->
+    <string name="settings_title">设置</string>
+    <string name="settings_rail_sections_label">分区</string>
+
+    <!-- Settings: Section labels (left pane) -->
+    <string name="settings_section_auto_battery_title">车辆与电池</string>
+    <string name="settings_section_trips_title">行程</string>
+    <string name="settings_section_integrations_title">集成</string>
+    <string name="settings_section_widget_title">小组件</string>
+    <string name="settings_section_places_title">地点</string>
+    <string name="settings_section_application_title">应用</string>
+    <string name="settings_smart_home_section_title">智能家居</string>
+
+    <!-- Settings: Auto and battery section -->
+    <string name="settings_battery_section_header">电池与电价</string>
+    <string name="settings_battery_capacity_label">电池容量（kWh）</string>
+    <string name="settings_tariff_home_label">家充电价（%1$s/kWh）</string>
+    <string name="settings_tariff_dc_label">快充电价（%1$s/kWh）</string>
+    <string name="settings_tariff_trip_label">行程电价</string>
+    <string name="settings_tariff_custom_label">自定义电价（%1$s/kWh）</string>
+    <string name="settings_save_tariffs_button">保存电价</string>
+    <string name="settings_tariff_future_note">新电价将应用于未来行程。\n已计算的行程不会改变。</string>
+    <string name="settings_recalc_all_button">重新计算所有行程</string>
+    <string name="settings_recalc_note">按当前电价重新计算\n所有行程的费用。</string>
+    <string name="settings_consumption_section_header">能耗阈值</string>
+    <string name="settings_consumption_good_label">良好 &lt; (kWh/100km)</string>
+    <string name="settings_consumption_bad_label">较差 &gt; (kWh/100km)</string>
+
+    <!-- Settings: Recalculate confirmation dialog -->
+    <string name="settings_recalc_dialog_title">重新计算费用？</string>
+    <string name="settings_recalc_dialog_text">所有行程将按电价 %1$s %2$s/kWh 重新计算。\n已计算的数值将被替换。</string>
+    <string name="settings_recalc_confirm_button">重新计算</string>
+    <string name="settings_cancel_button">取消</string>
+
+    <!-- Settings: Trips section -->
+    <string name="settings_trips_datasource_header">行程数据来源</string>
+    <string name="settings_trips_datasource_note">钛3 - BYD energydata。\n宋及其他无内置数据库的车型 - DiPlus TripInfo。</string>
+    <string name="settings_trips_datasource_hint">如果行驶 2-3 次后列表为空，请切换模式。</string>
+    <string name="settings_trips_system_header">系统数据（实验性）</string>
+    <string name="settings_trips_system_note">车辆扩展数据：电池 SoH、BMS 真实里程、充电统计。仅读取。</string>
+    <string name="settings_trips_system_enable_label">启用</string>
+
+    <!-- Settings: Integrations section -->
+    <string name="settings_abrp_section_header">ABRP - 遥测</string>
+    <string name="settings_abrp_telemetry_label">实时数据 -> A Better Route Planner</string>
+    <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。不发送 GPS 坐标，ABRP 自行读取。</string>
+    <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
+    <string name="settings_abrp_save_button">保存 ABRP</string>
+    <string name="settings_ai_section_header">AI 洞察</string>
+    <string name="settings_openrouter_api_key_label">OpenRouter API 密钥</string>
+    <string name="settings_openrouter_model_selected">模型：%1$s</string>
+    <string name="settings_openrouter_model_pick">选择模型</string>
+    <string name="settings_ai_loading_label">加载中...</string>
+    <string name="settings_ai_save_button">保存并获取洞察</string>
+
+    <!-- Settings: Model picker dialog -->
+    <string name="settings_model_picker_title">选择模型</string>
+    <string name="settings_model_picker_search_label">搜索</string>
+    <string name="settings_model_picker_loading">加载模型...</string>
+
+    <!-- Settings: Widget section -->
+    <string name="settings_widget_section_header">悬浮小组件</string>
+    <string name="settings_widget_show_soc_label">显示 SOC 小组件</string>
+    <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
+    <string name="settings_widget_reset_position_button">重置位置</string>
+    <string name="settings_widget_opacity_label">不透明度</string>
+    <string name="settings_widget_scale_label">大小</string>
+    <string name="settings_widget_tap_section_header">点击小组件</string>
+    <string name="settings_widget_left_tap_zoning_label">点击区域</string>
+    <string name="settings_widget_left_tap_zoning_description">左侧 1/3 - 打开选定应用；其余部分 - 打开 BYDMate。</string>
+    <string name="settings_widget_left_tap_label">左侧点击的应用</string>
+    <string name="settings_widget_left_tap_description">默认为 Yandex 导航。如果应用已卸载，点击将无效。</string>
+
+    <!-- Settings: Places section -->
+    <string name="settings_places_section_header">地点</string>
+    <string name="settings_places_entry_title">自动化地点</string>
+    <string name="settings_places_entry_description">家、公司、常去地点 - "进入地点" / "离开地点" 触发器</string>
+
+    <!-- Settings: Application section -->
+    <string name="settings_app_units_header">单位与货币</string>
+    <string name="settings_app_distance_label">距离</string>
+    <string name="settings_app_currency_label">货币</string>
+    <string name="settings_app_data_header">数据</string>
+    <string name="settings_export_csv_button">导出 CSV</string>
+    <string name="settings_log_recording_start_button">录制日志</string>
+    <string name="settings_log_recording_stop_button">停止录制</string>
+    <string name="settings_about_header">关于</string>
+    <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_autostart_recorded">自启动：%1$s</string>
+    <string name="settings_autostart_not_recorded">自启动：未记录</string>
+    <string name="settings_update_check_toggle_label">检查更新</string>
+    <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并提示更新</string>
+    <string name="settings_update_check_button">立即检查更新</string>
+
+    <!-- Settings: Autoservice status -->
+    <string name="settings_autoservice_disconnected_title">未连接</string>
+    <string name="settings_autoservice_disconnected_detail">如果开发者设置中已启用 ADB，请重启应用</string>
+    <string name="settings_autoservice_sentinel_title">已连接，但数据不可读</string>
+    <string name="settings_autoservice_sentinel_detail">此功能可能仅适用于 钛3</string>
+    <string name="settings_autoservice_connected_title">已连接</string>
+    <string name="settings_autoservice_connected_detail">SoH %1$s • 生命周期 %2$s / %3$s</string>
+
+    <!-- Settings: Update dialog -->
+    <string name="settings_update_dialog_title">更新</string>
+    <string name="settings_update_current_version">当前版本：v%1$s</string>
+    <string name="settings_update_check_now_button">检查更新</string>
+    <string name="settings_update_checking">检查中...</string>
+    <string name="settings_update_up_to_date">已是最新版本</string>
+    <string name="settings_update_available_version">可用版本：v%1$s</string>
+    <string name="settings_update_whats_new_label">更新内容：</string>
+    <string name="settings_update_install_button">下载并安装</string>
+    <string name="settings_update_downloading">正在下载 v%1$s</string>
+    <string name="settings_update_error">错误：%1$s</string>
+    <string name="settings_update_retry_button">重试</string>
+    <string name="settings_update_close_button">关闭</string>
+
+    <!-- Trips screen -->
+    <string name="trips_filter_all">全部</string>
+    <string name="trips_filter_trips_only">行程</string>
+    <string name="trips_filter_stops_only">停留</string>
+    <string name="trips_empty">所选时间段内没有数据</string>
+    <string name="trips_col_time">时间</string>
+    <string name="trips_col_duration">时长</string>
+    <string name="trips_col_km">公里</string>
+    <string name="trips_col_kwh">kWh</string>
+    <string name="trips_chart_kwh_chip">kWh</string>
+    <string name="trips_chart_no_data">暂无数据</string>
+    <string name="trips_chart_tooltip_count">%1$s · %2$d 次行程</string>
+    <string name="trips_km_value">%1$.0f 公里</string>
+    <string name="trips_kwh_value">%1$.0f kWh</string>
+    <string name="trips_km_decimal_value">%1$.1f 公里</string>
+    <string name="trips_kwh_decimal_value">%1$.1f kWh</string>
+
+    <!-- TripDetailDialog -->
+    <string name="trip_detail_title_trip">行程</string>
+    <string name="trip_detail_title_stop">停留</string>
+    <string name="trip_detail_stats_header">统计</string>
+    <string name="trip_detail_gps_unavailable">GPS 数据不可用</string>
+    <string name="trip_detail_distance_label">距离</string>
+    <string name="trip_detail_distance_value">%1$.1f 公里</string>
+    <string name="trip_detail_duration_label">时长</string>
+    <string name="trip_detail_avg_speed_label">平均速度</string>
+    <string name="trip_detail_speed_value">%1$.0f km/h</string>
+    <string name="trip_detail_max_speed_label">最高速度</string>
+    <string name="trip_detail_consumption_label">能耗</string>
+    <string name="trip_detail_consumption_value">%1$.1f kWh</string>
+    <string name="trip_detail_efficiency_label">百公里电耗</string>
+    <string name="trip_detail_cost_label">费用</string>
+    <string name="trip_detail_temp_label">温度</string>
+    <string name="trip_detail_max_speed_histogram">最高 %1$d km/h</string>
+
+    <!-- Charges screen -->
+    <string name="charges_filter_all">全部</string>
+    <string name="charges_add_button">+ 充电</string>
+    <string name="charges_empty">所选时间段内没有充电记录</string>
+    <string name="charges_col_time">时间</string>
+    <string name="charges_col_kwh">kWh</string>
+    <string name="charges_kwh_value">%1$.0f kWh</string>
+    <string name="charges_action_edit">编辑</string>
+    <string name="charges_action_delete">删除</string>
+    <string name="charges_delete_dialog_title">删除充电记录？</string>
+    <string name="charges_delete_dialog_text">%1$s kWh - 删除后无法恢复。</string>
+    <string name="charges_onboarding_empty_text">充电统计不可用。要在每次充电中查看 kWh 和费用，请在设置中启用"系统数据"。</string>
+    <string name="charges_go_to_settings_button">前往设置</string>
+    <string name="charges_sentinel_empty_text">您的车型不支持充电统计 - 无法读取诊断数据。SoH 也不会显示。</string>
+    <string name="charges_not_tracking_banner">当前未追踪新的充电记录。</string>
+    <string name="charges_enable_tracking_button">启用 →</string>
+    <string name="charges_stats_period_label">所选时间段</string>
+    <string name="charges_stats_sessions">次数</string>
+    <string name="charges_stats_cost">费用</string>
+    <string name="charges_stats_lifetime_label">全生命周期（系统数据）</string>
+    <string name="charges_stats_pumped_total">累计充入</string>
+    <string name="charges_stats_equiv_cycles">等效循环</string>
+    <string name="charges_stats_bms_mileage">BMS 里程</string>
+    <string name="charges_stats_per100km">/100公里 全生命周期</string>
+    <string name="charges_lifetime_enable_hint">在设置中启用"系统数据"，以查看 BMS 里程和车辆累计充入量。</string>
+    <string name="charges_lifetime_waiting">等待车辆首次响应...</string>
+    <string name="charges_stats_dynamics_label">趋势</string>
+    <string name="charges_chart_cell_delta_title">电芯压差 (V)</string>
+    <string name="charges_chart_cell_delta_placeholder">电芯压差：完成 3 次充电后显示（当前：%1$d）</string>
+    <string name="charges_chart_bat_temp_title">电池温度 (°C)</string>
+    <string name="charges_chart_bat_temp_placeholder">温度：完成 3 次充电后显示（当前：%1$d）</string>
+
+    <!-- Charge edit dialog -->
+    <string name="charges_edit_dialog_title">编辑充电记录</string>
+    <string name="charges_edit_type_label">类型：</string>
+    <string name="charges_edit_kwh_label">kWh：</string>
+    <string name="charges_edit_kwh_from_soc">按 SOC 计算 × %1$.1f kWh</string>
+    <string name="charges_edit_cost_label">费用：</string>
+    <string name="charges_edit_tariff_label">%1$s/kWh：</string>
+    <string name="charges_edit_save_button">保存</string>
+
+    <!-- Automation screen -->
+    <string name="automation_tab_title">自动化</string>
+
+    <!-- Filter chips -->
+    <string name="automation_filter_all">全部</string>
+    <string name="automation_filter_active">已启用</string>
+    <string name="automation_filter_disabled">已禁用</string>
+
+    <!-- Header buttons -->
+    <string name="automation_journal_button">日志</string>
+    <string name="automation_create_button">+ 创建</string>
+
+    <!-- Rule card context menu -->
+    <string name="automation_menu_edit">编辑</string>
+    <string name="automation_menu_duplicate">复制</string>
+    <string name="automation_menu_delete">删除</string>
+
+    <!-- Delete confirmation dialog -->
+    <string name="automation_delete_confirm_title">删除规则？</string>
+    <string name="automation_delete_confirm_text">此操作不可撤销。</string>
+    <string name="automation_delete_button">删除</string>
+    <string name="automation_cancel_button">取消</string>
+
+    <!-- Rule card stats -->
+    <string name="automation_rule_triggered_count">已触发：%1$d</string>
+    <string name="automation_rule_last_trigger">最近：%1$s</string>
+    <string name="automation_rule_cooldown">冷却：%1$d 秒</string>
+    <string name="automation_rule_logic_and"> 且 </string>
+    <string name="automation_rule_logic_or"> 或 </string>
+
+    <!-- Editor dialog -->
+    <string name="automation_editor_new_rule_title">新建规则</string>
+    <string name="automation_rule_name_placeholder">规则名称</string>
+    <string name="automation_section_when">当（条件）</string>
+    <string name="automation_section_then">则（动作）</string>
+    <string name="automation_section_settings">设置</string>
+    <string name="automation_logic_and">且（AND）</string>
+    <string name="automation_logic_or">或（OR）</string>
+
+    <!-- Settings section in editor -->
+    <string name="automation_setting_cooldown">触发间隔</string>
+    <string name="automation_setting_unit_sec">秒</string>
+    <string name="automation_setting_park_only">仅在 P 挡时</string>
+    <string name="automation_setting_confirm_before">执行前询问</string>
+    <string name="automation_setting_once_per_trip">每次行程仅执行一次</string>
+
+    <!-- Editor footer buttons -->
+    <string name="automation_save_button">保存</string>
+
+    <!-- Trigger controls -->
+    <string name="automation_trigger_place_deleted">地点已删除</string>
+    <string name="automation_trigger_place_enter_label">进入</string>
+    <string name="automation_trigger_place_exit_label">离开</string>
+    <string name="automation_trigger_place_enter_prefix">进入</string>
+    <string name="automation_trigger_place_exit_prefix">离开</string>
+    <string name="automation_trigger_place_deleted_placeholder">&lt;已删除&gt;</string>
+    <string name="automation_trigger_time_of_day_label">时段：</string>
+    <string name="automation_trigger_day">白天</string>
+    <string name="automation_trigger_night">夜晚</string>
+    <string name="automation_trigger_dawn">黎明</string>
+    <string name="automation_trigger_dusk">黄昏</string>
+    <string name="automation_trigger_service_start">BYDMate 启动</string>
+    <string name="automation_trigger_internet">网络可用</string>
+
+    <!-- Add trigger button -->
+    <string name="automation_add_condition_button">+ 添加条件</string>
+    <string name="automation_trigger_type_param">参数</string>
+    <string name="automation_trigger_type_place">地点</string>
+    <string name="automation_trigger_type_place_empty_hint">请先在设置中创建地点</string>
+    <string name="automation_trigger_type_time_of_day">时段</string>
+    <string name="automation_trigger_type_service_start">BYDMate 启动</string>
+    <string name="automation_trigger_type_internet">网络可用</string>
+
+    <!-- Action row: delay -->
+    <string name="automation_action_delay_label">延迟</string>
+    <string name="automation_delay_0_5s">0.5 秒</string>
+    <string name="automation_delay_1s">1 秒</string>
+    <string name="automation_delay_2s">2 秒</string>
+    <string name="automation_delay_3s">3 秒</string>
+    <string name="automation_delay_5s">5 秒</string>
+    <string name="automation_delay_10s">10 秒</string>
+    <string name="automation_delay_display_name">延迟 %1$s</string>
+
+    <!-- Add action button -->
+    <string name="automation_add_action_button">+ 添加动作</string>
+    <string name="automation_action_dplus_command">D+ 指令</string>
+    <string name="automation_action_notification_silent">通知（静音）</string>
+    <string name="automation_action_notification_sound">通知（带声音）</string>
+    <string name="automation_action_app_launch">启动应用</string>
+    <string name="automation_action_yandex_music">Yandex 音乐</string>
+    <string name="automation_action_call">拨打电话</string>
+    <string name="automation_action_navigate">Yandex 导航路线</string>
+    <string name="automation_action_url">打开 URL</string>
+    <string name="automation_action_delay">延迟</string>
+
+    <!-- Overlay permission dialog -->
+    <string name="automation_overlay_permission_title">需要权限</string>
+    <string name="automation_overlay_permission_text">声音通知以弹窗形式显示在其他应用上方。请打开系统设置，为 BYDMate 启用"显示在其他应用上层"。</string>
+    <string name="automation_overlay_open_settings">打开设置</string>
+    <string name="automation_overlay_later">稍后</string>
+
+    <!-- Action controls: preview placeholders -->
+    <string name="automation_tap_to_configure">点击配置...</string>
+    <string name="automation_tap_to_pick_app">点击选择应用...</string>
+    <string name="automation_tap_to_set_phone">点击设置号码...</string>
+    <string name="automation_tap_to_pick_place">点击选择地点...</string>
+    <string name="automation_tap_to_set_url">点击设置 URL...</string>
+
+    <!-- Notification edit dialog -->
+    <string name="automation_notification_title_label">标题</string>
+    <string name="automation_notification_body_label">内容（可选）</string>
+
+    <!-- Call edit dialog -->
+    <string name="automation_call_dialog_title">拨打电话</string>
+    <string name="automation_call_name_label">姓名（可选）</string>
+    <string name="automation_call_phone_label">电话号码</string>
+    <string name="automation_call_auto_dial_label">自动拨打</string>
+    <string name="automation_call_auto_dial_hint">无需按绿色按钮</string>
+
+    <!-- Navigate edit dialog -->
+    <string name="automation_navigate_dialog_title">Yandex 导航路线</string>
+    <string name="automation_navigate_no_places_hint">请先在 设置 → 地点 中添加地点</string>
+    <string name="automation_navigate_pick_place_placeholder">选择地点...</string>
+
+    <!-- URL edit dialog -->
+    <string name="automation_url_dialog_title">打开 URL</string>
+    <string name="automation_url_field_label">URL</string>
+    <string name="automation_url_minimize_label">启动后最小化（3 秒后）</string>
+
+    <!-- Yandex Music edit dialog -->
+    <string name="automation_music_dialog_title">Yandex 音乐</string>
+    <string name="automation_music_what_to_play">播放内容：</string>
+    <string name="automation_music_my_wave">我的电台</string>
+    <string name="automation_music_minimize_label">启动后最小化（3 秒后）</string>
+
+    <!-- Journal dialog -->
+    <string name="automation_journal_title">触发日志</string>
+    <string name="automation_journal_empty">日志为空</string>
+
+    <!-- Journal relative time -->
+    <string name="automation_time_yesterday">昨天 %1$s</string>
+
+    <!-- Places screen -->
+    <string name="places_tab_title">地点</string>
+    <string name="places_back_content_description">返回</string>
+    <string name="places_add_button">+ 添加</string>
+    <string name="places_empty">暂无地点。点击"+ 添加"创建一个。</string>
+    <string name="places_row_coords">%1$.5f, %2$.5f · %3$d 米</string>
+    <string name="places_row_in_use">在 %1$d 条规则中使用</string>
+    <string name="places_edit_content_description">编辑</string>
+    <string name="places_delete_content_description">删除</string>
+    <string name="places_delete_blocked_message">该地点在 %1$d 条自动化规则中使用。请先删除规则。</string>
+
+    <!-- Place edit dialog -->
+    <string name="place_edit_dialog_title_new">新建地点</string>
+    <string name="place_edit_dialog_title_edit">编辑地点</string>
+    <string name="place_edit_name_label">名称</string>
+    <string name="place_edit_lat_label">纬度</string>
+    <string name="place_edit_lon_label">经度</string>
+    <string name="place_edit_radius_label">半径（米）</string>
+    <string name="place_edit_error_min_radius">最小半径为 20 米</string>
+
+    <!-- Welcome Wizard -->
+    <string name="welcome_step_indicator">第 %1$d 步，共 3 步</string>
+    <string name="welcome_model_step_title">您的 BYD 是哪款车型？</string>
+    <string name="welcome_model_step_description">这将决定行程数据来源。\n钛3 将数据存储在 BYD 内置数据库（energydata）中。\n宋及其他车型 - 仅存储在 DiPlus 中。</string>
+    <string name="welcome_model_song_label">宋 / 其他</string>
+    <string name="welcome_model_change_later">稍后可在设置中更改。</string>
+    <string name="welcome_next_button">下一步</string>
+    <string name="welcome_battery_section_title">电池</string>
+    <string name="welcome_battery_capacity_hint">钛3：72.9 kWh（纯电）或 31.8 kWh（插混）</string>
+    <string name="welcome_tariff_section_title">电价</string>
+    <string name="welcome_tariff_home_label">家充电价（%1$s/kWh）</string>
+    <string name="welcome_tariff_dc_label">快充电价（%1$s/kWh）</string>
+    <string name="welcome_tariff_cost_section_title">行程费用计算</string>
+    <string name="welcome_tariff_home_chip">家充</string>
+    <string name="welcome_tariff_custom_chip">自定义</string>
+    <string name="welcome_tariff_cost_note">费用 = 能耗 × 电价。稍后可在设置中更改。</string>
+    <string name="welcome_autostart_step_title">DiLink 自启动</string>
+    <string name="welcome_autostart_step_description">要让 BYDMate 在车机开机时自动启动：</string>
+    <string name="welcome_autostart_instruction_1">1. 点击右侧按钮</string>
+    <string name="welcome_autostart_instruction_2">2. 在列表中找到 BYDMate</string>
+    <string name="welcome_autostart_instruction_3">3. 开关必须处于关闭（OFF）状态</string>
+    <string name="welcome_autostart_off_note">OFF = 允许自启动。这是一个黑名单：被禁用的应用可以自行启动。</string>
+    <string name="welcome_autostart_apk_update_warning">更新 APK 后请检查此设置！</string>
+    <string name="welcome_autostart_dilink_section_title">替代方案：通过 DiLink+（Di+）</string>
+    <string name="welcome_autostart_dilink_hint">如果自启动未生效，请在 Di+ 中添加：</string>
+    <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
+    <string name="welcome_autostart_command_copied_toast">已复制！</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = "open app" + 包名。\n两个应用用分号分隔：\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_system_settings_section_title">系统设置</string>
+    <string name="welcome_autostart_open_settings_button">打开自启动设置</string>
+    <string name="welcome_autostart_open_settings_error">无法打开 DiLink 自启动设置。已打开应用设置。</string>
+    <string name="welcome_loading_default">加载中...</string>
+    <string name="welcome_back_button">返回</string>
+    <string name="welcome_done_button">启动 BYDMate</string>
+    <string name="welcome_saving_settings_status">保存设置...</string>
+    <string name="welcome_updating_data_status">更新数据...</string>
+    <string name="welcome_importing_trips_status">导入行程...</string>
+
+    <!-- Service & Notifications -->
+    <string name="service_foreground_content_starting">启动中...</string>
+    <string name="service_notification_soc_line">续航：%1$s%2$s%3$s</string>
+    <string name="service_notification_range_suffix"> ~%1$.0f 公里</string>
+    <string name="service_notification_bat_temp_suffix"> | 电池温度：%1$d°C</string>
+    <string name="service_notification_voltage">车载电源：%1$.1f V</string>
+    <string name="service_confirm_action_yes">执行</string>
+    <string name="service_confirm_action_no">取消</string>
+
+    <!-- Floating widget -->
+    <string name="widget_unit_km">公里</string>
+    <string name="widget_duration_hours">%1$d小时 %2$d分</string>
+    <string name="widget_duration_minutes">%1$d 分钟</string>
+    <string name="widget_trip_km_value">%1$.1f 公里</string>
+    <string name="widget_voltage_value">%1$.1f V</string>
+    <string name="widget_toast_hidden">小组件已隐藏。打开 BYDMate 即可恢复。</string>
+    <string name="widget_trash_release">松手 - 隐藏小组件</string>
+    <string name="widget_trash_hint">拖到这里隐藏</string>
+
+    <!-- Dashboard -->
+    <string name="dashboard_diplus_offline">DiPlus 无响应</string>
+    <string name="dashboard_adb_offline">ADB 无响应</string>
+    <string name="dashboard_status_online">在线</string>
+    <string name="dashboard_status_offline">离线</string>
+
+    <string name="dashboard_unit_km">公里</string>
+    <string name="dashboard_unit_kwh">kWh</string>
+    <string name="dashboard_range_label">预估续航</string>
+    <string name="dashboard_idle_time_min">%1$.0f 分钟</string>
+    <string name="dashboard_idle_time_hours">%1$.1f 小时</string>
+
+    <!-- Idle drain card -->
+    <string name="dashboard_idle_drain_parking_label">停车</string>
+    <string name="dashboard_idle_drain_title">停车能耗</string>
+    <string name="dashboard_idle_drain_rate_label">速率</string>
+    <string name="dashboard_idle_drain_rate_value">%1$.2f kWh/小时</string>
+    <string name="dashboard_idle_drain_week_label">近 7 天</string>
+    <string name="dashboard_idle_drain_week_value">%1$.1f kWh</string>
+    <string name="dashboard_idle_drain_avg_day_label">日均</string>
+
+    <!-- Battery card -->
+    <string name="dashboard_battery_temp_label">电池温度</string>
+    <string name="dashboard_battery_voltage_label">车载电源</string>
+
+    <!-- AI Insight card -->
+    <string name="dashboard_insight_loading">分析中...</string>
+    <string name="dashboard_insight_setup_prompt">AI 洞察 - 设置 OpenRouter →</string>
+    <string name="dashboard_insight_refresh">刷新</string>
+    <string name="dashboard_insight_refreshing">刷新中...</string>
+    <string name="dashboard_insight_no_api_key">请在设置中配置 OpenRouter API 以获取 AI 洞察</string>
+    <string name="dashboard_insight_no_data">数据不足，无法分析</string>
+
+    <!-- Period chips -->
+    <string name="dashboard_period_day">日</string>
+    <string name="dashboard_period_week">周</string>
+    <string name="dashboard_period_month">月</string>
+    <string name="dashboard_period_year">年</string>
+    <string name="dashboard_period_all">全部</string>
+
+    <!-- Stat cards -->
+    <string name="dashboard_stat_distance">里程</string>
+    <string name="dashboard_stat_energy">能耗</string>
+    <string name="dashboard_stat_consumption">百公里电耗</string>
+    <string name="dashboard_stat_cost">费用</string>
+    <string name="dashboard_trip_count">%1$d 次行程</string>
+
+    <!-- Recent trips section -->
+    <string name="dashboard_recent_trips_title">最近行程</string>
+    <string name="dashboard_col_time">时间</string>
+    <string name="dashboard_col_duration">时长</string>
+    <string name="dashboard_col_per100">/100</string>
+    <string name="dashboard_empty_no_trips">暂无行程</string>
+
+    <string name="dashboard_stat_km_value">%1$.1f 公里</string>
+    <string name="dashboard_stat_kwh_value">%1$.1f kWh</string>
+    <string name="dashboard_voltage_value">%1$.1fV</string>
+    <string name="dashboard_insight_refresh_error">刷新失败</string>
+
+    <!-- Navigation bar tab labels -->
+    <string name="nav_tab_dashboard">首页</string>
+    <string name="nav_tab_trips">行程</string>
+    <string name="nav_tab_charges">充电</string>
+    <string name="nav_tab_automation">自动化</string>
+    <string name="nav_tab_settings">设置</string>
+
+    <!-- Post-install autostart hint dialog -->
+    <string name="nav_autostart_dialog_title">BYDMate 已更新至 v%1$s</string>
+    <string name="nav_autostart_dialog_body">请检查后台运行是否被阻止：\n\nDiLink 设置 - General - Disable background Apps - BYDMate - OFF\n\n如果开关为 ON，DiLink 可能会终止 BYDMate 服务，导致行程和 GPS 无法记录。</string>
+    <string name="nav_autostart_dialog_button">知道了</string>
+    <string name="nav_autostart_open_settings_error">无法打开 DiLink 自启动设置。已打开应用设置。</string>
+
+    <!-- AppLaunchPicker dialog -->
+    <string name="applauncher_title">选择应用</string>
+    <string name="applauncher_search_label">搜索</string>
+    <string name="applauncher_minimize_label">启动后最小化（3 秒后）</string>
+    <string name="applauncher_empty">未找到结果</string>
+    <string name="applauncher_close_button">关闭</string>
+
+    <!-- SOC ring: charging icon content description -->
+    <string name="battery_health_charging_cd">充电中</string>
+
+    <!-- Battery health dialog -->
+    <string name="battery_health_dialog_title">电池健康</string>
+    <string name="battery_health_now_header">当前（车辆实时数据）</string>
+    <string name="battery_health_lifetime_header">全生命周期（系统数据）</string>
+    <string name="battery_health_cell_delta_label">电芯压差</string>
+    <string name="battery_health_cell_delta_value">%1$.3f V</string>
+    <string name="battery_health_bat_temp_label">电池温度</string>
+    <string name="battery_health_12v_label">车载电源</string>
+    <string name="battery_health_12v_value">%1$.1f V</string>
+    <string name="battery_health_bms_mileage_label">BMS 里程</string>
+    <string name="battery_health_bms_mileage_value">%1$.1f 公里</string>
+    <string name="battery_health_pumped_label">累计充入</string>
+    <string name="battery_health_pumped_value">%1$.0f kWh</string>
+    <string name="battery_health_disabled_title">系统数据已禁用</string>
+    <string name="battery_health_disabled_hint">在设置中启用"系统数据"，以查看 SoH、BMS 里程和车辆累计充入量。</string>
+
+    <!-- Shared summary row (Components.kt SummaryRow) -->
+    <string name="summary_unit_km">公里</string>
+    <string name="summary_label_mileage">里程</string>
+    <string name="summary_unit_kwh">kWh</string>
+    <string name="summary_label_energy">能耗</string>
+    <string name="summary_unit_kwh_per_100km">kWh/100km</string>
+    <string name="summary_label_consumption">百公里电耗</string>
+    <string name="summary_label_cost">费用</string>
+
+    <!-- Settings: unit chips and language labels -->
+    <string name="settings_tariff_trip_custom_chip">自定义</string>
+    <string name="settings_unit_km">公里</string>
+    <string name="settings_unit_miles">英里</string>
+    <string name="settings_lang_russian">Русский</string>
+
+    <!-- Settings: ViewModel status strings -->
+    <string name="settings_saved">已保存</string>
+    <string name="settings_datasource_switching">切换中...</string>
+    <string name="settings_datasource_done">完成</string>
+    <string name="settings_recalc_done">已重新计算：%1$d 次行程</string>
+    <string name="settings_export_in_progress">导出中...</string>
+    <string name="settings_export_done">已导出：%1$d 次行程，%2$d 次充电</string>
+    <string name="settings_error_with_message">错误：%1$s</string>
+    <string name="settings_error_prefix">错误</string>
+    <string name="settings_log_recording_started">录制中（2 小时后自动停止）... - %1$s</string>
+    <string name="settings_log_saved">已保存：%1$s（%2$d KB）</string>
+    <string name="settings_log_error_no_fs_access">错误：无法访问文件系统</string>
+    <string name="settings_update_check_in_progress">检查中...</string>
+    <string name="settings_update_available_short">可更新至 v%1$s</string>
+    <string name="settings_ai_no_key_model">请输入 API 密钥和模型</string>
+    <string name="settings_ai_done">完成！请切换到首页</string>
+    <string name="settings_ai_fetch_error">获取洞察失败</string>
+
+    <!-- UpdateChecker: download progress strings -->
+    <string name="update_downloading_progress">下载中：%1$d%%</string>
+    <string name="update_downloading_done">已下载。正在安装...</string>
+    <string name="update_downloading_paused">已暂停...</string>
+    <string name="update_download_error">下载错误（代码 %1$d）</string>
+    <string name="update_download_notification_description">BYDMate 更新</string>
+    <string name="update_downloading_start">下载中：0%%</string>
+
+    <!-- Charges: day group labels -->
+    <string name="charges_day_today">今天（%1$s）</string>
+    <string name="charges_day_yesterday">昨天</string>
+
+    <!-- Common duration formats -->
+    <string name="common_duration_hours_minutes">%1$d 小时 %2$d 分钟</string>
+    <string name="common_duration_minutes">%1$d 分钟</string>
+
+    <!-- Automation confirm overlay buttons -->
+    <string name="confirm_overlay_cancel">取消</string>
+    <string name="confirm_overlay_run">执行</string>
+
+    <!-- AI insight dynamic metric labels -->
+    <string name="insight_metric_consumption">百公里电耗</string>
+    <string name="insight_metric_trips">行程</string>
+    <string name="insight_metric_short_trips">短途 &lt; 5 公里</string>
+    <string name="insight_metric_avg_distance">平均距离</string>
+    <string name="insight_metric_idle">停车</string>
+    <string name="insight_section_week_to_week">周环比</string>
+    <string name="insight_unit_kwh_per_100">%.1f kWh/100</string>
+    <string name="insight_unit_kwh_per_100_prev">%.1f</string>
+    <string name="insight_trips_value">%1$d · %2$s 公里</string>
+    <string name="insight_trips_prev">%1$d · %2$s 公里</string>
+    <string name="insight_short_value">%1$d%%（%2$d/%3$d）</string>
+    <string name="insight_short_prev">%1$d%%</string>
+    <string name="insight_avg_distance_value">%1$s 公里</string>
+    <string name="insight_idle_value">%1$s kWh · %2$s</string>
+    <string name="insight_idle_prev">%1$s kWh</string>
+    <string name="insight_idle_minutes">%1$s 分钟</string>
+    <string name="insight_idle_hours">%1$s 小时</string>
+</resources>

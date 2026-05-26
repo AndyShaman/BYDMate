@@ -339,6 +339,7 @@ private fun EditorDialog(
             dismissOnClickOutside = false
         )
     ) {
+        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.65f)
@@ -428,20 +429,20 @@ private fun EditorDialog(
                             onAddParam = {
                                 val p = TRIGGER_PARAMS.first()
                                 onUpdate {
-                                    copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.displayName))
+                                    copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.localizedName(context)))
                                 }
                             },
                             onAddPlace = { place ->
-                                onUpdate { copy(triggers = triggers + newPlaceTrigger(place)) }
+                                onUpdate { copy(triggers = triggers + newPlaceTrigger(place, context)) }
                             },
                             onAddTimeOfDay = {
-                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger()) }
+                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
                             },
                             onAddServiceStart = {
-                                onUpdate { copy(triggers = triggers + newServiceStartTrigger()) }
+                                onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
                             },
                             onAddNetworkAvailable = {
-                                onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger()) }
+                                onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
                             }
                         )
                     }
@@ -488,28 +489,28 @@ private fun EditorDialog(
                         AddActionButton(
                             onAddParam = {
                                 val a = ACTION_COMMANDS.first()
-                                onUpdate { copy(actions = actions + ActionDef(a.command, a.displayName)) }
+                                onUpdate { copy(actions = actions + ActionDef(a.command, a.localizedName(context))) }
                             },
                             onAddNotification = { silent ->
-                                onUpdate { copy(actions = actions + newNotificationAction(silent)) }
+                                onUpdate { copy(actions = actions + newNotificationAction(silent, context)) }
                             },
                             onAddAppLaunch = {
-                                onUpdate { copy(actions = actions + newAppLaunchAction()) }
+                                onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
                             },
                             onAddCall = {
-                                onUpdate { copy(actions = actions + newCallAction()) }
+                                onUpdate { copy(actions = actions + newCallAction(context)) }
                             },
                             onAddNavigate = {
-                                onUpdate { copy(actions = actions + newNavigateAction()) }
+                                onUpdate { copy(actions = actions + newNavigateAction(context)) }
                             },
                             onAddUrl = {
-                                onUpdate { copy(actions = actions + newUrlAction()) }
+                                onUpdate { copy(actions = actions + newUrlAction(context)) }
                             },
                             onAddYandexMusic = {
-                                onUpdate { copy(actions = actions + newYandexMusicAction()) }
+                                onUpdate { copy(actions = actions + newYandexMusicAction(context)) }
                             },
                             onAddDelay = {
-                                onUpdate { copy(actions = actions + newDelayAction()) }
+                                onUpdate { copy(actions = actions + newDelayAction(context)) }
                             }
                         )
                     }
@@ -647,16 +648,17 @@ private fun ParamTriggerControls(
     trigger: TriggerDef,
     onUpdate: (TriggerDef) -> Unit
 ) {
+    val context = LocalContext.current
     // Param dropdown
     CatalogDropdown(
-        selected = TRIGGER_PARAMS.find { it.param == trigger.param }?.displayName ?: trigger.param,
-        items = TRIGGER_PARAMS.map { it.displayName },
-        categories = TRIGGER_PARAMS.map { it.category },
+        selected = TRIGGER_PARAMS.find { it.param == trigger.param }?.localizedName(context) ?: trigger.param,
+        items = TRIGGER_PARAMS.map { it.localizedName(context) },
+        categories = TRIGGER_PARAMS.map { it.localizedCategory(context) },
         modifier = Modifier.width(150.dp),
         onSelect = { idx ->
             val p = TRIGGER_PARAMS[idx]
             onUpdate(trigger.copy(param = p.param, chineseName = p.chineseName,
-                displayName = "${p.displayName} ${trigger.operator} ${trigger.value}"))
+                displayName = "${p.localizedName(context)} ${trigger.operator} ${trigger.value}"))
         }
     )
     Spacer(Modifier.width(4.dp))
@@ -958,14 +960,15 @@ private fun ParamActionControls(
     onUpdate: (ActionDef) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     CatalogDropdown(
-        selected = action.displayName,
-        items = ACTION_COMMANDS.map { it.displayName },
-        categories = ACTION_COMMANDS.map { it.category },
+        selected = ACTION_COMMANDS.find { it.command == action.command }?.localizedName(context) ?: action.displayName,
+        items = ACTION_COMMANDS.map { it.localizedName(context) },
+        categories = ACTION_COMMANDS.map { it.localizedCategory(context) },
         modifier = modifier,
         onSelect = { idx ->
             val a = ACTION_COMMANDS[idx]
-            onUpdate(ActionDef(a.command, a.displayName))
+            onUpdate(ActionDef(a.command, a.localizedName(context)))
         }
     )
 }
@@ -1100,6 +1103,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.4f)
@@ -1137,6 +1141,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
 
 @Composable
 private fun LogItem(log: RuleLogEntity) {
+    val context = LocalContext.current
     val borderColor = if (log.success) AccentGreen else Color(0xFFEF4444)
     val bgColor = if (log.success) AccentGreen.copy(alpha = 0.05f) else Color(0xFFEF4444).copy(alpha = 0.05f)
 
@@ -1164,7 +1169,7 @@ private fun LogItem(log: RuleLogEntity) {
         try {
             val obj = JSONObject(log.triggersSnapshot)
             obj.keys().asSequence().joinToString(" · ") { key ->
-                val paramName = TRIGGER_PARAMS.find { it.param == key }?.displayName ?: key
+                val paramName = TRIGGER_PARAMS.find { it.param == key }?.localizedName(context) ?: key
                 "$paramName: ${obj.get(key)}"
             }
         } catch (_: Exception) { "" }
@@ -2183,55 +2188,55 @@ private fun AddTriggerButton(
     }
 }
 
-private fun newPlaceTrigger(place: PlaceEntity): TriggerDef {
+private fun newPlaceTrigger(place: PlaceEntity, context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "Place",
         chineseName = "位置",
         operator = "==",
         value = "enter",
-        displayName = "Въезд в «${place.name}»",
+        displayName = localized("进入「${place.name}」", "Enter «${place.name}»", "Въезд в «${place.name}»", context),
         kind = "place_enter",
         placeId = place.id,
         placeName = place.name
     )
 }
 
-private fun newServiceStartTrigger(): TriggerDef {
+private fun newServiceStartTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "ServiceStart",
         chineseName = "服务启动",
         operator = "==",
         value = "true",
-        displayName = "Запуск BYDMate",
+        displayName = localized("BYDMate 启动", "BYDMate startup", "Запуск BYDMate", context),
         kind = "service_start"
     )
 }
 
-private fun newNetworkAvailableTrigger(): TriggerDef {
+private fun newNetworkAvailableTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "NetworkAvailable",
         chineseName = "网络可用",
         operator = "==",
         value = "true",
-        displayName = "Доступен интернет",
+        displayName = localized("网络可用", "Internet available", "Доступен интернет", context),
         kind = "network_available"
     )
 }
 
-private fun newDelayAction(): ActionDef = ActionDef(
+private fun newDelayAction(context: android.content.Context): ActionDef = ActionDef(
     command = "delay_1000",
-    displayName = "Пауза 1 сек",
+    displayName = localized("延迟 1 秒", "Delay 1 sec", "Пауза 1 сек", context),
     kind = "delay",
     payload = "1000"
 )
 
-private fun newTimeOfDayTrigger(): TriggerDef {
+private fun newTimeOfDayTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "TimeOfDay",
         chineseName = "时间段",
         operator = "==",
         value = "NIGHT",
-        displayName = "Ночь",
+        displayName = localized("夜晚", "Night", "Ночь", context),
         kind = "time_of_day"
     )
 }

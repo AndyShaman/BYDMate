@@ -152,6 +152,10 @@ class SettingsViewModel @Inject constructor(
         localePreferences.setLanguage(lang)
         AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang))
         _appLanguage.value = lang
+        // Auto-select CNY when switching to Chinese
+        if (lang == "zh") {
+            saveCurrency("CNY")
+        }
         // Force overlay teardown so the next attach picks up the new locale.
         // applicationContext keeps a stale Configuration after setApplicationLocales,
         // which leaves the floating widget rendering against the old language.
