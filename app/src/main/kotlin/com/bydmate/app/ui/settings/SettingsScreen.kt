@@ -1160,6 +1160,11 @@ private fun LanguageBlock(
                 selected = currentLang == "en",
                 onClick = { applyLang("en") },
             )
+            LanguageOption(
+                label = "简体中文",
+                selected = currentLang == "zh",
+                onClick = { applyLang("zh") },
+            )
         }
     }
 }
