@@ -834,7 +834,7 @@ class SettingsViewModel @Inject constructor(
                 logProcess = Runtime.getRuntime().exec(arrayOf(
                     "logcat", "-v", "time",
                     "-s", "BootReceiver:*",
-                    "DiParsClient:*", "TrackingService:*", "TripTracker:*",
+                    "TrackingService:*", "TripTracker:*",
                     "HistoryImporter:*", "EnergyDataReader:*",
                     "AutoserviceClient:*", "AdbOnDeviceClient:*",
                     "IternioTelemetryClient:*", "BatteryHealthRepository:*",

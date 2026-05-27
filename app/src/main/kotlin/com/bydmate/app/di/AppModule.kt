@@ -321,4 +321,5 @@ object AppModule {
         adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     ): com.bydmate.app.data.autoservice.AutoserviceClient =
         com.bydmate.app.data.autoservice.AutoserviceClientImpl(adb)
+
 }

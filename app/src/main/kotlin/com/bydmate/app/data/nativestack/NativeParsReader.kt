@@ -51,7 +51,7 @@ class NativeParsReader @Inject constructor(
         // Battery capacity comes from user settings, not from autoservice.
         val batteryCapacityKwh = settings.getBatteryCapacity()
 
-        // ── Domain-level guards (mirror DiParsClient.parse semantics) ────────
+        // ── Domain-level guards ──────────────────────────────────────────────
         // Cell voltages: autoservice raw is in mV scaled to V via INT_SCALED ÷1000.
         // Filter anything ≤ 0.5 V (BMS not reporting).
         @Suppress("UNCHECKED_CAST")
