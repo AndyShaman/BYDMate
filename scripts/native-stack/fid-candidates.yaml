@@ -1,6 +1,6 @@
 # Phase 1a candidate registry. Validated entries graduate to FidMap.kt.
 # Status: validated | candidate | unknown
-# decoder: int_raw | int_div10 | int_percent | int_enum | float_volt | float_percent | float_kw | float_kwh | int_temp_c | int_kpa
+# decoder: int_raw | int_div10 | int_percent | int_enum | float_volt | float_percent | float_kw | float_kwh | int_temp_c | int_kpa | static_user_setting
 # Source must be neutral: autoservice-catalog | fid-registry | logcat-reverse
 
 - param: SOC
@@ -22,7 +22,7 @@
   unit: "km/h"
   status: candidate
   source: autoservice-catalog
-  note: "SPEED_AUTO_SPEED, getCurrentSpeed(). Read=0.0f parked. Direct km/h float."
+  note: "SPEED_AUTO_SPEED, getCurrentSpeed(), candidate float km/h. Read=0.0f parked."
 
 - param: Mileage
   diplus_key: Mileage
@@ -111,11 +111,11 @@
   device: 1014
   fid: 1148190776
   transact: 5
-  decoder: int_temp_c
+  decoder: int_raw
   unit: "°C"
   status: candidate
   source: autoservice-catalog
-  note: "STATISTIC_AVERAGE_BATTERY_TEMP. Raw read=52 → ÷10 = 5.2°C. Decoder needs ÷10 — verify scale in diff.py before graduating."
+  note: "STATISTIC_AVERAGE_BATTERY_TEMP. Raw read=52 → ÷10 = 5.2°C. Consumer must apply ÷10 to convert to °C."
 
 - param: MinBatTemp
   diplus_key: MinBatTemp
@@ -132,22 +132,22 @@
   device: 1014
   fid: 1147142192
   transact: 5
-  decoder: float_volt
+  decoder: int_raw
   unit: "V"
   status: candidate
   source: autoservice-catalog
-  note: "STATISTIC_HIGHEST_BATTERY_VOLTAGE. Read=3321 → mV units, divide by 1000 for V (3.321V). Decoder and scale must be validated in diff.py."
+  note: "STATISTIC_HIGHEST_BATTERY_VOLTAGE. Read=3321 (mV). Consumer must apply ÷1000 to convert mV to V (3.321V)."
 
 - param: MinCellV
   diplus_key: MinCellV
   device: 1014
   fid: 1147142160
   transact: 5
-  decoder: float_volt
+  decoder: int_raw
   unit: "V"
   status: candidate
   source: autoservice-catalog
-  note: "STATISTIC_LOWEST_BATTERY_VOLTAGE. Read=3313 → mV units, divide by 1000 for V. Same scale caveat as MaxCellV."
+  note: "STATISTIC_LOWEST_BATTERY_VOLTAGE. Read=3313 (mV). Consumer must apply ÷1000 to convert mV to V."
 
 - param: ExtTemp
   diplus_key: ExtTemp
@@ -208,7 +208,7 @@
   device: null
   fid: null
   transact: null
-  decoder: int_raw
+  decoder: int_temp_c
   unit: "°C"
   status: unknown
   source: tbd
@@ -278,7 +278,7 @@
   source: autoservice-catalog
   note: "BODYWORK_HOOD on dev=1001. Read=0 (closed). Direct enum: 0=closed."
 
-- { param: SeatbeltFL, diplus_key: SeatbeltFL, device: 1007, fid: 692060184, transact: 5, decoder: int_enum, unit: "", status: candidate, source: autoservice-catalog }
+- { param: SeatbeltFL, diplus_key: SeatbeltFL, device: 1007, fid: 692060184, transact: 5, decoder: int_enum, unit: "", status: candidate, source: autoservice-catalog, note: "INSTRUMENT_DD_MAIN_SAFETYBELT_STATE, dev=1007, read=0 (unbuckled)." }
 - { param: LockFL, diplus_key: LockFL, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
 
 - param: TirePressFL
