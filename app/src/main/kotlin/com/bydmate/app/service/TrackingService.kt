@@ -85,10 +85,6 @@ class TrackingService : Service(), LocationListener {
     private var consecutiveNullCount = 0
     private var firstDataReceived = false
     private var currentPollIntervalMs = POLL_INTERVAL_MS
-    // Last D+ relaunch attempt. Reset to 0 on first successful fetch so a future
-    // outage triggers an immediate retry; otherwise spaced by RELAUNCH_COOLDOWN_MS
-    // to avoid hammering the launcher when D+ is genuinely broken.
-    @Volatile private var lastDiPlusRelaunchTs: Long = 0L
 
     // Widget session (ignition-on → ignition-off) — decoupled from TripTracker GPS state.
     // Primary signal: DiPars powerState ≥ 1. Fallback when powerState is unreliable:
@@ -160,9 +156,6 @@ class TrackingService : Service(), LocationListener {
         private const val GUN_STATE_POLL_EVERY_N_TICKS = 5
         private const val NULL_WARNING_THRESHOLD = 3
         private const val MAX_POLL_INTERVAL_MS = 60_000L
-        // Cool-down between D+ relaunch attempts while it is still silent. Caps
-        // log noise / launcher pressure when D+ refuses to come back up.
-        private const val DIPLUS_RELAUNCH_COOLDOWN_MS = 5L * 60_000L
         // Tolerance between last "session active" tick and the current tick before we
         // consider the session closed. 30 sec survives brief powerState blips and
         // covers the DiLink wind-down after ignition-off.
@@ -638,7 +631,6 @@ class TrackingService : Service(), LocationListener {
                     val data = parsReader.fetch()
                     if (data != null) {
                         consecutiveNullCount = 0
-                        lastDiPlusRelaunchTs = 0L
                         currentPollIntervalMs = POLL_INTERVAL_MS
                         _diPlusConnected.value = true
                         _lastData.value = data
@@ -762,19 +754,7 @@ class TrackingService : Service(), LocationListener {
                             _diPlusConnected.value = false
                             currentPollIntervalMs = (currentPollIntervalMs * 1.5).toLong()
                                 .coerceAtMost(MAX_POLL_INTERVAL_MS)
-                            val now = System.currentTimeMillis()
-                            if (DiPlusWatchdog.shouldRelaunch(
-                                    failuresCount = consecutiveNullCount,
-                                    threshold = NULL_WARNING_THRESHOLD,
-                                    nowMs = now,
-                                    lastRelaunchTs = lastDiPlusRelaunchTs,
-                                    cooldownMs = DIPLUS_RELAUNCH_COOLDOWN_MS,
-                                )
-                            ) {
-                                Log.w(TAG, "DiPlus silent ($consecutiveNullCount nulls), relaunching (backoff ${currentPollIntervalMs}ms)")
-                                tryLaunchDiPlus()
-                                lastDiPlusRelaunchTs = now
-                            }
+                            Log.w(TAG, "Vehicle data silent ($consecutiveNullCount nulls), backoff=${currentPollIntervalMs}ms")
                         }
                     }
                 } catch (e: Exception) {
@@ -897,56 +877,6 @@ class TrackingService : Service(), LocationListener {
         cameraStateMonitor.start()
         serviceScope.launch {
             cameraStateMonitor.active.collect { _cameraActive.value = it }
-        }
-    }
-
-    private fun tryLaunchDiPlus() {
-        // Primary path: ADB shell uid bypasses BackgroundServiceStartNotAllowedException.
-        // Without this, startActivity(StartMainServiceActivity) crashes inside D+'s
-        // own onCreate when D+'s process is in cached/idle state — happens reliably
-        // when reverse is engaged before DiLink finishes booting.
-        serviceScope.launch {
-            val launched = try {
-                if (!adbOnDeviceClient.isConnected()) {
-                    adbOnDeviceClient.connect()
-                }
-                adbOnDeviceClient.launchDiPlusService()
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "ADB-driven DiPlus launch failed: ${e.message}")
-                false
-            }
-            if (launched) {
-                Log.i(TAG, "Launched DiPlus MainService via ADB shell")
-                return@launch
-            }
-            // Fallback: legacy startActivity path. Works when D+'s process is
-            // already warm; usually fails on cold start in Android 12.
-            try {
-                val intent = Intent().apply {
-                    setClassName("com.van.diplus", "com.van.diplus.activity.StartMainServiceActivity")
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(intent)
-                Log.i(TAG, "Launched DiPlus StartMainServiceActivity (fallback)")
-            } catch (e: kotlinx.coroutines.CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to launch DiPlus via activity: ${e.message}")
-                try {
-                    val launchIntent = packageManager.getLaunchIntentForPackage("com.van.diplus")
-                    if (launchIntent != null) {
-                        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        startActivity(launchIntent)
-                        Log.i(TAG, "Launched DiPlus via package manager")
-                    }
-                } catch (e2: kotlinx.coroutines.CancellationException) {
-                    throw e2
-                } catch (e2: Exception) {
-                    Log.w(TAG, "Failed to launch DiPlus fallback: ${e2.message}")
-                }
-            }
         }
     }
 
