@@ -35,4 +35,10 @@ class ParamDecoderTest {
         assertEquals(60, ParamDecoder.decodeInt(60, Decoder.INT_TEMP_C))
         assertNull(ParamDecoder.decodeInt(200, Decoder.INT_TEMP_C))
     }
+
+    @Test fun `int_scaled applies scale factor`() {
+        assertEquals(1234.5, ParamDecoder.decodeScaled(12345, 0.1)!!, 0.001)
+        assertEquals(3.456, ParamDecoder.decodeScaled(3456, 0.001)!!, 0.0001)
+        assertNull(ParamDecoder.decodeScaled(-10011, 0.1))
+    }
 }

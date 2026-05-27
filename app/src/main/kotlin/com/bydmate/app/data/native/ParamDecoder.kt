@@ -5,6 +5,7 @@ import com.bydmate.app.data.autoservice.SentinelDecoder
 enum class Decoder {
     INT_RAW,
     INT_DIV10,
+    INT_SCALED,
     INT_PERCENT,
     INT_ENUM,
     INT_TEMP_C,
@@ -28,6 +29,11 @@ object ParamDecoder {
             Decoder.INT_DIV10 -> cleaned
             else -> null
         }
+    }
+
+    fun decodeScaled(rawInt: Int, scale: Double): Double? {
+        val cleaned = SentinelDecoder.decodeInt(rawInt) ?: return null
+        return cleaned * scale
     }
 
     fun decodeFloat(rawInt: Int, decoder: Decoder): Double? {
