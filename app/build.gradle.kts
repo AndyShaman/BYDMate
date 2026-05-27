@@ -139,6 +139,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.6.1")
 
     // Testing
+    testImplementation("org.jetbrains.kotlin:kotlin-reflect:2.1.0")
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
