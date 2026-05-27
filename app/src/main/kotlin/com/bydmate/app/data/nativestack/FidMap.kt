@@ -67,7 +67,6 @@ object FidMap {
         FidEntry("windowFR",             1001, 1267728400,   5, Decoder.INT_PERCENT),
         FidEntry("windowRL",             1001, 947912736,    5, Decoder.INT_PERCENT),
         FidEntry("windowRR",             1001, 947912752,    5, Decoder.INT_PERCENT),
-        FidEntry("sunroof",              1001, 1101004848,   5, Decoder.INT_PERCENT),
         FidEntry("trunk",                1001, 1074790416,   5, Decoder.INT_ENUM),
         FidEntry("lockFL",               1032, 1081081864,   5, Decoder.INT_ENUM),
         FidEntry("driveMode",            1006, 555745294,    5, Decoder.INT_ENUM),

@@ -104,7 +104,7 @@ class NativeParsReader @Inject constructor(
             windowFR            = field<Int>("windowFR"),
             windowRL            = field<Int>("windowRL"),
             windowRR            = field<Int>("windowRR"),
-            sunroof             = field<Int>("sunroof"),
+            sunroof             = null,  // removed from FidMap: fid returns enum(1=open,2=closed,5=vent) not percent
             trunk               = field<Int>("trunk"),
             hood                = field<Int>("hood"),
             seatbeltFL          = field<Int>("seatbeltFL"),
