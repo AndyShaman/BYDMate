@@ -64,10 +64,19 @@ class NativeParsReader @Inject constructor(
         // no dual-unit handling needed. Filter ≤ 0.0 as unavailable.
         val voltage12v = field<Double>("voltage12v")?.takeIf { it > 0.0 }
 
+        val soc = field<Double>("soc")?.toInt()
+        val mileage = field<Double>("mileage")
+
+        // Liveness gate: if every primary signal is null, autoservice is unreachable
+        // or returning sentinels — treat as a fetch failure so consumers can retry.
+        if (soc == null && mileage == null && voltage12v == null) {
+            return null
+        }
+
         return DiParsData(
-            soc                 = field<Double>("soc")?.toInt(),
+            soc                 = soc,
             speed               = field<Double>("speed")?.toInt(),
-            mileage             = field<Double>("mileage"),
+            mileage             = mileage,
             power               = field<Int>("power")?.toDouble(),
             chargeGunState      = field<Int>("chargeGunState"),
             maxBatTemp          = field<Int>("maxBatTemp"),

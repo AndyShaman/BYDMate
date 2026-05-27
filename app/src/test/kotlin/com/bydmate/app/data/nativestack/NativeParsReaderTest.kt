@@ -180,4 +180,25 @@ class NativeParsReaderTest {
         // lightLow: no fixture data for fid=950009866 → null
         assertNull("lightLow should be null (no fixture data)", data.lightLow)
     }
+
+    /**
+     * Liveness gate: when autoservice is available but all primary signals (soc,
+     * mileage, voltage12v) return null, fetch() must return null so the caller
+     * treats it as an unreachable / sentinel-spamming autoservice and retries.
+     */
+    @Test
+    fun `fetch returns null when all primary signals are null`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        // All reads return null — simulates sentinel-spam or disconnected autoservice.
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+
+        val reader = NativeParsReader(auto, settings)
+        val result = reader.fetch()
+        assertNull("fetch() must return null when soc + mileage + voltage12v are all null", result)
+    }
 }
