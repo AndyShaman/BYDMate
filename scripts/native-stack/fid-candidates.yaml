@@ -776,3 +776,925 @@
   unit: ""
   status: unknown
   source: tbd
+
+# ── Reference-catalog gap import (S8 batch) ──────────────────────────────
+# Status `imported` = present in reference catalog, not yet observed live on
+# Leopard 3. Will be filtered by S9 cold sweep (sentinel = drop, real value
+# = imported_validated).
+
+# ── Battery extended (dev=1014 except where noted) ───────────────────────
+
+- param: SOH
+  diplus_key: null
+  device: 1014
+  fid: 1145045032
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: imported
+  source: reference-catalog
+  note: "Statistic battery health. Already in FidRegistry.kt as FID_SOH."
+
+- param: SOC_BMS
+  diplus_key: null
+  device: 1014
+  fid: 1145045040
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: imported
+  source: reference-catalog
+  note: "Reference SOC alternate to our validated 1246777400. Same dev=1014. Compare on S9 sweep — pick one source, drop other."
+
+- param: EvRange
+  diplus_key: null
+  device: 1014
+  fid: 1246765118
+  transact: 5
+  decoder: int_raw
+  unit: "km"
+  status: imported
+  source: reference-catalog
+  note: "Estimated remaining EV range from BMS."
+
+- param: TotalAvgSpeed
+  diplus_key: null
+  device: 1014
+  fid: 1032871976
+  transact: 5
+  decoder: int_raw
+  unit: "km/h"
+  status: imported
+  source: reference-catalog
+
+- param: TripAvgSpeed
+  diplus_key: null
+  device: 1007
+  fid: 1246777388
+  transact: 5
+  decoder: int_raw
+  unit: "km/h"
+  status: imported
+  source: reference-catalog
+
+- param: TripElecCon
+  diplus_key: null
+  device: 1014
+  fid: 1246801976
+  transact: 7
+  decoder: float_kwh
+  unit: "kWh"
+  status: imported
+  source: reference-catalog
+
+- param: BatteryMaxChargePower
+  diplus_key: null
+  device: 1014
+  fid: 877658136
+  transact: 5
+  decoder: int_raw
+  unit: "kW"
+  status: imported
+  source: reference-catalog
+  note: "Live during charging only — S5 deferred."
+
+- param: BatteryMaxDischargePower
+  diplus_key: null
+  device: 1014
+  fid: 1145045048
+  transact: 5
+  decoder: int_raw
+  unit: "kW"
+  status: imported
+  source: reference-catalog
+
+- param: BatteryInsulation
+  diplus_key: null
+  device: 1039
+  fid: 1134559256
+  transact: 5
+  decoder: int_raw
+  unit: "kΩ"
+  status: imported
+  source: reference-catalog
+
+# ── Motor dev=1009/1012/1039 ─────────────────────────────────────────────
+
+- param: FrontMotorTemp
+  diplus_key: null
+  device: 1039
+  fid: 1154482192
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: imported
+  source: reference-catalog
+  note: "May be 0 on RWD trim."
+
+- param: RearMotorTemp
+  diplus_key: null
+  device: 1039
+  fid: 1155530768
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: imported
+  source: reference-catalog
+
+- param: FrontMotorCurrent
+  diplus_key: null
+  device: 1009
+  fid: 1186988040
+  transact: 5
+  decoder: int_scaled
+  scale: 0.1
+  unit: "A"
+  status: imported
+  source: reference-catalog
+
+- param: RearMotorCurrent
+  diplus_key: null
+  device: 1009
+  fid: 1186988056
+  transact: 5
+  decoder: int_scaled
+  scale: 0.1
+  unit: "A"
+  status: imported
+  source: reference-catalog
+
+- param: FrontMotorSpeed
+  diplus_key: null
+  device: 1012
+  fid: 1141899272
+  transact: 5
+  decoder: int_raw
+  unit: "rpm"
+  status: imported
+  source: reference-catalog
+
+- param: RearMotorSpeed
+  diplus_key: null
+  device: 1012
+  fid: 621805576
+  transact: 5
+  decoder: int_raw
+  unit: "rpm"
+  status: imported
+  source: reference-catalog
+
+- param: EngineRPM
+  diplus_key: null
+  device: 1012
+  fid: 339738642
+  transact: 5
+  decoder: int_raw
+  unit: "rpm"
+  status: imported
+  source: reference-catalog
+  note: "Pure EV — likely sentinel/0. Verify on sweep."
+
+# ── AC extended dev=1000 ─────────────────────────────────────────────────
+
+- param: ACDual
+  diplus_key: null
+  device: 1000
+  fid: 1077936164
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: ACTempDeputy
+  diplus_key: null
+  device: 1000
+  fid: 1077936176
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: imported
+  source: reference-catalog
+  note: "Passenger-side set temperature (dual mode)."
+
+- param: ACCompressorPower
+  diplus_key: null
+  device: 1000
+  fid: 1031798840
+  transact: 5
+  decoder: int_raw
+  unit: "W"
+  status: imported
+  source: reference-catalog
+
+# ── Massage seats dev=1023 (trim-dependent) ──────────────────────────────
+
+- param: MassageModeD
+  diplus_key: null
+  device: 1023
+  fid: 1335885872
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Trim-dependent. May not exist on operator Leopard 3."
+
+- param: MassageLevelD
+  diplus_key: null
+  device: 1023
+  fid: 1335885876
+  transact: 5
+  decoder: int_raw
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: MassageModeP
+  diplus_key: null
+  device: 1023
+  fid: 1335885880
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: MassageLevelP
+  diplus_key: null
+  device: 1023
+  fid: 1335885884
+  transact: 5
+  decoder: int_raw
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Seat heat/vent ALT dev=1023 (dual-source pair) ───────────────────────
+# Our dev=1000 entries are validated (see SeatHeatD/VentD/HeatP/VentP above).
+# These dev=1023 reference entries kept for sweep comparison only.
+
+- param: SeatHeatD_alt
+  diplus_key: null
+  device: 1023
+  fid: 1335885835
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Alternate seat-heat-driver fid. Compare against validated dev=1000 fid=702545948 on sweep."
+
+- param: SeatVentD_alt
+  diplus_key: null
+  device: 1023
+  fid: 1335885832
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: SeatHeatP_alt
+  diplus_key: null
+  device: 1023
+  fid: 1335885843
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: SeatVentP_alt
+  diplus_key: null
+  device: 1023
+  fid: 1335885840
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Trunk extended (7 alt fids dev=1001/1023) ────────────────────────────
+
+- param: TrunkP0
+  diplus_key: null
+  device: 1001
+  fid: 654311456
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Alternate trunk flag. Trunk_p4 is our primary."
+
+- param: TrunkP1
+  diplus_key: null
+  device: 1001
+  fid: 365953060
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkP2
+  diplus_key: null
+  device: 1001
+  fid: 365953067
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkP3
+  diplus_key: null
+  device: 1001
+  fid: 365953069
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkP5
+  diplus_key: null
+  device: 1023
+  fid: 1074790427
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkP6
+  diplus_key: null
+  device: 1023
+  fid: 1074790408
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkP7
+  diplus_key: null
+  device: 1001
+  fid: 1125122080
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TrunkOpen
+  diplus_key: null
+  device: 1001
+  fid: 692060186
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Binary trunk-open from reference. Alternative to trunk_p4."
+
+# ── Lock state global ────────────────────────────────────────────────────
+
+- param: LockStateGlobal
+  diplus_key: null
+  device: 1023
+  fid: 315621421
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Whole-car lock state. Distinct from 4 per-door lock_xx."
+
+# ── Lights extended dev=1004 ─────────────────────────────────────────────
+
+- param: LightTurnLeft
+  diplus_key: null
+  device: 1004
+  fid: 321912844
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightTurnRight
+  diplus_key: null
+  device: 1004
+  fid: 321912845
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightFrontFog
+  diplus_key: null
+  device: 1004
+  fid: 321912846
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightRearFog
+  diplus_key: null
+  device: 1004
+  fid: 321912847
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightBrake
+  diplus_key: null
+  device: 1004
+  fid: 950009874
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightReversing
+  diplus_key: null
+  device: 1004
+  fid: 950009876
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: LightHazard
+  diplus_key: null
+  device: 1004
+  fid: 960495667
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Pedals + brake state + e-pedal dev=1011/1013 ─────────────────────────
+
+- param: AccelPedal
+  diplus_key: null
+  device: 1013
+  fid: 874512392
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: imported
+  source: reference-catalog
+
+- param: BrakePedal
+  diplus_key: null
+  device: 1013
+  fid: 874512400
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: imported
+  source: reference-catalog
+
+- param: EpbState
+  diplus_key: null
+  device: 1011
+  fid: 562036753
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Electronic parking brake state."
+
+- param: BrakeState
+  diplus_key: null
+  device: 1011
+  fid: 692060194
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: EpedalMode
+  diplus_key: null
+  device: 1006
+  fid: 888143930
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Tyre state dev=1016 ──────────────────────────────────────────────────
+
+- param: TyreStateFL
+  diplus_key: null
+  device: 1016
+  fid: -1728052957
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TyreStateFR
+  diplus_key: null
+  device: 1016
+  fid: -1728052953
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TyreStateRL
+  diplus_key: null
+  device: 1016
+  fid: -1728052949
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: TyreStateRR
+  diplus_key: null
+  device: 1016
+  fid: -1728052945
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── GPS dev=1017 ─────────────────────────────────────────────────────────
+# May be redundant — we already use Android LocationManager. Sweep first.
+
+- param: GpsLongitude
+  diplus_key: null
+  device: 1017
+  fid: 965600
+  transact: 7
+  decoder: float_kw
+  unit: "deg"
+  status: imported
+  source: reference-catalog
+
+- param: GpsLatitude
+  diplus_key: null
+  device: 1017
+  fid: 311087
+  transact: 7
+  decoder: float_kw
+  unit: "deg"
+  status: imported
+  source: reference-catalog
+
+- param: GpsHeading
+  diplus_key: null
+  device: 1017
+  fid: 639440
+  transact: 7
+  decoder: float_kw
+  unit: "deg"
+  status: imported
+  source: reference-catalog
+
+- param: GpsAltitude
+  diplus_key: null
+  device: 1017
+  fid: 689157
+  transact: 7
+  decoder: float_kw
+  unit: "m"
+  status: imported
+  source: reference-catalog
+
+- param: GpsFix
+  diplus_key: null
+  device: 1017
+  fid: 233088
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Parking radar dev=1025 (9 sensors) ───────────────────────────────────
+
+- param: RadarDist0
+  diplus_key: null
+  device: 1025
+  fid: -1728053151
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist1
+  diplus_key: null
+  device: 1025
+  fid: -1728053148
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist2
+  diplus_key: null
+  device: 1025
+  fid: -1728053146
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist3
+  diplus_key: null
+  device: 1025
+  fid: -1728053145
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist4
+  diplus_key: null
+  device: 1025
+  fid: -1728053147
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist5
+  diplus_key: null
+  device: 1025
+  fid: -1728053144
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist6
+  diplus_key: null
+  device: 1025
+  fid: -1728053150
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist7
+  diplus_key: null
+  device: 1025
+  fid: -1728053149
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+- param: RadarDist8
+  diplus_key: null
+  device: 1025
+  fid: -1728053143
+  transact: 5
+  decoder: int_raw
+  unit: "cm"
+  status: imported
+  source: reference-catalog
+
+# ── ADAS dev=1038 ────────────────────────────────────────────────────────
+
+- param: AdasEspState
+  diplus_key: null
+  device: 1038
+  fid: 305135676
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: AdasAebState
+  diplus_key: null
+  device: 1038
+  fid: 852492332
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: AdasAvhState
+  diplus_key: null
+  device: 1038
+  fid: 304087110
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: AdasLksMode
+  diplus_key: null
+  device: 1038
+  fid: 828375054
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: AdasBsdState
+  diplus_key: null
+  device: 1038
+  fid: 1098907656
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: AdasTjaState
+  diplus_key: null
+  device: 1038
+  fid: 828375084
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+# ── Misc body + chassis ──────────────────────────────────────────────────
+
+- param: InteriorHumidity
+  diplus_key: null
+  device: 1043
+  fid: 740567
+  transact: 5
+  decoder: int_raw
+  unit: "%"
+  status: imported
+  source: reference-catalog
+  note: "Returned sentinel 0xffffd8e5 in our earlier dropped-list. Sweep will re-confirm."
+
+- param: VehicleSlope
+  diplus_key: null
+  device: 1043
+  fid: 573571116
+  transact: 5
+  decoder: int_raw
+  unit: "deg"
+  status: imported
+  source: reference-catalog
+
+- param: MirrorFoldState
+  diplus_key: null
+  device: 1047
+  fid: 1011875887
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Whole-car mirror fold state. Operator will toggle in S10."
+
+- param: AlarmState
+  diplus_key: null
+  device: 1001
+  fid: 1150287934
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: EnergyType
+  diplus_key: null
+  device: 1001
+  fid: -1728052985
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+  note: "Powertrain type (EV/PHEV/etc)."
+
+- param: WaterTemp
+  diplus_key: null
+  device: 1014
+  fid: 839263
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: imported
+  source: reference-catalog
+  note: "Coolant temp. Likely 0 or sentinel on pure EV."
+
+- param: FuelRange
+  diplus_key: null
+  device: 1014
+  fid: 1246773304
+  transact: 5
+  decoder: int_raw
+  unit: "km"
+  status: imported
+  source: reference-catalog
+  note: "PHEV-only — sentinel expected on Leopard 3 (pure EV)."
+
+- param: InstrumentOkIndicator
+  diplus_key: null
+  device: 1007
+  fid: 738197524
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: GbDcCurrentPowerConsumption
+  diplus_key: null
+  device: 1011
+  fid: 651624504
+  transact: 5
+  decoder: int_raw
+  unit: "kW"
+  status: imported
+  source: reference-catalog
+
+# ── Charging extended dev=1009 (S5 deferred — needs charger) ─────────────
+
+- param: ChargingPower
+  diplus_key: null
+  device: 1009
+  fid: 740506
+  transact: 5
+  decoder: int_raw
+  unit: "kW"
+  status: imported
+  source: reference-catalog
+  note: "Live charging power. Compare with ChargingPowerDD (842006552) on S5."
+
+- param: ChargingPowerDD
+  diplus_key: null
+  device: 1009
+  fid: 842006552
+  transact: 7
+  decoder: float_kw
+  unit: "kW"
+  status: imported
+  source: reference-catalog
+  note: "Precise float kW. Already in memory `reference_charging_power_dd_fid`."
+
+- param: ChargingCapacity
+  diplus_key: null
+  device: 1009
+  fid: 666894360
+  transact: 5
+  decoder: int_raw
+  unit: "kWh"
+  status: imported
+  source: reference-catalog
+  note: "kWh charged this session."
+
+- param: ChargerWorkState
+  diplus_key: null
+  device: 1009
+  fid: 666894346
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: imported
+  source: reference-catalog
+
+- param: ChargeStopSoc
+  diplus_key: null
+  device: 1009
+  fid: 1132462120
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: imported
+  source: reference-catalog
+  note: "User-set SOC limit for charge stop."
