@@ -1,0 +1,343 @@
+# Phase 1a candidate registry. Validated entries graduate to FidMap.kt.
+# Status: validated | candidate | unknown
+# decoder: int_raw | int_div10 | int_percent | int_enum | float_volt | float_percent | float_kw | float_kwh | int_temp_c | int_kpa
+# Source must be neutral: autoservice-catalog | fid-registry | logcat-reverse
+
+- param: SOC
+  diplus_key: SOC
+  device: 1014
+  fid: 1246777400
+  transact: 7
+  decoder: float_percent
+  unit: "%"
+  status: validated
+  source: fid-registry
+
+- param: Speed
+  diplus_key: Speed
+  device: 1013
+  fid: -1807745016
+  transact: 7
+  decoder: int_raw
+  unit: "km/h"
+  status: candidate
+  source: autoservice-catalog
+  note: "SPEED_AUTO_SPEED, getCurrentSpeed(). Read=0.0f parked. Direct km/h float."
+
+- param: Mileage
+  diplus_key: Mileage
+  device: 1014
+  fid: 1246765072
+  transact: 5
+  decoder: int_div10
+  unit: "km"
+  status: validated
+  source: fid-registry
+
+- param: Power
+  diplus_key: Power
+  device: 1012
+  fid: 339738656
+  transact: 5
+  decoder: int_raw
+  unit: "kW"
+  status: validated
+  source: fid-registry
+
+- param: ChargeGun
+  diplus_key: ChargeGun
+  device: 1009
+  fid: 876609586
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: validated
+  source: fid-registry
+
+- param: ChargingStatus
+  diplus_key: ChargingStatus
+  device: 1009
+  fid: 876609560
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: validated
+  source: fid-registry
+
+- param: BatCapacity
+  diplus_key: BatCapacity
+  device: null
+  fid: null
+  transact: null
+  decoder: static_user_setting
+  unit: "kWh"
+  status: unknown
+  source: tbd
+  note: "Likely user-config (SettingsRepository.batteryCapacityKwh). Verify in S2 snap whether D+ value matches user-set capacity exactly."
+
+- param: TotalElecCon
+  diplus_key: TotalElecCon
+  device: 1014
+  fid: 1032871984
+  transact: 7
+  decoder: float_kwh
+  unit: "kWh"
+  status: validated
+  source: fid-registry
+  note: "Monotonicity + IGN-off continuity required (see spec §4)."
+
+- param: Voltage12V
+  diplus_key: Voltage12V
+  device: 1001
+  fid: 1128267816
+  transact: 7
+  decoder: float_volt
+  unit: "V"
+  status: validated
+  source: fid-registry
+
+- param: MaxBatTemp
+  diplus_key: MaxBatTemp
+  device: null
+  fid: null
+  transact: null
+  decoder: int_temp_c
+  unit: "°C"
+  status: unknown
+  source: tbd
+
+- param: AvgBatTemp
+  diplus_key: AvgBatTemp
+  device: 1014
+  fid: 1148190776
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: candidate
+  source: autoservice-catalog
+  note: "STATISTIC_AVERAGE_BATTERY_TEMP. Raw read=52 → ÷10 = 5.2°C. Decoder needs ÷10 — verify scale in diff.py before graduating."
+
+- param: MinBatTemp
+  diplus_key: MinBatTemp
+  device: null
+  fid: null
+  transact: null
+  decoder: int_temp_c
+  unit: "°C"
+  status: unknown
+  source: tbd
+
+- param: MaxCellV
+  diplus_key: MaxCellV
+  device: 1014
+  fid: 1147142192
+  transact: 5
+  decoder: float_volt
+  unit: "V"
+  status: candidate
+  source: autoservice-catalog
+  note: "STATISTIC_HIGHEST_BATTERY_VOLTAGE. Read=3321 → mV units, divide by 1000 for V (3.321V). Decoder and scale must be validated in diff.py."
+
+- param: MinCellV
+  diplus_key: MinCellV
+  device: 1014
+  fid: 1147142160
+  transact: 5
+  decoder: float_volt
+  unit: "V"
+  status: candidate
+  source: autoservice-catalog
+  note: "STATISTIC_LOWEST_BATTERY_VOLTAGE. Read=3313 → mV units, divide by 1000 for V. Same scale caveat as MaxCellV."
+
+- param: ExtTemp
+  diplus_key: ExtTemp
+  device: 1000
+  fid: 1077936184
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: candidate
+  source: autoservice-catalog
+  note: "AC_TEMP_OUT on dev=1000. Read=12 (12°C outdoor). Direct °C value."
+
+- param: Gear
+  diplus_key: Gear
+  device: 1011
+  fid: 562036736
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: candidate
+  source: autoservice-catalog
+  note: "getCurrentGear() on dev=1011. Read=1 (P). Enum: 1=P, 2=R, 3=N, 4=D, 5=M, 6=S. Legacy fid 4017 is dead on Leopard 3."
+
+- param: PowerState
+  diplus_key: PowerState
+  device: null
+  fid: null
+  transact: null
+  decoder: int_enum
+  unit: ""
+  status: unknown
+  source: tbd
+
+- param: InsideTemp
+  diplus_key: InsideTemp
+  device: 1000
+  fid: 1031798832
+  transact: 5
+  decoder: int_temp_c
+  unit: "°C"
+  status: candidate
+  source: autoservice-catalog
+  note: "AC_TEMP_INSIDE on dev=1000. Read=24 (24°C interior). Direct °C value."
+
+- param: ACStatus
+  diplus_key: ACStatus
+  device: 1000
+  fid: 1077936144
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: candidate
+  source: autoservice-catalog
+  note: "AC_POWER_STATE on dev=1000. Read=1 (ON). Enum: 0=OFF, 1=ON."
+
+- param: ACTemp
+  diplus_key: ACTemp
+  device: null
+  fid: null
+  transact: null
+  decoder: int_raw
+  unit: "°C"
+  status: unknown
+  source: tbd
+
+- param: FanLevel
+  diplus_key: FanLevel
+  device: null
+  fid: null
+  transact: null
+  decoder: int_raw
+  unit: ""
+  status: unknown
+  source: tbd
+
+- param: ACCirc
+  diplus_key: ACCirc
+  device: null
+  fid: null
+  transact: null
+  decoder: int_enum
+  unit: ""
+  status: unknown
+  source: tbd
+
+# Doors x4
+- { param: DoorFL, diplus_key: DoorFL, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: DoorFR, diplus_key: DoorFR, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: DoorRL, diplus_key: DoorRL, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: DoorRR, diplus_key: DoorRR, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+
+# Windows x4
+- { param: WindowFL, diplus_key: WindowFL, device: null, fid: null, transact: null, decoder: int_percent, unit: "%", status: unknown, source: tbd }
+- { param: WindowFR, diplus_key: WindowFR, device: null, fid: null, transact: null, decoder: int_percent, unit: "%", status: unknown, source: tbd }
+- { param: WindowRL, diplus_key: WindowRL, device: null, fid: null, transact: null, decoder: int_percent, unit: "%", status: unknown, source: tbd }
+- { param: WindowRR, diplus_key: WindowRR, device: null, fid: null, transact: null, decoder: int_percent, unit: "%", status: unknown, source: tbd }
+
+- param: Sunroof
+  diplus_key: Sunroof
+  device: 1001
+  fid: 1101004832
+  transact: 5
+  decoder: int_percent
+  unit: "%"
+  status: candidate
+  source: autoservice-catalog
+  note: "BODYWORK_SUNROOF_STATE on dev=1001. Read=1 (closed?). Enum/percent scale needs open-state validation."
+
+- param: Trunk
+  diplus_key: Trunk
+  device: 1001
+  fid: 1074790416
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: candidate
+  source: autoservice-catalog
+  note: "BODYWORK_BACKDOOR_CURRENT_POSITION on dev=1001. Read=2 (closed). Enum 0/1/2/3 scale TBD."
+
+- param: Hood
+  diplus_key: Hood
+  device: 1001
+  fid: 692060188
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: candidate
+  source: autoservice-catalog
+  note: "BODYWORK_HOOD on dev=1001. Read=0 (closed). Direct enum: 0=closed."
+
+- { param: SeatbeltFL, diplus_key: SeatbeltFL, device: 1007, fid: 692060184, transact: 5, decoder: int_enum, unit: "", status: candidate, source: autoservice-catalog }
+- { param: LockFL, diplus_key: LockFL, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+
+- param: TirePressFL
+  diplus_key: TirePressFL
+  device: 1016
+  fid: -1728052956
+  transact: 5
+  decoder: int_kpa
+  unit: "kPa"
+  status: candidate
+  source: autoservice-catalog
+  note: "TYRE_PRESSURE_VALUE_LEFT_FRONT on dev=1016. Read=255 (255 kPa = 36.9 psi). Direct kPa value."
+
+- param: TirePressFR
+  diplus_key: TirePressFR
+  device: 1016
+  fid: -1728052952
+  transact: 5
+  decoder: int_kpa
+  unit: "kPa"
+  status: candidate
+  source: autoservice-catalog
+  note: "TYRE_PRESSURE_VALUE_RIGHT_FRONT on dev=1016. Read=252 (252 kPa = 36.5 psi)."
+
+- param: TirePressRL
+  diplus_key: TirePressRL
+  device: 1016
+  fid: -1728052948
+  transact: 5
+  decoder: int_kpa
+  unit: "kPa"
+  status: candidate
+  source: autoservice-catalog
+  note: "TYRE_PRESSURE_VALUE_LEFT_REAR on dev=1016. Read=262 (262 kPa = 38 psi)."
+
+- param: TirePressRR
+  diplus_key: TirePressRR
+  device: 1016
+  fid: -1728052944
+  transact: 5
+  decoder: int_kpa
+  unit: "kPa"
+  status: candidate
+  source: autoservice-catalog
+  note: "TYRE_PRESSURE_VALUE_RIGHT_REAR on dev=1016. Read=255 (255 kPa = 36.9 psi)."
+
+- { param: DriveMode, diplus_key: DriveMode, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: WorkMode, diplus_key: WorkMode, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: AutoPark, diplus_key: AutoPark, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+- { param: Rain, diplus_key: Rain, device: null, fid: null, transact: null, decoder: int_raw, unit: "", status: unknown, source: tbd }
+- { param: LightLow, diplus_key: LightLow, device: null, fid: null, transact: null, decoder: int_enum, unit: "", status: unknown, source: tbd }
+
+- param: DRL
+  diplus_key: DRL
+  device: 1004
+  fid: 985661476
+  transact: 5
+  decoder: int_enum
+  unit: ""
+  status: candidate
+  source: autoservice-catalog
+  note: "getDayTimeLightState() on dev=1004. No read value recorded in catalog; fid exists but state enum unconfirmed."
