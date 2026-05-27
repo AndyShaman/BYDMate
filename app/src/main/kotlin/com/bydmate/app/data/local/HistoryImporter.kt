@@ -151,14 +151,16 @@ class HistoryImporter @Inject constructor(
                 byd.tripKm / (byd.duration / 3600.0)
             } else null
 
-            // SOC enrichment: if this trip's time range falls within the last recorded
-            // session bookmarks, attach socStart/socEnd from the realtime ParsReader
-            // snapshot. Tolerance: session end + 30 sec to cover the post-idle-close window.
+            // SOC enrichment: attach socStart/socEnd when this trip's endTs falls
+            // within the recorded session window [sessionStartTs .. sessionEndTs + 30s].
+            // Containment on endTs (not intersection) avoids enriching trips that merely
+            // overlap the session boundary but ended before the session started.
+            // Tolerance: +30 sec on sessionEnd covers the post-idle-close window.
             // sessionSnap is Snapshot? — null when no session was recorded this process lifetime.
             val sessionStartTs = sessionSnap?.startTs
             val sessionEndTs = sessionSnap?.endTs
             val withinSession = sessionStartTs != null && sessionEndTs != null &&
-                endTsMs >= sessionStartTs && startTsMs <= (sessionEndTs + 30_000L)
+                endTsMs in sessionStartTs..(sessionEndTs + 30_000L)
             val socStart = if (withinSession) sessionSnap?.startSoc else null
             val socEnd   = if (withinSession) sessionSnap?.endSoc   else null
 
