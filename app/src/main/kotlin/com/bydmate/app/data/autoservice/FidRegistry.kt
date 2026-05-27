@@ -1,11 +1,7 @@
 package com.bydmate.app.data.autoservice
 
 /**
- * autoservice Binder addresses validated on Leopard 3 2026-04-25.
- *
- * Source: BydDiagnoseToolV2.apk decompile + adb shell service call validation.
- * See .research/leopard3-pulled/AUTOSERVICE-CATALOG-2026-04-25.md for the
- * full catalog (47 device types, sentinel map, decoders).
+ * autoservice Binder addresses validated against on-device service.
  *
  * IMPORTANT: read-only constants. NEVER add a setInt fid here — the
  * regex barrier in AutoserviceClientImpl will reject any tx=6 attempt.
@@ -16,7 +12,7 @@ object FidRegistry {
     const val TX_GET_INT = 5
     const val TX_GET_FLOAT = 7
 
-    // device types — verified against AUTOSERVICE-CATALOG-2026-04-25.md
+    // device types — verified by on-device probe
     const val DEV_STATISTIC = 1014   // BMS lifetime statistics
     const val DEV_CHARGING = 1009    // Charging gun + charger state
     const val DEV_BODYWORK = 1001    // 12V battery voltage on bodywork
@@ -35,10 +31,10 @@ object FidRegistry {
     const val FID_SOC = 1246777400
 
     // === Charging fids (dev=1009) ===
-    // Validated against AUTOSERVICE-CATALOG-2026-04-25.md and live AC-charging
-    // 2026-04-30: the legacy `-1442840xxx` group (gun/type/battery_type) returned
-    // sentinel 0xffffd8e5 on every call — phantom values the SentinelDecoder
-    // collapsed to null. The catalog fids below return real codes during charging.
+    // Validated against live AC-charging probe. The legacy `-1442840xxx` group
+    // (gun/type/battery_type) returned sentinel 0xffffd8e5 on every call —
+    // phantom values the SentinelDecoder collapsed to null. The fids below
+    // return real codes during charging.
     /** Charging gun connect state: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL. */
     const val FID_GUN_CONNECT_STATE = 876609586
     /** Charging type after handshake: 1=DEFAULT, 2=AC, 3=VTOG, 4=GB_DC, 5=GB_NON_DC. */
