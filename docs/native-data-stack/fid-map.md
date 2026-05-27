@@ -135,3 +135,112 @@ Memory fids dev=1000 work end-to-end (off → operator pressed level → off obs
 2. Alternative reference catalog — used when our local catalog had wrong fid or scale.
 3. Local autoservice catalog — initial seed, superseded by 1+2 on conflict.
 4. D+ value — **never** primary truth (scaling bugs, reduced-payload).
+
+---
+
+# Phase 1a extended — 2026-05-27 sessions
+
+S9 (cold sweep 155 fids), S10 (active state tests doors/locks/belts/mirror/sunshade/sunroof/lights),
+S5 (AC charging snap). Validates reference catalog as `imported` → `validated` / `dropped` / `noisy`.
+
+## Sentinel classes discovered
+
+- **-10011** (0xffffd8e5) — fid registered but always invalid on Leopard 3. Permanent drop.
+- **-10013** (0xffffd8e3) — fid valid, no data right now (e.g. BatteryCurrent under no-load).
+  Distinguish from -10011 in decoder.
+- **float -1.0** (0xbf800000) — GPS no-fix value on tx=7 GPS fids.
+- **constant 65535** (0xffff) — some int fids return uint16 max as "not available" (TrunkP1/P2/P3,
+  ChargeStopSoc when unset, SeatHeat alt dev=1023).
+- **constant unchanged** — fid returns the same value across all state changes (ChargingStatus 1231032336
+  stuck 0, ChargerWorkState 666894346 stuck 1). Not usable as live signal.
+
+## Newly validated on Leopard 3 (S9 + S10 + S5)
+
+| Param | fid | dev | tx | decoder | Live observed |
+|---|---|---|---|---|---|
+| **SOH** | 1145045032 | 1014 | 5 | int_percent | 100% on new battery ← main find |
+| EvRange | 1246765118 | 1014 | 5 | int_raw km | 465-468 km |
+| BatteryVoltage | 1145045000 | 1009 | 5 | int_raw V | 504-506 V (HV) |
+| BatteryMaxChargePower | 877658136 | 1014 | 5 | int_raw kW | 302-304 |
+| BatteryMaxDischargePower | 1145045048 | 1014 | 5 | int_raw kW | 154 |
+| BatteryInsulation | 1134559256 | 1039 | 5 | int_raw kΩ | 6211 |
+| TotalElecCon | 1032871984 | 1014 | 7 | float_kwh | 1014.7 lifetime |
+| FrontMotorTemp | 1154482192 | 1039 | 5 | int_temp_c | 20°C |
+| RearMotorTemp | 1155530768 | 1039 | 5 | int_temp_c | 20°C |
+| EpbState | 562036753 | 1011 | 5 | int_enum | 3 (parked) |
+| **DoorFL/FR/RL/RR** | 692060168/170/172/174 | 1001 | 5 | int_enum | **0=closed, 1=open** |
+| **Hood** (frunk) | 692060188 | 1001 | 5 | int_enum | **0=closed, 1=open** |
+| **LockFL/FR/RL/RR** | 1081081864/1866/1868/1870 | 1032/1001 | 5 | int_enum | **1=unlocked, 2=locked** (NOT 0/1!) |
+| SeatbeltFL | 692060184 | 1007 | 5 | int_enum | 0=off / 1=on |
+| BeltDriver | -1455423464 | 1042 | 5 | int_enum | 0=off / 1=on (alt to SeatbeltFL) |
+| **MirrorFoldState** | 1011875887 | 1047 | 5 | int_enum | **1=folded, 2=unfolded** |
+| **Sunshade** | 1101004816 | 1001 | 5 | int_percent | 0-100% direct |
+| **Sunroof** | 1101004848 | 1001 | 5 | int_enum | **1=open, 2=closed, 5=vent/tilt** (NOT percent!) |
+| LightHigh | 950009868 | 1004 | 5 | int_enum | 0=off, 1=on |
+| RadarDist0-7 | -1728053151..-1728053149 | 1025 | 5 | int_raw cm | 150 baseline (radar8 dropped) |
+| ChargeGun | 876609586 | 1009 | 5 | int_enum | **1=disconnected, 2=AC** |
+| **ChargingPowerDD** | 842006552 | 1009 | 7 | float_kw | **3.11 kW live** ✓ |
+| Power | 339738656 | 1012 | 5 | int_raw kW | -3 charging, +1 idle (signed) |
+
+## Sentinel-dropped on Leopard 3 (S9 baseline)
+
+Constant -10011 = drop permanently.
+
+| fid | Reference name | dev | Note |
+|---|---|---|---|
+| 755989 | belt_rear_left | 1042 | Use BeltRearRight or rely on cluster UI |
+| 740506 | charging_power | 1009 | Use ChargingPowerDD instead |
+| 651624504 | gb_dc_current_power_consumption | 1011 | Unused |
+| 233088 | gps_fix | 1017 | All GPS fids same — no satellite indoor |
+| 1125122080 | trunk_p7 | 1001 | Use Trunk (1074790416) |
+| 839263 | water_temp | 1014 | Pure EV — no coolant |
+| 740567 | interior_humidity | 1043 | Already known dead |
+| -1728053143 | radar_dist_8 | 1025 | 9th radar slot empty |
+
+## Sentinel -10013 (transient, may revive under load/charging)
+
+- BatteryCurrent (1145045016 dev=1009) — sentinel during AC charging at 3 kW too.
+  Hidden on Leopard 3, or needs DC fast charge.
+- ChargingCapacity (666894360 dev=1009) — sentinel during short session.
+  May reflect after sustained charging.
+- FrontMotorCurrent / RearMotorCurrent — sentinel parked; expected to revive during drive.
+
+## Dual-source resolved
+
+- **SOC**: our 1246777400 dev=1014 tx=7 float (98.0) vs reference soc_bms 1145045040 dev=1014 tx=5 int (98). Same value, two representations. Keep our float fid as primary.
+- **Voltage12V**: our 1128267816 dev=1001 tx=7 float (14.0V) vs reference dev=1032 — both fid same, our dev works; reference dev untested but redundant.
+- **Seat heat/vent ALT dev=1023** (fid 1335885832/835/840/843) — all returned 65535 (uint16 max = not available). **Drop alt entries.** Our dev=1000 fids remain only valid path on Leopard 3.
+
+## Constant / unusable on Leopard 3
+
+- ChargingStatus 1231032336 dev=1009 — stuck 0 even during active 3 kW charge. Replace with: derive from `ChargeGun != 1` for connection state, `ChargingPowerDD > 0` for active charge.
+- ChargerWorkState 666894346 dev=1009 — stuck 1. Same fallback as above.
+- AlarmState 1150287934 dev=1001 — stuck 1 across lock/unlock. Not alarm-armed signal.
+- LockStateGlobal 315621421 dev=1023 — stuck 0 across lock/unlock. Not global lock; use 4× LockXX instead.
+- LightHazard, LightBrake, LightReversing — baseline 2/3/2, not toggling. Need driver-active test (deferred).
+
+## Noisy / not reliable
+
+- **BeltPassenger** -1728052985 dev=1042 — drifts 0↔1 between snaps even with empty seat
+  + no item. Not weight-based, not buckle-based. Drop or mark unreliable.
+
+## S5 charging takeaways
+
+AC charger plug-in at 98% SOC, ~3 kW draw:
+- ChargeGun: 1 → 2 immediately
+- BatteryVoltage: 504 → 506 V
+- MaxCellV: 3323 → 3337 mV
+- ChargingPowerDD: junk value 359.4 (disconnected) → 3.11 kW (live)
+- Power: 1 (idle) → -3 (regen/charge direction)
+- BatteryCurrent stayed sentinel — A-level read not available via autoservice on Leopard 3
+
+After disconnect ChargingPowerDD shows stale 359.4 — **must gate UI display by ChargeGun ≠ 1**.
+
+## Verdict on competitor catalog
+
+After live-validating ~50% of reference fids across S2/S3/S4/S5/S9/S10 with full agreement on
+every tested entry, we treat the reference catalog as authoritative for Leopard 3. Untested
+fids are imported with `imported` status, filtered by S9 sentinel sweep:
+
+- 155 reference fids snapped → 132 returned live data, 7 sentinel -10011 (drop), 4 sentinel -10013 (transient), 4 GPS no-fix, 4 alt-seat 65535, 4 constant-stuck (drop).
+- Net usable: **~140 fids** ready for FidMap.kt integration.
