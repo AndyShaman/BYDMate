@@ -69,8 +69,8 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 - **`app/src/main/kotlin/com/bydmate/app/data/trips/TripRecorder.kt`**
   Subscribes to `SharedAdaptiveLoop.flow`. Watches `powerState` transitions. Writes `TripEntity` rows with `source = NATIVE_POLLING` when `EnergyDataReader.isAvailable() == false`. On Leopard 3, passive: maintains `last_state.openTripId = null`, writes no native rows.
 
-- **`app/src/main/kotlin/com/bydmate/app/data/lastsession/LastStateEntity.kt`** + **`LastStateDao.kt`**
-  Single-row table `last_state` (`id` always 1). Fields: `soc REAL?`, `mileage REAL?`, `ts INTEGER`, `ignition INTEGER`, `openTripId INTEGER?`, `tripStartTs INTEGER?`, `tripStartSoc REAL?`, `tripStartMileage REAL?`, `energydataAvailable INTEGER`. Atomic write each tick.
+- **`app/src/main/kotlin/com/bydmate/app/data/local/entity/LastStateEntity.kt`** + **`app/src/main/kotlin/com/bydmate/app/data/local/dao/LastStateDao.kt`**
+  Single-row table `last_state` (`id` always 1). Fields: `soc INTEGER?`, `mileage REAL?`, `ts INTEGER`, `ignition INTEGER?`, `open_trip_id INTEGER?`, `trip_start_ts INTEGER?`, `trip_start_soc INTEGER?`, `trip_start_mileage REAL?`, `energydata_available INTEGER`. Atomic write each tick. **Persistent — distinct from existing in-memory `LastSessionRepository`**, which keeps SOC bookmarks for `HistoryImporter` SOC enrichment and stays in-memory by design.
 
 ### Modified files
 
@@ -81,22 +81,23 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 - **`SettingsViewModel.kt#runDiagnostics`** — takes one tick from `sharedAdaptiveLoop.flow.first()` for the live snapshot.
 - **`IternioClient`** / ABRP policy — subscribes to `sharedAdaptiveLoop.flow`, downstream throttle to `IternioIntervalPolicy.DRIVING_MS / PARKED_MS`. Its own polling loop is removed.
 - **`AlicePollingManager.kt`** — replaces internal autoservice reads with `sharedAdaptiveLoop.flow.replayCache.firstOrNull()`. Its own VPS POST timer (~25s) stays unchanged.
-- **`HistoryImporter.kt`** — `syncFromEnergyData()` tags inserted rows with `source = BMS_ENERGYDATA`. Dedup considers `source`.
-- **`AppDatabase.kt`** — version 9 → 10. Migration adds `last_state` table and `source` column on `trips`.
-- **`TripEntity.kt`** — new `source: TripSource` (`BMS_ENERGYDATA | NATIVE_POLLING`). `kwhConsumed` remains nullable; native fills it from `socDelta × batteryCapacityKwh` (approximate, BMS-grade accuracy not available without energydata).
+- **`HistoryImporter.kt`** — `syncFromEnergyData()` already tags inserted rows with `source = "energydata"`. Dedup considers `source` so native rows and energydata rows can coexist without false-positive duplicates.
+- **`AppDatabase.kt`** — version 13 → 14. Migration adds the `last_state` table only (additive, no destructive changes). `TripEntity.source` column already exists since migration 5→6.
+- **`TripEntity`** — no schema change. Existing `source: String` column (defaultValue `"live"`) is reused. New value `"native_polling"` joins existing `"live"` and `"energydata"`. `kwhConsumed` remains nullable; native fills it from `socDelta × batteryCapacityKwh` (approximate, BMS-grade accuracy not available without energydata).
+- **`TripSource.kt`** (new) — `object TripSource { const val LIVE = "live"; const val ENERGYDATA = "energydata"; const val NATIVE_POLLING = "native_polling" }`. Replaces magic strings in `HistoryImporter` and `TripRecorder`.
 
 ## Data flow scenarios
 
 **Drive (non-Leopard 3):**
-- First tick `powerState=ON` after `ACC` (or no openTrip in last_state): `TripRecorder` opens trip — captures `tripStartTs`, `tripStartSoc`, `tripStartMileage`, assigns provisional `openTripId` in `last_state`.
+- First tick `powerState=ON` after `ACC` (or no openTrip in last_state): `TripRecorder` opens trip — captures `trip_start_ts`, `trip_start_soc`, `trip_start_mileage`, assigns provisional `open_trip_id` in `last_state`.
 - Subsequent ticks: `last_state` row updates `{soc, mileage, ts}`. No row written to `trips` table yet.
-- Transition `ON → ACC` observed in a tick: `TripRecorder` inserts `TripEntity{source=NATIVE_POLLING, startTs=last_state.tripStartTs, endTs=tick.ts, socStart=last_state.tripStartSoc, socEnd=tick.soc, mileageStart=last_state.tripStartMileage, mileageEnd=tick.mileage, kwhConsumed = (socStart-socEnd)/100 × batteryCapacityKwh, ...}`. Clears `openTripId`.
+- Transition `ON → ACC` observed in a tick: `TripRecorder` inserts `TripEntity{source="native_polling", startTs=last_state.trip_start_ts, endTs=tick.ts, socStart=last_state.trip_start_soc, socEnd=tick.soc, mileageStart=last_state.trip_start_mileage, mileageEnd=tick.mileage, kwhConsumed=(socStart-socEnd)/100 × batteryCapacityKwh, ...}`. Clears `open_trip_id`.
 
 **Cold start:**
 - `TrackingService.onStartCommand` loads `last_state` before starting the loop.
-- First `flow` tick: if `last_state.openTripId != null`:
-  - `now - last_state.ts < 5 min` → resume (keep openTripId, continue ticking)
-  - `now - last_state.ts >= 5 min` → finalize stale trip from last_state (best-effort end), clear openTripId, optionally open a new trip if `powerState=ON` now.
+- First `flow` tick: if `last_state.open_trip_id != null`:
+  - `now - last_state.ts < 5 min` → resume (keep open_trip_id, continue ticking)
+  - `now - last_state.ts >= 5 min` → finalize stale trip from last_state (best-effort end), clear open_trip_id, optionally open a new trip if `powerState=ON` now.
 - If `last_state` is missing or corrupted → start fresh.
 
 **Hard shutdown (DiLink screen powered down mid-tick):**
@@ -105,7 +106,7 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 
 **Leopard 3 (energydata present):**
 - `TripRecorder` runs in passive mode: still updates `last_state`, but never inserts to `trips`.
-- `HistoryImporter.syncFromEnergyData()` continues as today, marking inserted rows `source=BMS_ENERGYDATA`.
+- `HistoryImporter.syncFromEnergyData()` continues as today, already marking inserted rows `source="energydata"`.
 
 **Subscriber concurrency:**
 - `SharedFlow(replay=1, BufferOverflow.DROP_OLDEST)` lets slow consumers (Alice VPS POST) drop intermediate ticks without blocking the loop.
@@ -115,9 +116,9 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 
 - **autoservice fetch failure (null result):** `consecutiveNullCount++`, exponential backoff cadence × 1.5 up to `MAX_POLL_INTERVAL_MS = 60_000`. On reconnect, reset cadence and emit `vehicleDataConnected = true`. No emission to `SharedFlow` on null; replayCache keeps the last valid tick.
 - **`powerState` sentinel/null streak ≥ 5 ticks:** `TripRecorder` falls back to derived ignition `(gear != null || speed > 0)`. One-shot WARN log. The fallback uses `gear` FID `555745336` (already validated). Smoke flags it for the next release.
-- **Trip insert failure (Room exception):** caught; `openTripId` stays set in `last_state`; retried via the same reconciliation path on the next tick.
+- **Trip insert failure (Room exception):** caught; `open_trip_id` stays set in `last_state`; retried via the same reconciliation path on the next tick.
 - **Corrupt or missing `last_state` row on cold start:** fresh start. No retroactive trip. WARN log.
-- **energydata availability change:** `EnergyDataReader.isAvailable()` re-checked at every `Service` boot; cached in `last_state.energydataAvailable`. Active/passive mode of `TripRecorder` decided from this flag.
+- **energydata availability change:** `EnergyDataReader.isAvailable()` re-checked at every `Service` boot; cached in `last_state.energydata_available`. Active/passive mode of `TripRecorder` decided from this flag.
 
 ## Testing
 
@@ -129,11 +130,11 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 
 **Integration (Robolectric):**
 - `LastStateDaoTest`: atomic single-row read/write.
-- `Migration9To10Test`: real v9 DB dump in `src/androidTest/assets/` → migration applied → `last_state` exists, all existing `trips` rows have `source = BMS_ENERGYDATA` (default).
+- `Migration13To14Test`: real v13 DB dump in `src/androidTest/assets/` → migration applied → `last_state` exists; existing `trips` rows are untouched (`source` already populated from migrations 5→6 onward).
 - `SharedFlowConcurrencyTest`: five subscribers, one deliberately slow; loop is never blocked; replayCache delivers last value to late subscribers.
 
 **Smoke on real Leopard 3:**
-- One round trip → `TripEntity` row with `source = BMS_ENERGYDATA`.
+- One round trip → `TripEntity` row with `source = "energydata"` (existing path, unchanged).
 - Service force-stop mid-drive + restart → `last_state` has open trip, resume yields one row, no duplicates.
 - DiLink reboot then drive → cold start closes the stale trip from `last_state`, new trip starts.
 - Charging session → `TripRecorder` writes nothing; FSM enters `charge` state, dashboard still updates at 5s.
@@ -159,12 +160,12 @@ Cadence changes apply on the next tick after a state transition, with no reset o
 | Native trip recording produces wrong consumption on Song/Atto (SOC delta × capacity is coarse) | Document approximation in user-facing strings; let manual edit override. Long-term: explore CAN/OBD when feasible. |
 | Cold start lag on DiLink (~3-5 s service startup) causes 50-100m distance loss at trip start | Acceptable. Reconciliation from `last_state` recovers SOC/odometer if the next tick lands during a still-open trip. |
 | Concurrent writers to `last_state` (loop + cold-start finalizer) | Cold start finalizer runs before loop starts; loop is the only writer afterward. Serialized by the single coroutine. |
-| Migration v9→v10 fails on some user devices | Test with real v9 DB dumps. Migration is additive (new column with default, new table) so rollback is data-safe. |
+| Migration v13→v14 fails on some user devices | Test with real v13 DB dumps. Migration is additive (only adds new `last_state` table; no changes to existing `trips` columns) so rollback is data-safe. |
 
 ## Implementation order (writing-plans seed)
 
-1. Room migration v9→v10: `last_state` table, `TripEntity.source`.
-2. `LastStateEntity` + `LastStateDao` + DI binding.
+1. Room migration v13→v14: `last_state` table only (no `TripEntity` schema change — `source` column already exists).
+2. `LastStateEntity` + `LastStateDao` + DI binding. `TripSource.kt` constants.
 3. `SharedAdaptiveLoop` (FSM, SharedFlow, snapshot persistence).
 4. `TrackingService` swap: existing poll loop → `SharedAdaptiveLoop`.
 5. Consumer swaps: Dashboard, Charging Detector, Settings Diagnostics, ABRP, Alice. One commit per.
