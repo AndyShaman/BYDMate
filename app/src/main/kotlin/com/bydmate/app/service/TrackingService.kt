@@ -639,6 +639,8 @@ class TrackingService : Service(), LocationListener {
                 try {
                     _lastData.value = data
                     alicePollingManager.latestData = data
+                    // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
+                    autoserviceDetector.onSample(data)
 
                     data.soc?.let { soc ->
                         settingsRepository.saveLastKnownSoc(soc)

@@ -4,6 +4,7 @@ import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.nativestack.ParsReader
+import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -93,8 +94,14 @@ class AutoserviceChargingDetector @Inject constructor(
     }
 
     private val mutex = Mutex()
+    @Volatile private var lastSample: DiParsData? = null
     private val _state = MutableStateFlow(DetectorState.IDLE)
     val state: StateFlow<DetectorState> = _state
+
+    /** Feed the most recent shared-loop sample so runCatchUp can avoid a live fetch. */
+    fun onSample(data: DiParsData) {
+        lastSample = data
+    }
 
     /**
      * Run the cascade detector.
@@ -138,7 +145,7 @@ class AutoserviceChargingDetector @Inject constructor(
             val currentSoc: Int = if (autoSoc != null) {
                 autoSoc
             } else {
-                val diParsSoc = runCatching { parsReader.fetch() }.getOrNull()
+                val diParsSoc = (lastSample ?: runCatching { parsReader.fetch() }.getOrNull())
                     ?.soc?.takeIf { it in 0..100 }
                 if (diParsSoc != null) {
                     android.util.Log.i(TAG, "runCatchUp: autoservice SOC sentinel → DiPars fallback soc=$diParsSoc")
@@ -311,7 +318,7 @@ class AutoserviceChargingDetector @Inject constructor(
             if ((socEnd - socStart) >= MIN_SOC_DELTA_FOR_SNAPSHOT) {
                 val capacity = batteryHealthRepo.calculateCapacity(delta, socStart, socEnd)
                 val bmsSoh = battery?.sohPercent?.toDouble()
-                val diPars = runCatching { parsReader.fetch() }.getOrNull()
+                val diPars = lastSample ?: runCatching { parsReader.fetch() }.getOrNull()
                 val cellDelta = if (diPars?.maxCellVoltage != null && diPars.minCellVoltage != null)
                     diPars.maxCellVoltage - diPars.minCellVoltage else null
                 val batTemp = diPars?.avgBatTemp?.toDouble()
