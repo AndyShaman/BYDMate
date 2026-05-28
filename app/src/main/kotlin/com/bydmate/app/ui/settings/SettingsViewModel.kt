@@ -14,7 +14,6 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
-import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
@@ -135,7 +134,6 @@ class SettingsViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val historyImporter: HistoryImporter,
     private val energyDataReader: EnergyDataReader,
-    private val parsReader: ParsReader,
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
