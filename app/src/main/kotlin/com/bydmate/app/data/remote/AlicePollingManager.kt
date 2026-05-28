@@ -122,6 +122,9 @@ class AlicePollingManager @Inject constructor(
             val result = vehicleApi.dispatch(command)
             val success = result.isSuccess
             Log.i(TAG, "Result: $command → ${if (success) "OK" else "FAIL: ${result.exceptionOrNull()?.message}"}")
+            // Crowd-validation: ack regardless of success. Unmapped/Unsupported commands
+            // get a "done" signal to VPS so Alice does not retry forever. The vehicle_write_log
+            // DAO row carries the actual outcome for diagnostics.
             ackIds.add(id)
         }
 

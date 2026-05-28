@@ -99,6 +99,11 @@ class VehicleApiImpl @Inject constructor(
      *
      * Sentinel -10011 in readback = "no data / permission denied" (transient).
      * Readback null = entry has no readbackFid → trust the write result.
+     *
+     * Best-effort semantics: Result.success(Unit) means the helper daemon accepted
+     * the setInt call with status>=0. For entries without readbackFid (windows %,
+     * climate, sunroof/sunshade), there is no independent verification that the
+     * physical actuator moved. Locks and select climate flags do have readback.
      */
     // internal for testing the Unsupported path (non-validated helper-false flow).
     internal suspend fun doWrite(actionName: String, value: Int): Result<Unit> {
