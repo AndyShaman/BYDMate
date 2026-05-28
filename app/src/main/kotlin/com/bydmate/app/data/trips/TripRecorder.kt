@@ -25,11 +25,19 @@ class TripRecorder @Inject constructor(
     )
     internal var open: Open? = null
 
+    private var nullPowerStreak = 0
+    private fun ignitionOn(data: DiParsData): Boolean {
+        if (data.powerState != null) { nullPowerStreak = 0; return data.powerState == 2 }
+        nullPowerStreak++
+        val fallback = nullPowerStreak >= 5
+        return fallback && (data.gear == 4 || ((data.speed ?: 0) > 0))
+    }
+
     suspend fun consume(data: DiParsData) {
         val active = !energyDataReader.isAvailable()
         if (!active) return  // passive on Leopard 3 — never write trips or open-trip state
 
-        val ignitionOn = data.powerState == 2  // DRIVE mode in DiParsData enum
+        val ignitionOn = ignitionOn(data)
         val cur = open
         when {
             cur == null && ignitionOn -> openTrip(data)
