@@ -23,7 +23,8 @@ import javax.inject.Singleton
 class AlicePollingManager @Inject constructor(
     private val httpClient: OkHttpClient,
     private val controlClient: DiParsControlClient,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop,
 ) {
     // Fast client with short timeouts for polling (main httpClient has 15s)
     private val pollClient = OkHttpClient.Builder()
@@ -46,8 +47,14 @@ class AlicePollingManager @Inject constructor(
 
     fun start() {
         if (pollingJob?.isActive == true) return
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        pollingJob = scope?.launch {
+        val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope = s
+        // Flow collector: Alice's own subscription to the shared loop so it
+        // doesn't depend on TrackingService writing latestData on every tick.
+        s.launch {
+            sharedAdaptiveLoop.flow.collect { data -> latestData = data }
+        }
+        pollingJob = s.launch {
             Log.i(TAG, "Polling started")
             while (true) {
                 try {
