@@ -6,7 +6,7 @@ import org.json.JSONObject
 /**
  * Hardcoded action_name → write address map. Task C.1 populates PRODUCTION
  * from competitor JSON (123 entries, source="competitor-v80") merged with
- * LIVE_VALIDATED (22 entries verified on Leopard 3 2026-05-28). Live entries
+ * LIVE_VALIDATED (23 entries verified on Leopard 3 2026-05-28). Live entries
  * win on name collision.
  *
  * Competitor JSON shape (competitor-actions.json asset, from pushFidConfig.json):
@@ -45,7 +45,8 @@ data class WriteEntry(
 class WriteAllowlist(private val map: Map<String, WriteEntry>) {
     val size: Int get() = map.size
     val validatedCount: Int get() = map.values.count { it.validated }
-    fun find(actionName: String): WriteEntry? = map[actionName]
+    val entries: Collection<WriteEntry> get() = map.values
+    fun find(actionName: String): WriteEntry? = map[actionName.lowercase()]
     fun allEntries(): Collection<WriteEntry> = map.values
     fun entriesByCategory(category: String): Collection<WriteEntry> =
         map.values.filter { it.category == category }
@@ -59,7 +60,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1004, 1006, 1007, 1009, 1011, 1012, 1013, 1014, 1016, 1023, 1032
         )
 
-        // 22 entries live-validated on Leopard 3 2026-05-28 via HelperDaemon.
+        // 23 entries live-validated on Leopard 3 2026-05-28 via HelperDaemon.
         val LIVE_VALIDATED: List<WriteEntry> = listOf(
             // climate (dev=1000)
             WriteEntry("ac_on",          1000, 501219364, null, 2, 2,   "climate",  true, "live-leopard3-2026-05-28"),
@@ -130,42 +131,55 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
          * [assetReader] returns the raw JSON text of competitor-actions.json.
          */
         fun loadProduction(assetReader: () -> String): WriteAllowlist {
+            // Fail-fast: LIVE_VALIDATED must have no duplicate actionName (case-insensitive).
+            val liveKeys = LIVE_VALIDATED.map { it.actionName.lowercase() }
+            require(liveKeys.size == liveKeys.distinct().size) {
+                val dupes = liveKeys.groupBy { it }.filter { it.value.size > 1 }.keys
+                "LIVE_VALIDATED has duplicate actionName(s) (case-insensitive): $dupes"
+            }
+
             val json = JSONObject(assetReader())
+            // Key = lowercase actionName for collision detection; value preserves original casing.
             val merged = mutableMapOf<String, WriteEntry>()
 
-            // Parse competitor entries first
+            // Parse competitor entries first (keyed by lowercase, entry stores original name)
             val keys = json.keys()
             while (keys.hasNext()) {
                 val name = keys.next()
-                val obj = json.getJSONObject(name)
-                val dev = obj.getInt("deviceType")
-                val fid = obj.getInt("featureId")
-                val hasValue = obj.has("value")
-                val value = if (hasValue) obj.getInt("value") else 0
-                if (dev in BANNED_DEVS) {
-                    Log.w(TAG, "Dropping banned-dev action=$name dev=$dev")
+                try {
+                    val obj = json.getJSONObject(name)
+                    val dev = obj.getInt("deviceType")
+                    val fid = obj.getInt("featureId")
+                    val hasValue = obj.has("value")
+                    val value = if (hasValue) obj.getInt("value") else 0
+                    if (dev in BANNED_DEVS) {
+                        Log.w(TAG, "Dropping banned-dev action=$name dev=$dev")
+                        continue
+                    }
+                    merged[name.lowercase()] = WriteEntry(
+                        actionName = name,
+                        dev = dev,
+                        writeFid = fid,
+                        readbackFid = null,
+                        valueMin = value,
+                        valueMax = value,
+                        category = inferCategory(name),
+                        validated = false,
+                        source = "competitor-v80",
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "skip malformed competitor entry $name: ${e.message}")
                     continue
                 }
-                merged[name] = WriteEntry(
-                    actionName = name,
-                    dev = dev,
-                    writeFid = fid,
-                    readbackFid = null,
-                    valueMin = value,
-                    valueMax = value,
-                    category = inferCategory(name),
-                    validated = false,
-                    source = "competitor-v80",
-                )
             }
 
-            // LIVE_VALIDATED wins on collision
+            // LIVE_VALIDATED wins on collision (match by lowercase key, store original entry)
             for (entry in LIVE_VALIDATED) {
                 if (entry.dev in BANNED_DEVS) {
                     Log.w(TAG, "Dropping banned-dev live entry=${entry.actionName} dev=${entry.dev}")
                     continue
                 }
-                merged[entry.actionName] = entry
+                merged[entry.actionName.lowercase()] = entry
             }
 
             return WriteAllowlist(merged)

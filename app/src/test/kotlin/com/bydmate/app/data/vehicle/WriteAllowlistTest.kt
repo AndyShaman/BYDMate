@@ -113,4 +113,95 @@ class WriteAllowlistTest {
         assertEquals(0, WriteAllowlist.EMPTY.size)
         assertNull(WriteAllowlist.EMPTY.find("anything"))
     }
+
+    // ── Dim 6, Test 1: malformed entry missing deviceType is skipped ──────────
+    @Test fun `loadProduction skips entries missing deviceType`() {
+        val fixture = """
+            {
+              "no_dev_action": { "featureId": 12345, "value": 1 },
+              "valid_action": { "featureId": 1125122104, "deviceType": 1001, "value": 1 }
+            }
+        """.trimIndent()
+        val allowlist = WriteAllowlist.loadProduction { fixture }
+        assertNull("entry missing deviceType must be skipped", allowlist.find("no_dev_action"))
+        assertNotNull("valid entry must survive", allowlist.find("valid_action"))
+    }
+
+    // ── Dim 6, Test 2: malformed entry missing featureId is skipped ───────────
+    @Test fun `loadProduction skips entries missing featureId`() {
+        val fixture = """
+            {
+              "no_fid_action": { "deviceType": 1001, "value": 1 },
+              "valid_action2": { "featureId": 1125122107, "deviceType": 1001, "value": 2 }
+            }
+        """.trimIndent()
+        val allowlist = WriteAllowlist.loadProduction { fixture }
+        assertNull("entry missing featureId must be skipped", allowlist.find("no_fid_action"))
+        assertNotNull("valid entry must survive", allowlist.find("valid_action2"))
+    }
+
+    // ── Dim 6, Test 3: all-banned competitor JSON yields only LIVE_VALIDATED ──
+    @Test fun `loadProduction returns LIVE only when all competitor entries are banned`() {
+        // All entries target banned devs — none should survive from competitor
+        val fixture = """
+            {
+              "banned1": { "featureId": 1, "deviceType": 1014, "value": 1 },
+              "banned2": { "featureId": 2, "deviceType": 1012, "value": 1 },
+              "banned3": { "featureId": 3, "deviceType": 1004, "value": 1 }
+            }
+        """.trimIndent()
+        val allowlist = WriteAllowlist.loadProduction { fixture }
+        assertEquals(
+            "only LIVE_VALIDATED entries should be present",
+            WriteAllowlist.LIVE_VALIDATED.size,
+            allowlist.entries.size,
+        )
+        assertNull(allowlist.find("banned1"))
+        assertNull(allowlist.find("banned2"))
+        assertNull(allowlist.find("banned3"))
+    }
+
+    // ── Dim 6, Test 4: intra-competitor duplicate actionName → exactly one entry
+    @Test fun `loadProduction handles intra-competitor duplicate actionName`() {
+        val fixture = """
+            {
+              "dup_action": { "featureId": 1125122104, "deviceType": 1001, "value": 1 },
+              "Dup_Action": { "featureId": 1125122107, "deviceType": 1001, "value": 2 }
+            }
+        """.trimIndent()
+        val allowlist = WriteAllowlist.loadProduction { fixture }
+        // Both lowercase to "dup_action" — exactly one entry survives; no crash
+        val found = allowlist.find("dup_action")
+        assertNotNull("one of the two entries must survive", found)
+        // Total entries = LIVE_VALIDATED + 1 competitor (duplicate collapsed)
+        val liveSize = WriteAllowlist.LIVE_VALIDATED.size
+        assertEquals(
+            "duplicate competitor names collapse to one entry",
+            liveSize + 1,
+            allowlist.entries.size,
+        )
+    }
+
+    // ── Dim 6, Test 5: unknown-prefix action is tagged as category=other ──────
+    @Test fun `loadProduction tags unknown-prefix actions as category=other`() {
+        val fixture = """
+            {
+              "xyz_unknown_action": { "featureId": 1125122104, "deviceType": 1001, "value": 1 }
+            }
+        """.trimIndent()
+        val allowlist = WriteAllowlist.loadProduction { fixture }
+        val entry = allowlist.find("xyz_unknown_action")
+        assertNotNull(entry)
+        assertEquals("other", entry!!.category)
+    }
+
+    // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
+    @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
+        val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }
+        assertEquals(
+            "LIVE_VALIDATED must have no duplicate actionName (case-insensitive)",
+            liveKeys.distinct().size,
+            liveKeys.size,
+        )
+    }
 }
