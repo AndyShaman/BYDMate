@@ -11,7 +11,8 @@ import com.bydmate.app.data.remote.DiParsData
  * via WriteAllowlist.
  *
  * Returns null on any read failure (sentinel, daemon down, parse failure).
- * Returns false on any write failure (allowlist miss, daemon down, readback mismatch).
+ * Returns Result.failure(VehicleWriteError) on any write failure — never throws.
+ * The error type carries actionName + details for structured logging.
  */
 interface VehicleApi {
     // Liveness / snapshots — passthroughs to AutoserviceClient / NativeParsReader.
@@ -35,17 +36,18 @@ interface VehicleApi {
     suspend fun readWindowRearRight(): Int?
 
     // Write entrypoints — backwards-compat dispatch + structured methods.
-    // All `write*` methods wired to WriteAllowlist + HelperClient in Group C (C.2).
-    suspend fun dispatch(commandString: String): Boolean
-    suspend fun writeAcOn(): Boolean
-    suspend fun writeAcOff(): Boolean
-    suspend fun writeSetDriverTemp(celsius: Int): Boolean   // range 16..30
-    suspend fun writeWindowDriver(percent: Int): Boolean    // range 0..100
-    suspend fun writeWindowPassenger(percent: Int): Boolean // range 0..100
-    suspend fun writeWindowRearLeft(percent: Int): Boolean  // range 0..100
-    suspend fun writeWindowRearRight(percent: Int): Boolean // range 0..100
-    suspend fun writeLockDoors(): Boolean
-    suspend fun writeUnlockDoors(): Boolean
-    suspend fun writeSunroof(mode: SunroofMode): Boolean
-    suspend fun writeSunshade(open: Boolean): Boolean
+    // All `write*` methods wired to WriteAllowlist + HelperClient (Group C).
+    // Failure reason available via Result.exceptionOrNull() as VehicleWriteError.
+    suspend fun dispatch(commandString: String): Result<Unit>
+    suspend fun writeAcOn(): Result<Unit>
+    suspend fun writeAcOff(): Result<Unit>
+    suspend fun writeSetDriverTemp(celsius: Int): Result<Unit>   // range 16..30
+    suspend fun writeWindowDriver(percent: Int): Result<Unit>    // range 0..100
+    suspend fun writeWindowPassenger(percent: Int): Result<Unit> // range 0..100
+    suspend fun writeWindowRearLeft(percent: Int): Result<Unit>  // range 0..100
+    suspend fun writeWindowRearRight(percent: Int): Result<Unit> // range 0..100
+    suspend fun writeLockDoors(): Result<Unit>
+    suspend fun writeUnlockDoors(): Result<Unit>
+    suspend fun writeSunroof(mode: SunroofMode): Result<Unit>
+    suspend fun writeSunshade(open: Boolean): Result<Unit>
 }

@@ -42,87 +42,140 @@ class VehicleApiImpl @Inject constructor(
 
     // ─── Writes ────────────────────────────────────────────────────────────────
 
-    override suspend fun dispatch(commandString: String): Boolean {
-        val resolved = CommandTranslator.resolve(commandString) ?: run {
+    override suspend fun dispatch(commandString: String): Result<Unit> {
+        val resolved = CommandTranslator.resolve(commandString)
+        if (resolved == null) {
             Log.w(TAG, "dispatch: unknown command '$commandString'")
-            return false
+            logWrite(commandString, -1, -1, 0, null, false, "no_translator_mapping", validated = false)
+            return Result.failure(VehicleWriteError.AllowlistMiss(commandString, "no translator mapping"))
         }
         return doWrite(resolved.actionName, resolved.value)
     }
 
     // Climate
-    override suspend fun writeAcOn(): Boolean = doWrite("ac_on", 2)
-    override suspend fun writeAcOff(): Boolean = doWrite("ac_off", 1)
-    override suspend fun writeSetDriverTemp(celsius: Int): Boolean =
+    override suspend fun writeAcOn(): Result<Unit> = doWrite("ac_on", 2)
+    override suspend fun writeAcOff(): Result<Unit> = doWrite("ac_off", 1)
+    override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> =
         doWrite("ac_temp_main", celsius)
 
     // Windows
-    override suspend fun writeWindowDriver(percent: Int): Boolean =
+    override suspend fun writeWindowDriver(percent: Int): Result<Unit> =
         doWrite("window_driver_pos", percent)
-    override suspend fun writeWindowPassenger(percent: Int): Boolean =
+    override suspend fun writeWindowPassenger(percent: Int): Result<Unit> =
         doWrite("window_passenger_pos", percent)
-    override suspend fun writeWindowRearLeft(percent: Int): Boolean =
+    override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> =
         doWrite("window_rear_left_pos", percent)
-    override suspend fun writeWindowRearRight(percent: Int): Boolean =
+    override suspend fun writeWindowRearRight(percent: Int): Result<Unit> =
         doWrite("window_rear_right_pos", percent)
 
     // Locks
-    override suspend fun writeLockDoors(): Boolean = doWrite("doors_lock", 2)
-    override suspend fun writeUnlockDoors(): Boolean = doWrite("doors_unlock", 1)
+    override suspend fun writeLockDoors(): Result<Unit> = doWrite("doors_lock", 2)
+    override suspend fun writeUnlockDoors(): Result<Unit> = doWrite("doors_unlock", 1)
 
     // Sunroof — one allowlist entry per mode (sunroof_open, sunroof_close, etc.)
-    override suspend fun writeSunroof(mode: SunroofMode): Boolean =
+    override suspend fun writeSunroof(mode: SunroofMode): Result<Unit> =
         doWrite("sunroof_${mode.name.lowercase()}", mode.value)
 
     // Sunshade
-    override suspend fun writeSunshade(open: Boolean): Boolean =
+    override suspend fun writeSunshade(open: Boolean): Result<Unit> =
         doWrite(if (open) "sunshade_open" else "sunshade_close", if (open) 1 else 2)
 
     // ─── Core write helper ─────────────────────────────────────────────────────
 
     /**
-     * Fail-soft write via WriteAllowlist + HelperClient. Never throws — returns
-     * false on any failure (allowlist miss, range violation, daemon failure,
-     * readback sentinel/mismatch). Audit entry always written via [logWrite].
+     * Fail-soft write via WriteAllowlist + HelperClient. Never throws — wraps
+     * all failures in Result.failure(VehicleWriteError). Audit entry always
+     * written via [logWrite]. Validated failures additionally logged via
+     * [maybeReportValidatedFailure].
+     *
+     * Flow (matches plan C.6 step 3):
+     * 1. Allowlist miss      → AllowlistMiss
+     * 2. Out of range        → OutOfRange
+     * 3. helper.write throws → HelperUnreachable (IOException or other)
+     * 4. helper.write false  → HelperUnreachable (validated) / Unsupported (non-validated)
+     * 5. Readback == -10011  → Sentinel
+     * 6. Readback != value   → ReadbackMismatch
+     * 7. Otherwise           → Result.success(Unit)
      *
      * Sentinel -10011 in readback = "no data / permission denied" (transient).
      * Readback null = entry has no readbackFid → trust the write result.
      */
-    private suspend fun doWrite(actionName: String, value: Int): Boolean {
+    // internal for testing the Unsupported path (non-validated helper-false flow).
+    internal suspend fun doWrite(actionName: String, value: Int): Result<Unit> {
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWrite: action=$actionName not in allowlist")
             logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)
-            return false
+            val err = VehicleWriteError.AllowlistMiss(actionName)
+            return Result.failure(err)
         }
+
         if (value < entry.valueMin || value > entry.valueMax) {
             Log.w(TAG, "doWrite: action=$actionName value=$value out of range [${entry.valueMin}..${entry.valueMax}]")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "range", entry.validated)
-            return false
+            val err = VehicleWriteError.OutOfRange(actionName, "value=$value range=[${entry.valueMin}..${entry.valueMax}]")
+            return Result.failure(err)
         }
-        val wrote = helper.write(entry.dev, entry.writeFid, value)
+
+        val wrote: Boolean = try {
+            helper.write(entry.dev, entry.writeFid, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "doWrite: action=$actionName helper.write threw: ${e.message}")
+            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
+            val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
+            maybeReportValidatedFailure(actionName, err, entry)
+            return Result.failure(err)
+        }
+
         if (!wrote) {
-            val errTag = if (entry.validated) "helper_fail" else "helper_fail_nonvalidated"
-            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, errTag, entry.validated)
-            return false
+            return if (entry.validated) {
+                Log.w(TAG, "doWrite: action=$actionName helper.write returned false (validated)")
+                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_fail", entry.validated)
+                val err = VehicleWriteError.HelperUnreachable(actionName, "helper.write returned false")
+                maybeReportValidatedFailure(actionName, err, entry)
+                Result.failure(err)
+            } else {
+                Log.w(TAG, "doWrite: action=$actionName helper.write returned false (non-validated)")
+                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_fail_nonvalidated", entry.validated)
+                val err = VehicleWriteError.Unsupported(actionName)
+                Result.failure(err)
+            }
         }
+
         val readback: Long? = entry.readbackFid?.let { helper.read(entry.dev, it) }
-        val readbackSentinel = readback == -10011L
-        val ok = readback == null || (!readbackSentinel && readback.toInt() == value)
-        logWrite(
-            action = actionName,
-            dev = entry.dev,
-            fid = entry.writeFid,
-            requested = value,
-            readback = readback?.toInt(),
-            ok = ok,
-            error = when {
-                ok               -> null
-                readbackSentinel -> "readback_sentinel"
-                else             -> "readback_mismatch"
-            },
-            validated = entry.validated,
-        )
-        return ok
+
+        if (readback == -10011L) {
+            logWrite(actionName, entry.dev, entry.writeFid, value, readback.toInt(), false, "readback_sentinel", entry.validated)
+            val err = VehicleWriteError.Sentinel(actionName)
+            maybeReportValidatedFailure(actionName, err, entry)
+            return Result.failure(err)
+        }
+
+        if (readback != null && readback.toInt() != value) {
+            logWrite(actionName, entry.dev, entry.writeFid, value, readback.toInt(), false, "readback_mismatch", entry.validated)
+            val err = VehicleWriteError.ReadbackMismatch(actionName, "expected=$value got=$readback")
+            maybeReportValidatedFailure(actionName, err, entry)
+            return Result.failure(err)
+        }
+
+        logWrite(actionName, entry.dev, entry.writeFid, value, readback?.toInt(), true, null, entry.validated)
+        return Result.success(Unit)
+    }
+
+    // ─── Observability hook ────────────────────────────────────────────────────
+
+    /**
+     * Logs a WARN for validated actions that unexpectedly fail with
+     * HelperUnreachable or ReadbackMismatch. These are the highest-signal
+     * failures: the action was live-confirmed on Leopard 3, so a failure means
+     * the helper daemon is down or the vehicle state machine rejected the command.
+     *
+     * TODO: route to Crashlytics when Firebase is integrated
+     *   (requires google-services.json + Firebase gradle plugin — out of scope for Phase 2).
+     */
+    private fun maybeReportValidatedFailure(actionName: String, err: VehicleWriteError, entry: WriteEntry) {
+        if (entry.validated && (err is VehicleWriteError.HelperUnreachable || err is VehicleWriteError.ReadbackMismatch)) {
+            Log.w(VALIDATED_FAILURE_TAG, "action=$actionName error=${err::class.simpleName}: ${err.message}")
+        }
     }
 
     // ─── Audit logger ──────────────────────────────────────────────────────────
@@ -148,5 +201,7 @@ class VehicleApiImpl @Inject constructor(
 
     companion object {
         private const val TAG = "VehicleApiImpl"
+        private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
+        // TODO: route to Crashlytics when Firebase is integrated
     }
 }
