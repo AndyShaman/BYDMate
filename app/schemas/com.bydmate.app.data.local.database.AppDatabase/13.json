@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 13,
-    "identityHash": "37a0bd0ed91d556e49cbb5d16ae968f1",
+    "identityHash": "3b474c4a0cb03c8aa6f3265b188e4f54",
     "entities": [
       {
         "tableName": "trips",
@@ -922,86 +922,12 @@
           }
         ],
         "foreignKeys": []
-      },
-      {
-        "tableName": "last_state",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `ts` INTEGER NOT NULL, `soc` INTEGER, `mileage` REAL, `ignition` INTEGER, `open_trip_id` INTEGER, `trip_start_ts` INTEGER, `trip_start_soc` INTEGER, `trip_start_mileage` REAL, `energydata_available` INTEGER NOT NULL, PRIMARY KEY(`id`))",
-        "fields": [
-          {
-            "fieldPath": "id",
-            "columnName": "id",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "ts",
-            "columnName": "ts",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "soc",
-            "columnName": "soc",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "mileage",
-            "columnName": "mileage",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "ignition",
-            "columnName": "ignition",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "openTripId",
-            "columnName": "open_trip_id",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "tripStartTs",
-            "columnName": "trip_start_ts",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "tripStartSoc",
-            "columnName": "trip_start_soc",
-            "affinity": "INTEGER",
-            "notNull": false
-          },
-          {
-            "fieldPath": "tripStartMileage",
-            "columnName": "trip_start_mileage",
-            "affinity": "REAL",
-            "notNull": false
-          },
-          {
-            "fieldPath": "energydataAvailable",
-            "columnName": "energydata_available",
-            "affinity": "INTEGER",
-            "notNull": true
-          }
-        ],
-        "primaryKey": {
-          "autoGenerate": false,
-          "columnNames": [
-            "id"
-          ]
-        },
-        "indices": [],
-        "foreignKeys": []
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '37a0bd0ed91d556e49cbb5d16ae968f1')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '3b474c4a0cb03c8aa6f3265b188e4f54')"
     ]
   }
 }
