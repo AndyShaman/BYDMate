@@ -379,4 +379,24 @@ object AppModule {
         batteryCapacityKwh = { settingsRepository.getBatteryCapacity() },
     )
 
+    @Provides
+    @Singleton
+    fun provideHelperClient(): com.bydmate.app.data.vehicle.HelperClient =
+        com.bydmate.app.data.vehicle.HelperClientImpl()
+
+    @Provides
+    @Singleton
+    fun provideWriteAllowlist(): com.bydmate.app.data.vehicle.WriteAllowlist =
+        com.bydmate.app.data.vehicle.WriteAllowlist.PRODUCTION
+
+    @Provides
+    @Singleton
+    fun provideVehicleApi(
+        parsReader: com.bydmate.app.data.nativestack.ParsReader,
+        autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        allowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
+    ): com.bydmate.app.data.vehicle.VehicleApi =
+        com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist)
+
 }
