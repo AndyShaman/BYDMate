@@ -94,4 +94,37 @@ class TripRecorder @Inject constructor(
         this.open = null
         lastStateDao.clearOpenTrip()
     }
+
+    /** Call once before subscribing to the loop. */
+    suspend fun reconcileColdStart() {
+        val state = lastStateDao.getCurrent() ?: return
+        if (state.openTripId == null || state.tripStartTs == null) return
+        val gap = now() - state.ts
+        val active = !energyDataReader.isAvailable()
+        val staleGap = 5 * 60 * 1_000L
+        if (gap < staleGap) {
+            if (active) {
+                open = Open(state.tripStartTs, state.tripStartSoc, state.tripStartMileage)
+            }
+            return
+        }
+        if (active) {
+            val socDelta = (state.tripStartSoc ?: 0) - (state.soc ?: 0)
+            val kwh = if (socDelta > 0) socDelta / 100.0 * batteryCapacityKwh() else null
+            val distance = if (state.tripStartMileage != null && state.mileage != null)
+                (state.mileage - state.tripStartMileage).coerceAtLeast(0.0) else null
+            tripDao.insert(
+                TripEntity(
+                    startTs = state.tripStartTs,
+                    endTs = state.ts,
+                    distanceKm = distance,
+                    kwhConsumed = kwh,
+                    socStart = state.tripStartSoc,
+                    socEnd = state.soc,
+                    source = TripSource.NATIVE_POLLING,
+                )
+            )
+        }
+        lastStateDao.clearOpenTrip()
+    }
 }
