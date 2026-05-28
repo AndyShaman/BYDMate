@@ -4,8 +4,8 @@ package com.bydmate.app.data.vehicle
  * Maps legacy D+ Chinese command strings to (action_name, value) for VehicleApi.dispatch.
  *
  * Source: AutomationViewModel.ACTION_COMMANDS (49 entries) + Smart Home VPS catalog
- * (same vocabulary). Both callers stripped of the "迪加" prefix before sending to
- * DiParsControlClient; the prefix is also removed here if present.
+ * (same vocabulary). Both callers historically stripped the "迪加" prefix before sending
+ * over HTTP; the prefix is now removed here if present.
  *
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.

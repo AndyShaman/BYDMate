@@ -9,7 +9,6 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.data.local.entity.ActionDef
-import com.bydmate.app.data.remote.DiParsControlClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.VehicleApi
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,7 +22,6 @@ data class DispatchResult(val success: Boolean, val reason: String? = null)
 @Singleton
 class ActionDispatcher @Inject constructor(
     private val vehicleApi: VehicleApi,
-    @Suppress("unused") private val controlClient: DiParsControlClient,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -75,7 +73,7 @@ class ActionDispatcher @Inject constructor(
         return DispatchResult(true)
     }
 
-    // --- param (D+ sendCmd) ---
+    // --- param (native autoservice via VehicleApi) ---
 
     private suspend fun dispatchParam(action: ActionDef, data: DiParsData?): DispatchResult {
         val blockReason = getBlockReason(action.command, data)
