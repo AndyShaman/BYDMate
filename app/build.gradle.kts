@@ -148,6 +148,7 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
 
     // ADB-on-device for autoservice access (path H, read-only)
