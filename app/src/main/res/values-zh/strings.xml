@@ -85,6 +85,7 @@
     <string name="settings_app_units_header">单位与货币</string>
     <string name="settings_app_distance_label">距离</string>
     <string name="settings_app_currency_label">货币</string>
+    <string name="settings_map_tile_source_label">地图源</string>
     <string name="settings_app_data_header">数据</string>
     <string name="settings_export_csv_button">导出 CSV</string>
     <string name="settings_log_recording_start_button">录制日志</string>

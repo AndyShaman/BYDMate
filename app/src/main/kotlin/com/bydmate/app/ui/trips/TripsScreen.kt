@@ -161,6 +161,7 @@ fun TripsScreen(
             trip = trip,
             points = state.selectedTripPoints,
             currencySymbol = state.currencySymbol,
+            tileSource = state.mapTileSource,
             onDismiss = { viewModel.clearSelectedTrip() }
         )
     }

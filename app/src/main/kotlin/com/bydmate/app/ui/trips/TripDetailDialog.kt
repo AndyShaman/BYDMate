@@ -23,6 +23,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -47,6 +48,8 @@ import com.bydmate.app.ui.components.formatDuration
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.R
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.BYDMateApp
+import com.bydmate.app.util.Gcj02Converter
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -58,6 +61,7 @@ fun TripDetailDialog(
     trip: TripEntity,
     points: List<TripPointEntity>,
     currencySymbol: String,
+    tileSource: String = "osm",
     onDismiss: () -> Unit
 ) {
     val ctx = LocalContext.current
@@ -117,6 +121,7 @@ fun TripDetailDialog(
                             ) {
                                 TripRouteMap(
                                     points = points,
+                                    tileSource = tileSource,
                                     modifier = Modifier.fillMaxSize()
                                 )
                             }
@@ -191,16 +196,26 @@ private fun DetailRow(label: String, value: String, valueColor: Color = TextPrim
 }
 
 @Composable
-private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Modifier) {
+private fun TripRouteMap(
+    points: List<TripPointEntity>,
+    tileSource: String,
+    modifier: Modifier = Modifier
+) {
     val context = LocalContext.current
+    val isAmap = tileSource == "amap"
 
-    val geoPoints = remember(points) {
-        points.map { GeoPoint(it.lat, it.lon) }
+    val geoPoints = remember(points, tileSource) {
+        points.map {
+            val (lat, lon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(it.lat, it.lon) else it.lat to it.lon
+            GeoPoint(lat, lon)
+        }
     }
 
-    val mapView = remember {
+    val mapView = remember(tileSource) {
         MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(
+                if (tileSource == "amap") BYDMateApp.AmapTileSource else TileSourceFactory.MAPNIK
+            )
             setMultiTouchControls(true)
             zoomController.setVisibility(
                 org.osmdroid.views.CustomZoomButtonsController.Visibility.NEVER
@@ -208,7 +223,7 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(mapView) {
         mapView.onResume()
         onDispose {
             mapView.onPause()
@@ -216,15 +231,16 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
         }
     }
 
-    AndroidView(
-        factory = { mapView },
-        modifier = modifier,
-        update = { map ->
+    key(tileSource) {
+        AndroidView(
+            factory = { mapView },
+            modifier = modifier,
+            update = { map ->
             map.overlays.clear()
 
             if (geoPoints.size >= 2) {
                 // Dark outline underneath for contrast on any road color
-                for (i in 0 until points.size - 1) {
+                for (i in 0 until geoPoints.size - 1) {
                     val outline = Polyline().apply {
                         setPoints(listOf(geoPoints[i], geoPoints[i + 1]))
                         outlinePaint.color = android.graphics.Color.argb(180, 0, 0, 0)
@@ -236,7 +252,7 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
                     map.overlays.add(outline)
                 }
                 // Bright speed-colored track on top
-                for (i in 0 until points.size - 1) {
+                for (i in 0 until geoPoints.size - 1) {
                     val speed = points[i].speedKmh ?: 0.0
                     val color = speedColor(speed)
 
@@ -263,6 +279,7 @@ private fun TripRouteMap(points: List<TripPointEntity>, modifier: Modifier = Mod
             map.invalidate()
         }
     )
+    } // key(tileSource)
 }
 
 @Composable

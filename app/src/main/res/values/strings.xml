@@ -86,6 +86,7 @@
     <string name="settings_app_units_header">Единицы и валюта</string>
     <string name="settings_app_distance_label">Расстояние</string>
     <string name="settings_app_currency_label">Валюта</string>
+    <string name="settings_map_tile_source_label">Источник карты</string>
     <string name="settings_app_data_header">Данные</string>
     <string name="settings_export_csv_button">Экспорт CSV</string>
     <string name="settings_log_recording_start_button">Запись логов</string>

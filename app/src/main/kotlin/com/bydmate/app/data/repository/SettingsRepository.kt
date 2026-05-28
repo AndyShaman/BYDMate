@@ -51,6 +51,7 @@ open class SettingsRepository @Inject constructor(
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         const val KEY_DATA_SOURCE = "data_source"
+        const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
@@ -70,6 +71,7 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_CURRENCY = "BYN"
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
+        const val DEFAULT_MAP_TILE_SOURCE = "osm" // "osm" or "amap"
 
         val CURRENCIES = listOf(
             Currency("BYN", "BYN"),
@@ -180,6 +182,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setConsumptionRecalcDone() =
         setString(KEY_CONSUMPTION_RECALC_DONE, "true")
+
+    suspend fun getMapTileSource(): String =
+        getString(KEY_MAP_TILE_SOURCE, DEFAULT_MAP_TILE_SOURCE)
+
+    suspend fun setMapTileSource(source: String) =
+        setString(KEY_MAP_TILE_SOURCE, source)
 
     suspend fun isIdleDrainV2CleanupDone(): Boolean =
         getString(KEY_IDLE_DRAIN_V2_CLEANUP, "false") == "true"

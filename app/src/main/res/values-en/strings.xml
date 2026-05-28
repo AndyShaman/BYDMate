@@ -65,6 +65,7 @@
     <string name="settings_app_units_header">Units and currency</string>
     <string name="settings_app_distance_label">Distance</string>
     <string name="settings_app_currency_label">Currency</string>
+    <string name="settings_map_tile_source_label">Map tile source</string>
     <string name="settings_app_data_header">Data</string>
     <string name="settings_export_csv_button">Export CSV</string>
     <string name="settings_log_recording_start_button">Record logs</string>

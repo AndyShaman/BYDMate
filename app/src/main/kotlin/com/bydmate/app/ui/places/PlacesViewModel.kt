@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.repository.SettingsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -17,7 +18,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class PlacesViewModel @Inject constructor(
-    private val placeRepository: PlaceRepository
+    private val placeRepository: PlaceRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     val places: StateFlow<List<PlaceEntity>> =
@@ -36,7 +38,13 @@ class PlacesViewModel @Inject constructor(
     private val _deleteBlocked = MutableSharedFlow<Int>(extraBufferCapacity = 1)
     val deleteBlocked = _deleteBlocked.asSharedFlow()
 
+    private val _mapTileSource = MutableStateFlow(SettingsRepository.DEFAULT_MAP_TILE_SOURCE)
+    val mapTileSource: StateFlow<String> = _mapTileSource.asStateFlow()
+
     init {
+        viewModelScope.launch {
+            _mapTileSource.value = settingsRepository.getMapTileSource()
+        }
         // Refresh usage counts whenever the places list changes.
         viewModelScope.launch {
             places.collect { list ->

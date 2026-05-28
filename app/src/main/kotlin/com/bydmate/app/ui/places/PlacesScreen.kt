@@ -64,6 +64,7 @@ fun PlacesScreen(
 ) {
     val places by viewModel.places.collectAsStateWithLifecycle()
     val usageCounts by viewModel.usageCounts.collectAsStateWithLifecycle()
+    val tileSource by viewModel.mapTileSource.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
     val context = LocalContext.current
@@ -85,6 +86,7 @@ fun PlacesScreen(
     if (editing != null) {
         PlaceEditDialog(
             initial = editing,
+            tileSource = tileSource,
             onDismiss = { editing = null },
             onSave = { id, name, lat, lon, r ->
                 viewModel.save(id, name, lat, lon, r)
@@ -94,6 +96,7 @@ fun PlacesScreen(
     } else if (showAddDialog) {
         PlaceEditDialog(
             initial = null,
+            tileSource = tileSource,
             onDismiss = { showAddDialog = false },
             onSave = { id, name, lat, lon, r ->
                 viewModel.save(id, name, lat, lon, r)

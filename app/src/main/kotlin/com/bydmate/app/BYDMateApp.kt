@@ -29,6 +29,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.osmdroid.config.Configuration as OsmdroidConfig
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.MapTileIndex
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -143,6 +146,31 @@ class BYDMateApp : Application(), Configuration.Provider {
         override fun onActivityStopped(activity: Activity) {}
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         override fun onActivityDestroyed(activity: Activity) {}
+    }
+
+    companion object {
+        /** 高德地图道路瓦片 — 中国大陆可用，免 API Key。
+         *  查询参数风格 (?x=&y=&z=) 需要重写 getTileURLString。 */
+        val AmapTileSource = object : OnlineTileSourceBase(
+            "Amap", 0, 18, 256, ".png",
+            arrayOf(
+                "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+            ),
+        ) {
+            override fun getTileURLString(pMapTileIndex: Long): String {
+                return String.format(
+                    baseUrl,
+                    MapTileIndex.getX(pMapTileIndex),
+                    MapTileIndex.getY(pMapTileIndex),
+                    MapTileIndex.getZoom(pMapTileIndex),
+                )
+            }
+        }
+
+        val OsmTileSource = TileSourceFactory.MAPNIK
     }
 
     private fun scheduleDataThinning() {
