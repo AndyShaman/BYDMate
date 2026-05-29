@@ -15,13 +15,20 @@ daemon не поднимался. Два бага в доставке (`AdbOnDev
 Сам daemon-код исправен (при ручном `adb shell` биндит порт и слушает). Чиним только
 доставку и транспорт. Андй выбрал: сразу binder-сервис как у конкурента (а не латать TCP).
 
+**Решение по fallback (2026-05-29, Andy подтвердил):** runtime-fallback на сокет НЕ строим —
+идём binder-only. Старый TCP-путь как fallback не годится: сломана была доставка (push dex
+>256 КБ), а не сокет; откат к нему через git вернёт нерабочее состояние, не рабочий сокет.
+Поэтому TCP/helper-dex вычищаем целиком в этой итерации, git хранит историю на случай отката.
+Если binder упрётся на машине (риск низкий — конкурент гоняет ровно это на том же DiLink) —
+чиним вперёд (сокет в новый демон), не назад.
+
 ## Что меняем (суть)
 
 - **Доставка**: `CLASSPATH=<base.apk>` (наш подписанный APK через `context.packageCodePath`),
   `HelperDaemon` компилируется в основной dex приложения. Push dex убираем целиком
   (`:helper-dex` модуль, `buildHelperDex` task, assets `helper.dex`+`.sha256` — на удаление).
   Целостность теперь от подписи APK (OS проверяет при install), отдельный sha не нужен.
-- **Запуск**: `setsid app_process … </dev/null >/dev/null 2>&1 &` — новая сессия, переживает
+- **Запуск**: `setsid app_process … </dev/null >/data/local/tmp/bydmate_helper.log 2>&1 &` — новая сессия, переживает
   закрытие ADB-shell. Чинит баг #2.
 - **IPC**: daemon = binder-сервис (`ServiceManager.addService` + onTransact + `Looper.loop`),
   app ходит через `ServiceManager.getService` + `IBinder.transact`. TCP 8765 убираем целиком
@@ -82,7 +89,7 @@ App при `transact()==false` или пустом reply → null/false (fail-so
 ```
 CLASSPATH=<packageCodePath> setsid app_process /system/bin \
   --nice-name=bydmate_helper com.bydmate.app.helper.HelperDaemon <appUid> \
-  </dev/null >/dev/null 2>&1 &
+  </dev/null >/data/local/tmp/bydmate_helper.log 2>&1 &
 ```
 
 `packageCodePath` из нашего context, `appUid` из `android.os.Process.myUid()` — оба наши,
@@ -99,11 +106,22 @@ CLASSPATH=<packageCodePath> setsid app_process /system/bin \
 
 ### Task 2 — Binder daemon (новый файл в app-модуле)
 - Создать `app/src/main/kotlin/com/bydmate/app/helper/HelperDaemon.kt`:
-  `main(args)`: `expectedUid = args[0].toInt()`; файловый lock single-owner (если занят → exit 0);
+  `main(args)`: `expectedUid = args[0].toInt()`; single-owner через файловый lock (см. ниже);
   resolve autoservice IBinder (как сейчас, reflection ServiceManager.getService); создать
   `Binder()` subclass с onTransact (uid-check + enforceInterface + PING/READ/WRITE → autoservice
   parcel-танец); `ServiceManager.addService(SERVICE_NAME, binder)` reflection; `Looper.prepareMainLooper()`
-  + `Looper.loop()`. Печатать READY/ERR в stderr для диагностики.
+  + `Looper.loop()`.
+- **Single-owner (finding 3)**: lock `/data/local/tmp/bydmate_helper.lock` через `FileChannel.tryLock`.
+  Хелпер `acquireSingleOwnerLock(path): FileLock?` → lock или null если занят (cross-process tryLock
+  возвращает null; same-JVM `OverlappingFileLockException` ловим и тоже → null). `FileChannel`+`FileLock`
+  держим в ЖИВЫХ переменных `main` до выхода процесса (Looper.loop блокирует → стек жив → не GC).
+  Если null → демон уже поднят → `return` (exit 0) БЕЗ addService. TDD: два channel'а к одному файлу,
+  первый tryLock != null, второй == null.
+- **Диагностика (finding 2)**: демон печатает `READY` / `ERR: <причина>` в stdout (спавн редиректит
+  в лог-файл, не /dev/null — см. Task 5), чтобы bootstrap прочитал причину при неудачном poll.
+- **Комментарий (finding 5)**: входящие transact обслуживает binder-threadpool, который `app_process`
+  поднимает сам (`AppRuntime::onStarted` → `ProcessState::startThreadPool`); `Looper.loop()` тут ТОЛЬКО
+  keepalive, чтобы main не завершился. Зафиксировать это в комментарии к коду.
 - `proguard-rules.pro`: `-keep public class com.bydmate.app.helper.HelperDaemon { public static void main(java.lang.String[]); }`
   (defensive — reflective entry point; minify сейчас off, но это foot-gun на будущее).
 - Порт parcel-логики к autoservice — из СТАРОГО helper-dex/HelperDaemon (это наш код). Clean-room ок.
@@ -126,19 +144,25 @@ CLASSPATH=<packageCodePath> setsid app_process /system/bin \
   companion writeAccepted/readAccepted — без изменений. Сохранить withTimeoutOrNull + mutex.
 - Удалить `HelperProtocol.kt` (JSON DTO) и `HelperClientProtocolTest.kt` (тест DTO).
 - TDD (Robolectric): фейковый локальный `Binder` с onTransact, проверить read возвращает value
-  при status==0 и null иначе; write true при status>=0; isAlive по ping. `HelperClientStatusTest` остаётся.
+  при status==0 и null иначе; write true при status>=0; isAlive по ping. **DeadObjectException (finding 4)**:
+  первый закэшированный binder бросает `DeadObjectException` на transact → клиент сбрасывает кэш,
+  повторный getService отдаёт живой binder → вызов успешен. `HelperClientStatusTest` остаётся.
 
 ### Task 5 — Спавн-рецепт (AdbOnDeviceClient + HelperBootstrap)
 - `AdbOnDeviceClient`: заменить `bootstrapHelper(context, expectedSha256)` на `spawnHelper(): Boolean` —
-  строит спавн-команду выше (`ctx.packageCodePath` + `Process.myUid()`), шлёт `p.exec`, true если
-  не бросило. Убрать чтение dex/sha/base64/push и inline TCP-poll. Обновить интерфейс.
+  строит спавн-команду выше (`ctx.packageCodePath` + `Process.myUid()`, редирект в
+  `/data/local/tmp/bydmate_helper.log`), шлёт `p.exec`, true если не бросило. Убрать чтение
+  dex/sha/base64/push и inline TCP-poll. Обновить интерфейс.
+- **Диагностика (finding 2)**: добавить `readHelperLog(): String?` (`p.exec("cat /data/local/tmp/bydmate_helper.log")`).
 - `HelperBootstrap.ensureRunning`: ping (`helper.isAlive`) → `adb.spawnHelper()` → poll
-  `helper.isAlive()` до 3 с (15×200мс) → вернуть результат. Убрать `expectedDexSha256`/SHA_ASSET.
+  `helper.isAlive()` до 3 с (15×200мс) → вернуть результат. При неудачном poll — прочитать
+  `adb.readHelperLog()` и залогировать причину (READY/ERR демона). Убрать `expectedDexSha256`/SHA_ASSET.
 - `TrackingService` строки 265-269: обновить комментарий (не «127.0.0.1:8765 socket», а «native
   binder service»).
 - TDD: `AdbOnDeviceClientTest` — через FakeProtocol.execCalls проверить, что spawnHelper строит
   команду с `setsid`, `CLASSPATH=`, `app_process`, `--nice-name=bydmate_helper`,
-  `com.bydmate.app.helper.HelperDaemon`, uid; и НЕ содержит `base64`/`echo`/`helper.dex` (нет push).
+  `com.bydmate.app.helper.HelperDaemon`, uid, редирект в `bydmate_helper.log`; и НЕ содержит
+  `base64`/`echo`/`helper.dex` (нет push).
 
 ### Task 6 — Верификация + clean-room gate
 - Полный `./gradlew :app:testDebugUnitTest` зелёный (JAVA_HOME 17, ANDROID_HOME).
@@ -152,10 +176,12 @@ CLASSPATH=<packageCodePath> setsid app_process /system/bin \
 ## On-device checkpoints (проверить на машине при тесте — НЕ верифицируемо локально)
 
 1. **`ServiceManager.addService` под shell uid** не блокируется SELinux на DiLink (конкурент это
-   делает — ожидаем PASS). Если SecurityException → fallback на socket-вариант (setsid+apk-classpath
-   фиксят доставку и для сокета).
+   делает — ожидаем PASS). Если SecurityException — НЕ откат на сокет (рабочей версии нет),
+   а форвард-фикс: добавить сокет-листенер в новый демон (доставка setsid+apk-classpath уже общая),
+   второй визит на машину.
 2. **base.apk читается shell uid** как CLASSPATH (конкурент грузит свой apk так же — ожидаем PASS).
 3. Действие (свет/окно/Алиса) реально срабатывает; `vehicle_write_log` пишет status=0.
+4. При сбое старта — прочитать `/data/local/tmp/bydmate_helper.log` (READY/ERR демона) для диагностики.
 
 ## Релиз
 
