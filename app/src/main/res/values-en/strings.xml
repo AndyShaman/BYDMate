@@ -204,8 +204,24 @@
     <string name="automation_trigger_type_place">Place</string>
     <string name="automation_trigger_type_place_empty_hint">Create a place in settings first</string>
     <string name="automation_trigger_type_time_of_day">Time of day</string>
+    <string name="automation_trigger_type_schedule">Time / schedule</string>
     <string name="automation_trigger_type_service_start">BYDMate startup</string>
     <string name="automation_trigger_type_internet">Internet available</string>
+
+    <!-- Schedule trigger (exact time / range + days of week) -->
+    <string name="automation_schedule_mode_exact">Exact</string>
+    <string name="automation_schedule_mode_range">Range</string>
+    <string name="automation_schedule_time_label">Time:</string>
+    <string name="automation_schedule_from">From:</string>
+    <string name="automation_schedule_to">To:</string>
+    <string name="automation_schedule_days_label">Days of week (empty = every day):</string>
+    <string name="automation_day_mon">Mon</string>
+    <string name="automation_day_tue">Tue</string>
+    <string name="automation_day_wed">Wed</string>
+    <string name="automation_day_thu">Thu</string>
+    <string name="automation_day_fri">Fri</string>
+    <string name="automation_day_sat">Sat</string>
+    <string name="automation_day_sun">Sun</string>
     <string name="automation_action_delay_label">Delay</string>
     <string name="automation_delay_0_5s">0.5 s</string>
     <string name="automation_delay_1s">1 s</string>

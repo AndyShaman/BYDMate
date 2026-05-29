@@ -11,6 +11,7 @@ import android.location.Location
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.util.Calendar
 import kotlin.math.abs
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -243,6 +244,7 @@ class AutomationEngine @Inject constructor(
             "place_enter" -> evaluatePlace(trigger, location, places, enterKind = true)
             "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
             "time_of_day" -> evaluateTimeOfDay(trigger, location)
+            "time_range" -> evaluateSchedule(trigger)
             "service_start" -> isFirstEval
             "network_available" -> networkAvailableEdge
             else -> { // "param" (default)
@@ -303,6 +305,16 @@ class AutomationEngine @Inject constructor(
         val phase = SunTimeCalculator.currentPhase(loc)
         val target = trigger.value.uppercase()
         return phase.name == target
+    }
+
+    private fun evaluateSchedule(trigger: TriggerDef): Boolean {
+        val spec = ScheduleSpec.fromJson(trigger.value) ?: return false
+        val cal = Calendar.getInstance()
+        val nowMinute = cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE)
+        // Calendar: SUNDAY=1..SATURDAY=7 → ISO: MONDAY=1..SUNDAY=7
+        val nowDow = if (cal.get(Calendar.DAY_OF_WEEK) == Calendar.SUNDAY) 7
+            else cal.get(Calendar.DAY_OF_WEEK) - 1
+        return isWithinSchedule(spec, nowMinute, nowDow)
     }
 
     private fun compare(actual: Double, op: String, expected: Double): Boolean = when (op) {
@@ -402,6 +414,7 @@ class AutomationEngine @Inject constructor(
                 "place_enter" -> json.put("place_enter", t.placeName ?: "?")
                 "place_exit" -> json.put("place_exit", t.placeName ?: "?")
                 "time_of_day" -> json.put("time_of_day", t.value)
+                "time_range" -> json.put("time_range", t.value)
                 "service_start" -> json.put("service_start", true)
                 "network_available" -> json.put("network_available", true)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)

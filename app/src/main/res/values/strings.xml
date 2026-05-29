@@ -258,8 +258,24 @@
     <string name="automation_trigger_type_place">Место</string>
     <string name="automation_trigger_type_place_empty_hint">Сначала создайте место в настройках</string>
     <string name="automation_trigger_type_time_of_day">Время суток</string>
+    <string name="automation_trigger_type_schedule">Время / расписание</string>
     <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
     <string name="automation_trigger_type_internet">Доступен интернет</string>
+
+    <!-- Schedule trigger (exact time / range + days of week) -->
+    <string name="automation_schedule_mode_exact">Точное</string>
+    <string name="automation_schedule_mode_range">Промежуток</string>
+    <string name="automation_schedule_time_label">Время:</string>
+    <string name="automation_schedule_from">С:</string>
+    <string name="automation_schedule_to">До:</string>
+    <string name="automation_schedule_days_label">Дни недели (пусто = каждый день):</string>
+    <string name="automation_day_mon">Пн</string>
+    <string name="automation_day_tue">Вт</string>
+    <string name="automation_day_wed">Ср</string>
+    <string name="automation_day_thu">Чт</string>
+    <string name="automation_day_fri">Пт</string>
+    <string name="automation_day_sat">Сб</string>
+    <string name="automation_day_sun">Вс</string>
 
     <!-- Action row: delay -->
     <string name="automation_action_delay_label">Пауза</string>
