@@ -50,4 +50,25 @@ object AppModuleMigrationsForTest {
             )
         }
     }
+
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS vehicle_write_log (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    actionName TEXT NOT NULL,
+                    dev INTEGER NOT NULL,
+                    fid INTEGER NOT NULL,
+                    requested INTEGER NOT NULL,
+                    readback INTEGER,
+                    status INTEGER NOT NULL,
+                    error TEXT,
+                    validated INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+        }
+    }
 }
