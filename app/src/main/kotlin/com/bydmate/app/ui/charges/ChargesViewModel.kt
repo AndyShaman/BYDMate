@@ -56,7 +56,6 @@ data class ChargesUiState(
     val periodSummary: ChargeSummary = ChargeSummary(0, 0.0, 0.0),
     val currencySymbol: String = "BYN",
     val initialAutoserviceCheckDone: Boolean = false,
-    val autoserviceEnabled: Boolean = false,
     val autoserviceConnected: Boolean = false,
     val autoserviceAllSentinel: Boolean = false,
     val hasLegacyCharges: Boolean = false,
@@ -260,14 +259,12 @@ class ChargesViewModel @Inject constructor(
 
     private fun loadAutoserviceState() {
         viewModelScope.launch {
-            // Phase 1: fast reads from SharedPrefs/Room — no Binder probe yet.
+            // Phase 1: fast read from Room — no Binder probe yet.
             // Setting initialAutoserviceCheckDone = true immediately suppresses the
             // OnboardingEmptyState flash that was visible during the ~1-2 s Binder probe.
-            val enabled = settingsRepository.isAutoserviceEnabled()
             val legacyExists = chargeRepository.hasLegacyCharges()
             _uiState.update {
                 it.copy(
-                    autoserviceEnabled = enabled,
                     hasLegacyCharges = legacyExists,
                     initialAutoserviceCheckDone = true,
                 )

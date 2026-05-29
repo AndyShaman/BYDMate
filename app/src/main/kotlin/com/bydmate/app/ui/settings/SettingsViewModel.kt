@@ -19,7 +19,6 @@ import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -43,36 +42,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
-
-/**
- * Represents the runtime status of the autoservice data channel.
- *
- * - [NotEnabled] — the toggle is OFF; render no status block.
- * - [Disconnected] — toggle ON, but [BatteryStateRepository.refresh] returned
- *   `autoserviceAvailable = false` (ADB not connected or service unreachable).
- * - [Connected] — toggle ON and at least one real value was returned.
- *   Individual fields are nullable because partial sentinel responses occur.
- * - [AllSentinel] — see KDoc on the object itself.
- */
-sealed class AutoserviceStatus {
-    object NotEnabled : AutoserviceStatus()
-    object Disconnected : AutoserviceStatus()
-    data class Connected(
-        val socNow: Float?,
-        val lifetimeKm: Float?,
-        val lifetimeKwh: Float?,
-        val sohPercent: Float?
-    ) : AutoserviceStatus()
-
-    /**
-     * Toggle ON, autoservice connected, but the battery-trio (SoC, lifetime km,
-     * lifetime kWh) all came back as sentinel/null. Typically happens when the
-     * car is in deep standby — DiLink BMS bus quiet, only 12V + cached SoH
-     * still readable. UI should show "сейчас машина не отвечает" rather than
-     * empty cards.
-     */
-    object AllSentinel : AutoserviceStatus()
-}
 
 /**
  * UI state for the Settings screen.
@@ -116,8 +85,6 @@ data class SettingsUiState(
     val aliceEnabled: Boolean = false,
     val aliceSaveStatus: String? = null,
     val autoCheckUpdates: Boolean = true,
-    val autoserviceEnabled: Boolean = false,
-    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled,
     val abrpTelemetryEnabled: Boolean = false,
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
@@ -137,7 +104,6 @@ class SettingsViewModel @Inject constructor(
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
-    private val batteryStateRepository: BatteryStateRepository,
     private val localePreferences: LocalePreferences
 ) : ViewModel() {
 
@@ -211,8 +177,6 @@ class SettingsViewModel @Inject constructor(
             val aliceApiKey = settingsRepository.getString(SettingsRepository.KEY_ALICE_API_KEY, "")
             val aliceEnabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
 
-            val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
-
             val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
@@ -237,51 +201,12 @@ class SettingsViewModel @Inject constructor(
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
-                    autoserviceEnabled = autoserviceEnabled,
                     abrpTelemetryEnabled = abrpEnabled,
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
                 )
             }
-
-            loadAutoserviceState()
-        }
-    }
-
-    internal suspend fun loadAutoserviceState() {
-        val status = if (!settingsRepository.isAutoserviceEnabled()) {
-            AutoserviceStatus.NotEnabled
-        } else {
-            val state = batteryStateRepository.refresh()
-            when {
-                !state.autoserviceAvailable -> AutoserviceStatus.Disconnected
-                state.socNow == null && state.lifetimeKm == null && state.lifetimeKwh == null ->
-                    AutoserviceStatus.AllSentinel
-                else -> AutoserviceStatus.Connected(
-                    socNow = state.socNow,
-                    lifetimeKm = state.lifetimeKm,
-                    lifetimeKwh = state.lifetimeKwh,
-                    sohPercent = state.sohPercent
-                )
-            }
-        }
-        _uiState.update { it.copy(autoserviceStatus = status) }
-    }
-
-    /**
-     * UI entry point for the autoservice toggle. Persists the new value, then
-     * triggers ADB handshake on enable. Single coroutine — no UI race between
-     * persist-reload and connect-reload.
-     */
-    fun enableAutoservice(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoserviceEnabled(enabled)
-            _uiState.update { it.copy(autoserviceEnabled = enabled) }
-            if (enabled) {
-                adbOnDeviceClient.connect()
-            }
-            loadAutoserviceState()
         }
     }
 
@@ -736,13 +661,11 @@ class SettingsViewModel @Inject constructor(
                 val dataSource = settingsRepository.getDataSource().name
                 val capacityRaw = settingsRepository.getString(SettingsRepository.KEY_BATTERY_CAPACITY, "")
                 val capacityParsed = settingsRepository.getBatteryCapacity()
-                val autoservice = settingsRepository.isAutoserviceEnabled()
                 val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
                 val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
                 val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
-                appendLine("autoservice_enabled: $autoservice")
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")

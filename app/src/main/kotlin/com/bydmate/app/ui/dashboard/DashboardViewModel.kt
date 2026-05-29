@@ -84,7 +84,6 @@ data class DashboardUiState(
     val currentSoh: Float? = null,
     val currentLifetimeKm: Float? = null,
     val currentLifetimeKwh: Float? = null,
-    val autoserviceEnabled: Boolean = false,
     // Widget-style stats around SOC ring (mirror FloatingWidgetView bindings).
     val insideTemp: Int? = null,
     val tripDistanceKm: Double? = null,
@@ -402,26 +401,12 @@ class DashboardViewModel @Inject constructor(
     }
 
     private suspend fun loadAutoserviceFlag() {
-        val enabled = settingsRepository.isAutoserviceEnabled()
-        if (!enabled) {
-            _uiState.update {
-                it.copy(
-                    autoserviceEnabled = false,
-                    adbConnected = null,
-                    currentSoh = null,
-                    currentLifetimeKm = null,
-                    currentLifetimeKwh = null,
-                )
-            }
-            return
-        }
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
         _uiState.update {
             if (state == null) {
-                it.copy(autoserviceEnabled = true, adbConnected = false)
+                it.copy(adbConnected = false)
             } else {
                 it.copy(
-                    autoserviceEnabled = true,
                     adbConnected = state.autoserviceAvailable,
                     currentSoh = state.sohPercent,
                     currentLifetimeKm = state.lifetimeKm,

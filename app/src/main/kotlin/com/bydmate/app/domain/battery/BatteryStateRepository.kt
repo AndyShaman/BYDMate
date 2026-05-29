@@ -2,7 +2,6 @@ package com.bydmate.app.domain.battery
 
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.repository.BatteryHealthRepository
-import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -19,7 +18,7 @@ data class BatteryState(
     val sohPercent: Float?,
     val lifetimeKm: Float?,
     val lifetimeKwh: Float?,
-    /** True when toggle is ON AND the autoservice client returned at least one real value. */
+    /** True when the autoservice client returned at least one real value. */
     val autoserviceAvailable: Boolean
 )
 
@@ -27,12 +26,8 @@ data class BatteryState(
 class BatteryStateRepository @Inject constructor(
     private val vehicleApi: VehicleApi,
     private val batteryHealth: BatteryHealthRepository,
-    private val settings: SettingsRepository
 ) {
     suspend fun refresh(): BatteryState {
-        if (!settings.isAutoserviceEnabled()) {
-            return BatteryState(null, null, null, null, null, autoserviceAvailable = false)
-        }
         if (!vehicleApi.isAvailable()) {
             return BatteryState(null, null, null, null, null, autoserviceAvailable = false)
         }

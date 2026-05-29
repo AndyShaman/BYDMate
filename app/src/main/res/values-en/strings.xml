@@ -28,9 +28,6 @@
     <string name="settings_recalc_dialog_text">All trips will be recalculated using tariff %1$s %2$s/kWh.\nExisting calculated values will be replaced.</string>
     <string name="settings_recalc_confirm_button">Recalculate</string>
     <string name="settings_cancel_button">Cancel</string>
-    <string name="settings_trips_system_header">System data (experimental)</string>
-    <string name="settings_trips_system_note">Extended car data: battery SoH, true BMS mileage, charging statistics. Read only.</string>
-    <string name="settings_trips_system_enable_label">Enable</string>
     <string name="settings_abrp_section_header">ABRP - telemetry</string>
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent - ABRP reads coordinates itself.</string>
@@ -145,7 +142,6 @@
     <string name="charges_stats_equiv_cycles">Equiv. cycles</string>
     <string name="charges_stats_bms_mileage">BMS mileage</string>
     <string name="charges_stats_per100km">/100km lifetime</string>
-    <string name="charges_lifetime_enable_hint">Enable \"System data\" in Settings to see BMS mileage and total pumped from the car.</string>
     <string name="charges_lifetime_waiting">Waiting for the first response from the car...</string>
     <string name="charges_stats_dynamics_label">Trends</string>
     <string name="charges_chart_cell_delta_title">Cell delta (V)</string>

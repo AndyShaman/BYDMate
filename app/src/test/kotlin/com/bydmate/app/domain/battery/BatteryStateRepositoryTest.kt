@@ -3,10 +3,7 @@ package com.bydmate.app.domain.battery
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
-import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.repository.BatteryHealthRepository
-import com.bydmate.app.data.repository.SettingsRepository
-import io.mockk.mockk
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
@@ -52,7 +49,7 @@ class BatteryStateRepositoryTest {
         override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
     }
 
-    // Deviation 2: BatteryHealthRepository is not open, so we stub via the DAO
+    // BatteryHealthRepository is not open, so we stub via the DAO
     private class StubBatterySnapshotDao(
         private val lastValue: BatterySnapshotEntity?
     ) : com.bydmate.app.data.local.dao.BatterySnapshotDao {
@@ -66,45 +63,11 @@ class BatteryStateRepositoryTest {
     private fun fakeBatteryHealth(last: BatterySnapshotEntity?): BatteryHealthRepository =
         BatteryHealthRepository(StubBatterySnapshotDao(last))
 
-    // Deviation 1: SettingsRepository.isAutoserviceEnabled() is not open — back real
-    // instance with a map-based SettingsDao so it reads the right value
-    private fun fakeSettings(autoserviceEnabled: Boolean): SettingsRepository {
-        val map = mutableMapOf<String, String>()
-        map[SettingsRepository.KEY_AUTOSERVICE_ENABLED] = autoserviceEnabled.toString()
-        val dao = object : com.bydmate.app.data.local.dao.SettingsDao {
-            override suspend fun get(key: String): String? = map[key]
-            override fun observe(key: String): Flow<String?> = flowOf(map[key])
-            override suspend fun set(entity: com.bydmate.app.data.local.entity.SettingEntity) {
-                map[entity.key] = entity.value ?: ""
-            }
-            override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.SettingEntity>> = flowOf(emptyList())
-        }
-        return SettingsRepository(dao, mockk<LocalePreferences>(relaxed = true))
-    }
-
     @Test
-    fun `state has all autoservice fields null when toggle OFF`() = runTest {
-        val repo = BatteryStateRepository(
-            FakeVehicleApi(BatteryReading(100f, 91f, 600f, 2091f, 14f, 0L)),
-            fakeBatteryHealth(null),
-            fakeSettings(autoserviceEnabled = false)
-        )
-
-        val state = repo.refresh()
-
-        assertNull(state.sohPercent)
-        assertNull(state.lifetimeKwh)
-        assertNull(state.lifetimeKm)
-        assertNull(state.voltage12v)
-        assertFalse(state.autoserviceAvailable)
-    }
-
-    @Test
-    fun `state populated when toggle ON and autoservice available`() = runTest {
+    fun `state populated when autoservice available and snapshot present`() = runTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(BatteryReading(100f, 91f, 602.7f, 2091f, 14.0f, 0L)),
             fakeBatteryHealth(null),
-            fakeSettings(autoserviceEnabled = true)
         )
 
         val state = repo.refresh()
@@ -118,11 +81,23 @@ class BatteryStateRepositoryTest {
     }
 
     @Test
-    fun `autoserviceAvailable is false when toggle ON but client unreachable`() = runTest {
+    fun `autoserviceAvailable is false when client unreachable`() = runTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(battery = null, available = false),
             fakeBatteryHealth(null),
-            fakeSettings(autoserviceEnabled = true)
+        )
+
+        val state = repo.refresh()
+
+        assertFalse(state.autoserviceAvailable)
+        assertNull(state.sohPercent)
+    }
+
+    @Test
+    fun `autoserviceAvailable is false when snapshot is null`() = runTest {
+        val repo = BatteryStateRepository(
+            FakeVehicleApi(battery = null, available = true),
+            fakeBatteryHealth(null),
         )
 
         val state = repo.refresh()
@@ -140,7 +115,6 @@ class BatteryStateRepositoryTest {
         val repo = BatteryStateRepository(
             FakeVehicleApi(BatteryReading(null, 91f, 602.7f, 2091f, 14f, 0L)),  // sohPercent sentinel
             fakeBatteryHealth(snap),
-            fakeSettings(autoserviceEnabled = true)
         )
 
         val state = repo.refresh()

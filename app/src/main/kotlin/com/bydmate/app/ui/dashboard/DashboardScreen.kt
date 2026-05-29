@@ -427,7 +427,6 @@ fun DashboardScreen(
                             liveSoh = state.currentSoh,
                             liveLifetimeKm = state.currentLifetimeKm,
                             liveLifetimeKwh = state.currentLifetimeKwh,
-                            autoserviceEnabled = state.autoserviceEnabled,
                             borderColor = color,
                             onDismiss = { viewModel.toggleBatteryHealthExpanded() },
                         )

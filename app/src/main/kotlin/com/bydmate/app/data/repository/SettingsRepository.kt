@@ -51,7 +51,6 @@ open class SettingsRepository @Inject constructor(
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         const val KEY_DATA_SOURCE = "data_source"
-        const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"
@@ -194,12 +193,6 @@ open class SettingsRepository @Inject constructor(
     suspend fun getDataSource(): DataSource = DataSource.ENERGYDATA
 
     fun observeDataSource(): Flow<String?> = observeString(KEY_DATA_SOURCE)
-
-    suspend fun isAutoserviceEnabled(): Boolean =
-        getString(KEY_AUTOSERVICE_ENABLED, "false") == "true"
-
-    suspend fun setAutoserviceEnabled(enabled: Boolean) =
-        setString(KEY_AUTOSERVICE_ENABLED, enabled.toString())
 
     suspend fun getChargingBaselineSoc(): Int? =
         getString(KEY_CHARGING_BASELINE_SOC, "").toIntOrNull()

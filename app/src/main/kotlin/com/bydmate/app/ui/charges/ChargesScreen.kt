@@ -77,18 +77,9 @@ fun ChargesScreen(
             return@Column
         }
 
-        if (!state.autoserviceEnabled && !state.hasLegacyCharges) {
-            OnboardingEmptyState(onNavigateSettings)
-            return@Column
-        }
-
-        if (state.autoserviceEnabled && state.autoserviceAllSentinel) {
+        if (state.autoserviceAllSentinel) {
             SentinelEmptyState()
             return@Column
-        }
-
-        if (!state.autoserviceEnabled && state.hasLegacyCharges) {
-            NotTrackingBanner(onClick = onNavigateSettings)
         }
 
         Row(
@@ -190,7 +181,6 @@ fun ChargesScreen(
             ChargesStatsPanel(
                 periodSummary = state.periodSummary,
                 currencySymbol = state.currencySymbol,
-                autoserviceEnabled = state.autoserviceEnabled,
                 bmsLifetimeKm = state.bmsLifetimeKm,
                 bmsLifetimeKwh = state.bmsLifetimeKwh,
                 nominalCapacityKwh = state.nominalCapacityKwh,
@@ -287,37 +277,6 @@ private fun ChargeActionSheet(
 // ─── Fallback states ──────────────────────────────────────────────────────────
 
 @Composable
-private fun OnboardingEmptyState(onNavigateSettings: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Column(
-            modifier = Modifier
-                .background(CardSurface, RoundedCornerShape(12.dp))
-                .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
-                .padding(horizontal = 32.dp, vertical = 60.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = stringResource(R.string.charges_onboarding_empty_text),
-                color = TextSecondary,
-                fontSize = 14.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 20.sp
-            )
-            Spacer(modifier = Modifier.height(14.dp))
-            Button(
-                onClick = onNavigateSettings,
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentGreen,
-                    contentColor = NavyDark
-                )
-            ) {
-                Text(stringResource(R.string.charges_go_to_settings_button), fontWeight = FontWeight.SemiBold)
-            }
-        }
-    }
-}
-
-@Composable
 private fun SentinelEmptyState() {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Box(
@@ -335,38 +294,6 @@ private fun SentinelEmptyState() {
             )
         }
     }
-}
-
-@Composable
-private fun NotTrackingBanner(onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(
-                color = SocYellow.copy(alpha = 0.08f),
-                shape = RoundedCornerShape(8.dp)
-            )
-            .border(1.dp, SocYellow.copy(alpha = 0.35f), RoundedCornerShape(8.dp))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = stringResource(R.string.charges_not_tracking_banner),
-            color = SocYellow,
-            fontSize = 12.sp,
-            modifier = Modifier.weight(1f)
-        )
-        Spacer(modifier = Modifier.width(8.dp))
-        Text(
-            text = stringResource(R.string.charges_enable_tracking_button),
-            color = AccentGreen,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Medium,
-            modifier = Modifier.clickable { onClick() }
-        )
-    }
-    Spacer(modifier = Modifier.height(8.dp))
 }
 
 // ─── List components ──────────────────────────────────────────────────────────
@@ -599,7 +526,6 @@ private fun ChargeRow(
 private fun ChargesStatsPanel(
     periodSummary: ChargeSummary,
     currencySymbol: String,
-    autoserviceEnabled: Boolean,
     bmsLifetimeKm: Double?,
     bmsLifetimeKwh: Double?,
     nominalCapacityKwh: Double,
@@ -630,7 +556,7 @@ private fun ChargesStatsPanel(
         }
 
         SectionLabel(stringResource(R.string.charges_stats_lifetime_label))
-        if (autoserviceEnabled && bmsLifetimeKwh != null) {
+        if (bmsLifetimeKwh != null) {
             val equiv = if (nominalCapacityKwh > 0) bmsLifetimeKwh / nominalCapacityKwh else 0.0
             val avgPer100 = if (bmsLifetimeKm != null && bmsLifetimeKm > 0)
                 bmsLifetimeKwh / bmsLifetimeKm * 100.0 else null
@@ -667,12 +593,7 @@ private fun ChargesStatsPanel(
                 )
             }
         } else {
-            PlaceholderBlock(
-                if (!autoserviceEnabled)
-                    stringResource(R.string.charges_lifetime_enable_hint)
-                else
-                    stringResource(R.string.charges_lifetime_waiting)
-            )
+            PlaceholderBlock(stringResource(R.string.charges_lifetime_waiting))
         }
 
         SectionLabel(stringResource(R.string.charges_stats_dynamics_label))

@@ -33,7 +33,8 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import io.mockk.mockk
@@ -60,10 +61,8 @@ class DashboardViewModelTest {
 
     // --- Fake SettingsDao ---
 
-    private class FakeSettingsDao(autoserviceEnabled: Boolean) : SettingsDao {
-        val map = mutableMapOf<String, String>(
-            SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString()
-        )
+    private class FakeSettingsDao : SettingsDao {
+        val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
@@ -170,12 +169,11 @@ class DashboardViewModelTest {
     // --- Factory ---
 
     private fun buildViewModel(
-        autoserviceEnabled: Boolean,
         fakeAutoservice: VehicleApi
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
-        val settingsDao = FakeSettingsDao(autoserviceEnabled)
+        val settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
@@ -188,7 +186,7 @@ class DashboardViewModelTest {
         val insightsManager = InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, settingsRepo)
 
         val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
-        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
+        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo)
 
         return DashboardViewModel(
             appContext = ctx,
@@ -212,20 +210,8 @@ class DashboardViewModelTest {
     )
 
     @Test
-    fun `adbConnected is null when autoservice disabled`() = runTest {
+    fun `adbConnected is true when autoservice connected`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertNull(vm.uiState.value.adbConnected)
-    }
-
-    @Test
-    fun `adbConnected is true when autoservice enabled and connected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
             fakeAutoservice = FakeAutoservice(sampleReading, available = true)
         )
         testDispatcher.scheduler.advanceUntilIdle()
@@ -234,13 +220,22 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `adbConnected is false when autoservice enabled but unavailable`() = runTest {
+    fun `adbConnected is false when autoservice unavailable`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = true,
             fakeAutoservice = FakeAutoservice(battery = null, available = false)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(false, vm.uiState.value.adbConnected)
+        assertFalse(vm.uiState.value.adbConnected!!)
+    }
+
+    @Test
+    fun `currentSoh is populated from autoservice snapshot`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(100f, vm.uiState.value.currentSoh!!, 0.01f)
     }
 }

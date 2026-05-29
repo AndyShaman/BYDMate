@@ -38,11 +38,6 @@
     <string name="settings_recalc_confirm_button">Пересчитать</string>
     <string name="settings_cancel_button">Отмена</string>
 
-    <!-- Settings: Trips section -->
-    <string name="settings_trips_system_header">Системные данные (экспериментально)</string>
-    <string name="settings_trips_system_note">Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.</string>
-    <string name="settings_trips_system_enable_label">Включить</string>
-
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - телеметрия</string>
     <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
@@ -177,7 +172,6 @@
     <string name="charges_stats_equiv_cycles">Эквив. циклов</string>
     <string name="charges_stats_bms_mileage">Пробег BMS</string>
     <string name="charges_stats_per100km">/100км lifetime</string>
-    <string name="charges_lifetime_enable_hint">Включи «Системные данные» в Настройках, чтобы видеть пробег BMS и прокачано всего от машины.</string>
     <string name="charges_lifetime_waiting">Жду первого ответа от машины…</string>
     <string name="charges_stats_dynamics_label">Динамика</string>
     <string name="charges_chart_cell_delta_title">Δ ячеек (В)</string>

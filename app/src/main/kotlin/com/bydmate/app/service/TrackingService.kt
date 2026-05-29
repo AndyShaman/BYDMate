@@ -477,12 +477,11 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
-                val autoserviceOn = settingsRepository.isAutoserviceEnabled()
                 // Best-effort autoservice enrichment. Snapshots are heavier
                 // (multiple fids) — only read them in CHARGING window where
                 // is_dcfc / kwh_charged actually matter. In DRIVING we still
                 // want ENG_POW every tick.
-                val readSnapshots = autoserviceOn && state == IternioIntervalPolicy.TelemetryState.CHARGING
+                val readSnapshots = state == IternioIntervalPolicy.TelemetryState.CHARGING
                 val battery = if (readSnapshots) {
                     runCatching { autoserviceClient.readBatterySnapshot() }.getOrNull()
                 } else null
@@ -492,13 +491,13 @@ class TrackingService : Service(), LocationListener {
                 // ENG_POW: tight timeout — at 1 Hz drive cadence a 900 ms budget
                 // covers a healthy ADB read but won't pile up if autoservice
                 // stalls. Null on timeout/error → client falls back to DiPars.
-                val enginePowerKw: Int? = if (autoserviceOn) {
+                val enginePowerKw: Int? = run {
                     runCatching {
                         kotlinx.coroutines.withTimeoutOrNull(900L) {
                             autoserviceClient.getEnginePowerKw()
                         }
                     }.getOrNull()
-                } else null
+                }
 
                 iternioTelemetryClient.send(
                     apiKey = apiKey,
@@ -789,7 +788,6 @@ class TrackingService : Service(), LocationListener {
     private suspend fun pollGunStateForEdge() {
         if (!pollGunInFlight.compareAndSet(false, true)) return
         try {
-            if (!settingsRepository.isAutoserviceEnabled()) return
             val gun = try {
                 autoserviceClient.getInt(
                     com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING,
@@ -818,54 +816,11 @@ class TrackingService : Service(), LocationListener {
     }
 
     private fun detectOfflineCharge(currentSoc: Int) {
-        serviceScope.launch {
-            try {
-                // When autoservice is enabled, AutoserviceChargingDetector.runCatchUp
-                // is the source of truth (lifetime_kwh delta is more accurate than
-                // SOC delta, and it survives BMS calibration ticks). Skip the
-                // legacy SOC-delta path to avoid duplicate ChargeEntity inserts.
-                if (settingsRepository.isAutoserviceEnabled()) {
-                    Log.d(TAG, "detectOfflineCharge skipped (autoservice ON)")
-                    return@launch
-                }
-
-                val lastSoc = settingsRepository.getLastKnownSoc() ?: return@launch
-                val lastTs = settingsRepository.getLastSocTimestamp()
-                val now = System.currentTimeMillis()
-
-                // SOC increased since last shutdown → charging happened offline
-                if (currentSoc > lastSoc) {
-                    val socDelta = currentSoc - lastSoc
-                    val batteryCapacity = settingsRepository.getBatteryCapacity()
-                    val kwhCharged = socDelta / 100.0 * batteryCapacity
-
-                    // Determine tariff (assume AC for home charging)
-                    val tariff = settingsRepository.getHomeTariff()
-                    val cost = kwhCharged * tariff
-
-                    val chargeId = chargeRepository.insertCharge(
-                        com.bydmate.app.data.local.entity.ChargeEntity(
-                            startTs = lastTs,
-                            endTs = now,
-                            socStart = lastSoc,
-                            socEnd = currentSoc,
-                            kwhCharged = kwhCharged,
-                            kwhChargedSoc = kwhCharged,
-                            type = "AC",
-                            cost = cost,
-                            status = "COMPLETED"
-                        )
-                    )
-
-                    Log.i(TAG, "Offline charge detected: SOC $lastSoc→$currentSoc (+$socDelta%), " +
-                        "${"%.1f".format(kwhCharged)} kWh, id=$chargeId")
-                } else {
-                    Log.d(TAG, "No offline charge: lastSoc=$lastSoc, currentSoc=$currentSoc")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "detectOfflineCharge failed: ${e.message}")
-            }
-        }
+        // Autoservice is always on — AutoserviceChargingDetector.runCatchUp is the
+        // source of truth for offline charge detection (lifetime_kwh delta is more
+        // accurate than SOC delta and survives BMS calibration ticks). Legacy SOC-delta
+        // path removed to eliminate duplicate ChargeEntity inserts.
+        Log.d(TAG, "detectOfflineCharge: deferred to autoservice detector (currentSoc=$currentSoc)")
     }
 
     /**

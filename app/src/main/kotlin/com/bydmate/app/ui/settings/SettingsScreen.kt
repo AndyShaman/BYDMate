@@ -89,7 +89,6 @@ import com.bydmate.app.ui.theme.*
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
-    TRIPS(R.string.settings_section_trips_title, Icons.Outlined.DirectionsCar),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
@@ -214,7 +213,6 @@ fun SettingsScreen(
                 ) {
                     when (safeSelected) {
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
-                        SettingsSection.TRIPS -> TripsSection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
@@ -427,42 +425,6 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 onValueChange = { viewModel.saveConsumptionBad(it) },
                 keyboardType = KeyboardType.Decimal
             )
-        }
-    }
-}
-
-@Composable
-private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = stringResource(R.string.settings_trips_system_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.settings_trips_system_note),
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.settings_trips_system_enable_label), color = TextPrimary, fontSize = 14.sp)
-                Switch(
-                    checked = state.autoserviceEnabled,
-                    onCheckedChange = { enabled ->
-                        viewModel.enableAutoservice(enabled)
-                    },
-                    colors = bydSwitchColors(),
-                )
-            }
-            AutoserviceStatusBlock(status = state.autoserviceStatus)
         }
     }
 }
@@ -1158,70 +1120,6 @@ private fun SectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
-}
-
-@Composable
-private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
-    when (status) {
-        AutoserviceStatus.NotEnabled -> Unit
-        AutoserviceStatus.Disconnected -> StatusRow(
-            marker = "✗",
-            markerColor = TextMuted,
-            title = stringResource(R.string.settings_autoservice_disconnected_title),
-            detail = stringResource(R.string.settings_autoservice_disconnected_detail),
-            detailColor = TextSecondary,
-        )
-        AutoserviceStatus.AllSentinel -> StatusRow(
-            marker = "⚠",
-            markerColor = SocYellow,
-            title = stringResource(R.string.settings_autoservice_sentinel_title),
-            detail = stringResource(R.string.settings_autoservice_sentinel_detail),
-            detailColor = SocYellow,
-        )
-        is AutoserviceStatus.Connected -> {
-            val soh = status.sohPercent?.let { "%.0f%%".format(it) } ?: "—"
-            val km = status.lifetimeKm?.let { "%.1f км".format(it) } ?: "—"
-            val kwh = status.lifetimeKwh?.let { "%.0f кВт·ч".format(it) } ?: "—"
-            StatusRow(
-                marker = "✓",
-                markerColor = AccentGreen,
-                title = stringResource(R.string.settings_autoservice_connected_title),
-                detail = stringResource(R.string.settings_autoservice_connected_detail, soh, km, kwh),
-                detailColor = AccentGreen,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusRow(
-    marker: String,
-    markerColor: Color,
-    title: String,
-    detail: String,
-    detailColor: Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = marker,
-            color = markerColor,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 1.dp),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = title, color = TextPrimary, fontSize = 13.sp)
-            Text(
-                text = detail,
-                color = detailColor.copy(alpha = 0.85f),
-                fontSize = 11.sp,
-            )
-        }
-    }
 }
 
 @Composable

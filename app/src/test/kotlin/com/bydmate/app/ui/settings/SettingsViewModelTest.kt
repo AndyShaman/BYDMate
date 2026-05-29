@@ -3,8 +3,6 @@ package com.bydmate.app.ui.settings
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
-import com.bydmate.app.data.autoservice.BatteryReading
-import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
@@ -26,11 +24,9 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
-import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -43,8 +39,6 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import io.mockk.mockk
@@ -71,10 +65,8 @@ class SettingsViewModelTest {
 
     // --- Fake DAOs ---
 
-    private class FakeSettingsDao(autoserviceEnabled: Boolean = false) : SettingsDao {
-        val map = mutableMapOf<String, String>(
-            SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString(),
-        )
+    private class FakeSettingsDao : SettingsDao {
+        val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
@@ -167,42 +159,6 @@ class SettingsViewModelTest {
         override suspend fun getCount(): Int = 0
     }
 
-    // --- Fake AutoserviceClient ---
-
-    private class FakeAutoservice(
-        private val battery: BatteryReading?,
-        private val available: Boolean = true
-    ) : VehicleApi {
-        override suspend fun isAvailable(): Boolean = available
-        override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readSnapshot(): com.bydmate.app.data.remote.DiParsData? = null
-        override suspend fun readSoc(): Float? = null
-        override suspend fun readSpeed(): Float? = null
-        override suspend fun readMileageKm(): Float? = null
-        override suspend fun readPowerKw(): Int? = null
-        override suspend fun readAcStatus(): Int? = null
-        override suspend fun readAcTemp(): Int? = null
-        override suspend fun readInsideTemp(): Int? = null
-        override suspend fun readExteriorTemp(): Int? = null
-        override suspend fun readFanLevel(): Int? = null
-        override suspend fun readWindowDriver(): Int? = null
-        override suspend fun readWindowPassenger(): Int? = null
-        override suspend fun readWindowRearLeft(): Int? = null
-        override suspend fun readWindowRearRight(): Int? = null
-        override suspend fun dispatch(commandString: String): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOn(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeAcOff(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowDriver(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowPassenger(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeWindowRearRight(percent: Int): Result<Unit> = Result.success(Unit)
-        override suspend fun writeLockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeUnlockDoors(): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunroof(mode: com.bydmate.app.data.vehicle.SunroofMode): Result<Unit> = Result.success(Unit)
-        override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
-    }
-
     private class FakeAdbClient : AdbOnDeviceClient {
         override suspend fun connect(): Result<Unit> = Result.success(Unit)
         override suspend fun isConnected(): Boolean = false
@@ -215,13 +171,10 @@ class SettingsViewModelTest {
 
     // --- Factory ---
 
-    private fun buildViewModel(
-        autoserviceEnabled: Boolean,
-        fakeAutoservice: VehicleApi
-    ): SettingsViewModel {
+    private fun buildViewModel(): SettingsViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
-        val settingsDao = FakeSettingsDao(autoserviceEnabled)
+        val settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
@@ -243,9 +196,6 @@ class SettingsViewModelTest {
         val openRouterClient = OpenRouterClient(httpClient)
         val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, settingsRepo)
 
-        val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
-        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
-
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
@@ -257,7 +207,6 @@ class SettingsViewModelTest {
             idleDrainDao = idleDrainDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
-            batteryStateRepository = batteryStateRepo,
             localePreferences = LocalePreferences(ctx)
         )
     }
@@ -265,88 +214,18 @@ class SettingsViewModelTest {
     // --- Tests ---
 
     @Test
-    fun `loadAutoserviceState_toggleOff_returnsNotEnabled`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
+    fun `initial state has default battery capacity`() = runTest {
+        val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(AutoserviceStatus.NotEnabled, vm.uiState.value.autoserviceStatus)
+        assertEquals(SettingsRepository.DEFAULT_BATTERY_CAPACITY, vm.uiState.value.batteryCapacity)
     }
 
     @Test
-    fun `loadAutoserviceState_toggleOnDisconnected_returnsDisconnected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(battery = null, available = false)
-        )
+    fun `initial state has default home tariff`() = runTest {
+        val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(AutoserviceStatus.Disconnected, vm.uiState.value.autoserviceStatus)
-    }
-
-    @Test
-    fun `loadAutoserviceState_toggleOnAllNull_returnsAllSentinel`() = runTest {
-        // socNow, lifetimeKm, lifetimeKwh all null — sentinel response
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(
-                    sohPercent = null,
-                    socPercent = null,
-                    lifetimeKwh = null,
-                    lifetimeMileageKm = null,
-                    voltage12v = 14f,
-                    readAtMs = 0L
-                ),
-                available = true
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(AutoserviceStatus.AllSentinel, vm.uiState.value.autoserviceStatus)
-    }
-
-    @Test
-    fun `loadAutoserviceState_toggleOnWithData_returnsConnected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val status = vm.uiState.value.autoserviceStatus
-        assertTrue(status is AutoserviceStatus.Connected)
-        val connected = status as AutoserviceStatus.Connected
-        assertEquals(91f, connected.socNow!!, 0.01f)
-        assertEquals(100f, connected.sohPercent!!, 0.01f)
-        assertEquals(2091f, connected.lifetimeKm!!, 0.01f)
-        assertEquals(602f, connected.lifetimeKwh!!, 0.01f)
-    }
-
-    @Test
-    fun `enableAutoservice_persistsAndReloads`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(AutoserviceStatus.NotEnabled, vm.uiState.value.autoserviceStatus)
-        assertFalse(vm.uiState.value.autoserviceEnabled)
-
-        vm.enableAutoservice(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.autoserviceEnabled)
-        // After enable, BatteryStateRepository sees autoservice enabled = true and returns data
-        assertTrue(vm.uiState.value.autoserviceStatus is AutoserviceStatus.Connected)
+        assertEquals(SettingsRepository.DEFAULT_HOME_TARIFF, vm.uiState.value.homeTariff)
     }
 }
