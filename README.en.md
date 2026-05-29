@@ -214,23 +214,6 @@ If a record is missing or the numbers look off:
 
 ---
 
-## Trip data source
-
-BYDMate supports two trip-data backends, switchable in **Settings → Trip data source** or during the first-run wizard.
-
-<img src="docs/screenshots/data-source-toggle.jpg" alt="Trip data source toggle" width="800">
-
-| Mode | For which cars | What is read |
-|------|-----------------|--------------|
-| **BYD energydata** | Leopard 3 (Fangchengbao Bao 3) and other models with the built-in BMS `energydata` database | BYD SQLite: precise consumption (BMS), mileage, duration, charges |
-| **DiPlus TripInfo** | Song and other models **without** built-in energydata | DiPlus database: trip list, SOC start/end, average speed |
-
-**How to choose:** if the Trips list stays empty after 2–3 drives — switch the mode. Leopard 3 needs energydata (more accurate); Song and similar models use TripInfo (the only available source).
-
-In `DiPlus TripInfo` mode, consumption is computed from the SOC delta — it is ~1 kWh/100km coarser than BMS, offset by the fact that the car offers no other data.
-
----
-
 ## Battery health (SoH)
 
 SoH (State of Health) is the percent "health" of the traction battery, computed by the car's onboard system with its internal algorithms.
@@ -243,17 +226,13 @@ If your car exposes SoH via DiPlus and you want to help add support, open an [Is
 
 ---
 
-## Enable SoH and automatic charge logging (Leopard 3)
+## SoH and automatic charge logging (Leopard 3)
 
-SoH and automatic charge logging on Leopard 3 work through an additional "System data" mode that reads values from the car's onboard system. Enable it once:
+On Leopard 3, SoH and automatic charge logging read values directly from the car's onboard system. This works by default, with no switch to flip and no setup step. The first time the app reaches the onboard system, DiLink shows a system **ADB debugging** permission dialog with the key fingerprint. Tap **"Allow"** and check **"Always allow from this computer"** so DiLink does not ask again on every app start.
 
-1. Open **Settings** and toggle **"System data (experimental)"** on.
-2. DiLink will show a system **ADB debugging** permission dialog with the key fingerprint. Tap **"Allow"** and check **"Always allow from this computer"** so DiLink does not ask again on every app start.
-3. After that, SoH appears in the Battery health card, and charges start logging automatically with real kWh values.
+After that SoH appears in the Battery health card, and charges log automatically with real kWh values.
 
-If you do not enable this mode, the rest of BYDMate (trips, consumption, floating widget, automation) works as usual. Only SoH and automatic charge logging will be unavailable.
-
-> The mode is marked "experimental" because it has been tested on Leopard 3. On other BYD models access to this data is not confirmed.
+On cars without onboard-system access (older firmware, non-DiLink) the app falls back gracefully: the rest of BYDMate (trips, consumption, floating widget, automation) works as usual, only SoH and automatic charge logging are unavailable.
 
 ---
 
@@ -261,7 +240,7 @@ If you do not enable this mode, the rest of BYDMate (trips, consumption, floatin
 
 BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Bao 3). On other BYD models most features still work, with some differences. Before the first launch, check:
 
-- **Trip data source**: for models without the built-in BMS `energydata` (Song, Yuan and similar) switch to **DiPlus TripInfo** in Settings or in the first-run wizard. See the "Trip data source" section above.
+- **Trip logging**: on Leopard 3 trips come from the built-in BMS `energydata` database. On models without it (Song, Yuan and similar) BYDMate records trips natively from the live data stream, so the Trips list fills up on its own. Consumption from the SOC delta is a bit coarser than the BMS figure, but the list is no longer empty.
 - **Battery capacity**: defaults to 72.9 kWh (Leopard 3). Go to **Settings → Battery** and set your own. For example: Atto 3 = 60.5 kWh, Seal AWD = 82.5 kWh, Han EV = 85.4 kWh. Without this, range and trip-cost calculations will be off.
 - **SoH**: shown only on Leopard 3. On other models the "Battery health" card works without the SoH field.
 - **Charges**: the AC/DC algorithm was tuned for Leopard 3. On other models records may appear with delay or wrong power, especially for DC. Use manual add and edit when automation misses.
@@ -317,7 +296,7 @@ Without ADB, BYDMate runs in basic mode. ADB debugging is required for these fea
 
 Without ADB you still get: trip and mileage tracking, energy consumption, widget, AI insights.
 
-To enable these features, after installing BYDMate open **Settings → "System data (experimental)"**. DiLink will show an "Allow ADB debugging" dialog once — tap **Allow** and check **"Always allow from this computer"**.
+These features are on by default, with no switch to flip. The first time the app reaches the onboard system, DiLink shows an "Allow ADB debugging" dialog once, tap **Allow** and check **"Always allow from this computer"**.
 
 - **DiLink 3 / 4** — ADB can be enabled by yourself: install [BydDevelopmentTools](https://disk.yandex.by/d/e3gEnY9P2Y9_fQ), go to *Settings → Version Management*, tap *Reset to factory default* 10 times, enable *Debug Mode when USB is Connected* and *Wireless adb debug switch*. On updated DiLink 3/4 firmware ADB may be locked like on DiLink 5 — then follow the path below.
 - **DiLink 5.0** — ADB debugging is **locked** and can only be unlocked remotely from China. This is typically done via **TaoBao** sellers (search for `DiLink 5.0`, ~40 ¥ inside China / ~80 ¥ outside, AliPay payment). The seller remotely opens the engineering menu via the QR code you send, after which ADB is enabled as usual.
@@ -354,8 +333,7 @@ DiLink's IP address can be found in Wi-Fi settings on the head unit.
 
 1. Open BYDMate — the setup wizard appears
 2. Grant **location** and **storage** permissions (for GPS and reading energydata)
-3. Pick the **trip data source** — `BYD energydata` for Leopard 3, `DiPlus TripInfo` for Song and other models without the built-in BMS database (see the [section above](#trip-data-source))
-4. Set **electricity tariffs** (for trip cost calculation)
+3. Set **electricity tariffs** (for trip cost calculation)
 
 ### 5. Background work
 
@@ -435,8 +413,8 @@ Only aggregated vehicle metrics, no identifiers:
 - **Odometer** — mileage, km
 - **Tire pressures** — pressure in 4 tires
 - **is_charging / is_parked** — state flags
-- **is_dcfc / kwh_charged** — charge station type (DC vs AC) and kWh in the current session (only when "System data" mode is on — otherwise these fields are simply omitted)
-- **soh** — real battery SoH (Leopard 3, when "System data" mode is on)
+- **is_dcfc / kwh_charged** — charge station type (DC vs AC) and kWh in the current session (sent when the car exposes onboard-system data, otherwise these fields are simply omitted)
+- **soh** — real battery SoH (Leopard 3)
 
 ### What is NOT sent
 

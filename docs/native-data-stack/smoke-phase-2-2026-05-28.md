@@ -74,6 +74,24 @@ adb shell ps -A | grep -E "bydmate_helper|aps_diplus|diplus"
 
 ---
 
+## #3b — Нативная запись поездки на машине БЕЗ energydata
+
+**Pre:** машина со старой прошивкой или не-Leopard3 (Song / Yuan), где BYD energydata SQLite отсутствует. На Leopard 3 этот пункт пропускается (там работает HistoryImporter, TripRecorder пассивен).
+
+**Action:** проехать одну поездку (3–5 минут движения), поставить P, выключить IGN. Подождать 30s. Открыть BYDMate → вкладка «Поездки».
+
+**Expected:**
+- Список поездок НЕ пустой. Появилась новая строка (расход из SOC delta грубее, чем BMS, это норма).
+- В Room запись имеет `source = NATIVE_POLLING`:
+```bash
+adb shell run-as com.bydmate.app sqlite3 databases/bydmate.db \
+  "SELECT id, distanceKm, source FROM trips ORDER BY id DESC LIMIT 1"
+```
+
+**Result:** [ ] PASS / [ ] FAIL / [ ] N/A (Leopard 3)
+
+---
+
 ## #4 — Одна зарядка записывается в Room со start/end SOC
 
 **Pre:** машина припаркована, IGN OFF. Запустить AC-зарядку (даже короткую, 2–5 минут).
@@ -104,6 +122,23 @@ adb shell ps -A | grep -E "bydmate_helper|aps_diplus|diplus"
 adb shell run-as com.bydmate.app sqlite3 databases/bydmate.db \
   "SELECT ts, actionName, requested, status, error FROM vehicle_write_log ORDER BY ts DESC LIMIT 4"
 ```
+
+**Result:** [ ] PASS / [ ] FAIL
+
+---
+
+## #5b — Нативные write-действия для света срабатывают
+
+**Pre:** машина в P, IGN ON. В Automation tab настроены тестовые действия (или через UI): свет салона, ambient-подсветка, ДХО (DRL), обогрев зеркал.
+
+**Action:** последовательно запустить четыре действия: interior light, ambient light, DRL, mirror heat.
+
+**Expected:**
+- Каждое действие даёт физический эффект (свет салона, ambient, ДХО, обогрев зеркал, он же обогрев заднего стекла).
+- `logcat -d | grep ActionDispatcher` — `Result: ... → OK` для каждого.
+- В Room `vehicle_write_log` появились пары записей (attempt + success).
+
+> Подробная on-car валидация маппинга (dev/fid/значения) живёт в `oncar-light-validation-2026-05-28.md`.
 
 **Result:** [ ] PASS / [ ] FAIL
 
@@ -153,6 +188,21 @@ adb shell run-as com.bydmate.app sqlite3 databases/bydmate.db \
 
 ---
 
+## #9 — Тоггл «Системные данные» убран, native работает по умолчанию
+
+**Pre:** свежая установка v2.9.0-pre.
+
+**Action:** открыть BYDMate → Settings. Пройти первый запуск (Welcome Wizard).
+
+**Expected:**
+- В Settings НЕТ переключателя «Системные данные (экспериментально)». В Welcome Wizard нет шага про autoservice.
+- SoH / lifetime, автоматическое логирование зарядок, ABRP engine power и live-детект зарядного пистолета работают сразу, без включения какого-либо тоггла.
+- На машине без autoservice (старая прошивка / не-DiLink) приложение не падает (fail-soft через isAvailable / sentinel-гард).
+
+**Result:** [ ] PASS / [ ] FAIL
+
+---
+
 ## Sign-off
 
 | Item | Status | Notes |
@@ -161,11 +211,14 @@ adb shell run-as com.bydmate.app sqlite3 databases/bydmate.db \
 | #1 App launches | | |
 | #2 Dashboard live | | |
 | #3 Trip recording | | |
+| #3b Native trip (no energydata) | | |
 | #4 Charging recording | | |
 | #5 Automation rule | | |
+| #5b Lights native writes | | |
 | #6 Alice voice | | |
 | #7 ABRP telemetry | | |
 | #8 Diagnostics | | |
+| #9 Toggle removed, native default | | |
 
 **Smoke run date:** _____________
 **Operator:** Andy
