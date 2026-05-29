@@ -182,6 +182,35 @@ class NativeParsReaderTest {
     }
 
     /**
+     * Battery temps (dev=1014) carry a -40 CAN offset. Raw 51/50 must decode to
+     * 11°C/10°C, and avgBatTemp (dropped in native v2.9.0) must be restored as the
+     * mean of the two live extremes — (11+10)/2 → 11. Verified against D+ 10/11/11.
+     */
+    @Test
+    fun `battery temps decode with -40 offset and avg is mean of max-min`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+        // Liveness gate: provide mileage (raw 37998 × 0.1 = 3799.8 km).
+        coEvery { auto.getInt(1014, 1246765072) } returns 37998
+        // Battery temp raws (need -40 offset).
+        coEvery { auto.getInt(1014, 1148190752) } returns 51 // max → 11°C
+        coEvery { auto.getInt(1014, 1148190736) } returns 50 // min → 10°C
+
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+
+        val data = NativeParsReader(auto, settings).fetch()
+        assertNotNull("fetch() returned null", data)
+        checkNotNull(data)
+
+        assertEquals("maxBatTemp", 11, data.maxBatTemp)
+        assertEquals("minBatTemp", 10, data.minBatTemp)
+        assertEquals("avgBatTemp restored as mean of max/min", 11, data.avgBatTemp)
+    }
+
+    /**
      * Liveness gate: when autoservice is available but all primary signals (soc,
      * mileage, voltage12v) return null, fetch() must return null so the caller
      * treats it as an unreachable / sentinel-spamming autoservice and retries.

@@ -56,8 +56,10 @@ object FidMap {
         // Graduated from yaml status=candidate without formal D+ snap validation.
         // Smoke on real DiLink will surface sentinel returns or wrong values.
         // If a field shows sentinel/garbage in UI after upgrade — pull the fid from FidMap.
-        FidEntry("maxBatTemp",           1014, 1148190752,   5, Decoder.INT_TEMP_C),
-        FidEntry("minBatTemp",           1014, 1148190736,   5, Decoder.INT_TEMP_C),
+        // Battery temps carry a -40 CAN offset (raw 51 → 11°C). Validated against
+        // D+ 10/11/11 and the competitor config offsets {-40} on Leopard 3 2026-05-29.
+        FidEntry("maxBatTemp",           1014, 1148190752,   5, Decoder.INT_TEMP_C_OFS40),
+        FidEntry("minBatTemp",           1014, 1148190736,   5, Decoder.INT_TEMP_C_OFS40),
         FidEntry("powerState",           1023, 315621408,    5, Decoder.INT_ENUM),
         FidEntry("doorFL",               1001, 692060168,    5, Decoder.INT_ENUM),
         FidEntry("doorFR",               1001, 692060170,    5, Decoder.INT_ENUM),

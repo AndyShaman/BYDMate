@@ -5,6 +5,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.roundToInt
 
 /**
  * ParsReader implementation that fetches live vehicle params from the system
@@ -73,15 +74,25 @@ class NativeParsReader @Inject constructor(
             return null
         }
 
+        // Battery temps decode with a -40 offset via INT_TEMP_C_OFS40. avgBatTemp
+        // was dropped on the native cutover; restore it as the mean of the two live
+        // cell extremes (the dedicated avg fid is a suspected 24h-cached statistic).
+        val maxBatTemp = field<Int>("maxBatTemp")
+        val minBatTemp = field<Int>("minBatTemp")
+        val avgBatTemp = when {
+            maxBatTemp != null && minBatTemp != null -> ((maxBatTemp + minBatTemp) / 2.0).roundToInt()
+            else -> maxBatTemp ?: minBatTemp
+        }
+
         return DiParsData(
             soc                 = soc,
             speed               = field<Double>("speed")?.toInt(),
             mileage             = mileage,
             power               = field<Int>("power")?.toDouble(),
             chargeGunState      = field<Int>("chargeGunState"),
-            maxBatTemp          = field<Int>("maxBatTemp"),
-            avgBatTemp          = null,  // dropped (24h-cached statistic, not live)
-            minBatTemp          = field<Int>("minBatTemp"),
+            maxBatTemp          = maxBatTemp,
+            avgBatTemp          = avgBatTemp,
+            minBatTemp          = minBatTemp,
             chargingStatus      = null,  // deferred (old fid stuck, new fid not in FidMap yet)
             batteryCapacityKwh  = batteryCapacityKwh,
             totalElecConsumption = field<Double>("totalElecConsumption"),

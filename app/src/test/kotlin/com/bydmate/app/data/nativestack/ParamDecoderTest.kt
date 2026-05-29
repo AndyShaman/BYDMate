@@ -36,6 +36,18 @@ class ParamDecoderTest {
         assertNull(ParamDecoder.decodeInt(200, Decoder.INT_TEMP_C))
     }
 
+    @Test fun `int_temp_c_ofs40 subtracts 40 within plausible range`() {
+        // Battery temp fids (dev=1014) encode °C with a -40 CAN offset.
+        // raw 51 → 11°C, raw 50 → 10°C (matches D+ 10/11/11 and competitor offsets).
+        assertEquals(11, ParamDecoder.decodeInt(51, Decoder.INT_TEMP_C_OFS40))
+        assertEquals(10, ParamDecoder.decodeInt(50, Decoder.INT_TEMP_C_OFS40))
+        assertEquals(16, ParamDecoder.decodeInt(56, Decoder.INT_TEMP_C_OFS40))
+        // 200 → 160 out of plausible decoded range → null
+        assertNull(ParamDecoder.decodeInt(200, Decoder.INT_TEMP_C_OFS40))
+        // sentinel rejected before offset
+        assertNull(ParamDecoder.decodeInt(-10011, Decoder.INT_TEMP_C_OFS40))
+    }
+
     @Test fun `int_scaled applies scale factor`() {
         assertEquals(1234.5, ParamDecoder.decodeScaled(12345, 0.1)!!, 0.001)
         assertEquals(3.456, ParamDecoder.decodeScaled(3456, 0.001)!!, 0.0001)
