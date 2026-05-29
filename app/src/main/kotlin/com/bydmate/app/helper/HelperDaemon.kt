@@ -9,6 +9,7 @@ import java.io.RandomAccessFile
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
+import kotlin.system.exitProcess
 
 // Lock path on the device filesystem (writable by shell uid).
 private const val LOCK_PATH = "/data/local/tmp/bydmate_helper.lock"
@@ -59,14 +60,18 @@ internal fun acquireSingleOwnerLock(path: String): Pair<FileChannel, FileLock>? 
 fun main(args: Array<String>) {
     val expectedUid = args.getOrNull(0)?.toIntOrNull() ?: run {
         System.err.println("ERR: usage: HelperDaemon <appUid>")
-        return
+        // exitProcess (not return): app_process keeps the binder threadpool's
+        // non-daemon threads alive, so a bare `return` from main() would hang the JVM.
+        exitProcess(2)
     }
 
     // Step 1: single-owner lock — prevents duplicate daemons.
     val lockPair = acquireSingleOwnerLock(LOCK_PATH)
     if (lockPair == null) {
         println("ALREADY_RUNNING")
-        return
+        // Clean exit: another owner already holds the service. Must exitProcess
+        // rather than return so this spawn does not linger as a zombie process.
+        exitProcess(0)
     }
     // lockChannel and lockHandle stay referenced past Looper.loop() because the
     // stack frame is never unwound (loop() blocks forever). The lock stays live.
@@ -79,7 +84,9 @@ fun main(args: Array<String>) {
         .invoke(null, "autoservice") as? IBinder
         ?: run {
             System.err.println("ERR: autoservice not found")
-            return
+            // exitProcess so the OS releases the file lock we already hold above;
+            // a bare return would leave a hung daemon holding the lock forever.
+            exitProcess(3)
         }
     val autoIface: String = svc.interfaceDescriptor ?: ""
 
@@ -135,7 +142,9 @@ fun main(args: Array<String>) {
             .invoke(null, HelperBinderProtocol.SERVICE_NAME, helperBinder)
     } catch (e: Exception) {
         System.err.println("ERR: addService ${e.message}")
-        return
+        // exitProcess so the OS releases the file lock we hold; a bare return would
+        // leave a hung lock-holding daemon and block every future spawn.
+        exitProcess(4)
     }
 
     System.out.println("READY pid=${android.os.Process.myPid()}")
