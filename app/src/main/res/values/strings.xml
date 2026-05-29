@@ -408,6 +408,8 @@
     <string name="widget_duration_minutes">%1$d мин</string>
     <!-- Trip distance value with unit -->
     <string name="widget_trip_km_value">%1$.1f км</string>
+    <!-- Range per 1% SOC: %.1f km per percent -->
+    <string name="widget_km_per_percent">%1$.1f км/%%</string>
     <!-- Voltage value with unit: %.1f V -->
     <string name="widget_voltage_value">%1$.1f В</string>
     <!-- Long-press toast -->
