@@ -1,23 +1,31 @@
 package com.bydmate.app.data.vehicle
 
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class CommandTranslatorTest {
 
+    // resolve() now returns a List<Resolved>: empty = unknown, 1 element = single
+    // write, N elements = composite fan-out (e.g. window aggregates). Helper for
+    // the single-command tests.
+    private fun one(cmd: String): CommandTranslator.Resolved? =
+        CommandTranslator.resolve(cmd).singleOrNull()
+
+    private fun pairs(cmd: String): Set<Pair<String, Int>> =
+        CommandTranslator.resolve(cmd).map { it.actionName to it.value }.toSet()
+
     // ── Test 1: prefix stripped before lookup ─────────────────────────────────
     @Test fun `prefix stripped before lookup`() {
-        val r = CommandTranslator.resolve("迪加车门上锁")
+        val r = one("迪加车门上锁")
         assertEquals("doors_lock", r?.actionName)
         assertEquals(2, r?.value)
     }
 
-    // ── Test 2: unknown command returns null ──────────────────────────────────
-    @Test fun `unknown command returns null`() {
-        assertNull(CommandTranslator.resolve("不存在的命令"))
+    // ── Test 2: unknown command returns empty list ────────────────────────────
+    @Test fun `unknown command returns empty list`() {
+        assertTrue(CommandTranslator.resolve("不存在的命令").isEmpty())
     }
 
     // ── Test 3: every translator action_name resolves in production allowlist ─
@@ -37,58 +45,165 @@ class CommandTranslatorTest {
 
     // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
     @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
-        val r = CommandTranslator.resolve("设置温度22")
+        val r = one("设置温度22")
         assertEquals("ac_temp_main", r?.actionName)
         assertEquals(22, r?.value)
     }
 
     // ── Test 5: command without prefix resolves directly ──────────────────────
     @Test fun `command without prefix resolves directly`() {
-        val r = CommandTranslator.resolve("车门解锁")
+        val r = one("车门解锁")
         assertEquals("doors_unlock", r?.actionName)
         assertEquals(1, r?.value)
     }
 
     // ── Test 6: seat heat level 1 maps to _on val=2 ──────────────────────────
     @Test fun `seat heat level 1 maps to driver_seat_heat_on val 2`() {
-        val r = CommandTranslator.resolve("主驾座椅加热1档")
+        val r = one("主驾座椅加热1档")
         assertEquals("driver_seat_heat_on", r?.actionName)
         assertEquals(2, r?.value)
     }
 
-    // ── Test 7: seat heat level 2 maps to _lvl2 val=3 ────────────────────────
-    @Test fun `seat heat level 2 maps to driver_seat_heat_lvl2 val 3`() {
-        val r = CommandTranslator.resolve("主驾座椅加热2档")
-        assertEquals("driver_seat_heat_lvl2", r?.actionName)
-        assertEquals(3, r?.value)
-    }
-
-    // ── Test 8: seat heat off maps to _off val=1 ─────────────────────────────
-    @Test fun `seat heat off maps to driver_seat_heat_off val 1`() {
-        val r = CommandTranslator.resolve("主驾座椅加热关闭")
-        assertEquals("driver_seat_heat_off", r?.actionName)
-        assertEquals(1, r?.value)
-    }
-
     // ── Test 9: sunroof 50 maps to sunroof_tilt val=3 ────────────────────────
     @Test fun `sunroof 50 maps to sunroof_tilt val 3`() {
-        val r = CommandTranslator.resolve("天窗打开50")
+        val r = one("天窗打开50")
         assertEquals("sunroof_tilt", r?.actionName)
         assertEquals(3, r?.value)
     }
 
     // ── Test 10: inner circulation maps to ac_cycle_inner val=1 ──────────────
     @Test fun `inner circulation maps to ac_cycle_inner val 1`() {
-        val r = CommandTranslator.resolve("内循环")
+        val r = one("内循环")
         assertEquals("ac_cycle_inner", r?.actionName)
         assertEquals(1, r?.value)
     }
 
-    // ── Test 11: outer circulation maps to ac_cycle_outer val=2 ──────────────
-    @Test fun `outer circulation maps to ac_cycle_outer val 2`() {
-        val r = CommandTranslator.resolve("外循环")
-        assertEquals("ac_cycle_outer", r?.actionName)
+    // ── Rear windows (individual) — Alice VPS vocab 后左/后右打开{n} ──────────────
+    @Test fun `rear-left open 100 maps to window_rear_left_pos val 100`() {
+        val r = one("后左打开100")
+        assertEquals("window_rear_left_pos", r?.actionName)
+        assertEquals(100, r?.value)
+    }
+
+    @Test fun `rear-right open 0 maps to window_rear_right_pos val 0`() {
+        val r = one("后右打开0")
+        assertEquals("window_rear_right_pos", r?.actionName)
+        assertEquals(0, r?.value)
+    }
+
+    // ── Rear windows (aggregate) — fan-out to both validated % fids ────────────
+    @Test fun `rear windows open fans out to both rear pos fids at 100`() {
+        assertEquals(
+            setOf("window_rear_left_pos" to 100, "window_rear_right_pos" to 100),
+            pairs("后排车窗全开"),
+        )
+    }
+
+    @Test fun `rear windows close fans out to both rear pos fids at 0`() {
+        assertEquals(
+            setOf("window_rear_left_pos" to 0, "window_rear_right_pos" to 0),
+            pairs("后排车窗关闭"),
+        )
+    }
+
+    // ── Front windows (aggregate) — fan-out to driver + passenger ─────────────
+    @Test fun `front windows open fans out to driver and passenger pos at 100`() {
+        assertEquals(
+            setOf("window_driver_pos" to 100, "window_passenger_pos" to 100),
+            pairs("前排车窗全开"),
+        )
+    }
+
+    // ── All windows (aggregate) — fan-out to all four validated % fids ────────
+    @Test fun `all windows open fans out to all four pos fids at 100`() {
+        assertEquals(
+            setOf(
+                "window_driver_pos" to 100,
+                "window_passenger_pos" to 100,
+                "window_rear_left_pos" to 100,
+                "window_rear_right_pos" to 100,
+            ),
+            pairs("车窗全开"),
+        )
+    }
+
+    @Test fun `all windows close fans out to all four pos fids at 0`() {
+        assertEquals(
+            setOf(
+                "window_driver_pos" to 0,
+                "window_passenger_pos" to 0,
+                "window_rear_left_pos" to 0,
+                "window_rear_right_pos" to 0,
+            ),
+            pairs("车窗关闭"),
+        )
+    }
+
+    @Test fun `all windows half fans out to all four pos fids at 50`() {
+        assertEquals(
+            setOf(
+                "window_driver_pos" to 50,
+                "window_passenger_pos" to 50,
+                "window_rear_left_pos" to 50,
+                "window_rear_right_pos" to 50,
+            ),
+            pairs("车窗半开"),
+        )
+    }
+
+    // ── Interior / ambient light (candidate, dev=1023 carve-out) ──────────────
+    @Test fun `open interior light maps to interior_light_on`() {
+        val r = one("打开车内灯")
+        assertEquals("interior_light_on", r?.actionName)
         assertEquals(2, r?.value)
+    }
+
+    @Test fun `close interior light maps to interior_light_off`() {
+        val r = one("关闭车内灯")
+        assertEquals("interior_light_off", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `open ambient light maps to ambient_light_on`() {
+        val r = one("氛围灯打开")
+        assertEquals("ambient_light_on", r?.actionName)
+    }
+
+    @Test fun `close ambient light maps to ambient_light_off`() {
+        val r = one("氛围灯关闭")
+        assertEquals("ambient_light_off", r?.actionName)
+    }
+
+    // ── Ambient off must write raw 1 (level 0), not 0 (level -1, no effect) ───
+    @Test fun `close ambient light writes value 1 not 0`() {
+        val r = one("氛围灯关闭")
+        assertEquals(1, r?.value)
+    }
+
+    // ── DRL (ДХО) — dev=1004 carve-out, validated 2026-05-29 ──────────────────
+    @Test fun `open drl maps to drl_on val 1`() {
+        val r = one("打开日行灯")
+        assertEquals("drl_on", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `close drl maps to drl_off val 2`() {
+        val r = one("关闭日行灯")
+        assertEquals("drl_off", r?.actionName)
+        assertEquals(2, r?.value)
+    }
+
+    // ── Mirror heat = rear defrost (one button on Leopard 3), validated 2026-05-29 ──
+    @Test fun `mirror heat on maps to defrost_rear_on val 1`() {
+        val r = one("后视镜加热")
+        assertEquals("defrost_rear_on", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `mirror heat off maps to defrost_rear_off val 0`() {
+        val r = one("关闭后视镜加热")
+        assertEquals("defrost_rear_off", r?.actionName)
+        assertEquals(0, r?.value)
     }
 
     // ── Test 12: allActions returns non-empty set of unique names ─────────────

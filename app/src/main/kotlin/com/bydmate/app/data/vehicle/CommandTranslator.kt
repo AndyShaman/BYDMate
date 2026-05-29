@@ -10,14 +10,21 @@ package com.bydmate.app.data.vehicle
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.
  *
- * DROPPED (13): commands whose action_name either has no allowlist entry or targets
+ * Window aggregates (车窗全开/关闭/半开, 前排/后排车窗全开/关闭) and individual rear
+ * windows (后左/后右打开{n}) fan out to the validated per-door % fids — see the
+ * [composite] map. The competitor "aggregate" fids all target the driver
+ * short-form fid (1125122104) and the rear short-form fids are no-ops on
+ * Leopard 3, so the % path is the only reliable channel.
+ *
+ * Interior/cabin light (打开/关闭车内灯), ambient light (氛围灯打开/关闭), DRL
+ * (打开/关闭日行灯) and mirror heat = rear-window defrost (后视镜加热/关闭后视镜加热)
+ * route to LIVE_VALIDATED entries on dev=1023/1004/1000 — the channel D+ used via
+ * BYDAutoSettingDevice. dev=1023/1004 are carved out per-fid in WriteAllowlist.
+ * All four groups validated on Leopard 3 2026-05-29 (write+readback snap).
+ *
+ * DROPPED: commands whose action_name either has no allowlist entry or targets
  * a banned dev namespace —
- *   前排车窗关闭/全开, 后排车窗关闭/全开 — no aggregate window write (out of scope)
- *   后视镜加热/关闭后视镜加热              — no mirror-heat entry in any source
- *   氛围灯打开/关闭                        — no ambient-light entry in any source
- *   打开日行灯/关闭日行灯                  — drl_on/drl_off target dev=1004 (BANNED)
- *   打开车内灯/关闭车内灯                  — no interior-light entry in any source
- *   ECO模式                                — drive mode write targets dev=1004 (BANNED).
+ *   ECO模式                                — drive mode write targets dev=1006 (BANNED).
  *                                            Default rule "Эко при низком заряде" is
  *                                            shipped disabled; if user enables it the
  *                                            dispatch fails-soft via AllowlistMiss.
@@ -29,17 +36,19 @@ object CommandTranslator {
     data class Resolved(val actionName: String, val value: Int)
 
     private val table: Map<String, Resolved> = mapOf(
-        // ── Windows (aggregate) ── competitor-actions.json ────────────────────
+        // ── Windows (vent) ── competitor windows_vent (driver-only fid). Aggregate
+        // open/close/half are handled by the composite fan-out below ──────────
         "车窗通风"   to Resolved("windows_vent",  5),   // competitor val=5 (vent mode)
-        "车窗关闭"   to Resolved("close_windows", 2),   // competitor val=2
-        "车窗全开"   to Resolved("open_windows",  1),   // competitor val=1
-        "车窗半开"   to Resolved("windows_half",  4),   // competitor val=4
 
         // ── Windows (individual %, 0..100) ── LIVE_VALIDATED ──────────────────
-        "主驾打开100" to Resolved("window_driver_pos",    100),
-        "主驾打开0"   to Resolved("window_driver_pos",      0),
-        "副驾打开100" to Resolved("window_passenger_pos", 100),
-        "副驾打开0"   to Resolved("window_passenger_pos",   0),
+        "主驾打开100" to Resolved("window_driver_pos",      100),
+        "主驾打开0"   to Resolved("window_driver_pos",        0),
+        "副驾打开100" to Resolved("window_passenger_pos",   100),
+        "副驾打开0"   to Resolved("window_passenger_pos",     0),
+        "后左打开100" to Resolved("window_rear_left_pos",   100),
+        "后左打开0"   to Resolved("window_rear_left_pos",     0),
+        "后右打开100" to Resolved("window_rear_right_pos",  100),
+        "后右打开0"   to Resolved("window_rear_right_pos",    0),
 
         // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_temp_main/ac_cycle_*) ──
         "自动空调"    to Resolved("ac_on",         2),   // LIVE val=2 (on/auto)
@@ -88,17 +97,58 @@ object CommandTranslator {
         // ── Sunshade ── LIVE_VALIDATED ────────────────────────────────────────
         "遮阳帘打开" to Resolved("sunshade_open",  1),
         "遮阳帘关闭" to Resolved("sunshade_close", 2),
+
+        // ── Interior / ambient light ── LIVE_VALIDATED (dev=1023 carve-out) ──────
+        "打开车内灯" to Resolved("interior_light_on",  2),
+        "关闭车内灯" to Resolved("interior_light_off", 1),
+        "氛围灯打开" to Resolved("ambient_light_on",   5),
+        "氛围灯关闭" to Resolved("ambient_light_off",  1),  // raw +1 shift: 1 = off (lvl0)
+
+        // ── DRL (ДХО) ── LIVE_VALIDATED (dev=1004 carve-out) ──────────────────
+        "打开日行灯" to Resolved("drl_on",  1),
+        "关闭日行灯" to Resolved("drl_off", 2),
+
+        // ── Mirror heat = rear-window defrost ── LIVE_VALIDATED (dev=1000) ────
+        "后视镜加热"   to Resolved("defrost_rear_on",  1),
+        "关闭后视镜加热" to Resolved("defrost_rear_off", 0),
+    )
+
+    /**
+     * Composite commands fan out to several validated per-door % writes. All four
+     * window fids (driver/passenger/rear-left/rear-right *_pos) are LIVE_VALIDATED.
+     */
+    private fun allWindows(pct: Int): List<Resolved> = listOf(
+        Resolved("window_driver_pos", pct),
+        Resolved("window_passenger_pos", pct),
+        Resolved("window_rear_left_pos", pct),
+        Resolved("window_rear_right_pos", pct),
+    )
+
+    private val composite: Map<String, List<Resolved>> = mapOf(
+        "车窗全开"     to allWindows(100),
+        "车窗关闭"     to allWindows(0),
+        "车窗半开"     to allWindows(50),
+        "前排车窗全开" to listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)),
+        "前排车窗关闭" to listOf(Resolved("window_driver_pos", 0),   Resolved("window_passenger_pos", 0)),
+        "后排车窗全开" to listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)),
+        "后排车窗关闭" to listOf(Resolved("window_rear_left_pos", 0),   Resolved("window_rear_right_pos", 0)),
     )
 
     /**
      * Resolve a D+ command string. Strips leading "迪加" prefix if present.
-     * Returns null when the command is unknown — caller treats this as a soft failure.
+     * Returns an empty list when the command is unknown — caller treats this as a
+     * soft failure. A composite command returns several writes; the caller
+     * dispatches each (fan-out).
      */
-    fun resolve(commandString: String): Resolved? {
+    fun resolve(commandString: String): List<Resolved> {
         val stripped = commandString.removePrefix("迪加")
-        return table[stripped]
+        composite[stripped]?.let { return it }
+        table[stripped]?.let { return listOf(it) }
+        return emptyList()
     }
 
     /** Set of all action_names referenced by this translator. Used by invariant test. */
-    fun allActions(): Set<String> = table.values.mapTo(mutableSetOf()) { it.actionName }
+    fun allActions(): Set<String> =
+        (table.values.map { it.actionName } + composite.values.flatten().map { it.actionName })
+            .toMutableSet()
 }

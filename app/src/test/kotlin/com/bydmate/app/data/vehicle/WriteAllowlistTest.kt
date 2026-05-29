@@ -50,7 +50,8 @@ class WriteAllowlistTest {
         assertNull("banned_action must be dropped", allowlist.find("banned_action"))
 
         for (entry in allowlist.allEntries()) {
-            if (entry.dev in bannedDevs) {
+            if (entry.dev in bannedDevs &&
+                (entry.dev to entry.writeFid) !in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS) {
                 fail("WriteAllowlist contains banned dev=${entry.dev} for action=${entry.actionName}")
             }
         }
@@ -152,8 +153,8 @@ class WriteAllowlistTest {
         """.trimIndent()
         val allowlist = WriteAllowlist.loadProduction { fixture }
         assertEquals(
-            "only LIVE_VALIDATED entries should be present",
-            WriteAllowlist.LIVE_VALIDATED.size,
+            "only LIVE_VALIDATED + CANDIDATE_UNVALIDATED entries should be present",
+            WriteAllowlist.LIVE_VALIDATED.size + WriteAllowlist.CANDIDATE_UNVALIDATED.size,
             allowlist.entries.size,
         )
         assertNull(allowlist.find("banned1"))
@@ -173,11 +174,11 @@ class WriteAllowlistTest {
         // Both lowercase to "dup_action" — exactly one entry survives; no crash
         val found = allowlist.find("dup_action")
         assertNotNull("one of the two entries must survive", found)
-        // Total entries = LIVE_VALIDATED + 1 competitor (duplicate collapsed)
-        val liveSize = WriteAllowlist.LIVE_VALIDATED.size
+        // Total entries = LIVE_VALIDATED + CANDIDATE_UNVALIDATED + 1 competitor (duplicate collapsed)
+        val baseSize = WriteAllowlist.LIVE_VALIDATED.size + WriteAllowlist.CANDIDATE_UNVALIDATED.size
         assertEquals(
             "duplicate competitor names collapse to one entry",
-            liveSize + 1,
+            baseSize + 1,
             allowlist.entries.size,
         )
     }
@@ -193,6 +194,43 @@ class WriteAllowlistTest {
         val entry = allowlist.find("xyz_unknown_action")
         assertNotNull(entry)
         assertEquals("other", entry!!.category)
+    }
+
+    // ── Lights / mirror / DRL live-validated on Leopard 3 2026-05-29 ──────────
+    @Test fun `light mirror and drl actions are live-validated`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val names = listOf(
+            "interior_light_on", "interior_light_off",
+            "ambient_light_on", "ambient_light_off",
+            "drl_on", "drl_off",
+            "defrost_rear_on", "defrost_rear_off",
+        )
+        for (name in names) {
+            val e = al.find(name)
+            assertNotNull("$name must be present", e)
+            assertTrue("$name must be validated", e!!.validated)
+        }
+    }
+
+    @Test fun `ambient light off writes raw 1 not 0`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val e = al.find("ambient_light_off")
+        assertNotNull(e)
+        assertEquals(1, e!!.valueMin)
+        assertEquals(1, e.valueMax)
+    }
+
+    @Test fun `drl is carved out of banned dev 1004`() {
+        assertTrue(
+            "drl write fid must be carved out of the dev 1004 ban",
+            (1004 to 1125122118) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val on = al.find("drl_on")
+        assertNotNull(on)
+        assertEquals(1004, on!!.dev)
+        assertEquals(1, on.valueMin)
+        assertEquals(2, al.find("drl_off")!!.valueMin)
     }
 
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────

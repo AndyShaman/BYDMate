@@ -33,15 +33,15 @@ class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun read(dev: Int, fid: Int, tx: Int): Long? =
         send(HelperRequest(op = "read", tx = tx, dev = dev, fid = fid))?.let {
-            if (it.status == 0) it.value else null
+            if (readAccepted(it.status)) it.value else null
         }
 
     override suspend fun write(dev: Int, fid: Int, value: Int): Boolean =
         send(HelperRequest(op = "write", tx = 6, dev = dev, fid = fid, value = value.toLong()))
-            ?.let { it.status == 0 } ?: false
+            ?.let { writeAccepted(it.status) } ?: false
 
     override suspend fun isAlive(): Boolean =
-        send(HelperRequest(op = "ping"))?.status == 0
+        send(HelperRequest(op = "ping"))?.let { readAccepted(it.status) } ?: false
 
     private suspend fun send(req: HelperRequest): HelperResponse? = withContext(Dispatchers.IO) {
         withTimeoutOrNull(REQ_TIMEOUT_MS) {
@@ -79,6 +79,18 @@ class HelperClientImpl @Inject constructor() : HelperClient {
     }
 
     companion object {
+        /**
+         * The daemon forwards the raw autoservice transact return code in `status`
+         * (HelperDaemon: status = reply.readInt()). On Leopard 3 a successful
+         * setInt returns 1 for a real actuator move and 0 for a no-op; reads
+         * return 0 with the value following; errors / no-data return negative
+         * (-1 daemon exception, -999 no reply, -10011 sentinel). A write is
+         * therefore accepted on status >= 0 — using == 0 (the old check) marked
+         * every real action as a failure. See HelperClientStatusTest.
+         */
+        internal fun writeAccepted(status: Int): Boolean = status >= 0
+        internal fun readAccepted(status: Int): Boolean = status == 0
+
         private const val TAG = "HelperClient"
         private const val PORT = 8765
         private const val CONNECT_TIMEOUT_MS = 500

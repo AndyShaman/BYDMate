@@ -163,6 +163,39 @@ class VehicleApiWriteTest {
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 2) }
     }
 
+    // ── Composite dispatch: rear windows fan out to both rear % fids ──────────
+
+    @Test fun `dispatch rear windows open writes both rear pos fids and returns success`() = runTest {
+        val rl = allowlist.find("window_rear_left_pos")!!
+        val rr = allowlist.find("window_rear_right_pos")!!
+        coEvery { helper.write(rl.dev, rl.writeFid, 100) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 100) } returns true
+
+        val result = api.dispatch("后排车窗全开")
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 100) }
+        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 100) }
+    }
+
+    @Test fun `dispatch rear windows open returns failure but still attempts both when one fid fails`() = runTest {
+        val rl = allowlist.find("window_rear_left_pos")!!
+        val rr = allowlist.find("window_rear_right_pos")!!
+        coEvery { helper.write(rl.dev, rl.writeFid, 100) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 100) } returns false // rear-right fails
+
+        val result = api.dispatch("后排车窗全开")
+        assertTrue(result.isFailure)
+        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 100) }
+        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 100) }
+    }
+
+    @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {
+        val result = api.dispatch("不存在的命令")
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is VehicleWriteError.AllowlistMiss)
+        coVerify(exactly = 0) { helper.write(any(), any(), any()) }
+    }
+
     // ── C.5: DAO receives audit entry on write ────────────────────────────────
 
     @Test fun `writeAcOn persists audit log entries (attempt + outcome)`() = runTest {

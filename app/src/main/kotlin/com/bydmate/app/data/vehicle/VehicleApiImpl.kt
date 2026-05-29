@@ -44,12 +44,24 @@ class VehicleApiImpl @Inject constructor(
 
     override suspend fun dispatch(commandString: String): Result<Unit> {
         val resolved = CommandTranslator.resolve(commandString)
-        if (resolved == null) {
+        if (resolved.isEmpty()) {
             Log.w(TAG, "dispatch: unknown command '$commandString'")
             logWrite(commandString, -1, -1, 0, null, false, "no_translator_mapping", validated = false)
             return Result.failure(VehicleWriteError.AllowlistMiss(commandString, "no translator mapping"))
         }
-        return doWrite(resolved.actionName, resolved.value)
+        if (resolved.size == 1) {
+            val r = resolved[0]
+            return doWrite(r.actionName, r.value)
+        }
+        // Composite command (e.g. window aggregates) → fan out to several
+        // per-door writes. Attempt every sub-write (no short-circuit: a partial
+        // open beats stopping at the first stuck pane); succeed only if all do.
+        var firstError: Throwable? = null
+        for (r in resolved) {
+            val res = doWrite(r.actionName, r.value)
+            if (res.isFailure && firstError == null) firstError = res.exceptionOrNull()
+        }
+        return firstError?.let { Result.failure(it) } ?: Result.success(Unit)
     }
 
     // Climate

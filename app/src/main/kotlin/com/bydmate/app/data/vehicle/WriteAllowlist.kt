@@ -60,7 +60,28 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1004, 1006, 1007, 1009, 1011, 1012, 1013, 1014, 1016, 1023, 1032
         )
 
-        // 23 entries live-validated on Leopard 3 2026-05-28 via HelperDaemon.
+        /**
+         * Per-(dev,fid) carve-outs from [BANNED_DEVS]. dev=1023 (global powerState)
+         * and dev=1004 (light enums) are blanket-banned, but BYD's own system app
+         * (BYDAutoSettingDevice, byddiagnosetool decompile) drives the cabin/ambient
+         * lights and the DRL through these specific comfort fids via autoservice
+         * setInt — the same channel D+ used. Only these exact pairs are exempt; the
+         * rest of dev=1023/1004 stays banned. All three live-validated on Leopard 3
+         * 2026-05-29 (write+readback snap).
+         */
+        val BANNED_DEV_FID_EXCEPTIONS: Set<Pair<Int, Int>> = setOf(
+            1023 to 1330643002,  // SET_INSIDE_LIGHT_STATE_SET (interior light on/off)
+            1023 to 1069547536,  // SET_INTERIOR_ATMOSPHERE_LAMP_BRIGHTNESS_SET (ambient)
+            1004 to 1125122118,  // DRL (daytime running lights) on/off
+        )
+
+        /** A (dev,fid) is banned unless explicitly carved out. */
+        internal fun isBanned(dev: Int, fid: Int): Boolean =
+            dev in BANNED_DEVS && (dev to fid) !in BANNED_DEV_FID_EXCEPTIONS
+
+        // 31 entries live-validated on Leopard 3 via HelperDaemon: 23 on 2026-05-28
+        // (climate/windows/sunroof/sunshade/locks) + 8 on 2026-05-29
+        // (interior/ambient light, DRL, rear-window-defrost = mirror heat).
         val LIVE_VALIDATED: List<WriteEntry> = listOf(
             // climate (dev=1000)
             WriteEntry("ac_on",          1000, 501219364, null, 2, 2,   "climate",  true, "live-leopard3-2026-05-28"),
@@ -96,7 +117,28 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // locks (readback fid 1081081864 mirrors write value)
             WriteEntry("doors_unlock", 1001, 1276141590, 1081081864, 1, 1, "locks", true, "live-leopard3-2026-05-28"),
             WriteEntry("doors_lock",   1001, 1276141590, 1081081864, 2, 2, "locks", true, "live-leopard3-2026-05-28"),
+
+            // interior/cabin light — SET_INSIDE_LIGHT_STATE_SET (1=off, 2=on), dev=1023 carve-out
+            WriteEntry("interior_light_on",  1023, 1330643002, null, 2, 2, "lights", true, "live-leopard3-2026-05-29"),
+            WriteEntry("interior_light_off", 1023, 1330643002, null, 1, 1, "lights", true, "live-leopard3-2026-05-29"),
+            // ambient (IAL) via brightness — raw is +1 shifted: raw 1=off(lvl0), 2..5=lvl1..4, dev=1023 carve-out
+            WriteEntry("ambient_light_on",   1023, 1069547536, null, 5, 5, "lights", true, "live-leopard3-2026-05-29"),
+            WriteEntry("ambient_light_off",  1023, 1069547536, null, 1, 1, "lights", true, "live-leopard3-2026-05-29"),
+            // DRL (daytime running lights) — 1=on, 2=off (0 invalid), dev=1004 carve-out
+            WriteEntry("drl_on",  1004, 1125122118, null, 1, 1, "lights", true, "live-leopard3-2026-05-29"),
+            WriteEntry("drl_off", 1004, 1125122118, null, 2, 2, "lights", true, "live-leopard3-2026-05-29"),
+            // mirror heat = rear-window defrost (single button on Leopard 3) — 1=on, 0=off, dev=1000
+            WriteEntry("defrost_rear_on",  1000, 501219357, null, 1, 1, "climate", true, "live-leopard3-2026-05-29"),
+            WriteEntry("defrost_rear_off", 1000, 501219357, null, 0, 0, "climate", true, "live-leopard3-2026-05-29"),
         )
+
+        /**
+         * Candidate (unvalidated) native channels staged for an in-vehicle snap.
+         * Empty since 2026-05-29: the interior/ambient light entries graduated to
+         * [LIVE_VALIDATED] after a write+readback snap passed on Leopard 3. Kept as
+         * an extension point — the merge order in [loadProduction] still folds it in.
+         */
+        val CANDIDATE_UNVALIDATED: List<WriteEntry> = emptyList()
 
         /**
          * Category inference from action name prefix.
@@ -152,7 +194,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
                     val fid = obj.getInt("featureId")
                     val hasValue = obj.has("value")
                     val value = if (hasValue) obj.getInt("value") else 0
-                    if (dev in BANNED_DEVS) {
+                    if (isBanned(dev, fid)) {
                         Log.w(TAG, "Dropping banned-dev action=$name dev=$dev")
                         continue
                     }
@@ -173,9 +215,19 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
                 }
             }
 
+            // Candidate (unvalidated) native entries merged after competitor.
+            // Carve-out check still applies (only exempt dev=1023 light fids pass).
+            for (entry in CANDIDATE_UNVALIDATED) {
+                if (isBanned(entry.dev, entry.writeFid)) {
+                    Log.w(TAG, "Dropping banned-dev candidate=${entry.actionName} dev=${entry.dev}")
+                    continue
+                }
+                merged[entry.actionName.lowercase()] = entry
+            }
+
             // LIVE_VALIDATED wins on collision (match by lowercase key, store original entry)
             for (entry in LIVE_VALIDATED) {
-                if (entry.dev in BANNED_DEVS) {
+                if (isBanned(entry.dev, entry.writeFid)) {
                     Log.w(TAG, "Dropping banned-dev live entry=${entry.actionName} dev=${entry.dev}")
                     continue
                 }

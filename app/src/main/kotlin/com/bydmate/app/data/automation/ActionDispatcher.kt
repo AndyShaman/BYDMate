@@ -37,6 +37,28 @@ class ActionDispatcher @Inject constructor(
         // Hard cap on user-set delay action; protects against typos like "60000000".
         private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
+
+        /**
+         * True if [command] would OPEN a window/sunroof/sunshade (apertures that
+         * are blocked above 80 km/h). Pure predicate — kept in the companion so it
+         * is unit-testable without Android deps.
+         *
+         * "打开N" sets the aperture to N%; N==0 is a CLOSE (safe at speed) and must
+         * not be treated as an open. A bare "打开" with no percentage is treated
+         * conservatively as an open. 全开/半开/通风 are always opens.
+         */
+        internal fun isWindowOpenCommand(command: String): Boolean {
+            val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
+            if (subjects.none { command.contains(it) }) return false
+            if (command.contains("关")) return false
+            val opensViaPosition = POSITION_OPEN.find(command)
+                ?.let { it.groupValues[1].toInt() > 0 }
+                ?: command.contains("打开")        // bare "打开" (no %) — treat as open
+            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
+            return opensViaPosition || opensViaWord
+        }
+
+        private val POSITION_OPEN = Regex("打开(\\d+)")
     }
 
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
@@ -97,14 +119,6 @@ class ActionDispatcher @Inject constructor(
             if (speed > 80) return "Открытие окон заблокировано на скорости ${speed} км/ч (>80)"
         }
         return null
-    }
-
-    private fun isWindowOpenCommand(command: String): Boolean {
-        val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
-        val openWords = listOf("全开", "半开", "打开", "通风")
-        val isWindow = subjects.any { command.contains(it) }
-        val isOpen = openWords.any { command.contains(it) }
-        return isWindow && isOpen && !command.contains("关")
     }
 
     // --- notifications (user-visible) ---
