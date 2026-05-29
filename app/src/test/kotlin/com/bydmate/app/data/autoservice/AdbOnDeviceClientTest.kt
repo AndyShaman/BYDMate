@@ -2,6 +2,7 @@ package com.bydmate.app.data.autoservice
 
 import androidx.test.core.app.ApplicationProvider
 import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -125,5 +126,31 @@ class AdbOnDeviceClientTest {
         client.shutdown()
 
         assertEquals(1, fake.disconnectCalls)
+    }
+
+    @Test
+    fun `spawnHelper builds app_process classpath command without dex push`() = runTest {
+        val fake = FakeProtocol(connectResult = true)
+        val client = newClient(fake)
+
+        client.connect()
+        val result = client.spawnHelper()
+
+        assertTrue("spawnHelper should return true on successful dispatch", result)
+        assertEquals("exactly one exec call should be made", 1, fake.execCalls.size)
+
+        val cmd = fake.execCalls.single()
+        assertTrue("must contain setsid", cmd.contains("setsid"))
+        assertTrue("must contain CLASSPATH=", cmd.contains("CLASSPATH="))
+        assertTrue("must contain app_process", cmd.contains("app_process"))
+        assertTrue("must contain --nice-name=bydmate_helper", cmd.contains("--nice-name=bydmate_helper"))
+        assertTrue("must contain HelperDaemon class", cmd.contains("com.bydmate.app.helper.HelperDaemon"))
+        assertTrue("must contain caller uid", cmd.contains(android.os.Process.myUid().toString()))
+        assertTrue("must redirect to bydmate_helper.log", cmd.contains("bydmate_helper.log"))
+
+        // Prove no dex push artifacts
+        assertFalse("must not contain base64", cmd.contains("base64"))
+        assertFalse("must not contain echo", cmd.contains("echo"))
+        assertFalse("must not contain helper.dex", cmd.contains("helper.dex"))
     }
 }

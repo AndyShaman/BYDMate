@@ -263,7 +263,7 @@ class TrackingService : Service(), LocationListener {
         }
 
         // Bootstrap the native helper daemon BEFORE polling so the first write
-        // (automation rule, Alice command) lands on a live 127.0.0.1:8765 socket.
+        // (automation rule, Alice command) reaches a live bydmate_helper binder service.
         // Fire-and-forget — reads via autoservice don't depend on the daemon, so
         // a slow / failed bootstrap must not block trip recording or dashboard.
         // Writes that race the bootstrap fail-soft via VehicleApi.HelperUnreachable.

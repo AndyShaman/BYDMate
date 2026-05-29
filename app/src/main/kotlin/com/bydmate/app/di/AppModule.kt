@@ -429,10 +429,9 @@ object AppModule {
     @Provides
     @Singleton
     fun provideHelperBootstrap(
-        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
         adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
         helper: com.bydmate.app.data.vehicle.HelperClient,
     ): com.bydmate.app.data.vehicle.HelperBootstrap =
-        com.bydmate.app.data.vehicle.HelperBootstrap(context, adb, helper)
+        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper)
 
 }

@@ -39,16 +39,21 @@ interface AdbOnDeviceClient {
     suspend fun grantUsageStatsAppop(packageName: String): Boolean
 
     /**
-     * Pushes the bundled helper.dex (SHA-256 verified against the supplied
-     * expected hash) to /data/local/tmp/helper.dex on DiLink, then spawns
-     * the helper daemon via app_process. Returns true if the daemon binds
-     * 127.0.0.1:8765 and responds to ping within 3 s.
+     * Spawns the helper daemon under shell uid via app_process, using the app's
+     * own signed base.apk as CLASSPATH (no dex push — integrity comes from the
+     * APK signature). The daemon registers itself as the `bydmate_helper` binder
+     * service; reachability is verified separately by the binder client's ping,
+     * not here. Returns true if the spawn command was dispatched without error
+     * (NOT a liveness guarantee).
      *
-     * Hardcoded path + cmdline + process name — caller cannot inject. The
-     * write barrier on exec() stays unchanged; this method uses a private
-     * exec path on the underlying protocol object.
+     * Hardcoded cmdline + process name — caller cannot inject. Uses the raw
+     * protocol exec path (the public exec() write barrier only permits autoservice
+     * GETs and would reject this).
      */
-    suspend fun bootstrapHelper(context: android.content.Context, expectedSha256: String): Boolean
+    suspend fun spawnHelper(): Boolean
+
+    /** Reads the daemon's stdout/stderr log (READY / ERR lines) for diagnostics. Null on transport error. */
+    suspend fun readHelperLog(): String?
 
     /** Read-only check: is a process named `bydmate_helper` running? */
     suspend fun helperHeartbeat(): Boolean
@@ -75,7 +80,7 @@ class AdbOnDeviceClientImpl @Inject constructor(
 
     @Volatile private var protocol: AdbProtocol? = null
 
-    @Suppress("unused")  // kept for future-proofing; AdbKeyStore already has Context.
+    // used for packageCodePath when spawning the helper daemon
     private val ctx = context
 
     override suspend fun connect(): Result<Unit> = withContext(Dispatchers.IO) {
@@ -132,52 +137,32 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun bootstrapHelper(
-        context: android.content.Context,
-        expectedSha256: String
-    ): Boolean = withContext(Dispatchers.IO) {
+    override suspend fun spawnHelper(): Boolean = withContext(Dispatchers.IO) {
         val p = protocol ?: run {
             val r = connect()
             if (r.isFailure) return@withContext false
             protocol ?: return@withContext false
         }
         try {
-            val dexBytes = context.assets.open("helper.dex").use { it.readBytes() }
-            val sha = java.security.MessageDigest.getInstance("SHA-256")
-                .digest(dexBytes).joinToString("") { "%02x".format(it) }
-            if (sha != expectedSha256) {
-                Log.e(TAG, "helper.dex sha mismatch: expected=$expectedSha256 actual=$sha")
-                return@withContext false
-            }
-            val b64 = android.util.Base64.encodeToString(dexBytes, android.util.Base64.NO_WRAP)
-            val pushCmd = "echo $b64 | base64 -d > $HELPER_REMOTE_PATH && chmod 755 $HELPER_REMOTE_PATH"
-            p.exec(pushCmd)
+            // Raw protocol exec — bypasses the public exec() write barrier by design
+            // (this is not an autoservice GET). Hardcoded, no caller input.
+            // CLASSPATH = the app's own signed base.apk; setsid + redirect detach the
+            // daemon from the ADB exec channel so it survives the shell closing.
             val spawnCmd =
-                "nohup sh -c 'CLASSPATH=$HELPER_REMOTE_PATH app_process /system/bin " +
-                "--nice-name=$HELPER_PROCESS_NAME com.bydmate.app.helper.HelperDaemon' " +
-                ">/dev/null 2>&1 &"
+                "CLASSPATH=${ctx.packageCodePath} setsid app_process /system/bin " +
+                "--nice-name=$HELPER_PROCESS_NAME com.bydmate.app.helper.HelperDaemon " +
+                "${android.os.Process.myUid()} </dev/null >$HELPER_LOG_PATH 2>&1 &"
             p.exec(spawnCmd)
-            // Poll for the daemon's ping response (max 3 s).
-            repeat(15) {
-                kotlinx.coroutines.delay(200)
-                val pingOk = runCatching {
-                    java.net.Socket().use { sock ->
-                        sock.connect(java.net.InetSocketAddress("127.0.0.1", 8765), 200)
-                        sock.getOutputStream().apply {
-                            write(("""{"op":"ping"}""" + "\n").toByteArray())
-                            flush()
-                        }
-                        sock.getInputStream().bufferedReader().readLine() != null
-                    }
-                }.getOrDefault(false)
-                if (pingOk) return@withContext true
-            }
-            Log.w(TAG, "helper bootstrap: spawned but ping never responded")
-            false
+            true
         } catch (e: Exception) {
-            Log.w(TAG, "bootstrapHelper failed: ${e.message}")
+            Log.w(TAG, "spawnHelper failed: ${e.message}")
             false
         }
+    }
+
+    override suspend fun readHelperLog(): String? = withContext(Dispatchers.IO) {
+        val p = protocol ?: return@withContext null
+        runCatching { p.exec("cat $HELPER_LOG_PATH") }.getOrNull()
     }
 
     override suspend fun helperHeartbeat(): Boolean = withContext(Dispatchers.IO) {
@@ -207,7 +192,7 @@ class AdbOnDeviceClientImpl @Inject constructor(
         private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
 
         // Helper daemon — hardcoded so neither caller can inject paths/cmdlines.
-        private const val HELPER_REMOTE_PATH = "/data/local/tmp/helper.dex"
         private const val HELPER_PROCESS_NAME = "bydmate_helper"
+        private const val HELPER_LOG_PATH = "/data/local/tmp/bydmate_helper.log"
     }
 }
