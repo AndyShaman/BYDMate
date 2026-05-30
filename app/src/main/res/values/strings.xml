@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BYDMate</string>
+    <string name="cluster_a11y_description">Перехват кнопок руля для проекции навигации на приборную панель. Включается вручную, работает только при включённой функции.</string>
     <string name="settings_language_title">Язык</string>
 
     <!-- Settings: Navigation rail -->
