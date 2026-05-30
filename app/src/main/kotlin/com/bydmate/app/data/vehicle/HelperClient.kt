@@ -13,6 +13,15 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** One display as reported by the daemon's DisplayManager.getDisplays(). */
+data class DisplayInfo(
+    val id: Int,
+    val name: String,
+    val width: Int,
+    val height: Int,
+    val densityDpi: Int,
+)
+
 /**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
@@ -29,6 +38,15 @@ interface HelperClient {
     suspend fun read(dev: Int, fid: Int, tx: Int = 5): Long?
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
     suspend fun isAlive(): Boolean
+
+    /** All displays visible to the shell-uid daemon, or null if the channel is unavailable. */
+    suspend fun listDisplays(): List<DisplayInfo>?
+
+    /**
+     * Reads a BYDAuto instrument/setting feature value, or null when no data
+     * (feature absent on this trim) or the channel is unavailable. A real 0 is returned as 0.
+     */
+    suspend fun getInstrumentFeature(featureId: Int): Int?
 }
 
 @Singleton
@@ -56,8 +74,33 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transact(HelperBinderProtocol.TX_PING) { }
             ?.let { (status, _) -> readAccepted(status) } ?: false
 
-    /** Returns (status, value) or null on any failure. Retries ONCE on a dead cached binder. */
-    private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =
+    override suspend fun listDisplays(): List<DisplayInfo>? =
+        transactParsed(HelperBinderProtocol.TX_LIST_DISPLAYS, { /* no args */ }) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed null
+            if (status != 0) return@transactParsed null
+            val count = if (reply.dataAvail() >= 4) reply.readInt() else 0
+            val out = ArrayList<DisplayInfo>(count)
+            repeat(count) {
+                val id = reply.readInt()
+                val name = reply.readString() ?: ""
+                val width = reply.readInt()
+                val height = reply.readInt()
+                val densityDpi = reply.readInt()
+                out.add(DisplayInfo(id, name, width, height, densityDpi))
+            }
+            out
+        }
+
+    override suspend fun getInstrumentFeature(featureId: Int): Int? =
+        transact(HelperBinderProtocol.TX_GET_INSTRUMENT_FEATURE) { it.writeInt(featureId) }
+            ?.let { (status, value) -> if (readAccepted(status)) value else null }
+
+    /** Returns the parsed reply or null on any failure. Retries ONCE on a dead cached binder. */
+    private suspend fun <T> transactParsed(
+        code: Int,
+        writeArgs: (Parcel) -> Unit,
+        parse: (Parcel) -> T?,
+    ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(REQ_TIMEOUT_MS) {
                 mutex.withLock {
@@ -70,9 +113,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
                             writeArgs(data)
                             val ok = binder.transact(code, data, reply, 0)
                             if (!ok) return@withLock null           // uid gate rejected / not handled
-                            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@withLock null
-                            val value = if (reply.dataAvail() >= 4) reply.readInt() else 0
-                            return@withLock status to value
+                            return@withLock parse(reply)
                         } catch (e: DeadObjectException) {
                             cached = null                            // stale binder; loop re-resolves once
                             if (attempt == 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return@withLock null }
@@ -85,6 +126,14 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
                     null
                 }
             }
+        }
+
+    /** (status, value) wrapper used by read/write/ping/getInstrumentFeature. */
+    private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =
+        transactParsed(code, writeArgs) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed null
+            val value = if (reply.dataAvail() >= 4) reply.readInt() else 0
+            status to value
         }
 
     private fun ensureBinder(): IBinder? {
