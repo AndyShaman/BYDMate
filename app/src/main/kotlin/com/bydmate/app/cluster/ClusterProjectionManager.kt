@@ -9,6 +9,7 @@ import android.util.DisplayMetrics
 import android.util.Log
 import android.view.Display
 import android.view.Gravity
+import android.view.Surface
 import android.view.SurfaceHolder
 import android.view.SurfaceView
 import android.view.View
@@ -16,12 +17,16 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 
 /**
  * Owns the cluster projection lifecycle. An overlay SurfaceView is placed on the
@@ -31,6 +36,16 @@ import kotlinx.coroutines.withContext
  * Mirrors OpenBYD ClusterOverlayManager but uses our suspend HelperClient instead
  * of ICarControl shell strings. Single in-memory instance — mode resets to OFF on
  * process death (acceptable for v1; persistence is a later concern).
+ *
+ * Concurrency: every cycleMode press runs under [mutex], so two fast presses can't
+ * build overlapping overlays or clobber [remoteDisplayId]. The whole transition —
+ * including the daemon's VirtualDisplay create + launchAndForce — runs inside the
+ * lock, so a press during an in-flight transition is queued, not dropped.
+ *
+ * State honesty: [currentMode] advances to the requested mode ONLY when the projection
+ * fully succeeds (overlay up + VirtualDisplay created + Navi pinned). On ANY failure it
+ * falls back to OFF and Navi is pulled back to the main display, so the in-memory mode
+ * always matches what is actually on screen.
  *
  * Threading: WindowManager add/removeView run on Main; daemon calls are suspend
  * (HelperClient switches to IO internally).
@@ -43,8 +58,10 @@ object ClusterProjectionManager {
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
     private const val OVERLAY_FLAGS = 264                     // FLAG_NOT_FOCUSABLE(8) | FLAG_LAYOUT_IN_SCREEN(256)
     private const val SWITCH_SETTLE_MS = 500L                 // OpenBYD refresh delay between pull-back and re-cast
+    private const val SURFACE_TIMEOUT_MS = 3000L              // give up if the overlay Surface never gets created
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private val mutex = Mutex()
 
     @Volatile
     var currentMode: ClusterMode = ClusterMode.OFF
@@ -56,21 +73,27 @@ object ClusterProjectionManager {
     private var clusterHeight: Int = 480
     private var clusterDensityDpi: Int = 320
 
-    /** Button entry point: advance OFF → MINI → FULLSCREEN → OFF and apply. */
+    /** Button entry point: advance OFF → MINI → FULLSCREEN → OFF and apply, serialized. */
     fun cycleMode(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
-        val next = currentMode.next()
-        Log.i(TAG, "cycleMode: $currentMode -> $next")
-        scope.launch { applyMode(appContext, next, helper, bootstrap) }
+        scope.launch {
+            mutex.withLock {
+                val next = currentMode.next()
+                Log.i(TAG, "cycleMode: $currentMode -> $next")
+                applyModeLocked(appContext, next, helper, bootstrap)
+            }
+        }
     }
 
-    private suspend fun applyMode(
+    /** Caller MUST hold [mutex]. Sets currentMode = mode only on full success, else OFF. */
+    private suspend fun applyModeLocked(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
     ) {
         when (mode) {
             ClusterMode.OFF -> {
                 pullBackToMain(helper, focus = true)
                 hideOverlay(helper)
+                currentMode = ClusterMode.OFF
             }
             else -> {
                 if (currentMode != ClusterMode.OFF) {
@@ -79,26 +102,60 @@ object ClusterProjectionManager {
                     hideOverlay(helper)
                     delay(SWITCH_SETTLE_MS)
                 }
-                project(context, mode, helper, bootstrap)
+                if (project(context, mode, helper, bootstrap)) {
+                    currentMode = mode
+                } else {
+                    // projection failed: keep state honest. project() already tore down the
+                    // overlay/VD on its failure paths; make sure Navi is back on the main screen.
+                    Log.e(TAG, "projection failed; falling back to OFF")
+                    pullBackToMain(helper, focus = true)
+                    currentMode = ClusterMode.OFF
+                }
             }
         }
-        currentMode = mode
     }
 
+    /** Returns true only when the overlay is up, the VirtualDisplay exists, and Navi is pinned. */
     private suspend fun project(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
-    ) {
-        bootstrap.ensureRunning()  // best-effort; if the daemon is down the calls below fail soft
+    ): Boolean {
+        if (!bootstrap.ensureRunning()) {
+            Log.e(TAG, "helper daemon not running; aborting projection"); return false
+        }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
         if (!ensureOverlayPermission(context, helper)) {
-            Log.e(TAG, "overlay permission unavailable; aborting projection")
-            return
+            Log.e(TAG, "overlay permission unavailable; aborting projection"); return false
         }
         val display = resolveClusterDisplay(context) ?: run {
-            Log.e(TAG, "cluster display not found"); return
+            Log.e(TAG, "cluster display not found"); return false
         }
-        val geo = geometryFor(mode, clusterWidth, clusterHeight) ?: return
-        withContext(Dispatchers.Main) { addOverlay(context, display, geo, helper) }
+        val geo = geometryFor(mode, clusterWidth, clusterHeight) ?: return false
+
+        val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
+            addOverlayAndAwaitSurface(context, display, geo, helper)
+        }
+        if (surface == null) {
+            Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
+            hideOverlay(helper); return false
+        }
+        // Release a stale VD (e.g. a prior release that failed) before overwriting the id,
+        // otherwise that VirtualDisplay would leak on the daemon side.
+        if (remoteDisplayId != -1) {
+            helper.releaseVirtualDisplay(remoteDisplayId); remoteDisplayId = -1
+        }
+        val id = helper.createVirtualDisplay(
+            VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+        )
+        if (id == null) {
+            Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return false
+        }
+        remoteDisplayId = id
+        Log.i(TAG, "VirtualDisplay id=$id; launchAndForce $NAVI_PACKAGE")
+        val ok = helper.launchAndForce(NAVI_PACKAGE, id, geo.width, geo.height)
+        if (!ok) {
+            Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return false
+        }
+        return true
     }
 
     /** App-side display lookup (matches OpenBYD getClusterDisplayId). Updates cluster W/H/dpi. */
@@ -120,53 +177,53 @@ object ClusterProjectionManager {
         return match
     }
 
-    /** Builds the overlay container + SurfaceView on the cluster display. Main thread. */
-    private fun addOverlay(context: Context, display: Display, geo: ClusterGeometry, helper: HelperClient) {
-        val displayContext = context.createDisplayContext(display)
-        val wm = displayContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+    /**
+     * Builds the overlay container + SurfaceView on the cluster display (main thread) and
+     * suspends until the Surface is created, returning the live Surface for the daemon to wrap.
+     * Sets [overlayView] so a later hideOverlay() can tear it down even if we time out waiting.
+     */
+    private suspend fun addOverlayAndAwaitSurface(
+        context: Context, display: Display, geo: ClusterGeometry, helper: HelperClient,
+    ): Surface {
+        val ready = CompletableDeferred<Surface>()
+        withContext(Dispatchers.Main) {
+            val displayContext = context.createDisplayContext(display)
+            val wm = displayContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
 
-        val container = FrameLayout(displayContext)
-        val surfaceView = SurfaceView(displayContext)
-        val surfaceParams = FrameLayout.LayoutParams(geo.width, geo.height, Gravity.TOP or Gravity.START).apply {
-            leftMargin = geo.xOffset
-            topMargin = geo.yOffset
-        }
-        container.addView(surfaceView, surfaceParams)
-
-        surfaceView.holder.setFixedSize(geo.width, geo.height)
-        surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
-            override fun surfaceCreated(holder: SurfaceHolder) {
-                Log.d(TAG, "surfaceCreated; creating VirtualDisplay ${geo.width}x${geo.height}")
-                val surface = holder.surface
-                scope.launch { onSurfaceReady(geo, surface, helper) }
+            val container = FrameLayout(displayContext)
+            val surfaceView = SurfaceView(displayContext)
+            val surfaceParams = FrameLayout.LayoutParams(geo.width, geo.height, Gravity.TOP or Gravity.START).apply {
+                leftMargin = geo.xOffset
+                topMargin = geo.yOffset
             }
-            override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
-            override fun surfaceDestroyed(holder: SurfaceHolder) {
-                Log.d(TAG, "surfaceDestroyed")
-            }
-        })
+            container.addView(surfaceView, surfaceParams)
 
-        val overlayParams = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
-            WindowManager.LayoutParams.MATCH_PARENT,
-            OVERLAY_TYPE,
-            OVERLAY_FLAGS,
-            PixelFormat.TRANSLUCENT,  // -3
-        )
-        wm.addView(container, overlayParams)
-        overlayView = container
-    }
+            surfaceView.holder.setFixedSize(geo.width, geo.height)
+            surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
+                override fun surfaceCreated(holder: SurfaceHolder) {
+                    Log.d(TAG, "surfaceCreated ${geo.width}x${geo.height}")
+                    if (!ready.isCompleted) ready.complete(holder.surface)
+                }
+                override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
+                override fun surfaceDestroyed(holder: SurfaceHolder) {
+                    Log.d(TAG, "surfaceDestroyed")
+                    // Safety net: if the system tore the Surface down outside hideOverlay(), the
+                    // VirtualDisplay would render into a dead Surface — release it (mirrors OpenBYD).
+                    scope.launch { mutex.withLock { releaseRemoteDisplayIfAlive(helper) } }
+                }
+            })
 
-    /** Daemon side: create the VirtualDisplay from the Surface, then pin Navi onto it. */
-    private suspend fun onSurfaceReady(geo: ClusterGeometry, surface: android.view.Surface, helper: HelperClient) {
-        val id = helper.createVirtualDisplay(VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface)
-        if (id == null) {
-            Log.e(TAG, "createVirtualDisplay failed"); return
+            val overlayParams = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                OVERLAY_TYPE,
+                OVERLAY_FLAGS,
+                PixelFormat.TRANSLUCENT,  // -3
+            )
+            wm.addView(container, overlayParams)
+            overlayView = container
         }
-        remoteDisplayId = id
-        Log.i(TAG, "VirtualDisplay id=$id; launchAndForce $NAVI_PACKAGE")
-        val ok = helper.launchAndForce(NAVI_PACKAGE, id, geo.width, geo.height)
-        Log.i(TAG, "launchAndForce ok=$ok")
+        return ready.await()
     }
 
     /** Move Navi's task back to the main display and (optionally) refocus it. */
@@ -179,12 +236,16 @@ object ClusterProjectionManager {
         if (focus) helper.setFocusedTask(taskId)
     }
 
-    /** Release the VirtualDisplay and remove the overlay (main thread). */
+    /**
+     * Release the VirtualDisplay and remove the overlay (main thread). [remoteDisplayId] is
+     * cleared ONLY after a confirmed release so a failed release can be retried instead of
+     * leaking the daemon-side VirtualDisplay.
+     */
     private suspend fun hideOverlay(helper: HelperClient) {
-        if (remoteDisplayId != -1) {
-            val id = remoteDisplayId
-            remoteDisplayId = -1
-            helper.releaseVirtualDisplay(id)
+        val id = remoteDisplayId
+        if (id != -1) {
+            if (helper.releaseVirtualDisplay(id)) remoteDisplayId = -1
+            else Log.w(TAG, "releaseVirtualDisplay($id) failed; keeping id for retry")
         }
         withContext(Dispatchers.Main) {
             overlayView?.let { v ->
@@ -196,6 +257,15 @@ object ClusterProjectionManager {
                 }
             }
             overlayView = null
+        }
+    }
+
+    /** surfaceDestroyed safety net; caller holds [mutex]. No-op once the id is already cleared. */
+    private suspend fun releaseRemoteDisplayIfAlive(helper: HelperClient) {
+        val id = remoteDisplayId
+        if (id != -1) {
+            Log.d(TAG, "surfaceDestroyed: releasing leaked VirtualDisplay $id")
+            if (helper.releaseVirtualDisplay(id)) remoteDisplayId = -1
         }
     }
 
