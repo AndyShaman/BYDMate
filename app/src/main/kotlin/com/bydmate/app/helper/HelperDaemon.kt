@@ -242,6 +242,27 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_LAUNCH_APP -> runCatching {
+                    val ok = launchApp(data.readString() ?: "")
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_GRANT_OVERLAY_PERMISSION -> runCatching {
+                    // Narrow, hardcoded — NOT a generic shell passthrough.
+                    val r = execShell("appops set ${HelperBinderProtocol.APP_PACKAGE} SYSTEM_ALERT_WINDOW allow")
+                    reply?.writeInt(if (!r.contains("Error", ignoreCase = true)) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_LAUNCH_AND_FORCE -> runCatching {
+                    val pkg = data.readString() ?: ""
+                    val displayId = data.readInt(); val width = data.readInt(); val height = data.readInt()
+                    val ok = launchAndForce(pkg, displayId, width, height)
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -439,4 +460,61 @@ private fun createVirtualDisplay(
     if (id <= 0) { vd.release(); return -1 }
     store[id] = vd
     return id
+}
+
+/** Runs a shell command (shell uid) and returns combined stdout/stderr. Mirrors CarControlImpl.exec. */
+private fun execShell(command: String): String {
+    val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
+    val out = process.inputStream.bufferedReader().readText().trim()
+    val err = process.errorStream.bufferedReader().readText().trim()
+    process.waitFor()
+    return buildString {
+        if (out.isNotBlank()) append(out)
+        if (err.isNotBlank()) { if (isNotEmpty()) append(" | STDERR: "); append(err) }
+    }.ifEmpty { "OK" }
+}
+
+/**
+ * Launches [packageName] via am/monkey strategies. Returns true if a launch command ran without an
+ * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
+ */
+private fun launchApp(packageName: String): Boolean {
+    val resolve = execShell("cmd package resolve-activity --brief -c android.intent.category.LAUNCHER $packageName")
+    val component = resolve.lineSequence().firstOrNull { it.contains("/") && !it.startsWith("No ") }?.trim()
+    if (component != null) {
+        val r = execShell("am start -n $component")
+        if (!r.contains("Error")) return true
+    }
+    val r2 = execShell("am start -a android.intent.action.MAIN $packageName")
+    if (!r2.contains("Error")) return true
+    val r3 = execShell("monkey -p $packageName -c android.intent.category.LAUNCHER 1")
+    return !r3.contains("Error") && !r3.contains("error")
+}
+
+/**
+ * Launches [packageName] on [displayId] and pins it there with a short persistence loop
+ * (move -> bounds -> focus, x2). Returns true once redirection ran. Mirrors CarControlImpl.launchAndForce.
+ * Blocking (Thread.sleep) — runs on a binder threadpool thread; the app side uses a 15s timeout.
+ */
+private fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean {
+    var taskId = findTaskId(packageName)
+    if (taskId <= 0) {
+        launchApp(packageName)
+        var attempt = 1
+        while (attempt < 16) {
+            taskId = findTaskId(packageName)
+            if (taskId > 0) break
+            Thread.sleep(500L)
+            attempt++
+        }
+        Thread.sleep(1500L)
+    }
+    if (taskId <= 0) return false
+    repeat(2) {
+        moveTaskToDisplayReflect(taskId, displayId)
+        setTaskBoundsReflect(taskId, 0, 0, width, height)
+        setFocusedTaskReflect(taskId)
+        Thread.sleep(200L)
+    }
+    return true
 }
