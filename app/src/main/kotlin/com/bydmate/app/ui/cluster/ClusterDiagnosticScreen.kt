@@ -1,7 +1,9 @@
 package com.bydmate.app.ui.cluster
 
+import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.provider.Settings
+import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -100,10 +102,19 @@ fun ClusterDiagnosticScreen(
                         fontSize = 13.sp,
                     )
                     Button(onClick = {
-                        context.startActivity(
-                            Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        )
+                        // DiLink has no Accessibility settings activity — startActivity would crash.
+                        try {
+                            context.startActivity(
+                                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                            )
+                        } catch (e: ActivityNotFoundException) {
+                            Toast.makeText(
+                                context,
+                                "На DiLink нет экрана Спецвозможностей. Сервис включается через ADB (Phase 0).",
+                                Toast.LENGTH_LONG,
+                            ).show()
+                        }
                     }) { Text("Открыть Спецвозможности") }
 
                     val cap = captured
@@ -113,7 +124,10 @@ fun ClusterDiagnosticScreen(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp,
                     )
-                    Text("Кандидаты: 305 (звезда), 304 (voice short), 312 (voice long)", fontSize = 12.sp)
+                    Text(
+                        "Лев. звезда: 305 / удержание 306 · Прав.: 351 / 352 · Карусель: 309",
+                        fontSize = 12.sp,
+                    )
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text("Поглощать (return true)", modifier = Modifier.weight(1f))
