@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.bydmate.app.cluster.KeyCapture
 import com.bydmate.app.cluster.SteeringWheelKeyState
 import com.bydmate.app.data.vehicle.DisplayInfo
+import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +28,7 @@ data class ClusterDiagnosticState(
 @HiltViewModel
 class ClusterDiagnosticViewModel @Inject constructor(
     private val helperClient: HelperClient,
+    private val helperBootstrap: HelperBootstrap,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(ClusterDiagnosticState())
@@ -35,11 +37,29 @@ class ClusterDiagnosticViewModel @Inject constructor(
     /** Captured steering-wheel key event, surfaced straight from the service bridge. */
     val capturedKeyEvent: StateFlow<KeyCapture?> = SteeringWheelKeyState.capturedKeyEvent
 
+    /** One-shot result of the last "enable a11y service" attempt (null = not attempted yet). */
+    private val _enableStatus = MutableStateFlow<String?>(null)
+    val enableStatus: StateFlow<String?> = _enableStatus.asStateFlow()
+
     val isServiceConnected: Boolean get() = SteeringWheelKeyState.isConnected
 
     var consumeEvents: Boolean
         get() = SteeringWheelKeyState.consumeEvents
         set(value) { SteeringWheelKeyState.consumeEvents = value }
+
+    /** Starts the daemon if needed, then enables our a11y service via the shell-uid daemon op. */
+    fun enableService() {
+        viewModelScope.launch {
+            _enableStatus.value = "Включаю…"
+            val started = helperBootstrap.ensureRunning()
+            if (!started) {
+                _enableStatus.value = "Демон недоступен"
+                return@launch
+            }
+            val ok = helperClient.enableAccessibilityService()
+            _enableStatus.value = if (ok) "Включено — нажми кнопку руля для проверки" else "Не удалось включить"
+        }
+    }
 
     fun refresh() {
         viewModelScope.launch {

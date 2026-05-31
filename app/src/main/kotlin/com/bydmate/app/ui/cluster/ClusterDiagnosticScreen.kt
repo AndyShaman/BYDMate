@@ -1,9 +1,5 @@
 package com.bydmate.app.ui.cluster
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -31,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -45,7 +40,7 @@ fun ClusterDiagnosticScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val captured by viewModel.capturedKeyEvent.collectAsState()
-    val context = LocalContext.current
+    val enableStatus by viewModel.enableStatus.collectAsState()
 
     Scaffold(
         topBar = {
@@ -101,21 +96,11 @@ fun ClusterDiagnosticScreen(
                         fontFamily = FontFamily.Monospace,
                         fontSize = 13.sp,
                     )
-                    Button(onClick = {
-                        // DiLink has no Accessibility settings activity — startActivity would crash.
-                        try {
-                            context.startActivity(
-                                Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                            )
-                        } catch (e: ActivityNotFoundException) {
-                            Toast.makeText(
-                                context,
-                                "На DiLink нет экрана Спецвозможностей. Сервис включается через ADB (Phase 0).",
-                                Toast.LENGTH_LONG,
-                            ).show()
-                        }
-                    }) { Text("Открыть Спецвозможности") }
+                    // DiLink has no Accessibility settings UI; enable our service via the shell-uid daemon.
+                    Button(onClick = { viewModel.enableService() }) { Text("Включить кнопку руля") }
+                    enableStatus?.let {
+                        Text(it, fontFamily = FontFamily.Monospace, fontSize = 13.sp)
+                    }
 
                     val cap = captured
                     Text(
