@@ -1,6 +1,5 @@
 package com.bydmate.app.data.vehicle
 
-import android.graphics.SurfaceTexture
 import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel

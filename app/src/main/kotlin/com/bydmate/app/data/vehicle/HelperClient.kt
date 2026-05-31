@@ -4,6 +4,7 @@ import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.Parcel
 import android.util.Log
+import android.view.Surface
 import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -50,7 +51,7 @@ interface HelperClient {
 
     /** Creates a VirtualDisplay backed by [surface]; returns its displayId (>0) or null. */
     suspend fun createVirtualDisplay(
-        name: String, width: Int, height: Int, density: Int, flags: Int, surface: android.view.Surface,
+        name: String, width: Int, height: Int, density: Int, flags: Int, surface: Surface,
     ): Int?
     suspend fun releaseVirtualDisplay(displayId: Int): Boolean
     suspend fun launchApp(packageName: String): Boolean
@@ -113,14 +114,14 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             ?.let { (status, value) -> if (readAccepted(status)) value else null }
 
     override suspend fun createVirtualDisplay(
-        name: String, width: Int, height: Int, density: Int, flags: Int, surface: android.view.Surface,
+        name: String, width: Int, height: Int, density: Int, flags: Int, surface: Surface,
     ): Int? = transactParsed(HelperBinderProtocol.TX_CREATE_VIRTUAL_DISPLAY, { d ->
         d.writeString(name); d.writeInt(width); d.writeInt(height); d.writeInt(density); d.writeInt(flags)
         surface.writeToParcel(d, 0)
     }) { reply ->
         val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed null
         val id = if (reply.dataAvail() >= 4) reply.readInt() else -1
-        if (status == 0 && id > 0) id else null
+        if (readAccepted(status) && id > 0) id else null
     }
 
     override suspend fun releaseVirtualDisplay(displayId: Int): Boolean =
@@ -131,7 +132,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun getTaskId(packageName: String): Int? =
         transact(HelperBinderProtocol.TX_GET_TASK_ID) { it.writeString(packageName) }
-            ?.let { (status, value) -> if (status == 0 && value > 0) value else null }
+            ?.let { (status, value) -> if (readAccepted(status) && value > 0) value else null }
 
     override suspend fun moveTaskToDisplay(taskId: Int, displayId: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_MOVE_TASK_TO_DISPLAY) { it.writeInt(taskId); it.writeInt(displayId) }
@@ -155,12 +156,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             d.writeString(packageName); d.writeInt(displayId); d.writeInt(width); d.writeInt(height)
         }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
-            status == 0
+            readAccepted(status)
         } ?: false
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =
-        transact(code, writeArgs)?.let { (status, _) -> status == 0 } ?: false
+        transact(code, writeArgs)?.let { (status, _) -> readAccepted(status) } ?: false
 
     /** Returns the parsed reply or null on any failure. Retries ONCE on a dead cached binder. */
     private suspend fun <T> transactParsed(
