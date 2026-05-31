@@ -2,6 +2,7 @@
 package com.bydmate.app.helper
 
 import android.content.Context
+import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.util.DisplayMetrics
 import android.os.Binder
@@ -178,6 +179,41 @@ fun main(args: Array<String>) {
                     reply?.writeInt(-1); reply?.writeInt(0); true
                 }
 
+                HelperBinderProtocol.TX_GET_TASK_ID -> runCatching {
+                    val pkg = data.readString() ?: ""
+                    val taskId = findTaskId(pkg)
+                    reply?.writeInt(0); reply?.writeInt(taskId)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_MOVE_TASK_TO_DISPLAY -> runCatching {
+                    val taskId = data.readInt(); val displayId = data.readInt()
+                    moveTaskToDisplayReflect(taskId, displayId)
+                    reply?.writeInt(0); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_TASK_BOUNDS -> runCatching {
+                    val taskId = data.readInt()
+                    val l = data.readInt(); val t = data.readInt(); val r = data.readInt(); val b = data.readInt()
+                    setTaskBoundsReflect(taskId, l, t, r, b)
+                    reply?.writeInt(0); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_FOCUSED_TASK -> runCatching {
+                    setFocusedTaskReflect(data.readInt())
+                    reply?.writeInt(0); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE -> runCatching {
+                    val taskId = data.readInt(); val mode = data.readInt()
+                    setTaskWindowingModeReflect(taskId, mode)
+                    reply?.writeInt(0); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -241,6 +277,76 @@ private fun autoserviceTransact(
         data2.recycle()
         reply2.recycle()
     }
+}
+
+/** Resolves IActivityTaskManager via ActivityTaskManager.getService() (hidden API, ok under app_process). */
+private fun activityTaskManager(): Any =
+    Class.forName("android.app.ActivityTaskManager").getMethod("getService").invoke(null)
+        ?: throw IllegalStateException("ActivityTaskManager.getService() returned null")
+
+/** Walks the superclass chain for a declared field [name] (mirrors CarControlImpl.findField). */
+private fun fieldByName(target: Any, name: String): java.lang.reflect.Field? {
+    var cls: Class<*>? = target.javaClass
+    while (cls != null) {
+        try { return cls.getDeclaredField(name) } catch (e: NoSuchFieldException) { cls = cls.superclass }
+    }
+    return null
+}
+
+/**
+ * Finds the running task id of [packageName]. Reconstructed from CarControlImpl.getTopActivityPackage:
+ * iAtm.getTasks(maxNum, false, false) -> List<RunningTaskInfo>; match topActivity/baseActivity package;
+ * read int field "taskId" (fallback "id"). Returns -1 when not found.
+ * NOTE: field names validated on-car in Phase 2.
+ */
+private fun findTaskId(packageName: String): Int {
+    val iAtm = activityTaskManager()
+    val getTasks = iAtm.javaClass.getMethod(
+        "getTasks", Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, Boolean::class.javaPrimitiveType,
+    )
+    val tasks = getTasks.invoke(iAtm, 100, false, false) as? List<*> ?: return -1
+    for (task in tasks) {
+        if (task == null) continue
+        val pkg = listOf("topActivity", "baseActivity").firstNotNullOfOrNull { fieldName ->
+            fieldByName(task, fieldName)?.let { f ->
+                f.isAccessible = true
+                (f.get(task) as? android.content.ComponentName)?.packageName
+            }
+        }
+        if (pkg == packageName) {
+            val idField = fieldByName(task, "taskId") ?: fieldByName(task, "id") ?: continue
+            idField.isAccessible = true
+            return idField.getInt(task)
+        }
+    }
+    return -1
+}
+
+/** moveRootTaskToDisplay(int,int) preferred, fallback moveTaskToDisplay(int,int). */
+private fun moveTaskToDisplayReflect(taskId: Int, displayId: Int) {
+    val iAtm = activityTaskManager()
+    val m = iAtm.javaClass.methods.firstOrNull { it.name == "moveRootTaskToDisplay" && it.parameterTypes.size == 2 }
+        ?: iAtm.javaClass.methods.firstOrNull { it.name == "moveTaskToDisplay" && it.parameterTypes.size == 2 }
+        ?: throw NoSuchMethodException("moveTaskToDisplay")
+    m.invoke(iAtm, taskId, displayId)
+}
+
+private fun setTaskWindowingModeReflect(taskId: Int, windowingMode: Int) {
+    val iAtm = activityTaskManager()
+    iAtm.javaClass.getMethod("setTaskWindowingMode", Int::class.javaPrimitiveType, Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType)
+        .invoke(iAtm, taskId, windowingMode, true)
+}
+
+private fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, bottom: Int) {
+    val iAtm = activityTaskManager()
+    val resizeTask = iAtm.javaClass.getMethod("resizeTask", Int::class.javaPrimitiveType, Rect::class.java, Int::class.javaPrimitiveType)
+    val rect = if (left == 0 && top == 0 && right == 0 && bottom == 0) null else Rect(left, top, right, bottom)
+    resizeTask.invoke(iAtm, taskId, rect, 1)
+}
+
+private fun setFocusedTaskReflect(taskId: Int) {
+    val iAtm = activityTaskManager()
+    iAtm.javaClass.getMethod("setFocusedRootTask", Int::class.javaPrimitiveType).invoke(iAtm, taskId)
 }
 
 /**
