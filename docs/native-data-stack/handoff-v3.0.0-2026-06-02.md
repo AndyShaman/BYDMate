@@ -34,7 +34,7 @@
 - Демон грантит себе `PROJECT_MEDIA` + `SYSTEM_ALERT_WINDOW` appops (иначе `getDisplay(clusterId)`=null у стороннего процесса).
 - План: `docs/superpowers/plans/2026-06-02-cluster-star-control.md`; коммиты `b30eddf..46a6f90`; 615 тестов зелёные, `assembleDebug` OK.
 - Codex pre-build audit пройден 2026-06-02 (SHIP).
-- **Проверено на машине 2026-06-02 (PASS):** Andy подтвердил работу; в системе наш a11y-сервис включён сам (`accessibility_enabled=1`, есть в `enabled_accessibility_services`, запущен в dumpsys), демон `bydmate_helper` жив под uid shell. ADB-шаг не понадобился. (Косметика: на тестовой машине в списке две формы записи нашего компонента — хвост прежних ручных ADB-включений; на чистой установке дубля не будет.)
+- **Проверено на машине 2026-06-02 (PASS):** Andy подтвердил работу; в системе наш a11y-сервис включён сам (`accessibility_enabled=1`, есть в `enabled_accessibility_services`, запущен в dumpsys), демон `bydmate_helper` жив под uid shell. ADB-шаг не понадобился. (Дубль форм записи нашего компонента, замеченный тогда как «косметика», оказался причиной поломки после ребута — починено в Блоке 5.)
 
 Детали: memory `[[reference_native_cluster_nav_mechanism]]`, `[[reference_cluster_projection_phase0]]`, `[[reference_openbyd_cluster_projection]]`.
 
@@ -58,6 +58,21 @@
 - Закрытие окна обновления отменяет загрузку (#23).
 - README quick-link anchors + releases link (#20).
 
+### Блок 5. Размер окна на приборке + устойчивость после ребута (эта сессия, 2026-06-02)
+
+Доводка cluster projection после первой проверки на машине.
+
+- **Ползунки размера окна (фича).** Настройки → новый раздел **«Дисплей»** → «Размер окна на приборке»: два независимых ползунка Ширина/Высота (50-100%, шаг 2%). `geometryFor` принимает `widthPct`/`heightPct`, центрирует уменьшенное окно, штатная приборка просвечивает вокруг. Размер хранится в prefs (`KEY_WIDTH_PCT`/`KEY_HEIGHT_PCT`).
+- **Плавный ресайз (make-before-break).** `reproject` → `swapToNewSize`: поднимает новый overlay+VirtualDisplay нужного размера, переносит на него Navi через `launchAndForce`, и ТОЛЬКО потом отпускает старый. Navi не прыгает на главный экран. Fallback на полный rebuild только при неоднозначном состоянии.
+- **Самовосстановление a11y после ребута (фикс).** Корень бага «после ребута звезда умерла и тумблер не помогал»: на раннем старте загрузки бинд `SteeringWheelKeyService` падает → AMS держит сервис в `Crashed` и сам не пере-биндит. Перетык тумблера не помогал из-за **дубля форм** в `enabled_accessibility_services` (короткая `/.cluster.X` + полная) — демон снимал только полную, набор компонентов не менялся, перехода нет → re-bind не триггерился. Починка: `HelperDaemon.enableAccessibilityService` теперь сравнивает по **каноническому** компоненту (`canonicalComponent`, разворот ведущей точки) и снимает ОБЕ формы. Плюс `TrackingService.onCreate` на старте, если тумблер включён и сервис не привязан (`AccessibilityManager.getEnabledAccessibilityServiceList`), один раз форсит re-bind — каждый ребут оживает сам, без действий пользователя. Подтверждено вживую на машине 2026-06-02 (полное снятие обеих форм → `SteeringWheelKeySvc: connected`).
+- **Утечка VirtualDisplay (фикс).** Демон переживает рестарт приложения и держит старый VirtualDisplay, а приложение теряет handle (`remoteDisplayId=-1`) → на следующей проекции плодит новый, не освободив осиротевший (на тестовой машине накопилось 13 дисплеев `BYDMate_Cluster_VD`, живых 5). Починка app-side: id созданного дисплея пишется в prefs (`KEY_LAST_VD_ID`), на холодном старте проекции `releaseOrphanedDisplay` освобождает осиротевший id прошлой сессии. Демон убивает только дисплеи из своей карты, чужой не заденет. Make-before-break не задет (демон старый дисплей по имени НЕ убивает — иначе вернулся бы прыжок). Текущие хвосты на машине очистятся на следующем ребуте.
+- **Локализация.** Строки нового раздела «Дисплей» вынесены в `values/strings.xml` + `values-en/strings.xml` (`settings_display_*`), UI на `stringResource`.
+- Тесты: `CanonicalComponentTest` (5 кейсов на дедуп форм), `ClusterProjectionStateTest` (+6 кейсов на размеры) — зелёные. `assembleRelease` BUILD SUCCESSFUL.
+- Файлы: `HelperDaemon.kt`, `TrackingService.kt`, `ClusterProjectionManager.kt`, `ClusterProjectionState.kt`, `ui/settings/SettingsScreen.kt`, `values/strings.xml`, `values-en/strings.xml`, `ClusterProjectionStateTest.kt`, `CanonicalComponentTest.kt`.
+- Тестовый APK (release-подпись, 2.9.1/305): `BYDMate-cluster-fix-test.apk` в корне репо. На машину НЕ закидывался (Andy выключил машину).
+
+Детали: memory `[[reference_native_cluster_nav_mechanism]]`.
+
 ## Состояние веток (всё закоммичено)
 
 На `feature/cluster-projection`, рабочее дерево чистое. Релевантные коммиты этой сессии:
@@ -66,8 +81,9 @@
 - `760faa2` cluster cleanup: убран старый diagnostic/a11y/steering-wheel путь (тогда — в пользу auto-mirror; charging-правки TrackingService приехали этим же коммитом).
 - `b30eddf..46a6f90` — **откат auto-mirror → управление правой звездой** (решение Andy 2026-06-02): возвращены `SteeringWheelKeyService` + `ClusterEntryPoint` + a11y-config, добавлен чистый gate `SteeringWheelKeyDecision`, `ClusterProjectionManager.toggle()`/`nextMode`, снят guard auto-launch, выпилен мёртвый lever-mapper, обновлён тумблер в Настройках.
 - `b4f1959` — **самовключение a11y по тумблеру (без ADB)**: возвращён демонский путь `TX_ENABLE_ACCESSIBILITY` + `enableAccessibilityService` (force re-bind как OpenBYD), `enableStarControl` дёргается из тумблера. Любой пользователь ставит APK → включает тумблер → работает.
+- **(Блок 5, последний коммит)** ползунки размера окна + плавный ресайз + самовосстановление a11y после ребута (канонический дедуп форм) + фикс утечки VirtualDisplay + локализация раздела «Дисплей».
 
-Весь набор компилируется и проходит `./gradlew :app:testDebugUnitTest` + `:app:assembleDebug` (BUILD SUCCESSFUL, 615 тестов, 2026-06-02).
+Весь набор компилируется и проходит `./gradlew :app:testDebugUnitTest` + `:app:assembleRelease` (BUILD SUCCESSFUL, 2026-06-02).
 
 ## Release checklist (после личной проверки Andy на машине)
 

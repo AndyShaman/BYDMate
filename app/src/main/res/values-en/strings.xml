@@ -8,6 +8,14 @@
     <string name="settings_section_trips_title">Trips</string>
     <string name="settings_section_integrations_title">Integrations</string>
     <string name="settings_section_widget_title">Widget</string>
+    <string name="settings_section_display_title">Display</string>
+    <!-- Settings: Display section (cluster projection) -->
+    <string name="settings_display_mirror_header">Navigator on cluster</string>
+    <string name="settings_display_mirror_title">Navigator on cluster via right star</string>
+    <string name="settings_display_mirror_desc">A short press of the right steering-wheel star moves Yandex Navigator to the cluster and back. Requires cluster full-screen mode to be on.</string>
+    <string name="settings_display_size_header">Cluster window size</string>
+    <string name="settings_display_size_width">Width</string>
+    <string name="settings_display_size_height">Height</string>
     <string name="settings_section_places_title">Places</string>
     <string name="settings_section_application_title">Application</string>
     <string name="settings_smart_home_section_title">Smart home</string>

@@ -454,9 +454,14 @@ private fun shExec(script: String, vararg args: String): CmdResult {
  */
 private fun enableAccessibilityService(): Boolean {
     val component = HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT
+    val target = canonicalComponent(component)
     // Abort on a failed READ — never write a guessed/garbled list back, that would clobber others.
     val current = readSecure("enabled_accessibility_services") ?: return false
-    val others = current.split(':').filter { it.isNotEmpty() && it != component }
+    // Strip EVERY spelling of our component. The short ("pkg/.Cls") and full ("pkg/pkg.Cls") forms
+    // both canonicalise to the same ComponentName, so a literal-string filter would leave the other
+    // form behind. The framework would then see no change to the enabled SET and never re-bind a
+    // crashed service — the exact failure that kept star control dead after a reboot.
+    val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
     // $1 = the list, passed as argv (not interpolated) — safe even if an existing entry is odd.
     if (shExec("settings put secure enabled_accessibility_services \"\$1\"", others.joinToString(":")).code != 0) return false
     Thread.sleep(200L)  // let the framework observe the removal before we re-add (OpenBYD uses 0.2s)
@@ -464,7 +469,21 @@ private fun enableAccessibilityService(): Boolean {
     if (shExec("settings put secure accessibility_enabled 1").code != 0) return false
     // Verify read-back: our component is now listed AND accessibility is enabled.
     val after = (readSecure("enabled_accessibility_services") ?: return false).split(':').filter { it.isNotEmpty() }
-    return after.contains(component) && readSecure("accessibility_enabled") == "1"
+    return after.any { canonicalComponent(it) == target } && readSecure("accessibility_enabled") == "1"
+}
+
+/**
+ * Expands a flattened component string to a canonical `pkg/fully.qualified.Class`, mirroring
+ * ComponentName.unflattenFromString's leading-dot rule (`pkg/.A.B` -> `pkg/pkg.A.B`). Lets the short
+ * and full spellings of one service compare equal. Returns the input unchanged when it has no '/'.
+ */
+internal fun canonicalComponent(flattened: String): String {
+    val sep = flattened.indexOf('/')
+    if (sep < 0) return flattened
+    val pkg = flattened.substring(0, sep)
+    val cls = flattened.substring(sep + 1)
+    val fqcn = if (cls.startsWith(".")) pkg + cls else cls
+    return "$pkg/$fqcn"
 }
 
 /**

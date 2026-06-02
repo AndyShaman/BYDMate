@@ -1,11 +1,13 @@
 package com.bydmate.app.service
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -16,10 +18,12 @@ import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.bydmate.app.MainActivity
 import com.bydmate.app.R
+import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
 import com.bydmate.app.data.nativestack.ParsReader
@@ -80,6 +84,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
+    @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -279,6 +284,7 @@ class TrackingService : Service(), LocationListener {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
+                if (ok) maybeRebindStarService()
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
@@ -938,6 +944,35 @@ class TrackingService : Service(), LocationListener {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bydmate:tracking")
         wakeLock?.acquire(30 * 60 * 1000L) // 30 min max, auto-released
+    }
+
+    /**
+     * Re-assert the steering-wheel a11y key filter when cluster projection is enabled but the
+     * service is not currently bound. The system binds a11y services very early at boot — before our
+     * process is ready — so ours can crash, and the framework then leaves it disabled until something
+     * re-triggers a bind. enableStarControl only runs on the settings toggle, so without this a reboot
+     * kills star control until the user toggles again. Skips the re-bind when already bound, so a
+     * healthy projection is never disturbed.
+     */
+    private suspend fun maybeRebindStarService() {
+        val prefs = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+        if (!prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)) return
+        if (starServiceBound()) {
+            Log.d(TAG, "star a11y already bound; no re-assert")
+            return
+        }
+        val rebound = helperClient.enableAccessibilityService()
+        Log.i(TAG, "star a11y re-asserted on startup → $rebound")
+    }
+
+    /** True when our steering-wheel service is in the framework's currently-bound a11y set. */
+    private fun starServiceBound(): Boolean {
+        val am = getSystemService(Context.ACCESSIBILITY_SERVICE) as? AccessibilityManager ?: return false
+        val ours = ComponentName.unflattenFromString(
+            com.bydmate.app.helper.HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT
+        ) ?: return false
+        return am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { ComponentName.unflattenFromString(it.id ?: "") == ours }
     }
 
     private fun createNotificationChannel() {

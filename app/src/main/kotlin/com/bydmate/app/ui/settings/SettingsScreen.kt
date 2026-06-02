@@ -6,7 +6,10 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.MAX_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_PROJECTION_PCT
 import dagger.hilt.android.EntryPointAccessors
+import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.background
@@ -95,6 +98,7 @@ private enum class SettingsSection(@StringRes val labelRes: Int, val icon: Image
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
+    DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
     APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
     SMART_HOME(R.string.settings_smart_home_section_title, Icons.Outlined.Home),
@@ -219,6 +223,7 @@ fun SettingsScreen(
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
+                        SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -557,9 +562,6 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
-    SectionHeader(text = "Приборка")
-    ClusterMirrorToggle()
-
     // Model picker dialog
     if (state.showModelPicker) {
         ModelPickerDialog(
@@ -834,14 +836,25 @@ private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
 }
 
 @Composable
-private fun ClusterMirrorToggle() {
+private fun DisplaySection() {
     val context = LocalContext.current
     val prefs = remember {
         context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     }
+    val entryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
     var enabled by remember {
         mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false))
     }
+    var widthPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_WIDTH_PCT, MAX_PROJECTION_PCT))
+    }
+    var heightPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_HEIGHT_PCT, MAX_PROJECTION_PCT))
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -860,9 +873,9 @@ private fun ClusterMirrorToggle() {
                 tint = AccentGreen,
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Навигатор на приборку правой звездой", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(stringResource(R.string.settings_display_mirror_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Text(
-                    "Короткое нажатие правой звезды руля переносит Яндекс.Навигатор на приборку и обратно на экран. Нужен включённый полноэкранный режим приборки.",
+                    stringResource(R.string.settings_display_mirror_desc),
                     color = TextSecondary, fontSize = 12.sp,
                 )
             }
@@ -874,14 +887,64 @@ private fun ClusterMirrorToggle() {
                     // Turning the switch on self-enables our a11y key filter via the daemon, so star
                     // control works on a clean install with no ADB (DiLink has no a11y settings UI).
                     if (it) {
-                        val ep = EntryPointAccessors.fromApplication(
-                            context.applicationContext, ClusterEntryPoint::class.java)
-                        ClusterProjectionManager.enableStarControl(ep.helperClient(), ep.helperBootstrap())
+                        ClusterProjectionManager.enableStarControl(
+                            entryPoint.helperClient(), entryPoint.helperBootstrap())
                     }
                 },
                 colors = bydSwitchColors(),
             )
         }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_display_size_header))
+    // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
+    // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
+    val applySize: () -> Unit = {
+        prefs.edit()
+            .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
+            .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
+            .apply()
+        ClusterProjectionManager.reproject(
+            context, entryPoint.helperClient(), entryPoint.helperBootstrap())
+    }
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_width), widthPct, enabled, { widthPct = it }, applySize)
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_height), heightPct, enabled, { heightPct = it }, applySize)
+}
+
+@Composable
+private fun ClusterSizeSlider(
+    label: String,
+    pct: Int,
+    enabled: Boolean,
+    onChange: (Int) -> Unit,
+    onFinished: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = if (enabled) TextPrimary else TextMuted, fontSize = 14.sp)
+            Text(
+                "$pct%",
+                color = if (enabled) AccentGreen else TextMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Slider(
+            value = pct.toFloat(),
+            onValueChange = { onChange(it.roundToInt()) },
+            onValueChangeFinished = onFinished,
+            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
+            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = AccentGreen,
+                activeTrackColor = AccentGreen,
+            ),
+        )
     }
 }
 

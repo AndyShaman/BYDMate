@@ -62,6 +62,12 @@ object ClusterProjectionManager {
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
     const val KEY_MIRROR_ENABLED = "mirror_enabled"
+    // User-tunable window size, % of the cluster panel (MIN_PROJECTION_PCT..MAX, default = full).
+    const val KEY_WIDTH_PCT = "width_pct"
+    const val KEY_HEIGHT_PCT = "height_pct"
+    // Last VirtualDisplay id we created. Persisted so a fresh app process can release the display
+    // a prior (dead) process left orphaned in the long-lived daemon, instead of leaking it.
+    private const val KEY_LAST_VD_ID = "last_vd_id"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
@@ -120,6 +126,131 @@ object ClusterProjectionManager {
         }
     }
 
+    /**
+     * Apply the size currently saved in prefs to the live projection (size-slider change). No-op
+     * unless we are actively projecting FULLSCREEN — when OFF the new size is picked up on the next
+     * star press, since [project] reads the size prefs fresh. When projecting, [swapToNewSize] does
+     * an in-place make-before-break resize so Navi never bounces to the main screen; only if that
+     * fails do we fall back to a full (visibly bouncing) rebuild. Serialized under [mutex].
+     */
+    fun reproject(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+        val appContext = context.applicationContext
+        scope.launch {
+            mutex.withLock {
+                if (currentMode != ClusterMode.FULLSCREEN) return@withLock
+                Log.i(TAG, "reproject: in-place resize")
+                if (!swapToNewSize(appContext, helper, bootstrap)) {
+                    Log.w(TAG, "in-place resize failed; rebuilding projection")
+                    applyModeLocked(appContext, ClusterMode.FULLSCREEN, helper, bootstrap)
+                }
+            }
+        }
+    }
+
+    /**
+     * Resize the live projection without dropping Navi back to the main screen. Stands up a fresh
+     * overlay + VirtualDisplay at the saved size and moves Navi straight onto it, THEN releases the
+     * old overlay + VirtualDisplay. Relocating a task to another display is fine, but *removing* a
+     * task's only display is what bounces it to the main screen — so by moving Navi onto the new
+     * cluster display before releasing the old one, the cluster just redraws at the new size.
+     *
+     * Caller holds [mutex]. Returns false ONLY when state is left uncertain (Navi may have moved
+     * onto a released display) so [reproject] does a clean rebuild; on the benign failures (new
+     * overlay/VD never came up) it returns true and leaves the existing projection running untouched.
+     */
+    private suspend fun swapToNewSize(
+        context: Context, helper: HelperClient, bootstrap: HelperBootstrap,
+    ): Boolean {
+        if (!bootstrap.ensureRunning()) return true        // daemon gone; keep what's on screen
+        val oldOverlay = overlayView ?: return true
+        val oldVdId = remoteDisplayId
+        val display = resolveClusterDisplay(context) ?: return true
+        val (widthPct, heightPct) = readSizePct(context)
+        val geo = geometryFor(ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct)
+            ?: return true
+
+        // addOverlayAndAwaitSurface points overlayView at the NEW container; oldOverlay keeps the old
+        // one so we can drop it after Navi has moved. remoteDisplayId is untouched until we commit.
+        val surface = try {
+            withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
+                addOverlayAndAwaitSurface(context, display, geo, helper)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "resize: new overlay threw: ${e.message}"); null
+        }
+        if (surface == null) {
+            Log.e(TAG, "resize: new overlay Surface not ready; keeping current size")
+            discardNewOverlayKeepOld(oldOverlay); return true
+        }
+        val newVdId = helper.createVirtualDisplay(
+            VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+        )
+        if (newVdId == null) {
+            Log.e(TAG, "resize: createVirtualDisplay failed; keeping current size")
+            discardNewOverlayKeepOld(oldOverlay); return true
+        }
+        if (!helper.launchAndForce(NAVI_PACKAGE, newVdId, geo.width, geo.height)) {
+            // Navi may already have been moved onto newVd; release it and let the caller rebuild.
+            Log.e(TAG, "resize: launchAndForce failed")
+            helper.releaseVirtualDisplay(newVdId)
+            discardNewOverlayKeepOld(oldOverlay); return false
+        }
+        // New projection holds Navi. Commit the new id, then drop the old overlay + VirtualDisplay.
+        remoteDisplayId = newVdId
+        saveLastVdId(context, newVdId)
+        if (oldVdId != -1) helper.releaseVirtualDisplay(oldVdId)
+        removeOverlayView(oldOverlay)
+        Log.i(TAG, "resize: swapped to ${geo.width}x${geo.height} (vd $oldVdId -> $newVdId)")
+        return true
+    }
+
+    /**
+     * Failed-resize cleanup: remove the half-built NEW overlay and restore [overlayView] to the
+     * still-running old projection, so nothing leaks and the surfaceDestroyed guard keeps matching.
+     */
+    private suspend fun discardNewOverlayKeepOld(oldOverlay: View) {
+        val newOverlay = overlayView
+        overlayView = oldOverlay
+        if (newOverlay != null && newOverlay !== oldOverlay) removeOverlayView(newOverlay)
+    }
+
+    /** Remove an overlay container from its display's WindowManager (main thread, never throws). */
+    private suspend fun removeOverlayView(view: View) {
+        withContext(Dispatchers.Main) {
+            try {
+                (view.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager).removeView(view)
+            } catch (e: Exception) {
+                Log.w(TAG, "removeView failed: ${e.message}")
+            }
+        }
+    }
+
+    /** Saved window size as (widthPct, heightPct); defaults to a full-screen window. */
+    private fun readSizePct(context: Context): Pair<Int, Int> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_WIDTH_PCT, MAX_PROJECTION_PCT) to
+            prefs.getInt(KEY_HEIGHT_PCT, MAX_PROJECTION_PCT)
+    }
+
+    /** Remember the last VirtualDisplay id so a future process can release it if we die holding it. */
+    private fun saveLastVdId(context: Context, id: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt(KEY_LAST_VD_ID, id).apply()
+    }
+
+    /**
+     * Release a cluster display a prior process orphaned in the long-lived daemon. No-op when none
+     * was recorded or the id is already gone (the daemon only releases displays in its own map).
+     */
+    private suspend fun releaseOrphanedDisplay(context: Context, helper: HelperClient) {
+        val orphan = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_LAST_VD_ID, -1)
+        if (orphan != -1) {
+            Log.i(TAG, "releasing orphaned VirtualDisplay id=$orphan from a prior session")
+            helper.releaseVirtualDisplay(orphan)
+        }
+    }
+
     /** Caller MUST hold [mutex]. Sets currentMode = mode only on full success, else OFF. */
     private suspend fun applyModeLocked(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
@@ -158,7 +289,8 @@ object ClusterProjectionManager {
         val display = resolveClusterDisplay(context) ?: run {
             Log.e(TAG, "cluster display not found"); return false
         }
-        val geo = geometryFor(mode, clusterWidth, clusterHeight) ?: return false
+        val (widthPct, heightPct) = readSizePct(context)
+        val geo = geometryFor(mode, clusterWidth, clusterHeight, widthPct, heightPct) ?: return false
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
@@ -178,6 +310,11 @@ object ClusterProjectionManager {
                     hideOverlay(helper); return false
                 }
                 remoteDisplayId = -1
+            } else {
+                // Cold start (fresh process): release any display this app orphaned in the daemon
+                // before its last death, so cluster displays can't pile up across restarts. The
+                // daemon only releases ids in its own map, so a reused/stale id is a safe no-op.
+                releaseOrphanedDisplay(context, helper)
             }
             val id = helper.createVirtualDisplay(
                 VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
@@ -186,6 +323,7 @@ object ClusterProjectionManager {
                 Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return false
             }
             remoteDisplayId = id
+            saveLastVdId(context, id)
             Log.i(TAG, "VirtualDisplay id=$id; launchAndForce $NAVI_PACKAGE")
             val ok = helper.launchAndForce(NAVI_PACKAGE, id, geo.width, geo.height)
             if (!ok) {
