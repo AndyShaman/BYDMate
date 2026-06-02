@@ -37,10 +37,10 @@ import kotlinx.coroutines.withTimeoutOrNull
  * of ICarControl shell strings. Single in-memory instance — mode resets to OFF on
  * process death (acceptable for v1; persistence is a later concern).
  *
- * Concurrency: every cycleMode press runs under [mutex], so two fast presses can't
+ * Concurrency: every setMode call runs under [mutex], so two fast polls can't
  * build overlapping overlays or clobber [remoteDisplayId]. The whole transition —
  * including the daemon's VirtualDisplay create + launchAndForce — runs inside the
- * lock, so a press during an in-flight transition is queued, not dropped.
+ * lock, so a poll during an in-flight transition is queued, not dropped.
  *
  * State honesty: [currentMode] advances to the requested mode ONLY when the projection
  * fully succeeds (overlay up + VirtualDisplay created + Navi pinned). On ANY failure it
@@ -57,14 +57,11 @@ object ClusterProjectionManager {
     private const val VD_NAME = "BYDMate_Cluster_VD"
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
     private const val OVERLAY_FLAGS = 264                     // FLAG_NOT_FOCUSABLE(8) | FLAG_LAYOUT_IN_SCREEN(256)
-    private const val SWITCH_SETTLE_MS = 500L                 // OpenBYD refresh delay between pull-back and re-cast
     private const val SURFACE_TIMEOUT_MS = 3000L              // give up if the overlay Surface never gets created
 
-    // Manual cluster-display override (mirrors OpenBYD AppPreferences.getOverrideClusterDisplayId).
-    // Lets the diagnostic screen probe display id 2/3/4 live without a rebuild. -1 = auto.
     const val PREFS_NAME = "cluster_projection"
-    const val KEY_OVERRIDE_DISPLAY_ID = "override_display_id"
-    private const val OVERRIDE_NONE = -1
+    // Master enable for the auto-mirror (settings checkbox). The poller in TrackingService reads it.
+    const val KEY_MIRROR_ENABLED = "mirror_enabled"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
@@ -82,14 +79,23 @@ object ClusterProjectionManager {
     private var clusterHeight: Int = 480
     private var clusterDensityDpi: Int = 320
 
-    /** Button entry point: advance OFF → MINI → FULLSCREEN → OFF and apply, serialized. */
-    fun cycleMode(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+    /**
+     * Mirror entry point: drive the projection to [mode] read from the native ИПЦ lever, serialized.
+     * Idempotent — a no-op when already in [mode]. For FULLSCREEN we project only if Navi is already
+     * running; we never auto-launch it, so when Navi is absent the call is a no-op and the next poll
+     * retries once the user opens it. OFF always tears the projection down.
+     */
+    fun setMode(context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
         scope.launch {
             mutex.withLock {
-                val next = currentMode.next()
-                Log.i(TAG, "cycleMode: $currentMode -> $next")
-                applyModeLocked(appContext, next, helper, bootstrap)
+                if (mode == currentMode) return@withLock
+                if (mode != ClusterMode.OFF && helper.getTaskId(NAVI_PACKAGE) == null) {
+                    Log.d(TAG, "setMode $mode deferred: $NAVI_PACKAGE not running")
+                    return@withLock
+                }
+                Log.i(TAG, "setMode: $currentMode -> $mode")
+                applyModeLocked(appContext, mode, helper, bootstrap)
             }
         }
     }
@@ -104,13 +110,7 @@ object ClusterProjectionManager {
                 hideOverlay(helper)
                 currentMode = ClusterMode.OFF
             }
-            else -> {
-                if (currentMode != ClusterMode.OFF) {
-                    // switching MINI <-> FULLSCREEN: pull Navi back, tear down, re-cast at new size
-                    pullBackToMain(helper, focus = false)
-                    hideOverlay(helper)
-                    delay(SWITCH_SETTLE_MS)
-                }
+            ClusterMode.FULLSCREEN -> {
                 if (project(context, mode, helper, bootstrap)) {
                     currentMode = mode
                 } else {
@@ -182,27 +182,20 @@ object ClusterProjectionManager {
     }
 
     /**
-     * App-side display lookup, ported from OpenBYD getClusterDisplayId: a manual override wins;
-     * otherwise pick the LAST display named "cluster" that is NOT "fission"; else fall back to
-     * id 2 (the primary fission_bg surface on Leopard 3). Updates cluster W/H/dpi.
-     *
-     * The previous predicate matched ANY "fission" display and non-deterministically landed on
-     * id 3 (a shared_fission_bg secondary surface), so Navi was pinned to a VirtualDisplay whose
-     * overlay sat on a surface the panel never renders.
+     * App-side display lookup. The cluster's projection surfaces are virtual displays owned by
+     * com.byd.containerservice, named "*XDJAScreenProjection*" (1280x480). Validated on-car
+     * 2026-06-02: the panel composites the "..._1" surface in Full mode, so we pick it by name;
+     * if it is absent we take the first projection surface, else fall back to id 2. Name-based
+     * selection survives containerservice reassigning display ids at boot. Updates cluster W/H/dpi.
      */
     private fun resolveClusterDisplay(context: Context): Display? {
         val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val override = context
-            .getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getInt(KEY_OVERRIDE_DISPLAY_ID, OVERRIDE_NONE)
-        val match = if (override != OVERRIDE_NONE) {
-            dm.getDisplay(override)
-        } else {
-            dm.displays.lastOrNull {
-                !it.name.contains("fission", ignoreCase = true) &&
-                    it.name.contains("cluster", ignoreCase = true)
-            } ?: dm.getDisplay(DEFAULT_CLUSTER_DISPLAY_ID)
+        val projectionDisplays = dm.displays.filter {
+            it.name.contains("XDJAScreenProjection", ignoreCase = true)
         }
+        val match = projectionDisplays.firstOrNull { it.name.endsWith("_1") }
+            ?: projectionDisplays.firstOrNull()
+            ?: dm.getDisplay(DEFAULT_CLUSTER_DISPLAY_ID)
         if (match != null) {
             val point = Point()
             @Suppress("DEPRECATION") match.getRealSize(point)
@@ -248,8 +241,8 @@ object ClusterProjectionManager {
                     Log.d(TAG, "surfaceDestroyed")
                     // Safety net: if the system tore the Surface down outside hideOverlay(), the
                     // VirtualDisplay would render into a dead Surface — release it (mirrors OpenBYD).
-                    // Identity guard: during a MINI<->FULLSCREEN switch this OLD overlay's callback
-                    // must not release the NEW VirtualDisplay created for the next overlay.
+                    // Identity guard: during an OFF->FULLSCREEN re-projection this OLD overlay's
+                    // callback must not release the NEW VirtualDisplay created for the next overlay.
                     scope.launch {
                         mutex.withLock {
                             if (overlayView === container) releaseRemoteDisplayIfAlive(helper)

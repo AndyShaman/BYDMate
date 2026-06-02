@@ -1,8 +1,10 @@
 package com.bydmate.app.ui.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.background
@@ -102,7 +104,6 @@ private val PrimaryColor = AccentGreen
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToPlaces: () -> Unit = {},
-    onNavigateToClusterDiagnostic: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -216,10 +217,7 @@ fun SettingsScreen(
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
-                        SettingsSection.PLACES -> {
-                            PlacesSection(onNavigateToPlaces)
-                            ClusterDiagnosticEntry(onNavigateToClusterDiagnostic)
-                        }
+                        SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
                     }
@@ -557,6 +555,9 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
+    SectionHeader(text = "Приборка")
+    ClusterMirrorToggle()
+
     // Model picker dialog
     if (state.showModelPicker) {
         ModelPickerDialog(
@@ -831,7 +832,14 @@ private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
 }
 
 @Composable
-private fun ClusterDiagnosticEntry(onNavigate: () -> Unit) {
+private fun ClusterMirrorToggle() {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    var enabled by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false))
+    }
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -840,7 +848,6 @@ private fun ClusterDiagnosticEntry(onNavigate: () -> Unit) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onNavigate() }
                 .padding(horizontal = 12.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -851,9 +858,20 @@ private fun ClusterDiagnosticEntry(onNavigate: () -> Unit) {
                 tint = AccentGreen,
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Диагностика приборки (эксп.)", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
-                Text("Проекция экрана и состояние кластера", color = TextSecondary, fontSize = 12.sp)
+                Text("Выводить Яндекс.Навигатор на приборку", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Когда штатный режим приборки = «Полный», на неё выводится Яндекс.Навигатор",
+                    color = TextSecondary, fontSize = 12.sp,
+                )
             }
+            Switch(
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, it).apply()
+                },
+                colors = bydSwitchColors(),
+            )
         }
     }
 }

@@ -62,7 +62,6 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
-import com.bydmate.app.ui.cluster.ClusterDiagnosticScreen
 import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.SettingsScreen
@@ -236,11 +235,9 @@ fun AppNavigation(
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToPlaces = { navController.navigate("places") },
-                    onNavigateToClusterDiagnostic = { navController.navigate("cluster-diagnostic") },
                 )
             }
             composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
-            composable("cluster-diagnostic") { ClusterDiagnosticScreen(onBack = { navController.popBackStack() }) }
         }
     }
 }

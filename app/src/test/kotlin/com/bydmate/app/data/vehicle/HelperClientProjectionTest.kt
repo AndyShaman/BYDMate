@@ -110,21 +110,6 @@ class HelperClientProjectionTest {
     }
 
     @Test
-    fun `enableAccessibilityService sends TX_ENABLE_ACCESSIBILITY and maps status to boolean`() = runBlocking {
-        var code = -1
-        val fake = object : FakeIBinder() {
-            override fun transact(c: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
-                code = c
-                reply!!.writeInt(0); reply.writeInt(0); reply.setDataPosition(0)
-                return true
-            }
-        }
-        assertTrue(clientWith(fake).enableAccessibilityService())
-        assertEquals(HelperBinderProtocol.TX_ENABLE_ACCESSIBILITY, code)
-        assertFalse(clientWith(capturingFake(status = -1, value = 0)).enableAccessibilityService())
-    }
-
-    @Test
     fun `launchAndForce sends args and maps status to boolean`() = runBlocking {
         var pkg: String? = null; val nums = IntArray(3)
         val ok = clientWith(capturingFake(status = 0, value = 0) {

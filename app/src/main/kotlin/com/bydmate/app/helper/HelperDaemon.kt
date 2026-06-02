@@ -5,7 +5,6 @@ import android.content.Context
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
-import android.util.DisplayMetrics
 import android.os.Binder
 import android.view.Surface
 import java.util.concurrent.ConcurrentHashMap
@@ -86,7 +85,7 @@ fun main(args: Array<String>) {
     @Suppress("UNUSED_VARIABLE") val lockHandle = lockPair.second
 
     // Prepare the main looper BEFORE ActivityThread.systemMain (OpenBYD EntryPoint order),
-    // then acquire a system Context for DisplayManager / BYDAutoInstrumentDevice reads.
+    // then acquire a system Context for the projection DisplayManager calls.
     @Suppress("DEPRECATION")
     Looper.prepareMainLooper()
     val systemContext: Context? = acquireSystemContext()
@@ -142,45 +141,6 @@ fun main(args: Array<String>) {
                     val (status, retInt) = autoserviceTransact(svc, autoIface, 6, dev, fid, value, writeValue = true)
                     reply?.writeInt(status)
                     reply?.writeInt(retInt)
-                    true
-                }.getOrElse {
-                    reply?.writeInt(-1); reply?.writeInt(0); true
-                }
-
-                HelperBinderProtocol.TX_LIST_DISPLAYS -> runCatching {
-                    val ctx = systemContext
-                    if (ctx == null) {
-                        reply?.writeInt(-1); reply?.writeInt(0)
-                    } else {
-                        val dm = ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-                        val displays = dm.displays
-                        reply?.writeInt(0)
-                        reply?.writeInt(displays.size)
-                        for (d in displays) {
-                            val m = DisplayMetrics()
-                            @Suppress("DEPRECATION")
-                            d.getRealMetrics(m)
-                            reply?.writeInt(d.displayId)
-                            reply?.writeString(d.name ?: "")
-                            reply?.writeInt(m.widthPixels)
-                            reply?.writeInt(m.heightPixels)
-                            reply?.writeInt(m.densityDpi)
-                        }
-                    }
-                    true
-                }.getOrElse {
-                    reply?.writeInt(-1); reply?.writeInt(0); true
-                }
-
-                HelperBinderProtocol.TX_GET_INSTRUMENT_FEATURE -> runCatching {
-                    val featureId = data.readInt()
-                    val ctx = systemContext
-                    val value = if (ctx == null) null else readBydAutoFeature(ctx, featureId)
-                    if (value == null) {
-                        reply?.writeInt(-1); reply?.writeInt(0)
-                    } else {
-                        reply?.writeInt(0); reply?.writeInt(value)
-                    }
                     true
                 }.getOrElse {
                     reply?.writeInt(-1); reply?.writeInt(0); true
@@ -266,12 +226,6 @@ fun main(args: Array<String>) {
                     val pkg = data.readString() ?: ""
                     val displayId = data.readInt(); val width = data.readInt(); val height = data.readInt()
                     val ok = launchAndForce(pkg, displayId, width, height)
-                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
-                    true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
-
-                HelperBinderProtocol.TX_ENABLE_ACCESSIBILITY -> runCatching {
-                    val ok = enableAccessibilityService()
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -429,33 +383,6 @@ private fun acquireSystemContext(): Context? = try {
 }
 
 /**
- * Reads a BYDAuto feature value by id. Tries the instrument device first, then the
- * setting device (Phase 0 diagnostics determine which one is live on this trim).
- * Returns null when neither device yields a value (feature absent / eventValue null /
- * any reflection failure). A real value of 0 is returned as 0 (NOT null).
- */
-private fun readBydAutoFeature(ctx: Context, featureId: Int): Int? {
-    readFeatureFrom("android.hardware.bydauto.instrument.BYDAutoInstrumentDevice", ctx, featureId)
-        ?.let { return it }
-    return readFeatureFrom("android.hardware.bydauto.setting.BYDAutoSettingDevice", ctx, featureId)
-}
-
-private fun readFeatureFrom(className: String, ctx: Context, featureId: Int): Int? = try {
-    val cls = Class.forName(className)
-    val device = cls.getMethod("getInstance", Context::class.java).invoke(null, ctx)
-    if (device == null) {
-        null
-    } else {
-        val getMethod = cls.getMethod("get", IntArray::class.java, Class::class.java)
-        val eventValue = getMethod.invoke(device, intArrayOf(featureId), Integer.TYPE)
-        if (eventValue == null) null
-        else eventValue.javaClass.getField("intValue").getInt(eventValue)
-    }
-} catch (e: Throwable) {
-    null
-}
-
-/**
  * Creates a VirtualDisplay backed by [surface]. Uses a com.android.shell package Context so the
  * shell uid's privilege applies to the requested [flags] (incl. TRUSTED / SYSTEM_DECORATIONS).
  * Returns the new displayId (>0) on success, or -1 (releasing any invalid display). Mirrors
@@ -504,43 +431,6 @@ private fun shExec(script: String, vararg args: String): CmdResult {
         .start()
     val out = process.inputStream.bufferedReader().use { it.readText().trim() }
     return CmdResult(process.waitFor(), out)
-}
-
-/**
- * Enables our steering-wheel accessibility service by APPENDING our flattened ComponentName to
- * secure setting enabled_accessibility_services (DiLink has no a11y settings UI, so the user
- * cannot toggle it themselves). Uses the `settings` binary under shell uid — the in-process
- * Settings.Secure ContentResolver path does not stick for an app_process-spawned daemon (mirrors
- * OpenBYD AccessibilitySetupHelper). Safe read-modify-write: existing entries are preserved, our
- * own entry is never duplicated, we never clobber another app's accessibility service. Also sets
- * accessibility_enabled=1 so the framework actually binds enabled services. App-scoped, reversible
- * Secure settings only; touches nothing on the vehicle (no autoservice/CAN/firmware).
- */
-private fun enableAccessibilityService(): Boolean {
-    val component = HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT
-    // Abort on a failed READ — never write a guessed/garbled list back, that would clobber other
-    // apps' accessibility services.
-    val current = readSecure("enabled_accessibility_services") ?: return false
-    val parts = current.split(':').filter { it.isNotEmpty() }
-    if (!parts.contains(component)) {
-        val updated = (parts + component).joinToString(":")
-        // $1 = updated, passed as argv (not interpolated) — safe even if the existing list is odd.
-        if (shExec("settings put secure enabled_accessibility_services \"\$1\"", updated).code != 0) return false
-    }
-    if (shExec("settings put secure accessibility_enabled 1").code != 0) return false
-    // Verify read-back: our component is now listed AND accessibility is enabled.
-    val after = (readSecure("enabled_accessibility_services") ?: return false).split(':').filter { it.isNotEmpty() }
-    return after.contains(component) && readSecure("accessibility_enabled") == "1"
-}
-
-/**
- * Reads a secure setting via the `settings` binary: "" when unset (`settings get` prints "null"),
- * or null on a non-zero exit so callers can abort instead of acting on a bad read.
- */
-private fun readSecure(key: String): String? {
-    val r = shExec("settings get secure \"\$1\"", key)
-    if (r.code != 0) return null
-    return if (r.stdout == "null") "" else r.stdout
 }
 
 /**
