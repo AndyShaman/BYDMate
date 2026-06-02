@@ -17,15 +17,8 @@ class ClusterProjectionStateTest {
         assertNull(geometryFor(ClusterMode.OFF, 1280, 480))
     }
 
-    @Test fun `clusterModeFromRaw maps the on-car validated lever values`() {
-        assertEquals(ClusterMode.OFF, clusterModeFromRaw(1))         // Off
-        assertEquals(ClusterMode.OFF, clusterModeFromRaw(2))         // Simple — not projectable, tear down
-        assertEquals(ClusterMode.FULLSCREEN, clusterModeFromRaw(4))  // Full
-    }
-
-    @Test fun `clusterModeFromRaw returns null for sentinel and unexpected values`() {
-        assertNull(clusterModeFromRaw(-10011))  // permission sentinel
-        assertNull(clusterModeFromRaw(0))
-        assertNull(clusterModeFromRaw(3))
+    @Test fun `nextMode flips the two projection states`() {
+        assertEquals(ClusterMode.FULLSCREEN, nextMode(ClusterMode.OFF))
+        assertEquals(ClusterMode.OFF, nextMode(ClusterMode.FULLSCREEN))
     }
 }
