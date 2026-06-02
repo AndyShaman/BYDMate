@@ -858,9 +858,9 @@ private fun ClusterMirrorToggle() {
                 tint = AccentGreen,
             )
             Column(modifier = Modifier.weight(1f)) {
-                Text("Выводить Яндекс.Навигатор на приборку", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Навигатор на приборку правой звездой", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
                 Text(
-                    "Когда штатный режим приборки = «Полный», на неё выводится Яндекс.Навигатор",
+                    "Короткое нажатие правой звезды руля переносит Яндекс.Навигатор на приборку и обратно на экран. Нужен включённый полноэкранный режим приборки.",
                     color = TextSecondary, fontSize = 12.sp,
                 )
             }
