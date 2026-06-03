@@ -260,22 +260,6 @@ If a record is missing or the numbers look off:
 
 ---
 
-<<<<<<< HEAD
-## Trip data source
-
-BYDMate supports two trip-data backends, switchable in **Settings → Trip data source** or during the first-run wizard.
-
-<img src="docs/screenshots/data-source-toggle.jpg" alt="Trip data source toggle" width="800">
-
-| Mode | For which cars                                                                              | What is read |
-|------|---------------------------------------------------------------------------------------------|--------------|
-| **BYD energydata** | Leopard 3 (Fangchengbao Tai 3) and other models with the built-in BMS `energydata` database | BYD SQLite: precise consumption (BMS), mileage, duration, charges |
-| **DiPlus TripInfo** | Song and other models **without** built-in energydata                                       | DiPlus database: trip list, SOC start/end, average speed |
-
-**How to choose:** if the Trips list stays empty after 2–3 drives — switch the mode. Leopard 3 needs energydata (more accurate); Song and similar models use TripInfo (the only available source).
-
-In `DiPlus TripInfo` mode, consumption is computed from the SOC delta — it is ~1 kWh/100km coarser than BMS, offset by the fact that the car offers no other data.
-
 ---
 
 ## Battery health (SoH)
