@@ -38,7 +38,8 @@ class SteeringWheelKeyService : AccessibilityService() {
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
         val enabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
-        return when (starDecision(event.keyCode, event.action == KeyEvent.ACTION_DOWN, enabled)) {
+        val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)
+        return when (starDecision(event.keyCode, event.action == KeyEvent.ACTION_DOWN, enabled, trigger)) {
             StarDecision.CONSUME_AND_TOGGLE -> {
                 val ep = entryPoint()
                 ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
