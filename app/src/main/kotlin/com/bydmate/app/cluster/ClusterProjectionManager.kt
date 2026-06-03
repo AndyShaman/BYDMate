@@ -249,11 +249,6 @@ object ClusterProjectionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
 
-    /** Steering-wheel keycode that toggles projection; defaults to the right star. */
-    fun triggerKeyCode(context: Context): Int =
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .getInt(KEY_TRIGGER_KEYCODE, RIGHT_STAR_KEYCODE)
-
     /** Persist the user's chosen trigger keycode (from the learn-button dialog). */
     fun setTriggerKeyCode(context: Context, keyCode: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
