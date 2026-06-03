@@ -9,6 +9,7 @@ import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import dagger.hilt.android.EntryPointAccessors
+import kotlinx.coroutines.flow.MutableStateFlow
 
 /**
  * Steering-wheel key filter for cluster projection. When the settings master switch
@@ -39,9 +40,24 @@ class SteeringWheelKeyService : AccessibilityService() {
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {
+        val isDown = event.action == KeyEvent.ACTION_DOWN
+        if (learnMode) {
+            return when (learnDecision(event.keyCode, isDown)) {
+                LearnAction.CAPTURE -> {
+                    capturedKey.value = CaptureResult(event.keyCode, assignable = true)
+                    learnMode = false  // got it; dialog moves to the confirm step
+                    true
+                }
+                LearnAction.REJECT -> {
+                    capturedKey.value = CaptureResult(event.keyCode, assignable = false)
+                    true  // stay in learn mode; dialog shows "can't assign", waits for another key
+                }
+                LearnAction.CONSUME -> true
+            }
+        }
         val enabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
         val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)
-        return when (starDecision(event.keyCode, event.action == KeyEvent.ACTION_DOWN, enabled, trigger)) {
+        return when (starDecision(event.keyCode, isDown, enabled, trigger)) {
             StarDecision.CONSUME_AND_TOGGLE -> {
                 val ep = entryPoint()
                 ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
@@ -83,5 +99,19 @@ class SteeringWheelKeyService : AccessibilityService() {
         @Volatile
         var isConnected: Boolean = false
             private set
+
+        /**
+         * Learn mode: when true, the next steering-wheel key is captured into [capturedKey] instead
+         * of toggling projection, and every key is consumed so its native action can't fire. Set by
+         * the settings learn dialog; cleared by the service on CAPTURE or by the dialog on dismiss.
+         */
+        @Volatile
+        var learnMode: Boolean = false
+
+        /** Result of a learn-mode key press; the settings dialog (same process) collects this. */
+        data class CaptureResult(val keyCode: Int, val assignable: Boolean)
+
+        /** Last captured key while learning; null = nothing captured yet. */
+        val capturedKey = MutableStateFlow<CaptureResult?>(null)
     }
 }
