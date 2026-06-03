@@ -12,13 +12,15 @@ import dagger.hilt.android.EntryPointAccessors
 
 /**
  * Steering-wheel key filter for cluster projection. When the settings master switch
- * ([ClusterProjectionManager.KEY_MIRROR_ENABLED]) is ON, a short press of the right star
- * ([RIGHT_STAR_KEYCODE]) toggles Yandex Navi between the cluster and the centre screen and is
- * consumed; everything else (switch OFF, left star, the right-star long-press that opens the
- * native action menu, the cluster carousel) passes through untouched.
+ * ([ClusterProjectionManager.KEY_MIRROR_ENABLED]) is ON, a short press of the configured trigger
+ * button (keycode in [ClusterProjectionManager.KEY_TRIGGER_KEYCODE], default
+ * [DEFAULT_TRIGGER_KEYCODE] = the right star) toggles Yandex Navi between the cluster and the centre
+ * screen and is consumed; every other key (switch OFF, a non-trigger button, the right-star
+ * long-press that opens the native action menu) passes through untouched.
  *
- * Inert unless enabled in secure settings (manual/ADB — no Accessibility UI on DiLink) AND the
- * settings switch is on, so it does nothing for users who never opt in.
+ * Inert unless enabled in secure settings (self-enabled via the daemon when the switch turns on —
+ * no Accessibility UI on DiLink) AND the settings switch is on, so it does nothing for users who
+ * never opt in.
  */
 class SteeringWheelKeyService : AccessibilityService() {
 
