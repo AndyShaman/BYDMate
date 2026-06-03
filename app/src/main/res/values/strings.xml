@@ -328,6 +328,8 @@
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
     <string name="automation_action_url">Открыть URL</string>
     <string name="automation_action_delay">Пауза</string>
+    <string name="automation_action_media_volume">Громкость медиа</string>
+    <string name="automation_action_media_volume_label">Громкость</string>
 
     <!-- Overlay permission dialog -->
     <string name="automation_overlay_permission_title">Нужно разрешение</string>

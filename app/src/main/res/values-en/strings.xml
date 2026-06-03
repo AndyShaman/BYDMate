@@ -270,6 +270,8 @@
     <string name="automation_action_navigate">Route in Y.Navigator</string>
     <string name="automation_action_url">Open URL</string>
     <string name="automation_action_delay">Delay</string>
+    <string name="automation_action_media_volume">Media volume</string>
+    <string name="automation_action_media_volume_label">Volume</string>
     <string name="automation_overlay_permission_title">Permission required</string>
     <string name="automation_overlay_permission_text">Sound notifications are shown as a popup over other apps. Open system settings and enable \"Display over other apps\" for BYDMate.</string>
     <string name="automation_overlay_open_settings">Open settings</string>

@@ -1,6 +1,8 @@
 package com.bydmate.app.ui.automation
 
 import android.app.TimePickerDialog
+import android.content.Context
+import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -43,6 +45,7 @@ import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -61,6 +64,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -538,6 +542,9 @@ private fun EditorDialog(
                             },
                             onAddDelay = {
                                 onUpdate { copy(actions = actions + newDelayAction()) }
+                            },
+                            onAddMediaVolume = {
+                                onUpdate { copy(actions = actions + newMediaVolumeAction()) }
                             }
                         )
                     }
@@ -1136,6 +1143,8 @@ private fun ActionRow(
                 YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "delay" ->
                 DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "media_volume" ->
+                MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1245,6 +1254,56 @@ private fun DelayActionControls(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MediaVolumeActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    // Max volume is device-dependent; read it once from the head unit's AudioManager.
+    val maxVolume = remember {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        (am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1)
+    }
+    val current = (action.payload?.toIntOrNull() ?: 2).coerceIn(0, maxVolume)
+    val label = stringResource(R.string.automation_action_media_volume_label)
+    val namePrefix = stringResource(R.string.automation_action_media_volume)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.VolumeUp,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(8.dp))
+        Slider(
+            value = current.toFloat(),
+            onValueChange = { v ->
+                val lvl = v.toInt().coerceIn(0, maxVolume)
+                onUpdate(action.copy(payload = lvl.toString(), displayName = "$namePrefix: $lvl"))
+            },
+            valueRange = 0f..maxVolume.toFloat(),
+            steps = (maxVolume - 1).coerceAtLeast(0),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$current/$maxVolume",
+            fontSize = 13.sp,
+            color = AccentTeal,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(40.dp)
+        )
     }
 }
 
@@ -1480,7 +1539,8 @@ private fun AddActionButton(
     onAddNavigate: () -> Unit,
     onAddUrl: () -> Unit,
     onAddYandexMusic: () -> Unit,
-    onAddDelay: () -> Unit
+    onAddDelay: () -> Unit,
+    onAddMediaVolume: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1539,6 +1599,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddDelay() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddMediaVolume() }
             )
         }
     }
@@ -2435,6 +2499,13 @@ private fun newDelayAction(): ActionDef = ActionDef(
     displayName = "Пауза 1 сек",
     kind = "delay",
     payload = "1000"
+)
+
+private fun newMediaVolumeAction(): ActionDef = ActionDef(
+    command = "media_volume",
+    displayName = "Громкость медиа: 2",
+    kind = "media_volume",
+    payload = "2"
 )
 
 private fun newTimeOfDayTrigger(): TriggerDef {
