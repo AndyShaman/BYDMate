@@ -1,13 +1,22 @@
 package com.bydmate.app.ui.settings
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import com.bydmate.app.cluster.ClusterEntryPoint
+import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.MAX_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_PROJECTION_PCT
+import com.bydmate.app.cluster.NAVI_PACKAGE
+import dagger.hilt.android.EntryPointAccessors
+import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
@@ -89,9 +98,9 @@ import com.bydmate.app.ui.theme.*
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
-    TRIPS(R.string.settings_section_trips_title, Icons.Outlined.DirectionsCar),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
+    DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
     APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
     SMART_HOME(R.string.settings_smart_home_section_title, Icons.Outlined.Home),
@@ -102,7 +111,7 @@ private val PrimaryColor = AccentGreen
 @Composable
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
-    onNavigateToPlaces: () -> Unit = {}
+    onNavigateToPlaces: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -214,9 +223,9 @@ fun SettingsScreen(
                 ) {
                     when (safeSelected) {
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
-                        SettingsSection.TRIPS -> TripsSection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
+                        SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -427,83 +436,6 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 onValueChange = { viewModel.saveConsumptionBad(it) },
                 keyboardType = KeyboardType.Decimal
             )
-        }
-    }
-}
-
-@Composable
-private fun TripsSection(state: SettingsUiState, viewModel: SettingsViewModel) {
-    SectionHeader(text = stringResource(R.string.settings_trips_datasource_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.settings_trips_datasource_note),
-                color = TextSecondary,
-                fontSize = 11.sp,
-            )
-            DataSourceOption(
-                label = "BYD energydata",
-                selected = state.dataSource == "ENERGYDATA",
-                onClick = { viewModel.setDataSource("ENERGYDATA") },
-            )
-            DataSourceOption(
-                label = "DiPlus TripInfo",
-                selected = state.dataSource == "DIPLUS",
-                onClick = { viewModel.setDataSource("DIPLUS") },
-            )
-            Text(
-                text = stringResource(R.string.settings_trips_datasource_hint),
-                color = TextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.padding(top = 2.dp),
-            )
-            if (state.dataSourceStatus != null) {
-                Text(
-                    state.dataSourceStatus!!,
-                    color = PrimaryColor,
-                    fontSize = 11.sp,
-                )
-            }
-        }
-    }
-
-    SectionHeader(text = stringResource(R.string.settings_trips_system_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.settings_trips_system_note),
-                color = TextSecondary,
-                fontSize = 12.sp,
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.settings_trips_system_enable_label), color = TextPrimary, fontSize = 14.sp)
-                Switch(
-                    checked = state.autoserviceEnabled,
-                    onCheckedChange = { enabled ->
-                        viewModel.enableAutoservice(enabled)
-                    },
-                    colors = bydSwitchColors(),
-                )
-            }
-            AutoserviceStatusBlock(status = state.autoserviceStatus)
         }
     }
 }
@@ -906,6 +838,183 @@ private fun PlacesSection(onNavigateToPlaces: () -> Unit) {
 }
 
 @Composable
+private fun DisplaySection() {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    val entryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
+    var enabled by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false))
+    }
+    var widthPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_WIDTH_PCT, MAX_PROJECTION_PCT))
+    }
+    var heightPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_HEIGHT_PCT, MAX_PROJECTION_PCT))
+    }
+    var targetPkg by remember {
+        mutableStateOf(prefs.getString(ClusterProjectionManager.KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE)
+    }
+    var targetLabel by remember {
+        mutableStateOf(
+            prefs.getString(ClusterProjectionManager.KEY_TARGET_LABEL, null)
+                ?: resolveAppLabel(context, targetPkg)
+        )
+    }
+    var pickingApp by remember { mutableStateOf(false) }
+
+    SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.DirectionsCar,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_display_mirror_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(R.string.settings_display_mirror_desc),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = {
+                    enabled = it
+                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, it).apply()
+                    // Turning the switch on self-enables our a11y key filter via the daemon, so star
+                    // control works on a clean install with no ADB (DiLink has no a11y settings UI).
+                    if (it) {
+                        ClusterProjectionManager.enableStarControl(
+                            entryPoint.helperClient(), entryPoint.helperBootstrap())
+                    }
+                },
+                colors = bydSwitchColors(),
+            )
+        }
+    }
+
+    // App to project — defaults to Yandex Navi. Reuses the Automation app picker. The new app takes
+    // effect on the next star press / projection start, not live (we don't migrate a running task).
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clickable { pickingApp = true }
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Apps,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_display_app_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(targetLabel, color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+            }
+        }
+    }
+
+    if (pickingApp) {
+        AppLaunchPickerDialog(
+            currentPackage = targetPkg,
+            onDismiss = { pickingApp = false },
+            onSelect = { newPkg, newLabel ->
+                targetPkg = newPkg
+                targetLabel = newLabel
+                prefs.edit()
+                    .putString(ClusterProjectionManager.KEY_TARGET_PACKAGE, newPkg)
+                    .putString(ClusterProjectionManager.KEY_TARGET_LABEL, newLabel)
+                    .apply()
+                pickingApp = false
+            },
+        )
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_display_size_header))
+    // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
+    // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
+    val applySize: () -> Unit = {
+        prefs.edit()
+            .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
+            .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
+            .apply()
+        ClusterProjectionManager.reproject(
+            context, entryPoint.helperClient(), entryPoint.helperBootstrap())
+    }
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_width), widthPct, enabled, { widthPct = it }, applySize)
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_height), heightPct, enabled, { heightPct = it }, applySize)
+}
+
+/** App label for the cluster picker row; falls back to the package name when not installed/resolvable. */
+private fun resolveAppLabel(context: Context, pkg: String): String =
+    try {
+        val pm = context.packageManager
+        pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+    } catch (e: Exception) {
+        pkg
+    }
+
+@Composable
+private fun ClusterSizeSlider(
+    label: String,
+    pct: Int,
+    enabled: Boolean,
+    onChange: (Int) -> Unit,
+    onFinished: () -> Unit,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = if (enabled) TextPrimary else TextMuted, fontSize = 14.sp)
+            Text(
+                "$pct%",
+                color = if (enabled) AccentGreen else TextMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+        }
+        Slider(
+            value = pct.toFloat(),
+            onValueChange = { onChange(it.roundToInt()) },
+            onValueChangeFinished = onFinished,
+            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
+            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            enabled = enabled,
+            colors = SliderDefaults.colors(
+                thumbColor = AccentGreen,
+                activeTrackColor = AccentGreen,
+            ),
+        )
+    }
+}
+
+@Composable
 private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     val lang by viewModel.appLanguage.collectAsState()
     LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
@@ -1210,96 +1319,6 @@ private fun SectionHeader(text: String) {
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier.fillMaxWidth()
     )
-}
-
-@Composable
-private fun DataSourceOption(label: String, selected: Boolean, onClick: () -> Unit) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(
-            selected = selected,
-            onClick = onClick,
-            colors = RadioButtonDefaults.colors(
-                selectedColor = AccentGreen,
-                unselectedColor = TextMuted,
-            ),
-        )
-        Text(
-            text = label,
-            color = TextPrimary,
-            fontSize = 13.sp,
-            modifier = Modifier.padding(start = 4.dp),
-        )
-    }
-}
-
-@Composable
-private fun AutoserviceStatusBlock(status: AutoserviceStatus) {
-    when (status) {
-        AutoserviceStatus.NotEnabled -> Unit
-        AutoserviceStatus.Disconnected -> StatusRow(
-            marker = "✗",
-            markerColor = TextMuted,
-            title = stringResource(R.string.settings_autoservice_disconnected_title),
-            detail = stringResource(R.string.settings_autoservice_disconnected_detail),
-            detailColor = TextSecondary,
-        )
-        AutoserviceStatus.AllSentinel -> StatusRow(
-            marker = "⚠",
-            markerColor = SocYellow,
-            title = stringResource(R.string.settings_autoservice_sentinel_title),
-            detail = stringResource(R.string.settings_autoservice_sentinel_detail),
-            detailColor = SocYellow,
-        )
-        is AutoserviceStatus.Connected -> {
-            val soh = status.sohPercent?.let { "%.0f%%".format(it) } ?: "—"
-            val km = status.lifetimeKm?.let { "%.1f км".format(it) } ?: "—"
-            val kwh = status.lifetimeKwh?.let { "%.0f кВт·ч".format(it) } ?: "—"
-            StatusRow(
-                marker = "✓",
-                markerColor = AccentGreen,
-                title = stringResource(R.string.settings_autoservice_connected_title),
-                detail = stringResource(R.string.settings_autoservice_connected_detail, soh, km, kwh),
-                detailColor = AccentGreen,
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatusRow(
-    marker: String,
-    markerColor: Color,
-    title: String,
-    detail: String,
-    detailColor: Color,
-) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.Top,
-    ) {
-        Text(
-            text = marker,
-            color = markerColor,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.SemiBold,
-            modifier = Modifier.padding(top = 1.dp),
-        )
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(text = title, color = TextPrimary, fontSize = 13.sp)
-            Text(
-                text = detail,
-                color = detailColor.copy(alpha = 0.85f),
-                fontSize = 11.sp,
-            )
-        }
-    }
 }
 
 @Composable

@@ -17,8 +17,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 303
-        versionName = "2.8.1"
+        versionCode = 306
+        versionName = "3.0.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -138,7 +138,12 @@ dependencies {
     // AppCompat (required for AppCompatDelegate.setApplicationLocales per-app language support)
     implementation("androidx.appcompat:appcompat:1.6.1")
 
+    // Hidden-API bypass: allows in-process ServiceManager.getService() on Android 9+
+    // to reach the helper binder without UnsatisfiedLinkError / NoSuchMethodError.
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
+
     // Testing
+    testImplementation("org.jetbrains.kotlin:kotlin-reflect:2.1.0")
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
@@ -147,7 +152,10 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.1")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
 
     // ADB-on-device for autoservice access (path H, read-only)
     // com.cgutman:adblib does not exist on MavenCentral (only com.tananaev:adblib does).

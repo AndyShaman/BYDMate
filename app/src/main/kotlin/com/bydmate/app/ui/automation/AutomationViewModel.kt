@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.automation
 
 import android.content.Context
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.LocalePreferences
@@ -12,6 +13,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.vehicle.VehicleApi
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -132,6 +134,7 @@ val TRIGGER_PARAMS = listOf(
 )
 
 val ACTION_COMMANDS = listOf(
+<<<<<<< HEAD
     ActionOption("车窗通风", "Проветривание", "车窗通风", "Vent Windows", "Окна", "车窗", "Windows"),
     ActionOption("车窗关闭", "Закрыть все окна", "关闭所有车窗", "Close All Windows", "Окна", "车窗", "Windows"),
     ActionOption("车窗全开", "Открыть все окна", "打开所有车窗", "Open All Windows", "Окна", "车窗", "Windows"),
@@ -219,6 +222,7 @@ class AutomationViewModel @Inject constructor(
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
     private val placeRepository: PlaceRepository,
+    private val vehicleApi: VehicleApi,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -250,6 +254,22 @@ class AutomationViewModel @Inject constructor(
 
     fun toggleEnabled(rule: RuleEntity) {
         viewModelScope.launch { ruleDao.setEnabled(rule.id, !rule.enabled) }
+    }
+
+    /**
+     * "Выполнить сейчас" — dispatch a single vehicle command through the native
+     * write channel immediately, for live testing from the rule editor. Result is
+     * surfaced via Toast; the raw autoservice status (real action vs no-op) lands
+     * in logcat via HelperClient. Bypasses the automation edge/cooldown logic by
+     * design — this is a manual, explicit user action.
+     */
+    fun executeNow(command: String) {
+        viewModelScope.launch {
+            val result = vehicleApi.dispatch(command)
+            val msg = if (result.isSuccess) "Отправлено"
+                      else "Ошибка: ${result.exceptionOrNull()?.message ?: "недоступно"}"
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+        }
     }
 
     // --- Editor ---

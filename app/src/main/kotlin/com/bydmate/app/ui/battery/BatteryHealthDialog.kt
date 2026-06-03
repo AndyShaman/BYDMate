@@ -62,7 +62,6 @@ fun BatteryHealthDialog(
     liveSoh: Float?,
     liveLifetimeKm: Float?,
     liveLifetimeKwh: Float?,
-    autoserviceEnabled: Boolean,
     borderColor: Color,
     onDismiss: () -> Unit,
 ) {
@@ -110,15 +109,11 @@ fun BatteryHealthDialog(
                     )
 
                     SectionHeader(stringResource(R.string.battery_health_lifetime_header))
-                    if (autoserviceEnabled) {
-                        LifetimeBlock(
-                            soh = liveSoh,
-                            lifetimeKm = liveLifetimeKm,
-                            lifetimeKwh = liveLifetimeKwh
-                        )
-                    } else {
-                        LifetimeDisabledBlock()
-                    }
+                    LifetimeBlock(
+                        soh = liveSoh,
+                        lifetimeKm = liveLifetimeKm,
+                        lifetimeKwh = liveLifetimeKwh
+                    )
                 }
             }
         }

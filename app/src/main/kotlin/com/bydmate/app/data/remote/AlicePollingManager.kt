@@ -2,6 +2,7 @@ package com.bydmate.app.data.remote
 
 import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.VehicleApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -22,8 +23,9 @@ import javax.inject.Singleton
 @Singleton
 class AlicePollingManager @Inject constructor(
     private val httpClient: OkHttpClient,
-    private val controlClient: DiParsControlClient,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop,
+    private val vehicleApi: VehicleApi,
 ) {
     // Fast client with short timeouts for polling (main httpClient has 15s)
     private val pollClient = OkHttpClient.Builder()
@@ -46,8 +48,14 @@ class AlicePollingManager @Inject constructor(
 
     fun start() {
         if (pollingJob?.isActive == true) return
-        scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        pollingJob = scope?.launch {
+        val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope = s
+        // Flow collector: Alice's own subscription to the shared loop so it
+        // doesn't depend on TrackingService writing latestData on every tick.
+        s.launch {
+            sharedAdaptiveLoop.flow.collect { data -> latestData = data }
+        }
+        pollingJob = s.launch {
             Log.i(TAG, "Polling started")
             while (true) {
                 try {
@@ -110,8 +118,12 @@ class AlicePollingManager @Inject constructor(
             val id = cmd.getString("id")
             val command = cmd.getString("command")
             Log.i(TAG, "Executing: '$command' (id=$id)")
-            val success = controlClient.sendCommand(command)
-            Log.i(TAG, "Result: $command → ${if (success) "OK" else "FAIL"}")
+            val result = vehicleApi.dispatch(command)
+            val success = result.isSuccess
+            Log.i(TAG, "Result: $command → ${if (success) "OK" else "FAIL: ${result.exceptionOrNull()?.message}"}")
+            // Crowd-validation: ack regardless of success. Unmapped/Unsupported commands
+            // get a "done" signal to VPS so Alice does not retry forever. The vehicle_write_log
+            // DAO row carries the actual outcome for diagnostics.
             ackIds.add(id)
         }
 

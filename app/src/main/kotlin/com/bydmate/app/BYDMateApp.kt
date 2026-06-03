@@ -4,8 +4,10 @@ import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -55,9 +57,25 @@ class BYDMateApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Allow in-process ServiceManager.getService() on Android 9+ to reach the helper
+        // binder service without hidden-API restrictions (UnsatisfiedLinkError / NoSuchMethodError).
+        // Guarded: under JVM/Robolectric unit tests the HiddenApiBypass static initializer throws
+        // (no Android ART runtime), which would otherwise crash onCreate for every test that
+        // instantiates this Application. Swallow there; on a real device the call succeeds.
+        if (Build.VERSION.SDK_INT >= 28) {
+            runCatching {
+                HiddenApiBypass.addHiddenApiExemptions("Landroid/os/ServiceManager;")
+            }.onFailure {
+                android.util.Log.w("BYDMateApp", "hidden-api exemption unavailable", it)
+            }
+        }
         bootstrapLocale()
         initOsmdroid()
         appScope.launch {
+            // v2.8.1: clear stale "DIPLUS" data_source value from pre-native-stack
+            // builds. One-shot, gated by its own flag.
+            settingsRepository.migrateDataSourceIfNeeded()
+
             if (!settingsRepository.isInsightCacheV2MigrationDone()) {
                 insightsManager.migrateLegacyCache()
                 settingsRepository.setInsightCacheV2MigrationDone()

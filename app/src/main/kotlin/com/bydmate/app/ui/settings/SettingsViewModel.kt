@@ -14,13 +14,11 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
-import com.bydmate.app.data.remote.DiParsClient
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.R
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,9 +29,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.bydmate.app.service.BootReceiver
@@ -44,36 +44,6 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
-
-/**
- * Represents the runtime status of the autoservice data channel.
- *
- * - [NotEnabled] — the toggle is OFF; render no status block.
- * - [Disconnected] — toggle ON, but [BatteryStateRepository.refresh] returned
- *   `autoserviceAvailable = false` (ADB not connected or service unreachable).
- * - [Connected] — toggle ON and at least one real value was returned.
- *   Individual fields are nullable because partial sentinel responses occur.
- * - [AllSentinel] — see KDoc on the object itself.
- */
-sealed class AutoserviceStatus {
-    object NotEnabled : AutoserviceStatus()
-    object Disconnected : AutoserviceStatus()
-    data class Connected(
-        val socNow: Float?,
-        val lifetimeKm: Float?,
-        val lifetimeKwh: Float?,
-        val sohPercent: Float?
-    ) : AutoserviceStatus()
-
-    /**
-     * Toggle ON, autoservice connected, but the battery-trio (SoC, lifetime km,
-     * lifetime kWh) all came back as sentinel/null. Typically happens when the
-     * car is in deep standby — DiLink BMS bus quiet, only 12V + cached SoH
-     * still readable. UI should show "сейчас машина не отвечает" rather than
-     * empty cards.
-     */
-    object AllSentinel : AutoserviceStatus()
-}
 
 /**
  * UI state for the Settings screen.
@@ -117,10 +87,6 @@ data class SettingsUiState(
     val aliceEnabled: Boolean = false,
     val aliceSaveStatus: String? = null,
     val autoCheckUpdates: Boolean = true,
-    val dataSource: String = "ENERGYDATA",
-    val dataSourceStatus: String? = null,
-    val autoserviceEnabled: Boolean = false,
-    val autoserviceStatus: AutoserviceStatus = AutoserviceStatus.NotEnabled,
     val abrpTelemetryEnabled: Boolean = false,
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
@@ -138,11 +104,9 @@ class SettingsViewModel @Inject constructor(
     private val updateChecker: UpdateChecker,
     private val historyImporter: HistoryImporter,
     private val energyDataReader: EnergyDataReader,
-    private val diParsClient: DiParsClient,
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
-    private val batteryStateRepository: BatteryStateRepository,
     private val localePreferences: LocalePreferences
 ) : ViewModel() {
 
@@ -168,6 +132,9 @@ class SettingsViewModel @Inject constructor(
         autoCheckUpdates = UpdateChecker.isAutoCheckEnabled(appContext)
     ))
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    // Tracks the in-flight update download so "Close" can cancel it (issue #23).
+    private var downloadJob: Job? = null
 
     private fun getVersion(): String = try {
         appContext.packageManager.getPackageInfo(appContext.packageName, 0).versionName ?: "?"
@@ -220,10 +187,6 @@ class SettingsViewModel @Inject constructor(
             val aliceApiKey = settingsRepository.getString(SettingsRepository.KEY_ALICE_API_KEY, "")
             val aliceEnabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
 
-            val dataSource = settingsRepository.getDataSource().name
-
-            val autoserviceEnabled = settingsRepository.isAutoserviceEnabled()
-
             val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
@@ -249,8 +212,6 @@ class SettingsViewModel @Inject constructor(
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
-                    dataSource = dataSource,
-                    autoserviceEnabled = autoserviceEnabled,
                     abrpTelemetryEnabled = abrpEnabled,
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
@@ -258,55 +219,6 @@ class SettingsViewModel @Inject constructor(
                     mapTileSource = mapTileSource,
                 )
             }
-
-            loadAutoserviceState()
-        }
-    }
-
-    internal suspend fun loadAutoserviceState() {
-        val status = if (!settingsRepository.isAutoserviceEnabled()) {
-            AutoserviceStatus.NotEnabled
-        } else {
-            val state = batteryStateRepository.refresh()
-            when {
-                !state.autoserviceAvailable -> AutoserviceStatus.Disconnected
-                state.socNow == null && state.lifetimeKm == null && state.lifetimeKwh == null ->
-                    AutoserviceStatus.AllSentinel
-                else -> AutoserviceStatus.Connected(
-                    socNow = state.socNow,
-                    lifetimeKm = state.lifetimeKm,
-                    lifetimeKwh = state.lifetimeKwh,
-                    sohPercent = state.sohPercent
-                )
-            }
-        }
-        _uiState.update { it.copy(autoserviceStatus = status) }
-    }
-
-    /**
-     * UI entry point for the autoservice toggle. Persists the new value, then
-     * triggers ADB handshake on enable. Single coroutine — no UI race between
-     * persist-reload and connect-reload.
-     */
-    fun enableAutoservice(enabled: Boolean) {
-        viewModelScope.launch {
-            settingsRepository.setAutoserviceEnabled(enabled)
-            _uiState.update { it.copy(autoserviceEnabled = enabled) }
-            if (enabled) {
-                adbOnDeviceClient.connect()
-            }
-            loadAutoserviceState()
-        }
-    }
-
-    fun setDataSource(value: String) {
-        if (value == _uiState.value.dataSource) return
-        val target = runCatching { SettingsRepository.DataSource.valueOf(value) }.getOrNull() ?: return
-        _uiState.update { it.copy(dataSource = value, dataSourceStatus = appContext.getString(R.string.settings_datasource_switching)) }
-        viewModelScope.launch {
-            settingsRepository.setDataSource(target)
-            val r = historyImporter.runSync()
-            _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: appContext.getString(R.string.settings_datasource_done)) }
         }
     }
 
@@ -482,7 +394,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    /** Run full diagnostics: BYD storage, our DB, DiPlus API, permissions. */
+    /** Run full diagnostics: BYD storage, our DB, permissions. */
     fun runDiagnostics() {
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(diagnosticLog = "Диагностика...") }
@@ -539,32 +451,6 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 sb.appendLine("ОШИБКА: ${e.message}")
-            }
-
-            // 4. DiPlus API
-            sb.appendLine("\n=== DiPlus API ===")
-            try {
-                val testTemplate = "SOC:{电量百分比}|Speed:{车速}|Mileage:{里程}"
-                val httpUrl = okhttp3.HttpUrl.Builder()
-                    .scheme("http").host("127.0.0.1").port(8988)
-                    .addPathSegments("api/getDiPars")
-                    .addQueryParameter("text", testTemplate)
-                    .build()
-                val testClient = okhttp3.OkHttpClient.Builder()
-                    .connectTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                    .readTimeout(3, java.util.concurrent.TimeUnit.SECONDS)
-                    .build()
-                val resp = testClient.newCall(
-                    okhttp3.Request.Builder().url(httpUrl).build()
-                ).execute()
-                val body = resp.body?.string() ?: "(пустое тело)"
-                sb.appendLine("HTTP ${resp.code}: $body")
-            } catch (e: java.net.ConnectException) {
-                sb.appendLine("Соединение отклонено — DiPlus не запущен")
-            } catch (e: java.net.SocketTimeoutException) {
-                sb.appendLine("Таймаут соединения")
-            } catch (e: Exception) {
-                sb.appendLine("${e.javaClass.simpleName}: ${e.message}")
             }
 
             _uiState.update { it.copy(diagnosticLog = sb.toString()) }
@@ -762,9 +648,9 @@ class SettingsViewModel @Inject constructor(
      * Writes a diagnostic header to the recording file before piping logcat.
      * Captures app / device / setting context that issue reports (e.g. #19)
      * routinely lack: which battery capacity the user typed (raw + parsed,
-     * which surfaces the comma-decimal bug immediately), which data source mode
-     * is selected, whether autoservice / ABRP are configured, and whether the
-     * underlying BYD energydata / DiPlus databases are reachable.
+     * which surfaces the comma-decimal bug immediately), whether autoservice /
+     * ABRP are configured, and whether the BYD energydata trip source is
+     * reachable.
      */
     private suspend fun writeDiagnosticHeader(file: File) = withContext(Dispatchers.IO) {
         // Build the header. Each piece is independently caught so a single
@@ -794,13 +680,11 @@ class SettingsViewModel @Inject constructor(
                 val dataSource = settingsRepository.getDataSource().name
                 val capacityRaw = settingsRepository.getString(SettingsRepository.KEY_BATTERY_CAPACITY, "")
                 val capacityParsed = settingsRepository.getBatteryCapacity()
-                val autoservice = settingsRepository.isAutoserviceEnabled()
                 val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
                 val abrpTokenLen = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "").length
                 val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
-                appendLine("autoservice_enabled: $autoservice")
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
@@ -809,7 +693,6 @@ class SettingsViewModel @Inject constructor(
             appendLine("--- vehicle data sources ---")
             try {
                 val energyDb = File("/storage/emulated/0/energydata")
-                val diplusDb = File("/storage/emulated/0/vandiplus/db/van_bm_db")
                 appendLine("energydata dir: exists=${energyDb.exists()} isDir=${energyDb.isDirectory}")
                 if (energyDb.exists() && energyDb.isDirectory) {
                     val files = energyDb.listFiles()
@@ -819,7 +702,6 @@ class SettingsViewModel @Inject constructor(
                         files.forEach { appendLine("  ${it.name} (${it.length()}B, mtime=${it.lastModified()})") }
                     }
                 }
-                appendLine("DiPlus van_bm_db: exists=${diplusDb.exists()} size=${if (diplusDb.exists()) diplusDb.length() else 0}B mtime=${if (diplusDb.exists()) diplusDb.lastModified() else 0}")
             } catch (e: Exception) {
                 appendLine("(failed to gather vehicle data sources: ${e.message})")
             }
@@ -864,8 +746,7 @@ class SettingsViewModel @Inject constructor(
                 logProcess = Runtime.getRuntime().exec(arrayOf(
                     "logcat", "-v", "time",
                     "-s", "BootReceiver:*",
-                    "DiParsClient:*", "TrackingService:*", "TripTracker:*",
-                    "DiPlusDbReader:*",
+                    "TrackingService:*", "TripTracker:*",
                     "HistoryImporter:*", "EnergyDataReader:*",
                     "AutoserviceClient:*", "AdbOnDeviceClient:*",
                     "IternioTelemetryClient:*", "BatteryHealthRepository:*",
@@ -944,7 +825,12 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun hideUpdateDialog() {
-        _uiState.update { it.copy(showUpdateDialog = false) }
+        // Cancel any in-flight download so the progress callback stops re-emitting
+        // Downloading (which reopened the dialog) and the finished download no longer
+        // fires the system install prompt after the user closed it (issue #23).
+        downloadJob?.cancel()
+        downloadJob = null
+        _uiState.update { it.copy(showUpdateDialog = false, updateDialogState = UpdateState.Idle) }
     }
 
     fun setAutoCheckUpdates(enabled: Boolean) {
@@ -988,7 +874,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun downloadUpdate() {
-        viewModelScope.launch {
+        downloadJob = viewModelScope.launch {
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
@@ -996,11 +882,17 @@ class SettingsViewModel @Inject constructor(
                         it.copy(updateDialogState = UpdateState.Downloading(update.version, appContext.getString(R.string.update_downloading_start)))
                     }
                     updateChecker.downloadAndInstall(appContext, update) { progress ->
-                        _uiState.update {
-                            it.copy(updateDialogState = UpdateState.Downloading(update.version, progress))
+                        // Ignore late progress after the job was cancelled (Close pressed)
+                        // so a closed dialog is never resurrected.
+                        if (isActive) {
+                            _uiState.update {
+                                it.copy(updateDialogState = UpdateState.Downloading(update.version, progress))
+                            }
                         }
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e // cooperative cancellation from hideUpdateDialog(); not an error
             } catch (e: Exception) {
                 _uiState.update { it.copy(updateDialogState = UpdateState.Error(e.message ?: "Download failed")) }
             }

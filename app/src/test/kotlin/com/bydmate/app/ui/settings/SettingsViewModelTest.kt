@@ -3,9 +3,6 @@ package com.bydmate.app.ui.settings
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
-import com.bydmate.app.data.autoservice.AutoserviceClient
-import com.bydmate.app.data.autoservice.BatteryReading
-import com.bydmate.app.data.autoservice.ChargingReading
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
@@ -25,15 +22,11 @@ import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
-import com.bydmate.app.data.remote.DiParsClient
-import com.bydmate.app.data.remote.DiPlusDbReader
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
-import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
-import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.UpdateChecker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -46,11 +39,12 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import io.mockk.coEvery
 import io.mockk.mockk
+import io.mockk.slot
+import kotlinx.coroutines.delay
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -74,10 +68,8 @@ class SettingsViewModelTest {
 
     // --- Fake DAOs ---
 
-    private class FakeSettingsDao(autoserviceEnabled: Boolean = false) : SettingsDao {
-        val map = mutableMapOf<String, String>(
-            SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString(),
-        )
+    private class FakeSettingsDao : SettingsDao {
+        val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
@@ -170,38 +162,23 @@ class SettingsViewModelTest {
         override suspend fun getCount(): Int = 0
     }
 
-    // --- Fake AutoserviceClient ---
-
-    private class FakeAutoservice(
-        private val battery: BatteryReading?,
-        private val available: Boolean = true
-    ) : AutoserviceClient {
-        override suspend fun isAvailable(): Boolean = available
-        override suspend fun getInt(dev: Int, fid: Int): Int? = null
-        override suspend fun getFloat(dev: Int, fid: Int): Float? = null
-        override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readChargingSnapshot(): ChargingReading? = null
-        override suspend fun getEnginePowerKw(): Int? = null
-    }
-
     private class FakeAdbClient : AdbOnDeviceClient {
         override suspend fun connect(): Result<Unit> = Result.success(Unit)
         override suspend fun isConnected(): Boolean = false
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
-        override suspend fun launchDiPlusService(): Boolean = false
+        override suspend fun spawnHelper(): Boolean = false
+        override suspend fun readHelperLog(): String? = null
+        override suspend fun helperHeartbeat(): Boolean = false
         override suspend fun shutdown() {}
     }
 
     // --- Factory ---
 
-    private fun buildViewModel(
-        autoserviceEnabled: Boolean,
-        fakeAutoservice: AutoserviceClient
-    ): SettingsViewModel {
+    private fun buildViewModel(updateChecker: UpdateChecker? = null): SettingsViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
-        val settingsDao = FakeSettingsDao(autoserviceEnabled)
+        val settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
@@ -212,33 +189,28 @@ class SettingsViewModelTest {
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
-        val updateChecker = UpdateChecker(httpClient)
+        val resolvedUpdateChecker = updateChecker ?: UpdateChecker(httpClient)
 
         val energyReader = EnergyDataReader(ctx)
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
-            DiPlusDbReader(), settingsRepo
+            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository()
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
         val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, settingsRepo)
-
-        val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
-        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
 
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
             tripRepository = tripRepo,
             chargeRepository = chargeRepo,
-            updateChecker = updateChecker,
+            updateChecker = resolvedUpdateChecker,
             historyImporter = historyImporter,
             energyDataReader = energyReader,
-            diParsClient = DiParsClient(httpClient),
             idleDrainDao = idleDrainDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
-            batteryStateRepository = batteryStateRepo,
             localePreferences = LocalePreferences(ctx)
         )
     }
@@ -246,88 +218,50 @@ class SettingsViewModelTest {
     // --- Tests ---
 
     @Test
-    fun `loadAutoserviceState_toggleOff_returnsNotEnabled`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
+    fun `initial state has default battery capacity`() = runTest {
+        val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(AutoserviceStatus.NotEnabled, vm.uiState.value.autoserviceStatus)
+        assertEquals(SettingsRepository.DEFAULT_BATTERY_CAPACITY, vm.uiState.value.batteryCapacity)
     }
 
     @Test
-    fun `loadAutoserviceState_toggleOnDisconnected_returnsDisconnected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(battery = null, available = false)
-        )
+    fun `initial state has default home tariff`() = runTest {
+        val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(AutoserviceStatus.Disconnected, vm.uiState.value.autoserviceStatus)
+        assertEquals(SettingsRepository.DEFAULT_HOME_TARIFF, vm.uiState.value.homeTariff)
     }
 
+    // Issue #23: pressing "Close" while an update is downloading must cancel the
+    // download coroutine and clear the Downloading state. Without cancellation the
+    // progress callback keeps re-emitting Downloading (re-opening the dialog) and
+    // the download eventually fires the system install prompt unexpectedly.
     @Test
-    fun `loadAutoserviceState_toggleOnAllNull_returnsAllSentinel`() = runTest {
-        // socNow, lifetimeKm, lifetimeKwh all null — sentinel response
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(
-                    sohPercent = null,
-                    socPercent = null,
-                    lifetimeKwh = null,
-                    lifetimeMileageKm = null,
-                    voltage12v = 14f,
-                    readAtMs = 0L
-                ),
-                available = true
-            )
+    fun `closing update dialog during download cancels job and clears downloading state`() = runTest {
+        val uc = mockk<UpdateChecker>(relaxed = true)
+        val info = UpdateChecker.UpdateInfo(
+            version = "9.9.9",
+            downloadUrl = "http://example.invalid/BYDMate.apk",
+            releaseNotes = ""
         )
+        coEvery { uc.checkForUpdate(any(), any()) } returns info
+        val onProgressSlot = slot<(String) -> Unit>()
+        coEvery { uc.downloadAndInstall(any(), any(), capture(onProgressSlot)) } coAnswers {
+            onProgressSlot.captured.invoke("10%")
+            delay(10_000)                       // still downloading...
+            onProgressSlot.captured.invoke("100%") // must NOT run after the dialog is closed
+        }
+
+        val vm = buildViewModel(updateChecker = uc)
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(AutoserviceStatus.AllSentinel, vm.uiState.value.autoserviceStatus)
-    }
+        vm.downloadUpdate()
+        testDispatcher.scheduler.runCurrent() // start download, emit "10%", suspend on delay
 
-    @Test
-    fun `loadAutoserviceState_toggleOnWithData_returnsConnected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
+        vm.hideUpdateDialog()
+        testDispatcher.scheduler.advanceUntilIdle() // cancelled job must not resurrect state
 
-        val status = vm.uiState.value.autoserviceStatus
-        assertTrue(status is AutoserviceStatus.Connected)
-        val connected = status as AutoserviceStatus.Connected
-        assertEquals(91f, connected.socNow!!, 0.01f)
-        assertEquals(100f, connected.sohPercent!!, 0.01f)
-        assertEquals(2091f, connected.lifetimeKm!!, 0.01f)
-        assertEquals(602f, connected.lifetimeKwh!!, 0.01f)
-    }
-
-    @Test
-    fun `enableAutoservice_persistsAndReloads`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(
-                BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L), available = true
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(AutoserviceStatus.NotEnabled, vm.uiState.value.autoserviceStatus)
-        assertFalse(vm.uiState.value.autoserviceEnabled)
-
-        vm.enableAutoservice(true)
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.autoserviceEnabled)
-        // After enable, BatteryStateRepository sees autoservice enabled = true and returns data
-        assertTrue(vm.uiState.value.autoserviceStatus is AutoserviceStatus.Connected)
+        assertEquals(UpdateState.Idle, vm.uiState.value.updateDialogState)
     }
 }

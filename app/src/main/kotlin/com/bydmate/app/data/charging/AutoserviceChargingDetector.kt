@@ -3,7 +3,8 @@ package com.bydmate.app.data.charging
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
-import com.bydmate.app.data.remote.DiParsClient
+import com.bydmate.app.data.nativestack.ParsReader
+import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -42,9 +43,11 @@ data class CatchUpResult(
  * Gate C (fallback): socDelta > 0, cap unreliable
  *   → source = "autoservice_soc_estimate"
  *
- * The single required gate is `socDelta > 0` — prevents phantom rows when SOC
- * did not change (the regression that produced phantom autoservice_catchup rows
- * in v2.4.15/v2.4.16 via the lifetime_kwh driving counter).
+ * The required gate is `socDelta >= MIN_SOC_DELTA_FOR_CHARGE` with the odometer
+ * unchanged since the parked anchor — prevents phantom rows when SOC barely
+ * moved (the regression that produced phantom autoservice_catchup rows in
+ * v2.4.15/v2.4.16 via the lifetime_kwh driving counter) and stops a drive that
+ * happened in the sleep gap from smearing into a reconstructed session.
  */
 @Singleton
 class AutoserviceChargingDetector @Inject constructor(
@@ -54,7 +57,7 @@ class AutoserviceChargingDetector @Inject constructor(
     private val stateStore: ChargingStateStore,
     private val classifier: ChargingTypeClassifier,
     private val settings: SettingsRepository,
-    private val diParsClient: DiParsClient
+    private val parsReader: ParsReader
 ) {
     companion object {
         const val MIN_DELTA_KWH = 0.5
@@ -87,14 +90,62 @@ class AutoserviceChargingDetector @Inject constructor(
         const val SOC_SANITY_RATIO_HIGH = 1.30
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
+        // Minimum SOC rise (percentage points) for a wake-up jump to count as a
+        // real charging session. A genuine plug-in adds far more; anything below
+        // this is BMS recalibration / regen noise, so we roll the anchor forward
+        // without a row instead of logging a phantom micro-charge.
+        const val MIN_SOC_DELTA_FOR_CHARGE = 3
+        // Odometer movement (km) above which the gap between the parked anchor and
+        // wake-up contained a drive — the stored start-of-charge SOC is then no
+        // longer the true charge start, so we skip reconstruction.
+        const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
         private const val TAG = "AutoserviceDetector"
     }
 
     private val mutex = Mutex()
+    @Volatile private var lastSample: DiParsData? = null
     private val _state = MutableStateFlow(DetectorState.IDLE)
     val state: StateFlow<DetectorState> = _state
+
+    /** Feed the most recent shared-loop sample so runCatchUp can avoid a live fetch. */
+    fun onSample(data: DiParsData) {
+        lastSample = data
+    }
+
+    /**
+     * Roll the persisted charge-start anchor forward on every live poll while the
+     * car is NOT charging. This is the only moment the pre-charge SOC can be
+     * captured: the app is dead for the whole of a sleep-charge, so the anchor
+     * must already hold the SOC from the last tick before shutdown (≈ the SOC the
+     * car arrived at).
+     *
+     * Roll forward only while SOC is non-increasing (driving / idle drain). A SOC
+     * INCREASE means a charge happened while we were away — we deliberately do NOT
+     * overwrite the low anchor here, so runCatchUp can reconstruct the session
+     * from it. That also makes the wake-up path race-free without a lock-step
+     * flag: a post-charge 80% tick can never clobber the 10% anchor before
+     * reconstruction reads it.
+     */
+    suspend fun recordParkedAnchor(data: DiParsData, now: Long = System.currentTimeMillis()) {
+        val gun = data.chargeGunState
+        val gunConnected = gun != null && gun != GUN_STATE_NONE && gun != 0
+        if (gunConnected) return                       // live charge — keep the start anchor
+        val soc = data.soc?.takeIf { it in 0..100 } ?: return
+        mutex.withLock {
+            val prevSoc = stateStore.load().socPercent
+            // prevSoc == null → seed; soc < prevSoc → driving roll-forward.
+            // soc >= prevSoc → charge pending or unchanged: leave the anchor.
+            if (prevSoc != null && soc >= prevSoc) return@withLock
+            stateStore.save(
+                socPercent = soc,
+                mileageKm = data.mileage?.toFloat(),
+                capacityKwh = null,
+                ts = now
+            )
+        }
+    }
 
     /**
      * Run the cascade detector.
@@ -124,30 +175,17 @@ class AutoserviceChargingDetector @Inject constructor(
             val battery = client.readBatterySnapshot()
             val charging = client.readChargingSnapshot()
 
-            // Step 3: SOC sentinel check with DiPars fallback.
-            // The autoservice SOC fid can sentinel-out for several reasons:
-            //   - cold-start window: TrackingService runs catch-up before
-            //     autoservice has warmed its fid cache (observed 2026-04-30).
-            //   - 100% balancing: BMS may temporarily detach some telemetry
-            //     fids while equalizing cells (per car manual).
-            // DiPars lives in a separate process with its own cache and
-            // typically holds the last-known SOC across both windows. When
-            // it has a valid 0..100 value, we use it as the SOC source so
-            // catch-up does not lose a real charging session.
-            val autoSoc = battery?.socPercent?.toInt()
-            val currentSoc: Int = if (autoSoc != null) {
-                autoSoc
-            } else {
-                val diParsSoc = runCatching { diParsClient.fetch() }.getOrNull()
-                    ?.soc?.takeIf { it in 0..100 }
-                if (diParsSoc != null) {
-                    android.util.Log.i(TAG, "runCatchUp: autoservice SOC sentinel → DiPars fallback soc=$diParsSoc")
-                    diParsSoc
-                } else {
-                    android.util.Log.i(TAG, "runCatchUp: socPercent sentinel from BOTH autoservice AND DiPars")
-                    _state.value = DetectorState.IDLE
-                    return CatchUpResult(CatchUpOutcome.SENTINEL)
-                }
+            // Step 3: SOC sentinel check. The autoservice SOC fid can sentinel-out
+            // during the cold-start window (TrackingService runs catch-up before
+            // autoservice has warmed its fid cache, observed 2026-04-30) or while
+            // the BMS balances cells at 100%. There is no independent second SOC
+            // source — parsReader reads the same native autoservice — so a
+            // sentinel here means "retry later": return SENTINEL without touching
+            // state and let TrackingService re-run catch-up once the fid warms up.
+            val currentSoc: Int = battery?.socPercent?.toInt() ?: run {
+                android.util.Log.i(TAG, "runCatchUp: autoservice SOC sentinel → SENTINEL (retry later)")
+                _state.value = DetectorState.IDLE
+                return CatchUpResult(CatchUpOutcome.SENTINEL)
             }
 
             // Step 4: load previous state; seed on cold start
@@ -198,11 +236,21 @@ class AutoserviceChargingDetector @Inject constructor(
                 return CatchUpResult(CatchUpOutcome.STILL_CHARGING)
             }
 
-            // Step 5: SOC delta gate — the regression-fix gate. NEVER create a row when SOC
-            // did not increase. Covers phantom rows from the old lifetime_kwh driving counter.
+            // Step 5: charge-detection gate. Create a row only for a real charge:
+            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (smaller = recalibration /
+            //     regen noise, never a plug-in), AND
+            //   - the odometer did not move since the anchor (a drive in the gap
+            //     makes the stored start-of-charge SOC untrustworthy — we'd log a
+            //     smeared session, so skip).
+            // Every non-charge case rolls the baseline forward WITHOUT a row so the
+            // anchor can never stick low and mis-attribute the next session. This
+            // also subsumes the old socDelta <= 0 regression gate (lifetime_kwh
+            // driving-counter phantom rows).
             val socDelta = currentSoc - prev.socPercent
-            if (socDelta <= 0) {
-                android.util.Log.i(TAG, "runCatchUp: socDelta=$socDelta <= 0 → NO_DELTA (no charge)")
+            val odometerMoved = prev.mileageKm != null && battery?.lifetimeMileageKm != null &&
+                (battery.lifetimeMileageKm - prev.mileageKm) > ODOMETER_MOVED_EPSILON_KM
+            if (socDelta < MIN_SOC_DELTA_FOR_CHARGE || odometerMoved) {
+                android.util.Log.i(TAG, "runCatchUp: socDelta=$socDelta odometerMoved=$odometerMoved → NO_DELTA (roll forward, no row)")
                 stateStore.save(
                     socPercent = currentSoc,
                     mileageKm = battery?.lifetimeMileageKm,
@@ -307,14 +355,14 @@ class AutoserviceChargingDetector @Inject constructor(
 
             // Step 11: BatterySnapshot when SOC delta is meaningful
             // SoH = BMS-reported (autoservice FID_SOH), NOT our derived value.
-            // cellDeltaV/batTempAvg = best-effort from DiPlus; nulls if unavailable.
+            // cellDeltaV/batTempAvg = best-effort from the latest native sample; nulls if unavailable.
             if ((socEnd - socStart) >= MIN_SOC_DELTA_FOR_SNAPSHOT) {
                 val capacity = batteryHealthRepo.calculateCapacity(delta, socStart, socEnd)
                 val bmsSoh = battery?.sohPercent?.toDouble()
-                val diPars = runCatching { diParsClient.fetch() }.getOrNull()
-                val cellDelta = if (diPars?.maxCellVoltage != null && diPars.minCellVoltage != null)
-                    diPars.maxCellVoltage - diPars.minCellVoltage else null
-                val batTemp = diPars?.avgBatTemp?.toDouble()
+                val sample = lastSample ?: runCatching { parsReader.fetch() }.getOrNull()
+                val cellDelta = if (sample?.maxCellVoltage != null && sample.minCellVoltage != null)
+                    sample.maxCellVoltage - sample.minCellVoltage else null
+                val batTemp = sample?.avgBatTemp?.toDouble()
                 batteryHealthRepo.insert(
                     BatterySnapshotEntity(
                         timestamp = now,

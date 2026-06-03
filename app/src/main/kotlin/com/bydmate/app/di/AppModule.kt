@@ -15,8 +15,16 @@ import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.data.local.dao.LastStateDao
+import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.loop.CadenceConfig
+import com.bydmate.app.data.loop.SharedAdaptiveLoop
+import com.bydmate.app.data.nativestack.ParsReader
+import com.bydmate.app.data.trips.TripRecorder
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
 import com.bydmate.app.domain.calculator.RangeAvgSource
 import com.bydmate.app.domain.calculator.RangeCalculator
@@ -235,6 +243,47 @@ object AppModule {
         }
     }
 
+    private val MIGRATION_13_14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS last_state (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    soc INTEGER,
+                    mileage REAL,
+                    ignition INTEGER,
+                    open_trip_id INTEGER,
+                    trip_start_ts INTEGER,
+                    trip_start_soc INTEGER,
+                    trip_start_mileage REAL,
+                    energydata_available INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    // Internal so Migration14To15Test can reference it directly.
+    internal val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS vehicle_write_log (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    actionName TEXT NOT NULL,
+                    dev INTEGER NOT NULL,
+                    fid INTEGER NOT NULL,
+                    requested INTEGER NOT NULL,
+                    readback INTEGER,
+                    status INTEGER NOT NULL,
+                    error TEXT,
+                    validated INTEGER NOT NULL DEFAULT 0
+                )
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -243,7 +292,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
             .build()
     }
 
@@ -258,6 +307,11 @@ object AppModule {
     @Provides fun provideRuleLogDao(db: AppDatabase): RuleLogDao = db.ruleLogDao()
     @Provides fun providePlaceDao(db: AppDatabase): PlaceDao = db.placeDao()
     @Provides fun provideOdometerSampleDao(db: AppDatabase): OdometerSampleDao = db.odometerSampleDao()
+    @Provides @Singleton
+    fun provideLastStateDao(db: AppDatabase): LastStateDao = db.lastStateDao()
+
+    @Provides
+    fun provideVehicleWriteLogDao(db: AppDatabase): VehicleWriteLogDao = db.vehicleWriteLogDao()
 
     @Provides
     @Singleton
@@ -284,7 +338,7 @@ object AppModule {
     @Singleton
     fun provideRangeCalculator(
         rangeAvgSource: RangeAvgSource,
-        settingsRepository: com.bydmate.app.data.repository.SettingsRepository,
+        settingsRepository: SettingsRepository,
         socInterpolator: SocInterpolator,
     ): RangeCalculator = RangeCalculator(
         buffer = rangeAvgSource,
@@ -321,4 +375,63 @@ object AppModule {
         adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     ): com.bydmate.app.data.autoservice.AutoserviceClient =
         com.bydmate.app.data.autoservice.AutoserviceClientImpl(adb)
+
+    @Provides
+    @Singleton
+    fun provideSharedAdaptiveLoop(
+        parsReader: ParsReader,
+        lastStateDao: LastStateDao,
+        energyDataReader: EnergyDataReader,
+    ): SharedAdaptiveLoop = SharedAdaptiveLoop(
+        parsReader = parsReader,
+        lastStateDao = lastStateDao,
+        energyDataReader = energyDataReader,
+        cadence = CadenceConfig.default(),
+    )
+
+    @Provides
+    @Singleton
+    fun provideTripRecorder(
+        tripDao: TripDao,
+        lastStateDao: LastStateDao,
+        energyDataReader: EnergyDataReader,
+        settingsRepository: SettingsRepository,
+    ): TripRecorder = TripRecorder(
+        tripDao = tripDao,
+        lastStateDao = lastStateDao,
+        energyDataReader = energyDataReader,
+        batteryCapacityKwh = { settingsRepository.getBatteryCapacity() },
+    )
+
+    @Provides
+    @Singleton
+    fun provideHelperClient(): com.bydmate.app.data.vehicle.HelperClient =
+        com.bydmate.app.data.vehicle.HelperClientImpl()
+
+    @Provides
+    @Singleton
+    fun provideWriteAllowlist(@ApplicationContext context: Context): com.bydmate.app.data.vehicle.WriteAllowlist =
+        com.bydmate.app.data.vehicle.WriteAllowlist.loadProduction {
+            context.assets.open("competitor-actions.json").bufferedReader().use { it.readText() }
+        }
+
+    @Provides
+    @Singleton
+    fun provideVehicleApi(
+        parsReader: com.bydmate.app.data.nativestack.ParsReader,
+        autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        allowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
+        writeLogDao: VehicleWriteLogDao,
+    ): com.bydmate.app.data.vehicle.VehicleApi =
+        com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao)
+
+    @Provides
+    @Singleton
+    fun provideHelperBootstrap(
+        adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+    ): com.bydmate.app.data.vehicle.HelperBootstrap =
+        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper)
+
 }

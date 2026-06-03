@@ -1,0 +1,61 @@
+package com.bydmate.app.cluster
+
+import android.accessibilityservice.AccessibilityService
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.Context
+import android.content.SharedPreferences
+import android.util.Log
+import android.view.KeyEvent
+import android.view.accessibility.AccessibilityEvent
+import dagger.hilt.android.EntryPointAccessors
+
+/**
+ * Steering-wheel key filter for cluster projection. When the settings master switch
+ * ([ClusterProjectionManager.KEY_MIRROR_ENABLED]) is ON, a short press of the right star
+ * ([RIGHT_STAR_KEYCODE]) toggles Yandex Navi between the cluster and the centre screen and is
+ * consumed; everything else (switch OFF, left star, the right-star long-press that opens the
+ * native action menu, the cluster carousel) passes through untouched.
+ *
+ * Inert unless enabled in secure settings (manual/ADB — no Accessibility UI on DiLink) AND the
+ * settings switch is on, so it does nothing for users who never opt in.
+ */
+class SteeringWheelKeyService : AccessibilityService() {
+
+    private var cachedEntryPoint: ClusterEntryPoint? = null
+    private val prefs: SharedPreferences by lazy {
+        applicationContext.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        val info = serviceInfo ?: AccessibilityServiceInfo()
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS  // 32
+        serviceInfo = info
+        Log.d(TAG, "connected; filtering steering-wheel keys")
+    }
+
+    override fun onKeyEvent(event: KeyEvent): Boolean {
+        val enabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
+        return when (starDecision(event.keyCode, event.action == KeyEvent.ACTION_DOWN, enabled)) {
+            StarDecision.CONSUME_AND_TOGGLE -> {
+                val ep = entryPoint()
+                ClusterProjectionManager.toggle(applicationContext, ep.helperClient(), ep.helperBootstrap())
+                true
+            }
+            StarDecision.CONSUME -> true
+            StarDecision.PASS_THROUGH -> false
+        }
+    }
+
+    private fun entryPoint(): ClusterEntryPoint =
+        cachedEntryPoint ?: EntryPointAccessors
+            .fromApplication(applicationContext, ClusterEntryPoint::class.java)
+            .also { cachedEntryPoint = it }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* unused */ }
+    override fun onInterrupt() { /* no-op */ }
+
+    private companion object {
+        const val TAG = "SteeringWheelKeySvc"
+    }
+}

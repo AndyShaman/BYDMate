@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">BYDMate</string>
+    <string name="cluster_a11y_description">Перехват кнопок руля для проекции навигации на приборную панель. Включается вручную, работает только при включённой функции.</string>
     <string name="settings_language_title">Язык</string>
 
     <!-- Settings: Navigation rail -->
@@ -12,6 +13,15 @@
     <string name="settings_section_trips_title">Поездки</string>
     <string name="settings_section_integrations_title">Интеграции</string>
     <string name="settings_section_widget_title">Виджет</string>
+    <string name="settings_section_display_title">Дисплей</string>
+    <!-- Settings: Display section (cluster projection) -->
+    <string name="settings_display_mirror_header">Навигатор на приборку</string>
+    <string name="settings_display_mirror_title">Навигатор на приборку правой звездой</string>
+    <string name="settings_display_mirror_desc">Короткое нажатие правой звезды руля переносит Яндекс.Навигатор на приборку и обратно на экран. Нужен включённый полноэкранный режим приборки.</string>
+    <string name="settings_display_app_title">Приложение на приборку</string>
+    <string name="settings_display_size_header">Размер окна на приборке</string>
+    <string name="settings_display_size_width">Ширина</string>
+    <string name="settings_display_size_height">Высота</string>
     <string name="settings_section_places_title">Места</string>
     <string name="settings_section_application_title">Приложение</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
@@ -37,14 +47,6 @@
     <string name="settings_recalc_dialog_text">Все поездки будут пересчитаны по тарифу %1$s %2$s/кВт·ч.\nУже посчитанные значения будут заменены.</string>
     <string name="settings_recalc_confirm_button">Пересчитать</string>
     <string name="settings_cancel_button">Отмена</string>
-
-    <!-- Settings: Trips section -->
-    <string name="settings_trips_datasource_header">Источник данных поездок</string>
-    <string name="settings_trips_datasource_note">Leopard 3 - BYD energydata.\nSong и другие без встроенной базы - DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">Если после 2-3 поездок список пустой - переключи режим.</string>
-    <string name="settings_trips_system_header">Системные данные (экспериментально)</string>
-    <string name="settings_trips_system_note">Расширенные данные с машины: SoH батареи, истинный пробег от BMS, статистика зарядок. Только чтение.</string>
-    <string name="settings_trips_system_enable_label">Включить</string>
 
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - телеметрия</string>
@@ -181,7 +183,6 @@
     <string name="charges_stats_equiv_cycles">Эквив. циклов</string>
     <string name="charges_stats_bms_mileage">Пробег BMS</string>
     <string name="charges_stats_per100km">/100км lifetime</string>
-    <string name="charges_lifetime_enable_hint">Включи «Системные данные» в Настройках, чтобы видеть пробег BMS и прокачано всего от машины.</string>
     <string name="charges_lifetime_waiting">Жду первого ответа от машины…</string>
     <string name="charges_stats_dynamics_label">Динамика</string>
     <string name="charges_chart_cell_delta_title">Δ ячеек (В)</string>
@@ -268,8 +269,24 @@
     <string name="automation_trigger_type_place">Место</string>
     <string name="automation_trigger_type_place_empty_hint">Сначала создайте место в настройках</string>
     <string name="automation_trigger_type_time_of_day">Время суток</string>
+    <string name="automation_trigger_type_schedule">Время / расписание</string>
     <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
     <string name="automation_trigger_type_internet">Доступен интернет</string>
+
+    <!-- Schedule trigger (exact time / range + days of week) -->
+    <string name="automation_schedule_mode_exact">Точное</string>
+    <string name="automation_schedule_mode_range">Промежуток</string>
+    <string name="automation_schedule_time_label">Время:</string>
+    <string name="automation_schedule_from">С:</string>
+    <string name="automation_schedule_to">До:</string>
+    <string name="automation_schedule_days_label">Дни недели (пусто = каждый день):</string>
+    <string name="automation_day_mon">Пн</string>
+    <string name="automation_day_tue">Вт</string>
+    <string name="automation_day_wed">Ср</string>
+    <string name="automation_day_thu">Чт</string>
+    <string name="automation_day_fri">Пт</string>
+    <string name="automation_day_sat">Сб</string>
+    <string name="automation_day_sun">Вс</string>
 
     <!-- Action row: delay -->
     <string name="automation_action_delay_label">Пауза</string>
@@ -283,7 +300,7 @@
 
     <!-- Add action button -->
     <string name="automation_add_action_button">+ Добавить действие</string>
-    <string name="automation_action_dplus_command">D+ команда</string>
+    <string name="automation_action_dplus_command">Команда автомобилю</string>
     <string name="automation_action_notification_silent">Уведомление (без звука)</string>
     <string name="automation_action_notification_sound">Уведомление (звук)</string>
     <string name="automation_action_app_launch">Запуск приложения</string>
@@ -363,7 +380,6 @@
     <!-- Welcome Wizard -->
     <string name="welcome_step_indicator">Шаг %1$d из 3</string>
     <string name="welcome_model_step_title">Какая у тебя модель BYD?</string>
-    <string name="welcome_model_step_description">От этого зависит источник данных о поездках.\nLeopard 3 хранит их во встроенной базе BYD (energydata).\nSong и другие модели - только в DiPlus.</string>
     <string name="welcome_model_song_label">Song / другая</string>
     <string name="welcome_model_change_later">Можно поменять позже в настройках.</string>
     <string name="welcome_next_button">Далее</string>
@@ -419,6 +435,8 @@
     <string name="widget_duration_minutes">%1$d мин</string>
     <!-- Trip distance value with unit -->
     <string name="widget_trip_km_value">%1$.1f км</string>
+    <!-- Range per 1% SOC: %.1f km per percent -->
+    <string name="widget_km_per_percent">%1$.1f</string>
     <!-- Voltage value with unit: %.1f V -->
     <string name="widget_voltage_value">%1$.1f В</string>
     <!-- Long-press toast -->
@@ -429,7 +447,7 @@
 
     <!-- Dashboard -->
     <!-- Top bar -->
-    <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
+    <string name="dashboard_vehicle_data_offline">Нет данных от автомобиля</string>
     <string name="dashboard_adb_offline">ADB не отвечает</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
@@ -554,8 +572,6 @@
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Сохранено</string>
-    <string name="settings_datasource_switching">Переключение...</string>
-    <string name="settings_datasource_done">Готово</string>
     <!-- %1$d = trip count -->
     <string name="settings_recalc_done">Пересчитано: %1$d поездок</string>
     <string name="settings_export_in_progress">Экспорт...</string>

@@ -1,0 +1,598 @@
+{
+  "ac_ctrl_mode": {
+    "deviceType": 1000,
+    "featureId": 501219352
+  },
+  "ac_cycle_mode": {
+    "deviceType": 1000,
+    "featureId": 501219355
+  },
+  "ac_defrost_front": {
+    "deviceType": 1000,
+    "featureId": 501219362
+  },
+  "ac_defrost_rear": {
+    "deviceType": 1000,
+    "featureId": 501219357
+  },
+  "ac_dual": {
+    "deviceType": 1000,
+    "featureId": 501219346
+  },
+  "ac_flow_only_off": {
+    "deviceType": 1000,
+    "featureId": 501219394,
+    "value": 0
+  },
+  "ac_flow_only_on": {
+    "deviceType": 1000,
+    "featureId": 501219394,
+    "value": 1
+  },
+  "ac_off": {
+    "deviceType": 1000,
+    "featureId": 501219364,
+    "value": 0
+  },
+  "ac_on": {
+    "deviceType": 1000,
+    "featureId": 501219352,
+    "value": 0
+  },
+  "ac_power": {
+    "deviceType": 1000,
+    "featureId": 501219364
+  },
+  "ac_temp_deputy": {
+    "deviceType": 1000,
+    "featureId": 501219376
+  },
+  "ac_temp_main": {
+    "deviceType": 1000,
+    "featureId": 501219368
+  },
+  "ac_wind_level": {
+    "deviceType": 1000,
+    "featureId": 501219340
+  },
+  "ac_wind_mode": {
+    "deviceType": 1000,
+    "featureId": 501219336
+  },
+  "close_sunroof": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 2
+  },
+  "close_sunshade": {
+    "deviceType": 1001,
+    "featureId": 1125122060,
+    "value": 2
+  },
+  "close_trunk": {
+    "deviceType": 1001,
+    "featureId": 1125122080,
+    "value": 3
+  },
+  "close_windows": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 2
+  },
+  "comfort_sunroof": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 6
+  },
+  "defrost_front_off": {
+    "deviceType": 1000,
+    "featureId": 501219362,
+    "value": 0
+  },
+  "defrost_front_on": {
+    "deviceType": 1000,
+    "featureId": 501219362,
+    "value": 1
+  },
+  "defrost_rear_off": {
+    "deviceType": 1000,
+    "featureId": 501219357,
+    "value": 0
+  },
+  "defrost_rear_on": {
+    "deviceType": 1000,
+    "featureId": 501219357,
+    "value": 1
+  },
+  "doors_lock": {
+    "deviceType": 1001,
+    "featureId": 1276141590,
+    "value": 2
+  },
+  "doors_unlock": {
+    "deviceType": 1001,
+    "featureId": 1276141590,
+    "value": 1
+  },
+  "driver_massage_lvl1": {
+    "deviceType": 1023,
+    "featureId": 1276190736,
+    "value": 1
+  },
+  "driver_massage_lvl2": {
+    "deviceType": 1023,
+    "featureId": 1276190736,
+    "value": 2
+  },
+  "driver_massage_lvl3": {
+    "deviceType": 1023,
+    "featureId": 1276190736,
+    "value": 3
+  },
+  "driver_massage_off": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 1
+  },
+  "driver_massage_pulse": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 2
+  },
+  "driver_massage_shoulder": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 3
+  },
+  "driver_massage_stretch": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 4
+  },
+  "driver_massage_waist": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 5
+  },
+  "driver_massage_wave": {
+    "deviceType": 1023,
+    "featureId": 1276190752,
+    "value": 6
+  },
+  "driver_seat_heat": {
+    "deviceType": 1001,
+    "featureId": 1125122068
+  },
+  "driver_seat_heat_lvl2": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 3
+  },
+  "driver_seat_heat_lvl3": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 4
+  },
+  "driver_seat_heat_lvl4": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 5
+  },
+  "driver_seat_heat_lvl5": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 6
+  },
+  "driver_seat_heat_off": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 1
+  },
+  "driver_seat_heat_on": {
+    "deviceType": 1001,
+    "featureId": 1125122068,
+    "value": 2
+  },
+  "driver_seat_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122064
+  },
+  "driver_seat_vent_lvl2": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 3
+  },
+  "driver_seat_vent_lvl3": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 4
+  },
+  "driver_seat_vent_lvl4": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 5
+  },
+  "driver_seat_vent_lvl5": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 6
+  },
+  "driver_seat_vent_off": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 1
+  },
+  "driver_seat_vent_on": {
+    "deviceType": 1001,
+    "featureId": 1125122064,
+    "value": 2
+  },
+  "drl_auto": {
+    "deviceType": 1004,
+    "featureId": 1125122118,
+    "value": 0
+  },
+  "drl_off": {
+    "deviceType": 1004,
+    "featureId": 1125122118,
+    "value": 2
+  },
+  "drl_on": {
+    "deviceType": 1004,
+    "featureId": 1125122118,
+    "value": 1
+  },
+  "lock_doors": {
+    "deviceType": 1001,
+    "featureId": 1276141590,
+    "value": 2
+  },
+  "open_sunroof": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 1
+  },
+  "open_sunshade": {
+    "deviceType": 1001,
+    "featureId": 1125122060,
+    "value": 1
+  },
+  "open_trunk": {
+    "deviceType": 1001,
+    "featureId": 1125122080,
+    "value": 1
+  },
+  "open_windows": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 1
+  },
+  "passenger_massage_lvl1": {
+    "deviceType": 1023,
+    "featureId": 1276190739,
+    "value": 1
+  },
+  "passenger_massage_lvl2": {
+    "deviceType": 1023,
+    "featureId": 1276190739,
+    "value": 2
+  },
+  "passenger_massage_lvl3": {
+    "deviceType": 1023,
+    "featureId": 1276190739,
+    "value": 3
+  },
+  "passenger_massage_off": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 1
+  },
+  "passenger_massage_pulse": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 2
+  },
+  "passenger_massage_shoulder": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 3
+  },
+  "passenger_massage_stretch": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 4
+  },
+  "passenger_massage_waist": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 5
+  },
+  "passenger_massage_wave": {
+    "deviceType": 1023,
+    "featureId": 1276190756,
+    "value": 6
+  },
+  "passenger_seat_heat": {
+    "deviceType": 1001,
+    "featureId": 1125122076
+  },
+  "passenger_seat_heat_lvl2": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 3
+  },
+  "passenger_seat_heat_lvl3": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 4
+  },
+  "passenger_seat_heat_lvl4": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 5
+  },
+  "passenger_seat_heat_lvl5": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 6
+  },
+  "passenger_seat_heat_off": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 1
+  },
+  "passenger_seat_heat_on": {
+    "deviceType": 1001,
+    "featureId": 1125122076,
+    "value": 2
+  },
+  "passenger_seat_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122072
+  },
+  "passenger_seat_vent_lvl2": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 3
+  },
+  "passenger_seat_vent_lvl3": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 4
+  },
+  "passenger_seat_vent_lvl4": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 5
+  },
+  "passenger_seat_vent_lvl5": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 6
+  },
+  "passenger_seat_vent_off": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 1
+  },
+  "passenger_seat_vent_on": {
+    "deviceType": 1001,
+    "featureId": 1125122072,
+    "value": 2
+  },
+  "set_driver_temp": {
+    "deviceType": 1000,
+    "featureId": 501219368
+  },
+  "set_passenger_temp": {
+    "deviceType": 1000,
+    "featureId": 501219376
+  },
+  "set_sunshade_position": {
+    "deviceType": 1001,
+    "featureId": 1330642984
+  },
+  "steering_heat_lvl2": {
+    "deviceType": 1000,
+    "featureId": 944767029,
+    "value": 3
+  },
+  "steering_heat_off": {
+    "deviceType": 1000,
+    "featureId": 944767029,
+    "value": 1
+  },
+  "steering_heat_on": {
+    "deviceType": 1000,
+    "featureId": 944767029,
+    "value": 2
+  },
+  "steering_wheel_heat": {
+    "deviceType": 1000,
+    "featureId": 944767029
+  },
+  "sunroof_close": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 2
+  },
+  "sunroof_comfort": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 6
+  },
+  "sunroof_open": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 1
+  },
+  "sunroof_tilt": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 5
+  },
+  "sunshade_close": {
+    "deviceType": 1001,
+    "featureId": 1125122060,
+    "value": 2
+  },
+  "sunshade_open": {
+    "deviceType": 1001,
+    "featureId": 1125122060,
+    "value": 1
+  },
+  "sunshade_set_position": {
+    "deviceType": 1001,
+    "featureId": 1330642984
+  },
+  "tilt_sunroof": {
+    "deviceType": 1001,
+    "featureId": 1125122056,
+    "value": 5
+  },
+  "trunk_close": {
+    "deviceType": 1001,
+    "featureId": 1125122080,
+    "value": 3
+  },
+  "trunk_open": {
+    "deviceType": 1001,
+    "featureId": 1125122080,
+    "value": 1
+  },
+  "unlock_doors": {
+    "deviceType": 1001,
+    "featureId": 1276141590,
+    "value": 1
+  },
+  "wheel_heat_off": {
+    "deviceType": 1000,
+    "featureId": 944767029,
+    "value": 1
+  },
+  "wheel_heat_on": {
+    "deviceType": 1000,
+    "featureId": 944767029,
+    "value": 2
+  },
+  "window_driver_close": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 2
+  },
+  "window_driver_half": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 4
+  },
+  "window_driver_open": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 1
+  },
+  "window_driver_stop": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 3
+  },
+  "window_driver_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 5
+  },
+  "window_passenger_close": {
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "value": 2
+  },
+  "window_passenger_half": {
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "value": 4
+  },
+  "window_passenger_open": {
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "value": 1
+  },
+  "window_passenger_stop": {
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "value": 3
+  },
+  "window_passenger_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122107,
+    "value": 5
+  },
+  "window_rear_left_close": {
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "value": 2
+  },
+  "window_rear_left_half": {
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "value": 4
+  },
+  "window_rear_left_open": {
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "value": 1
+  },
+  "window_rear_left_stop": {
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "value": 3
+  },
+  "window_rear_left_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122112,
+    "value": 5
+  },
+  "window_rear_right_close": {
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "value": 2
+  },
+  "window_rear_right_half": {
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "value": 4
+  },
+  "window_rear_right_open": {
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "value": 1
+  },
+  "window_rear_right_stop": {
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "value": 3
+  },
+  "window_rear_right_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122115,
+    "value": 5
+  },
+  "windows_close": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 2
+  },
+  "windows_half": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 4
+  },
+  "windows_open": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 1
+  },
+  "windows_vent": {
+    "deviceType": 1001,
+    "featureId": 1125122104,
+    "value": 5
+  }
+}

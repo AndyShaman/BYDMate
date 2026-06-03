@@ -1,8 +1,7 @@
 package com.bydmate.app.ui.charges
 
-import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.autoservice.BatteryReading
-import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
@@ -59,11 +58,9 @@ class ChargesViewModelTest {
     // ─── Fake DAOs ────────────────────────────────────────────────────────────
 
     private class FakeSettingsDao(
-        autoserviceEnabled: Boolean = false,
         batteryCapacity: String = "72.9"
     ) : SettingsDao {
         val map = mutableMapOf(
-            SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString(),
             SettingsRepository.KEY_BATTERY_CAPACITY to batteryCapacity,
             SettingsRepository.KEY_CURRENCY to "BYN"
         )
@@ -137,19 +134,40 @@ class ChargesViewModelTest {
     private class FakeAutoserviceClient(
         private val battery: BatteryReading?,
         private val available: Boolean = true
-    ) : AutoserviceClient {
+    ) : VehicleApi {
         override suspend fun isAvailable(): Boolean = available
-        override suspend fun getInt(dev: Int, fid: Int): Int? = null
-        override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readChargingSnapshot(): ChargingReading? = null
-        override suspend fun getEnginePowerKw(): Int? = null
+        override suspend fun readSnapshot(): com.bydmate.app.data.remote.DiParsData? = null
+        override suspend fun readSoc(): Float? = null
+        override suspend fun readSpeed(): Float? = null
+        override suspend fun readMileageKm(): Float? = null
+        override suspend fun readPowerKw(): Int? = null
+        override suspend fun readAcStatus(): Int? = null
+        override suspend fun readAcTemp(): Int? = null
+        override suspend fun readInsideTemp(): Int? = null
+        override suspend fun readExteriorTemp(): Int? = null
+        override suspend fun readFanLevel(): Int? = null
+        override suspend fun readWindowDriver(): Int? = null
+        override suspend fun readWindowPassenger(): Int? = null
+        override suspend fun readWindowRearLeft(): Int? = null
+        override suspend fun readWindowRearRight(): Int? = null
+        override suspend fun dispatch(commandString: String): Result<Unit> = Result.success(Unit)
+        override suspend fun writeAcOn(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeAcOff(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowDriver(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowPassenger(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowRearRight(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeLockDoors(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeUnlockDoors(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSunroof(mode: com.bydmate.app.data.vehicle.SunroofMode): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
     }
 
     // ─── Factory ──────────────────────────────────────────────────────────────
 
     private fun buildViewModel(
-        autoserviceEnabled: Boolean = false,
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
         legacyExists: Boolean = false,
@@ -158,12 +176,11 @@ class ChargesViewModelTest {
         snapshots: List<BatterySnapshotEntity> = emptyList(),
         batteryCapacityKwh: String = "72.9"
     ): ChargesViewModel = buildViewModelAndDao(
-        autoserviceEnabled, chargesFlow, autoserviceCharges, legacyExists,
+        chargesFlow, autoserviceCharges, legacyExists,
         batteryReading, autoserviceAvailable, snapshots, batteryCapacityKwh
     ).first
 
     private fun buildViewModelAndDao(
-        autoserviceEnabled: Boolean = false,
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
         legacyExists: Boolean = false,
@@ -172,7 +189,7 @@ class ChargesViewModelTest {
         snapshots: List<BatterySnapshotEntity> = emptyList(),
         batteryCapacityKwh: String = "72.9"
     ): Pair<ChargesViewModel, FakeChargeDao> {
-        val settingsDao = FakeSettingsDao(autoserviceEnabled, batteryCapacityKwh)
+        val settingsDao = FakeSettingsDao(batteryCapacityKwh)
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val chargeDao = FakeChargeDao(chargesFlow, autoserviceCharges, legacyExists)
@@ -181,7 +198,7 @@ class ChargesViewModelTest {
         val snapshotDao = FakeBatterySnapshotDao(snapshots)
         val autoservice = FakeAutoserviceClient(batteryReading, autoserviceAvailable)
         val batteryHealthRepo = BatteryHealthRepository(snapshotDao)
-        val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo, settingsRepo)
+        val batteryStateRepo = BatteryStateRepository(autoservice, batteryHealthRepo)
 
         // Minimal Context mock — only locale lookup used in ChargesViewModel.groupChargesByMonthDay.
         val mockLocaleList = mockk<LocaleList> { every { get(0) } returns Locale("ru") }
@@ -405,36 +422,20 @@ class ChargesViewModelTest {
     }
 
     @Test
-    fun `loadAutoserviceState_toggleOff_returnsEnabledFalse`() = runTest {
+    fun `loadAutoserviceState_connected_returnsConnectedTrue`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = false,
             batteryReading = BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L),
             autoserviceAvailable = true
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertFalse(vm.uiState.value.autoserviceEnabled)
-        assertFalse(vm.uiState.value.autoserviceConnected)
-    }
-
-    @Test
-    fun `loadAutoserviceState_toggleOnConnected_returnsEnabledTrueConnectedTrue`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
-            batteryReading = BatteryReading(100f, 91f, 602f, 2091f, 14f, 0L),
-            autoserviceAvailable = true
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(vm.uiState.value.autoserviceEnabled)
         assertTrue(vm.uiState.value.autoserviceConnected)
         assertFalse(vm.uiState.value.autoserviceAllSentinel)
     }
 
     @Test
-    fun `loadAutoserviceState_toggleOnAllNull_returnsAllSentinelTrue`() = runTest {
+    fun `loadAutoserviceState_allNull_returnsAllSentinelTrue`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = true,
             batteryReading = BatteryReading(
                 sohPercent = null,
                 socPercent = null,
@@ -447,7 +448,6 @@ class ChargesViewModelTest {
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(vm.uiState.value.autoserviceEnabled)
         assertTrue(vm.uiState.value.autoserviceConnected)
         assertTrue(vm.uiState.value.autoserviceAllSentinel)
     }
@@ -499,7 +499,7 @@ class ChargesViewModelTest {
             makeCharge(2, now - 2000, kwhCharged = 50.0, gunState = null, type = "DC"),
             makeCharge(3, now - 1000, kwhCharged = 10.0, gunState = 2, type = "AC")
         )
-        val vm = buildViewModel(autoserviceEnabled = true, autoserviceCharges = charges)
+        val vm = buildViewModel(autoserviceCharges = charges)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(35.0, vm.uiState.value.lifetimeAcKwh, 0.01)
@@ -617,30 +617,27 @@ class ChargesViewModelTest {
 
     @Test
     fun `initialAutoserviceCheckDone_startsAsFalse`() = runTest {
-        val vm = buildViewModel(autoserviceEnabled = false)
+        val vm = buildViewModel()
 
         // Before any coroutines run, the flag must still be false (default value).
         assertFalse(vm.uiState.value.initialAutoserviceCheckDone)
     }
 
     @Test
-    fun `initialAutoserviceCheckDone_becomesTrueAfterPhase1_andAutoserviceEnabledMatchesPrefs`() = runTest {
-        // autoserviceEnabled = true in prefs, legacyExists = false
-        val vm = buildViewModel(autoserviceEnabled = true, legacyExists = false)
+    fun `initialAutoserviceCheckDone_becomesTrueAfterPhase1_noLegacy`() = runTest {
+        val vm = buildViewModel(legacyExists = false)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.uiState.value.initialAutoserviceCheckDone)
-        assertTrue(vm.uiState.value.autoserviceEnabled)
         assertFalse(vm.uiState.value.hasLegacyCharges)
     }
 
     @Test
-    fun `initialAutoserviceCheckDone_disabledWithLegacy_flagTrueAutoserviceEnabledFalse`() = runTest {
-        val vm = buildViewModel(autoserviceEnabled = false, legacyExists = true)
+    fun `initialAutoserviceCheckDone_withLegacy_flagTrueHasLegacyTrue`() = runTest {
+        val vm = buildViewModel(legacyExists = true)
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertTrue(vm.uiState.value.initialAutoserviceCheckDone)
-        assertFalse(vm.uiState.value.autoserviceEnabled)
         assertTrue(vm.uiState.value.hasLegacyCharges)
     }
 }

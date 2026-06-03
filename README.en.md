@@ -17,7 +17,7 @@
 
 **English** | [中文](README.zh.md) | [Русский](README.md)
 
-[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [AI Insights](#ai-insights) | [ABRP](#abrp--live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Sponsor](SUPPORT.md)
+[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Cluster navigation](#navigation-on-the-cluster) | [AI Insights](#ai-insights) | [ABRP](#abrp--live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Sponsor](SUPPORT.md)
 
 </div>
 
@@ -33,6 +33,20 @@ Two optional features can leave the car: AI insights via OpenRouter and live tel
 
 ---
 
+## What's new in v3.0.0
+
+A major update. BYDMate moved to its own data stack and learned to mirror navigation onto the instrument cluster.
+
+**Own data stack, no D+.** Earlier BYDMate relied on the third-party D+ (迪加) app to reach car data. Now everything is read and every command is sent directly through the car's system service, with no middleman. After installing and verifying BYDMate, D+ can be removed from DiLink. SOC, power, temperatures, capacity, voltage, charge-gun state, SoH and mileage are read from the source. Lights, climate, windows, mirrors and the trunk are controlled directly too.
+
+**Yandex Navigator on the cluster.** The right steering-wheel star moves navigation onto the instrument cluster and back to the center screen. Yandex Navigator is the default, but any app can be picked. See the "Navigation on the cluster" section.
+
+**Sleep charging.** A charge that finished while the car was fully asleep and the app was off is now reconstructed correctly from two SOC points. Such a session could previously be lost.
+
+**Widget and automation.** The widget now shows kilometers per 1% of charge and cabin, battery and 12V temperatures. Automation gained a trigger by exact time and time range with weekday selection, and the rule editor gained a "Run now" button.
+
+---
+
 ## Features
 
 | | Feature | Description |
@@ -44,7 +58,8 @@ Two optional features can leave the car: AI insights via OpenRouter and live tel
 | **Idle** | Idle drain | Idle consumption from energydata |
 | **Bat** | Battery health | Temperature, SoH (on Leopard 3), cell balance, 12V |
 | **Map** | Route map | osmdroid (OpenStreetMap) inside trip detail |
-| **Rules** | Automation | WHEN→THEN rules: parameter triggers → D+ commands |
+| **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle commands |
+| **Cluster** | Cluster navigation | Mirror navigation onto the instrument cluster via the right star |
 | **Widget** | Floating widget | 7-field overlay above other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V |
 | **Auto** | Autostart | WorkManager, starts on boot |
 | **CSV** | Data export | Trips and charges export to CSV |
@@ -95,7 +110,7 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 
 ## Automation
 
-The **Automation** tab lets you create rules that drive the car via the D+ API.
+The **Automation** tab lets you create rules that drive the car directly through the car's system interface.
 
 ### How it works
 
@@ -110,21 +125,52 @@ Examples:
 
 | | Description |
 |---|-------------|
-| **25 triggers** | SOC, speed, temperature, doors, windows, tire pressure, drive mode, geofence places, time of day, etc. |
-| **41 commands** | Windows (including individual driver and passenger), climate, lights, locks, sunroof, mirrors. All via D+ API |
-| **8 action kinds** | D+ command, silent or sound notification, app launch, phone call, navigation, URL, Yandex Music |
+| **Triggers** | SOC, speed, temperature, doors, windows, tire pressure, drive mode, geofence places, time of day, exact time and time range with weekdays, etc. |
+| **Commands** | Windows (including individual driver and passenger), climate, lights, locks, sunroof, mirrors. Directly through the car's system interface |
+| **8 action kinds** | Vehicle command, silent or sound notification, app launch, phone call, navigation, URL, Yandex Music |
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
 | **Cooldown** | Configurable delay between firings |
 | **Overlay confirmation** | "Cancel / Run" popup before action. 15-second timeout → auto-cancel |
 | **Safety** | Windows do not open above 80 km/h, CAN/SHELL commands are blocked |
 | **Log** | Full trigger history with outcomes |
 | **Templates** | 6 ready-made rules for a quick start |
+| **Run now** | Manually run a rule from the editor, bypassing triggers and cooldown |
 
 ### Logic
 
 - **AND** — every condition must hold
 - **OR** — any one condition is enough
 - **Park only** — the rule fires only when the car is in Park
+
+---
+
+## Navigation on the cluster
+
+BYDMate can mirror navigation onto the instrument cluster in front of the driver, so the map and maneuvers are right in your line of sight while the center screen stays free.
+
+### Right steering-wheel star control
+
+- **A short press of the right star** moves navigation to the cluster.
+- **Another short press** brings it back to the center screen.
+- **Holding the right star** keeps the stock behavior (car menu); BYDMate does not intercept it.
+
+### Enabling
+
+Open **Settings → Cluster** and turn on "Navigator on cluster via right star". The app enables the required service itself (ADB debugging must be on, see "Install"), no manual setup needed.
+
+In the car's stock navigation, enable full-screen cluster mode, otherwise the system has nowhere to render the projection.
+
+### Which app to project
+
+Yandex Navigator is projected by default. Below the enable toggle there is an app picker: choose any installed app (another navigator, a media player, etc.). The new choice applies on the next star press.
+
+### Window size
+
+In **Settings → Display → "Cluster window size"** two sliders (width and height, 50% to 100%) set the projection size. A smaller window is centered, and the native cluster shows through around it.
+
+### How it works
+
+The projection goes through the car's system service: BYDMate raises a virtual display on the instrument panel and moves the chosen app there. To intercept the steering-wheel buttons, the app enables its own accessibility service. It works only while the toggle is on and is used solely for the star. It does not change the firmware or the car itself, and it is fully reversible.
 
 ---
 
@@ -140,7 +186,7 @@ Seven fields across three rows. Colors: icons gray, values white. The frame and 
 
 **Top row** (small, 13sp):
 - ⏱ **Current trip duration** — `N min` or `X h Y min` (e.g. `47 min`, `1 h 12 min`). Start = ignition on, end = ignition off. Standstills with the car running (parked with AC on, passenger fetching water, red light) belong to the trip — as long as the electrical system is alive, the counter does not reset
-- 🚗 **Cabin temperature** — °C, from DiPlus
+- 🚗 **Cabin temperature** — °C
 
 **Center row** (large, key values):
 - **SOC %** (18sp bold, colored) — traction battery state of charge. Green > 50%, yellow 20–50%, red < 20%
@@ -148,7 +194,7 @@ Seven fields across three rows. Colors: icons gray, values white. The frame and 
 - **X.X ↓** (18sp, trend-colored) — **current trip consumption**, kWh/100km, with a trend arrow (details below)
 
 **Bottom row** (small, 13sp):
-- 🔋 **Battery temperature** — °C, from DiPlus
+- 🔋 **Battery temperature** — °C
 - ⚡ **12V** — auxiliary battery voltage, V. Normal 12.5–14.7 V, < 12.0 V = yellow, < 11.7 V = red
 
 ### Consumption and trend arrow (right block)
@@ -214,6 +260,7 @@ If a record is missing or the numbers look off:
 
 ---
 
+<<<<<<< HEAD
 ## Trip data source
 
 BYDMate supports two trip-data backends, switchable in **Settings → Trip data source** or during the first-run wizard.
@@ -237,23 +284,19 @@ SoH (State of Health) is the percent "health" of the traction battery, computed 
 
 On **BYD Leopard 3 (Fangchengbao Tai 3)** BYDMate reads this value directly from the onboard system and shows it in the "Battery health" card. This is the **real SoH from the car**, not an estimate from SoC delta: BYDMate simply reads what the car writes to itself.
 
-On other BYD models access to this value is not yet confirmed, so SoH is hidden there. The rest of the card (battery temperature, 12V, cell balance, min/max voltage) works on every model that has DiPlus.
+On other BYD models access to this value is not yet confirmed, so SoH is hidden there. The rest of the card (battery temperature, 12V, cell balance, min/max voltage) works on every supported model.
 
-If your car exposes SoH via DiPlus and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with the model and year of manufacture.
+If your car exposes SoH and you want to help add support, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with the model and year of manufacture.
 
 ---
 
-## Enable SoH and automatic charge logging (Leopard 3)
+## SoH and automatic charge logging (Leopard 3)
 
-SoH and automatic charge logging on Leopard 3 work through an additional "System data" mode that reads values from the car's onboard system. Enable it once:
+On Leopard 3, SoH and automatic charge logging read values directly from the car's onboard system. This works by default, with no switch to flip and no setup step. The first time the app reaches the onboard system, DiLink shows a system **ADB debugging** permission dialog with the key fingerprint. Tap **"Allow"** and check **"Always allow from this computer"** so DiLink does not ask again on every app start.
 
-1. Open **Settings** and toggle **"System data (experimental)"** on.
-2. DiLink will show a system **ADB debugging** permission dialog with the key fingerprint. Tap **"Allow"** and check **"Always allow from this computer"** so DiLink does not ask again on every app start.
-3. After that, SoH appears in the Battery health card, and charges start logging automatically with real kWh values.
+After that SoH appears in the Battery health card, and charges log automatically with real kWh values.
 
-If you do not enable this mode, the rest of BYDMate (trips, consumption, floating widget, automation) works as usual. Only SoH and automatic charge logging will be unavailable.
-
-> The mode is marked "experimental" because it has been tested on Leopard 3. On other BYD models access to this data is not confirmed.
+On cars without onboard-system access (older firmware, non-DiLink) the app falls back gracefully: the rest of BYDMate (trips, consumption, floating widget, automation) works as usual, only SoH and automatic charge logging are unavailable.
 
 ---
 
@@ -261,11 +304,11 @@ If you do not enable this mode, the rest of BYDMate (trips, consumption, floatin
 
 BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Tai 3). On other BYD models most features still work, with some differences. Before the first launch, check:
 
-- **Trip data source**: for models without the built-in BMS `energydata` (Song, Yuan and similar) switch to **DiPlus TripInfo** in Settings or in the first-run wizard. See the "Trip data source" section above.
+- **Trip logging**: on Leopard 3 trips come from the built-in BMS `energydata` database. On models without it (Song, Yuan and similar) BYDMate records trips natively from the live data stream, so the Trips list fills up on its own. Consumption from the SOC delta is a bit coarser than the BMS figure, but the list is no longer empty.
 - **Battery capacity**: defaults to 72.9 kWh (Leopard 3). Go to **Settings → Battery** and set your own. For example: Atto 3 = 60.5 kWh, Seal AWD = 82.5 kWh, Han EV = 85.4 kWh. Without this, range and trip-cost calculations will be off.
 - **SoH**: shown only on Leopard 3. On other models the "Battery health" card works without the SoH field.
 - **Charges**: the AC/DC algorithm was tuned for Leopard 3. On other models records may appear with delay or wrong power, especially for DC. Use manual add and edit when automation misses.
-- **Automation and floating widget**: work the same on every model since they use the DiPlus API.
+- **Automation and floating widget**: work the same on every model since they use the car's system service.
 
 If something does not work or shows strange values, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your car model and DiLink firmware version. We need reports like that to widen support.
 
@@ -287,21 +330,21 @@ If something does not work or shows strange values, open an [Issue](https://gith
 
 ```
 BYD energydata (BMS SQLite)  →  HistoryImporter    →  Room DB  →  Compose UI
-DiPlus API (localhost:8988)  →  TrackingService     ↗     ↓
+autoservice (system Binder)  →  TrackingService     ↗     ↓
 Android LocationManager      →  TripTracker (GPS)   ↗   AI (OpenRouter)
-DiPlus sendCmd API           ←  AutomationEngine   ←  Rules (Room DB)
+autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 ```
 
 | Data | Source |
 |------|--------|
 | Consumption, mileage, duration | BYD energydata (BMS) |
-| SOC, speed, temperatures | DiPlus API (`getDiPars`) |
-| Cell voltages, 12V | DiPlus API |
+| SOC, speed, temperatures | Car system service (autoservice Binder) |
+| Cell voltages, 12V, SoH | Car system service (autoservice Binder) |
 | GPS coordinates | Android LocationManager |
 | AI analytics | OpenRouter API (optional) |
-| Vehicle control | DiPlus sendCmd API (automation) |
+| Vehicle control | Car system service (command writes) |
 
-**No OBD adapter** — BYD blocks third-party OBD devices. BYDMate uses the same API as the built-in BYD apps.
+**No OBD adapter** and **no third-party D+**. BYDMate reads data and controls the car directly through the `autoservice` system service (the same one the stock BYD system uses) under shell access over wireless ADB.
 
 ---
 
@@ -317,32 +360,18 @@ Without ADB, BYDMate runs in basic mode. ADB debugging is required for these fea
 
 Without ADB you still get: trip and mileage tracking, energy consumption, widget, AI insights.
 
-To enable these features, after installing BYDMate open **Settings → "System data (experimental)"**. DiLink will show an "Allow ADB debugging" dialog once — tap **Allow** and check **"Always allow from this computer"**.
+These features are on by default, with no switch to flip. The first time the app reaches the onboard system, DiLink shows an "Allow ADB debugging" dialog once, tap **Allow** and check **"Always allow from this computer"**.
 
 - **DiLink 3 / 4** — ADB can be enabled by yourself: install [BydDevelopmentTools](https://disk.yandex.by/d/e3gEnY9P2Y9_fQ), go to *Settings → Version Management*, tap *Reset to factory default* 10 times, enable *Debug Mode when USB is Connected* and *Wireless adb debug switch*. On updated DiLink 3/4 firmware ADB may be locked like on DiLink 5 — then follow the path below.
 - **DiLink 5.0** — ADB debugging is **locked** and can only be unlocked remotely from China. This is typically done via **TaoBao** sellers (search for `DiLink 5.0`, ~40 ¥ inside China / ~80 ¥ outside, AliPay payment). The seller remotely opens the engineering menu via the QR code you send, after which ADB is enabled as usual.
 
   Step-by-step: [PDF guide (Russian)](docs/guides/dilink5-adb-activation-ru.pdf) — included in the repository.
 
-### 2. Install DiPlus (D+)
+### 2. DiPlus (D+) is no longer required
 
-The head unit must have **[DiPlus (D+)](https://drive.google.com/file/d/1ndKgzh-HWRPrPw2eTbKh9pwhdDwYJ0Ug/view?usp=drive_link)** installed — the bridge app for car data access.
+Since version 3.0.0 BYDMate works directly with the car's system and **does not require** the third-party D+ (迪加) app. All data is read and every command is sent through the car's system service.
 
-Easiest way (no ADB):
-
-1. Download the APK from the link above
-2. Transfer to a USB stick (or download directly via DiLink's browser)
-3. Open the file in DiLink's file manager and install
-4. Allow installation from unknown sources if prompted
-
-Alternative via ADB (if enabled in step 1):
-
-```bash
-adb connect <DiLink-IP>:5555
-adb install DiPlus.apk
-```
-
-DiLink's IP address can be found in Wi-Fi settings on the head unit.
+If you used earlier versions and installed D+, you can remove it from DiLink once you have verified BYDMate works.
 
 ### 3. Install BYDMate
 
@@ -354,8 +383,7 @@ DiLink's IP address can be found in Wi-Fi settings on the head unit.
 
 1. Open BYDMate — the setup wizard appears
 2. Grant **location** and **storage** permissions (for GPS and reading energydata)
-3. Pick the **trip data source** — `BYD energydata` for Leopard 3, `DiPlus TripInfo` for Song and other models without the built-in BMS database (see the [section above](#trip-data-source))
-4. Set **electricity tariffs** (for trip cost calculation)
+3. Set **electricity tariffs** (for trip cost calculation)
 
 ### 5. Background work
 
@@ -435,8 +463,8 @@ Only aggregated vehicle metrics, no identifiers:
 - **Odometer** — mileage, km
 - **Tire pressures** — pressure in 4 tires
 - **is_charging / is_parked** — state flags
-- **is_dcfc / kwh_charged** — charge station type (DC vs AC) and kWh in the current session (only when "System data" mode is on — otherwise these fields are simply omitted)
-- **soh** — real battery SoH (Leopard 3, when "System data" mode is on)
+- **is_dcfc / kwh_charged** — charge station type (DC vs AC) and kWh in the current session (sent when the car exposes onboard-system data, otherwise these fields are simply omitted)
+- **soh** — real battery SoH (Leopard 3)
 
 ### What is NOT sent
 
@@ -472,7 +500,7 @@ cd BYDMate
 ## Credits
 
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** (`org.jayb.bydapp`) by jayb — the original DiLink trip app, inspiration for BYDMate
-- **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — the bridge app for car data
+- **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — the bridge app for car data, used in early BYDMate versions (no longer required since 3.0.0)
 
 ---
 

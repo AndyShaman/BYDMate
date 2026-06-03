@@ -1,0 +1,304 @@
+{
+  "ts": 1779870058,
+  "diplus": {
+    "SOC": "100",
+    "Speed": "0",
+    "Mileage": "37998",
+    "Power": "0",
+    "ChargeGun": "1",
+    "MaxBatTemp": "16",
+    "AvgBatTemp": "16",
+    "MinBatTemp": "15",
+    "ChargingStatus": "1",
+    "BatCapacity": "0.8",
+    "TotalElecCon": "1012.6",
+    "Voltage12V": "14",
+    "MaxCellV": "3.427",
+    "MinCellV": "3.353",
+    "ExtTemp": "15",
+    "Gear": "1",
+    "PowerState": "2",
+    "InsideTemp": "18",
+    "ACStatus": "0",
+    "ACTemp": "24",
+    "FanLevel": "0",
+    "ACCirc": "1",
+    "DoorFL": "0",
+    "DoorFR": "0",
+    "DoorRL": "0",
+    "DoorRR": "0",
+    "WindowFL": "0",
+    "WindowFR": "0",
+    "WindowRL": "0",
+    "WindowRR": "0",
+    "Sunroof": "0",
+    "Trunk": "0",
+    "Hood": "0",
+    "SeatbeltFL": "0",
+    "LockFL": "1",
+    "TirePressFL": "255",
+    "TirePressFR": "252",
+    "TirePressRL": "252",
+    "TirePressRR": "255",
+    "DriveMode": "3",
+    "WorkMode": "3",
+    "AutoPark": "0",
+    "Rain": "0",
+    "LightLow": "1",
+    "DRL": "1"
+  },
+  "autoservice": {
+    "SOC": {
+      "raw_parcel": "42c80000",
+      "raw_int": 1120403456,
+      "transact": 7,
+      "device": 1014,
+      "fid": 1246777400
+    },
+    "Speed": {
+      "raw_parcel": "00000000",
+      "raw_int": 0,
+      "transact": 7,
+      "device": 1013,
+      "fid": -1807745016
+    },
+    "Mileage": {
+      "raw_parcel": "0000946e",
+      "raw_int": 37998,
+      "transact": 5,
+      "device": 1014,
+      "fid": 1246765072
+    },
+    "Power": {
+      "raw_parcel": "00000000",
+      "raw_int": 0,
+      "transact": 5,
+      "device": 1012,
+      "fid": 339738656
+    },
+    "ChargeGun": {
+      "raw_parcel": "00000001",
+      "raw_int": 1,
+      "transact": 5,
+      "device": 1009,
+      "fid": 876609586
+    },
+    "ChargingStatus": {
+      "raw_parcel": "0000000f",
+      "raw_int": 15,
+      "transact": 5,
+      "device": 1009,
+      "fid": 876609560
+    },
+    "BatCapacity": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "TotalElecCon": {
+      "raw_parcel": "447d2667",
+      "raw_int": 1149052519,
+      "transact": 7,
+      "device": 1014,
+      "fid": 1032871984
+    },
+    "Voltage12V": {
+      "raw_parcel": "41600000",
+      "raw_int": 1096810496,
+      "transact": 7,
+      "device": 1001,
+      "fid": 1128267816
+    },
+    "MaxBatTemp": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "AvgBatTemp": {
+      "raw_parcel": "00000038",
+      "raw_int": 56,
+      "transact": 5,
+      "device": 1014,
+      "fid": 1148190776
+    },
+    "MinBatTemp": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "MaxCellV": {
+      "raw_parcel": "00000d62",
+      "raw_int": 3426,
+      "transact": 5,
+      "device": 1014,
+      "fid": 1147142192
+    },
+    "MinCellV": {
+      "raw_parcel": "00000d18",
+      "raw_int": 3352,
+      "transact": 5,
+      "device": 1014,
+      "fid": 1147142160
+    },
+    "ExtTemp": {
+      "raw_parcel": "0000000f",
+      "raw_int": 15,
+      "transact": 5,
+      "device": 1000,
+      "fid": 1077936184
+    },
+    "Gear": {
+      "raw_parcel": "00000001",
+      "raw_int": 1,
+      "transact": 5,
+      "device": 1011,
+      "fid": 562036736
+    },
+    "PowerState": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "InsideTemp": {
+      "raw_parcel": "00000012",
+      "raw_int": 18,
+      "transact": 5,
+      "device": 1000,
+      "fid": 1031798832
+    },
+    "ACStatus": {
+      "raw_parcel": "00000000",
+      "raw_int": 0,
+      "transact": 5,
+      "device": 1000,
+      "fid": 1077936144
+    },
+    "ACTemp": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "FanLevel": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "ACCirc": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "DoorFL": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "DoorFR": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "DoorRL": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "DoorRR": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "WindowFL": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "WindowFR": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "WindowRL": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "WindowRR": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "Sunroof": {
+      "raw_parcel": "00000001",
+      "raw_int": 1,
+      "transact": 5,
+      "device": 1001,
+      "fid": 1101004832
+    },
+    "Trunk": {
+      "raw_parcel": "00000002",
+      "raw_int": 2,
+      "transact": 5,
+      "device": 1001,
+      "fid": 1074790416
+    },
+    "Hood": {
+      "raw_parcel": "00000000",
+      "raw_int": 0,
+      "transact": 5,
+      "device": 1001,
+      "fid": 692060188
+    },
+    "SeatbeltFL": {
+      "raw_parcel": "00000000",
+      "raw_int": 0,
+      "transact": 5,
+      "device": 1007,
+      "fid": 692060184
+    },
+    "LockFL": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "TirePressFL": {
+      "raw_parcel": "000000ff",
+      "raw_int": 255,
+      "transact": 5,
+      "device": 1016,
+      "fid": -1728052956
+    },
+    "TirePressFR": {
+      "raw_parcel": "000000fc",
+      "raw_int": 252,
+      "transact": 5,
+      "device": 1016,
+      "fid": -1728052952
+    },
+    "TirePressRL": {
+      "raw_parcel": "000000fc",
+      "raw_int": 252,
+      "transact": 5,
+      "device": 1016,
+      "fid": -1728052948
+    },
+    "TirePressRR": {
+      "raw_parcel": "000000ff",
+      "raw_int": 255,
+      "transact": 5,
+      "device": 1016,
+      "fid": -1728052944
+    },
+    "DriveMode": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "WorkMode": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "AutoPark": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "Rain": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "LightLow": {
+      "skipped": true,
+      "reason": "no candidate fid"
+    },
+    "DRL": {
+      "raw_parcel": "00000001",
+      "raw_int": 1,
+      "transact": 5,
+      "device": 1004,
+      "fid": 985661476
+    }
+  }
+}

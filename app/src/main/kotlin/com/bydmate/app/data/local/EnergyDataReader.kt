@@ -35,7 +35,7 @@ data class BydTripRecord(
  * 4. Read EnergyConsumption table from the local copy
  */
 @Singleton
-class EnergyDataReader @Inject constructor(
+open class EnergyDataReader @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
 
@@ -282,6 +282,20 @@ class EnergyDataReader @Inject constructor(
         val zeroKm = results.count { it.tripKm <= 0.0 }
         Log.i(TAG, "readTrips: ${results.size} rows (${zeroKm} zero-km / idle drain)")
         results
+    }
+
+    /** Hook for tests to swap the dir. Default points at the real ENERGY_DIR_PATH. */
+    internal open fun energyDataDir(): File = File(ENERGY_DIR_PATH)
+
+    /**
+     * Phase 1.5 mode switch: does the BYD energydata directory hold a readable trips DB?
+     * Reuses existing find helpers — no new file probing logic.
+     */
+    fun isAvailable(): Boolean {
+        val dir = energyDataDir()
+        if (!dir.exists() || !dir.isDirectory) return false
+        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        return db.canRead() && db.length() >= 16
     }
 
     private fun findDbViaListFiles(dir: File): File? {

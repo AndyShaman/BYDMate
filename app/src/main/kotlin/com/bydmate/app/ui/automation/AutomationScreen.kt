@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.automation
 
+import android.app.TimePickerDialog
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -87,6 +88,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.data.automation.ScheduleSpec
+import com.bydmate.app.data.automation.minuteToHHmm
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
@@ -175,6 +178,7 @@ fun AutomationScreen(
             editorError = state.editorError,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
+            onTestAction = { viewModel.executeNow(it) },
             onDismiss = { viewModel.closeEditor() }
         )
     }
@@ -292,12 +296,17 @@ private fun RuleCard(
                                 append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
-                        withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-                        append(" ")
-                        withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-                        append(" ")
-                        withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                            append(t.value)
+                        if (t.kind == "time_range") {
+                            // value is JSON (parsed by the engine); show the readable displayName instead.
+                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
+                        } else {
+                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
+                            append(" ")
+                            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
+                            append(" ")
+                            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                                append(t.value)
+                            }
                         }
                     }
                     withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
@@ -330,6 +339,7 @@ private fun EditorDialog(
     editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
+    onTestAction: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -438,6 +448,9 @@ private fun EditorDialog(
                             onAddTimeOfDay = {
                                 onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
                             },
+                            onAddSchedule = {
+                                onUpdate { copy(triggers = triggers + newScheduleTrigger()) }
+                            },
                             onAddServiceStart = {
                                 onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
                             },
@@ -476,6 +489,7 @@ private fun EditorDialog(
                                     copy(actions = actions.toMutableList().apply { set(idx, newAction) })
                                 }
                             },
+                            onTest = onTestAction,
                             onDelete = {
                                 onUpdate {
                                     copy(actions = actions.toMutableList().apply { removeAt(idx) })
@@ -630,6 +644,7 @@ private fun TriggerRow(
         when (trigger.kind) {
             "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
             "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
+            "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
             else -> ParamTriggerControls(trigger, onUpdate)
@@ -874,6 +889,153 @@ private fun TimeOfDayTriggerControls(
 }
 
 @Composable
+private fun ScheduleTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit
+) {
+    val context = LocalContext.current
+    val spec = remember(trigger.value) {
+        ScheduleSpec.fromJson(trigger.value) ?: ScheduleSpec(8 * 60, 10 * 60, emptySet())
+    }
+    val isExact = spec.isExact
+
+    fun push(newSpec: ScheduleSpec) {
+        onUpdate(trigger.copy(value = newSpec.toJson(), displayName = scheduleDisplayName(context, newSpec)))
+    }
+
+    fun pickTime(currentMinute: Int, onPicked: (Int) -> Unit) {
+        TimePickerDialog(
+            context,
+            { _, h, m -> onPicked(h * 60 + m) },
+            currentMinute / 60, currentMinute % 60, true
+        ).show()
+    }
+
+    val dayLabels = listOf(
+        1 to stringResource(R.string.automation_day_mon),
+        2 to stringResource(R.string.automation_day_tue),
+        3 to stringResource(R.string.automation_day_wed),
+        4 to stringResource(R.string.automation_day_thu),
+        5 to stringResource(R.string.automation_day_fri),
+        6 to stringResource(R.string.automation_day_sat),
+        7 to stringResource(R.string.automation_day_sun),
+    )
+
+    Column {
+        // Mode toggle: exact vs range
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilterChip(
+                selected = isExact,
+                onClick = { if (!isExact) push(spec.copy(toMinute = spec.fromMinute)) },
+                label = { Text(stringResource(R.string.automation_schedule_mode_exact), fontSize = 12.sp) },
+            )
+            Spacer(Modifier.width(6.dp))
+            FilterChip(
+                selected = !isExact,
+                onClick = {
+                    // Open a 2h window so "from" and "to" differ when switching to range.
+                    if (isExact) push(spec.copy(toMinute = (spec.fromMinute + 120) % 1440))
+                },
+                label = { Text(stringResource(R.string.automation_schedule_mode_range), fontSize = 12.sp) },
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        // Time picker(s)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isExact) {
+                Text(stringResource(R.string.automation_schedule_time_label) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.fromMinute)) {
+                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it, toMinute = it)) }
+                }
+            } else {
+                Text(stringResource(R.string.automation_schedule_from) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.fromMinute)) {
+                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it)) }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.automation_schedule_to) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.toMinute)) {
+                    pickTime(spec.toMinute) { push(spec.copy(toMinute = it)) }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        // Days of week (none selected = every day)
+        Text(stringResource(R.string.automation_schedule_days_label), fontSize = 11.sp, color = TextMuted)
+        Spacer(Modifier.height(2.dp))
+        Row {
+            dayLabels.forEach { (d, label) ->
+                DayChip(
+                    label = label,
+                    selected = d in spec.days,
+                    onClick = {
+                        val newDays = if (d in spec.days) spec.days - d else spec.days + d
+                        push(spec.copy(days = newDays))
+                    },
+                )
+                Spacer(Modifier.width(3.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeChip(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(8.dp, 6.dp)
+    )
+}
+
+@Composable
+private fun DayChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color = if (selected) AccentGreen else TextMuted,
+        modifier = Modifier
+            .background(if (selected) AccentGreen.copy(alpha = 0.15f) else CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, if (selected) AccentGreen else CardBorder, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+    )
+}
+
+/** Readable schedule label; first token is the time so the rule summary stays compact. */
+private fun scheduleDisplayName(context: android.content.Context, spec: ScheduleSpec): String {
+    val time = if (spec.isExact) {
+        minuteToHHmm(spec.fromMinute)
+    } else {
+        "${minuteToHHmm(spec.fromMinute)}-${minuteToHHmm(spec.toMinute)}"
+    }
+    val days = scheduleDaysShort(context, spec.days)
+    return if (days.isEmpty()) time else "$time $days"
+}
+
+private fun scheduleDaysShort(context: android.content.Context, days: Set<Int>): String {
+    if (days.isEmpty() || days.size == 7) return ""
+    val labels = mapOf(
+        1 to R.string.automation_day_mon,
+        2 to R.string.automation_day_tue,
+        3 to R.string.automation_day_wed,
+        4 to R.string.automation_day_thu,
+        5 to R.string.automation_day_fri,
+        6 to R.string.automation_day_sat,
+        7 to R.string.automation_day_sun,
+    )
+    return days.sorted().joinToString(",") { context.getString(labels.getValue(it)) }
+}
+
+@Composable
 private fun ServiceStartTriggerControls() {
     Icon(
         Icons.Outlined.PlayArrow,
@@ -915,6 +1077,7 @@ private fun ActionRow(
     action: ActionDef,
     places: List<PlaceEntity>,
     onUpdate: (ActionDef) -> Unit,
+    onTest: (String) -> Unit,
     onDelete: () -> Unit
 ) {
     Row(
@@ -947,6 +1110,14 @@ private fun ActionRow(
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
 
+        // "Выполнить сейчас" — fire this vehicle command immediately for live testing.
+        // Only for param (vehicle) actions; result is shown via Toast + logcat status line.
+        if (action.kind == "param" && action.command.isNotBlank()) {
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = { onTest(action.command) }, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Outlined.PlayArrow, "выполнить сейчас", tint = AccentGreen, modifier = Modifier.size(16.dp))
+            }
+        }
         Spacer(Modifier.width(4.dp))
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
@@ -2123,6 +2294,7 @@ private fun AddTriggerButton(
     onAddParam: () -> Unit,
     onAddPlace: (PlaceEntity) -> Unit,
     onAddTimeOfDay: () -> Unit,
+    onAddSchedule: () -> Unit,
     onAddServiceStart: () -> Unit,
     onAddNetworkAvailable: () -> Unit
 ) {
@@ -2168,6 +2340,13 @@ private fun AddTriggerButton(
                 onClick = {
                     menuExpanded = false
                     onAddTimeOfDay()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddSchedule()
                 }
             )
             DropdownMenuItem(
@@ -2238,6 +2417,20 @@ private fun newTimeOfDayTrigger(context: android.content.Context): TriggerDef {
         value = "NIGHT",
         displayName = localized("夜晚", "Night", "Ночь", context),
         kind = "time_of_day"
+    )
+}
+
+private fun newScheduleTrigger(): TriggerDef {
+    // Default: 08:00-10:00 window, every day. displayName carries only the time
+    // (no days), so no context is needed here.
+    val spec = ScheduleSpec(fromMinute = 8 * 60, toMinute = 10 * 60, days = emptySet())
+    return TriggerDef(
+        param = "Schedule",
+        chineseName = "时间表",
+        operator = "==",
+        value = spec.toJson(),
+        displayName = "${minuteToHHmm(spec.fromMinute)}-${minuteToHHmm(spec.toMinute)}",
+        kind = "time_range"
     )
 }
 

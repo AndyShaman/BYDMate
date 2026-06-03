@@ -8,6 +8,16 @@
     <string name="settings_section_trips_title">Trips</string>
     <string name="settings_section_integrations_title">Integrations</string>
     <string name="settings_section_widget_title">Widget</string>
+    <string name="settings_section_display_title">Display</string>
+    <!-- Settings: Display section (cluster projection) -->
+    <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
+    <string name="settings_display_mirror_header">Navigator on cluster</string>
+    <string name="settings_display_mirror_title">Navigator on cluster via right star</string>
+    <string name="settings_display_mirror_desc">A short press of the right steering-wheel star moves Yandex Navigator to the cluster and back. Requires cluster full-screen mode to be on.</string>
+    <string name="settings_display_app_title">App on cluster</string>
+    <string name="settings_display_size_header">Cluster window size</string>
+    <string name="settings_display_size_width">Width</string>
+    <string name="settings_display_size_height">Height</string>
     <string name="settings_section_places_title">Places</string>
     <string name="settings_section_application_title">Application</string>
     <string name="settings_smart_home_section_title">Smart home</string>
@@ -28,12 +38,6 @@
     <string name="settings_recalc_dialog_text">All trips will be recalculated using tariff %1$s %2$s/kWh.\nExisting calculated values will be replaced.</string>
     <string name="settings_recalc_confirm_button">Recalculate</string>
     <string name="settings_cancel_button">Cancel</string>
-    <string name="settings_trips_datasource_header">Trip data source</string>
-    <string name="settings_trips_datasource_note">Leopard 3 - BYD energydata.\nSong and other cars without the built-in database - DiPlus TripInfo.</string>
-    <string name="settings_trips_datasource_hint">If the list is empty after 2-3 trips, switch the mode.</string>
-    <string name="settings_trips_system_header">System data (experimental)</string>
-    <string name="settings_trips_system_note">Extended car data: battery SoH, true BMS mileage, charging statistics. Read only.</string>
-    <string name="settings_trips_system_enable_label">Enable</string>
     <string name="settings_abrp_section_header">ABRP - telemetry</string>
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent - ABRP reads coordinates itself.</string>
@@ -149,7 +153,6 @@
     <string name="charges_stats_equiv_cycles">Equiv. cycles</string>
     <string name="charges_stats_bms_mileage">BMS mileage</string>
     <string name="charges_stats_per100km">/100km lifetime</string>
-    <string name="charges_lifetime_enable_hint">Enable \"System data\" in Settings to see BMS mileage and total pumped from the car.</string>
     <string name="charges_lifetime_waiting">Waiting for the first response from the car...</string>
     <string name="charges_stats_dynamics_label">Trends</string>
     <string name="charges_chart_cell_delta_title">Cell delta (V)</string>
@@ -212,8 +215,24 @@
     <string name="automation_trigger_type_place">Place</string>
     <string name="automation_trigger_type_place_empty_hint">Create a place in settings first</string>
     <string name="automation_trigger_type_time_of_day">Time of day</string>
+    <string name="automation_trigger_type_schedule">Time / schedule</string>
     <string name="automation_trigger_type_service_start">BYDMate startup</string>
     <string name="automation_trigger_type_internet">Internet available</string>
+
+    <!-- Schedule trigger (exact time / range + days of week) -->
+    <string name="automation_schedule_mode_exact">Exact</string>
+    <string name="automation_schedule_mode_range">Range</string>
+    <string name="automation_schedule_time_label">Time:</string>
+    <string name="automation_schedule_from">From:</string>
+    <string name="automation_schedule_to">To:</string>
+    <string name="automation_schedule_days_label">Days of week (empty = every day):</string>
+    <string name="automation_day_mon">Mon</string>
+    <string name="automation_day_tue">Tue</string>
+    <string name="automation_day_wed">Wed</string>
+    <string name="automation_day_thu">Thu</string>
+    <string name="automation_day_fri">Fri</string>
+    <string name="automation_day_sat">Sat</string>
+    <string name="automation_day_sun">Sun</string>
     <string name="automation_action_delay_label">Delay</string>
     <string name="automation_delay_0_5s">0.5 s</string>
     <string name="automation_delay_1s">1 s</string>
@@ -223,7 +242,7 @@
     <string name="automation_delay_10s">10 s</string>
     <string name="automation_delay_display_name">Delay %1$s</string>
     <string name="automation_add_action_button">+ Add action</string>
-    <string name="automation_action_dplus_command">D+ command</string>
+    <string name="automation_action_dplus_command">Vehicle command</string>
     <string name="automation_action_notification_silent">Notification (silent)</string>
     <string name="automation_action_notification_sound">Notification (sound)</string>
     <string name="automation_action_app_launch">Launch app</string>
@@ -279,7 +298,6 @@
     <string name="place_edit_error_min_radius">Minimum radius is 20 m</string>
     <string name="welcome_step_indicator">Step %1$d of 3</string>
     <string name="welcome_model_step_title">Which BYD model do you have?</string>
-    <string name="welcome_model_step_description">This determines the trip data source.\nLeopard 3 stores it in the built-in BYD database (energydata).\nSong and other models - only in DiPlus.</string>
     <string name="welcome_model_song_label">Song / other</string>
     <string name="welcome_model_change_later">You can change this later in settings.</string>
     <string name="welcome_next_button">Next</string>
@@ -324,11 +342,12 @@
     <string name="widget_duration_hours">%1$dh %2$dmin</string>
     <string name="widget_duration_minutes">%1$d min</string>
     <string name="widget_trip_km_value">%1$.1f km</string>
+    <string name="widget_km_per_percent">%1$.1f</string>
     <string name="widget_voltage_value">%1$.1f V</string>
     <string name="widget_toast_hidden">Widget hidden. Open BYDMate - it will return.</string>
     <string name="widget_trash_release">release - widget hidden</string>
     <string name="widget_trash_hint">drag here to hide</string>
-    <string name="dashboard_diplus_offline">DiPlus is not responding</string>
+    <string name="dashboard_vehicle_data_offline">No vehicle data</string>
     <string name="dashboard_adb_offline">ADB is not responding</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
@@ -412,8 +431,6 @@
     <string name="settings_unit_miles">miles</string>
     <string name="settings_lang_russian">Русский</string>
     <string name="settings_saved">Saved</string>
-    <string name="settings_datasource_switching">Switching...</string>
-    <string name="settings_datasource_done">Done</string>
     <string name="settings_recalc_done">Recalculated: %1$d trips</string>
     <string name="settings_export_in_progress">Exporting...</string>
     <string name="settings_export_done">Exported: %1$d trips, %2$d charging sessions</string>

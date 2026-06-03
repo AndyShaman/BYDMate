@@ -78,13 +78,12 @@ data class DashboardUiState(
     val idleDrainKwhWeek: Double = 0.0,
     val idleDrainHoursWeek: Double = 0.0,
     val estimatedRangeKm: Double? = null,
-    val diPlusConnected: Boolean = true,
+    val vehicleDataConnected: Boolean = true,
     val idleDrainAvailable: Boolean = true,
     val adbConnected: Boolean? = null,
     val currentSoh: Float? = null,
     val currentLifetimeKm: Float? = null,
     val currentLifetimeKwh: Float? = null,
-    val autoserviceEnabled: Boolean = false,
     // Widget-style stats around SOC ring (mirror FloatingWidgetView bindings).
     val insideTemp: Int? = null,
     val tripDistanceKm: Double? = null,
@@ -142,7 +141,7 @@ class DashboardViewModel @Inject constructor(
         viewModelScope.launch {
             // combine() is typed only up to 5 flows — bundle data+connected and
             // session+tripKm to stay under the limit (mirrors WidgetController).
-            val dataConnFlow = TrackingService.lastData.combine(TrackingService.diPlusConnected) { d, c -> d to c }
+            val dataConnFlow = TrackingService.lastData.combine(TrackingService.vehicleDataConnected) { d, c -> d to c }
             val tripFlow = TrackingService.sessionStartedAt.combine(TrackingService.tripDistanceKm) { s, t -> s to t }
             combine(
                 dataConnFlow,
@@ -193,7 +192,7 @@ class DashboardViewModel @Inject constructor(
                             )
                         ),
                         estimatedRangeKm = rangeKm ?: current.estimatedRangeKm,
-                        diPlusConnected = connected,
+                        vehicleDataConnected = connected,
                         insideTemp = data?.insideTemp ?: current.insideTemp,
                         tripDistanceKm = snapshot.tripDistanceKm,
                         sessionStartedAt = snapshot.sessionStartedAt,
@@ -402,26 +401,12 @@ class DashboardViewModel @Inject constructor(
     }
 
     private suspend fun loadAutoserviceFlag() {
-        val enabled = settingsRepository.isAutoserviceEnabled()
-        if (!enabled) {
-            _uiState.update {
-                it.copy(
-                    autoserviceEnabled = false,
-                    adbConnected = null,
-                    currentSoh = null,
-                    currentLifetimeKm = null,
-                    currentLifetimeKwh = null,
-                )
-            }
-            return
-        }
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
         _uiState.update {
             if (state == null) {
-                it.copy(autoserviceEnabled = true, adbConnected = false)
+                it.copy(adbConnected = false)
             } else {
                 it.copy(
-                    autoserviceEnabled = true,
                     adbConnected = state.autoserviceAvailable,
                     currentSoh = state.sohPercent,
                     currentLifetimeKm = state.lifetimeKm,

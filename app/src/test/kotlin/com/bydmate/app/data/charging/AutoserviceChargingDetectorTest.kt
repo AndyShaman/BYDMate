@@ -7,7 +7,7 @@ import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
-import com.bydmate.app.data.remote.DiParsClient
+import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
@@ -101,9 +101,9 @@ class AutoserviceChargingDetectorTest {
             flowOf(emptyList())
     }
 
-    private class FakeDiParsClient(
+    private class FakeParsReader(
         private val data: DiParsData? = null
-    ) : DiParsClient(okhttp3.OkHttpClient()) {
+    ) : ParsReader {
         override suspend fun fetch(): DiParsData? = data
     }
 
@@ -143,6 +143,7 @@ class AutoserviceChargingDetectorTest {
         ),
         prevSoc: Int? = null,
         prevCapacityKwh: Float? = null,
+        prevMileageKm: Float? = null,
         prevTs: Long? = null,
         autoserviceAvailable: Boolean = true,
         homeTariff: Double = 0.20,
@@ -164,6 +165,9 @@ class AutoserviceChargingDetectorTest {
             if (prevCapacityKwh != null) {
                 put(SettingsRepository.KEY_LAST_CAPACITY_KWH, prevCapacityKwh.toString())
             }
+            if (prevMileageKm != null) {
+                put(SettingsRepository.KEY_LAST_MILEAGE_KM, prevMileageKm.toString())
+            }
             if (prevTs != null) {
                 put(SettingsRepository.KEY_LAST_STATE_TS, prevTs.toString())
             }
@@ -179,15 +183,15 @@ class AutoserviceChargingDetectorTest {
             stateStore = stateStore,
             classifier = classifier,
             settings = settings,
-            diParsClient = FakeDiParsClient(diParsData)
+            parsReader = FakeParsReader(diParsData)
         )
         return TestSetup(detector, dao, snapshotDao, stateStore, auto)
     }
 
-    /** Minimal DiParsData with only the SOC field populated; rest is null. */
-    private fun diParsSoc(soc: Int?): DiParsData = DiParsData(
+    /** DiParsData carrying only the fields recordParkedAnchor reads (gun defaults to NONE=1). */
+    private fun parkedSample(soc: Int?, mileage: Double? = null, gun: Int? = 1): DiParsData = DiParsData(
         soc = soc,
-        speed = null, mileage = null, power = null, chargeGunState = null,
+        speed = null, mileage = mileage, power = null, chargeGunState = gun,
         maxBatTemp = null, avgBatTemp = null, minBatTemp = null,
         chargingStatus = null, batteryCapacityKwh = null, totalElecConsumption = null,
         voltage12v = null, maxCellVoltage = null, minCellVoltage = null,
@@ -401,10 +405,10 @@ class AutoserviceChargingDetectorTest {
 
     @Test
     fun `gate B cap session overreports versus SOC falls back to SOC estimate`() = runTest {
-        // BMS counter overruns SOC: 80→82 (2%), but cap=12 (likely stale residue).
-        // socEstimate = 2/100 * 72.9 = 1.458. Ratio 12/1.458 = 8.23 → fallback.
+        // BMS counter overruns SOC: 80→84 (4%), but cap=12 (likely stale residue).
+        // socEstimate = 4/100 * 72.9 = 2.916. Ratio 12/2.916 = 4.12 → fallback.
         val setup = build(
-            battery = battery(soc = 82f),
+            battery = battery(soc = 84f),
             charging = charging(capKwh = 12.0f),
             prevSoc = 80,
             prevCapacityKwh = null
@@ -414,7 +418,7 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(1.458, ch.kwhCharged!!, 0.01)
+        assertEquals(2.916, ch.kwhCharged!!, 0.01)
         assertEquals("autoservice_soc_fallback", ch.detectionSource)
     }
 
@@ -467,84 +471,6 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `autoservice SOC sentinel falls back to DiPars and seeds baseline`() = runTest {
-        // Cold-start scenario: TrackingService runs catch-up before autoservice
-        // has warmed its fid cache. autoservice SOC is sentinel, but DiPars
-        // (separate process) returns the cached SOC=99. Baseline must seed
-        // from DiPars value, no row created.
-        val batteryNoSoc = BatteryReading(
-            sohPercent = 100f, socPercent = null,
-            lifetimeKwh = null, lifetimeMileageKm = 2091f,
-            voltage12v = 14f, readAtMs = 1000L
-        )
-        val setup = build(
-            battery = batteryNoSoc,
-            prevSoc = null,
-            diParsData = diParsSoc(99)
-        )
-
-        val result = setup.detector.runCatchUp(now = 1500L)
-
-        assertEquals(CatchUpOutcome.BASELINE_INITIALIZED, result.outcome)
-        assertEquals(0, setup.chargeDao.inserted.size)
-        val state = setup.stateStore.load()
-        assertEquals(99, state.socPercent)
-    }
-
-    @Test
-    fun `autoservice SOC sentinel falls back to DiPars and creates session`() = runTest {
-        // Reproduces the 2026-04-30 lost-charge bug: car charged overnight,
-        // pistol pulled before DiLink finished booting → autoservice SOC was
-        // sentinel during catch-up. With DiPars fallback, we recover the real
-        // SOC=100, see the +20 jump from prevSoc=80, and create the session.
-        val batteryNoSoc = BatteryReading(
-            sohPercent = 100f, socPercent = null,
-            lifetimeKwh = null, lifetimeMileageKm = 2091f,
-            voltage12v = 14f, readAtMs = 1000L
-        )
-        val setup = build(
-            battery = batteryNoSoc,
-            charging = charging(capKwh = 14.0f),
-            prevSoc = 80,
-            prevCapacityKwh = 0.0f,
-            diParsData = diParsSoc(100)
-        )
-
-        val result = setup.detector.runCatchUp(now = 1500L)
-
-        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
-        assertEquals(1, setup.chargeDao.inserted.size)
-        val ch = setup.chargeDao.inserted.single()
-        assertEquals(100, ch.socEnd)
-        assertEquals(80, ch.socStart)
-        assertEquals(14.0, ch.kwhCharged!!, 0.01)
-    }
-
-    @Test
-    fun `autoservice SOC sentinel and DiPars out-of-range still returns SENTINEL`() = runTest {
-        // DiPars can return garbage values (negative or >100) on some firmware
-        // states. takeIf { it in 0..100 } guard must reject them and keep the
-        // SENTINEL outcome so the baseline isn't poisoned.
-        val batteryNoSoc = BatteryReading(
-            sohPercent = 100f, socPercent = null,
-            lifetimeKwh = null, lifetimeMileageKm = 2091f,
-            voltage12v = 14f, readAtMs = 1000L
-        )
-        val setup = build(
-            battery = batteryNoSoc,
-            prevSoc = 80,
-            diParsData = diParsSoc(-1)
-        )
-
-        val result = setup.detector.runCatchUp(now = 1500L)
-
-        assertEquals(CatchUpOutcome.SENTINEL, result.outcome)
-        assertEquals(0, setup.chargeDao.inserted.size)
-        val state = setup.stateStore.load()
-        assertEquals(80, state.socPercent)
-    }
-
-    @Test
     fun `BatterySnapshot recorded when SOC delta is 5 or more`() = runTest {
         // socStart=80, socEnd=91, delta=11 >= 5 → snapshot inserted
         val setup = build(
@@ -567,16 +493,18 @@ class AutoserviceChargingDetectorTest {
 
     @Test
     fun `BatterySnapshot NOT recorded when SOC delta is less than 5`() = runTest {
-        // socStart=89, socEnd=91, delta=2 < 5 → no snapshot
+        // socStart=87, socEnd=91, delta=4: above the charge threshold (row created)
+        // but below MIN_SOC_DELTA_FOR_SNAPSHOT(5) → no snapshot.
         val setup = build(
             battery = battery(soc = 91f),
             charging = charging(capKwh = 1.5f),
-            prevSoc = 89,
+            prevSoc = 87,
             prevCapacityKwh = 0.0f
         )
 
         setup.detector.runCatchUp(now = 1500L)
 
+        assertEquals(1, setup.chargeDao.inserted.size)
         assertEquals(0, setup.snapshotDao.inserted.size)
     }
 
@@ -778,7 +706,7 @@ class AutoserviceChargingDetectorTest {
         val setup = build(
             battery = battery(soc = 91f),
             charging = charging(capKwh = 0.8f, gunState = 1),
-            prevSoc = 90,
+            prevSoc = 87,
             prevCapacityKwh = 0.0f
         )
 
@@ -915,5 +843,120 @@ class AutoserviceChargingDetectorTest {
 
         val ch = setup.chargeDao.inserted.single()
         assertEquals("DC", ch.type)
+    }
+
+    // === Sleep-charge reconstruction (two-point model) ===
+
+    @Test
+    fun `sleep charge reconstructed from parked anchor creates one session`() = runTest {
+        // The exact user scenario: arrived at 10% (anchor saved during the drive,
+        // before car-off), app dead the whole time, plugged in, charged to 80%
+        // while asleep, gun pulled, car started → app wakes with only two points
+        // (anchor 10% + current 80%) and no live data. gun=NONE, odometer
+        // unchanged from the anchor, cap unknown. Expect exactly ONE COMPLETED
+        // row 10→80 via SOC estimate, AC by the elapsed-time classifier.
+        val fourHoursMs = 4L * 3_600_000L
+        val setup = build(
+            battery = battery(soc = 80f, mileage = 2091f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 10,
+            prevMileageKm = 2091f,
+            prevTs = 100L
+        )
+
+        val result = setup.detector.runCatchUp(now = 100L + fourHoursMs)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        assertEquals(1, setup.chargeDao.inserted.size)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(10, ch.socStart)
+        assertEquals(80, ch.socEnd)
+        // (80-10)/100 * 72.9 = 51.03
+        assertEquals(51.03, ch.kwhCharged!!, 0.1)
+        assertEquals("autoservice_soc_estimate", ch.detectionSource)
+        // 51.03 kWh over 4h = 12.76 kW < 15 kW threshold → AC
+        assertEquals("AC", ch.type)
+        // baseline rolled forward to the new SOC
+        assertEquals(80, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `drive in the gap moves odometer and skips reconstruction`() = runTest {
+        // The odometer advanced between the parked anchor and wake-up → a drive
+        // happened in the gap, so the stored start SOC is no longer the charge
+        // start. Skip the row; roll the baseline forward to current.
+        val setup = build(
+            battery = battery(soc = 80f, mileage = 2200f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 10,
+            prevMileageKm = 2091f,
+            prevTs = 100L
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
+        assertEquals(0, setup.chargeDao.inserted.size)
+        assertEquals(80, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `SOC bump below charge threshold rolls forward without a row`() = runTest {
+        // A 2% wake-up rise is BMS recalibration / regen noise, not a plug-in.
+        // No row; baseline advances to the new SOC.
+        val setup = build(
+            battery = battery(soc = 80f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 78
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
+        assertEquals(0, setup.chargeDao.inserted.size)
+        assertEquals(80, setup.stateStore.load().socPercent)
+    }
+
+    // === recordParkedAnchor ===
+
+    @Test
+    fun `recordParkedAnchor rolls the anchor forward on a SOC drop`() = runTest {
+        val setup = build(battery = battery(soc = 50f), prevSoc = 50)
+
+        setup.detector.recordParkedAnchor(parkedSample(soc = 48, mileage = 2100.0, gun = 1), now = 2000L)
+
+        val state = setup.stateStore.load()
+        assertEquals(48, state.socPercent)
+        assertEquals(2100f, state.mileageKm!!, 0.01f)
+    }
+
+    @Test
+    fun `recordParkedAnchor does NOT overwrite the anchor on a SOC rise`() = runTest {
+        // A higher SOC than the stored anchor means a charge happened while we
+        // were away. Keep the low anchor so runCatchUp can reconstruct the session.
+        val setup = build(battery = battery(soc = 80f), prevSoc = 10)
+
+        setup.detector.recordParkedAnchor(parkedSample(soc = 80, gun = 1), now = 2000L)
+
+        assertEquals(10, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `recordParkedAnchor skips while the gun is connected`() = runTest {
+        // Live charge in progress — never move the start anchor.
+        val setup = build(battery = battery(soc = 50f), prevSoc = 50)
+
+        setup.detector.recordParkedAnchor(parkedSample(soc = 48, gun = 2), now = 2000L)
+
+        assertEquals(50, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `recordParkedAnchor seeds the anchor when the store is empty`() = runTest {
+        val setup = build(battery = battery(soc = 50f), prevSoc = null)
+
+        setup.detector.recordParkedAnchor(parkedSample(soc = 50, gun = 1), now = 2000L)
+
+        assertEquals(50, setup.stateStore.load().socPercent)
     }
 }

@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Schedule
+import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.TrendingDown
 import androidx.compose.material.icons.outlined.TrendingFlat
 import androidx.compose.material.icons.outlined.TrendingUp
@@ -58,9 +59,9 @@ import kotlinx.coroutines.delay
  * v3.1 layout — 260 × 108 dp, 3 rows, SOC row vertically centered.
  *
  * Row 1 (top, service, three equal slots):
- *   left — trip duration (⏱), center — trip distance (🗺 route), right — cabin temp (🚗). 13sp.
+ *   left — trip duration (⏱), center — trip distance (🗺 route), right — range per 1% SOC (km/%). 13sp.
  * Row 2 (center, main): SOC% (18sp, status color) · range km (28sp bold white) · consumption + trend (18sp).
- * Row 3 (bottom, service): battery temperature (🔋), 12V (⚡) — 13sp.
+ * Row 3 (bottom, service): cabin temp (🚗), battery temperature (🔋), 12V (⚡) — 13sp.
  *
  * Icons are muted gray, values are white in service rows. Km is always white
  * regardless of SOC status (only the border + SOC % + trend text colorize).
@@ -107,7 +108,8 @@ fun FloatingWidgetView(
             RowTrip(
                 sessionStartedAt = sessionStartedAt,
                 tripDistanceKm = tripDistanceKm,
-                insideTemp = insideTemp,
+                soc = soc,
+                rangeKm = rangeKm,
             )
             WidgetDivider()
             // First 300 m of an active session: the trend stat is still based on the
@@ -124,7 +126,7 @@ fun FloatingWidgetView(
             ) Trend.NONE else trend
             RowEnergy(soc = soc, rangeKm = rangeKm, consumption = consumption, trend = effectiveTrend)
             WidgetDivider()
-            RowService(batTemp = batTemp, voltage12v = voltage12v)
+            RowService(insideTemp = insideTemp, batTemp = batTemp, voltage12v = voltage12v)
         }
     }
 }
@@ -203,7 +205,8 @@ private fun RowEnergy(
 private fun RowTrip(
     sessionStartedAt: Long?,
     tripDistanceKm: Double?,
-    insideTemp: Int?,
+    soc: Int?,
+    rangeKm: Double?,
 ) {
     val context = LocalContext.current
     val durationText by produceState(initialValue = formatDurationShort(context, sessionStartedAt), sessionStartedAt) {
@@ -212,7 +215,7 @@ private fun RowTrip(
             delay(15_000L)
         }
     }
-    // Three equal slots so long labels ("1ч 25м", "287 км") never collide.
+    // Three equal slots so long labels ("1ч 25м", "287 км", "3.0 км/%") never collide.
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -224,13 +227,17 @@ private fun RowTrip(
             IconText(icon = Icons.Outlined.Route, text = formatTripKm(context, tripDistanceKm))
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
-            IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
+            IconText(
+                icon = Icons.Outlined.Speed,
+                text = formatKmPerPercent(context, widgetKmPerPercent(rangeKm, soc)),
+            )
         }
     }
 }
 
 @Composable
 private fun RowService(
+    insideTemp: Int?,
     batTemp: Int?,
     voltage12v: Double?,
 ) {
@@ -240,6 +247,7 @@ private fun RowService(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        IconText(icon = Icons.Outlined.DirectionsCar, text = insideTemp?.let { "$it°" } ?: "—")
         IconText(icon = Icons.Outlined.Battery6Bar, text = batTemp?.let { "$it°" } ?: "—")
         IconText(icon = Icons.Outlined.Bolt, text = voltage12v?.let {
             context.getString(R.string.widget_voltage_value, it)
@@ -295,6 +303,23 @@ internal fun formatDurationShort(context: Context, sessionStartedAt: Long?): Str
 internal fun formatTripKm(context: Context, km: Double?): String {
     if (km == null || km.isNaN() || km.isInfinite() || km < 0.0) return "—"
     return context.getString(R.string.widget_trip_km_value, km)
+}
+
+/**
+ * Range-per-percent: how many km the current range estimate buys per 1% SOC.
+ * Reuses the already-computed [rangeKm] (same trend-aware logic feeding the
+ * big number) divided by [soc] — no separate recomputation. Returns null
+ * (rendered as "—") for missing/zero SOC or a non-finite range.
+ */
+internal fun widgetKmPerPercent(rangeKm: Double?, soc: Int?): Double? {
+    if (rangeKm == null || soc == null || soc <= 0) return null
+    if (rangeKm.isNaN() || rangeKm.isInfinite() || rangeKm < 0.0) return null
+    return rangeKm / soc
+}
+
+internal fun formatKmPerPercent(context: Context, value: Double?): String {
+    if (value == null) return "—"
+    return context.getString(R.string.widget_km_per_percent, value)
 }
 
 // ---- Status model (covered by WidgetStatusTest) ----
