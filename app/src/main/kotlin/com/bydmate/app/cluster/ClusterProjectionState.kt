@@ -1,6 +1,6 @@
 package com.bydmate.app.cluster
 
-/** Package of the projection target (Yandex Navigator) on the DiLink head unit. */
+/** Default projection target. The actual package is user-selectable in settings (KEY_TARGET_PACKAGE). */
 const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
 
 /** Cluster projection state (OFF / FULLSCREEN). */
