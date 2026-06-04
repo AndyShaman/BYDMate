@@ -6,6 +6,9 @@ import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.repository.SettingsRepository
+import io.mockk.coEvery
+import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -93,7 +96,9 @@ class PlacesViewModelTest {
         val placeDao = FakePlaceDao(flow)
         val ruleDao = FakeRuleDao(usageCounts)
         val repo = PlaceRepository(placeDao, ruleDao)
-        val vm = PlacesViewModel(repo)
+        val settingsRepository = mockk<SettingsRepository>(relaxed = true)
+        coEvery { settingsRepository.getMapTileSource() } returns SettingsRepository.DEFAULT_MAP_TILE_SOURCE
+        val vm = PlacesViewModel(repo, settingsRepository)
         return Triple(vm, placeDao, flow)
     }
 
