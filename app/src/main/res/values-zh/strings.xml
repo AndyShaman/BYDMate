@@ -562,7 +562,7 @@
     <string name="settings_datasource_done">完成</string>
     <string name="settings_recalc_done">已重新计算：%1$d 次行程</string>
     <string name="settings_export_in_progress">导出中...</string>
-    <string name="settings_export_done">已导出：%1$d 次行程，%2$d 次充电</string>
+    <string name="settings_export_done">已导出：%1$d 次行程，%2$d 次充电，%3$d 个轨迹点，%4$d 次怠速耗电</string>
     <string name="settings_error_with_message">错误：%1$s</string>
     <string name="settings_error_prefix">错误</string>
     <string name="settings_log_recording_started">录制中（2 小时后自动停止）... - %1$s</string>
@@ -612,4 +612,34 @@
     <string name="insight_idle_prev">%1$s kWh</string>
     <string name="insight_idle_minutes">%1$s 分钟</string>
     <string name="insight_idle_hours">%1$s 小时</string>
+
+    <!-- v3.0.1-3.0.3 strings missing from PR #39 base (v3.0.0). DRAFT machine translation,
+         needs review by a native speaker before release. -->
+    <string name="automation_action_media_volume">媒体音量</string>
+    <string name="automation_action_media_volume_label">音量</string>
+    <string name="learn_button_again">重新学习</string>
+    <string name="learn_button_cancel">取消</string>
+    <string name="learn_button_captured">已识别按键：</string>
+    <string name="learn_button_dialog_title">分配按键</string>
+    <string name="learn_button_rejected">无法分配此按键，请按其他按键。</string>
+    <string name="learn_button_save">保存</string>
+    <string name="learn_button_timeout">未识别到按键，可能未传递给系统，请尝试其他按键。</string>
+    <string name="learn_button_waiting">请按方向盘按键…</string>
+    <string name="settings_config_export_button">导出配置</string>
+    <string name="settings_config_export_done">备份已保存：%1$s</string>
+    <string name="settings_config_restore_button">恢复配置</string>
+    <string name="settings_config_restore_confirm_body">当前所有数据和设置将被备份内容完全替换，此操作无法撤销。</string>
+    <string name="settings_config_restore_confirm_cancel">取消</string>
+    <string name="settings_config_restore_confirm_ok">恢复</string>
+    <string name="settings_config_restore_confirm_title">恢复配置？</string>
+    <string name="settings_display_button_change">更改</string>
+    <string name="settings_display_button_title">触发按键</string>
+    <string name="steering_button_aux_left">左侧辅助键</string>
+    <string name="steering_button_aux_right">右侧辅助键</string>
+    <string name="steering_button_carousel">仪表轮播</string>
+    <string name="steering_button_left_star">左星键</string>
+    <string name="steering_button_right_star">右星键</string>
+    <string name="steering_button_surround_view">360°全景</string>
+    <string name="steering_button_unknown">按键（代码 %1$d）</string>
+    <string name="steering_button_voice">语音助手</string>
 </resources>

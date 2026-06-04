@@ -182,7 +182,9 @@ val ACTION_COMMANDS = listOf(
     ActionOption("天窗打开50", "Люк открыть 50%", "天窗半开", "Sunroof Open 50%", "Люк", "天窗", "Sunroof"),
     ActionOption("天窗打开0", "Люк закрыть", "天窗关闭", "Sunroof Close", "Люк", "天窗", "Sunroof"),
     ActionOption("遮阳帘打开", "Шторка открыть", "遮阳帘打开", "Sunshade Open", "Люк", "天窗", "Sunroof"),
-    ActionOption("遮阳帘关闭", "Шторка закрыть", "遮阳帘关闭", "Sunshade Close", "Люк", "天窗", "Sunroof")
+    ActionOption("遮阳帘关闭", "Шторка закрыть", "遮阳帘关闭", "Sunshade Close", "Люк", "天窗", "Sunroof"),
+    ActionOption("开后备箱", "Открыть багажник", "打开后备箱", "Open Trunk", "Кузов", "车身", "Body"),
+    ActionOption("关后备箱", "Закрыть багажник", "关闭后备箱", "Close Trunk", "Кузов", "车身", "Body")
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
