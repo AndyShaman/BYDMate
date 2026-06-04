@@ -43,6 +43,19 @@ class SteeringWheelKeyDecisionTest {
         )
     }
 
+    @Test fun `sentinel NO_TRIGGER_KEYCODE never matches — no key toggles projection`() {
+        // Until the user has captured a button (learn mode) or chosen one manually, EVERY
+        // steering-wheel key must pass through to the native handler. This is the safe default
+        // for cars we have not validated (Tang L, generic DiLink 5.0).
+        for (code in listOf(351, 305, 320, 309, 310, 24)) {
+            assertEquals(
+                "code=$code must not toggle when no trigger is assigned",
+                StarDecision.PASS_THROUGH,
+                starDecision(code, isDown = true, enabled = true, triggerKeyCode = NO_TRIGGER_KEYCODE),
+            )
+        }
+    }
+
     @Test fun `default trigger constant is the right star`() {
         assertEquals(351, DEFAULT_TRIGGER_KEYCODE)
     }

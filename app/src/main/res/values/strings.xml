@@ -30,18 +30,27 @@
     <string name="steering_button_voice">Голосовой ассистент</string>
     <string name="steering_button_aux_left">Доп. левая</string>
     <string name="steering_button_aux_right">Доп. правая</string>
+    <string name="steering_button_mode">MODE</string>
+    <string name="steering_button_dial_press">Нажатие ролика</string>
+    <string name="steering_button_dial_up">Ролик вверх</string>
+    <string name="steering_button_dial_down">Ролик вниз</string>
     <string name="steering_button_unknown">Кнопка (код %1$d)</string>
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Кнопка запуска</string>
     <string name="settings_display_button_change">Изменить</string>
+    <!-- Settings: Car model profile (per-model cluster defaults) -->
+    <string name="settings_car_model_title">Модель автомобиля</string>
+    <string name="settings_car_autodetect">Определить автоматически</string>
     <string name="learn_button_dialog_title">Назначить кнопку</string>
     <string name="learn_button_waiting">Нажмите кнопку на руле…</string>
-    <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую.</string>
+    <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую или выберите ниже.</string>
     <string name="learn_button_captured">Кнопка распознана:</string>
-    <string name="learn_button_timeout">Кнопка не распознана. Возможно, она не передаётся системе. Попробуйте другую.</string>
+    <string name="learn_button_timeout">Кнопка не распознана. Возможно, она не передаётся системе. Попробуйте другую или выберите ниже.</string>
     <string name="learn_button_save">Сохранить</string>
     <string name="learn_button_again">Заново</string>
     <string name="learn_button_cancel">Отмена</string>
+    <string name="learn_button_manual_hint">Или выберите кнопку вручную:</string>
+    <string name="learn_button_manual_picked">Выбрано вручную:</string>
     <string name="settings_section_places_title">Места</string>
     <string name="settings_section_application_title">Приложение</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->

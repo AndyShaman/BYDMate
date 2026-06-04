@@ -1,5 +1,7 @@
 package com.bydmate.app.cluster
 
+import com.bydmate.app.data.vehicle.VehicleModel
+
 /**
  * Right steering-wheel star, SHORT press (KEYCODE_AUTO_R_CUSTOM_KEY). Validated on Leopard 3:
  * short=351, long=352 are DIFFERENT keycodes the MCU emits, so a long-press never matches the
@@ -9,6 +11,24 @@ const val RIGHT_STAR_KEYCODE = 351
 
 /** Default trigger keycode for a fresh install / Leopard 3 (the right star). */
 const val DEFAULT_TRIGGER_KEYCODE = RIGHT_STAR_KEYCODE
+
+/**
+ * Sentinel meaning "no trigger button has been assigned yet" — the service must pass every key
+ * through untouched, and Settings must surface the learn-the-button dialog the first time the user
+ * enables cluster projection. Persisted as a SharedPreferences Int; keycodes are positive so 0 is
+ * a safe out-of-band value.
+ */
+const val NO_TRIGGER_KEYCODE = 0
+
+/**
+ * Per-model default trigger keycode. The settings flow should NEVER hardcode a single default —
+ * the steering-wheel layout differs across DiLink 5.0 models (Leopard 3's right star is 351,
+ * Tang L's may not exist or have a different code). For models we haven't validated this returns
+ * [NO_TRIGGER_KEYCODE] and we force the user to learn a button. The value is computed by
+ * [VehicleModel.defaultClusterTriggerKeycode]; this indirection keeps `cluster/` decoupled from
+ * `data/vehicle/` types so unit tests stay free of Android dependencies.
+ */
+fun defaultTriggerForModel(model: VehicleModel): Int = model.defaultClusterTriggerKeycode
 
 /**
  * Keycodes that must NOT be assignable as the trigger — assigning one would steal an important or

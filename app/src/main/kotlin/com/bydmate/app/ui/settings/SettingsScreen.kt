@@ -6,9 +6,12 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.KNOWN_BUTTON_NAMES
+import com.bydmate.app.cluster.isAssignable
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
+import com.bydmate.app.cluster.NO_TRIGGER_KEYCODE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.WidgetController
@@ -53,6 +56,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -100,6 +104,8 @@ import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.VehicleModel
+import com.bydmate.app.data.vehicle.VehicleProfile
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
@@ -874,8 +880,97 @@ private fun DisplaySection() {
     }
     var pickingApp by remember { mutableStateOf(false) }
     var learning by remember { mutableStateOf(false) }
-    var triggerKey by remember {
-        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE))
+    // Default keycode is per-model. We do NOT fall back to a hardcoded 351 here because for
+    // models we haven't validated (Tang L, generic DiLink 5.0) the right star may not exist or
+    // have a different code. See VehicleModel.defaultClusterTriggerKeycode + the "must learn"
+    // branch below.
+    val profile = remember { VehicleProfile(context) }
+    val initialModel = profile.getModel()
+    var currentModel by remember { mutableStateOf(initialModel) }
+    val storedTrigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, Int.MIN_VALUE)
+    val effectiveTrigger = if (storedTrigger == Int.MIN_VALUE) {
+        currentModel.defaultClusterTriggerKeycode
+    } else storedTrigger
+    var triggerKey by remember { mutableStateOf(effectiveTrigger) }
+    // True iff no trigger has ever been assigned by the user AND the per-model default is
+    // also "no default" (e.g. Tang L, OTHER). Settings opens the learn dialog automatically
+    // the first time the master switch is flipped on.
+    val mustLearn = storedTrigger == Int.MIN_VALUE &&
+        triggerKey == NO_TRIGGER_KEYCODE
+
+    // Auto-open the learn dialog the first time the user enables cluster projection on a car
+    // whose default trigger is "unknown" (Tang L / generic). Tied to (enabled, mustLearn) so a
+    // normal model (Leopard 3) never sees this. Side effect guarded: learns on first flip only.
+    LaunchedEffect(enabled, mustLearn) {
+        if (enabled && mustLearn) learning = true
+    }
+
+    // --- Car profile card ---
+    // Lets the user override autodetect (some DiLink 5.0 models report the same Build.MODEL).
+    // Changing the model does NOT clobber a previously learned trigger.
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.DirectionsCar,
+                    contentDescription = null,
+                    tint = AccentGreen,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        stringResource(R.string.settings_car_model_title),
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                    Text(currentModel.displayName, color = TextSecondary, fontSize = 12.sp)
+                }
+            }
+            // Compact model picker — three chips. Adding a model = one row above + one chip here.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                VehicleModel.entries.forEach { m ->
+                    FilterChip(
+                        selected = currentModel == m,
+                        onClick = {
+                            if (m != currentModel) {
+                                currentModel = m
+                                profile.setModel(m)
+                                // Re-seed trigger to per-model default ONLY if user has never
+                                // learned one; otherwise their pick survives the model change.
+                                val stillUnset = !prefs.contains(
+                                    ClusterProjectionManager.KEY_TRIGGER_KEYCODE
+                                )
+                                if (stillUnset) {
+                                    triggerKey = m.defaultClusterTriggerKeycode
+                                }
+                            }
+                        },
+                        label = { Text(m.displayName, fontSize = 11.sp, maxLines = 1) },
+                    )
+                }
+            }
+            TextButton(
+                onClick = {
+                    currentModel = VehicleModel.autodetect()
+                    profile.setModel(currentModel)
+                    val stillUnset = !prefs.contains(ClusterProjectionManager.KEY_TRIGGER_KEYCODE)
+                    if (stillUnset) triggerKey = currentModel.defaultClusterTriggerKeycode
+                },
+            ) {
+                Text(stringResource(R.string.settings_car_autodetect), fontSize = 12.sp)
+            }
+        }
     }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
@@ -1045,12 +1140,19 @@ private sealed interface LearnUiState {
     data class Rejected(val keyCode: Int) : LearnUiState
     data class Captured(val keyCode: Int) : LearnUiState
     data object TimedOut : LearnUiState
+    /** User picked a known button from the manual list — same UX as a physical-press capture. */
+    data class ManualPicked(val keyCode: Int) : LearnUiState
 }
 
 /**
- * Learn-the-button dialog. Puts SteeringWheelKeyService into learn mode while open and collects the
- * captured key from its StateFlow (same process). States: Waiting → (Rejected loops) → Captured
- * (confirm) / TimedOut. learnMode is always cleared on dispose.
+ * Learn-the-button dialog. Two paths to assign a keycode:
+ *  1. **Physical** — SteeringWheelKeyService is put into learn mode, the next steering-wheel
+ *     keypress goes through [StarDecision]/[LearnAction] and lands in [capturedKey] as CAPTURE.
+ *  2. **Manual** — the user taps a chip in [ManualButtonList]; we re-use the same [isAssignable]
+ *     gate that a11y uses, so volume / home / 360-view / carousel are still blocked.
+ *
+ * States: Waiting → (Rejected loops) → Captured (confirm) / ManualPicked (confirm) / TimedOut.
+ * learnMode is always cleared on dispose.
  */
 @Composable
 private fun LearnButtonDialog(
@@ -1108,16 +1210,58 @@ private fun LearnButtonDialog(
         title = { Text(stringResource(R.string.learn_button_dialog_title)) },
         text = {
             when (val s = state) {
-                is LearnUiState.Waiting -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AccentGreen)
-                    Text(stringResource(R.string.learn_button_waiting))
+                is LearnUiState.Waiting -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    // --- a11y path: physical press captured by SteeringWheelKeyService ---
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AccentGreen)
+                        Text(stringResource(R.string.learn_button_waiting))
+                    }
+                    HorizontalDivider(color = CardBorder)
+                    // --- manual path: pick from the known keycode list ---
+                    // The user may not be able to wait for a physical capture (e.g. the
+                    // button is broken, or they're configuring a Tang L whose right star
+                    // doesn't exist). Tapping a chip binds it directly, after we filter
+                    // out NON_ASSIGNABLE_KEYCODES (volume / home / 360-view / carousel).
+                    Text(
+                        stringResource(R.string.learn_button_manual_hint),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                    ManualButtonList(
+                        onPick = { code ->
+                            // User-picked code goes through the same gate as a11y CAPTURE:
+                            // blocked codes are surfaced as "rejected" for consistency.
+                            if (isAssignable(code)) {
+                                SteeringWheelKeyService.learnMode = false
+                                state = LearnUiState.ManualPicked(code)
+                            } else {
+                                state = LearnUiState.Rejected(code)
+                            }
+                        },
+                    )
                 }
                 is LearnUiState.Rejected -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_rejected))
                     Text(steeringButtonLabel(s.keyCode), color = TextSecondary, fontSize = 12.sp)
+                    HorizontalDivider(color = CardBorder)
+                    Text(
+                        stringResource(R.string.learn_button_manual_hint),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                    ManualButtonList(
+                        onPick = { code ->
+                            if (isAssignable(code)) {
+                                SteeringWheelKeyService.learnMode = false
+                                state = LearnUiState.ManualPicked(code)
+                            } else {
+                                state = LearnUiState.Rejected(code)
+                            }
+                        },
+                    )
                 }
                 is LearnUiState.Captured -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_captured))
@@ -1126,7 +1270,32 @@ private fun LearnButtonDialog(
                         color = TextPrimary, fontWeight = FontWeight.Medium,
                     )
                 }
-                is LearnUiState.TimedOut -> Text(stringResource(R.string.learn_button_timeout))
+                is LearnUiState.ManualPicked -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.learn_button_manual_picked))
+                    Text(
+                        "${steeringButtonLabel(s.keyCode)} (${s.keyCode})",
+                        color = TextPrimary, fontWeight = FontWeight.Medium,
+                    )
+                }
+                is LearnUiState.TimedOut -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.learn_button_timeout))
+                    HorizontalDivider(color = CardBorder)
+                    Text(
+                        stringResource(R.string.learn_button_manual_hint),
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                    )
+                    ManualButtonList(
+                        onPick = { code ->
+                            if (isAssignable(code)) {
+                                SteeringWheelKeyService.learnMode = false
+                                state = LearnUiState.ManualPicked(code)
+                            } else {
+                                state = LearnUiState.Rejected(code)
+                            }
+                        },
+                    )
+                }
             }
         },
         confirmButton = {
@@ -1134,7 +1303,13 @@ private fun LearnButtonDialog(
                 is LearnUiState.Captured -> TextButton(onClick = { onSave(s.keyCode) }) {
                     Text(stringResource(R.string.learn_button_save))
                 }
+                is LearnUiState.ManualPicked -> TextButton(onClick = { onSave(s.keyCode) }) {
+                    Text(stringResource(R.string.learn_button_save))
+                }
                 is LearnUiState.TimedOut -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
+                is LearnUiState.Rejected -> TextButton(onClick = restart) {
                     Text(stringResource(R.string.learn_button_again))
                 }
                 else -> {}
@@ -1145,12 +1320,46 @@ private fun LearnButtonDialog(
                 is LearnUiState.Captured -> TextButton(onClick = restart) {
                     Text(stringResource(R.string.learn_button_again))
                 }
+                is LearnUiState.ManualPicked -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
                 else -> TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.learn_button_cancel))
                 }
             }
         },
     )
+}
+
+/**
+ * List of known steering-wheel keycodes the user can bind by tapping — the alternative path
+ * to the a11y "press a physical button" flow. Two chips per row, scrollable, grouped loosely:
+ * known (display name) first, then any "blocked" entries get filtered by the caller via
+ * [isAssignable] (we still show them in the list at the moment, but tapping them is a no-op
+ * that surfaces "rejected" — preserves discoverability for users on Leopard 3 with a broken
+ * a11y service).
+ */
+@Composable
+private fun ManualButtonList(onPick: (Int) -> Unit) {
+    val entries = KNOWN_BUTTON_NAMES.entries.toList()
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        entries.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { (code, _) ->
+                    AssistChip(
+                        onClick = { onPick(code) },
+                        label = {
+                            Text(
+                                "${steeringButtonLabel(code)} · $code",
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
