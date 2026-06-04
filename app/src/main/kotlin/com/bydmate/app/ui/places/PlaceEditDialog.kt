@@ -127,8 +127,8 @@ fun PlaceEditDialog(
     val canSave = nameValid && latValid && lonValid && radiusValid
 
     // Effective map coords (fallback to GPS/Moscow when text fields are unparseable)
-    val effLat = parseCoordinate(latText) ?: fallback.first
-    val effLon = parseCoordinate(lonText) ?: fallback.second
+    val effLat = parseCoordinate(latText) ?: fbLat
+    val effLon = parseCoordinate(lonText) ?: fbLon
     val effR = radiusText.toIntOrNull()?.coerceIn(20, 500) ?: 50
 
     val fieldColors = OutlinedTextFieldDefaults.colors(
