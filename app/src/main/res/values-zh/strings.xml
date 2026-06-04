@@ -613,8 +613,8 @@
     <string name="insight_idle_minutes">%1$s 分钟</string>
     <string name="insight_idle_hours">%1$s 小时</string>
 
-    <!-- v3.0.1-3.0.3 strings missing from PR #39 base (v3.0.0). DRAFT machine translation,
-         needs review by a native speaker before release. -->
+    <!-- v3.0.1-3.0.3 feature strings (backup / steering-button / media-volume), added by the
+         maintainer during PR #39 integration since they were absent from the PR base (v3.0.0). -->
     <string name="automation_action_media_volume">媒体音量</string>
     <string name="automation_action_media_volume_label">音量</string>
     <string name="learn_button_again">重新学习</string>
