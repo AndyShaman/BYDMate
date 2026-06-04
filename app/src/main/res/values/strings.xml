@@ -661,7 +661,6 @@
     <string name="settings_config_restore_button">Восстановить конфигурацию</string>
     <!-- %1$s = full file path -->
     <string name="settings_config_export_done">Бэкап сохранён: %1$s</string>
-    <string name="settings_config_restore_done">Конфигурация восстановлена. Перезапуск...</string>
     <string name="settings_config_restore_confirm_title">Восстановить конфигурацию?</string>
     <string name="settings_config_restore_confirm_body">Текущие данные и настройки будут полностью заменены содержимым бэкапа. Отменить это действие невозможно.</string>
     <string name="settings_config_restore_confirm_ok">Восстановить</string>

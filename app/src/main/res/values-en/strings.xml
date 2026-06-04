@@ -506,7 +506,6 @@
     <string name="settings_config_restore_button">Restore config</string>
     <!-- %1$s = full file path -->
     <string name="settings_config_export_done">Backup saved: %1$s</string>
-    <string name="settings_config_restore_done">Config restored. Restarting...</string>
     <string name="settings_config_restore_confirm_title">Restore config?</string>
     <string name="settings_config_restore_confirm_body">All current data and settings will be replaced with the backup contents. This cannot be undone.</string>
     <string name="settings_config_restore_confirm_ok">Restore</string>

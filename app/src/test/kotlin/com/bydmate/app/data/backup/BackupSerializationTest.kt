@@ -109,6 +109,21 @@ class BackupSerializationTest {
         assertTrue(result.isEmpty())
     }
 
+    @Test
+    fun `deserialize skips entries with an unknown type tag`() {
+        // A forward-incompatible backup may carry a type tag this version cannot decode.
+        // Such keys must be dropped, not crash, and known keys in the same file survive.
+        val json = """
+            {"file1":{
+                "good":{"t":"String","v":"ok"},
+                "weird":{"t":"Decimal","v":1.5}
+            }}
+        """.trimIndent()
+        val result = BackupManager.deserializePrefs(json)
+        assertEquals("ok", result["file1"]!!["good"])
+        assertFalse("unknown type tag must be skipped", result["file1"]!!.containsKey("weird"))
+    }
+
     // -------------------------------------------------------------------------
     // isRestorable boundary tests
     // -------------------------------------------------------------------------

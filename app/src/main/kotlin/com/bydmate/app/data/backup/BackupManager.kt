@@ -291,14 +291,27 @@ class BackupManager(
         // 3. Close the database so we can safely replace the file
         appDatabase.close()
 
-        // 4. Replace the DB files
-        val dbDir = context.getDatabasePath("bydmate.db").parentFile
-        for (suffix in listOf("", "-wal", "-shm")) {
-            File(dbDir, "bydmate.db$suffix").delete()
-        }
+        // 4. Replace the DB file via write-then-swap.
+        // The live bydmate.db is NEVER absent: we write the restored bytes to a temp
+        // file, then atomically rename it over the target. If writeBytes fails (no space,
+        // I/O error) the original DB is still intact. This also closes the race where the
+        // foreground TrackingService could re-open Room mid-restore and find a missing file.
         val targetDbFile = context.getDatabasePath("bydmate.db")
-        targetDbFile.parentFile?.mkdirs()
-        targetDbFile.writeBytes(dbBytes!!)
+        val dbDir = targetDbFile.parentFile
+        dbDir?.mkdirs()
+        val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
+        tmpDbFile.delete()
+        tmpDbFile.writeBytes(dbBytes!!)
+        if (!tmpDbFile.renameTo(targetDbFile)) {
+            // Same-filesystem rename should always succeed; fall back to overwrite-in-place.
+            targetDbFile.delete()
+            tmpDbFile.copyTo(targetDbFile, overwrite = true)
+            tmpDbFile.delete()
+        }
+        // Drop stale WAL/SHM left from the old DB AFTER the swap. The restored file is
+        // self-contained (WAL was folded in at export time).
+        File(dbDir, "bydmate.db-wal").delete()
+        File(dbDir, "bydmate.db-shm").delete()
 
         // 5. Restore SharedPreferences.
         // FULL REPLACE: clear EVERY whitelisted file first, even files absent from the
