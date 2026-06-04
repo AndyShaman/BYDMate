@@ -1,6 +1,8 @@
 package com.bydmate.app.data.backup
 
 import android.content.Context
+import android.database.sqlite.SQLiteDatabase
+import android.database.sqlite.SQLiteException
 import android.net.Uri
 import android.os.Environment
 import com.bydmate.app.data.local.database.AppDatabase
@@ -275,7 +277,14 @@ class BackupManager(
             )
         }
 
-        // 2a. Parse and check manifest compatibility
+        // ---------------------------------------------------------------------
+        // PRE-VALIDATION — everything that can fail MUST be checked here, before
+        // a single destructive operation runs. A backup with a valid manifest but
+        // a corrupt DB or malformed prefs.json must be rejected while the live DB
+        // is still intact, never half-applied.
+        // ---------------------------------------------------------------------
+
+        // 2a. Manifest schema compatibility
         val manifestObj = JSONObject(manifestJson!!)
         val backupSchema = manifestObj.getInt("dbSchemaVersion")
         if (!isRestorable(backupSchema, AppDatabase.SCHEMA_VERSION)) {
@@ -286,27 +295,35 @@ class BackupManager(
             )
         }
 
-        // --- Destructive part starts here ---
+        // 2b. Deserialize prefs now — malformed JSON throws here, before any destructive step.
+        val prefsMap = deserializePrefs(prefsJson!!)
 
-        // 3. Close the database so we can safely replace the file
-        appDatabase.close()
-
-        // 4. Replace the DB file via write-then-swap.
-        // The live bydmate.db is NEVER absent: we write the restored bytes to a temp
-        // file, then atomically rename it over the target. If writeBytes fails (no space,
-        // I/O error) the original DB is still intact. This also closes the race where the
-        // foreground TrackingService could re-open Room mid-restore and find a missing file.
+        // 2c. Write the DB bytes to a temp file and verify it is a real, intact SQLite
+        //     database. openDatabase rejects a non-SQLite file; quick_check catches
+        //     structural corruption. Bad file -> throw, temp deleted, live DB untouched.
         val targetDbFile = context.getDatabasePath("bydmate.db")
         val dbDir = targetDbFile.parentFile
         dbDir?.mkdirs()
         val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
         tmpDbFile.delete()
         tmpDbFile.writeBytes(dbBytes!!)
+        validateSqliteFile(tmpDbFile)
+
+        // ---------------------------------------------------------------------
+        // DESTRUCTIVE PART — only reached once the backup is fully validated.
+        // ---------------------------------------------------------------------
+
+        // 3. Close the database so we can safely replace the file.
+        appDatabase.close()
+
+        // 4. Swap the validated temp file in via an atomic rename. The live bydmate.db
+        //    is never absent: it is replaced atomically. If rename fails the original is
+        //    still in place, so we abort rather than risk destroying it with a non-atomic
+        //    delete+copy. This also closes the race where the foreground TrackingService
+        //    could re-open Room mid-restore and find a missing file.
         if (!tmpDbFile.renameTo(targetDbFile)) {
-            // Same-filesystem rename should always succeed; fall back to overwrite-in-place.
-            targetDbFile.delete()
-            tmpDbFile.copyTo(targetDbFile, overwrite = true)
             tmpDbFile.delete()
+            throw IllegalStateException("Не удалось заменить файл базы данных при восстановлении")
         }
         // Drop stale WAL/SHM left from the old DB AFTER the swap. The restored file is
         // self-contained (WAL was folded in at export time).
@@ -317,7 +334,6 @@ class BackupManager(
         // FULL REPLACE: clear EVERY whitelisted file first, even files absent from the
         // backup (they were empty at export time). Iterating only over prefsMap would let
         // stale prefs on the current device survive a "full replace".
-        val prefsMap = deserializePrefs(prefsJson!!)
         for (fileName in prefsFileNames) {
             val editor = context.getSharedPreferences(fileName, Context.MODE_PRIVATE).edit()
             editor.clear()
@@ -337,8 +353,38 @@ class BackupManager(
                     }
                 }
             }
-            editor.commit() // synchronous write before process restart
+            if (!editor.commit()) { // synchronous write before process restart
+                throw IllegalStateException("Не удалось записать настройки: $fileName")
+            }
         }
         // Caller is responsible for restarting the process after this returns.
+    }
+
+    /**
+     * Verify [file] is a readable, structurally intact SQLite database.
+     * Throws IllegalStateException (and deletes the temp file) if it is not a SQLite file
+     * or fails quick_check. Opened read-only so a backup from an older (but compatible)
+     * schema is not migrated here.
+     */
+    private fun validateSqliteFile(file: File) {
+        val db = try {
+            SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
+        } catch (e: SQLiteException) {
+            file.delete()
+            throw IllegalStateException("Файл базы данных в бэкапе повреждён или не является базой SQLite", e)
+        }
+        val ok = try {
+            db.rawQuery("PRAGMA quick_check", null).use { c ->
+                c.moveToFirst() && c.getString(0).equals("ok", ignoreCase = true)
+            }
+        } catch (e: SQLiteException) {
+            false
+        } finally {
+            db.close()
+        }
+        if (!ok) {
+            file.delete()
+            throw IllegalStateException("Файл базы данных в бэкапе не прошёл проверку целостности")
+        }
     }
 }
