@@ -7,7 +7,11 @@ import org.junit.Test
 class SteeringWheelButtonsTest {
 
     @Test fun `name table covers our and competitor known keycodes`() {
-        val expected = setOf(351, 305, 309, 310, 320, 321, 383)
+        // The 7 Leopard-3-validated / OpenBYD-known codes plus the 4 DiLink 5.0 generic codes
+        // (601-604) reported on Tang L / Atto 3 dumpsys input traces. Adding a new code to
+        // KNOWN_BUTTON_NAMES = adding it here too, otherwise this sentinel test breaks — which
+        // is intentional (we never want a silently unlabelled keycode to ship).
+        val expected = setOf(351, 305, 309, 310, 320, 321, 383, 601, 602, 603, 604)
         assertEquals(expected, KNOWN_BUTTON_NAMES.keys)
     }
 

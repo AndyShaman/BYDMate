@@ -1,5 +1,6 @@
 package com.bydmate.app.cluster
 
+import com.bydmate.app.data.vehicle.NO_TRIGGER_KEYCODE
 import com.bydmate.app.data.vehicle.VehicleModel
 
 /**
@@ -11,14 +12,6 @@ const val RIGHT_STAR_KEYCODE = 351
 
 /** Default trigger keycode for a fresh install / Leopard 3 (the right star). */
 const val DEFAULT_TRIGGER_KEYCODE = RIGHT_STAR_KEYCODE
-
-/**
- * Sentinel meaning "no trigger button has been assigned yet" — the service must pass every key
- * through untouched, and Settings must surface the learn-the-button dialog the first time the user
- * enables cluster projection. Persisted as a SharedPreferences Int; keycodes are positive so 0 is
- * a safe out-of-band value.
- */
-const val NO_TRIGGER_KEYCODE = 0
 
 /**
  * Per-model default trigger keycode. The settings flow should NEVER hardcode a single default —

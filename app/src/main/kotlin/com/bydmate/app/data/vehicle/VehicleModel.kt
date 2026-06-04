@@ -3,6 +3,18 @@ package com.bydmate.app.data.vehicle
 import android.os.Build
 
 /**
+ * Sentinel meaning "no steering-wheel key has been assigned to the cluster trigger". The cluster
+ * service uses it to short-circuit every key event to PASS_THROUGH, so a never-assigned trigger
+ * never steals a native button action. Lives in `data/vehicle/` (not `cluster/`) because
+ * [VehicleModel.defaultClusterTriggerKeycode] is the canonical source of trigger defaults and it
+ * needs this constant; `cluster/` re-imports it from here, which keeps the dependency arrow
+ * `cluster/ → data/vehicle/` and avoids a cycle.
+ *
+ * Persisted as a SharedPreferences Int; keycodes are positive so 0 is a safe out-of-band value.
+ */
+const val NO_TRIGGER_KEYCODE: Int = 0
+
+/**
  * Per-model defaults. The settings UI lets the user override the model if autodetect gets it
  * wrong. Adding a new model = adding a row + a knowledge-base fill-in for [KEYCODE_PRESETS].
  *

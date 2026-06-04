@@ -11,7 +11,7 @@ import com.bydmate.app.cluster.isAssignable
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
-import com.bydmate.app.cluster.NO_TRIGGER_KEYCODE
+import com.bydmate.app.data.vehicle.NO_TRIGGER_KEYCODE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.WidgetController

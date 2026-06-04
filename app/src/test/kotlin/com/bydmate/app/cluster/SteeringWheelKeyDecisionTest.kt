@@ -1,5 +1,6 @@
 package com.bydmate.app.cluster
 
+import com.bydmate.app.data.vehicle.NO_TRIGGER_KEYCODE
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
