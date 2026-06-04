@@ -7,9 +7,11 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.app.Service
+import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -171,6 +173,13 @@ class TrackingService : Service(), LocationListener {
         // a real sleep-charge isn't lost to a transient cold read.
         private const val AUTOSERVICE_CATCHUP_MAX_RETRIES = 4
         private const val AUTOSERVICE_CATCHUP_RETRY_DELAY_MS = 3_000L
+        // Steering-wheel star a11y re-assert. The framework binds a11y services very early at boot —
+        // before our process is ready — so our bind can lose the race and get parked with no retry.
+        // A single re-assert (the old behaviour) often fired before the race settled, so we verify-
+        // and-retry until the service is actually RUNNING (~30 s of grace) and re-run it on every
+        // wake. Copies OpenBYD, which re-checks on every reconnect instead of once at startup.
+        private const val STAR_REASSERT_ATTEMPTS = 6
+        private const val STAR_REASSERT_RETRY_MS = 5_000L
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -284,12 +293,17 @@ class TrackingService : Service(), LocationListener {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
-                if (ok) maybeRebindStarService()
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
             }
         }
+
+        // Keep steering-wheel star control bound across boot and every wake. The bind can lose the
+        // boot-time race, so we verify-and-retry here (in its own coroutine, independent of the
+        // helper bootstrap above) and re-run on every SCREEN_ON / USER_PRESENT.
+        serviceScope.launch { ensureStarServiceRunning("startup") }
+        registerScreenWakeReceiver()
 
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
@@ -602,6 +616,11 @@ class TrackingService : Service(), LocationListener {
         cameraStateMonitor.stop()
         _cameraActive.value = false
         networkAvailableMonitor.stop()
+        try {
+            unregisterReceiver(screenWakeReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "screen-wake receiver unregister failed: ${e.message}")
+        }
         // AutomationEngine is @Singleton — its scope must outlive the service
         // (WorkManager restarts the service into the same process, reusing the
         // singleton). Cancelling here left confirm-action callbacks dead until
@@ -946,24 +965,62 @@ class TrackingService : Service(), LocationListener {
         wakeLock?.acquire(30 * 60 * 1000L) // 30 min max, auto-released
     }
 
+    // Re-assert star control on every wake. OpenBYD re-checks on each proxy reconnect; SCREEN_ON /
+    // USER_PRESENT is our equivalent wake signal. The work is gated inside ensureStarServiceRunning,
+    // so a healthy service is never disturbed.
+    private val screenWakeReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            serviceScope.launch { ensureStarServiceRunning("wake:${intent?.action}") }
+        }
+    }
+
+    private fun registerScreenWakeReceiver() {
+        val filter = IntentFilter(Intent.ACTION_SCREEN_ON).apply {
+            addAction(Intent.ACTION_USER_PRESENT)
+        }
+        try {
+            registerReceiver(screenWakeReceiver, filter)
+        } catch (e: Exception) {
+            Log.w(TAG, "screen-wake receiver register failed: ${e.message}")
+        }
+    }
+
     /**
-     * Re-assert the steering-wheel a11y key filter when cluster projection is enabled but the
-     * service is not currently bound. The system binds a11y services very early at boot — before our
-     * process is ready — so ours can crash, and the framework then leaves it disabled until something
-     * re-triggers a bind. enableStarControl only runs on the settings toggle, so without this a reboot
-     * kills star control until the user toggles again. Skips the re-bind when already bound, so a
-     * healthy projection is never disturbed.
+     * Keep the steering-wheel a11y key filter alive when cluster projection is enabled. The system
+     * binds a11y services very early at boot — before our process is ready — so our bind can lose the
+     * race and the framework parks the service without retrying. A single early re-assert (the old
+     * behaviour) often fired before the race settled. OpenBYD survives the same environment by re-
+     * checking until the service is actually RUNNING and re-asserting on every wake, not once. We copy
+     * that: verify-and-retry, gated on the TRUE liveness signal (SteeringWheelKeyService.isConnected)
+     * plus the framework's running list, so a healthy service is never disturbed.
      */
-    private suspend fun maybeRebindStarService() {
+    private suspend fun ensureStarServiceRunning(reason: String) {
         val prefs = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
         if (!prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)) return
-        if (starServiceBound()) {
-            Log.d(TAG, "star a11y already bound; no re-assert")
-            return
+        repeat(STAR_REASSERT_ATTEMPTS) { attempt ->
+            if (starServiceRunning()) {
+                if (attempt > 0) Log.i(TAG, "star a11y confirmed running ($reason, try ${attempt + 1})")
+                return
+            }
+            if (!helperBootstrap.ensureRunning()) {
+                Log.w(TAG, "star a11y re-assert skipped: helper daemon unreachable ($reason)")
+            } else {
+                val rebound = helperClient.enableAccessibilityService()
+                Log.i(TAG, "star a11y not running; re-asserted ($reason, try ${attempt + 1}) → setting=$rebound")
+            }
+            delay(STAR_REASSERT_RETRY_MS)
         }
-        val rebound = helperClient.enableAccessibilityService()
-        Log.i(TAG, "star a11y re-asserted on startup → $rebound")
+        if (!starServiceRunning()) {
+            Log.w(TAG, "star a11y still not running after $STAR_REASSERT_ATTEMPTS tries ($reason)")
+        }
     }
+
+    /**
+     * RUNNING when our service reports it is connected (true liveness) OR the framework lists it in
+     * the currently-bound a11y set. Mirrors OpenBYD getStatus(): either signal counts as alive.
+     */
+    private fun starServiceRunning(): Boolean =
+        com.bydmate.app.cluster.SteeringWheelKeyService.isConnected || starServiceBound()
 
     /** True when our steering-wheel service is in the framework's currently-bound a11y set. */
     private fun starServiceBound(): Boolean {

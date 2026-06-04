@@ -80,12 +80,14 @@ class TripRecorder @Inject constructor(
         val kwh = if (socDelta > 0) socDelta / 100.0 * cap else null
         val distance = if (open.startMileage != null && end.mileage != null)
             (end.mileage - open.startMileage).coerceAtLeast(0.0) else null
+        val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
         tripDao.insert(
             TripEntity(
                 startTs = open.startTs,
                 endTs = now(),
                 distanceKm = distance,
                 kwhConsumed = kwh,
+                kwhPer100km = per100,
                 socStart = open.startSoc,
                 socEnd = end.soc,
                 source = TripSource.NATIVE_POLLING,
@@ -113,12 +115,14 @@ class TripRecorder @Inject constructor(
             val kwh = if (socDelta > 0) socDelta / 100.0 * batteryCapacityKwh() else null
             val distance = if (state.tripStartMileage != null && state.mileage != null)
                 (state.mileage - state.tripStartMileage).coerceAtLeast(0.0) else null
+            val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
             tripDao.insert(
                 TripEntity(
                     startTs = state.tripStartTs,
                     endTs = state.ts,
                     distanceKm = distance,
                     kwhConsumed = kwh,
+                    kwhPer100km = per100,
                     socStart = state.tripStartSoc,
                     socEnd = state.soc,
                     source = TripSource.NATIVE_POLLING,

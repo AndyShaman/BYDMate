@@ -56,6 +56,14 @@ import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
 
+/**
+ * Parse a coordinate the user sees. The text fields are seeded/updated with the device-locale
+ * format ("%.6f"), which yields a comma decimal separator in ru/be ("52,069746"); a bare
+ * toDoubleOrNull() returns null on the comma, so both validation and the map re-centre would fail.
+ * Normalise the comma to a dot first (same fix as ChargeEditDialog / parseNumericSetting).
+ */
+internal fun parseCoordinate(text: String): Double? = text.replace(',', '.').trim().toDoubleOrNull()
+
 @Composable
 fun PlaceEditDialog(
     initial: PlaceEntity?,
@@ -111,16 +119,16 @@ fun PlaceEditDialog(
 
     // Validation
     val nameValid = nameText.trim().isNotBlank() && nameText.trim().length <= 40
-    val latValue = latText.toDoubleOrNull()
+    val latValue = parseCoordinate(latText)
     val latValid = latValue != null && latValue in -90.0..90.0
-    val lonValue = lonText.toDoubleOrNull()
+    val lonValue = parseCoordinate(lonText)
     val lonValid = lonValue != null && lonValue in -180.0..180.0
     val radiusValid = radiusText.toIntOrNull() != null
     val canSave = nameValid && latValid && lonValid && radiusValid
 
-    // Effective map coords (fallback to GPS location when text fields are unparseable)
-    val effLat = latText.toDoubleOrNull() ?: fbLat
-    val effLon = lonText.toDoubleOrNull() ?: fbLon
+    // Effective map coords (fallback to GPS/Moscow when text fields are unparseable)
+    val effLat = parseCoordinate(latText) ?: fallback.first
+    val effLon = parseCoordinate(lonText) ?: fallback.second
     val effR = radiusText.toIntOrNull()?.coerceIn(20, 500) ?: 50
 
     val fieldColors = OutlinedTextFieldDefaults.colors(

@@ -3,6 +3,7 @@ package com.bydmate.app.ui.settings
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
+import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
@@ -107,6 +108,7 @@ class SettingsViewModelTest {
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
         override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
@@ -146,6 +148,7 @@ class SettingsViewModelTest {
         override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
         override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
         override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
         override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0
@@ -200,6 +203,9 @@ class SettingsViewModelTest {
         val openRouterClient = OpenRouterClient(httpClient)
         val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, settingsRepo)
 
+        // Stub BackupManager: no AppDatabase available in unit tests, use mockk
+        val backupManager = mockk<BackupManager>(relaxed = true)
+
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
@@ -209,9 +215,11 @@ class SettingsViewModelTest {
             historyImporter = historyImporter,
             energyDataReader = energyReader,
             idleDrainDao = idleDrainDao,
+            tripPointDao = tripPointDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
-            localePreferences = LocalePreferences(ctx)
+            localePreferences = LocalePreferences(ctx),
+            backupManager = backupManager,
         )
     }
 

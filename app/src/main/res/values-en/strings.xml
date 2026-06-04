@@ -12,12 +12,32 @@
     <!-- Settings: Display section (cluster projection) -->
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
     <string name="settings_display_mirror_header">Navigator on cluster</string>
-    <string name="settings_display_mirror_title">Navigator on cluster via right star</string>
-    <string name="settings_display_mirror_desc">A short press of the right steering-wheel star moves Yandex Navigator to the cluster and back. Requires cluster full-screen mode to be on.</string>
+    <string name="settings_display_mirror_title">Navigator on cluster via wheel button</string>
+    <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves Yandex Navigator to the cluster and back. Requires the cluster fullscreen mode to be on.</string>
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
     <string name="settings_display_size_height">Height</string>
+    <!-- Steering-wheel button names (cluster trigger picker) -->
+    <string name="steering_button_right_star">Right star</string>
+    <string name="steering_button_left_star">Left star</string>
+    <string name="steering_button_carousel">Cluster carousel</string>
+    <string name="steering_button_surround_view">360° view</string>
+    <string name="steering_button_voice">Voice assistant</string>
+    <string name="steering_button_aux_left">Aux left</string>
+    <string name="steering_button_aux_right">Aux right</string>
+    <string name="steering_button_unknown">Button (code %1$d)</string>
+    <!-- Cluster trigger-button picker + learn dialog -->
+    <string name="settings_display_button_title">Trigger button</string>
+    <string name="settings_display_button_change">Change</string>
+    <string name="learn_button_dialog_title">Assign button</string>
+    <string name="learn_button_waiting">Press a steering-wheel button…</string>
+    <string name="learn_button_rejected">This button can\'t be assigned. Press another.</string>
+    <string name="learn_button_captured">Button recognized:</string>
+    <string name="learn_button_timeout">Button not recognized. It may not reach the system. Try another.</string>
+    <string name="learn_button_save">Save</string>
+    <string name="learn_button_again">Again</string>
+    <string name="learn_button_cancel">Cancel</string>
     <string name="settings_section_places_title">Places</string>
     <string name="settings_section_application_title">Application</string>
     <string name="settings_smart_home_section_title">Smart home</string>
@@ -263,6 +283,8 @@
     <string name="automation_action_navigate">Route in Y.Navigator</string>
     <string name="automation_action_url">Open URL</string>
     <string name="automation_action_delay">Delay</string>
+    <string name="automation_action_media_volume">Media volume</string>
+    <string name="automation_action_media_volume_label">Volume</string>
     <string name="automation_overlay_permission_title">Permission required</string>
     <string name="automation_overlay_permission_text">Sound notifications are shown as a popup over other apps. Open system settings and enable \"Display over other apps\" for BYDMate.</string>
     <string name="automation_overlay_open_settings">Open settings</string>
@@ -447,7 +469,7 @@
     <string name="settings_saved">Saved</string>
     <string name="settings_recalc_done">Recalculated: %1$d trips</string>
     <string name="settings_export_in_progress">Exporting...</string>
-    <string name="settings_export_done">Exported: %1$d trips, %2$d charging sessions</string>
+    <string name="settings_export_done">Exported: %1$d trips, %2$d charging sessions, %3$d track points, %4$d idle drains</string>
     <string name="settings_error_with_message">Error: %1$s</string>
     <string name="settings_error_prefix">Error</string>
     <string name="settings_log_recording_started">Recording (auto-stop after 2h)... - %1$s</string>
@@ -493,4 +515,14 @@
     <string name="insight_idle_prev">%1$s kWh</string>
     <string name="insight_idle_minutes">%1$s min</string>
     <string name="insight_idle_hours">%1$s h</string>
+
+    <!-- Config backup / restore -->
+    <string name="settings_config_export_button">Export config</string>
+    <string name="settings_config_restore_button">Restore config</string>
+    <!-- %1$s = full file path -->
+    <string name="settings_config_export_done">Backup saved: %1$s</string>
+    <string name="settings_config_restore_confirm_title">Restore config?</string>
+    <string name="settings_config_restore_confirm_body">All current data and settings will be replaced with the backup contents. This cannot be undone.</string>
+    <string name="settings_config_restore_confirm_ok">Restore</string>
+    <string name="settings_config_restore_confirm_cancel">Cancel</string>
 </resources>

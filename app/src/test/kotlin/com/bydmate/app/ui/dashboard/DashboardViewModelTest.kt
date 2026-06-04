@@ -102,6 +102,7 @@ class DashboardViewModelTest {
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
         override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
@@ -114,6 +115,7 @@ class DashboardViewModelTest {
         override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
         override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
         override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
         override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0

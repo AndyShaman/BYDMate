@@ -16,12 +16,32 @@
     <string name="settings_section_display_title">Дисплей</string>
     <!-- Settings: Display section (cluster projection) -->
     <string name="settings_display_mirror_header">Навигатор на приборку</string>
-    <string name="settings_display_mirror_title">Навигатор на приборку правой звездой</string>
-    <string name="settings_display_mirror_desc">Короткое нажатие правой звезды руля переносит Яндекс.Навигатор на приборку и обратно на экран. Нужен включённый полноэкранный режим приборки.</string>
+    <string name="settings_display_mirror_title">Навигатор на приборку кнопкой руля</string>
+    <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит Яндекс.Навигатор на приборку и обратно. Нужен включённый полноэкранный режим приборки.</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
     <string name="settings_display_size_height">Высота</string>
+    <!-- Steering-wheel button names (cluster trigger picker) -->
+    <string name="steering_button_right_star">Правая звезда</string>
+    <string name="steering_button_left_star">Левая звезда</string>
+    <string name="steering_button_carousel">Карусель приборки</string>
+    <string name="steering_button_surround_view">Обзор 360°</string>
+    <string name="steering_button_voice">Голосовой ассистент</string>
+    <string name="steering_button_aux_left">Доп. левая</string>
+    <string name="steering_button_aux_right">Доп. правая</string>
+    <string name="steering_button_unknown">Кнопка (код %1$d)</string>
+    <!-- Cluster trigger-button picker + learn dialog -->
+    <string name="settings_display_button_title">Кнопка запуска</string>
+    <string name="settings_display_button_change">Изменить</string>
+    <string name="learn_button_dialog_title">Назначить кнопку</string>
+    <string name="learn_button_waiting">Нажмите кнопку на руле…</string>
+    <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую.</string>
+    <string name="learn_button_captured">Кнопка распознана:</string>
+    <string name="learn_button_timeout">Кнопка не распознана. Возможно, она не передаётся системе. Попробуйте другую.</string>
+    <string name="learn_button_save">Сохранить</string>
+    <string name="learn_button_again">Заново</string>
+    <string name="learn_button_cancel">Отмена</string>
     <string name="settings_section_places_title">Места</string>
     <string name="settings_section_application_title">Приложение</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
@@ -320,6 +340,8 @@
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
     <string name="automation_action_url">Открыть URL</string>
     <string name="automation_action_delay">Пауза</string>
+    <string name="automation_action_media_volume">Громкость медиа</string>
+    <string name="automation_action_media_volume_label">Громкость</string>
 
     <!-- Overlay permission dialog -->
     <string name="automation_overlay_permission_title">Нужно разрешение</string>
@@ -588,8 +610,8 @@
     <!-- %1$d = trip count -->
     <string name="settings_recalc_done">Пересчитано: %1$d поездок</string>
     <string name="settings_export_in_progress">Экспорт...</string>
-    <!-- %1$d = trip count, %2$d = charge count -->
-    <string name="settings_export_done">Экспортировано: %1$d поездок, %2$d зарядок</string>
+    <!-- %1$d = trip count, %2$d = charge count, %3$d = track point count, %4$d = idle drain count -->
+    <string name="settings_export_done">Экспортировано: %1$d поездок, %2$d зарядок, %3$d точек трека, %4$d стоянок</string>
     <!-- Generic error with message: %1$s = error text -->
     <string name="settings_error_with_message">Ошибка: %1$s</string>
     <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
@@ -647,4 +669,14 @@
     <string name="insight_idle_prev">%1$s кВтч</string>
     <string name="insight_idle_minutes">%1$s мин</string>
     <string name="insight_idle_hours">%1$s ч</string>
+
+    <!-- Config backup / restore -->
+    <string name="settings_config_export_button">Экспорт конфигурации</string>
+    <string name="settings_config_restore_button">Восстановить конфигурацию</string>
+    <!-- %1$s = full file path -->
+    <string name="settings_config_export_done">Бэкап сохранён: %1$s</string>
+    <string name="settings_config_restore_confirm_title">Восстановить конфигурацию?</string>
+    <string name="settings_config_restore_confirm_body">Текущие данные и настройки будут полностью заменены содержимым бэкапа. Отменить это действие невозможно.</string>
+    <string name="settings_config_restore_confirm_ok">Восстановить</string>
+    <string name="settings_config_restore_confirm_cancel">Отмена</string>
 </resources>

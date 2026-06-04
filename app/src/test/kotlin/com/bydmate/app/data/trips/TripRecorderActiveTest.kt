@@ -12,6 +12,7 @@ import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -46,6 +47,7 @@ class TripRecorderActiveTest {
         assertEquals(70, t.socEnd)
         assertEquals(10.0, t.distanceKm!!, 0.001)
         assertEquals(72.9 * 0.10, t.kwhConsumed!!, 0.001)
+        assertEquals(72.9, t.kwhPer100km!!, 0.001)  // 7.29 kWh / 10 km * 100
         assertEquals(TripSource.NATIVE_POLLING, t.source)
         coVerify(exactly = 1) { lastState.openTrip(startTs = 1_000L, startSoc = 80, startMileage = 100.0, now = 1_000L) }
         coVerify(exactly = 1) { lastState.clearOpenTrip() }
@@ -59,6 +61,29 @@ class TripRecorderActiveTest {
         rec.consume(diParsData(powerState = 1, soc = 78, mileage = 102.0))
         coVerify(exactly = 1) { tripDao.insert(any()) }
         coVerify(exactly = 1) { lastState.openTrip(any(), any(), any(), any()) }
+    }
+
+    @Test fun `zero distance leaves kwhPer100km null even with consumption`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0))  // open
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 100.0))  // close: 0 km, 10% drop
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        val t = captured.captured
+        assertEquals(0.0, t.distanceKm!!, 0.001)
+        assertEquals(72.9 * 0.10, t.kwhConsumed!!, 0.001)
+        assertNull(t.kwhPer100km)  // distance == 0 -> no per-100km figure
+    }
+
+    @Test fun `no SOC drop leaves both consumption fields null`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0))  // open
+        rec.consume(diParsData(powerState = 1, soc = 80, mileage = 110.0))  // close: 10 km, no drop
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        val t = captured.captured
+        assertNull(t.kwhConsumed)
+        assertNull(t.kwhPer100km)
     }
 
     @Test fun `DRIVE to OFF also closes (powerState 2 to 0)`() = runTest {

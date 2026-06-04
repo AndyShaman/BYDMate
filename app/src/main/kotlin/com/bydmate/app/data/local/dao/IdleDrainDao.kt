@@ -28,6 +28,9 @@ interface IdleDrainDao {
     @Query("SELECT COUNT(*) FROM idle_drains")
     suspend fun getCount(): Int
 
+    @Query("SELECT * FROM idle_drains ORDER BY start_ts ASC")
+    suspend fun getAll(): List<IdleDrainEntity>
+
     @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains")
     suspend fun getTotalKwh(): Double
 

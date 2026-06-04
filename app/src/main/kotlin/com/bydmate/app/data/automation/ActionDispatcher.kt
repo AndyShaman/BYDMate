@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
@@ -59,6 +60,9 @@ class ActionDispatcher @Inject constructor(
         }
 
         private val POSITION_OPEN = Regex("打开(\\d+)")
+
+        /** Clamp a requested media volume level to the device's valid [0, max] range. Pure — unit-testable. */
+        internal fun clampVolume(level: Int, max: Int): Int = level.coerceIn(0, max.coerceAtLeast(0))
     }
 
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
@@ -78,6 +82,7 @@ class ActionDispatcher @Inject constructor(
             "url" -> openUrl(action)
             "yandex_music" -> launchYandexMusic(action)
             "delay" -> dispatchDelay(action)
+            "media_volume" -> setMediaVolume(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -92,6 +97,18 @@ class ActionDispatcher @Inject constructor(
             return DispatchResult(false, "Длительность паузы вне диапазона (0..${MAX_DELAY_MS} мс)")
         }
         kotlinx.coroutines.delay(ms)
+        return DispatchResult(true)
+    }
+
+    // --- media volume (standard AudioManager, no autoservice) ---
+
+    private fun setMediaVolume(action: ActionDef): DispatchResult {
+        val level = action.payload?.toIntOrNull()
+            ?: return DispatchResult(false, "Уровень громкости не задан")
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return DispatchResult(false, "AudioManager недоступен")
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, clampVolume(level, max), 0)
         return DispatchResult(true)
     }
 

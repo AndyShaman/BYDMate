@@ -1,6 +1,8 @@
 package com.bydmate.app.ui.automation
 
 import android.app.TimePickerDialog
+import android.content.Context
+import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,6 +35,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Navigation
@@ -41,6 +45,7 @@ import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -59,6 +64,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -424,6 +430,12 @@ private fun EditorDialog(
                                     copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
                                 }
                             },
+                            onMoveUp = if (idx > 0) {
+                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
+                            } else null,
+                            onMoveDown = if (idx < editing.triggers.lastIndex) {
+                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
+                            } else null,
                             onDelete = {
                                 onUpdate {
                                     copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
@@ -490,6 +502,12 @@ private fun EditorDialog(
                                 }
                             },
                             onTest = onTestAction,
+                            onMoveUp = if (idx > 0) {
+                                { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
+                            } else null,
+                            onMoveDown = if (idx < editing.actions.lastIndex) {
+                                { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
+                            } else null,
                             onDelete = {
                                 onUpdate {
                                     copy(actions = actions.toMutableList().apply { removeAt(idx) })
@@ -525,6 +543,9 @@ private fun EditorDialog(
                             },
                             onAddDelay = {
                                 onUpdate { copy(actions = actions + newDelayAction(context)) }
+                            },
+                            onAddMediaVolume = {
+                                onUpdate { copy(actions = actions + newMediaVolumeAction()) }
                             }
                         )
                     }
@@ -622,12 +643,27 @@ private fun EditorDialog(
 
 // --- Trigger Row ---
 
+/** Up/down reorder arrows shared by trigger and action rows. A null callback = boundary, shown dimmed and disabled. */
+@Composable
+private fun ReorderArrows(onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?) {
+    IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null, modifier = Modifier.size(24.dp)) {
+        Icon(Icons.Outlined.KeyboardArrowUp, "выше",
+            tint = TextSecondary.copy(alpha = if (onMoveUp != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+    }
+    IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null, modifier = Modifier.size(24.dp)) {
+        Icon(Icons.Outlined.KeyboardArrowDown, "ниже",
+            tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+    }
+}
+
 @Composable
 private fun TriggerRow(
     index: Int,
     trigger: TriggerDef,
     places: List<PlaceEntity>,
     onUpdate: (TriggerDef) -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
     onDelete: () -> Unit
 ) {
     Row(
@@ -652,6 +688,7 @@ private fun TriggerRow(
 
         Spacer(Modifier.weight(1f))
 
+        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
         }
@@ -1078,6 +1115,8 @@ private fun ActionRow(
     places: List<PlaceEntity>,
     onUpdate: (ActionDef) -> Unit,
     onTest: (String) -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
     onDelete: () -> Unit
 ) {
     Row(
@@ -1106,6 +1145,8 @@ private fun ActionRow(
                 YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "delay" ->
                 DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "media_volume" ->
+                MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1119,6 +1160,7 @@ private fun ActionRow(
             }
         }
         Spacer(Modifier.width(4.dp))
+        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
         }
@@ -1215,6 +1257,56 @@ private fun DelayActionControls(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun MediaVolumeActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    // Max volume is device-dependent; read it once from the head unit's AudioManager.
+    val maxVolume = remember {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        (am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1)
+    }
+    val current = (action.payload?.toIntOrNull() ?: 2).coerceIn(0, maxVolume)
+    val label = stringResource(R.string.automation_action_media_volume_label)
+    val namePrefix = stringResource(R.string.automation_action_media_volume)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.VolumeUp,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(8.dp))
+        Slider(
+            value = current.toFloat(),
+            onValueChange = { v ->
+                val lvl = v.toInt().coerceIn(0, maxVolume)
+                onUpdate(action.copy(payload = lvl.toString(), displayName = "$namePrefix: $lvl"))
+            },
+            valueRange = 0f..maxVolume.toFloat(),
+            steps = (maxVolume - 1).coerceAtLeast(0),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$current/$maxVolume",
+            fontSize = 13.sp,
+            color = AccentTeal,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(40.dp)
+        )
     }
 }
 
@@ -1452,7 +1544,8 @@ private fun AddActionButton(
     onAddNavigate: () -> Unit,
     onAddUrl: () -> Unit,
     onAddYandexMusic: () -> Unit,
-    onAddDelay: () -> Unit
+    onAddDelay: () -> Unit,
+    onAddMediaVolume: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1511,6 +1604,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddDelay() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddMediaVolume() }
             )
         }
     }
@@ -2407,6 +2504,13 @@ private fun newDelayAction(context: android.content.Context): ActionDef = Action
     displayName = localized("延迟 1 秒", "Delay 1 sec", "Пауза 1 сек", context),
     kind = "delay",
     payload = "1000"
+)
+
+private fun newMediaVolumeAction(): ActionDef = ActionDef(
+    command = "media_volume",
+    displayName = "Громкость медиа: 2",
+    kind = "media_volume",
+    payload = "2"
 )
 
 private fun newTimeOfDayTrigger(context: android.content.Context): TriggerDef {

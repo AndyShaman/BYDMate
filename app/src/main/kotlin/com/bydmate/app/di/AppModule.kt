@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.ChargePointDao
@@ -425,6 +426,24 @@ object AppModule {
         writeLogDao: VehicleWriteLogDao,
     ): com.bydmate.app.data.vehicle.VehicleApi =
         com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao)
+
+    @Provides
+    @Singleton
+    fun provideBackupManager(
+        @ApplicationContext ctx: Context,
+        db: AppDatabase,
+    ): BackupManager = BackupManager(
+        context = ctx,
+        appDatabase = db,
+        prefsFileNames = listOf(
+            "bydmate_locale",
+            "bydmate_widget",
+            "cluster_projection",
+            "automation",
+            "update_prefs",
+            "bydmate_range_prefs",
+        )
+    )
 
     @Provides
     @Singleton

@@ -58,6 +58,8 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
@@ -87,8 +89,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.runtime.collectAsState
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.runtime.LaunchedEffect
 import androidx.annotation.StringRes
 import androidx.compose.ui.res.stringResource
+import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
+import com.bydmate.app.cluster.SteeringWheelKeyService
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
@@ -865,6 +873,10 @@ private fun DisplaySection() {
         )
     }
     var pickingApp by remember { mutableStateOf(false) }
+    var learning by remember { mutableStateOf(false) }
+    var triggerKey by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE))
+    }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -906,6 +918,49 @@ private fun DisplaySection() {
                 colors = bydSwitchColors(),
             )
         }
+    }
+
+    // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on, so
+    // learning is gated on `enabled`. Tapping opens the learn dialog.
+    if (enabled) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+                .clickable { learning = true }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = null,
+                    tint = AccentGreen,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_display_button_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(steeringButtonLabel(triggerKey), color = TextSecondary, fontSize = 12.sp, maxLines = 1)
+                }
+                Text(stringResource(R.string.settings_display_button_change), color = AccentGreen, fontSize = 13.sp)
+            }
+        }
+    }
+
+    if (learning) {
+        LearnButtonDialog(
+            onSave = { code ->
+                triggerKey = code
+                ClusterProjectionManager.setTriggerKeyCode(context, code)
+                learning = false
+            },
+            onDismiss = { learning = false },
+        )
     }
 
     // App to project — defaults to Yandex Navi. Reuses the Automation app picker. The new app takes
@@ -977,6 +1032,127 @@ private fun resolveAppLabel(context: Context, pkg: String): String =
         pkg
     }
 
+/** Human label for a steering-wheel keycode: known name, else "Кнопка (код N)". */
+@Composable
+private fun steeringButtonLabel(keyCode: Int): String {
+    val res = com.bydmate.app.cluster.knownButtonNameRes(keyCode)
+    return if (res != 0) stringResource(res)
+    else stringResource(R.string.steering_button_unknown, keyCode)
+}
+
+private sealed interface LearnUiState {
+    data object Waiting : LearnUiState
+    data class Rejected(val keyCode: Int) : LearnUiState
+    data class Captured(val keyCode: Int) : LearnUiState
+    data object TimedOut : LearnUiState
+}
+
+/**
+ * Learn-the-button dialog. Puts SteeringWheelKeyService into learn mode while open and collects the
+ * captured key from its StateFlow (same process). States: Waiting → (Rejected loops) → Captured
+ * (confirm) / TimedOut. learnMode is always cleared on dispose.
+ */
+@Composable
+private fun LearnButtonDialog(
+    onSave: (Int) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var state by remember { mutableStateOf<LearnUiState>(LearnUiState.Waiting) }
+
+    // Clear learn mode AND the captured value on close, so a later reopen can't latch a stale capture.
+    DisposableEffect(Unit) {
+        onDispose {
+            SteeringWheelKeyService.learnMode = false
+            SteeringWheelKeyService.capturedKey.value = null
+        }
+    }
+
+    // Arm capture, then react ONLY to fresh emissions. The StateFlow replays its current value to a
+    // new collector, so we reset it to null first and filterNotNull() drops both that reset and any
+    // stale value left from a previous session — reopening therefore always starts at Waiting.
+    LaunchedEffect(Unit) {
+        SteeringWheelKeyService.capturedKey.value = null
+        SteeringWheelKeyService.learnMode = true
+        SteeringWheelKeyService.capturedKey
+            .filterNotNull()
+            .collect { r ->
+                state = if (r.assignable) {
+                    SteeringWheelKeyService.learnMode = false
+                    LearnUiState.Captured(r.keyCode)
+                } else {
+                    LearnUiState.Rejected(r.keyCode)
+                }
+            }
+    }
+
+    // Timeout while still waiting/rejected (no assignable capture yet).
+    LaunchedEffect(state) {
+        if (state is LearnUiState.Waiting || state is LearnUiState.Rejected) {
+            delay(10_000)
+            if (state is LearnUiState.Waiting || state is LearnUiState.Rejected) {
+                SteeringWheelKeyService.learnMode = false
+                state = LearnUiState.TimedOut
+            }
+        }
+    }
+
+    // "Again": re-arm. The collector above keeps running (keyed on Unit), so just reset + Waiting.
+    val restart = {
+        SteeringWheelKeyService.capturedKey.value = null
+        SteeringWheelKeyService.learnMode = true
+        state = LearnUiState.Waiting
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.learn_button_dialog_title)) },
+        text = {
+            when (val s = state) {
+                is LearnUiState.Waiting -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AccentGreen)
+                    Text(stringResource(R.string.learn_button_waiting))
+                }
+                is LearnUiState.Rejected -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.learn_button_rejected))
+                    Text(steeringButtonLabel(s.keyCode), color = TextSecondary, fontSize = 12.sp)
+                }
+                is LearnUiState.Captured -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.learn_button_captured))
+                    Text(
+                        "${steeringButtonLabel(s.keyCode)} (${s.keyCode})",
+                        color = TextPrimary, fontWeight = FontWeight.Medium,
+                    )
+                }
+                is LearnUiState.TimedOut -> Text(stringResource(R.string.learn_button_timeout))
+            }
+        },
+        confirmButton = {
+            when (val s = state) {
+                is LearnUiState.Captured -> TextButton(onClick = { onSave(s.keyCode) }) {
+                    Text(stringResource(R.string.learn_button_save))
+                }
+                is LearnUiState.TimedOut -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
+                else -> {}
+            }
+        },
+        dismissButton = {
+            when (state) {
+                is LearnUiState.Captured -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
+                else -> TextButton(onClick = onDismiss) {
+                    Text(stringResource(R.string.learn_button_cancel))
+                }
+            }
+        },
+    )
+}
+
 @Composable
 private fun ClusterSizeSlider(
     label: String,
@@ -1018,6 +1194,51 @@ private fun ClusterSizeSlider(
 private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     val lang by viewModel.appLanguage.collectAsState()
     LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
+
+    // SAF picker for restore — must be declared at composable top level
+    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.restoreConfig(uri)
+    }
+    var showRestoreConfirm by remember { mutableStateOf(false) }
+
+    // Confirm dialog for destructive restore operation
+    if (showRestoreConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRestoreConfirm = false },
+            title = {
+                Text(
+                    stringResource(R.string.settings_config_restore_confirm_title),
+                    color = TextPrimary,
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_config_restore_confirm_body),
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showRestoreConfirm = false
+                    restoreLauncher.launch(arrayOf("application/zip"))
+                }) {
+                    Text(
+                        stringResource(R.string.settings_config_restore_confirm_ok),
+                        color = SocRed,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showRestoreConfirm = false }) {
+                    Text(
+                        stringResource(R.string.settings_config_restore_confirm_cancel),
+                        color = TextSecondary,
+                    )
+                }
+            },
+            containerColor = CardSurfaceElevated,
+        )
+    }
 
     SectionHeader(text = stringResource(R.string.settings_app_units_header))
     Card(
@@ -1109,6 +1330,42 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                     state.logSaveStatus!!,
                     color = if (state.logSaveStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
                     fontSize = 12.sp
+                )
+            }
+
+            // Export full config backup (DB + prefs) as a zip to Downloads
+            Button(
+                onClick = { viewModel.exportConfig() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = NavyDark)
+            ) {
+                Text(
+                    stringResource(R.string.settings_config_export_button),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+
+            // Restore config backup: confirm dialog then SAF zip picker
+            Button(
+                onClick = { showRestoreConfirm = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentPurple, contentColor = NavyDark)
+            ) {
+                Text(
+                    stringResource(R.string.settings_config_restore_button),
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+            }
+
+            if (state.configStatus != null) {
+                Text(
+                    state.configStatus!!,
+                    color = if (state.configStatus!!.startsWith(errorPrefix)) SocRed else PrimaryColor,
+                    fontSize = 12.sp,
                 )
             }
         }

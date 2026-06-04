@@ -118,11 +118,13 @@ class HistoryImporter @Inject constructor(
             )
             if (existingByTime != null) {
                 // Update existing trip with byd_id so future syncs skip it instantly
+                val per100 = if (byd.tripKm > 0) byd.electricityKwh / byd.tripKm * 100.0 else null
                 tripRepository.updateTrip(existingByTime.copy(
                     source = "energydata",
                     bydId = byd.id,
                     distanceKm = byd.tripKm,
-                    kwhConsumed = byd.electricityKwh
+                    kwhConsumed = byd.electricityKwh,
+                    kwhPer100km = per100
                 ))
                 skippedDuplicate++
                 continue
@@ -253,10 +255,14 @@ class HistoryImporter @Inject constructor(
                 }
 
                 if (match != null) {
-                    // Update existing trip with energydata ID
+                    // Update existing trip with energydata ID + authoritative BMS values
+                    val per100 = if (byd.tripKm > 0) byd.electricityKwh / byd.tripKm * 100.0 else null
                     tripRepository.updateTrip(match.copy(
                         source = "energydata",
-                        bydId = byd.id
+                        bydId = byd.id,
+                        distanceKm = byd.tripKm,
+                        kwhConsumed = byd.electricityKwh,
+                        kwhPer100km = per100
                     ))
                     updated++
                 } else {

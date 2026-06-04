@@ -60,6 +60,9 @@ class ColdStartReconciliationTest {
         assertEquals(1_000_000L, cap.captured.endTs)
         assertEquals(80, cap.captured.socStart)
         assertEquals(70, cap.captured.socEnd)
+        assertEquals(10.0, cap.captured.distanceKm!!, 0.001)
+        assertEquals(72.9 * 0.10, cap.captured.kwhConsumed!!, 0.001)
+        assertEquals(72.9, cap.captured.kwhPer100km!!, 0.001)  // 7.29 kWh / 10 km * 100
         coVerify { lastState.clearOpenTrip() }
     }
 

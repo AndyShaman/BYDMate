@@ -62,6 +62,9 @@ object ClusterProjectionManager {
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
     const val KEY_MIRROR_ENABLED = "mirror_enabled"
+    // Steering-wheel keycode that toggles projection. Default = right star (DEFAULT_TRIGGER_KEYCODE).
+    // Stored independently of the master switch so the choice survives turning the feature off.
+    const val KEY_TRIGGER_KEYCODE = "trigger_keycode"
     // User-tunable window size, % of the cluster panel (MIN_PROJECTION_PCT..MAX, default = full).
     const val KEY_WIDTH_PCT = "width_pct"
     const val KEY_HEIGHT_PCT = "height_pct"
@@ -245,6 +248,12 @@ object ClusterProjectionManager {
     private fun targetPackage(context: Context): String =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
+
+    /** Persist the user's chosen trigger keycode (from the learn-button dialog). */
+    fun setTriggerKeyCode(context: Context, keyCode: Int) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putInt(KEY_TRIGGER_KEYCODE, keyCode).apply()
+    }
 
     /** Remember the last VirtualDisplay id so a future process can release it if we die holding it. */
     private fun saveLastVdId(context: Context, id: Int) {
