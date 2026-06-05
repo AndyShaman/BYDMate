@@ -1203,6 +1203,11 @@ private fun LearnButtonDialog(
  * AssistChip list sourced from KNOWN_BUTTON_NAMES. Tapping a chip binds the keycode without
  * needing the a11y service to capture a physical press. Useful fallback when the keycode is
  * not exposed to the accessibility filter (some DiLink 5.0 models, e.g. Tang L).
+ *
+ * Only [isAssignable] keycodes are listed — showing carousel (309) / 360-view (310), which are
+ * in NON_ASSIGNABLE_KEYCODES, would let the user tap a chip that just bounces to "can't assign".
+ * The physical-press path still surfaces those as Rejected (the user might press one by mistake),
+ * but the manual list should only offer choices that actually work.
  */
 @Composable
 private fun ManualButtonList(onPick: (Int) -> Unit) {
@@ -1212,10 +1217,10 @@ private fun ManualButtonList(onPick: (Int) -> Unit) {
             color = TextSecondary,
             fontSize = 12.sp,
         )
-        val entries = KNOWN_BUTTON_NAMES.entries.toList()
+        val entries = KNOWN_BUTTON_NAMES.keys.filter { isAssignable(it) }.sorted()
         entries.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                row.forEach { (code, _) ->
+                row.forEach { code ->
                     AssistChip(
                         onClick = { onPick(code) },
                         label = {
