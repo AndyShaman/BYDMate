@@ -6,9 +6,11 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.KNOWN_BUTTON_NAMES
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
+import com.bydmate.app.cluster.isAssignable
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.WidgetController
@@ -53,6 +55,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Slider
@@ -1045,12 +1048,20 @@ private sealed interface LearnUiState {
     data class Rejected(val keyCode: Int) : LearnUiState
     data class Captured(val keyCode: Int) : LearnUiState
     data object TimedOut : LearnUiState
+    /** User picked a keycode from the manual chip list (the a11y CAPTURE path was unreachable). */
+    data class ManualPicked(val keyCode: Int) : LearnUiState
 }
 
 /**
- * Learn-the-button dialog. Puts SteeringWheelKeyService into learn mode while open and collects the
- * captured key from its StateFlow (same process). States: Waiting → (Rejected loops) → Captured
- * (confirm) / TimedOut. learnMode is always cleared on dispose.
+ * Learn-the-button dialog. Two paths to assign a keycode:
+ *  1. **Physical** — SteeringWheelKeyService is put into learn mode; the next steering-wheel
+ *     keypress goes through [StarDecision]/[LearnAction] and lands in [capturedKey] as CAPTURE.
+ *  2. **Manual** — the user taps a chip in [ManualButtonList]; we re-use the same
+ *     [isAssignable] gate that a11y uses, so volume / home / 360-view / carousel are still
+ *     blocked.
+ *
+ * States: Waiting → (Rejected loops) → Captured / ManualPicked (confirm) → TimedOut.
+ * learnMode is always cleared on dispose.
  */
 @Composable
 private fun LearnButtonDialog(
@@ -1103,21 +1114,37 @@ private fun LearnButtonDialog(
         state = LearnUiState.Waiting
     }
 
+    // Tap a chip → same gate as the a11y path (isAssignable), so volume / home / 360-view /
+    // carousel are still blocked. Successful pick disables learnMode (we don't need the
+    // accessibility filter any more — the user has chosen).
+    val pickManual: (Int) -> Unit = { code ->
+        if (isAssignable(code)) {
+            SteeringWheelKeyService.learnMode = false
+            state = LearnUiState.ManualPicked(code)
+        } else {
+            state = LearnUiState.Rejected(code)
+        }
+    }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.learn_button_dialog_title)) },
         text = {
             when (val s = state) {
-                is LearnUiState.Waiting -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AccentGreen)
-                    Text(stringResource(R.string.learn_button_waiting))
+                is LearnUiState.Waiting -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        CircularProgressIndicator(modifier = Modifier.size(20.dp), color = AccentGreen)
+                        Text(stringResource(R.string.learn_button_waiting))
+                    }
+                    ManualButtonList(onPick = pickManual)
                 }
                 is LearnUiState.Rejected -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_rejected))
                     Text(steeringButtonLabel(s.keyCode), color = TextSecondary, fontSize = 12.sp)
+                    ManualButtonList(onPick = pickManual)
                 }
                 is LearnUiState.Captured -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_captured))
@@ -1126,7 +1153,17 @@ private fun LearnButtonDialog(
                         color = TextPrimary, fontWeight = FontWeight.Medium,
                     )
                 }
-                is LearnUiState.TimedOut -> Text(stringResource(R.string.learn_button_timeout))
+                is LearnUiState.ManualPicked -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(stringResource(R.string.learn_button_manual_picked))
+                    Text(
+                        "${steeringButtonLabel(s.keyCode)} (${s.keyCode})",
+                        color = TextPrimary, fontWeight = FontWeight.Medium,
+                    )
+                }
+                is LearnUiState.TimedOut -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text(stringResource(R.string.learn_button_timeout))
+                    ManualButtonList(onPick = pickManual)
+                }
             }
         },
         confirmButton = {
@@ -1134,7 +1171,13 @@ private fun LearnButtonDialog(
                 is LearnUiState.Captured -> TextButton(onClick = { onSave(s.keyCode) }) {
                     Text(stringResource(R.string.learn_button_save))
                 }
+                is LearnUiState.ManualPicked -> TextButton(onClick = { onSave(s.keyCode) }) {
+                    Text(stringResource(R.string.learn_button_save))
+                }
                 is LearnUiState.TimedOut -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
+                is LearnUiState.Rejected -> TextButton(onClick = restart) {
                     Text(stringResource(R.string.learn_button_again))
                 }
                 else -> {}
@@ -1145,12 +1188,48 @@ private fun LearnButtonDialog(
                 is LearnUiState.Captured -> TextButton(onClick = restart) {
                     Text(stringResource(R.string.learn_button_again))
                 }
+                is LearnUiState.ManualPicked -> TextButton(onClick = restart) {
+                    Text(stringResource(R.string.learn_button_again))
+                }
                 else -> TextButton(onClick = onDismiss) {
                     Text(stringResource(R.string.learn_button_cancel))
                 }
             }
         },
     )
+}
+
+/**
+ * AssistChip list sourced from KNOWN_BUTTON_NAMES. Tapping a chip binds the keycode without
+ * needing the a11y service to capture a physical press. Useful fallback when the keycode is
+ * not exposed to the accessibility filter (some DiLink 5.0 models, e.g. Tang L).
+ */
+@Composable
+private fun ManualButtonList(onPick: (Int) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(
+            stringResource(R.string.learn_button_manual_hint),
+            color = TextSecondary,
+            fontSize = 12.sp,
+        )
+        val entries = KNOWN_BUTTON_NAMES.entries.toList()
+        entries.chunked(2).forEach { row ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                row.forEach { (code, _) ->
+                    AssistChip(
+                        onClick = { onPick(code) },
+                        label = {
+                            Text(
+                                "${steeringButtonLabel(code)} · $code",
+                                fontSize = 11.sp,
+                                maxLines = 1,
+                            )
+                        },
+                    )
+                }
+            }
+        }
+    }
 }
 
 @Composable
