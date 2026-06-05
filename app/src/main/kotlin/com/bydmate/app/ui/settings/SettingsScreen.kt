@@ -12,6 +12,9 @@ import com.bydmate.app.cluster.MAX_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.MIN_OFFSET_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_SCALE_PCT
+import com.bydmate.app.cluster.MAX_SCALE_PCT
+import com.bydmate.app.cluster.DEFAULT_SCALE_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
@@ -875,6 +878,12 @@ private fun DisplaySection() {
     var offsetYPct by remember {
         mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT))
     }
+    var scalePct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_SCALE_PCT, DEFAULT_SCALE_PCT))
+    }
+    var oversample by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_OVERSAMPLE, false))
+    }
     var targetPkg by remember {
         mutableStateOf(prefs.getString(ClusterProjectionManager.KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE)
     }
@@ -1029,6 +1038,8 @@ private fun DisplaySection() {
             .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
             .putInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, offsetXPct)
             .putInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, offsetYPct)
+            .putInt(ClusterProjectionManager.KEY_SCALE_PCT, scalePct)
+            .putBoolean(ClusterProjectionManager.KEY_OVERSAMPLE, oversample)
             .apply()
         ClusterProjectionManager.reproject(
             context, entryPoint.helperClient(), entryPoint.helperBootstrap())
@@ -1040,6 +1051,12 @@ private fun DisplaySection() {
     // mini-cluster window (#48). Removed (or promoted to a real localised feature) before release.
     ClusterSizeSlider("Сдвиг по горизонтали", offsetXPct, enabled, { offsetXPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT)
     ClusterSizeSlider("Сдвиг по вертикали", offsetYPct, enabled, { offsetYPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT)
+    // EXPERIMENTAL (#48): content-scale levers — tune what the app renders INSIDE the window (how
+    // much map fits), independent of the window size/position above. "Масштаб" = VirtualDisplay
+    // density % (below 100 = more map); "Oversample" = render bigger then downscale (a stronger
+    // "show more" lever). Removed (or promoted to a real localised feature) before release.
+    ClusterSizeSlider("Масштаб", scalePct, enabled, { scalePct = it }, applyGeometry, MIN_SCALE_PCT, MAX_SCALE_PCT)
+    ClusterOversampleToggle(oversample, enabled) { oversample = it; applyGeometry() }
 
     // EXPERIMENTAL diagnostic snapshot (#48): appends displays + native instrument-mode codes + our
     // projection state to /sdcard/Download/bydmate-cluster-diag.txt, so a non-ADB tester can capture
@@ -1266,6 +1283,28 @@ private fun ClusterSizeSlider(
                 thumbColor = AccentGreen,
                 activeTrackColor = AccentGreen,
             ),
+        )
+    }
+}
+
+/** EXPERIMENTAL (#48). Oversample toggle — render the projection bigger, then downscale to the window. */
+@Composable
+private fun ClusterOversampleToggle(checked: Boolean, enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Oversample (больше карты)",
+            color = if (enabled) TextPrimary else TextMuted,
+            fontSize = 14.sp,
+        )
+        Switch(
+            checked = checked,
+            onCheckedChange = { if (enabled) onToggle(it) },
+            enabled = enabled,
+            colors = bydSwitchColors(),
         )
     }
 }

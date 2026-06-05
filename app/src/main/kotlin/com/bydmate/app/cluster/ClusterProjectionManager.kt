@@ -78,6 +78,11 @@ object ClusterProjectionManager {
     // User-tunable window position within the free space (MIN_OFFSET_PCT..MAX, default = centered).
     const val KEY_OFFSET_X_PCT = "offset_x_pct"
     const val KEY_OFFSET_Y_PCT = "offset_y_pct"
+    // User-tunable content scale: VirtualDisplay density as % of cluster dpi (MIN_SCALE_PCT..MAX,
+    // default 100 = native) and an oversample toggle (render bigger, then downscale). These tune
+    // what the projected app renders INSIDE the window, independent of the window size/position.
+    const val KEY_SCALE_PCT = "scale_pct"
+    const val KEY_OVERSAMPLE = "oversample"
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
     const val KEY_TARGET_LABEL = "target_label"
@@ -190,12 +195,14 @@ object ClusterProjectionManager {
         val geo = geometryFor(
             ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
         ) ?: return true
+        val (scalePct, oversample) = readContentScale(context)
+        val plan = renderPlanFor(geo, clusterDensityDpi, scalePct, oversample)
 
         // addOverlayAndAwaitSurface points overlayView at the NEW container; oldOverlay keeps the old
         // one so we can drop it after Navi has moved. remoteDisplayId is untouched until we commit.
         val surface = try {
             withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
-                addOverlayAndAwaitSurface(context, display, geo, helper)
+                addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
         } catch (e: Exception) {
             Log.e(TAG, "resize: new overlay threw: ${e.message}"); null
@@ -205,14 +212,14 @@ object ClusterProjectionManager {
             discardNewOverlayKeepOld(oldOverlay); return true
         }
         val newVdId = helper.createVirtualDisplay(
-            VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+            VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
         )
         if (newVdId == null) {
             Log.e(TAG, "resize: createVirtualDisplay failed; keeping current size")
             discardNewOverlayKeepOld(oldOverlay); return true
         }
         val pkg = targetPackage(context)
-        if (!helper.launchAndForce(pkg, newVdId, geo.width, geo.height)) {
+        if (!helper.launchAndForce(pkg, newVdId, plan.bufferWidth, plan.bufferHeight)) {
             // Navi may already have been moved onto newVd; release it and let the caller rebuild.
             Log.e(TAG, "resize: launchAndForce failed")
             helper.releaseVirtualDisplay(newVdId)
@@ -261,6 +268,13 @@ object ClusterProjectionManager {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getInt(KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT) to
             prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)
+    }
+
+    /** Saved content-scale levers as (scalePct, oversample); defaults reproduce native rendering. */
+    private fun readContentScale(context: Context): Pair<Int, Boolean> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_SCALE_PCT, DEFAULT_SCALE_PCT) to
+            prefs.getBoolean(KEY_OVERSAMPLE, false)
     }
 
     /** Package to project — user-selectable in settings, defaults to Yandex Navi. */
@@ -338,10 +352,12 @@ object ClusterProjectionManager {
         val geo = geometryFor(
             mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
         ) ?: return false
+        val (scalePct, oversample) = readContentScale(context)
+        val plan = renderPlanFor(geo, clusterDensityDpi, scalePct, oversample)
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
-                addOverlayAndAwaitSurface(context, display, geo, helper)
+                addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
             if (surface == null) {
                 Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
@@ -364,7 +380,7 @@ object ClusterProjectionManager {
                 releaseOrphanedDisplay(context, helper)
             }
             val id = helper.createVirtualDisplay(
-                VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+                VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
             )
             if (id == null) {
                 Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return false
@@ -372,8 +388,8 @@ object ClusterProjectionManager {
             remoteDisplayId = id
             saveLastVdId(context, id)
             val pkg = targetPackage(context)
-            Log.i(TAG, "VirtualDisplay id=$id; launchAndForce $pkg")
-            val ok = helper.launchAndForce(pkg, id, geo.width, geo.height)
+            Log.i(TAG, "VirtualDisplay id=$id ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}; launchAndForce $pkg")
+            val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return false
             }
@@ -422,7 +438,7 @@ object ClusterProjectionManager {
      * Sets [overlayView] so a later hideOverlay() can tear it down even if we time out waiting.
      */
     private suspend fun addOverlayAndAwaitSurface(
-        context: Context, display: Display, geo: ClusterGeometry, helper: HelperClient,
+        context: Context, display: Display, geo: ClusterGeometry, plan: RenderPlan, helper: HelperClient,
     ): Surface {
         val ready = CompletableDeferred<Surface>()
         withContext(Dispatchers.Main) {
@@ -431,16 +447,19 @@ object ClusterProjectionManager {
 
             val container = FrameLayout(displayContext)
             val surfaceView = SurfaceView(displayContext)
+            // Layout = the physical window on the cluster (geo); the Surface buffer = the render plan
+            // (plan), which is larger when oversampling. The compositor scales the buffer to the view,
+            // so an oversampled buffer is downscaled into the same window (aspect preserved).
             val surfaceParams = FrameLayout.LayoutParams(geo.width, geo.height, Gravity.TOP or Gravity.START).apply {
                 leftMargin = geo.xOffset
                 topMargin = geo.yOffset
             }
             container.addView(surfaceView, surfaceParams)
 
-            surfaceView.holder.setFixedSize(geo.width, geo.height)
+            surfaceView.holder.setFixedSize(plan.bufferWidth, plan.bufferHeight)
             surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) {
-                    Log.d(TAG, "surfaceCreated ${geo.width}x${geo.height}")
+                    Log.d(TAG, "surfaceCreated buffer ${plan.bufferWidth}x${plan.bufferHeight} window ${geo.width}x${geo.height}")
                     if (!ready.isCompleted) ready.complete(holder.surface)
                 }
                 override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}
@@ -582,7 +601,9 @@ object ClusterProjectionManager {
                     " width%=${prefs.getInt(KEY_WIDTH_PCT, MAX_PROJECTION_PCT)}" +
                     " height%=${prefs.getInt(KEY_HEIGHT_PCT, MAX_PROJECTION_PCT)}" +
                     " offsetX%=${prefs.getInt(KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT)}" +
-                    " offsetY%=${prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)}"
+                    " offsetY%=${prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)}" +
+                    " scale%=${prefs.getInt(KEY_SCALE_PCT, DEFAULT_SCALE_PCT)}" +
+                    " oversample=${prefs.getBoolean(KEY_OVERSAMPLE, false)}"
             )
             appendLine(
                 "target: ${prefs.getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE)}" +

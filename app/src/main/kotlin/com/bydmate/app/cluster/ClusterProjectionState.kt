@@ -24,6 +24,23 @@ const val MAX_OFFSET_PCT = 100
 const val CENTER_OFFSET_PCT = 50
 
 /**
+ * Content-scale levers for the projected app, tuning what it renders INSIDE the window (how much map
+ * fits) rather than where/how big the window is. Orthogonal to [geometryFor].
+ *
+ * [MIN_SCALE_PCT]..[MAX_SCALE_PCT] set the VirtualDisplay density as a % of the cluster's native dpi:
+ * below 100 the app sees a "roomier" logical screen (UI smaller, more map), 100 = native (current
+ * behaviour), above 100 = bigger UI / less map. [OVERSAMPLE_FACTOR] applies when the oversample
+ * toggle is on — the VirtualDisplay renders at this multiple of the window pixel size and the Surface
+ * downscales it to the window, giving the app a larger pixel viewport (more map) at the cost of a
+ * heavier render and slightly softer text. Density reinterprets the same buffer; oversample enlarges
+ * the buffer — the two combine independently.
+ */
+const val MIN_SCALE_PCT = 50
+const val MAX_SCALE_PCT = 150
+const val DEFAULT_SCALE_PCT = 100
+const val OVERSAMPLE_FACTOR = 2
+
+/**
  * Geometry for [mode] on a [clusterW] x [clusterH] cluster. OFF → null. FULLSCREEN → a
  * rectangle scaled to [widthPct]/[heightPct] (% of the panel, each coerced to
  * [MIN_PROJECTION_PCT]..[MAX_PROJECTION_PCT]) and positioned by [offsetXPct]/[offsetYPct] within
@@ -48,6 +65,31 @@ fun geometryFor(
         val y = (clusterH - h) * offsetYPct.coerceIn(MIN_OFFSET_PCT, MAX_OFFSET_PCT) / 100
         ClusterGeometry(w, h, x, y)
     }
+}
+
+/**
+ * VirtualDisplay buffer size + logical density for a window. [bufferWidth]/[bufferHeight] are the
+ * pixels the projected app renders into (== the window unless oversampling); the Surface downscales
+ * them to the on-screen window. [densityDpi] is the logical density the app sees.
+ */
+data class RenderPlan(val bufferWidth: Int, val bufferHeight: Int, val densityDpi: Int)
+
+/**
+ * Render plan for [geo] given the content-scale levers. [clusterDensityDpi] is the cluster panel's
+ * native density; [scalePct] (coerced to [MIN_SCALE_PCT]..[MAX_SCALE_PCT]) scales it. [oversample]
+ * multiplies the buffer by [OVERSAMPLE_FACTOR] while leaving density untouched, so the app draws a
+ * larger scene that is then downscaled into the same window. Defaults reproduce the pre-lever
+ * behaviour: buffer == window, density == cluster dpi.
+ */
+fun renderPlanFor(
+    geo: ClusterGeometry,
+    clusterDensityDpi: Int,
+    scalePct: Int = DEFAULT_SCALE_PCT,
+    oversample: Boolean = false,
+): RenderPlan {
+    val factor = if (oversample) OVERSAMPLE_FACTOR else 1
+    val dpi = clusterDensityDpi * scalePct.coerceIn(MIN_SCALE_PCT, MAX_SCALE_PCT) / 100
+    return RenderPlan(geo.width * factor, geo.height * factor, dpi)
 }
 
 /** The other projection state — drives the steering-wheel toggle (приборка ↔ центр). */
