@@ -1,12 +1,16 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import android.widget.Toast
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.CENTER_OFFSET_PCT
+import com.bydmate.app.cluster.MAX_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_OFFSET_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
 import dagger.hilt.android.EntryPointAccessors
@@ -64,6 +68,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.text.font.FontFamily
@@ -97,6 +102,7 @@ import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.launch
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
@@ -863,6 +869,12 @@ private fun DisplaySection() {
     var heightPct by remember {
         mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_HEIGHT_PCT, MAX_PROJECTION_PCT))
     }
+    var offsetXPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT))
+    }
+    var offsetYPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT))
+    }
     var targetPkg by remember {
         mutableStateOf(prefs.getString(ClusterProjectionManager.KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE)
     }
@@ -1011,16 +1023,82 @@ private fun DisplaySection() {
     SectionHeader(text = stringResource(R.string.settings_display_size_header))
     // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
     // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
-    val applySize: () -> Unit = {
+    val applyGeometry: () -> Unit = {
         prefs.edit()
             .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
             .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, offsetXPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, offsetYPct)
             .apply()
         ClusterProjectionManager.reproject(
             context, entryPoint.helperClient(), entryPoint.helperBootstrap())
     }
-    ClusterSizeSlider(stringResource(R.string.settings_display_size_width), widthPct, enabled, { widthPct = it }, applySize)
-    ClusterSizeSlider(stringResource(R.string.settings_display_size_height), heightPct, enabled, { heightPct = it }, applySize)
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_width), widthPct, enabled, { widthPct = it }, applyGeometry)
+    ClusterSizeSlider(stringResource(R.string.settings_display_size_height), heightPct, enabled, { heightPct = it }, applyGeometry)
+    // EXPERIMENTAL (feature/cluster-mini-sealion): window position within the free space left by a
+    // sub-100% window, so a tester can slide the rendered map into the visible region of the native
+    // mini-cluster window (#48). Removed (or promoted to a real localised feature) before release.
+    ClusterSizeSlider("Сдвиг по горизонтали", offsetXPct, enabled, { offsetXPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT)
+    ClusterSizeSlider("Сдвиг по вертикали", offsetYPct, enabled, { offsetYPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT)
+
+    // EXPERIMENTAL diagnostic snapshot (#48): appends displays + native instrument-mode codes + our
+    // projection state to /sdcard/Download/bydmate-cluster-diag.txt, so a non-ADB tester can capture
+    // the cluster topology in each native position (off / full / mini / arrows). Removed before release.
+    ClusterDiagnosticsButton(context, entryPoint)
+}
+
+/** EXPERIMENTAL (#48). Tap → pick the active native cluster position → write a diagnostic snapshot. */
+@Composable
+private fun ClusterDiagnosticsButton(context: Context, entryPoint: ClusterEntryPoint) {
+    val scope = rememberCoroutineScope()
+    var picking by remember { mutableStateOf(false) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clickable { picking = true },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(imageVector = Icons.Outlined.Settings, contentDescription = null, tint = AccentGreen)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Снять снимок приборки", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Диагностика мини-экрана: выбери текущее положение", color = TextSecondary, fontSize = 12.sp)
+            }
+        }
+    }
+    if (picking) {
+        AlertDialog(
+            onDismissRequest = { picking = false },
+            containerColor = CardSurfaceElevated,
+            title = { Text("Положение приборки", color = TextPrimary) },
+            text = {
+                Column {
+                    listOf("ИПЦ выкл", "ИПЦ full", "ИПЦ мини", "ИПЦ стрелки").forEach { lbl ->
+                        TextButton(onClick = {
+                            picking = false
+                            scope.launch {
+                                val msg = ClusterProjectionManager.captureDiagnostics(
+                                    context, entryPoint.helperClient(), entryPoint.helperBootstrap(), lbl)
+                                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                            }
+                        }) { Text(lbl, color = AccentGreen) }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { picking = false }) { Text("Отмена", color = TextSecondary) }
+            },
+        )
+    }
 }
 
 /** App label for the cluster picker row; falls back to the package name when not installed/resolvable. */
@@ -1160,6 +1238,8 @@ private fun ClusterSizeSlider(
     enabled: Boolean,
     onChange: (Int) -> Unit,
     onFinished: () -> Unit,
+    min: Int = MIN_PROJECTION_PCT,
+    max: Int = MAX_PROJECTION_PCT,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1179,8 +1259,8 @@ private fun ClusterSizeSlider(
             value = pct.toFloat(),
             onValueChange = { onChange(it.roundToInt()) },
             onValueChangeFinished = onFinished,
-            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
-            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            valueRange = min.toFloat()..max.toFloat(),
+            steps = (max - min) / 2 - 1,
             enabled = enabled,
             colors = SliderDefaults.colors(
                 thumbColor = AccentGreen,

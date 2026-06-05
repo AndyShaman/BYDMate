@@ -48,6 +48,34 @@ class ClusterProjectionStateTest {
         )
     }
 
+    @Test fun `offset zero pins the window to the left-top edge`() {
+        assertEquals(
+            ClusterGeometry(width = 640, height = 240, xOffset = 0, yOffset = 0),
+            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 50, 50, MIN_OFFSET_PCT, MIN_OFFSET_PCT),
+        )
+    }
+
+    @Test fun `offset hundred pins the window to the right-bottom edge`() {
+        assertEquals(
+            ClusterGeometry(width = 640, height = 240, xOffset = 640, yOffset = 240),
+            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 50, 50, MAX_OFFSET_PCT, MAX_OFFSET_PCT),
+        )
+    }
+
+    @Test fun `offset has no effect on a full-size window`() {
+        assertEquals(
+            ClusterGeometry(width = 1280, height = 480, xOffset = 0, yOffset = 0),
+            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 100, 100, MAX_OFFSET_PCT, MAX_OFFSET_PCT),
+        )
+    }
+
+    @Test fun `offsets outside the range are clamped`() {
+        assertEquals(
+            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 50, 50, MIN_OFFSET_PCT, MAX_OFFSET_PCT),
+            geometryFor(ClusterMode.FULLSCREEN, 1280, 480, 50, 50, -20, 180),
+        )
+    }
+
     @Test fun `OFF has no geometry`() {
         assertNull(geometryFor(ClusterMode.OFF, 1280, 480))
     }

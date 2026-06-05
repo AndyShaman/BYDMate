@@ -4,6 +4,8 @@ import android.content.Context
 import android.graphics.Point
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
+import android.os.Build
+import android.os.Environment
 import android.provider.Settings
 import android.util.DisplayMetrics
 import android.util.Log
@@ -27,6 +29,11 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import java.io.FileWriter
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Owns the cluster projection lifecycle. An overlay SurfaceView is placed on the
@@ -68,6 +75,9 @@ object ClusterProjectionManager {
     // User-tunable window size, % of the cluster panel (MIN_PROJECTION_PCT..MAX, default = full).
     const val KEY_WIDTH_PCT = "width_pct"
     const val KEY_HEIGHT_PCT = "height_pct"
+    // User-tunable window position within the free space (MIN_OFFSET_PCT..MAX, default = centered).
+    const val KEY_OFFSET_X_PCT = "offset_x_pct"
+    const val KEY_OFFSET_Y_PCT = "offset_y_pct"
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
     const val KEY_TARGET_LABEL = "target_label"
@@ -176,8 +186,10 @@ object ClusterProjectionManager {
         val oldVdId = remoteDisplayId
         val display = resolveClusterDisplay(context) ?: return true
         val (widthPct, heightPct) = readSizePct(context)
-        val geo = geometryFor(ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct)
-            ?: return true
+        val (offsetXPct, offsetYPct) = readOffsetPct(context)
+        val geo = geometryFor(
+            ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
+        ) ?: return true
 
         // addOverlayAndAwaitSurface points overlayView at the NEW container; oldOverlay keeps the old
         // one so we can drop it after Navi has moved. remoteDisplayId is untouched until we commit.
@@ -242,6 +254,13 @@ object ClusterProjectionManager {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         return prefs.getInt(KEY_WIDTH_PCT, MAX_PROJECTION_PCT) to
             prefs.getInt(KEY_HEIGHT_PCT, MAX_PROJECTION_PCT)
+    }
+
+    /** Saved window position as (offsetXPct, offsetYPct); defaults to centered. */
+    private fun readOffsetPct(context: Context): Pair<Int, Int> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT) to
+            prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)
     }
 
     /** Package to project — user-selectable in settings, defaults to Yandex Navi. */
@@ -315,7 +334,10 @@ object ClusterProjectionManager {
             Log.e(TAG, "cluster display not found"); return false
         }
         val (widthPct, heightPct) = readSizePct(context)
-        val geo = geometryFor(mode, clusterWidth, clusterHeight, widthPct, heightPct) ?: return false
+        val (offsetXPct, offsetYPct) = readOffsetPct(context)
+        val geo = geometryFor(
+            mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
+        ) ?: return false
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
@@ -508,5 +530,107 @@ object ClusterProjectionManager {
             if (Settings.canDrawOverlays(context)) return true
         }
         return false
+    }
+
+    /**
+     * Diagnostic snapshot for the cluster mini-screen investigation (#48). Captures the display
+     * topology visible to the app, our live projection state, and the native instrument-mode codes
+     * read via the daemon, appending a labelled block to a file the tester can pull without ADB.
+     * [label] marks which native cluster position (off / full / mini / arrows) was active when the
+     * snapshot was taken. Returns a short human summary for a toast. EXPERIMENTAL — this and the
+     * diagnostic button are removed before any release.
+     */
+    suspend fun captureDiagnostics(
+        context: Context, helper: HelperClient, bootstrap: HelperBootstrap, label: String,
+    ): String = withContext(Dispatchers.IO) {
+        val appContext = context.applicationContext
+        val daemonUp = try { bootstrap.ensureRunning() } catch (e: Exception) { false }
+
+        // Native instrument-feature reads (dev=1007, tx=5). 1086337074 returned OFF=1/MINI=2/FULL=4
+        // on Leopard 3 (which has no mini); 1276313665 was -10011 there. We read both to learn how
+        // Sea Lion 07 encodes the mini position. Add candidates here if both come back as sentinels.
+        val modeFids = listOf(1086337074, 1276313665)
+        val modeReads = if (daemonUp) {
+            modeFids.map { fid ->
+                val v = try { helper.read(1007, fid, 5) } catch (e: Exception) { null }
+                "  read(1007, $fid, tx5) = ${v ?: "null"}"
+            }
+        } else listOf("  (daemon not running, autoservice reads skipped)")
+
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val report = buildString {
+            appendLine("=========== CLUSTER DIAG ===========")
+            appendLine("label: $label")
+            appendLine("timestamp: ${SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date())}")
+            try {
+                val pi = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+                val code = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                    pi.longVersionCode.toString() else @Suppress("DEPRECATION") pi.versionCode.toString()
+                appendLine("app: v${pi.versionName} (code=$code)")
+            } catch (e: Exception) {
+                appendLine("app: (version unavailable: ${e.message})")
+            }
+            appendLine("device: ${Build.MANUFACTURER} ${Build.MODEL} (${Build.DEVICE})")
+            appendLine("android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
+
+            appendLine("--- our projection state ---")
+            appendLine("currentMode: $currentMode")
+            appendLine("remoteDisplayId (active VD): $remoteDisplayId")
+            appendLine("picked cluster: ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+            appendLine(
+                "prefs: enabled=${prefs.getBoolean(KEY_MIRROR_ENABLED, false)}" +
+                    " width%=${prefs.getInt(KEY_WIDTH_PCT, MAX_PROJECTION_PCT)}" +
+                    " height%=${prefs.getInt(KEY_HEIGHT_PCT, MAX_PROJECTION_PCT)}" +
+                    " offsetX%=${prefs.getInt(KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT)}" +
+                    " offsetY%=${prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)}"
+            )
+            appendLine(
+                "target: ${prefs.getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE)}" +
+                    " trigger=${prefs.getInt(KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)}"
+            )
+
+            appendLine("--- native instrument mode (dev=1007, tx=5) ---")
+            modeReads.forEach { appendLine(it) }
+
+            appendLine("--- displays (DisplayManager) ---")
+            try {
+                val dm = appContext.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+                dm.displays.forEach { d ->
+                    val p = Point()
+                    @Suppress("DEPRECATION") d.getRealSize(p)
+                    val m = DisplayMetrics()
+                    @Suppress("DEPRECATION") d.getMetrics(m)
+                    appendLine(
+                        "  id=${d.displayId} \"${d.name}\" ${p.x}x${p.y}" +
+                            " dpi=${m.densityDpi} state=${d.state} rot=${d.rotation}" +
+                            " flags=0x${Integer.toHexString(d.flags)}"
+                    )
+                }
+            } catch (e: Exception) {
+                appendLine("  (failed to enumerate displays: ${e.message})")
+            }
+            appendLine("====================================")
+            appendLine()
+        }
+
+        val saveDir = listOf(
+            Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+            File("/storage/emulated/0/Download"),
+            appContext.getExternalFilesDir(null),
+        ).firstOrNull { it != null && (it.exists() || it.mkdirs()) && it.canWrite() }
+
+        if (saveDir == null) {
+            Log.e(TAG, "captureDiagnostics: no writable dir")
+            return@withContext "Снимок не сохранён: нет доступа к файловой системе"
+        }
+        val outFile = File(saveDir, "bydmate-cluster-diag.txt")
+        try {
+            FileWriter(outFile, /* append = */ true).use { it.write(report) }
+            Log.i(TAG, "captureDiagnostics: appended \"$label\" to ${outFile.absolutePath}")
+            "Снимок \"$label\" записан:\n${outFile.absolutePath}"
+        } catch (e: Exception) {
+            Log.e(TAG, "captureDiagnostics write failed: ${e.message}")
+            "Ошибка записи снимка: ${e.message}"
+        }
     }
 }
