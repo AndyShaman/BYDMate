@@ -505,6 +505,9 @@ private fun EditorDialog(
                             onAddUrl = {
                                 onUpdate { copy(actions = actions + newUrlAction()) }
                             },
+                            onAddCameraOverlay = {
+                                onUpdate { copy(actions = actions + newCameraOverlayAction()) }
+                            },
                             onAddYandexMusic = {
                                 onUpdate { copy(actions = actions + newYandexMusicAction()) }
                             },
@@ -937,6 +940,8 @@ private fun ActionRow(
                 NavigateActionControls(action = action, places = places, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "url" ->
                 UrlActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "camera_overlay" ->
+                CameraOverlayActionControls(modifier = Modifier.weight(1f))
             "yandex_music" ->
                 YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "delay" ->
@@ -949,6 +954,33 @@ private fun ActionRow(
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
         }
+    }
+}
+
+@Composable
+private fun CameraOverlayActionControls(
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Link,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = stringResource(R.string.automation_camera_overlay_summary),
+            fontSize = 13.sp,
+            color = TextPrimary,
+            maxLines = 1
+        )
     }
 }
 
@@ -1275,6 +1307,7 @@ private fun AddActionButton(
     onAddCall: () -> Unit,
     onAddNavigate: () -> Unit,
     onAddUrl: () -> Unit,
+    onAddCameraOverlay: () -> Unit,
     onAddYandexMusic: () -> Unit,
     onAddDelay: () -> Unit
 ) {
@@ -1331,6 +1364,16 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_url), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddUrl() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_camera_overlay), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddCameraOverlay()
+                    if (!android.provider.Settings.canDrawOverlays(context)) {
+                        showOverlayPrompt = true
+                    }
+                }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },

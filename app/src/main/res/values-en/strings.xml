@@ -39,6 +39,11 @@
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent - ABRP reads coordinates itself.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
+    <string name="settings_parking_camera_section_header">Parking camera</string>
+    <string name="settings_parking_camera_url_label">Camera URL</string>
+    <string name="settings_parking_camera_description">This address opens over the screen through the Parking camera automation action.</string>
+    <string name="settings_parking_camera_save_button">Save camera</string>
+    <string name="settings_parking_camera_url_error">Error: enter camera address</string>
     <string name="settings_ai_section_header">AI Insights</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
@@ -230,7 +235,9 @@
     <string name="automation_action_call">Call</string>
     <string name="automation_action_navigate">Route in Y.Navigator</string>
     <string name="automation_action_url">Open URL</string>
+    <string name="automation_action_camera_overlay">Parking camera</string>
     <string name="automation_action_delay">Delay</string>
+    <string name="automation_camera_overlay_summary">Open the camera from settings over the screen</string>
     <string name="automation_overlay_permission_title">Permission required</string>
     <string name="automation_overlay_permission_text">Sound notifications are shown as a popup over other apps. Open system settings and enable \"Display over other apps\" for BYDMate.</string>
     <string name="automation_overlay_open_settings">Open settings</string>
@@ -240,6 +247,9 @@
     <string name="automation_tap_to_set_phone">Tap to set a number...</string>
     <string name="automation_tap_to_pick_place">Tap to choose a place...</string>
     <string name="automation_tap_to_set_url">Tap to set a URL...</string>
+    <string name="camera_overlay_title">Parking camera</string>
+    <string name="camera_overlay_refresh">Refresh</string>
+    <string name="camera_overlay_close">Close</string>
     <string name="automation_notification_title_label">Title</string>
     <string name="automation_notification_body_label">Text (optional)</string>
     <string name="automation_call_dialog_title">Call</string>

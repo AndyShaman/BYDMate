@@ -11,6 +11,8 @@ import androidx.core.app.NotificationCompat
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsControlClient
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.overlay.CameraOverlayManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
@@ -22,6 +24,7 @@ data class DispatchResult(val success: Boolean, val reason: String? = null)
 @Singleton
 class ActionDispatcher @Inject constructor(
     private val controlClient: DiParsControlClient,
+    private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -54,6 +57,7 @@ class ActionDispatcher @Inject constructor(
             "call" -> dial(action)
             "navigate" -> navigate(action)
             "url" -> openUrl(action)
+            "camera_overlay" -> showCameraOverlay()
             "yandex_music" -> launchYandexMusic(action)
             "delay" -> dispatchDelay(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
@@ -207,6 +211,18 @@ class ActionDispatcher @Inject constructor(
         val result = tryStartActivity(intent, "url:$url")
         if (result.success) maybeMinimize(payload)
         return result
+    }
+
+    private suspend fun showCameraOverlay(): DispatchResult {
+        if (!CameraOverlayManager.canShow(context)) {
+            return DispatchResult(false, "Нет разрешения показывать поверх других окон")
+        }
+        val url = settingsRepository.getString(
+            SettingsRepository.KEY_PARKING_CAMERA_URL,
+            SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
+        )
+        val shown = CameraOverlayManager.show(context, url)
+        return DispatchResult(shown, if (shown) null else "URL камеры не задан")
     }
 
     private suspend fun launchYandexMusic(action: ActionDef): DispatchResult {

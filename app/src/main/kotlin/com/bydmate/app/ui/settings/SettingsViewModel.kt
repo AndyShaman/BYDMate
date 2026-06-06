@@ -130,6 +130,8 @@ data class SettingsUiState(
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
     val abrpSaveStatus: String? = null,
+    val parkingCameraUrl: String = SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
+    val parkingCameraSaveStatus: String? = null,
 )
 
 @HiltViewModel
@@ -232,6 +234,10 @@ class SettingsViewModel @Inject constructor(
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val parkingCameraUrl = settingsRepository.getString(
+                SettingsRepository.KEY_PARKING_CAMERA_URL,
+                SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
+            )
 
             _uiState.update {
                 it.copy(
@@ -262,6 +268,7 @@ class SettingsViewModel @Inject constructor(
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
+                    parkingCameraUrl = parkingCameraUrl,
                 )
             }
 
@@ -765,6 +772,30 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(abrpCarModel = value) }
     }
 
+    fun updateParkingCameraUrl(value: String) {
+        _uiState.update { it.copy(parkingCameraUrl = value) }
+    }
+
+    fun saveParkingCameraSettings() {
+        val rawUrl = _uiState.value.parkingCameraUrl.trim()
+        val normalizedUrl = normalizeCameraUrl(rawUrl)
+        if (normalizedUrl == null) {
+            _uiState.update { it.copy(parkingCameraSaveStatus = appContext.getString(R.string.settings_parking_camera_url_error)) }
+            return
+        }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_PARKING_CAMERA_URL, normalizedUrl)
+            _uiState.update {
+                it.copy(
+                    parkingCameraUrl = normalizedUrl,
+                    parkingCameraSaveStatus = appContext.getString(R.string.settings_saved),
+                )
+            }
+            delay(2000)
+            _uiState.update { it.copy(parkingCameraSaveStatus = null) }
+        }
+    }
+
     fun saveAbrpSettings() {
         val state = _uiState.value
         viewModelScope.launch {
@@ -782,6 +813,12 @@ class SettingsViewModel @Inject constructor(
             delay(2000)
             _uiState.update { it.copy(abrpSaveStatus = null) }
         }
+    }
+
+    private fun normalizeCameraUrl(rawUrl: String): String? {
+        if (rawUrl.isBlank()) return null
+        val withScheme = if (rawUrl.contains("://")) rawUrl else "https://$rawUrl"
+        return if (withScheme.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*://.+"))) withScheme else null
     }
 
     fun saveConsumptionGood(value: String) {

@@ -653,6 +653,50 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
+    SectionHeader(text = stringResource(R.string.settings_parking_camera_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingsTextField(
+                label = stringResource(R.string.settings_parking_camera_url_label),
+                value = state.parkingCameraUrl,
+                onValueChange = { viewModel.updateParkingCameraUrl(it) },
+                keyboardType = KeyboardType.Uri
+            )
+            Text(
+                stringResource(R.string.settings_parking_camera_description),
+                color = TextMuted,
+                fontSize = 11.sp,
+                lineHeight = 15.sp,
+            )
+            Button(
+                onClick = { viewModel.saveParkingCameraSettings() },
+                enabled = state.parkingCameraUrl.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark
+                )
+            ) {
+                Text(stringResource(R.string.settings_parking_camera_save_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+            state.parkingCameraSaveStatus?.let {
+                Text(
+                    it,
+                    color = if (it.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
+                    fontSize = 12.sp
+                )
+            }
+        }
+    }
+
     SectionHeader(text = stringResource(R.string.settings_ai_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),

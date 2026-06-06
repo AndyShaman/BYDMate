@@ -52,6 +52,11 @@
     <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся - ABRP читает координаты сам.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
+    <string name="settings_parking_camera_section_header">Камера парковки</string>
+    <string name="settings_parking_camera_url_label">URL камеры</string>
+    <string name="settings_parking_camera_description">Этот адрес откроется поверх экрана действием сценария «Камера парковки».</string>
+    <string name="settings_parking_camera_save_button">Сохранить камеру</string>
+    <string name="settings_parking_camera_url_error">Ошибка: укажите адрес камеры</string>
     <string name="settings_ai_section_header">AI Инсайты</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Модель: %1$s</string>
@@ -290,7 +295,9 @@
     <string name="automation_action_call">Звонок</string>
     <string name="automation_action_navigate">Маршрут в Я.Навигаторе</string>
     <string name="automation_action_url">Открыть URL</string>
+    <string name="automation_action_camera_overlay">Камера парковки</string>
     <string name="automation_action_delay">Пауза</string>
+    <string name="automation_camera_overlay_summary">Открыть камеру из настроек поверх экрана</string>
 
     <!-- Overlay permission dialog -->
     <string name="automation_overlay_permission_title">Нужно разрешение</string>
@@ -304,6 +311,11 @@
     <string name="automation_tap_to_set_phone">Нажмите, чтобы задать номер…</string>
     <string name="automation_tap_to_pick_place">Нажмите, чтобы выбрать место…</string>
     <string name="automation_tap_to_set_url">Нажмите, чтобы задать URL…</string>
+
+    <!-- Parking camera overlay -->
+    <string name="camera_overlay_title">Камера парковки</string>
+    <string name="camera_overlay_refresh">Обновить</string>
+    <string name="camera_overlay_close">Закрыть</string>
 
     <!-- Notification edit dialog -->
     <string name="automation_notification_title_label">Заголовок</string>

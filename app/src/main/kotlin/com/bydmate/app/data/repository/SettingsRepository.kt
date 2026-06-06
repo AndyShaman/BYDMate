@@ -51,6 +51,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ABRP_USER_TOKEN = "abrp_user_token"
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
+        const val KEY_PARKING_CAMERA_URL = "parking_camera_url"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
@@ -74,6 +75,7 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
         const val DEFAULT_VEHICLE_PROFILE = "SONG_L_DMI_112"
+        const val DEFAULT_PARKING_CAMERA_URL = "https://parking.napaster.ru"
 
         val CURRENCIES = listOf(
             Currency("BYN", "BYN"),

@@ -594,6 +594,15 @@ fun ActionDef.withUrl(url: String, minimize: Boolean): ActionDef = copy(
     }.toString()
 )
 
+// --- Parking camera overlay helpers ---
+
+fun newCameraOverlayAction(): ActionDef = ActionDef(
+    command = "",
+    displayName = "Камера парковки",
+    kind = "camera_overlay",
+    payload = null
+)
+
 // --- Yandex Music helpers (v2.3.0) ---
 
 fun newYandexMusicAction(): ActionDef = ActionDef(
