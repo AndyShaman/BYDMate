@@ -41,7 +41,7 @@ object ConsumptionAggregator {
      *                      (25-km window).
      * @param recentAvg     25-km rolling average from OdometerConsumptionBuffer.
      *                      Used ONLY as the trend ratio denominator.
-     * @param shortAvg      2-km short window. Null when buffer has < 2 km of valid data.
+     * @param shortAvg      3-km short window. Null when the window holds < 1.5 km of valid pair data.
      */
     @Synchronized
     fun onSample(

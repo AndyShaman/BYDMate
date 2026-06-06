@@ -4,8 +4,10 @@ import android.app.Activity
 import android.app.Application
 import android.app.Application.ActivityLifecycleCallbacks
 import android.content.Context
+import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import org.lsposed.hiddenapibypass.HiddenApiBypass
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -29,6 +31,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.osmdroid.config.Configuration as OsmdroidConfig
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.util.MapTileIndex
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Inject
@@ -52,9 +57,24 @@ class BYDMateApp : Application(), Configuration.Provider {
 
     override fun onCreate() {
         super.onCreate()
+        // Allow in-process ServiceManager.getService() on Android 9+ to reach the helper
+        // binder service without hidden-API restrictions (UnsatisfiedLinkError / NoSuchMethodError).
+        // Guarded: under JVM/Robolectric unit tests the HiddenApiBypass static initializer throws
+        // (no Android ART runtime), which would otherwise crash onCreate for every test that
+        // instantiates this Application. Swallow there; on a real device the call succeeds.
+        if (Build.VERSION.SDK_INT >= 28) {
+            runCatching {
+                HiddenApiBypass.addHiddenApiExemptions("Landroid/os/ServiceManager;")
+            }.onFailure {
+                android.util.Log.w("BYDMateApp", "hidden-api exemption unavailable", it)
+            }
+        }
         bootstrapLocale()
         initOsmdroid()
         appScope.launch {
+            // Upstream compatibility flag; DM builds keep DIPLUS for Song profiles.
+            settingsRepository.migrateDataSourceIfNeeded()
+
             if (!settingsRepository.isInsightCacheV2MigrationDone()) {
                 insightsManager.migrateLegacyCache()
                 settingsRepository.setInsightCacheV2MigrationDone()
@@ -143,6 +163,31 @@ class BYDMateApp : Application(), Configuration.Provider {
         override fun onActivityStopped(activity: Activity) {}
         override fun onActivitySaveInstanceState(activity: Activity, outState: Bundle) {}
         override fun onActivityDestroyed(activity: Activity) {}
+    }
+
+    companion object {
+        /** 高德地图道路瓦片 — 中国大陆可用，免 API Key。
+         *  查询参数风格 (?x=&y=&z=) 需要重写 getTileURLString。 */
+        val AmapTileSource = object : OnlineTileSourceBase(
+            "Amap", 0, 18, 256, ".png",
+            arrayOf(
+                "https://webrd01.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd02.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd03.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+                "https://webrd04.is.autonavi.com/appmaptile?lang=zh_cn&size=1&scale=1&style=7&x=%d&y=%d&z=%d",
+            ),
+        ) {
+            override fun getTileURLString(pMapTileIndex: Long): String {
+                return String.format(
+                    baseUrl,
+                    MapTileIndex.getX(pMapTileIndex),
+                    MapTileIndex.getY(pMapTileIndex),
+                    MapTileIndex.getZoom(pMapTileIndex),
+                )
+            }
+        }
+
+        val OsmTileSource = TileSourceFactory.MAPNIK
     }
 
     private fun scheduleDataThinning() {

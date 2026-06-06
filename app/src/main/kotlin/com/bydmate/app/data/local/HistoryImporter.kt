@@ -9,6 +9,7 @@ import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.DiPlusDbReader
 import com.bydmate.app.data.remote.DiPlusTripRecord
+import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,7 +28,8 @@ class HistoryImporter @Inject constructor(
     private val tripPointDao: TripPointDao,
     private val idleDrainDao: IdleDrainDao,
     private val diPlusDbReader: DiPlusDbReader,
-    private val settingsRepository: SettingsRepository
+    private val settingsRepository: SettingsRepository,
+    private val lastSessionRepository: LastSessionRepository,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -81,6 +83,10 @@ class HistoryImporter @Inject constructor(
     private suspend fun doSync(): ImportResult {
         val lastImportTs = settingsRepository.getLastEnergyImportTs()
         val bydRecords = energyDataReader.readTripsSince(lastImportTs)
+        // Snapshot session SOC bookmarks once per sync run so all freshly-imported
+        // trips in this batch share the same snapshot. Null when service is not running
+        // (cold import after app update) — socStart/socEnd stay null in that case.
+        val sessionSnap = lastSessionRepository.snapshot()
 
         if (bydRecords.isEmpty()) {
             return ImportResult(trips = 0, details = "Нет новых записей")
@@ -115,11 +121,13 @@ class HistoryImporter @Inject constructor(
             )
             if (existingByTime != null) {
                 // Update existing trip with byd_id so future syncs skip it instantly
+                val per100 = if (byd.tripKm > 0) byd.electricityKwh / byd.tripKm * 100.0 else null
                 tripRepository.updateTrip(existingByTime.copy(
                     source = "energydata",
                     bydId = byd.id,
                     distanceKm = byd.tripKm,
-                    kwhConsumed = byd.electricityKwh
+                    kwhConsumed = byd.electricityKwh,
+                    kwhPer100km = per100
                 ))
                 skippedDuplicate++
                 continue
@@ -143,9 +151,23 @@ class HistoryImporter @Inject constructor(
                 byd.electricityKwh / byd.tripKm * 100.0
             } else null
 
+            // avgSpeedKmh: pure computation from energydata distance + duration.
             val avgSpeed = if (byd.duration > 0 && byd.tripKm > 0) {
                 byd.tripKm / (byd.duration / 3600.0)
             } else null
+
+            // SOC enrichment: attach socStart/socEnd when this trip's endTs falls
+            // within the recorded session window [sessionStartTs .. sessionEndTs + 30s].
+            // Containment on endTs (not intersection) avoids enriching trips that merely
+            // overlap the session boundary but ended before the session started.
+            // Tolerance: +30 sec on sessionEnd covers the post-idle-close window.
+            // sessionSnap is Snapshot? — null when no session was recorded this process lifetime.
+            val sessionStartTs = sessionSnap?.startTs
+            val sessionEndTs = sessionSnap?.endTs
+            val withinSession = sessionStartTs != null && sessionEndTs != null &&
+                endTsMs in sessionStartTs..(sessionEndTs + 30_000L)
+            val socStart = if (withinSession) sessionSnap?.startSoc else null
+            val socEnd   = if (withinSession) sessionSnap?.endSoc   else null
 
             tripRepository.insertTrip(
                 TripEntity(
@@ -155,6 +177,8 @@ class HistoryImporter @Inject constructor(
                     kwhConsumed = byd.electricityKwh,
                     kwhPer100km = kwhPer100km,
                     avgSpeedKmh = avgSpeed,
+                    socStart = socStart,
+                    socEnd = socEnd,
                     source = "energydata",
                     bydId = byd.id
                 )
@@ -297,10 +321,14 @@ class HistoryImporter @Inject constructor(
                 }
 
                 if (match != null) {
-                    // Update existing trip with energydata ID
+                    // Update existing trip with energydata ID + authoritative BMS values
+                    val per100 = if (byd.tripKm > 0) byd.electricityKwh / byd.tripKm * 100.0 else null
                     tripRepository.updateTrip(match.copy(
                         source = "energydata",
-                        bydId = byd.id
+                        bydId = byd.id,
+                        distanceKm = byd.tripKm,
+                        kwhConsumed = byd.electricityKwh,
+                        kwhPer100km = per100
                     ))
                     updated++
                 } else {

@@ -16,10 +16,10 @@ import javax.inject.Singleton
 /**
  * Persists the BYDMate-side ADB RSA keypair under `filesDir/adb_keys/`.
  *
- * Format mirrors the competitor (BYD EV Pro): raw bytes — `PKCS#8` for the
- * private key, `X.509` (`SubjectPublicKeyInfo`) for the public key — same as
- * `Key.getEncoded()` returns for `KeyFactory.getInstance("RSA")`. This avoids
- * an extra serialization layer and lets us reuse `KeyFactory.generate*` directly.
+ * Format: raw bytes — `PKCS#8` for the private key, `X.509`
+ * (`SubjectPublicKeyInfo`) for the public key — same as `Key.getEncoded()`
+ * returns for `KeyFactory.getInstance("RSA")`. This avoids an extra
+ * serialization layer and lets us reuse `KeyFactory.generate*` directly.
  *
  * The keystore is intentionally NOT the Android Keystore: standard ADB pubkey
  * auth needs raw modulus/exponent in a non-standard 524-byte ADB layout

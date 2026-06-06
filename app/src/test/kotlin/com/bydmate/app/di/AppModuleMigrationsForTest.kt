@@ -38,6 +38,63 @@ object AppModuleMigrationsForTest {
             addColumnIfMissing(db, "trips", "fuel_cost", "ALTER TABLE trips ADD COLUMN fuel_cost REAL")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_trips_byd_id ON trips(byd_id)")
             db.execSQL("CREATE INDEX IF NOT EXISTS index_trip_points_timestamp ON trip_points(timestamp)")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS last_state (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    soc INTEGER,
+                    mileage REAL,
+                    ignition INTEGER,
+                    open_trip_id INTEGER,
+                    trip_start_ts INTEGER,
+                    trip_start_soc INTEGER,
+                    trip_start_mileage REAL,
+                    energydata_available INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+        }
+    }
+
+    val MIGRATION_14_15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            addColumnIfMissing(db, "trips", "fuel_liters", "ALTER TABLE trips ADD COLUMN fuel_liters REAL")
+            addColumnIfMissing(db, "trips", "fuel_l_per_100km", "ALTER TABLE trips ADD COLUMN fuel_l_per_100km REAL")
+            addColumnIfMissing(db, "trips", "electricity_cost", "ALTER TABLE trips ADD COLUMN electricity_cost REAL")
+            addColumnIfMissing(db, "trips", "fuel_cost", "ALTER TABLE trips ADD COLUMN fuel_cost REAL")
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS last_state (
+                    id INTEGER NOT NULL PRIMARY KEY,
+                    ts INTEGER NOT NULL,
+                    soc INTEGER,
+                    mileage REAL,
+                    ignition INTEGER,
+                    open_trip_id INTEGER,
+                    trip_start_ts INTEGER,
+                    trip_start_soc INTEGER,
+                    trip_start_mileage REAL,
+                    energydata_available INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS vehicle_write_log (
+                    id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+                    ts INTEGER NOT NULL,
+                    actionName TEXT NOT NULL,
+                    dev INTEGER NOT NULL,
+                    fid INTEGER NOT NULL,
+                    requested INTEGER NOT NULL,
+                    readback INTEGER,
+                    status INTEGER NOT NULL,
+                    error TEXT,
+                    validated INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
         }
     }
 

@@ -37,14 +37,27 @@ interface AdbOnDeviceClient {
      * No-op effect if already granted. Returns true on success.
      */
     suspend fun grantUsageStatsAppop(packageName: String): Boolean
+
     /**
-     * Starts D+ MainService directly via shell uid `am start-foreground-service`.
-     * Used by the watchdog when D+ has gone silent — `startActivity` against
-     * StartMainServiceActivity crashes on Android 12+ due to background-service
-     * restrictions in cached/idle state, but the shell-uid path bypasses them.
-     * Returns true when am succeeded.
+     * Spawns the helper daemon under shell uid via app_process, using the app's
+     * own signed base.apk as CLASSPATH (no dex push — integrity comes from the
+     * APK signature). The daemon registers itself as the `bydmate_helper` binder
+     * service; reachability is verified separately by the binder client's ping,
+     * not here. Returns true if the spawn command was dispatched without error
+     * (NOT a liveness guarantee).
+     *
+     * Hardcoded cmdline + process name — caller cannot inject. Uses the raw
+     * protocol exec path (the public exec() write barrier only permits autoservice
+     * GETs and would reject this).
      */
-    suspend fun launchDiPlusService(): Boolean
+    suspend fun spawnHelper(): Boolean
+
+    /** Reads the daemon's stdout/stderr log (READY / ERR lines) for diagnostics. Null on transport error. */
+    suspend fun readHelperLog(): String?
+
+    /** Read-only check: is a process named `bydmate_helper` running? */
+    suspend fun helperHeartbeat(): Boolean
+
     /** Closes any underlying socket. Idempotent. */
     suspend fun shutdown()
 }
@@ -67,7 +80,7 @@ class AdbOnDeviceClientImpl @Inject constructor(
 
     @Volatile private var protocol: AdbProtocol? = null
 
-    @Suppress("unused")  // kept for future-proofing; AdbKeyStore already has Context.
+    // used for packageCodePath when spawning the helper daemon
     private val ctx = context
 
     override suspend fun connect(): Result<Unit> = withContext(Dispatchers.IO) {
@@ -124,18 +137,44 @@ class AdbOnDeviceClientImpl @Inject constructor(
         }
     }
 
-    override suspend fun launchDiPlusService(): Boolean = withContext(Dispatchers.IO) {
-        val p = protocol ?: return@withContext false
+    override suspend fun spawnHelper(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: run {
+            val r = connect()
+            if (r.isFailure) return@withContext false
+            protocol ?: return@withContext false
+        }
         try {
-            // am start-foreground-service prints "Starting service: Intent { ... }"
-            // on success and "Error: ..." on failure. Treat any output starting
-            // with "Error" as a failure.
-            val out = p.exec(LAUNCH_DIPLUS_CMD) ?: return@withContext false
-            !out.trimStart().startsWith("Error")
+            // Raw protocol exec — bypasses the public exec() write barrier by design
+            // (this is not an autoservice GET). Hardcoded, no caller input.
+            // CLASSPATH = the app's own signed base.apk; setsid detaches the daemon
+            // into its own session. The trailing poll-loop keeps THIS shell alive until
+            // the daemon registers (or 3s elapse): the on-device ADB closes the exec
+            // stream the instant `&` backgrounds the job, and adbd SIGHUPs the subprocess
+            // — without the loop the still-booting JVM dies before its first println
+            // (empty log, no registration). Mirrors the proven BYD EV Pro / aps_diplus
+            // spawn recipe; see reference_autoservice_write_channel.md.
+            val spawnCmd =
+                "CLASSPATH=${ctx.packageCodePath} setsid app_process /system/bin " +
+                "--nice-name=$HELPER_PROCESS_NAME com.bydmate.app.helper.HelperDaemon " +
+                "${android.os.Process.myUid()} </dev/null >$HELPER_LOG_PATH 2>&1 & " +
+                "for i in 1 2 3; do service list 2>/dev/null | grep -q $HELPER_PROCESS_NAME && break; sleep 1; done"
+            p.exec(spawnCmd)
+            true
         } catch (e: Exception) {
-            Log.w(TAG, "launchDiPlusService failed: ${e.message}")
+            Log.w(TAG, "spawnHelper failed: ${e.message}")
             false
         }
+    }
+
+    override suspend fun readHelperLog(): String? = withContext(Dispatchers.IO) {
+        val p = protocol ?: return@withContext null
+        runCatching { p.exec("cat $HELPER_LOG_PATH") }.getOrNull()
+    }
+
+    override suspend fun helperHeartbeat(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: return@withContext false
+        val out = runCatching { p.exec("ps -A -o NAME") }.getOrNull() ?: return@withContext false
+        out.lineSequence().any { it.trim() == HELPER_PROCESS_NAME }
     }
 
     override suspend fun shutdown() {
@@ -158,8 +197,8 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Narrow whitelist for grantUsageStatsAppop — only our own package.
         private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
 
-        // Hardcoded — no params, so no injection surface.
-        private const val LAUNCH_DIPLUS_CMD =
-            "am start-foreground-service -n com.van.diplus/com.van.diplus.service.MainService"
+        // Helper daemon — hardcoded so neither caller can inject paths/cmdlines.
+        private const val HELPER_PROCESS_NAME = "bydmate_helper"
+        private const val HELPER_LOG_PATH = "/data/local/tmp/bydmate_helper.log"
     }
 }

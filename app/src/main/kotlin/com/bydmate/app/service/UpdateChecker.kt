@@ -141,8 +141,10 @@ class UpdateChecker @Inject constructor(
         var finished = false
         while (!finished) {
             val query = DownloadManager.Query().setFilterById(downloadId)
-            val cursor = downloadManager.query(query)
-            if (cursor != null && cursor.moveToFirst()) {
+            // .use{} closes the cursor on every path — the old code only closed it inside the
+            // moveToFirst() block, leaking one cursor per poll when the row was momentarily absent.
+            val rowPresent = downloadManager.query(query)?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use false
                 val status = cursor.getInt(
                     cursor.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)
                 )
@@ -174,7 +176,12 @@ class UpdateChecker @Inject constructor(
                         onProgress(context.getString(R.string.update_downloading_paused))
                     }
                 }
-                cursor.close()
+                true
+            } ?: false
+            // Download row vanished (query null or cleared by the user): stop instead of spinning
+            // forever every 500 ms with no row that could ever flip `finished`.
+            if (!rowPresent) {
+                throw Exception(context.getString(R.string.update_download_error, -1))
             }
             if (!finished) {
                 kotlinx.coroutines.delay(500)

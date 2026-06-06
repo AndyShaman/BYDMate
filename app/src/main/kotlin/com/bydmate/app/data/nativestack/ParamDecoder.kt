@@ -1,0 +1,55 @@
+package com.bydmate.app.data.nativestack
+
+import com.bydmate.app.data.autoservice.SentinelDecoder
+
+enum class Decoder {
+    INT_RAW,
+    INT_DIV10,
+    INT_SCALED,
+    INT_PERCENT,
+    INT_ENUM,
+    INT_TEMP_C,
+    INT_TEMP_C_OFS40,
+    INT_KPA,
+    FLOAT_VOLT,
+    FLOAT_PERCENT,
+    FLOAT_KW,
+    FLOAT_KWH,
+}
+
+object ParamDecoder {
+
+    fun decodeInt(rawInt: Int, decoder: Decoder): Int? {
+        val cleaned = SentinelDecoder.decodeInt(rawInt) ?: return null
+        return when (decoder) {
+            Decoder.INT_RAW, Decoder.INT_ENUM, Decoder.INT_KPA -> cleaned
+            Decoder.INT_PERCENT -> cleaned.takeIf { it in 0..100 }
+            Decoder.INT_TEMP_C -> cleaned.takeIf { it in -50..80 }
+            // Battery temp fids (dev=1014) encode °C with a -40 CAN offset.
+            Decoder.INT_TEMP_C_OFS40 -> (cleaned - 40).takeIf { it in -50..80 }
+            // INT_DIV10 is a float-producing decoder — callers should use decodeFloat
+            Decoder.INT_DIV10 -> cleaned
+            else -> null
+        }
+    }
+
+    fun decodeScaled(rawInt: Int, scale: Double): Double? {
+        val cleaned = SentinelDecoder.decodeInt(rawInt) ?: return null
+        return cleaned * scale
+    }
+
+    fun decodeFloat(rawInt: Int, decoder: Decoder): Double? {
+        return when (decoder) {
+            Decoder.INT_DIV10 -> {
+                val v = SentinelDecoder.decodeInt(rawInt) ?: return null
+                v / 10.0
+            }
+            Decoder.FLOAT_VOLT, Decoder.FLOAT_PERCENT,
+            Decoder.FLOAT_KW, Decoder.FLOAT_KWH -> {
+                val f = SentinelDecoder.parseFloatFromShellInt(rawInt) ?: return null
+                f.toDouble()
+            }
+            else -> null
+        }
+    }
+}

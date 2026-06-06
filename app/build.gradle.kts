@@ -1,9 +1,19 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("org.jetbrains.kotlin.plugin.compose")
+}
+
+// Release signing is loaded from keystore.properties (gitignored, never in VCS).
+// When the file is absent (CI, fresh clone), the release build is left unsigned.
+val keystorePropsFile = rootProject.file("keystore.properties")
+val keystoreProps = Properties().apply {
+    if (keystorePropsFile.exists()) load(FileInputStream(keystorePropsFile))
 }
 
 android {
@@ -17,14 +27,26 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 304
-        versionName = "2.8.1-dm.1"
+        versionCode = 312
+        versionName = "3.1.1-dm.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (keystorePropsFile.exists()) {
+            create("release") {
+                storeFile = file(keystoreProps.getProperty("storeFile"))
+                storePassword = keystoreProps.getProperty("storePassword")
+                keyAlias = keystoreProps.getProperty("keyAlias")
+                keyPassword = keystoreProps.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
             isShrinkResources = false
             proguardFiles(
@@ -138,7 +160,12 @@ dependencies {
     // AppCompat (required for AppCompatDelegate.setApplicationLocales per-app language support)
     implementation("androidx.appcompat:appcompat:1.6.1")
 
+    // Hidden-API bypass: allows in-process ServiceManager.getService() on Android 9+
+    // to reach the helper binder without UnsatisfiedLinkError / NoSuchMethodError.
+    implementation("org.lsposed.hiddenapibypass:hiddenapibypass:4.3")
+
     // Testing
+    testImplementation("org.jetbrains.kotlin:kotlin-reflect:2.1.0")
     testImplementation("io.mockk:mockk:1.13.10")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.9.0")
@@ -147,7 +174,10 @@ dependencies {
     testImplementation("androidx.test.ext:junit:1.2.1")
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
+    testImplementation("app.cash.turbine:turbine:1.0.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.1")
+    androidTestImplementation("androidx.room:room-testing:2.6.1")
 
     // ADB-on-device for autoservice access (path H, read-only)
     // com.cgutman:adblib does not exist on MavenCentral (only com.tananaev:adblib does).

@@ -2,9 +2,8 @@ package com.bydmate.app.ui.dashboard
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
-import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.autoservice.BatteryReading
-import com.bydmate.app.data.autoservice.ChargingReading
+import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
@@ -34,7 +33,8 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNull
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import io.mockk.mockk
@@ -61,10 +61,8 @@ class DashboardViewModelTest {
 
     // --- Fake SettingsDao ---
 
-    private class FakeSettingsDao(autoserviceEnabled: Boolean) : SettingsDao {
-        val map = mutableMapOf<String, String>(
-            SettingsRepository.KEY_AUTOSERVICE_ENABLED to autoserviceEnabled.toString()
-        )
+    private class FakeSettingsDao : SettingsDao {
+        val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
@@ -104,6 +102,7 @@ class DashboardViewModelTest {
         override suspend fun getByTripId(tripId: Long): List<TripPointEntity> = emptyList()
         override suspend fun getByTripIds(tripIds: List<Long>): List<TripPointEntity> = emptyList()
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<TripPointEntity> = emptyList()
         override suspend fun thinOldPoints(cutoff: Long, intervalMs: Long): Int = 0
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
@@ -116,6 +115,7 @@ class DashboardViewModelTest {
         override fun getByDateRange(from: Long, to: Long): Flow<List<IdleDrainEntity>> = flowOf(emptyList())
         override suspend fun getTodayDrainKwh(dayStart: Long, dayEnd: Long): Double = 0.0
         override suspend fun getCount(): Int = 0
+        override suspend fun getAll(): List<IdleDrainEntity> = emptyList()
         override suspend fun getTotalKwh(): Double = 0.0
         override suspend fun deleteAll() {}
         override suspend fun getTodayDrainHours(dayStart: Long, dayEnd: Long): Double = 0.0
@@ -137,24 +137,45 @@ class DashboardViewModelTest {
     private class FakeAutoservice(
         private val battery: BatteryReading?,
         private val available: Boolean = true
-    ) : AutoserviceClient {
+    ) : VehicleApi {
         override suspend fun isAvailable(): Boolean = available
-        override suspend fun getInt(dev: Int, fid: Int): Int? = null
-        override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
-        override suspend fun readChargingSnapshot(): ChargingReading? = null
-        override suspend fun getEnginePowerKw(): Int? = null
+        override suspend fun readSnapshot(): com.bydmate.app.data.remote.DiParsData? = null
+        override suspend fun readSoc(): Float? = null
+        override suspend fun readSpeed(): Float? = null
+        override suspend fun readMileageKm(): Float? = null
+        override suspend fun readPowerKw(): Int? = null
+        override suspend fun readAcStatus(): Int? = null
+        override suspend fun readAcTemp(): Int? = null
+        override suspend fun readInsideTemp(): Int? = null
+        override suspend fun readExteriorTemp(): Int? = null
+        override suspend fun readFanLevel(): Int? = null
+        override suspend fun readWindowDriver(): Int? = null
+        override suspend fun readWindowPassenger(): Int? = null
+        override suspend fun readWindowRearLeft(): Int? = null
+        override suspend fun readWindowRearRight(): Int? = null
+        override suspend fun dispatch(commandString: String): Result<Unit> = Result.success(Unit)
+        override suspend fun writeAcOn(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeAcOff(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowDriver(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowPassenger(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowRearLeft(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeWindowRearRight(percent: Int): Result<Unit> = Result.success(Unit)
+        override suspend fun writeLockDoors(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeUnlockDoors(): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSunroof(mode: com.bydmate.app.data.vehicle.SunroofMode): Result<Unit> = Result.success(Unit)
+        override suspend fun writeSunshade(open: Boolean): Result<Unit> = Result.success(Unit)
     }
 
     // --- Factory ---
 
     private fun buildViewModel(
-        autoserviceEnabled: Boolean,
-        fakeAutoservice: AutoserviceClient
+        fakeAutoservice: VehicleApi
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
-        val settingsDao = FakeSettingsDao(autoserviceEnabled)
+        val settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
@@ -167,7 +188,7 @@ class DashboardViewModelTest {
         val insightsManager = InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, settingsRepo)
 
         val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
-        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo, settingsRepo)
+        val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo)
 
         return DashboardViewModel(
             appContext = ctx,
@@ -191,20 +212,8 @@ class DashboardViewModelTest {
     )
 
     @Test
-    fun `adbConnected is null when autoservice disabled`() = runTest {
+    fun `adbConnected is true when autoservice connected`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = false,
-            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertNull(vm.uiState.value.adbConnected)
-    }
-
-    @Test
-    fun `adbConnected is true when autoservice enabled and connected`() = runTest {
-        val vm = buildViewModel(
-            autoserviceEnabled = true,
             fakeAutoservice = FakeAutoservice(sampleReading, available = true)
         )
         testDispatcher.scheduler.advanceUntilIdle()
@@ -213,13 +222,22 @@ class DashboardViewModelTest {
     }
 
     @Test
-    fun `adbConnected is false when autoservice enabled but unavailable`() = runTest {
+    fun `adbConnected is false when autoservice unavailable`() = runTest {
         val vm = buildViewModel(
-            autoserviceEnabled = true,
             fakeAutoservice = FakeAutoservice(battery = null, available = false)
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals(false, vm.uiState.value.adbConnected)
+        assertFalse(vm.uiState.value.adbConnected!!)
+    }
+
+    @Test
+    fun `currentSoh is populated from autoservice snapshot`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(100f, vm.uiState.value.currentSoh!!, 0.01f)
     }
 }

@@ -54,6 +54,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_PARKING_CAMERA_URL = "parking_camera_url"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
+        const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
@@ -65,6 +66,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
         const val KEY_INSIGHT_CACHE_V2_MIGRATION_DONE = "insight_cache_v2_migration_done"
+        // One-shot migration flag kept for compatibility with upstream native-stack builds.
+        const val KEY_MIGRATION_V281_DATA_SOURCE = "migration_v281_data_source_done"
 
         const val DEFAULT_BATTERY_CAPACITY = "18.3"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -76,6 +79,7 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_CONSUMPTION_BAD = "30"
         const val DEFAULT_VEHICLE_PROFILE = "SONG_L_DMI_112"
         const val DEFAULT_PARKING_CAMERA_URL = "https://parking.napaster.ru"
+        const val DEFAULT_MAP_TILE_SOURCE = "osm" // "osm" or "amap"
 
         val CURRENCIES = listOf(
             Currency("BYN", "BYN"),
@@ -272,6 +276,12 @@ open class SettingsRepository @Inject constructor(
     suspend fun setConsumptionRecalcDone() =
         setString(KEY_CONSUMPTION_RECALC_DONE, "true")
 
+    suspend fun getMapTileSource(): String =
+        getString(KEY_MAP_TILE_SOURCE, DEFAULT_MAP_TILE_SOURCE)
+
+    suspend fun setMapTileSource(source: String) =
+        setString(KEY_MAP_TILE_SOURCE, source)
+
     suspend fun isIdleDrainV2CleanupDone(): Boolean =
         getString(KEY_IDLE_DRAIN_V2_CLEANUP, "false") == "true"
 
@@ -341,4 +351,9 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setInsightCacheV2MigrationDone() =
         setString(KEY_INSIGHT_CACHE_V2_MIGRATION_DONE, "true")
+
+    suspend fun migrateDataSourceIfNeeded() {
+        if (getString(KEY_MIGRATION_V281_DATA_SOURCE, "false") == "true") return
+        setString(KEY_MIGRATION_V281_DATA_SOURCE, "true")
+    }
 }

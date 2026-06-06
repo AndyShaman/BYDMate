@@ -71,8 +71,6 @@ class WelcomeViewModel @Inject constructor(
         _uiState.update { it.copy(currency = currency.code, currencySymbol = currency.symbol) }
     }
 
-    fun setDataSource(value: String) = _uiState.update { it.copy(dataSource = value) }
-
     fun nextStep() = _uiState.update { it.copy(step = (it.step + 1).coerceAtMost(3)) }
     fun prevStep() = _uiState.update { it.copy(step = (it.step - 1).coerceAtLeast(1)) }
 
@@ -109,7 +107,7 @@ class WelcomeViewModel @Inject constructor(
                     appContext.getString(R.string.welcome_importing_trips_status))
             }
 
-            if (isUpgrade && settingsRepository.getDataSource() == SettingsRepository.DataSource.ENERGYDATA) {
+            if (isUpgrade) {
                 historyImporter.deduplicateWithExisting()
             }
             historyImporter.runSync()

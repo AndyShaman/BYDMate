@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<!-- Mockup for review only. Real design tokens from ui/theme/Color.kt.
+     Final scope:
+       - "Банки" row (min/max/Δ) in BatteryHealthDialog, display-only.
+       - min cell is coloured by an LFP low-voltage threshold (visual alert, no
+         icon / no card highlight). Notification-style alert lives in Automations.
+       - "/100км lifetime" cell removed from the lifetime block.
+     Not wired to code. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>BYDMate — банки в карточке батареи (макет)</title>
+<style>
+  :root{
+    --bg:#0E1726; --card:#162032; --elev:#1D2940; --border:#2A3A52;
+    --green:#4ADE80; --primary:#E2E8F0; --secondary:#94A3B8; --muted:#64748B;
+    --yellow:#FBBF24; --red:#EF4444; --blue:#60A5FA;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--bg);color:var(--primary);font-family:-apple-system,Segoe UI,Roboto,sans-serif;margin:0;padding:28px;}
+  h1{font-size:16px;font-weight:600;color:var(--secondary);margin:0 0 4px}
+  .sub{font-size:12px;color:var(--muted);margin:0 0 24px;max-width:1040px;line-height:1.6}
+  .grid{display:flex;flex-wrap:wrap;gap:26px;align-items:flex-start}
+  .col{width:520px}
+  .tag{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin:0 0 8px}
+  .card{background:var(--card);border:2px solid rgba(74,222,128,.6);border-radius:14px;padding:20px;}
+  .title{font-size:16px;font-weight:700;margin:0 0 14px;color:var(--green)}
+  .hdr{font-size:10px;color:var(--muted);letter-spacing:1px;font-weight:600;margin:14px 0 8px}
+  .hdr:first-of-type{margin-top:0}
+  .row{background:var(--elev);border-radius:10px;padding:12px;display:flex;justify-content:space-between;gap:8px}
+  .cell{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1}
+  .v{font-family:ui-monospace,Menlo,monospace;font-size:14px;font-weight:600}
+  .l{font-size:10px;color:var(--secondary);text-align:center}
+  .v.green{color:var(--green)} .v.primary{color:var(--primary)} .v.yellow{color:var(--yellow)} .v.red{color:var(--red)}
+  .note{font-size:11px;color:var(--muted);margin:12px 2px 0;line-height:1.6}
+  .legend{font-size:12px;color:var(--secondary);margin:24px 2px 0;line-height:1.8;max-width:1040px}
+  .legend b{color:var(--primary)}
+  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin:0 4px 0 10px;vertical-align:middle}
+  code{color:var(--green);font-family:ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+  <h1>Карточка батареи — строка «Банки» + цветной алерт по min</h1>
+  <p class="sub">Токены из <code>ui/theme/Color.kt</code>, структура из <code>BatteryHealthDialog.kt</code>. Изменения: одинокая ячейка «Разбаланс» уходит в строку «Банки» (min / max / Δ); ячейка «/100км» из блока «За всё время» убрана; min подсвечивается цветом по порогу напряжения LFP-ячейки (только цвет, без иконки и подсветки карточки). Настраиваемый алерт-уведомление собирается отдельно в Автоматизациях. Макет, не код.</p>
+
+  <div class="grid">
+
+    <!-- ===== CURRENT ===== -->
+    <div class="col">
+      <p class="tag">Сейчас (как есть)</p>
+      <div class="card">
+        <div class="title">Здоровье батареи</div>
+        <div class="hdr">СЕЙЧАС</div>
+        <div class="row">
+          <div class="cell"><span class="v primary">87%</span><span class="l">SoC</span></div>
+          <div class="cell"><span class="v green">12 мВ</span><span class="l">Разбаланс</span></div>
+          <div class="cell"><span class="v primary">28°C</span><span class="l">Темп.</span></div>
+          <div class="cell"><span class="v primary">13.2 В</span><span class="l">12V</span></div>
+        </div>
+        <div class="hdr">ЗА ВСЁ ВРЕМЯ</div>
+        <div class="row">
+          <div class="cell"><span class="v green">100%</span><span class="l">SoH</span></div>
+          <div class="cell"><span class="v primary">12 480</span><span class="l">пробег BMS</span></div>
+          <div class="cell"><span class="v primary">1 935</span><span class="l">прокачано</span></div>
+          <div class="cell"><span class="v blue">15.5</span><span class="l">/100км</span></div>
+        </div>
+      </div>
+      <p class="note">По банкам видно только «Разбаланс». «/100км» (15.5) занимает 4-ю ячейку.</p>
+    </div>
+
+    <!-- ===== NEW ===== -->
+    <div class="col">
+      <p class="tag">Станет</p>
+      <div class="card">
+        <div class="title">Здоровье батареи</div>
+        <div class="hdr">СЕЙЧАС</div>
+        <div class="row">
+          <div class="cell"><span class="v primary">87%</span><span class="l">SoC</span></div>
+          <div class="cell"><span class="v primary">28°C</span><span class="l">Темп.</span></div>
+          <div class="cell"><span class="v primary">13.2 В</span><span class="l">12V</span></div>
+        </div>
+        <div class="hdr">БАНКИ</div>
+        <div class="row">
+          <div class="cell"><span class="v green">3.213 В</span><span class="l">min</span></div>
+          <div class="cell"><span class="v primary">3.225 В</span><span class="l">max</span></div>
+          <div class="cell"><span class="v green">12 мВ</span><span class="l">Δ</span></div>
+        </div>
+        <div class="hdr">ЗА ВСЁ ВРЕМЯ</div>
+        <div class="row">
+          <div class="cell"><span class="v green">100%</span><span class="l">SoH</span></div>
+          <div class="cell"><span class="v primary">12 480</span><span class="l">пробег BMS</span></div>
+          <div class="cell"><span class="v primary">1 935</span><span class="l">прокачано</span></div>
+        </div>
+      </div>
+      <p class="note">«За всё время» — теперь 3 ячейки (без «/100км»). min/max нейтральные, пока min на плато. Δ — прежняя LFP-расцветка.</p>
+
+      <p class="tag" style="margin-top:18px">Цветной алерт по min (примеры строки «БАНКИ»)</p>
+      <div class="row" style="margin-bottom:8px">
+        <div class="cell"><span class="v yellow">2.94 В</span><span class="l">min</span></div>
+        <div class="cell"><span class="v primary">3.18 В</span><span class="l">max</span></div>
+        <div class="cell"><span class="v yellow">240 мВ</span><span class="l">Δ</span></div>
+      </div>
+      <div class="row">
+        <div class="cell"><span class="v red">2.71 В</span><span class="l">min</span></div>
+        <div class="cell"><span class="v primary">3.15 В</span><span class="l">max</span></div>
+        <div class="cell"><span class="v red">440 мВ</span><span class="l">Δ</span></div>
+      </div>
+      <p class="note">min проваливается в колено LFP → жёлтый, ещё ниже → красный. Это и есть ранний сигнал слабой банки перед обвалом 10%→0.</p>
+    </div>
+
+  </div>
+
+  <p class="legend">
+    <b>Пороги цвета min</b> (LFP, BYD Blade):
+    <span class="sw" style="background:var(--green)"></span><b>≥ 3.0 В</b> — на плато, норма;
+    <span class="sw" style="background:var(--yellow)"></span><b>2.8–3.0 В</b> — колено, низко;
+    <span class="sw" style="background:var(--red)"></span><b>&lt; 2.8 В</b> — критично (отсечка BMS ~2.5 В).
+  </p>
+</body>
+</html>

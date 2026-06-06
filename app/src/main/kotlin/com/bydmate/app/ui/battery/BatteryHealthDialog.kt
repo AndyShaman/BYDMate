@@ -29,7 +29,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.R
-import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.CardSurfaceElevated
@@ -57,12 +56,13 @@ import com.bydmate.app.ui.theme.TextSecondary
 fun BatteryHealthDialog(
     liveSoc: Int?,
     liveCellDelta: Double?,
+    liveCellVoltageMin: Double?,
+    liveCellVoltageMax: Double?,
     liveBatTemp: Int?,
     liveVoltage12v: Double?,
     liveSoh: Float?,
     liveLifetimeKm: Float?,
     liveLifetimeKwh: Float?,
-    autoserviceEnabled: Boolean,
     borderColor: Color,
     onDismiss: () -> Unit,
 ) {
@@ -104,21 +104,23 @@ fun BatteryHealthDialog(
                     SectionHeader(stringResource(R.string.battery_health_now_header))
                     LiveBlock(
                         soc = liveSoc,
-                        cellDelta = liveCellDelta,
                         batTemp = liveBatTemp,
                         voltage12v = liveVoltage12v
                     )
 
+                    SectionHeader(stringResource(R.string.battery_health_banks_header))
+                    BanksBlock(
+                        cellMin = liveCellVoltageMin,
+                        cellMax = liveCellVoltageMax,
+                        cellDelta = liveCellDelta
+                    )
+
                     SectionHeader(stringResource(R.string.battery_health_lifetime_header))
-                    if (autoserviceEnabled) {
-                        LifetimeBlock(
-                            soh = liveSoh,
-                            lifetimeKm = liveLifetimeKm,
-                            lifetimeKwh = liveLifetimeKwh
-                        )
-                    } else {
-                        LifetimeDisabledBlock()
-                    }
+                    LifetimeBlock(
+                        soh = liveSoh,
+                        lifetimeKm = liveLifetimeKm,
+                        lifetimeKwh = liveLifetimeKwh
+                    )
                 }
             }
         }
@@ -139,7 +141,6 @@ private fun SectionHeader(text: String) {
 @Composable
 private fun LiveBlock(
     soc: Int?,
-    cellDelta: Double?,
     batTemp: Int?,
     voltage12v: Double?
 ) {
@@ -151,13 +152,39 @@ private fun LiveBlock(
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         StatCell("SoC", soc?.let { "$it%" } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_bat_temp_label), batTemp?.let { "$it°C" } ?: "—", TextPrimary)
+        StatCell(stringResource(R.string.battery_health_12v_label), voltage12v?.let { stringResource(R.string.battery_health_12v_value, it) } ?: "—", TextPrimary)
+    }
+}
+
+@Composable
+private fun BanksBlock(
+    cellMin: Double?,
+    cellMax: Double?,
+    cellDelta: Double?
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurfaceElevated, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
         StatCell(
-            stringResource(R.string.battery_health_cell_delta_label),
+            "min",
+            cellMin?.let { stringResource(R.string.battery_health_cell_voltage_value, it) } ?: "—",
+            cellMinVoltageColor(cellMin)
+        )
+        StatCell(
+            "max",
+            cellMax?.let { stringResource(R.string.battery_health_cell_voltage_value, it) } ?: "—",
+            TextPrimary
+        )
+        StatCell(
+            "Δ",
             cellDelta?.let { stringResource(R.string.battery_health_cell_delta_value, it) } ?: "—",
             cellDeltaColor(cellDelta)
         )
-        StatCell(stringResource(R.string.battery_health_bat_temp_label), batTemp?.let { "$it°C" } ?: "—", TextPrimary)
-        StatCell(stringResource(R.string.battery_health_12v_label), voltage12v?.let { stringResource(R.string.battery_health_12v_value, it) } ?: "—", TextPrimary)
     }
 }
 
@@ -167,8 +194,6 @@ private fun LifetimeBlock(
     lifetimeKm: Float?,
     lifetimeKwh: Float?
 ) {
-    val avgPer100 = if (lifetimeKm != null && lifetimeKwh != null && lifetimeKm > 0)
-        lifetimeKwh / lifetimeKm * 100.0 else null
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -179,11 +204,6 @@ private fun LifetimeBlock(
         StatCell("SoH", soh?.let { "%.0f%%".format(it) } ?: "—", AccentGreen)
         StatCell(stringResource(R.string.battery_health_bms_mileage_label), lifetimeKm?.let { stringResource(R.string.battery_health_bms_mileage_value, it) } ?: "—", TextPrimary)
         StatCell(stringResource(R.string.battery_health_pumped_label), lifetimeKwh?.let { stringResource(R.string.battery_health_pumped_value, it) } ?: "—", TextPrimary)
-        StatCell(
-            "/100км lifetime",
-            avgPer100?.let { "%.1f".format(it) } ?: "—",
-            AccentBlue
-        )
     }
 }
 
@@ -229,5 +249,20 @@ private fun cellDeltaColor(delta: Double?): Color = when {
     delta == null -> TextPrimary
     delta < 0.030 -> AccentGreen
     delta < 0.100 -> SocYellow
+    else -> SocRed
+}
+
+/**
+ * Low-voltage colour cue for the minimum cell. BYD Blade is LFP: the pack sits on
+ * a flat ~3.2 V plateau and only drops past the "knee" below ~3.0 V/cell, with the
+ * BMS cutoff around 2.5 V. A weak / imbalanced cell dips into the knee first, which
+ * is the early warning for the sudden ~10% → 0 SOC collapse users report.
+ * Visual-only — the configurable notification alert lives in Automations
+ * (MinCellVoltage trigger).
+ */
+private fun cellMinVoltageColor(min: Double?): Color = when {
+    min == null -> TextPrimary
+    min >= 3.0 -> AccentGreen
+    min >= 2.8 -> SocYellow
     else -> SocRed
 }

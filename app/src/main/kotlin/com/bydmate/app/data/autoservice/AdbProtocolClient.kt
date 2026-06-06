@@ -34,9 +34,9 @@ internal interface AdbProtocol {
  * protocol can authenticate via RSA pubkey and run `service call autoservice ...`
  * with shell uid (= hidden API access). See `reference_adb_on_device_pattern.md`.
  *
- * Protocol details ported from competitor (BYD EV Pro, AdbClient.java —
- * proven on Leopard 3): little-endian 24-byte header, payload checksum is the
- * unsigned-byte sum of payload, magic = `~command`, AUTH uses NONEwithRSA over
+ * Protocol shape (per Android `system/core/adb/`): little-endian 24-byte
+ * header, payload checksum is the unsigned-byte sum of payload, magic =
+ * `~command`, AUTH uses NONEwithRSA over
  * `(15-byte ASN1 padding ‖ token)`, public key is serialized as a 524-byte
  * little-endian blob (`modSizeWords | n0inv | modulus[64] | rr[64] | exponent`)
  * then Base64 + UTF-8.
@@ -219,7 +219,7 @@ internal class AdbProtocolClient(
         return false
     }
 
-    /** Per competitor `a()` — silently reply CLSE/OKAY for stale streams. */
+    /** Silently reply CLSE/OKAY for stale streams to keep the daemon happy. */
     private fun handleStalePacket(pkt: Packet, currentLocalId: Int) {
         when (pkt.command) {
             A_CLSE -> writePacket(A_CLSE, pkt.arg1, pkt.arg0, EMPTY)
@@ -304,7 +304,7 @@ internal class AdbProtocolClient(
         )
 
         // ADB daemon expects a null-terminated host id after the base64 pubkey
-        // (see system/core/adb/transport.cpp). Competitor uses the same shape.
+        // (see system/core/adb/transport.cpp).
         private const val ADB_PUBKEY_USERNAME = " bydmate@dilink\u0000"
 
         /**

@@ -5,13 +5,14 @@ import android.app.NotificationManager
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.media.AudioManager
 import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.data.local.entity.ActionDef
-import com.bydmate.app.data.remote.DiParsControlClient
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.ui.overlay.CameraOverlayManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import org.json.JSONObject
@@ -23,7 +24,7 @@ data class DispatchResult(val success: Boolean, val reason: String? = null)
 
 @Singleton
 class ActionDispatcher @Inject constructor(
-    private val controlClient: DiParsControlClient,
+    private val vehicleApi: VehicleApi,
     private val settingsRepository: SettingsRepository,
     @ApplicationContext private val context: Context
 ) {
@@ -40,6 +41,31 @@ class ActionDispatcher @Inject constructor(
         // Hard cap on user-set delay action; protects against typos like "60000000".
         private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
+
+        /**
+         * True if [command] would OPEN a window/sunroof/sunshade (apertures that
+         * are blocked above 80 km/h). Pure predicate — kept in the companion so it
+         * is unit-testable without Android deps.
+         *
+         * "打开N" sets the aperture to N%; N==0 is a CLOSE (safe at speed) and must
+         * not be treated as an open. A bare "打开" with no percentage is treated
+         * conservatively as an open. 全开/半开/通风 are always opens.
+         */
+        internal fun isWindowOpenCommand(command: String): Boolean {
+            val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
+            if (subjects.none { command.contains(it) }) return false
+            if (command.contains("关")) return false
+            val opensViaPosition = POSITION_OPEN.find(command)
+                ?.let { it.groupValues[1].toInt() > 0 }
+                ?: command.contains("打开")        // bare "打开" (no %) — treat as open
+            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
+            return opensViaPosition || opensViaWord
+        }
+
+        private val POSITION_OPEN = Regex("打开(\\d+)")
+
+        /** Clamp a requested media volume level to the device's valid [0, max] range. Pure — unit-testable. */
+        internal fun clampVolume(level: Int, max: Int): Int = level.coerceIn(0, max.coerceAtLeast(0))
     }
 
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
@@ -60,6 +86,7 @@ class ActionDispatcher @Inject constructor(
             "camera_overlay" -> showCameraOverlay()
             "yandex_music" -> launchYandexMusic(action)
             "delay" -> dispatchDelay(action)
+            "media_volume" -> setMediaVolume(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -77,7 +104,19 @@ class ActionDispatcher @Inject constructor(
         return DispatchResult(true)
     }
 
-    // --- param (D+ sendCmd) ---
+    // --- media volume (standard AudioManager, no autoservice) ---
+
+    private fun setMediaVolume(action: ActionDef): DispatchResult {
+        val level = action.payload?.toIntOrNull()
+            ?: return DispatchResult(false, "Уровень громкости не задан")
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+            ?: return DispatchResult(false, "AudioManager недоступен")
+        val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        am.setStreamVolume(AudioManager.STREAM_MUSIC, clampVolume(level, max), 0)
+        return DispatchResult(true)
+    }
+
+    // --- param (native autoservice via VehicleApi) ---
 
     private suspend fun dispatchParam(action: ActionDef, data: DiParsData?): DispatchResult {
         val blockReason = getBlockReason(action.command, data)
@@ -85,8 +124,12 @@ class ActionDispatcher @Inject constructor(
             Log.w(TAG, "Blocked '${action.command}': $blockReason")
             return DispatchResult(false, blockReason)
         }
-        val success = controlClient.sendCommand(action.command)
-        return DispatchResult(success, if (!success) "sendCmd failed" else null)
+        val result = vehicleApi.dispatch(action.command)
+        val success = result.isSuccess
+        val reason = if (!success) {
+            result.exceptionOrNull()?.message ?: "dispatch failed"
+        } else null
+        return DispatchResult(success, reason)
     }
 
     private fun getBlockReason(command: String, data: DiParsData?): String? {
@@ -97,14 +140,6 @@ class ActionDispatcher @Inject constructor(
             if (speed > 80) return "Открытие окон заблокировано на скорости ${speed} км/ч (>80)"
         }
         return null
-    }
-
-    private fun isWindowOpenCommand(command: String): Boolean {
-        val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
-        val openWords = listOf("全开", "半开", "打开", "通风")
-        val isWindow = subjects.any { command.contains(it) }
-        val isOpen = openWords.any { command.contains(it) }
-        return isWindow && isOpen && !command.contains("关")
     }
 
     // --- notifications (user-visible) ---

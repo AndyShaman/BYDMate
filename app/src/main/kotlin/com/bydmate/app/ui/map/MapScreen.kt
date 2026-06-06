@@ -30,6 +30,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,7 +47,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.ui.components.LocalConsumptionThresholds
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.components.formatTime
+import com.bydmate.app.BYDMateApp
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.util.Gcj02Converter
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory
 import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
@@ -242,25 +245,33 @@ private fun OsmdroidMapView(state: MapUiState) {
     val context = LocalContext.current
     val thresholds = LocalConsumptionThresholds.current
 
-    val lastPoint = remember(state.tripRoutes) {
+    val isAmap = state.tileSource == "amap"
+
+    val lastPoint = remember(state.tripRoutes, state.tileSource) {
         state.tripRoutes.lastOrNull()?.points?.lastOrNull()?.let {
-            GeoPoint(it.lat, it.lon)
+            val (lat, lon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(it.lat, it.lon) else it.lat to it.lon
+            GeoPoint(lat, lon)
         }
     }
 
-    val defaultCenter = GeoPoint(22.5431, 114.0579)
+    val defaultCenter = remember(state.tileSource) {
+        val (lat, lon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(22.5431, 114.0579) else 22.5431 to 114.0579
+        GeoPoint(lat, lon)
+    }
     val center = lastPoint ?: defaultCenter
 
-    val mapView = remember {
+    val mapView = remember(state.tileSource) {
         MapView(context).apply {
-            setTileSource(TileSourceFactory.MAPNIK)
+            setTileSource(
+                if (state.tileSource == "amap") BYDMateApp.AmapTileSource else TileSourceFactory.MAPNIK
+            )
             setMultiTouchControls(true)
             controller.setZoom(13.0)
             controller.setCenter(center)
         }
     }
 
-    DisposableEffect(Unit) {
+    DisposableEffect(mapView) {
         mapView.onResume()
         onDispose {
             mapView.onPause()
@@ -268,6 +279,7 @@ private fun OsmdroidMapView(state: MapUiState) {
         }
     }
 
+    key(state.tileSource) {
     AndroidView(
         factory = { mapView },
         modifier = Modifier.fillMaxSize(),
@@ -289,7 +301,11 @@ private fun OsmdroidMapView(state: MapUiState) {
                     infoWindow = null
                 }
 
-                polyline.setPoints(route.points.map { GeoPoint(it.lat, it.lon) })
+                val pts = route.points.map {
+                    val (lat, lon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(it.lat, it.lon) else it.lat to it.lon
+                    GeoPoint(lat, lon)
+                }
+                polyline.setPoints(pts)
                 map.overlays.add(polyline)
             }
 
@@ -297,9 +313,10 @@ private fun OsmdroidMapView(state: MapUiState) {
             for (charge in state.charges) {
                 val lat = charge.lat ?: continue
                 val lon = charge.lon ?: continue
+                val (mLat, mLon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(lat, lon) else lat to lon
 
                 val marker = Marker(map).apply {
-                    position = GeoPoint(lat, lon)
+                    position = GeoPoint(mLat, mLon)
                     setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM)
                     title = buildString {
                         append(charge.type ?: "Зарядка")
@@ -312,12 +329,16 @@ private fun OsmdroidMapView(state: MapUiState) {
             // Zoom to fit all points
             val allGeoPoints = mutableListOf<GeoPoint>()
             state.tripRoutes.forEach { route ->
-                route.points.forEach { allGeoPoints.add(GeoPoint(it.lat, it.lon)) }
+                route.points.forEach {
+                    val (lat, lon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(it.lat, it.lon) else it.lat to it.lon
+                    allGeoPoints.add(GeoPoint(lat, lon))
+                }
             }
             state.charges.forEach { charge ->
                 val lat = charge.lat ?: return@forEach
                 val lon = charge.lon ?: return@forEach
-                allGeoPoints.add(GeoPoint(lat, lon))
+                val (mLat, mLon) = if (isAmap) Gcj02Converter.wgs84ToGcj02(lat, lon) else lat to lon
+                allGeoPoints.add(GeoPoint(mLat, mLon))
             }
             if (allGeoPoints.size >= 2) {
                 try {
@@ -333,4 +354,5 @@ private fun OsmdroidMapView(state: MapUiState) {
             map.invalidate()
         }
     )
+    } // key(tileSource)
 }

@@ -1,0 +1,78 @@
+# Mapping: yaml param token → DiParsData Kotlin property name.
+# Generated from DiParsClient.kt DiParsData declaration (v2.8.0, 45 fields).
+# Used by FidMap generation tooling and coverage tests.
+#
+# Params with no DiParsData equivalent are omitted;
+# those reads are Phase 2 (comfort/automation extensions).
+
+# ── Core energy + drive ───────────────────────────────────────────────────
+SOC:           soc
+Speed:         speed
+Mileage:       mileage
+Power:         power
+TotalElecCon:  totalElecConsumption
+Voltage12V:    voltage12v
+
+# ── Battery ───────────────────────────────────────────────────────────────
+MaxCellV:      maxCellVoltage
+MinCellV:      minCellVoltage
+MaxBatTemp:    maxBatTemp
+MinBatTemp:    minBatTemp
+AvgBatTemp:    avgBatTemp
+BatCapacity:   batteryCapacityKwh
+
+# ── Gear + state ──────────────────────────────────────────────────────────
+Gear:          gear
+ChargeGun:     chargeGunState
+ChargingStatus: chargingStatus
+PowerState:    powerState
+DriveMode:     driveMode
+WorkMode:      workMode
+
+# ── Climate ───────────────────────────────────────────────────────────────
+ACStatus:      acStatus
+ACTemp:        acTemp
+FanLevel:      fanLevel
+ACCirc:        acCirc
+InsideTemp:    insideTemp
+ExtTemp:       exteriorTemp
+
+# ── Doors / windows / body ────────────────────────────────────────────────
+Hood:          hood
+Sunroof:       sunroof
+Trunk:         trunk
+DoorFL:        doorFL
+DoorFR:        doorFR
+DoorRL:        doorRL
+DoorRR:        doorRR
+WindowFL:      windowFL
+WindowFR:      windowFR
+WindowRL:      windowRL
+WindowRR:      windowRR
+
+# ── Locks + belts ─────────────────────────────────────────────────────────
+LockFL:        lockFL
+SeatbeltFL:    seatbeltFL
+
+# ── Tires ─────────────────────────────────────────────────────────────────
+TirePressFL:   tirePressFL
+TirePressFR:   tirePressFR
+TirePressRL:   tirePressRL
+TirePressRR:   tirePressRR
+
+# ── Misc ──────────────────────────────────────────────────────────────────
+AutoPark:      autoPark
+Rain:          rain
+LightLow:      lightLow
+DRL:           drl
+
+# ── No DiParsData equivalent (Phase 2 reads) ─────────────────────────────
+# ACDefrostFront  → no field in DiParsData
+# ACWindMode      → no field in DiParsData
+# ACCtrlMode      → no field in DiParsData
+# SeatHeatD       → no field in DiParsData
+# SeatVentD       → no field in DiParsData
+# SeatHeatP       → no field in DiParsData
+# SeatVentP       → no field in DiParsData
+# LightSide       → no field in DiParsData
+# LightHigh       → no field in DiParsData

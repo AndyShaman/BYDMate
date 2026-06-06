@@ -77,7 +77,8 @@ data class TripsUiState(
     val totalCost: Double = 0.0,
     val periodLabel: String = "",
     val expandedTripId: Long? = null,
-    val expandedTripPoints: List<TripPointEntity> = emptyList()
+    val expandedTripPoints: List<TripPointEntity> = emptyList(),
+    val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
 )
 
 @HiltViewModel
@@ -94,7 +95,8 @@ class TripsViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
-            _uiState.update { it.copy(currencySymbol = symbol) }
+            val tileSource = settingsRepository.getMapTileSource()
+            _uiState.update { it.copy(currencySymbol = symbol, mapTileSource = tileSource) }
         }
         loadTrips()
     }

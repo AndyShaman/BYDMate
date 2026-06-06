@@ -23,3 +23,6 @@
 # Keep data classes for Room
 -keepclassmembers class com.bydmate.app.data.local.entity.** { *; }
 -keepclassmembers class com.bydmate.app.data.local.dao.** { *; }
+
+# Guard the reflective app_process entry point for the binder daemon
+-keep public class com.bydmate.app.helper.HelperDaemon { public static void main(java.lang.String[]); }

@@ -1,5 +1,8 @@
 package com.bydmate.app.ui.automation
 
+import android.app.TimePickerDialog
+import android.content.Context
+import android.media.AudioManager
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -32,6 +35,8 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.KeyboardArrowDown
+import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Navigation
@@ -40,6 +45,7 @@ import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
+import androidx.compose.material.icons.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -58,6 +64,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -87,6 +94,8 @@ import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.data.automation.ScheduleSpec
+import com.bydmate.app.data.automation.minuteToHHmm
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
@@ -175,6 +184,7 @@ fun AutomationScreen(
             editorError = state.editorError,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
+            onTestAction = { viewModel.executeNow(it) },
             onDismiss = { viewModel.closeEditor() }
         )
     }
@@ -292,12 +302,17 @@ private fun RuleCard(
                                 append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
-                        withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-                        append(" ")
-                        withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-                        append(" ")
-                        withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                            append(t.value)
+                        if (t.kind == "time_range") {
+                            // value is JSON (parsed by the engine); show the readable displayName instead.
+                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
+                        } else {
+                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
+                            append(" ")
+                            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
+                            append(" ")
+                            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                                append(t.value)
+                            }
                         }
                     }
                     withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
@@ -330,6 +345,7 @@ private fun EditorDialog(
     editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
+    onTestAction: (String) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -339,6 +355,7 @@ private fun EditorDialog(
             dismissOnClickOutside = false
         )
     ) {
+        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.65f)
@@ -413,6 +430,12 @@ private fun EditorDialog(
                                     copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
                                 }
                             },
+                            onMoveUp = if (idx > 0) {
+                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
+                            } else null,
+                            onMoveDown = if (idx < editing.triggers.lastIndex) {
+                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
+                            } else null,
                             onDelete = {
                                 onUpdate {
                                     copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
@@ -428,20 +451,23 @@ private fun EditorDialog(
                             onAddParam = {
                                 val p = TRIGGER_PARAMS.first()
                                 onUpdate {
-                                    copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.displayName))
+                                    copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.localizedName(context)))
                                 }
                             },
                             onAddPlace = { place ->
-                                onUpdate { copy(triggers = triggers + newPlaceTrigger(place)) }
+                                onUpdate { copy(triggers = triggers + newPlaceTrigger(place, context)) }
                             },
                             onAddTimeOfDay = {
-                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger()) }
+                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
+                            },
+                            onAddSchedule = {
+                                onUpdate { copy(triggers = triggers + newScheduleTrigger()) }
                             },
                             onAddServiceStart = {
-                                onUpdate { copy(triggers = triggers + newServiceStartTrigger()) }
+                                onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
                             },
                             onAddNetworkAvailable = {
-                                onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger()) }
+                                onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
                             }
                         )
                     }
@@ -475,6 +501,13 @@ private fun EditorDialog(
                                     copy(actions = actions.toMutableList().apply { set(idx, newAction) })
                                 }
                             },
+                            onTest = onTestAction,
+                            onMoveUp = if (idx > 0) {
+                                { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
+                            } else null,
+                            onMoveDown = if (idx < editing.actions.lastIndex) {
+                                { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
+                            } else null,
                             onDelete = {
                                 onUpdate {
                                     copy(actions = actions.toMutableList().apply { removeAt(idx) })
@@ -488,31 +521,34 @@ private fun EditorDialog(
                         AddActionButton(
                             onAddParam = {
                                 val a = ACTION_COMMANDS.first()
-                                onUpdate { copy(actions = actions + ActionDef(a.command, a.displayName)) }
+                                onUpdate { copy(actions = actions + ActionDef(a.command, a.localizedName(context))) }
                             },
                             onAddNotification = { silent ->
-                                onUpdate { copy(actions = actions + newNotificationAction(silent)) }
+                                onUpdate { copy(actions = actions + newNotificationAction(silent, context)) }
                             },
                             onAddAppLaunch = {
-                                onUpdate { copy(actions = actions + newAppLaunchAction()) }
+                                onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
                             },
                             onAddCall = {
-                                onUpdate { copy(actions = actions + newCallAction()) }
+                                onUpdate { copy(actions = actions + newCallAction(context)) }
                             },
                             onAddNavigate = {
-                                onUpdate { copy(actions = actions + newNavigateAction()) }
+                                onUpdate { copy(actions = actions + newNavigateAction(context)) }
                             },
                             onAddUrl = {
-                                onUpdate { copy(actions = actions + newUrlAction()) }
+                                onUpdate { copy(actions = actions + newUrlAction(context)) }
                             },
                             onAddCameraOverlay = {
                                 onUpdate { copy(actions = actions + newCameraOverlayAction()) }
                             },
                             onAddYandexMusic = {
-                                onUpdate { copy(actions = actions + newYandexMusicAction()) }
+                                onUpdate { copy(actions = actions + newYandexMusicAction(context)) }
                             },
                             onAddDelay = {
-                                onUpdate { copy(actions = actions + newDelayAction()) }
+                                onUpdate { copy(actions = actions + newDelayAction(context)) }
+                            },
+                            onAddMediaVolume = {
+                                onUpdate { copy(actions = actions + newMediaVolumeAction(context)) }
                             }
                         )
                     }
@@ -610,12 +646,27 @@ private fun EditorDialog(
 
 // --- Trigger Row ---
 
+/** Up/down reorder arrows shared by trigger and action rows. A null callback = boundary, shown dimmed and disabled. */
+@Composable
+private fun ReorderArrows(onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?) {
+    IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null, modifier = Modifier.size(24.dp)) {
+        Icon(Icons.Outlined.KeyboardArrowUp, "выше",
+            tint = TextSecondary.copy(alpha = if (onMoveUp != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+    }
+    IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null, modifier = Modifier.size(24.dp)) {
+        Icon(Icons.Outlined.KeyboardArrowDown, "ниже",
+            tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
+    }
+}
+
 @Composable
 private fun TriggerRow(
     index: Int,
     trigger: TriggerDef,
     places: List<PlaceEntity>,
     onUpdate: (TriggerDef) -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
     onDelete: () -> Unit
 ) {
     Row(
@@ -632,6 +683,7 @@ private fun TriggerRow(
         when (trigger.kind) {
             "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
             "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
+            "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
             else -> ParamTriggerControls(trigger, onUpdate)
@@ -639,6 +691,7 @@ private fun TriggerRow(
 
         Spacer(Modifier.weight(1f))
 
+        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
         }
@@ -650,16 +703,17 @@ private fun ParamTriggerControls(
     trigger: TriggerDef,
     onUpdate: (TriggerDef) -> Unit
 ) {
+    val context = LocalContext.current
     // Param dropdown
     CatalogDropdown(
-        selected = TRIGGER_PARAMS.find { it.param == trigger.param }?.displayName ?: trigger.param,
-        items = TRIGGER_PARAMS.map { it.displayName },
-        categories = TRIGGER_PARAMS.map { it.category },
+        selected = TRIGGER_PARAMS.find { it.param == trigger.param }?.localizedName(context) ?: trigger.param,
+        items = TRIGGER_PARAMS.map { it.localizedName(context) },
+        categories = TRIGGER_PARAMS.map { it.localizedCategory(context) },
         modifier = Modifier.width(150.dp),
         onSelect = { idx ->
             val p = TRIGGER_PARAMS[idx]
             onUpdate(trigger.copy(param = p.param, chineseName = p.chineseName,
-                displayName = "${p.displayName} ${trigger.operator} ${trigger.value}"))
+                displayName = "${p.localizedName(context)} ${trigger.operator} ${trigger.value}"))
         }
     )
     Spacer(Modifier.width(4.dp))
@@ -875,6 +929,153 @@ private fun TimeOfDayTriggerControls(
 }
 
 @Composable
+private fun ScheduleTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit
+) {
+    val context = LocalContext.current
+    val spec = remember(trigger.value) {
+        ScheduleSpec.fromJson(trigger.value) ?: ScheduleSpec(8 * 60, 10 * 60, emptySet())
+    }
+    val isExact = spec.isExact
+
+    fun push(newSpec: ScheduleSpec) {
+        onUpdate(trigger.copy(value = newSpec.toJson(), displayName = scheduleDisplayName(context, newSpec)))
+    }
+
+    fun pickTime(currentMinute: Int, onPicked: (Int) -> Unit) {
+        TimePickerDialog(
+            context,
+            { _, h, m -> onPicked(h * 60 + m) },
+            currentMinute / 60, currentMinute % 60, true
+        ).show()
+    }
+
+    val dayLabels = listOf(
+        1 to stringResource(R.string.automation_day_mon),
+        2 to stringResource(R.string.automation_day_tue),
+        3 to stringResource(R.string.automation_day_wed),
+        4 to stringResource(R.string.automation_day_thu),
+        5 to stringResource(R.string.automation_day_fri),
+        6 to stringResource(R.string.automation_day_sat),
+        7 to stringResource(R.string.automation_day_sun),
+    )
+
+    Column {
+        // Mode toggle: exact vs range
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            FilterChip(
+                selected = isExact,
+                onClick = { if (!isExact) push(spec.copy(toMinute = spec.fromMinute)) },
+                label = { Text(stringResource(R.string.automation_schedule_mode_exact), fontSize = 12.sp) },
+            )
+            Spacer(Modifier.width(6.dp))
+            FilterChip(
+                selected = !isExact,
+                onClick = {
+                    // Open a 2h window so "from" and "to" differ when switching to range.
+                    if (isExact) push(spec.copy(toMinute = (spec.fromMinute + 120) % 1440))
+                },
+                label = { Text(stringResource(R.string.automation_schedule_mode_range), fontSize = 12.sp) },
+            )
+        }
+        Spacer(Modifier.height(6.dp))
+        // Time picker(s)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (isExact) {
+                Text(stringResource(R.string.automation_schedule_time_label) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.fromMinute)) {
+                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it, toMinute = it)) }
+                }
+            } else {
+                Text(stringResource(R.string.automation_schedule_from) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.fromMinute)) {
+                    pickTime(spec.fromMinute) { push(spec.copy(fromMinute = it)) }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.automation_schedule_to) + " ", fontSize = 12.sp, color = TextMuted)
+                TimeChip(minuteToHHmm(spec.toMinute)) {
+                    pickTime(spec.toMinute) { push(spec.copy(toMinute = it)) }
+                }
+            }
+        }
+        Spacer(Modifier.height(6.dp))
+        // Days of week (none selected = every day)
+        Text(stringResource(R.string.automation_schedule_days_label), fontSize = 11.sp, color = TextMuted)
+        Spacer(Modifier.height(2.dp))
+        Row {
+            dayLabels.forEach { (d, label) ->
+                DayChip(
+                    label = label,
+                    selected = d in spec.days,
+                    onClick = {
+                        val newDays = if (d in spec.days) spec.days - d else spec.days + d
+                        push(spec.copy(days = newDays))
+                    },
+                )
+                Spacer(Modifier.width(3.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TimeChip(text: String, onClick: () -> Unit) {
+    Text(
+        text,
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace,
+        modifier = Modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(8.dp, 6.dp)
+    )
+}
+
+@Composable
+private fun DayChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        fontSize = 12.sp,
+        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+        color = if (selected) AccentGreen else TextMuted,
+        modifier = Modifier
+            .background(if (selected) AccentGreen.copy(alpha = 0.15f) else CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, if (selected) AccentGreen else CardBorder, RoundedCornerShape(6.dp))
+            .clickable { onClick() }
+            .padding(horizontal = 6.dp, vertical = 5.dp)
+    )
+}
+
+/** Readable schedule label; first token is the time so the rule summary stays compact. */
+private fun scheduleDisplayName(context: android.content.Context, spec: ScheduleSpec): String {
+    val time = if (spec.isExact) {
+        minuteToHHmm(spec.fromMinute)
+    } else {
+        "${minuteToHHmm(spec.fromMinute)}-${minuteToHHmm(spec.toMinute)}"
+    }
+    val days = scheduleDaysShort(context, spec.days)
+    return if (days.isEmpty()) time else "$time $days"
+}
+
+private fun scheduleDaysShort(context: android.content.Context, days: Set<Int>): String {
+    if (days.isEmpty() || days.size == 7) return ""
+    val labels = mapOf(
+        1 to R.string.automation_day_mon,
+        2 to R.string.automation_day_tue,
+        3 to R.string.automation_day_wed,
+        4 to R.string.automation_day_thu,
+        5 to R.string.automation_day_fri,
+        6 to R.string.automation_day_sat,
+        7 to R.string.automation_day_sun,
+    )
+    return days.sorted().joinToString(",") { context.getString(labels.getValue(it)) }
+}
+
+@Composable
 private fun ServiceStartTriggerControls() {
     Icon(
         Icons.Outlined.PlayArrow,
@@ -916,6 +1117,9 @@ private fun ActionRow(
     action: ActionDef,
     places: List<PlaceEntity>,
     onUpdate: (ActionDef) -> Unit,
+    onTest: (String) -> Unit,
+    onMoveUp: (() -> Unit)?,
+    onMoveDown: (() -> Unit)?,
     onDelete: () -> Unit
 ) {
     Row(
@@ -946,11 +1150,22 @@ private fun ActionRow(
                 YandexMusicActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "delay" ->
                 DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "media_volume" ->
+                MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
 
+        // "Выполнить сейчас" — fire this vehicle command immediately for live testing.
+        // Only for param (vehicle) actions; result is shown via Toast + logcat status line.
+        if (action.kind == "param" && action.command.isNotBlank()) {
+            Spacer(Modifier.width(4.dp))
+            IconButton(onClick = { onTest(action.command) }, modifier = Modifier.size(24.dp)) {
+                Icon(Icons.Outlined.PlayArrow, "выполнить сейчас", tint = AccentGreen, modifier = Modifier.size(16.dp))
+            }
+        }
         Spacer(Modifier.width(4.dp))
+        ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
             Icon(Icons.Outlined.Close, "delete", tint = Color(0xFFEF4444).copy(alpha = 0.5f), modifier = Modifier.size(14.dp))
         }
@@ -990,14 +1205,15 @@ private fun ParamActionControls(
     onUpdate: (ActionDef) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     CatalogDropdown(
-        selected = action.displayName,
-        items = ACTION_COMMANDS.map { it.displayName },
-        categories = ACTION_COMMANDS.map { it.category },
+        selected = ACTION_COMMANDS.find { it.command == action.command }?.localizedName(context) ?: action.displayName,
+        items = ACTION_COMMANDS.map { it.localizedName(context) },
+        categories = ACTION_COMMANDS.map { it.localizedCategory(context) },
         modifier = modifier,
         onSelect = { idx ->
             val a = ACTION_COMMANDS[idx]
-            onUpdate(ActionDef(a.command, a.displayName))
+            onUpdate(ActionDef(a.command, a.localizedName(context)))
         }
     )
 }
@@ -1076,6 +1292,56 @@ private fun DelayActionControls(
     }
 }
 
+@Composable
+private fun MediaVolumeActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    // Max volume is device-dependent; read it once from the head unit's AudioManager.
+    val maxVolume = remember {
+        val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        (am?.getStreamMaxVolume(AudioManager.STREAM_MUSIC) ?: 15).coerceAtLeast(1)
+    }
+    val current = (action.payload?.toIntOrNull() ?: 2).coerceIn(0, maxVolume)
+    val label = stringResource(R.string.automation_action_media_volume_label)
+    val namePrefix = stringResource(R.string.automation_action_media_volume)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            Icons.Outlined.VolumeUp,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(label, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(8.dp))
+        Slider(
+            value = current.toFloat(),
+            onValueChange = { v ->
+                val lvl = v.toInt().coerceIn(0, maxVolume)
+                onUpdate(action.copy(payload = lvl.toString(), displayName = "$namePrefix: $lvl"))
+            },
+            valueRange = 0f..maxVolume.toFloat(),
+            steps = (maxVolume - 1).coerceAtLeast(0),
+            modifier = Modifier.weight(1f)
+        )
+        Spacer(Modifier.width(8.dp))
+        Text(
+            "$current/$maxVolume",
+            fontSize = 13.sp,
+            color = AccentTeal,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier.width(40.dp)
+        )
+    }
+}
+
 // --- Catalog Dropdown (with category headers) ---
 
 @Composable
@@ -1132,6 +1398,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
+        val context = LocalContext.current
         Column(
             modifier = Modifier
                 .fillMaxWidth(0.4f)
@@ -1169,6 +1436,7 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
 
 @Composable
 private fun LogItem(log: RuleLogEntity) {
+    val context = LocalContext.current
     val borderColor = if (log.success) AccentGreen else Color(0xFFEF4444)
     val bgColor = if (log.success) AccentGreen.copy(alpha = 0.05f) else Color(0xFFEF4444).copy(alpha = 0.05f)
 
@@ -1196,7 +1464,7 @@ private fun LogItem(log: RuleLogEntity) {
         try {
             val obj = JSONObject(log.triggersSnapshot)
             obj.keys().asSequence().joinToString(" · ") { key ->
-                val paramName = TRIGGER_PARAMS.find { it.param == key }?.displayName ?: key
+                val paramName = TRIGGER_PARAMS.find { it.param == key }?.localizedName(context) ?: key
                 "$paramName: ${obj.get(key)}"
             }
         } catch (_: Exception) { "" }
@@ -1309,7 +1577,8 @@ private fun AddActionButton(
     onAddUrl: () -> Unit,
     onAddCameraOverlay: () -> Unit,
     onAddYandexMusic: () -> Unit,
-    onAddDelay: () -> Unit
+    onAddDelay: () -> Unit,
+    onAddMediaVolume: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1378,6 +1647,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddDelay() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddMediaVolume() }
             )
         }
     }
@@ -2161,6 +2434,7 @@ private fun AddTriggerButton(
     onAddParam: () -> Unit,
     onAddPlace: (PlaceEntity) -> Unit,
     onAddTimeOfDay: () -> Unit,
+    onAddSchedule: () -> Unit,
     onAddServiceStart: () -> Unit,
     onAddNetworkAvailable: () -> Unit
 ) {
@@ -2209,6 +2483,13 @@ private fun AddTriggerButton(
                 }
             )
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddSchedule()
+                }
+            )
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
@@ -2226,56 +2507,77 @@ private fun AddTriggerButton(
     }
 }
 
-private fun newPlaceTrigger(place: PlaceEntity): TriggerDef {
+private fun newPlaceTrigger(place: PlaceEntity, context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "Place",
         chineseName = "位置",
         operator = "==",
         value = "enter",
-        displayName = "Въезд в «${place.name}»",
+        displayName = localized("进入「${place.name}」", "Enter «${place.name}»", "Въезд в «${place.name}»", context),
         kind = "place_enter",
         placeId = place.id,
         placeName = place.name
     )
 }
 
-private fun newServiceStartTrigger(): TriggerDef {
+private fun newServiceStartTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "ServiceStart",
         chineseName = "服务启动",
         operator = "==",
         value = "true",
-        displayName = "Запуск BYDMate",
+        displayName = localized("BYDMate 启动", "BYDMate startup", "Запуск BYDMate", context),
         kind = "service_start"
     )
 }
 
-private fun newNetworkAvailableTrigger(): TriggerDef {
+private fun newNetworkAvailableTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "NetworkAvailable",
         chineseName = "网络可用",
         operator = "==",
         value = "true",
-        displayName = "Доступен интернет",
+        displayName = localized("网络可用", "Internet available", "Доступен интернет", context),
         kind = "network_available"
     )
 }
 
-private fun newDelayAction(): ActionDef = ActionDef(
+private fun newDelayAction(context: android.content.Context): ActionDef = ActionDef(
     command = "delay_1000",
-    displayName = "Пауза 1 сек",
+    displayName = localized("延迟 1 秒", "Delay 1 sec", "Пауза 1 сек", context),
     kind = "delay",
     payload = "1000"
 )
 
-private fun newTimeOfDayTrigger(): TriggerDef {
+private fun newMediaVolumeAction(context: android.content.Context): ActionDef = ActionDef(
+    command = "media_volume",
+    displayName = localized("媒体音量: 2", "Media volume: 2", "Громкость медиа: 2", context),
+    kind = "media_volume",
+    payload = "2"
+)
+
+private fun newTimeOfDayTrigger(context: android.content.Context): TriggerDef {
     return TriggerDef(
         param = "TimeOfDay",
         chineseName = "时间段",
         operator = "==",
         value = "NIGHT",
-        displayName = "Ночь",
+        displayName = localized("夜晚", "Night", "Ночь", context),
         kind = "time_of_day"
+    )
+}
+
+private fun newScheduleTrigger(): TriggerDef {
+    // Default: 08:00-10:00 window, every day. displayName carries only the time
+    // (no days), so no context is needed here.
+    val spec = ScheduleSpec(fromMinute = 8 * 60, toMinute = 10 * 60, days = emptySet())
+    return TriggerDef(
+        param = "Schedule",
+        chineseName = "时间表",
+        operator = "==",
+        value = spec.toJson(),
+        displayName = "${minuteToHHmm(spec.fromMinute)}-${minuteToHHmm(spec.toMinute)}",
+        kind = "time_range"
     )
 }
 

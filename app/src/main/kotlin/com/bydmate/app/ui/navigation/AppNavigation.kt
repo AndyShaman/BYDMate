@@ -42,6 +42,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -99,6 +102,7 @@ fun AppNavigation(
     val autoCheckScope = rememberCoroutineScope()
     var autoUpdateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
     var autoUpdateState by remember { mutableStateOf<UpdateState?>(null) }
+    var autoUpdateDownloadJob by remember { mutableStateOf<Job?>(null) }
     LaunchedEffect(Unit) {
         if (!UpdateChecker.isAutoCheckEnabled(autoCheckContext)) return@LaunchedEffect
         try {
@@ -121,17 +125,25 @@ fun AppNavigation(
             onCheck = {
                 val info = autoUpdateInfo ?: return@UpdateDialog
                 autoUpdateState = UpdateState.Downloading(info.version, autoCheckContext.getString(R.string.update_downloading_start))
-                autoCheckScope.launch {
+                autoUpdateDownloadJob = autoCheckScope.launch {
                     try {
                         updateChecker.downloadAndInstall(autoCheckContext, info) { progress ->
-                            autoUpdateState = UpdateState.Downloading(info.version, progress)
+                            // Игнорируем поздний прогресс после отмены (нажат Закрыть),
+                            // иначе закрытый диалог «воскресает» в Downloading.
+                            if (isActive) {
+                                autoUpdateState = UpdateState.Downloading(info.version, progress)
+                            }
                         }
+                    } catch (e: CancellationException) {
+                        throw e // кооперативная отмена из onDismiss, не ошибка
                     } catch (e: Exception) {
                         autoUpdateState = UpdateState.Error(e.message ?: "Download failed")
                     }
                 }
             },
             onDismiss = {
+                autoUpdateDownloadJob?.cancel()
+                autoUpdateDownloadJob = null
                 autoUpdateState = null
                 autoUpdateInfo = null
             }
@@ -220,7 +232,11 @@ fun AppNavigation(
                 ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
             }
             composable(Screen.Automation.route) { AutomationScreen() }
-            composable(Screen.Settings.route) { SettingsScreen(onNavigateToPlaces = { navController.navigate("places") }) }
+            composable(Screen.Settings.route) {
+                SettingsScreen(
+                    onNavigateToPlaces = { navController.navigate("places") },
+                )
+            }
             composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
         }
     }

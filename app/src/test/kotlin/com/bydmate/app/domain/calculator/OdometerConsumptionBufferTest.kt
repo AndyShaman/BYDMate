@@ -281,6 +281,33 @@ class OdometerConsumptionBufferTest {
         )
     }
 
+    @Test fun `short avg survives a regen tail thanks to 3 km window`() = runBlocking {
+        // Repro for the 2026-06 grey-number report: on descents / stop-and-go the
+        // trailing 2 km holds regen pairs (dKwh < 0, skipped during averaging),
+        // starving the short window below MIN_SHORT_BUFFER_KM. shortAvg went null
+        // and the widget number greyed out mid-trip even though it kept changing.
+        // A 3 km short window reaches back past the regen tail to >= 1.5 km of
+        // valid pair data, so the trend (and now the decoupled number colour)
+        // stay alive.
+        val dao = FakeOdometerSampleDao()
+        val b = newBuffer(fallback = 18.0, dao = dao)
+        val s = 1L
+        // 2 km of valid driving at 20 kWh/100km.
+        b.onSample(10002.0, 1500.00, 80, s)
+        b.onSample(10002.5, 1500.10, 80, s)
+        b.onSample(10003.0, 1500.20, 80, s)
+        b.onSample(10003.5, 1500.30, 80, s)
+        b.onSample(10004.0, 1500.40, 80, s)
+        // 1 km of regen tail — both pairs have dKwh < 0 and are skipped.
+        b.onSample(10004.5, 1500.30, 80, s)
+        b.onSample(10005.0, 1500.20, 80, s)
+        // Trailing 2 km = only ~1 km of valid pairs (< 1.5 km) → null at a 2 km
+        // window; the 3 km window recovers the 2 km of valid data behind the tail.
+        val short = b.shortAvgConsumption()
+        assertTrue("shortAvg must survive the regen tail with a 3 km window", short != null)
+        assertEquals(20.0, short!!, 0.1)
+    }
+
     @Test fun `null totalElec pair is skipped`() = runBlocking {
         val dao = FakeOdometerSampleDao()
         val b = newBuffer(fallback = 18.0, dao = dao)

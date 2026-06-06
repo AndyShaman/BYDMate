@@ -6,6 +6,7 @@ import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,19 +33,25 @@ data class MapUiState(
     val totalKm: Double = 0.0,
     val totalKwh: Double = 0.0,
     val avgConsumption: Double = 0.0,
-    val trips: List<TripEntity> = emptyList()
+    val trips: List<TripEntity> = emptyList(),
+    val tileSource: String = "osm"
 )
 
 @HiltViewModel
 class MapViewModel @Inject constructor(
     private val tripRepository: TripRepository,
-    private val chargeRepository: ChargeRepository
+    private val chargeRepository: ChargeRepository,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(MapUiState())
     val uiState: StateFlow<MapUiState> = _uiState.asStateFlow()
 
     init {
+        viewModelScope.launch {
+            val source = settingsRepository.getMapTileSource()
+            _uiState.update { it.copy(tileSource = source) }
+        }
         loadData()
     }
 
