@@ -3,9 +3,11 @@ package com.bydmate.app.ui.overlay
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
+import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -14,6 +16,7 @@ import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
 import android.view.View
+import android.view.ViewOutlineProvider
 import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
@@ -31,6 +34,9 @@ object CameraOverlayManager {
     private const val BASE_SCREEN_FRACTION = 2f / 3f
     private const val CAMERA_SIZE_MULTIPLIER = 1.4f
     private const val AUTO_DIAL_DELAY_MS = 300L
+    private const val CLOSE_AFTER_CALL_MS = 3_000L
+    private const val CALL_MONITOR_INTERVAL_MS = 800L
+    private const val CALL_MONITOR_TIMEOUT_MS = 2L * 60_000L
     private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
     private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
     private const val BT_CALL_KEYCODE_DIAL = 313
@@ -41,8 +47,10 @@ object CameraOverlayManager {
     private val accentGreen = Color.rgb(74, 222, 128)
     private val accentTeal = Color.rgb(45, 212, 191)
     private val textPrimary = Color.rgb(226, 232, 240)
+    private val mainHandler = Handler(Looper.getMainLooper())
     private var currentView: View? = null
     private var currentWebView: WebView? = null
+    private var callMonitorRunnable: Runnable? = null
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
@@ -85,10 +93,17 @@ object CameraOverlayManager {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 setColor(cardSurface)
-                cornerRadius = dp(context, 12).toFloat()
+                cornerRadius = dp(context, 18).toFloat()
                 setStroke(dp(context, 1), accentTeal)
             }
-            elevation = dp(context, 12).toFloat()
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                elevation = dp(context, 28).toFloat()
+                translationZ = dp(context, 12).toFloat()
+                outlineProvider = roundedOutlineProvider(context, 18)
+            }
+            alpha = 0f
+            scaleX = 0.96f
+            scaleY = 0.96f
         }
 
         val header = LinearLayout(context).apply {
@@ -155,6 +170,10 @@ object CameraOverlayManager {
         val webFrame = FrameLayout(context).apply {
             setPadding(dp(context, 8), 0, dp(context, 8), dp(context, 8))
             setBackgroundColor(cardSurface)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                outlineProvider = roundedOutlineProvider(context, 12)
+                clipToOutline = true
+            }
             addView(webView, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -189,9 +208,18 @@ object CameraOverlayManager {
 
         wm.addView(root, params)
         currentView = root
+        root.animate()
+            .alpha(1f)
+            .scaleX(1f)
+            .scaleY(1f)
+            .setDuration(220L)
+            .setInterpolator(android.view.animation.DecelerateInterpolator())
+            .start()
     }
 
     private fun dismiss(context: Context) {
+        callMonitorRunnable?.let { mainHandler.removeCallbacks(it) }
+        callMonitorRunnable = null
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         currentView?.let { view ->
             try {
@@ -226,7 +254,7 @@ object CameraOverlayManager {
         }
         try {
             context.startActivity(intent)
-            Handler(Looper.getMainLooper()).postDelayed({
+            mainHandler.postDelayed({
                 val press = Intent(BT_CALL_ACTION_DIAL_HANGUP).apply {
                     setPackage(BT_CALL_PACKAGE)
                     putExtra("keycode", BT_CALL_KEYCODE_DIAL)
@@ -237,9 +265,37 @@ object CameraOverlayManager {
                     Log.w(TAG, "gate auto-dial broadcast failed: ${e.message}")
                 }
             }, AUTO_DIAL_DELAY_MS)
+            startCloseAfterCallMonitor(context.applicationContext)
         } catch (e: Exception) {
             Log.w(TAG, "gate dial failed: ${e.message}")
         }
+    }
+
+    private fun startCloseAfterCallMonitor(context: Context) {
+        callMonitorRunnable?.let { mainHandler.removeCallbacks(it) }
+        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        val startedAt = System.currentTimeMillis()
+        var sawCall = false
+        lateinit var monitor: Runnable
+        monitor = Runnable {
+            val mode = audio.mode
+            val inCall = mode == AudioManager.MODE_IN_CALL ||
+                mode == AudioManager.MODE_IN_COMMUNICATION
+            if (inCall) {
+                sawCall = true
+            } else if (sawCall) {
+                mainHandler.postDelayed({ dismiss(context) }, CLOSE_AFTER_CALL_MS)
+                callMonitorRunnable = null
+                return@Runnable
+            }
+            if (System.currentTimeMillis() - startedAt < CALL_MONITOR_TIMEOUT_MS) {
+                mainHandler.postDelayed(monitor, CALL_MONITOR_INTERVAL_MS)
+            } else {
+                callMonitorRunnable = null
+            }
+        }
+        callMonitorRunnable = monitor
+        mainHandler.postDelayed(monitor, CALL_MONITOR_INTERVAL_MS)
     }
 
     private fun actionButton(context: Context, label: String, destructive: Boolean = false): TextView =
@@ -262,6 +318,13 @@ object CameraOverlayManager {
                 }
             }
             setPadding(dp(context, 10), 0, dp(context, 10), 0)
+        }
+
+    private fun roundedOutlineProvider(context: Context, radiusDp: Int): ViewOutlineProvider =
+        object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height, dp(context, radiusDp).toFloat())
+            }
         }
 
     private fun dp(context: Context, value: Int): Int =
