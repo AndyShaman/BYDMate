@@ -7,7 +7,6 @@ import android.graphics.Outline
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.media.AudioManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -34,9 +33,6 @@ object CameraOverlayManager {
     private const val BASE_SCREEN_FRACTION = 2f / 3f
     private const val CAMERA_SIZE_MULTIPLIER = 1.4f
     private const val AUTO_DIAL_DELAY_MS = 300L
-    private const val CLOSE_AFTER_CALL_MS = 3_000L
-    private const val CALL_MONITOR_INTERVAL_MS = 800L
-    private const val CALL_MONITOR_TIMEOUT_MS = 2L * 60_000L
     private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
     private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
     private const val BT_CALL_KEYCODE_DIAL = 313
@@ -50,7 +46,6 @@ object CameraOverlayManager {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var currentView: View? = null
     private var currentWebView: WebView? = null
-    private var callMonitorRunnable: Runnable? = null
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
@@ -218,8 +213,6 @@ object CameraOverlayManager {
     }
 
     private fun dismiss(context: Context) {
-        callMonitorRunnable?.let { mainHandler.removeCallbacks(it) }
-        callMonitorRunnable = null
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         currentView?.let { view ->
             try {
@@ -253,6 +246,7 @@ object CameraOverlayManager {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         try {
+            dismiss(context)
             context.startActivity(intent)
             mainHandler.postDelayed({
                 val press = Intent(BT_CALL_ACTION_DIAL_HANGUP).apply {
@@ -265,37 +259,9 @@ object CameraOverlayManager {
                     Log.w(TAG, "gate auto-dial broadcast failed: ${e.message}")
                 }
             }, AUTO_DIAL_DELAY_MS)
-            startCloseAfterCallMonitor(context.applicationContext)
         } catch (e: Exception) {
             Log.w(TAG, "gate dial failed: ${e.message}")
         }
-    }
-
-    private fun startCloseAfterCallMonitor(context: Context) {
-        callMonitorRunnable?.let { mainHandler.removeCallbacks(it) }
-        val audio = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-        val startedAt = System.currentTimeMillis()
-        var sawCall = false
-        lateinit var monitor: Runnable
-        monitor = Runnable {
-            val mode = audio.mode
-            val inCall = mode == AudioManager.MODE_IN_CALL ||
-                mode == AudioManager.MODE_IN_COMMUNICATION
-            if (inCall) {
-                sawCall = true
-            } else if (sawCall) {
-                mainHandler.postDelayed({ dismiss(context) }, CLOSE_AFTER_CALL_MS)
-                callMonitorRunnable = null
-                return@Runnable
-            }
-            if (System.currentTimeMillis() - startedAt < CALL_MONITOR_TIMEOUT_MS) {
-                mainHandler.postDelayed(monitor, CALL_MONITOR_INTERVAL_MS)
-            } else {
-                callMonitorRunnable = null
-            }
-        }
-        callMonitorRunnable = monitor
-        mainHandler.postDelayed(monitor, CALL_MONITOR_INTERVAL_MS)
     }
 
     private fun actionButton(context: Context, label: String, destructive: Boolean = false): TextView =
