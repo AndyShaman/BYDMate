@@ -30,6 +30,10 @@ object CameraOverlayManager {
     private const val TAG = "CameraOverlay"
     private const val BASE_SCREEN_FRACTION = 2f / 3f
     private const val CAMERA_SIZE_MULTIPLIER = 1.4f
+    private const val AUTO_DIAL_DELAY_MS = 300L
+    private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
+    private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
+    private const val BT_CALL_KEYCODE_DIAL = 313
     private val navyDark = Color.rgb(10, 22, 40)
     private val cardSurface = Color.rgb(22, 32, 50)
     private val cardSurfaceElevated = Color.rgb(29, 41, 64)
@@ -222,6 +226,17 @@ object CameraOverlayManager {
         }
         try {
             context.startActivity(intent)
+            Handler(Looper.getMainLooper()).postDelayed({
+                val press = Intent(BT_CALL_ACTION_DIAL_HANGUP).apply {
+                    setPackage(BT_CALL_PACKAGE)
+                    putExtra("keycode", BT_CALL_KEYCODE_DIAL)
+                }
+                try {
+                    context.sendBroadcast(press)
+                } catch (e: Exception) {
+                    Log.w(TAG, "gate auto-dial broadcast failed: ${e.message}")
+                }
+            }, AUTO_DIAL_DELAY_MS)
         } catch (e: Exception) {
             Log.w(TAG, "gate dial failed: ${e.message}")
         }
