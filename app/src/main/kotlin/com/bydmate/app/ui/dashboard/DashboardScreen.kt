@@ -105,10 +105,10 @@ fun DashboardScreen(
                 // Ghost car background
                 Image(
                     painter = painterResource(
-                        if (state.vehicleProfileId.startsWith("SONG_L_DMI")) {
-                            R.drawable.song_l_dmi
-                        } else {
-                            R.drawable.leopard3
+                        when {
+                            state.vehicleProfileId.startsWith("SONG_L_DMI") -> R.drawable.song_l_dmi
+                            state.vehicleProfileId.startsWith("YUAN_PLUS") -> R.drawable.yuan_plus
+                            else -> R.drawable.leopard3
                         }
                     ),
                     contentDescription = null,

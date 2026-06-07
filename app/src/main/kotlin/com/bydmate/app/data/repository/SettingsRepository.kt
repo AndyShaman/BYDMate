@@ -148,6 +148,96 @@ open class SettingsRepository @Inject constructor(
                 note = "BYD energydata, батарея 72.9 кВт·ч"
             ),
             VehicleProfile(
+                id = "YUAN_PLUS_2023_430_LEADING",
+                label = "Yuan Plus 2023 Champion 430 km Leading",
+                shortLabel = "Yuan+ 430",
+                batteryCapacityKwh = 49.92,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 49.92 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2023_430_BEYOND",
+                label = "Yuan Plus 2023 Champion 430 km Beyond",
+                shortLabel = "Yuan+ 430",
+                batteryCapacityKwh = 49.92,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 49.92 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2023_510_LEADING",
+                label = "Yuan Plus 2023 Champion 510 km Leading",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2023_510_BEYOND",
+                label = "Yuan Plus 2023 Champion 510 km Beyond",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2023_510_EXCELLENCE",
+                label = "Yuan Plus 2023 Champion 510 km Excellence",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2024_430_LEADING",
+                label = "Yuan Plus 2024 Honor 430 km Leading",
+                shortLabel = "Yuan+ 430",
+                batteryCapacityKwh = 49.92,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 49.92 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2024_430_BEYOND",
+                label = "Yuan Plus 2024 Honor 430 km Beyond",
+                shortLabel = "Yuan+ 430",
+                batteryCapacityKwh = 49.92,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 49.92 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2024_510_LEADING",
+                label = "Yuan Plus 2024 Honor 510 km Leading",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2024_510_BEYOND",
+                label = "Yuan Plus 2024 Honor 510 km Beyond",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
+                id = "YUAN_PLUS_2024_510_EXCELLENCE",
+                label = "Yuan Plus 2024 Honor 510 km Excellence",
+                shortLabel = "Yuan+ 510",
+                batteryCapacityKwh = 60.48,
+                dataSource = DataSource.ENERGYDATA,
+                isHybrid = false,
+                note = "BYD energydata, BEV, батарея 60.48 кВт·ч"
+            ),
+            VehicleProfile(
                 id = "CUSTOM",
                 label = "Другая BYD",
                 shortLabel = "Custom",
