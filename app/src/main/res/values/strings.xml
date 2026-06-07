@@ -485,6 +485,8 @@
     <string name="widget_km_per_percent">%1$.1f</string>
     <!-- Voltage value with unit: %.1f V -->
     <string name="widget_voltage_value">%1$.1f В</string>
+    <string name="widget_camera_button_a11y">Открыть камеру парковки</string>
+    <string name="widget_camera_open_failed">Не удалось открыть камеру. Проверьте разрешение поверх окон.</string>
     <!-- Long-press toast -->
     <string name="widget_toast_hidden">Виджет скрыт. Откройте BYDMate - вернётся.</string>
     <!-- Trash zone labels -->

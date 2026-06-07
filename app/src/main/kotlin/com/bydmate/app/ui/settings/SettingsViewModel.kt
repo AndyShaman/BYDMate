@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import com.bydmate.app.service.BootReceiver
 import com.bydmate.app.ui.widget.WidgetController
+import com.bydmate.app.ui.widget.WidgetPreferences
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -221,6 +222,7 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.KEY_PARKING_CAMERA_URL,
                 SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
             )
+            WidgetPreferences(appContext).setParkingCameraUrl(parkingCameraUrl)
             val mapTileSource = settingsRepository.getMapTileSource()
 
             _uiState.update {
@@ -717,6 +719,7 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_PARKING_CAMERA_URL, normalizedUrl)
+            WidgetPreferences(appContext).setParkingCameraUrl(normalizedUrl)
             _uiState.update {
                 it.copy(
                     parkingCameraUrl = normalizedUrl,

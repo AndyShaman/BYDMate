@@ -114,6 +114,13 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
             .apply()
     }
 
+    fun getParkingCameraUrl(): String =
+        prefs.getString(KEY_PARKING_CAMERA_URL, DEFAULT_PARKING_CAMERA_URL) ?: DEFAULT_PARKING_CAMERA_URL
+
+    fun setParkingCameraUrl(url: String) {
+        prefs.edit().putString(KEY_PARKING_CAMERA_URL, url).apply()
+    }
+
     data class LeftTapAppState(
         val enabled: Boolean,
         val packageName: String,
@@ -164,8 +171,10 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_LEFT_TAP_ZONING = "widget_left_tap_zoning"
         const val KEY_LEFT_TAP_APP_PKG = "widget_left_tap_app_pkg"
         const val KEY_LEFT_TAP_APP_LABEL = "widget_left_tap_app_label"
+        const val KEY_PARKING_CAMERA_URL = "widget_parking_camera_url"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
         const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
+        const val DEFAULT_PARKING_CAMERA_URL = "https://parking.napaster.ru"
         const val SCALE_MIN = 0.7f
         const val SCALE_MAX = 2.0f
     }

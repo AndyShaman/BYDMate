@@ -18,6 +18,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Battery6Bar
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Route
 import androidx.compose.material.icons.outlined.Schedule
 import androidx.compose.material.icons.outlined.Speed
@@ -230,6 +231,18 @@ private fun RowTrip(
             IconText(
                 icon = Icons.Outlined.Speed,
                 text = formatKmPerPercent(context, widgetKmPerPercent(rangeKm, soc)),
+            )
+        }
+        Spacer(Modifier.width(7.dp))
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PhotoCamera,
+                contentDescription = stringResource(R.string.widget_camera_button_a11y),
+                tint = AccentGreen,
+                modifier = Modifier.size(16.dp),
             )
         }
     }

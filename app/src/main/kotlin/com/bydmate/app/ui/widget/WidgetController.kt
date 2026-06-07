@@ -22,6 +22,7 @@ import com.bydmate.app.MainActivity
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
+import com.bydmate.app.ui.overlay.CameraOverlayManager
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -49,6 +50,7 @@ object WidgetController {
     private const val DRAG_THRESHOLD_DP = 8
     private const val TRASH_RADIUS_DP = 48
     private const val LONG_PRESS_MS = 1500L
+    private const val CAMERA_TAP_ZONE_DP = 46
     // Tap on the left third of the widget launches the user-configured app
     // (default Yandex Navigator) when zoning is enabled in WidgetPreferences;
     // the right two thirds always open BYDMate. Threshold uses the live view
@@ -553,6 +555,20 @@ object WidgetController {
                     val wasTap = DragGestureLogic.isTap(0, 0, dx, dy, thresholdPx)
 
                     if (wasTap) {
+                        if (isCameraTap(v, event, prefs)) {
+                            val shown = CameraOverlayManager.show(context, prefs.getParkingCameraUrl())
+                            if (!shown) {
+                                try {
+                                    android.widget.Toast.makeText(
+                                        context,
+                                        context.getString(R.string.widget_camera_open_failed),
+                                        android.widget.Toast.LENGTH_SHORT,
+                                    ).show()
+                                } catch (_: Exception) {}
+                            }
+                            dragging = false
+                            return true
+                        }
                         // Tap zoning is opt-in via WidgetPreferences. Default: a tap
                         // anywhere opens BYDMate. When the user has flipped the
                         // setting on, the LEFT third launches Yandex Navigator (if
@@ -594,6 +610,17 @@ object WidgetController {
                 }
             }
             return false
+        }
+
+        private fun isCameraTap(
+            view: android.view.View,
+            event: MotionEvent,
+            prefs: WidgetPreferences,
+        ): Boolean {
+            val width = view.width
+            if (width <= 0) return false
+            val zonePx = (dpFromMetrics(metrics, CAMERA_TAP_ZONE_DP) * prefs.getScale()).toInt()
+            return event.x >= width - zonePx && event.y <= zonePx
         }
     }
 }

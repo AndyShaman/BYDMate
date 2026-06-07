@@ -389,6 +389,8 @@
     <string name="widget_trip_km_value">%1$.1f km</string>
     <string name="widget_km_per_percent">%1$.1f</string>
     <string name="widget_voltage_value">%1$.1f V</string>
+    <string name="widget_camera_button_a11y">Open parking camera</string>
+    <string name="widget_camera_open_failed">Could not open camera. Check overlay permission.</string>
     <string name="widget_toast_hidden">Widget hidden. Open BYDMate - it will return.</string>
     <string name="widget_trash_release">release - widget hidden</string>
     <string name="widget_trash_hint">drag here to hide</string>
