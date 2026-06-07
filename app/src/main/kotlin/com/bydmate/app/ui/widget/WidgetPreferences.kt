@@ -2,6 +2,8 @@ package com.bydmate.app.ui.widget
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.bydmate.app.data.parking.ParkingCamera
+import com.bydmate.app.data.parking.ParkingCameraConfig
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -121,8 +123,31 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         prefs.edit().putString(KEY_PARKING_CAMERA_URL, url).apply()
     }
 
+    fun getParkingCameras(): List<ParkingCamera> =
+        ParkingCameraConfig.decode(
+            raw = prefs.getString(KEY_PARKING_CAMERAS, null),
+            legacyUrl = getParkingCameraUrl(),
+        )
+
+    fun setParkingCameras(cameras: List<ParkingCamera>) {
+        val primaryUrl = cameras.firstOrNull()?.url?.takeIf(String::isNotBlank) ?: DEFAULT_PARKING_CAMERA_URL
+        prefs.edit()
+            .putString(KEY_PARKING_CAMERAS, ParkingCameraConfig.encode(cameras))
+            .putString(KEY_PARKING_CAMERA_URL, primaryUrl)
+            .apply()
+    }
+
+    fun getLeftTapAction(): String =
+        prefs.getString(KEY_LEFT_TAP_ACTION, LEFT_TAP_ACTION_APP) ?: LEFT_TAP_ACTION_APP
+
+    fun setLeftTapAction(action: String) {
+        val normalized = if (action == LEFT_TAP_ACTION_CAMERA) LEFT_TAP_ACTION_CAMERA else LEFT_TAP_ACTION_APP
+        prefs.edit().putString(KEY_LEFT_TAP_ACTION, normalized).apply()
+    }
+
     data class LeftTapAppState(
         val enabled: Boolean,
+        val action: String,
         val packageName: String,
         val label: String,
     )
@@ -130,11 +155,13 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
     fun leftTapAppFlow(): Flow<LeftTapAppState> = callbackFlow {
         fun snapshot() = LeftTapAppState(
             enabled = isLeftTapZoningEnabled(),
+            action = getLeftTapAction(),
             packageName = getLeftTapAppPackage(),
             label = getLeftTapAppLabel(),
         )
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
             if (changedKey == KEY_LEFT_TAP_ZONING ||
+                changedKey == KEY_LEFT_TAP_ACTION ||
                 changedKey == KEY_LEFT_TAP_APP_PKG ||
                 changedKey == KEY_LEFT_TAP_APP_LABEL
             ) {
@@ -169,12 +196,16 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_HIDDEN_UNTIL_LAUNCH = "widget_hidden_until_launch"
         const val LEGACY_KEY_LEFT_TAP_NAVIGATOR = "widget_left_tap_navigator"
         const val KEY_LEFT_TAP_ZONING = "widget_left_tap_zoning"
+        const val KEY_LEFT_TAP_ACTION = "widget_left_tap_action"
         const val KEY_LEFT_TAP_APP_PKG = "widget_left_tap_app_pkg"
         const val KEY_LEFT_TAP_APP_LABEL = "widget_left_tap_app_label"
         const val KEY_PARKING_CAMERA_URL = "widget_parking_camera_url"
+        const val KEY_PARKING_CAMERAS = "widget_parking_cameras"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
         const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
         const val DEFAULT_PARKING_CAMERA_URL = "https://parking.napaster.ru"
+        const val LEFT_TAP_ACTION_APP = "app"
+        const val LEFT_TAP_ACTION_CAMERA = "camera"
         const val SCALE_MIN = 0.7f
         const val SCALE_MAX = 2.0f
     }

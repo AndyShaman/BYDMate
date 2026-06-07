@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.overlay
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.Typeface
@@ -8,6 +9,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.net.Uri
 import android.provider.Settings
 import android.util.Log
 import android.view.Gravity
@@ -20,6 +22,8 @@ import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 import com.bydmate.app.R
+import com.bydmate.app.data.parking.ParkingCamera
+import com.bydmate.app.data.parking.ParkingGate
 
 object CameraOverlayManager {
 
@@ -39,14 +43,18 @@ object CameraOverlayManager {
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
     fun show(context: Context, rawUrl: String): Boolean {
+        return show(context, ParkingCamera(id = "legacy", name = context.getString(R.string.camera_overlay_title), url = rawUrl))
+    }
+
+    fun show(context: Context, camera: ParkingCamera): Boolean {
         if (!canShow(context)) {
             Log.w(TAG, "SYSTEM_ALERT_WINDOW not granted")
             return false
         }
-        val url = normalizeUrl(rawUrl) ?: return false
+        val url = normalizeUrl(camera.url) ?: return false
         Handler(Looper.getMainLooper()).post {
             try {
-                render(context.applicationContext, url)
+                render(context.applicationContext, camera.copy(url = url))
             } catch (e: Exception) {
                 Log.e(TAG, "show failed: ${e.message}")
             }
@@ -60,7 +68,7 @@ object CameraOverlayManager {
         }
     }
 
-    private fun render(context: Context, url: String) {
+    private fun render(context: Context, camera: ParkingCamera) {
         dismiss(context)
 
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
@@ -102,8 +110,18 @@ object CameraOverlayManager {
             dp(context, 34),
         ).apply { leftMargin = dp(context, 6) })
 
+        camera.gates.take(2).forEach { gate ->
+            val gateButton = actionButton(context, "☎ ${gate.name}", destructive = false).apply {
+                setOnClickListener { dialGate(context, gate) }
+            }
+            header.addView(gateButton, LinearLayout.LayoutParams(
+                dp(context, 148),
+                dp(context, 34),
+            ).apply { leftMargin = dp(context, 6) })
+        }
+
         val title = TextView(context).apply {
-            text = context.getString(R.string.camera_overlay_title)
+            text = camera.name.ifBlank { context.getString(R.string.camera_overlay_title) }
             setTextColor(textPrimary)
             textSize = 14f
             typeface = Typeface.DEFAULT_BOLD
@@ -127,7 +145,7 @@ object CameraOverlayManager {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
                 settings.mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_COMPATIBILITY_MODE
             }
-            loadUrl(url)
+            loadUrl(camera.url)
         }
 
         val webFrame = FrameLayout(context).apply {
@@ -194,6 +212,19 @@ object CameraOverlayManager {
         val trimmed = rawUrl.trim()
         if (trimmed.isBlank()) return null
         return if (trimmed.contains("://")) trimmed else "https://$trimmed"
+    }
+
+    private fun dialGate(context: Context, gate: ParkingGate) {
+        val phone = gate.phone.trim()
+        if (phone.isBlank()) return
+        val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        try {
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.w(TAG, "gate dial failed: ${e.message}")
+        }
     }
 
     private fun actionButton(context: Context, label: String, destructive: Boolean = false): TextView =

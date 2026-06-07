@@ -221,6 +221,18 @@ private fun RowTrip(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        Box(
+            modifier = Modifier.size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PhotoCamera,
+                contentDescription = stringResource(R.string.widget_camera_button_a11y),
+                tint = AccentGreen,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        Spacer(Modifier.width(7.dp))
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             IconText(icon = Icons.Outlined.Schedule, text = durationText)
         }
@@ -231,18 +243,6 @@ private fun RowTrip(
             IconText(
                 icon = Icons.Outlined.Speed,
                 text = formatKmPerPercent(context, widgetKmPerPercent(rangeKm, soc)),
-            )
-        }
-        Spacer(Modifier.width(7.dp))
-        Box(
-            modifier = Modifier.size(20.dp),
-            contentAlignment = Alignment.Center,
-        ) {
-            Icon(
-                imageVector = Icons.Outlined.PhotoCamera,
-                contentDescription = stringResource(R.string.widget_camera_button_a11y),
-                tint = AccentGreen,
-                modifier = Modifier.size(16.dp),
             )
         }
     }

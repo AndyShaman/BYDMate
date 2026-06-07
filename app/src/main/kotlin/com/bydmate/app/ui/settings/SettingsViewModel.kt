@@ -18,6 +18,8 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.parking.ParkingCamera
+import com.bydmate.app.data.parking.ParkingCameraConfig
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.ChargeRepository
@@ -105,6 +107,7 @@ data class SettingsUiState(
     val abrpCarModel: String = "",
     val abrpSaveStatus: String? = null,
     val parkingCameraUrl: String = SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
+    val parkingCameras: List<ParkingCamera> = listOf(ParkingCameraConfig.defaultCamera(SettingsRepository.DEFAULT_PARKING_CAMERA_URL)),
     val parkingCameraSaveStatus: String? = null,
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
@@ -222,7 +225,11 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.KEY_PARKING_CAMERA_URL,
                 SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
             )
-            WidgetPreferences(appContext).setParkingCameraUrl(parkingCameraUrl)
+            val parkingCameras = ParkingCameraConfig.decode(
+                raw = settingsRepository.getString(SettingsRepository.KEY_PARKING_CAMERAS, ""),
+                legacyUrl = parkingCameraUrl,
+            )
+            WidgetPreferences(appContext).setParkingCameras(parkingCameras)
             val mapTileSource = settingsRepository.getMapTileSource()
 
             _uiState.update {
@@ -255,6 +262,7 @@ class SettingsViewModel @Inject constructor(
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
                     parkingCameraUrl = parkingCameraUrl,
+                    parkingCameras = parkingCameras,
                     mapTileSource = mapTileSource,
                 )
             }
@@ -719,16 +727,64 @@ class SettingsViewModel @Inject constructor(
         }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_PARKING_CAMERA_URL, normalizedUrl)
-            WidgetPreferences(appContext).setParkingCameraUrl(normalizedUrl)
+            val cameras = _uiState.value.parkingCameras.ifEmpty {
+                listOf(ParkingCameraConfig.defaultCamera(normalizedUrl))
+            }.mapIndexed { index, camera ->
+                if (index == 0) camera.copy(url = normalizedUrl) else camera
+            }
+            saveParkingCamerasInternal(cameras)
             _uiState.update {
                 it.copy(
                     parkingCameraUrl = normalizedUrl,
+                    parkingCameras = cameras,
                     parkingCameraSaveStatus = appContext.getString(R.string.settings_saved),
                 )
             }
             delay(2000)
             _uiState.update { it.copy(parkingCameraSaveStatus = null) }
         }
+    }
+
+    fun saveParkingCameras(cameras: List<ParkingCamera>) {
+        val normalized = cameras.mapNotNull { camera ->
+            val url = ParkingCameraConfig.normalizeUrl(camera.url) ?: return@mapNotNull null
+            camera.copy(
+                name = camera.name.trim().ifBlank { appContext.getString(R.string.settings_parking_camera_default_name) },
+                url = url,
+                gates = camera.gates
+                    .filter { it.phone.isNotBlank() }
+                    .take(ParkingCameraConfig.MAX_GATES_PER_CAMERA)
+                    .mapIndexed { index, gate ->
+                        gate.copy(
+                            name = gate.name.trim().ifBlank {
+                                appContext.getString(R.string.settings_parking_gate_default_name, index + 1)
+                            },
+                            phone = gate.phone.trim(),
+                        )
+                    },
+            )
+        }.ifEmpty {
+            listOf(ParkingCameraConfig.defaultCamera(SettingsRepository.DEFAULT_PARKING_CAMERA_URL))
+        }
+        _uiState.update {
+            it.copy(
+                parkingCameras = normalized,
+                parkingCameraUrl = normalized.first().url,
+                parkingCameraSaveStatus = appContext.getString(R.string.settings_saved),
+            )
+        }
+        viewModelScope.launch {
+            saveParkingCamerasInternal(normalized)
+            delay(2000)
+            _uiState.update { it.copy(parkingCameraSaveStatus = null) }
+        }
+    }
+
+    private suspend fun saveParkingCamerasInternal(cameras: List<ParkingCamera>) {
+        val primaryUrl = cameras.firstOrNull()?.url ?: SettingsRepository.DEFAULT_PARKING_CAMERA_URL
+        settingsRepository.setString(SettingsRepository.KEY_PARKING_CAMERAS, ParkingCameraConfig.encode(cameras))
+        settingsRepository.setString(SettingsRepository.KEY_PARKING_CAMERA_URL, primaryUrl)
+        WidgetPreferences(appContext).setParkingCameras(cameras)
     }
 
     fun saveAbrpSettings() {

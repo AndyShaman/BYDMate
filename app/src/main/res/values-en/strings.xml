@@ -8,6 +8,7 @@
     <string name="settings_section_trips_title">Trips</string>
     <string name="settings_section_integrations_title">Integrations</string>
     <string name="settings_section_widget_title">Widget</string>
+    <string name="settings_section_parking_camera_title">Parking camera</string>
     <string name="settings_section_display_title">Display</string>
     <!-- Settings: Display section (cluster projection) -->
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
@@ -75,10 +76,21 @@
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
     <string name="settings_parking_camera_section_header">Parking camera</string>
+    <string name="settings_parking_camera_name_label">Camera name</string>
     <string name="settings_parking_camera_url_label">Camera URL</string>
-    <string name="settings_parking_camera_description">This address opens over the screen through the Parking camera automation action.</string>
+    <string name="settings_parking_camera_description">The first camera is used by the widget and Parking camera automation action. Each camera can have up to two gates opened by a phone call.</string>
+    <string name="settings_parking_camera_primary_badge">Primary camera</string>
+    <string name="settings_parking_camera_item_title">Camera %1$d</string>
+    <string name="settings_parking_camera_default_name">Parking</string>
+    <string name="settings_parking_camera_add_button">Add camera</string>
     <string name="settings_parking_camera_save_button">Save camera</string>
     <string name="settings_parking_camera_url_error">Error: enter camera address</string>
+    <string name="settings_parking_gates_header">Gates</string>
+    <string name="settings_parking_gate_name_label">Gate name</string>
+    <string name="settings_parking_gate_phone_label">Phone number</string>
+    <string name="settings_parking_gate_default_name">Gate %1$d</string>
+    <string name="settings_parking_gate_add_button">Add gate</string>
+    <string name="settings_delete_button">Delete</string>
     <string name="settings_ai_section_header">AI Insights</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
@@ -97,8 +109,13 @@
     <string name="settings_widget_tap_section_header">Widget tap</string>
     <string name="settings_widget_left_tap_zoning_label">Tap zoning</string>
     <string name="settings_widget_left_tap_zoning_description">Left 1/3 - opens the selected app; the rest - BYDMate.</string>
+    <string name="settings_widget_left_tap_action_label">Left 1/3 action</string>
+    <string name="settings_widget_left_tap_action_app">App</string>
+    <string name="settings_widget_left_tap_action_camera">Camera</string>
     <string name="settings_widget_left_tap_label">App for left tap</string>
     <string name="settings_widget_left_tap_description">Default is Yandex Navigator. If the app is removed, the tap will not work.</string>
+    <string name="settings_widget_left_tap_camera_label">Parking camera</string>
+    <string name="settings_widget_left_tap_camera_description">The left 1/3 of the widget will open the primary parking camera.</string>
     <string name="settings_places_section_header">Places</string>
     <string name="settings_places_entry_title">Automation points</string>
     <string name="settings_places_entry_description">Home, work, favorite places - Place enter / Place exit triggers</string>

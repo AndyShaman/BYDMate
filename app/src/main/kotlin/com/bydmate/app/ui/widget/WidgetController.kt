@@ -556,16 +556,7 @@ object WidgetController {
 
                     if (wasTap) {
                         if (isCameraTap(v, event, prefs)) {
-                            val shown = CameraOverlayManager.show(context, prefs.getParkingCameraUrl())
-                            if (!shown) {
-                                try {
-                                    android.widget.Toast.makeText(
-                                        context,
-                                        context.getString(R.string.widget_camera_open_failed),
-                                        android.widget.Toast.LENGTH_SHORT,
-                                    ).show()
-                                } catch (_: Exception) {}
-                            }
+                            openParkingCamera(context, prefs)
                             dragging = false
                             return true
                         }
@@ -582,7 +573,12 @@ object WidgetController {
                             width > 0 && event.x < width * LEFT_TAP_FRACTION
                         try {
                             val intent: Intent? = if (isLeftTap) {
-                                context.packageManager.getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
+                                if (prefs.getLeftTapAction() == WidgetPreferences.LEFT_TAP_ACTION_CAMERA) {
+                                    openParkingCamera(context, prefs)
+                                    null
+                                } else {
+                                    context.packageManager.getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
+                                }
                             } else {
                                 Intent(context, MainActivity::class.java)
                             }
@@ -620,7 +616,20 @@ object WidgetController {
             val width = view.width
             if (width <= 0) return false
             val zonePx = (dpFromMetrics(metrics, CAMERA_TAP_ZONE_DP) * prefs.getScale()).toInt()
-            return event.x >= width - zonePx && event.y <= zonePx
+            return event.x <= zonePx && event.y <= zonePx
+        }
+
+        private fun openParkingCamera(context: Context, prefs: WidgetPreferences) {
+            val shown = CameraOverlayManager.show(context, prefs.getParkingCameras().first())
+            if (!shown) {
+                try {
+                    android.widget.Toast.makeText(
+                        context,
+                        context.getString(R.string.widget_camera_open_failed),
+                        android.widget.Toast.LENGTH_SHORT,
+                    ).show()
+                } catch (_: Exception) {}
+            }
         }
     }
 }

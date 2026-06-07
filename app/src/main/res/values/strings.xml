@@ -13,6 +13,7 @@
     <string name="settings_section_trips_title">Поездки</string>
     <string name="settings_section_integrations_title">Интеграции</string>
     <string name="settings_section_widget_title">Виджет</string>
+    <string name="settings_section_parking_camera_title">Камера парковки</string>
     <string name="settings_section_display_title">Дисплей</string>
     <!-- Settings: Display section (cluster projection) -->
     <string name="settings_display_mirror_header">Вывод на приборку</string>
@@ -85,10 +86,21 @@
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
     <string name="settings_parking_camera_section_header">Камера парковки</string>
+    <string name="settings_parking_camera_name_label">Название камеры</string>
     <string name="settings_parking_camera_url_label">URL камеры</string>
-    <string name="settings_parking_camera_description">Этот адрес откроется поверх экрана действием сценария «Камера парковки».</string>
+    <string name="settings_parking_camera_description">Первая камера используется виджетом и сценарием «Камера парковки». У каждой камеры можно добавить до двух шлагбаумов, которые открываются звонком.</string>
+    <string name="settings_parking_camera_primary_badge">Основная камера</string>
+    <string name="settings_parking_camera_item_title">Камера %1$d</string>
+    <string name="settings_parking_camera_default_name">Парковка</string>
+    <string name="settings_parking_camera_add_button">Добавить камеру</string>
     <string name="settings_parking_camera_save_button">Сохранить камеру</string>
     <string name="settings_parking_camera_url_error">Ошибка: укажите адрес камеры</string>
+    <string name="settings_parking_gates_header">Шлагбаумы</string>
+    <string name="settings_parking_gate_name_label">Название шлагбаума</string>
+    <string name="settings_parking_gate_phone_label">Номер телефона</string>
+    <string name="settings_parking_gate_default_name">Шлагбаум %1$d</string>
+    <string name="settings_parking_gate_add_button">Добавить шлагбаум</string>
+    <string name="settings_delete_button">Удалить</string>
     <string name="settings_ai_section_header">AI Инсайты</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Модель: %1$s</string>
@@ -111,8 +123,13 @@
     <string name="settings_widget_tap_section_header">Тап по виджету</string>
     <string name="settings_widget_left_tap_zoning_label">Зонирование тапов</string>
     <string name="settings_widget_left_tap_zoning_description">Левая 1/3 - открывает выбранное приложение; остальное - BYDMate.</string>
+    <string name="settings_widget_left_tap_action_label">Действие левой 1/3</string>
+    <string name="settings_widget_left_tap_action_app">Приложение</string>
+    <string name="settings_widget_left_tap_action_camera">Камера</string>
     <string name="settings_widget_left_tap_label">Приложение для левого тапа</string>
     <string name="settings_widget_left_tap_description">По умолчанию Яндекс.Навигатор. Если приложение удалено, тап не сработает.</string>
+    <string name="settings_widget_left_tap_camera_label">Камера парковки</string>
+    <string name="settings_widget_left_tap_camera_description">Левая 1/3 виджета откроет основную парковочную камеру.</string>
 
     <!-- Settings: Places section -->
     <string name="settings_places_section_header">Места</string>

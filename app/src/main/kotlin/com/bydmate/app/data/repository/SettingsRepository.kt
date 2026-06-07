@@ -52,6 +52,7 @@ open class SettingsRepository @Inject constructor(
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         const val KEY_PARKING_CAMERA_URL = "parking_camera_url"
+        const val KEY_PARKING_CAMERAS = "parking_cameras"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"

@@ -17,11 +17,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.Call
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhoneAndroid
+import androidx.compose.material.icons.outlined.PhotoCamera
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -102,6 +106,8 @@ import com.bydmate.app.cluster.SteeringWheelKeyService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
+import com.bydmate.app.data.parking.ParkingCamera
+import com.bydmate.app.data.parking.ParkingCameraConfig
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
@@ -112,6 +118,7 @@ private enum class SettingsSection(@StringRes val labelRes: Int, val icon: Image
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
+    PARKING_CAMERA(R.string.settings_section_parking_camera_title, Icons.Outlined.PhotoCamera),
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
     APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
@@ -237,6 +244,7 @@ fun SettingsScreen(
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.WIDGET -> WidgetSection()
+                        SettingsSection.PARKING_CAMERA -> ParkingCameraSection(state, viewModel)
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
                         SettingsSection.APP -> AppSection(state, viewModel)
@@ -593,50 +601,6 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
-    SectionHeader(text = stringResource(R.string.settings_parking_camera_section_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            SettingsTextField(
-                label = stringResource(R.string.settings_parking_camera_url_label),
-                value = state.parkingCameraUrl,
-                onValueChange = { viewModel.updateParkingCameraUrl(it) },
-                keyboardType = KeyboardType.Uri
-            )
-            Text(
-                stringResource(R.string.settings_parking_camera_description),
-                color = TextMuted,
-                fontSize = 11.sp,
-                lineHeight = 15.sp,
-            )
-            Button(
-                onClick = { viewModel.saveParkingCameraSettings() },
-                enabled = state.parkingCameraUrl.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentGreen,
-                    contentColor = NavyDark
-                )
-            ) {
-                Text(stringResource(R.string.settings_parking_camera_save_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            }
-            state.parkingCameraSaveStatus?.let {
-                Text(
-                    it,
-                    color = if (it.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
-                    fontSize = 12.sp
-                )
-            }
-        }
-    }
-
     SectionHeader(text = stringResource(R.string.settings_ai_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -715,6 +679,178 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
 }
 
 @Composable
+private fun ParkingCameraSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+    var cameras by remember { mutableStateOf(state.parkingCameras) }
+    LaunchedEffect(state.parkingCameras) {
+        cameras = state.parkingCameras
+    }
+
+    fun updateCamera(cameraId: String, updated: ParkingCamera) {
+        cameras = cameras.map { if (it.id == cameraId) updated else it }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_parking_camera_section_header))
+    Text(
+        stringResource(R.string.settings_parking_camera_description),
+        color = TextMuted,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+    )
+
+    cameras.forEachIndexed { cameraIndex, camera ->
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Icon(Icons.Outlined.PhotoCamera, contentDescription = null, tint = AccentGreen)
+                    Text(
+                        text = if (cameraIndex == 0) {
+                            stringResource(R.string.settings_parking_camera_primary_badge)
+                        } else {
+                            stringResource(R.string.settings_parking_camera_item_title, cameraIndex + 1)
+                        },
+                        color = TextPrimary,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.weight(1f),
+                    )
+                    if (cameras.size > 1) {
+                        TextButton(
+                            onClick = { cameras = cameras.filterNot { it.id == camera.id } },
+                        ) {
+                            Icon(Icons.Outlined.Delete, contentDescription = null, tint = SocRed, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.settings_delete_button), color = SocRed, fontSize = 12.sp)
+                        }
+                    }
+                }
+
+                SettingsTextField(
+                    label = stringResource(R.string.settings_parking_camera_name_label),
+                    value = camera.name,
+                    onValueChange = { updateCamera(camera.id, camera.copy(name = it)) },
+                    keyboardType = KeyboardType.Text,
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_parking_camera_url_label),
+                    value = camera.url,
+                    onValueChange = { updateCamera(camera.id, camera.copy(url = it)) },
+                    keyboardType = KeyboardType.Uri,
+                )
+
+                Text(
+                    stringResource(R.string.settings_parking_gates_header),
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Medium,
+                )
+                camera.gates.forEachIndexed { gateIndex, gate ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(Icons.Outlined.Call, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(18.dp))
+                        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            SettingsTextField(
+                                label = stringResource(R.string.settings_parking_gate_name_label),
+                                value = gate.name,
+                                onValueChange = { newName ->
+                                    updateCamera(
+                                        camera.id,
+                                        camera.copy(gates = camera.gates.map {
+                                            if (it.id == gate.id) it.copy(name = newName) else it
+                                        }),
+                                    )
+                                },
+                                keyboardType = KeyboardType.Text,
+                            )
+                            SettingsTextField(
+                                label = stringResource(R.string.settings_parking_gate_phone_label),
+                                value = gate.phone,
+                                onValueChange = { newPhone ->
+                                    updateCamera(
+                                        camera.id,
+                                        camera.copy(gates = camera.gates.map {
+                                            if (it.id == gate.id) it.copy(phone = newPhone) else it
+                                        }),
+                                    )
+                                },
+                                keyboardType = KeyboardType.Phone,
+                            )
+                        }
+                        TextButton(
+                            onClick = {
+                                updateCamera(
+                                    camera.id,
+                                    camera.copy(gates = camera.gates.filterNot { it.id == gate.id }),
+                                )
+                            },
+                        ) {
+                            Icon(Icons.Outlined.Delete, contentDescription = null, tint = SocRed, modifier = Modifier.size(16.dp))
+                        }
+                    }
+                    if (gateIndex < camera.gates.lastIndex) HorizontalDivider(color = CardBorder)
+                }
+                if (camera.gates.size < ParkingCameraConfig.MAX_GATES_PER_CAMERA) {
+                    TextButton(
+                        onClick = {
+                            updateCamera(
+                                camera.id,
+                                camera.copy(gates = camera.gates + ParkingCameraConfig.newGate()),
+                            )
+                        },
+                    ) {
+                        Icon(Icons.Outlined.Add, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(R.string.settings_parking_gate_add_button), color = AccentGreen, fontSize = 12.sp)
+                    }
+                }
+            }
+        }
+    }
+
+    Button(
+        onClick = { cameras = cameras + ParkingCameraConfig.newCamera() },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
+        border = androidx.compose.foundation.BorderStroke(1.dp, AccentGreen.copy(alpha = 0.5f)),
+    ) {
+        Icon(Icons.Outlined.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(stringResource(R.string.settings_parking_camera_add_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+
+    Button(
+        onClick = { viewModel.saveParkingCameras(cameras) },
+        enabled = cameras.any { it.url.isNotBlank() },
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+    ) {
+        Text(stringResource(R.string.settings_parking_camera_save_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+    }
+    state.parkingCameraSaveStatus?.let {
+        Text(
+            it,
+            color = if (it.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
+            fontSize = 12.sp,
+        )
+    }
+}
+
+@Composable
 private fun WidgetSection() {
     val context = LocalContext.current
     val prefs = remember { WidgetPreferences(context) }
@@ -724,6 +860,7 @@ private fun WidgetSection() {
     val leftTapApp by prefs.leftTapAppFlow().collectAsStateWithLifecycle(
         initialValue = WidgetPreferences.LeftTapAppState(
             enabled = prefs.isLeftTapZoningEnabled(),
+            action = prefs.getLeftTapAction(),
             packageName = prefs.getLeftTapAppPackage(),
             label = prefs.getLeftTapAppLabel(),
         ),
@@ -899,6 +1036,20 @@ private fun WidgetSection() {
                 )
             }
 
+            Text(stringResource(R.string.settings_widget_left_tap_action_label), color = TextPrimary, fontSize = 13.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip(
+                    label = stringResource(R.string.settings_widget_left_tap_action_app),
+                    selected = leftTapApp.action == WidgetPreferences.LEFT_TAP_ACTION_APP,
+                    onClick = { prefs.setLeftTapAction(WidgetPreferences.LEFT_TAP_ACTION_APP) },
+                )
+                UnitChip(
+                    label = stringResource(R.string.settings_widget_left_tap_action_camera),
+                    selected = leftTapApp.action == WidgetPreferences.LEFT_TAP_ACTION_CAMERA,
+                    onClick = { prefs.setLeftTapAction(WidgetPreferences.LEFT_TAP_ACTION_CAMERA) },
+                )
+            }
+
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -906,14 +1057,18 @@ private fun WidgetSection() {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(stringResource(R.string.settings_widget_left_tap_label), color = TextPrimary, fontSize = 13.sp)
                     Text(
-                        text = stringResource(R.string.settings_widget_left_tap_description),
+                        text = if (leftTapApp.action == WidgetPreferences.LEFT_TAP_ACTION_CAMERA) {
+                            stringResource(R.string.settings_widget_left_tap_camera_description)
+                        } else {
+                            stringResource(R.string.settings_widget_left_tap_description)
+                        },
                         color = TextSecondary,
                         fontSize = 11.sp,
                     )
                 }
                 Row(
                     modifier = Modifier
-                        .clickable(enabled = leftTapApp.enabled && enabled) {
+                        .clickable(enabled = leftTapApp.enabled && enabled && leftTapApp.action == WidgetPreferences.LEFT_TAP_ACTION_APP) {
                             showLeftTapPicker = true
                         }
                         .background(
@@ -924,7 +1079,11 @@ private fun WidgetSection() {
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Text(
-                        text = leftTapApp.label,
+                        text = if (leftTapApp.action == WidgetPreferences.LEFT_TAP_ACTION_CAMERA) {
+                            stringResource(R.string.settings_widget_left_tap_camera_label)
+                        } else {
+                            leftTapApp.label
+                        },
                         color = if (leftTapApp.enabled && enabled) TextPrimary else TextMuted,
                         fontSize = 12.sp,
                     )

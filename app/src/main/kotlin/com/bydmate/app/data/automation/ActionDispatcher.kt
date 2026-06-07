@@ -10,6 +10,7 @@ import android.net.Uri
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.parking.ParkingCameraConfig
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.VehicleApi
@@ -256,7 +257,11 @@ class ActionDispatcher @Inject constructor(
             SettingsRepository.KEY_PARKING_CAMERA_URL,
             SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
         )
-        val shown = CameraOverlayManager.show(context, url)
+        val cameras = ParkingCameraConfig.decode(
+            raw = settingsRepository.getString(SettingsRepository.KEY_PARKING_CAMERAS, ""),
+            legacyUrl = url,
+        )
+        val shown = CameraOverlayManager.show(context, cameras.first())
         return DispatchResult(shown, if (shown) null else "URL камеры не задан")
     }
 
