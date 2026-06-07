@@ -24,6 +24,8 @@ import com.bydmate.app.R
 object CameraOverlayManager {
 
     private const val TAG = "CameraOverlay"
+    private const val BASE_SCREEN_FRACTION = 2f / 3f
+    private const val CAMERA_SIZE_MULTIPLIER = 1.4f
     private var currentView: View? = null
     private var currentWebView: WebView? = null
 
@@ -56,8 +58,9 @@ object CameraOverlayManager {
 
         val wm = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
         val displayMetrics = context.resources.displayMetrics
-        val overlayWidth = (displayMetrics.widthPixels * 2f / 3f).toInt()
-        val overlayHeight = (displayMetrics.heightPixels * 2f / 3f).toInt()
+        val overlayFraction = BASE_SCREEN_FRACTION * CAMERA_SIZE_MULTIPLIER
+        val overlayWidth = (displayMetrics.widthPixels * overlayFraction).toInt()
+        val overlayHeight = (displayMetrics.heightPixels * overlayFraction).toInt()
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
