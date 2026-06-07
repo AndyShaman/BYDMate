@@ -3,6 +3,7 @@ package com.bydmate.app.ui.overlay
 import android.content.Context
 import android.graphics.Color
 import android.graphics.PixelFormat
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
@@ -15,7 +16,6 @@ import android.view.WindowManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
@@ -26,6 +26,13 @@ object CameraOverlayManager {
     private const val TAG = "CameraOverlay"
     private const val BASE_SCREEN_FRACTION = 2f / 3f
     private const val CAMERA_SIZE_MULTIPLIER = 1.4f
+    private val navyDark = Color.rgb(10, 22, 40)
+    private val cardSurface = Color.rgb(22, 32, 50)
+    private val cardSurfaceElevated = Color.rgb(29, 41, 64)
+    private val cardBorder = Color.rgb(42, 58, 82)
+    private val accentGreen = Color.rgb(74, 222, 128)
+    private val accentTeal = Color.rgb(45, 212, 191)
+    private val textPrimary = Color.rgb(226, 232, 240)
     private var currentView: View? = null
     private var currentWebView: WebView? = null
 
@@ -65,9 +72,9 @@ object CameraOverlayManager {
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
-                setColor(Color.rgb(14, 23, 34))
+                setColor(cardSurface)
                 cornerRadius = dp(context, 12).toFloat()
-                setStroke(dp(context, 1), Color.rgb(45, 212, 191))
+                setStroke(dp(context, 1), accentTeal)
             }
             elevation = dp(context, 12).toFloat()
         }
@@ -75,40 +82,39 @@ object CameraOverlayManager {
         val header = LinearLayout(context).apply {
             orientation = LinearLayout.HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            setPadding(dp(context, 10), dp(context, 8), dp(context, 8), dp(context, 8))
+            setPadding(dp(context, 8), dp(context, 8), dp(context, 10), dp(context, 8))
+            setBackgroundColor(cardSurface)
         }
+
+        val refresh = actionButton(context, context.getString(R.string.camera_overlay_refresh)).apply {
+            setOnClickListener { currentWebView?.reload() }
+        }
+        header.addView(refresh, LinearLayout.LayoutParams(
+            dp(context, 92),
+            dp(context, 34),
+        ))
+
+        val close = actionButton(context, context.getString(R.string.camera_overlay_close), destructive = true).apply {
+            setOnClickListener { dismiss(context) }
+        }
+        header.addView(close, LinearLayout.LayoutParams(
+            dp(context, 82),
+            dp(context, 34),
+        ).apply { leftMargin = dp(context, 6) })
 
         val title = TextView(context).apply {
             text = context.getString(R.string.camera_overlay_title)
-            setTextColor(Color.WHITE)
+            setTextColor(textPrimary)
             textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
             maxLines = 1
+            gravity = Gravity.CENTER_VERTICAL
         }
-        header.addView(title, LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
-
-        val refresh = Button(context).apply {
-            text = context.getString(R.string.camera_overlay_refresh)
-            textSize = 12f
-            minHeight = 0
-            minimumHeight = 0
-            setPadding(dp(context, 10), 0, dp(context, 10), 0)
-        }
-        header.addView(refresh, LinearLayout.LayoutParams(
+        header.addView(title, LinearLayout.LayoutParams(
+            0,
             LinearLayout.LayoutParams.WRAP_CONTENT,
-            dp(context, 38),
-        ))
-
-        val close = Button(context).apply {
-            text = context.getString(R.string.camera_overlay_close)
-            textSize = 12f
-            minHeight = 0
-            minimumHeight = 0
-            setPadding(dp(context, 10), 0, dp(context, 10), 0)
-        }
-        header.addView(close, LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            dp(context, 38),
-        ).apply { leftMargin = dp(context, 6) })
+            1f,
+        ).apply { leftMargin = dp(context, 12) })
 
         val webView = WebView(context).apply {
             webViewClient = WebViewClient()
@@ -125,7 +131,8 @@ object CameraOverlayManager {
         }
 
         val webFrame = FrameLayout(context).apply {
-            setBackgroundColor(Color.BLACK)
+            setPadding(dp(context, 8), 0, dp(context, 8), dp(context, 8))
+            setBackgroundColor(cardSurface)
             addView(webView, FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -142,8 +149,7 @@ object CameraOverlayManager {
             1f,
         ))
 
-        refresh.setOnClickListener { webView.reload() }
-        close.setOnClickListener { dismiss(context) }
+        currentWebView = webView
 
         val params = WindowManager.LayoutParams(
             overlayWidth,
@@ -161,7 +167,6 @@ object CameraOverlayManager {
 
         wm.addView(root, params)
         currentView = root
-        currentWebView = webView
     }
 
     private fun dismiss(context: Context) {
@@ -190,6 +195,28 @@ object CameraOverlayManager {
         if (trimmed.isBlank()) return null
         return if (trimmed.contains("://")) trimmed else "https://$trimmed"
     }
+
+    private fun actionButton(context: Context, label: String, destructive: Boolean = false): TextView =
+        TextView(context).apply {
+            text = label
+            textSize = 12f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            maxLines = 1
+            includeFontPadding = false
+            setTextColor(if (destructive) textPrimary else navyDark)
+            background = GradientDrawable().apply {
+                cornerRadius = dp(context, 8).toFloat()
+                if (destructive) {
+                    setColor(cardSurfaceElevated)
+                    setStroke(dp(context, 1), cardBorder)
+                } else {
+                    setColor(accentGreen)
+                    setStroke(dp(context, 1), accentGreen)
+                }
+            }
+            setPadding(dp(context, 10), 0, dp(context, 10), 0)
+        }
 
     private fun dp(context: Context, value: Int): Int =
         (value * context.resources.displayMetrics.density).toInt()
