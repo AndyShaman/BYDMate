@@ -32,6 +32,8 @@ object CameraOverlayManager {
     private const val TAG = "CameraOverlay"
     private const val BASE_SCREEN_FRACTION = 2f / 3f
     private const val CAMERA_SIZE_MULTIPLIER = 1.4f
+    private const val CAMERA_HEIGHT_MULTIPLIER = 0.9f
+    private const val CAMERA_VERTICAL_OFFSET_FRACTION = 0.05f
     private const val AUTO_DIAL_DELAY_MS = 300L
     private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
     private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
@@ -82,7 +84,7 @@ object CameraOverlayManager {
         val displayMetrics = context.resources.displayMetrics
         val overlayFraction = BASE_SCREEN_FRACTION * CAMERA_SIZE_MULTIPLIER
         val overlayWidth = (displayMetrics.widthPixels * overlayFraction).toInt()
-        val overlayHeight = (displayMetrics.heightPixels * overlayFraction).toInt()
+        val overlayHeight = (displayMetrics.heightPixels * overlayFraction * CAMERA_HEIGHT_MULTIPLIER).toInt()
 
         val root = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
@@ -112,26 +114,26 @@ object CameraOverlayManager {
             setOnClickListener { currentWebView?.reload() }
         }
         header.addView(refresh, LinearLayout.LayoutParams(
-            dp(context, 92),
-            dp(context, 34),
+            dp(context, 101),
+            dp(context, 37),
         ))
 
         val close = actionButton(context, context.getString(R.string.camera_overlay_close), destructive = true).apply {
             setOnClickListener { dismiss(context) }
         }
         header.addView(close, LinearLayout.LayoutParams(
-            dp(context, 82),
-            dp(context, 34),
-        ).apply { leftMargin = dp(context, 6) })
+            dp(context, 90),
+            dp(context, 37),
+        ).apply { leftMargin = dp(context, 7) })
 
         camera.gates.take(2).forEach { gate ->
             val gateButton = actionButton(context, "☎ ${gate.name}", destructive = false).apply {
                 setOnClickListener { dialGate(context, gate) }
             }
             header.addView(gateButton, LinearLayout.LayoutParams(
-                dp(context, 148),
-                dp(context, 34),
-            ).apply { leftMargin = dp(context, 6) })
+                dp(context, 163),
+                dp(context, 37),
+            ).apply { leftMargin = dp(context, 7) })
         }
 
         val title = TextView(context).apply {
@@ -199,6 +201,7 @@ object CameraOverlayManager {
             PixelFormat.TRANSLUCENT,
         ).apply {
             gravity = Gravity.CENTER
+            y = (displayMetrics.heightPixels * CAMERA_VERTICAL_OFFSET_FRACTION).toInt()
         }
 
         wm.addView(root, params)
@@ -267,7 +270,7 @@ object CameraOverlayManager {
     private fun actionButton(context: Context, label: String, destructive: Boolean = false): TextView =
         TextView(context).apply {
             text = label
-            textSize = 12f
+            textSize = 13.2f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             maxLines = 1
@@ -283,7 +286,7 @@ object CameraOverlayManager {
                     setStroke(dp(context, 1), accentGreen)
                 }
             }
-            setPadding(dp(context, 10), 0, dp(context, 10), 0)
+            setPadding(dp(context, 11), 0, dp(context, 11), 0)
         }
 
     private fun roundedOutlineProvider(context: Context, radiusDp: Int): ViewOutlineProvider =
