@@ -918,6 +918,88 @@ class AutoserviceChargingDetectorTest {
         assertEquals(80, setup.stateStore.load().socPercent)
     }
 
+    // === Gun-glitch narrowing (static fids don't vouch for the gun fid) ===
+
+    @Test
+    fun `gun null with only static batteryType readable does NOT defer`() = runTest {
+        // batteryType is a constant (LFP) readable on firmwares where the gun
+        // fid is simply unsupported. Counting it as "charging device alive"
+        // turned every catch-up into STILL_CHARGING and permanently blocked
+        // charge logging on such cars. Only dynamic charging fids vouch.
+        val setup = build(
+            battery = battery(soc = 91f),
+            charging = ChargingReading(
+                gunConnectState = null,
+                chargingType = null, chargeBatteryVoltV = null,
+                batteryType = 1, chargingCapacityKwh = null,
+                bmsState = null, readAtMs = 1000L
+            ),
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        assertEquals(1, setup.chargeDao.inserted.size)
+    }
+
+    @Test
+    fun `fourth consecutive gun glitch falls through to cascade`() = runTest {
+        // A transient glitch clears within a read or two; a gun fid that stays
+        // silent across many runs while siblings answer is unsupported firmware.
+        // Without an escape the detector would defer forever and never log a
+        // charge on such cars.
+        val glitched = ChargingReading(
+            gunConnectState = null,
+            chargingType = 2, chargeBatteryVoltV = 0,
+            batteryType = 1, chargingCapacityKwh = 8.0f,
+            bmsState = null, readAtMs = 1000L
+        )
+        val setup = build(
+            battery = battery(soc = 91f),
+            charging = glitched,
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f
+        )
+
+        repeat(3) {
+            assertEquals(CatchUpOutcome.STILL_CHARGING, setup.detector.runCatchUp(now = 1500L).outcome)
+        }
+        val fourth = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, fourth.outcome)
+        assertEquals(1, setup.chargeDao.inserted.size)
+    }
+
+    @Test
+    fun `successful gun read resets the glitch counter`() = runTest {
+        val glitched = ChargingReading(
+            gunConnectState = null,
+            chargingType = 2, chargeBatteryVoltV = 0,
+            batteryType = 1, chargingCapacityKwh = 8.0f,
+            bmsState = null, readAtMs = 1000L
+        )
+        val setup = build(
+            battery = battery(soc = 91f),
+            charging = glitched,
+            prevSoc = 80,
+            prevCapacityKwh = 0.0f
+        )
+
+        // Two glitches, then a real gun read (connected) resets the streak.
+        repeat(2) { setup.detector.runCatchUp(now = 1500L) }
+        setup.auto.charging = charging(capKwh = 8.0f, gunState = 2)
+        setup.detector.runCatchUp(now = 1500L)
+
+        // Three more glitches are counts 1..3 of a fresh streak — all defer.
+        setup.auto.charging = glitched
+        repeat(3) {
+            assertEquals(CatchUpOutcome.STILL_CHARGING, setup.detector.runCatchUp(now = 1500L).outcome)
+        }
+        assertEquals(0, setup.chargeDao.inserted.size)
+    }
+
     // === Pending charge (gun seen connected → never silently lose the session) ===
 
     @Test

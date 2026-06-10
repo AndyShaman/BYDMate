@@ -101,10 +101,19 @@ class AutoserviceChargingDetector @Inject constructor(
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
+        // A transient gun-fid glitch clears within a read or two; a gun fid
+        // that stays silent across this many consecutive runs while sibling
+        // fids answer is unsupported firmware — stop deferring so charge
+        // logging is not permanently blocked on such cars.
+        const val MAX_CONSECUTIVE_GUN_GLITCHES = 3
         private const val TAG = "AutoserviceDetector"
     }
 
     private val mutex = Mutex()
+    // Consecutive gun-glitch verdicts (guarded by mutex). Reset on any
+    // successful gun read; past MAX_CONSECUTIVE_GUN_GLITCHES the gun fid is
+    // treated as unsupported and the cascade proceeds without it.
+    private var consecutiveGunGlitches = 0
     @Volatile private var lastSample: DiParsData? = null
     private val _state = MutableStateFlow(DetectorState.IDLE)
     val state: StateFlow<DetectorState> = _state
@@ -221,15 +230,26 @@ class AutoserviceChargingDetector @Inject constructor(
             // already treats it as null. We mirror that here so a firmware where 0
             // is the steady-state value doesn't permanently block charge logging.
             val gunResolved = gun?.takeIf { it != 0 }
+            if (gunResolved != null) consecutiveGunGlitches = 0
             val gunIsConnected = gunResolved != null && gunResolved != GUN_STATE_NONE
+            // Only DYNAMIC charging fids vouch for the gun fid. batteryType is
+            // a constant (LFP) that stays readable on firmwares where the gun
+            // fid is simply unsupported — counting it turned every catch-up
+            // into STILL_CHARGING and permanently blocked charge logging there.
             val chargingDeviceReadable = charging != null && (
                 charging.chargingType != null ||
-                    charging.batteryType != null ||
                     charging.bmsState != null ||
                     charging.chargingCapacityKwh != null ||
                     charging.chargeBatteryVoltV != null
                 )
-            val gunGlitch = gunResolved == null && chargingDeviceReadable
+            var gunGlitch = gunResolved == null && chargingDeviceReadable
+            if (gunGlitch) {
+                consecutiveGunGlitches++
+                if (consecutiveGunGlitches > MAX_CONSECUTIVE_GUN_GLITCHES) {
+                    android.util.Log.i(TAG, "runCatchUp: gun fid silent $consecutiveGunGlitches runs in a row → treating as unsupported, cascade proceeds")
+                    gunGlitch = false
+                }
+            }
             if (gunIsConnected || gunGlitch) {
                 // Persist the evidence that a session is in progress around the
                 // stored baseline. The gun physically blocks driving, so if the
