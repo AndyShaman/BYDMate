@@ -9,8 +9,13 @@ enum class ClusterMode { OFF, FULLSCREEN }
 /** Where Navi renders on the cluster overlay. VirtualDisplay size == SurfaceView size (1:1). */
 data class ClusterGeometry(val width: Int, val height: Int, val xOffset: Int, val yOffset: Int)
 
-/** Window size bounds (% of the cluster panel), shared by the settings sliders and [geometryFor]. */
-const val MIN_PROJECTION_PCT = 50
+/**
+ * Window size bounds (% of the cluster panel), shared by the settings sliders and [geometryFor].
+ * The minimum must stay below the native mini-window width: on Sea Lion 07 the mini zone is roughly
+ * a third of the 1920 px panel, so the old 50% floor made the window wider than the zone and the
+ * panel cut off Navi's left edge (where the maneuver/ETA panels live) (#48).
+ */
+const val MIN_PROJECTION_PCT = 20
 const val MAX_PROJECTION_PCT = 100
 
 /**

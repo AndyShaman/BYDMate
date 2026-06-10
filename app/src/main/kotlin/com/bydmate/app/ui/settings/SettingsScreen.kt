@@ -1062,6 +1062,48 @@ private fun DisplaySection() {
     // projection state to /sdcard/Download/bydmate-cluster-diag.txt, so a non-ADB tester can capture
     // the cluster topology in each native position (off / full / mini / arrows). Removed before release.
     ClusterDiagnosticsButton(context, entryPoint)
+
+    // EXPERIMENTAL calibration grid (#48): labelled 100 px cells drawn on the whole projection
+    // surface, so a photo of the native mini position reveals the exact visible rectangle (and
+    // whether the panel crops or scales the surface). Removed before release.
+    ClusterCalibrationButton(context, entryPoint)
+}
+
+/** EXPERIMENTAL (#48). Tap → toggle the calibration grid on the cluster projection display. */
+@Composable
+private fun ClusterCalibrationButton(context: Context, entryPoint: ClusterEntryPoint) {
+    val scope = rememberCoroutineScope()
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .clickable {
+                scope.launch {
+                    val msg = ClusterProjectionManager.toggleCalibrationGrid(
+                        context, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                }
+            },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(imageVector = Icons.Outlined.Settings, contentDescription = null, tint = AccentGreen)
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Калибровочная сетка", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    "Вкл/выкл сетку на приборке: сфотографируй мини-режим для замера зоны",
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+        }
+    }
 }
 
 /** EXPERIMENTAL (#48). Tap → pick the active native cluster position → write a diagnostic snapshot. */

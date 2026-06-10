@@ -48,6 +48,15 @@ class ClusterProjectionStateTest {
         )
     }
 
+    @Test fun `window can shrink to a fifth of the panel for the native mini zone`() {
+        // Sea Lion 07 mini zone is ~1/3 of the 1920 px panel; the floor must allow narrower-than-half
+        // windows so the tester can match the zone instead of overflowing it (#48).
+        assertEquals(
+            ClusterGeometry(width = 384, height = 720, xOffset = 1536, yOffset = 0),
+            geometryFor(ClusterMode.FULLSCREEN, 1920, 720, 20, 100, MAX_OFFSET_PCT, MAX_OFFSET_PCT),
+        )
+    }
+
     @Test fun `offset zero pins the window to the left-top edge`() {
         assertEquals(
             ClusterGeometry(width = 640, height = 240, xOffset = 0, yOffset = 0),

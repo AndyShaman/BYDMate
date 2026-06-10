@@ -1,6 +1,9 @@
 package com.bydmate.app.cluster
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Point
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -98,6 +101,8 @@ object ClusterProjectionManager {
         private set
 
     private var overlayView: View? = null
+    // EXPERIMENTAL (#48): full-surface calibration grid, independent of the projection overlay.
+    private var calibrationView: View? = null
     private var remoteDisplayId: Int = -1
     // Package actually pinned on the cluster (the one we launchAndForce'd). pullBackToMain tugs THIS
     // back, not the live settings target — the two differ when the user switches the projection app
@@ -653,5 +658,96 @@ object ClusterProjectionManager {
             Log.e(TAG, "captureDiagnostics write failed: ${e.message}")
             "Ошибка записи снимка: ${e.message}"
         }
+    }
+
+    /**
+     * EXPERIMENTAL (#48): toggle a full-surface calibration grid on the cluster projection display.
+     * Draws 100x100 px cells labelled with "col.row" indices straight onto the display (no
+     * VirtualDisplay, no projected app), so a photo of the native mini position reveals exactly
+     * which rectangle of the 1920x720 surface the panel shows — and whether it crops or scales it.
+     * Returns a toast-ready message. Removed before any release, like the diagnostics button.
+     */
+    suspend fun toggleCalibrationGrid(
+        context: Context, helper: HelperClient, bootstrap: HelperBootstrap,
+    ): String = mutex.withLock {
+        val appContext = context.applicationContext
+        calibrationView?.let {
+            removeOverlayView(it)
+            calibrationView = null
+            return@withLock "Калибровочная сетка убрана"
+        }
+        if (!bootstrap.ensureRunning()) return@withLock "Сервис не запущен, сетка недоступна"
+        if (!ensureOverlayPermission(appContext, helper)) return@withLock "Нет разрешения на оверлей"
+        val display = resolveClusterDisplay(appContext)
+            ?: return@withLock "Проекционный дисплей не найден"
+        withContext(Dispatchers.Main) {
+            val displayContext = appContext.createDisplayContext(display)
+            val wm = displayContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val view = CalibrationGridView(displayContext)
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                OVERLAY_TYPE,
+                OVERLAY_FLAGS,
+                PixelFormat.OPAQUE,
+            )
+            wm.addView(view, params)
+            calibrationView = view
+        }
+        Log.i(TAG, "calibration grid shown on ${clusterWidth}x$clusterHeight")
+        "Сетка ${clusterWidth}x$clusterHeight на приборке. Сфотографируй и нажми ещё раз, чтобы убрать"
+    }
+}
+
+/**
+ * EXPERIMENTAL (#48): calibration pattern for [ClusterProjectionManager.toggleCalibrationGrid].
+ * Checkerboard of 100 px cells, each labelled "col.row" (cell's left edge = col*100 px, top edge =
+ * row*100 px), thin grid lines, a red frame on the outermost surface edge and a cyan center cross.
+ * Any photographed fragment can be mapped back to absolute surface pixels from the labels alone.
+ */
+private class CalibrationGridView(context: Context) : View(context) {
+    private val cellStep = 100
+    private val evenCell = Paint().apply { color = Color.rgb(24, 24, 24) }
+    private val oddCell = Paint().apply { color = Color.rgb(52, 52, 52) }
+    private val line = Paint().apply { color = Color.argb(120, 255, 255, 255); strokeWidth = 1f }
+    private val frame = Paint().apply {
+        color = Color.RED; style = Paint.Style.STROKE; strokeWidth = 12f
+    }
+    private val cross = Paint().apply { color = Color.CYAN; strokeWidth = 4f }
+    private val label = Paint().apply {
+        color = Color.WHITE; textSize = 30f; isAntiAlias = true; textAlign = Paint.Align.CENTER
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        val w = width
+        val h = height
+        var row = 0
+        while (row * cellStep < h) {
+            var col = 0
+            while (col * cellStep < w) {
+                val x = col * cellStep.toFloat()
+                val y = row * cellStep.toFloat()
+                canvas.drawRect(
+                    x, y, x + cellStep, y + cellStep,
+                    if ((col + row) % 2 == 0) evenCell else oddCell,
+                )
+                canvas.drawText("$col.$row", x + cellStep / 2f, y + cellStep / 2f + 10f, label)
+                col++
+            }
+            row++
+        }
+        var gx = 0
+        while (gx <= w) {
+            canvas.drawLine(gx.toFloat(), 0f, gx.toFloat(), h.toFloat(), line)
+            gx += cellStep
+        }
+        var gy = 0
+        while (gy <= h) {
+            canvas.drawLine(0f, gy.toFloat(), w.toFloat(), gy.toFloat(), line)
+            gy += cellStep
+        }
+        canvas.drawLine(w / 2f, 0f, w / 2f, h.toFloat(), cross)
+        canvas.drawLine(0f, h / 2f, w.toFloat(), h / 2f, cross)
+        canvas.drawRect(0f, 0f, w.toFloat(), h.toFloat(), frame)
     }
 }
