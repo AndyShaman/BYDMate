@@ -84,11 +84,13 @@ class SharedAdaptiveLoop constructor(
                 ts = now,
                 soc = data.soc,
                 mileage = data.mileage,
+                totalElec = data.totalElecConsumption,
                 ignition = ignition,
                 openTripId = prev?.openTripId,
                 tripStartTs = prev?.tripStartTs,
                 tripStartSoc = prev?.tripStartSoc,
                 tripStartMileage = prev?.tripStartMileage,
+                tripStartTotalElec = prev?.tripStartTotalElec,
                 energydataAvailable = if (energyDataReader.isAvailable()) 1 else 0,
             )
         )

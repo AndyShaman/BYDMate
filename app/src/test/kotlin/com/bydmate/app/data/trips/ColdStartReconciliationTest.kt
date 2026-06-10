@@ -66,6 +66,28 @@ class ColdStartReconciliationTest {
         coVerify { lastState.clearOpenTrip() }
     }
 
+    @Test fun `stale trip consumption uses totalElec delta when available`() = runTest {
+        val tripDao = mockk<TripDao>(relaxed = true)
+        val lastState = mockk<LastStateDao>(relaxed = true) {
+            coEvery { getCurrent() } returns LastStateEntity(
+                id = 1, ts = 1_000_000L, soc = 70, mileage = 110.0,
+                totalElec = 500.8,
+                openTripId = 99L, tripStartTs = 900_000L, tripStartSoc = 70,
+                tripStartMileage = 100.0, tripStartTotalElec = 499.5
+            )
+        }
+        val rec = TripRecorder(
+            tripDao, lastState, energyAvailable(false),
+            batteryCapacityKwh = { 72.9 },
+            now = { 1_000_000L + 10 * 60_000L }
+        )
+        rec.reconcileColdStart()
+        val cap = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(cap)) }
+        assertEquals(1.3, cap.captured.kwhConsumed!!, 0.001)   // SOC flat: SOC path would yield null
+        assertEquals(13.0, cap.captured.kwhPer100km!!, 0.001)  // 1.3 kWh / 10 km * 100
+    }
+
     @Test fun `no last_state row starts fresh`() = runTest {
         val tripDao = mockk<TripDao>(relaxed = true)
         val lastState = mockk<LastStateDao>(relaxed = true) { coEvery { getCurrent() } returns null }

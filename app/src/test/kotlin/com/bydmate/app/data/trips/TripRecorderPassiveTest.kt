@@ -25,7 +25,7 @@ class TripRecorderPassiveTest {
         recorder.consume(diParsData(powerState = 1, soc = 70, mileage = 110.0))   // back to ON-idle
 
         coVerify(exactly = 0) { tripDao.insert(any()) }
-        coVerify(exactly = 0) { lastState.openTrip(any(), any(), any(), any()) }
+        coVerify(exactly = 0) { lastState.openTrip(any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { lastState.clearOpenTrip() }
     }
 }

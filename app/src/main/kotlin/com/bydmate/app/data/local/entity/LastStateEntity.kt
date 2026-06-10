@@ -17,10 +17,12 @@ data class LastStateEntity(
     @ColumnInfo(name = "ts") val ts: Long,
     @ColumnInfo(name = "soc") val soc: Int? = null,
     @ColumnInfo(name = "mileage") val mileage: Double? = null,
+    @ColumnInfo(name = "total_elec") val totalElec: Double? = null,
     @ColumnInfo(name = "ignition") val ignition: Int? = null,
     @ColumnInfo(name = "open_trip_id") val openTripId: Long? = null,
     @ColumnInfo(name = "trip_start_ts") val tripStartTs: Long? = null,
     @ColumnInfo(name = "trip_start_soc") val tripStartSoc: Int? = null,
     @ColumnInfo(name = "trip_start_mileage") val tripStartMileage: Double? = null,
+    @ColumnInfo(name = "trip_start_total_elec") val tripStartTotalElec: Double? = null,
     @ColumnInfo(name = "energydata_available") val energydataAvailable: Int = 0
 )

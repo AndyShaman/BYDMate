@@ -71,4 +71,11 @@ object AppModuleMigrationsForTest {
             )
         }
     }
+
+    val MIGRATION_15_16 = object : Migration(15, 16) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE last_state ADD COLUMN total_elec REAL")
+            db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_total_elec REAL")
+        }
+    }
 }

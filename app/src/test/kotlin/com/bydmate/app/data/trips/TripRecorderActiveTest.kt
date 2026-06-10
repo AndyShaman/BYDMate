@@ -49,8 +49,38 @@ class TripRecorderActiveTest {
         assertEquals(72.9 * 0.10, t.kwhConsumed!!, 0.001)
         assertEquals(72.9, t.kwhPer100km!!, 0.001)  // 7.29 kWh / 10 km * 100
         assertEquals(TripSource.NATIVE_POLLING, t.source)
-        coVerify(exactly = 1) { lastState.openTrip(startTs = 1_000L, startSoc = 80, startMileage = 100.0, now = 1_000L) }
+        coVerify(exactly = 1) { lastState.openTrip(startTs = 1_000L, startSoc = 80, startMileage = 100.0, startTotalElec = null, now = 1_000L) }
         coVerify(exactly = 1) { lastState.clearOpenTrip() }
+    }
+
+    @Test fun `totalElec delta gives consumption even when SOC unchanged`() = runTest {
+        val (rec, tripDao, lastState) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, totalElecConsumption = 1000.0))  // open
+        rec.consume(diParsData(powerState = 1, soc = 80, mileage = 103.0, totalElecConsumption = 1000.4))  // close: 3 km, SOC flat
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        val t = captured.captured
+        assertEquals(0.4, t.kwhConsumed!!, 0.001)
+        assertEquals(0.4 / 3.0 * 100.0, t.kwhPer100km!!, 0.001)
+        coVerify(exactly = 1) { lastState.openTrip(startTs = 1_000L, startSoc = 80, startMileage = 100.0, startTotalElec = 1000.0, now = 1_000L) }
+    }
+
+    @Test fun `totalElec delta preferred over coarse SOC delta`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, totalElecConsumption = 2000.0))
+        rec.consume(diParsData(powerState = 1, soc = 79, mileage = 105.0, totalElecConsumption = 2000.5))
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertEquals(0.5, captured.captured.kwhConsumed!!, 0.001)  // 0.5 from counter, not 0.729 from 1% SOC
+    }
+
+    @Test fun `negative totalElec delta falls back to SOC delta`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, totalElecConsumption = 1000.0))
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 110.0, totalElecConsumption = 999.0))  // counter reset
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertEquals(72.9 * 0.10, captured.captured.kwhConsumed!!, 0.001)
     }
 
     @Test fun `consecutive DRIVE ticks do not double-open`() = runTest {
@@ -60,7 +90,7 @@ class TripRecorderActiveTest {
         rec.consume(diParsData(powerState = 2, soc = 78, mileage = 102.0))
         rec.consume(diParsData(powerState = 1, soc = 78, mileage = 102.0))
         coVerify(exactly = 1) { tripDao.insert(any()) }
-        coVerify(exactly = 1) { lastState.openTrip(any(), any(), any(), any()) }
+        coVerify(exactly = 1) { lastState.openTrip(any(), any(), any(), any(), any()) }
     }
 
     @Test fun `zero distance leaves kwhPer100km null even with consumption`() = runTest {

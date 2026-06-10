@@ -22,6 +22,7 @@ class TripRecorder @Inject constructor(
         val startTs: Long,
         val startSoc: Int?,
         val startMileage: Double?,
+        val startTotalElec: Double? = null,
     )
     internal var open: Open? = null
 
@@ -47,12 +48,13 @@ class TripRecorder @Inject constructor(
 
     private suspend fun openTrip(data: DiParsData) {
         val startTs = now()
-        open = Open(startTs, data.soc, data.mileage)
+        open = Open(startTs, data.soc, data.mileage, data.totalElecConsumption)
         // Spec §96-100: persist open trip to last_state so cold-start can resume.
         val updated = lastStateDao.openTrip(
             startTs = startTs,
             startSoc = data.soc,
             startMileage = data.mileage,
+            startTotalElec = data.totalElecConsumption,
             now = startTs,
         )
         if (updated == 0) {
@@ -68,16 +70,31 @@ class TripRecorder @Inject constructor(
                     tripStartTs = startTs,
                     tripStartSoc = data.soc,
                     tripStartMileage = data.mileage,
+                    tripStartTotalElec = data.totalElecConsumption,
                     energydataAvailable = 0,
                 )
             )
         }
     }
 
+    /**
+     * BMS lifetime-consumption counter (0.1 kWh granularity) beats the integer SOC
+     * delta (1% SOC = ~0.7 kWh quantum — issue #53: dashes on short trips, inflated
+     * per-100km on others). Negative/zero delta (counter reset or unsupported fid)
+     * falls back to the SOC estimate.
+     */
+    private fun computeKwh(startElec: Double?, endElec: Double?, startSoc: Int?, endSoc: Int?, cap: Double): Double? {
+        if (startElec != null && endElec != null) {
+            val elecDelta = endElec - startElec
+            if (elecDelta > 0) return elecDelta
+        }
+        val socDelta = (startSoc ?: 0) - (endSoc ?: 0)
+        return if (socDelta > 0) socDelta / 100.0 * cap else null
+    }
+
     private suspend fun close(open: Open, end: DiParsData) {
         val cap = batteryCapacityKwh()
-        val socDelta = (open.startSoc ?: 0) - (end.soc ?: 0)
-        val kwh = if (socDelta > 0) socDelta / 100.0 * cap else null
+        val kwh = computeKwh(open.startTotalElec, end.totalElecConsumption, open.startSoc, end.soc, cap)
         val distance = if (open.startMileage != null && end.mileage != null)
             (end.mileage - open.startMileage).coerceAtLeast(0.0) else null
         val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
@@ -106,13 +123,12 @@ class TripRecorder @Inject constructor(
         val staleGap = 5 * 60 * 1_000L
         if (gap < staleGap) {
             if (active) {
-                open = Open(state.tripStartTs, state.tripStartSoc, state.tripStartMileage)
+                open = Open(state.tripStartTs, state.tripStartSoc, state.tripStartMileage, state.tripStartTotalElec)
             }
             return
         }
         if (active) {
-            val socDelta = (state.tripStartSoc ?: 0) - (state.soc ?: 0)
-            val kwh = if (socDelta > 0) socDelta / 100.0 * batteryCapacityKwh() else null
+            val kwh = computeKwh(state.tripStartTotalElec, state.totalElec, state.tripStartSoc, state.soc, batteryCapacityKwh())
             val distance = if (state.tripStartMileage != null && state.mileage != null)
                 (state.mileage - state.tripStartMileage).coerceAtLeast(0.0) else null
             val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
