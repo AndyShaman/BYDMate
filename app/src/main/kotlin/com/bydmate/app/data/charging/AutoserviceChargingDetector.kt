@@ -158,7 +158,11 @@ class AutoserviceChargingDetector @Inject constructor(
         return mutex.withLock {
             val prevSoc = stateStore.load().socPercent
             when {
-                prevSoc != null && soc > prevSoc -> true   // un-reconstructed charge — re-arm
+                // Un-reconstructed charge — re-arm. Negative power means energy
+                // is flowing IN right now (live charge still in progress, e.g.
+                // Song reports gun=null while charging; also covers regen while
+                // driving) — never re-arm mid-charge, wait for power to settle.
+                prevSoc != null && soc > prevSoc -> (data.power ?: 0.0) >= 0.0
                 prevSoc != null && soc == prevSoc -> false // unchanged: leave the anchor
                 else -> {
                     // prevSoc == null → seed; soc < prevSoc → driving roll-forward.

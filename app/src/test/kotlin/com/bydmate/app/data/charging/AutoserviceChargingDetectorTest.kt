@@ -196,9 +196,14 @@ class AutoserviceChargingDetectorTest {
     }
 
     /** DiParsData carrying only the fields recordParkedAnchor reads (gun defaults to NONE=1). */
-    private fun parkedSample(soc: Int?, mileage: Double? = null, gun: Int? = 1): DiParsData = DiParsData(
+    private fun parkedSample(
+        soc: Int?,
+        mileage: Double? = null,
+        gun: Int? = 1,
+        power: Double? = null
+    ): DiParsData = DiParsData(
         soc = soc,
-        speed = null, mileage = mileage, power = null, chargeGunState = gun,
+        speed = null, mileage = mileage, power = power, chargeGunState = gun,
         maxBatTemp = null, avgBatTemp = null, minBatTemp = null,
         chargingStatus = null, batteryCapacityKwh = null, totalElecConsumption = null,
         voltage12v = null, maxCellVoltage = null, minCellVoltage = null,
@@ -1233,6 +1238,33 @@ class AutoserviceChargingDetectorTest {
 
         assertFalse(rearm)
         assertEquals(50, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `recordParkedAnchor never signals re-arm while power is negative (gun-null live charge)`() = runTest {
+        // Song reports chargeGunState=null even during a live charge. SOC then
+        // climbs above the anchor mid-charge — re-arming there would create a
+        // partial session and split the charge. Negative power = energy is
+        // flowing IN = live charge; block the re-arm (codex audit 2026-06-11).
+        val setup = build(battery = battery(soc = 80f), prevSoc = 10)
+
+        val rearm = setup.detector.recordParkedAnchor(
+            parkedSample(soc = 80, gun = null, power = -5.0), now = 2000L
+        )
+
+        assertFalse(rearm)
+        assertEquals(10, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `recordParkedAnchor signals re-arm on gun-null SOC rise once power is non-negative`() = runTest {
+        // Same Song gun-null case after the charge ended: power settled to
+        // null/zero — now the rise above the anchor is a missed charge.
+        val setup = build(battery = battery(soc = 80f), prevSoc = 10)
+
+        assertTrue(setup.detector.recordParkedAnchor(parkedSample(soc = 80, gun = null, power = null), now = 2000L))
+        assertTrue(setup.detector.recordParkedAnchor(parkedSample(soc = 80, gun = null, power = 0.0), now = 3000L))
+        assertEquals(10, setup.stateStore.load().socPercent)
     }
 
     @Test
