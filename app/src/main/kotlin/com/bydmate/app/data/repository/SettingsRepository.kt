@@ -109,6 +109,10 @@ open class SettingsRepository @Inject constructor(
     suspend fun setString(key: String, value: String) =
         settingsDao.set(SettingEntity(key, value))
 
+    /** Writes all key/value pairs in one Room transaction (all or nothing). */
+    suspend fun setStrings(values: Map<String, String>) =
+        settingsDao.setAll(values.map { (k, v) -> SettingEntity(k, v) })
+
     suspend fun getBatteryCapacity(): Double =
         getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).parseNumericSetting() ?: 72.9
 

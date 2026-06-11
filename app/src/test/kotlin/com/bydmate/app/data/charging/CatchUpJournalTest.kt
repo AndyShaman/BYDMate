@@ -18,6 +18,7 @@ class CatchUpJournalTest {
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
+        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
         override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 

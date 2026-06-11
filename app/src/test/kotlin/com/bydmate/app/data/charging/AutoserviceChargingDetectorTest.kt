@@ -98,6 +98,9 @@ class AutoserviceChargingDetectorTest {
         override suspend fun set(entity: com.bydmate.app.data.local.entity.SettingEntity) {
             map[entity.key] = entity.value ?: ""
         }
+        override suspend fun setAll(settings: List<com.bydmate.app.data.local.entity.SettingEntity>) {
+            settings.forEach { set(it) }
+        }
         override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.SettingEntity>> =
             flowOf(emptyList())
     }

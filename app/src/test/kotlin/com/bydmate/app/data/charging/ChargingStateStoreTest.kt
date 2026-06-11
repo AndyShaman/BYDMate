@@ -21,6 +21,7 @@ class ChargingStateStoreTest {
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
+        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
         override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
@@ -96,5 +97,31 @@ class ChargingStateStoreTest {
         assertNull(state.mileageKm)
         assertNull(state.capacityKwh)
         assertEquals(2000L, state.ts)
+    }
+
+    @Test
+    fun `save writes the whole anchor in a single setAll batch`() = runTest {
+        // A process kill mid-save must never leave a mixed anchor (new mileage
+        // + stale SOC → false odometerMoved). Room makes a list-@Upsert one
+        // transaction, so save() must issue exactly one setAll and no set().
+        class RecordingDao : com.bydmate.app.data.local.dao.SettingsDao {
+            val map = mutableMapOf<String, String>()
+            var setCalls = 0
+            var setAllCalls = 0
+            override suspend fun get(key: String): String? = map[key]
+            override fun observe(key: String): Flow<String?> = flowOf(map[key])
+            override suspend fun set(entity: SettingEntity) {
+                setCalls++; map[entity.key] = entity.value ?: ""
+            }
+            override suspend fun setAll(settings: List<SettingEntity>) {
+                setAllCalls++; settings.forEach { map[it.key] = it.value ?: "" }
+            }
+            override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
+        }
+        val dao = RecordingDao()
+        val s = ChargingStateStore(SettingsRepository(dao, mockk(relaxed = true)))
+        s.save(socPercent = 85, mileageKm = 100f, capacityKwh = 5f, ts = 1000L)
+        assertEquals(1, dao.setAllCalls)
+        assertEquals(0, dao.setCalls)
     }
 }

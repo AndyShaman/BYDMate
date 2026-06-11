@@ -30,10 +30,16 @@ class ChargingStateStore @Inject constructor(
     )
 
     suspend fun save(socPercent: Int?, mileageKm: Float?, capacityKwh: Float?, ts: Long) {
-        socPercent?.let { settings.setChargingBaselineSoc(it) }
-        settings.setLastMileageKm(mileageKm)
-        settings.setLastCapacityKwh(capacityKwh)
-        settings.setLastStateTs(ts)
+        // Single transactional write: a process kill mid-save must never leave
+        // a mixed anchor (new mileage + stale SOC → false odometerMoved at the
+        // next catch-up) — audit 2026-06-11.
+        val values = buildMap {
+            socPercent?.let { put(SettingsRepository.KEY_CHARGING_BASELINE_SOC, it.toString()) }
+            put(SettingsRepository.KEY_LAST_MILEAGE_KM, mileageKm?.toString() ?: "")
+            put(SettingsRepository.KEY_LAST_CAPACITY_KWH, capacityKwh?.toString() ?: "")
+            put(SettingsRepository.KEY_LAST_STATE_TS, ts.toString())
+        }
+        settings.setStrings(values)
     }
 
     /** True when a charge session was observed in progress (gun connected) and
