@@ -929,14 +929,14 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `drive in the gap moves odometer and skips reconstruction`() = runTest {
-        // The odometer advanced between the parked anchor and wake-up → a drive
-        // happened in the gap, so the stored start SOC is no longer the charge
-        // start. Skip the row; roll the baseline forward to current.
+    fun `1 percent rise with odometer moved skips reconstruction`() = runTest {
+        // The odometer gate applies ONLY to the 1% tier: a 1% rise after a
+        // drive could be regen or a BMS recalculation, not a charge. Skip the
+        // row; roll the baseline forward to current.
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 10,
+            prevSoc = 79,
             prevMileageKm = 2091f,
             prevTs = 100L
         )
@@ -946,6 +946,53 @@ class AutoserviceChargingDetectorTest {
         assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
         assertEquals(0, setup.chargeDao.inserted.size)
         assertEquals(80, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `2 percent rise with odometer moved still creates a row`() = runTest {
+        // SOC_DELTA_TRUSTED_CHARGE: regen-while-parked and BMS recalibration
+        // never reach 2%, so a >=2% rise is a charge no matter what the
+        // odometer says — the anchor's mileage can be stale (it used to freeze
+        // while SOC was flat, field report 2026-06-11).
+        val fourHoursMs = 4L * 3_600_000L
+        val setup = build(
+            battery = battery(soc = 80f, mileage = 2200f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 78,
+            prevMileageKm = 2091f,
+            prevTs = 100L
+        )
+
+        val result = setup.detector.runCatchUp(now = 100L + fourHoursMs)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(78, ch.socStart)
+        assertEquals(80, ch.socEnd)
+    }
+
+    @Test
+    fun `dacha charge with stale anchor mileage is recorded (field report 2026-06-11)`() = runTest {
+        // VadimV, Song, v3.1.3: drove 7 km to the dacha at constant SOC — the
+        // old anchor froze its mileage at 47934.7 while the car reached 47941.6.
+        // Charged 10 kWh asleep (75→86), woke up → odometerMoved=true ate the
+        // session. With the trusted-delta tier an 11% rise is recorded.
+        val fourHoursMs = 4L * 3_600_000L
+        val setup = build(
+            battery = battery(soc = 86f, mileage = 47941.6f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 75,
+            prevMileageKm = 47934.7f,
+            prevTs = 100L
+        )
+
+        val result = setup.detector.runCatchUp(now = 100L + fourHoursMs)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(75, ch.socStart)
+        assertEquals(86, ch.socEnd)
+        assertEquals("autoservice_soc_estimate", ch.detectionSource)
     }
 
     @Test
@@ -1126,16 +1173,17 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `pending charge with odometer moved still creates a row and clears pending`() = runTest {
+    fun `pending 1 percent charge with odometer moved still creates a row and clears pending`() = runTest {
         // Morning race lost: a wake during the charge set pending, the final
         // wake-up window failed, the user drove off. SOC can only RISE via
-        // charging, so with pending evidence the session must become a row
-        // (kWh slightly under-counted by the drive) instead of a silent drop.
+        // charging, so with pending evidence even a 1% rise (the only tier the
+        // odometer gate still applies to) must become a row instead of a
+        // silent drop.
         val fourHoursMs = 4L * 3_600_000L
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 10,
+            prevSoc = 79,
             prevMileageKm = 2091f,
             prevTs = 100L
         )
@@ -1145,17 +1193,17 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(10, ch.socStart)
+        assertEquals(79, ch.socStart)
         assertEquals(80, ch.socEnd)
         assertFalse(setup.stateStore.loadChargePending())
     }
 
     @Test
-    fun `odometer moved WITHOUT pending still skips reconstruction`() = runTest {
+    fun `1 percent rise with odometer moved WITHOUT pending still skips reconstruction`() = runTest {
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 10,
+            prevSoc = 79,
             prevMileageKm = 2091f,
             prevTs = 100L
         )
@@ -1287,6 +1335,25 @@ class AutoserviceChargingDetectorTest {
 
         assertFalse(rearm)
         assertEquals(50, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `recordParkedAnchor keeps the mileage rolling while SOC is flat`() = runTest {
+        // A 7 km drive at constant SOC used to freeze the anchor's mileage
+        // (only SOC drops refreshed it) — the stale value then tripped the
+        // Step-5 odometer gate and a real dacha charge was dropped (field
+        // report 2026-06-11, Song). Flat SOC must still update mileage + ts.
+        val setup = build(battery = battery(soc = 50f), prevSoc = 50, prevMileageKm = 47934.7f)
+
+        val rearm = setup.detector.recordParkedAnchor(
+            parkedSample(soc = 50, mileage = 47941.6, gun = 1), now = 2000L
+        )
+
+        assertFalse(rearm)
+        val state = setup.stateStore.load()
+        assertEquals(50, state.socPercent)
+        assertEquals(47941.6f, state.mileageKm!!, 0.01f)
+        assertEquals(2000L, state.ts)
     }
 
     @Test
