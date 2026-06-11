@@ -91,10 +91,12 @@ class AutoserviceChargingDetector @Inject constructor(
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Minimum SOC rise (percentage points) for a wake-up jump to count as a
-        // real charging session. A genuine plug-in adds far more; anything below
-        // this is BMS recalibration / regen noise, so we roll the anchor forward
-        // without a row instead of logging a phantom micro-charge.
-        const val MIN_SOC_DELTA_FOR_CHARGE = 3
+        // real charging session. 1 = any integer SOC rise with the odometer
+        // parked counts. Was 3 (recalibration-noise guard) until 2026-06-11:
+        // short-trip cars top up only 1-2% per night and every such session was
+        // silently dropped. A rare BMS recalibration may now log a ~1% phantom
+        // row — visible and hand-deletable, accepted over daily silent loss.
+        const val MIN_SOC_DELTA_FOR_CHARGE = 1
         // Odometer movement (km) above which the gap between the parked anchor and
         // wake-up contained a drive — the stored start-of-charge SOC is then no
         // longer the true charge start, so we skip reconstruction.
@@ -267,8 +269,8 @@ class AutoserviceChargingDetector @Inject constructor(
             }
 
             // Step 5: charge-detection gate. Create a row only for a real charge:
-            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (smaller = recalibration /
-            //     regen noise, never a plug-in), AND
+            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (zero/negative = no
+            //     charge happened), AND
             //   - the odometer did not move since the anchor (a drive in the gap
             //     makes the stored start-of-charge SOC untrustworthy — we'd log a
             //     smeared session, so skip).

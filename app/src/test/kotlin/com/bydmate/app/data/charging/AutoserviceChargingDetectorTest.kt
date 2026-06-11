@@ -938,9 +938,28 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `SOC bump below charge threshold rolls forward without a row`() = runTest {
-        // A 2% wake-up rise is BMS recalibration / regen noise, not a plug-in.
-        // No row; baseline advances to the new SOC.
+    fun `1 percent SOC rise creates a row`() = runTest {
+        // Daily AC top-ups on short-trip cars add only 1-2% — these are real
+        // sessions, not noise (field report 2026-06-11). The gate is 1%.
+        val setup = build(
+            battery = battery(soc = 80f),
+            charging = charging(capKwh = null, gunState = 1),
+            prevSoc = 79
+        )
+
+        val result = setup.detector.runCatchUp(now = 1500L)
+
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        val ch = setup.chargeDao.inserted.single()
+        assertEquals(79, ch.socStart)
+        assertEquals(80, ch.socEnd)
+        assertEquals(80, setup.stateStore.load().socPercent)
+    }
+
+    @Test
+    fun `2 percent SOC rise creates a row`() = runTest {
+        // Regression guard for the old MIN_SOC_DELTA_FOR_CHARGE=3 gate that
+        // silently dropped small overnight charges.
         val setup = build(
             battery = battery(soc = 80f),
             charging = charging(capKwh = null, gunState = 1),
@@ -949,8 +968,8 @@ class AutoserviceChargingDetectorTest {
 
         val result = setup.detector.runCatchUp(now = 1500L)
 
-        assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
-        assertEquals(0, setup.chargeDao.inserted.size)
+        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
+        assertEquals(1, setup.chargeDao.inserted.size)
         assertEquals(80, setup.stateStore.load().socPercent)
     }
 
@@ -1117,13 +1136,13 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `tiny SOC bump clears chargePending without a row`() = runTest {
-        // Gun was seen connected but the charge added <3% — recalibration-scale
-        // noise. Roll forward and drop the stale pending flag.
+    fun `unchanged SOC clears chargePending without a row`() = runTest {
+        // Gun was seen connected but SOC did not rise (charger never delivered).
+        // Roll forward and drop the stale pending flag.
         val setup = build(
             battery = battery(soc = 80f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 78
+            prevSoc = 80
         )
         setup.stateStore.setChargePending(true)
 
