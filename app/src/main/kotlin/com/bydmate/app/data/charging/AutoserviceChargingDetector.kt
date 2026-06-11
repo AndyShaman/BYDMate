@@ -98,9 +98,18 @@ class AutoserviceChargingDetector @Inject constructor(
         // silently dropped. A rare BMS recalibration may now log a ~1% phantom
         // row — visible and hand-deletable, accepted over daily silent loss.
         const val MIN_SOC_DELTA_FOR_CHARGE = 1
+        // SOC rise (percentage points) at or above which a charge is trusted
+        // UNCONDITIONALLY — the odometer gate no longer applies. Physics: the
+        // only non-charge SOC rises are regen (needs driving, sub-1% while the
+        // anchor is parked) and a BMS/LFP recalculation (~1%). Neither reaches
+        // 2%, so a >=2% rise is always a real charge. Field decision 2026-06-11:
+        // an anchor with stale mileage made the odometer gate eat a real 11%
+        // dacha charge (Song) — a daily loss; a rare 1% phantom is acceptable.
+        const val SOC_DELTA_TRUSTED_CHARGE = 2
         // Odometer movement (km) above which the gap between the parked anchor and
         // wake-up contained a drive — the stored start-of-charge SOC is then no
-        // longer the true charge start, so we skip reconstruction.
+        // longer the true charge start, so we skip reconstruction. Applies ONLY
+        // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 1%).
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
@@ -163,9 +172,13 @@ class AutoserviceChargingDetector @Inject constructor(
                 // Song reports gun=null while charging; also covers regen while
                 // driving) — never re-arm mid-charge, wait for power to settle.
                 prevSoc != null && soc > prevSoc -> (data.power ?: 0.0) >= 0.0
-                prevSoc != null && soc == prevSoc -> false // unchanged: leave the anchor
                 else -> {
-                    // prevSoc == null → seed; soc < prevSoc → driving roll-forward.
+                    // prevSoc == null → seed; soc < prevSoc → driving roll-forward;
+                    // soc == prevSoc → SOC flat but the car may still be moving —
+                    // the mileage MUST keep rolling. Freezing it here let the
+                    // anchor's odometer go stale (a 7 km drive at constant SOC),
+                    // and the Step-5 odometer gate then ate a real dacha charge
+                    // (field report 2026-06-11, Song, 10 kWh lost).
                     stateStore.save(
                         socPercent = soc,
                         mileageKm = data.mileage?.toFloat(),
@@ -291,9 +304,13 @@ class AutoserviceChargingDetector @Inject constructor(
             // Step 5: charge-detection gate. Create a row only for a real charge:
             //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (zero/negative = no
             //     charge happened), AND
-            //   - the odometer did not move since the anchor (a drive in the gap
-            //     makes the stored start-of-charge SOC untrustworthy — we'd log a
-            //     smeared session, so skip).
+            //   - for the 1% tier ONLY: the odometer did not move since the
+            //     anchor (a 1% rise after a drive could be regen or a BMS
+            //     recalculation). A rise >= SOC_DELTA_TRUSTED_CHARGE is beyond
+            //     what regen-while-parked or recalibration can produce, so it
+            //     is recorded regardless of the odometer — the anchor's mileage
+            //     can be stale (it freezes while SOC is flat), and trusting it
+            //     over physics lost real charges in the field (2026-06-11).
             // Every non-charge case rolls the baseline forward WITHOUT a row so the
             // anchor can never stick low and mis-attribute the next session. This
             // also subsumes the old socDelta <= 0 regression gate (lifetime_kwh
@@ -307,7 +324,9 @@ class AutoserviceChargingDetector @Inject constructor(
             // that ended before the drive. The drive's consumption makes the SOC
             // estimate a slight under-count — accepted over losing the row.
             val chargePending = stateStore.loadChargePending()
-            if (socDelta < MIN_SOC_DELTA_FOR_CHARGE || (odometerMoved && !chargePending)) {
+            if (socDelta < MIN_SOC_DELTA_FOR_CHARGE ||
+                (socDelta < SOC_DELTA_TRUSTED_CHARGE && odometerMoved && !chargePending)
+            ) {
                 android.util.Log.i(TAG, "runCatchUp: socDelta=$socDelta odometerMoved=$odometerMoved pending=$chargePending → NO_DELTA (roll forward, no row)")
                 logJournal(
                     now,
