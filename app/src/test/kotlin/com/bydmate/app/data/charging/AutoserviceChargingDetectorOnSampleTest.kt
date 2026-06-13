@@ -20,6 +20,7 @@ class AutoserviceChargingDetectorOnSampleTest {
             classifier = mockk(relaxed = true),
             settings = mockk(relaxed = true),
             parsReader = mockk<ParsReader>(relaxed = true),
+            journal = mockk(relaxed = true),
         )
 
         val sample = diParsData(soc = 85)

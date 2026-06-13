@@ -204,7 +204,7 @@ fun ChargesScreen(
                 charge = charge,
                 homeTariff = state.homeTariff,
                 dcTariff = state.dcTariff,
-                batteryCapacityKwh = state.nominalCapacityKwh,
+                batteryCapacityKwh = state.effectiveCapacityKwh,
                 currencySymbol = state.currencySymbol,
                 onDismiss = { viewModel.onDismissEdit() },
                 onSave = { viewModel.onSaveEdit(it) },

@@ -129,6 +129,8 @@ class SettingsViewModel @Inject constructor(
     private val adbOnDeviceClient: AdbOnDeviceClient,
     private val localePreferences: LocalePreferences,
     private val backupManager: BackupManager,
+    private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
+    private val catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -886,6 +888,27 @@ class SettingsViewModel @Inject constructor(
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
+            }
+
+            appendLine("--- charging catch-up ---")
+            try {
+                val anchor = chargingStateStore.load()
+                val anchorTs = if (anchor.ts > 0L)
+                    SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(anchor.ts))
+                else "(unset)"
+                appendLine(
+                    "anchor: soc=${anchor.socPercent} mileageKm=${anchor.mileageKm} " +
+                        "ts=$anchorTs pending=${chargingStateStore.loadChargePending()}"
+                )
+                val journal = catchUpJournal.read()
+                appendLine("journal:")
+                if (journal.isBlank()) {
+                    appendLine("  (empty)")
+                } else {
+                    journal.lines().forEach { appendLine("  $it") }
+                }
+            } catch (e: Exception) {
+                appendLine("(failed to gather charging catch-up state: ${e.message})")
             }
 
             appendLine("--- vehicle data sources ---")

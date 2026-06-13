@@ -22,7 +22,15 @@
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
+    <string name="settings_display_size_width_desc">Ширина окна в % от ширины приборки</string>
     <string name="settings_display_size_height">Высота</string>
+    <string name="settings_display_size_height_desc">Высота окна в % от высоты приборки</string>
+    <string name="settings_display_offset_x">Сдвиг по горизонтали</string>
+    <string name="settings_display_offset_x_desc">Положение окна: 0 - левый край, 50 - центр, 100 - правый край</string>
+    <string name="settings_display_offset_y">Сдвиг по вертикали</string>
+    <string name="settings_display_offset_y_desc">Положение окна: 0 - верх, 50 - центр, 100 - низ</string>
+    <string name="settings_display_scale">Масштаб</string>
+    <string name="settings_display_scale_desc">Крупность интерфейса: меньше значение - мельче элементы и больше карты в окне</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Правая звезда</string>
     <string name="steering_button_left_star">Левая звезда</string>

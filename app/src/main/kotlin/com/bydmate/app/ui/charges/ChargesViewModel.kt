@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.R
+import com.bydmate.app.data.charging.AutoserviceChargingDetector
 import com.bydmate.app.data.local.dao.BatterySnapshotDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
@@ -64,6 +65,8 @@ data class ChargesUiState(
     val lifetimeTotalKwh: Double = 0.0,
     val equivCycles: Double = 0.0,
     val nominalCapacityKwh: Double = 72.9,
+    // BMS-reported SOH as a 0..1 factor; 1.0 when unavailable or implausible (#28)
+    val sohFactor: Double = 1.0,
     val sohSeries: List<Float> = emptyList(),
     val capacitySeries: List<Float> = emptyList(),
     // BMS lifetime from autoservice — distinct from sum across our charge rows
@@ -77,7 +80,10 @@ data class ChargesUiState(
     val deleteConfirmCharge: ChargeEntity? = null,
     val homeTariff: Double = 0.20,
     val dcTariff: Double = 0.73,
-)
+) {
+    /** SOC→kWh conversions use the aged capacity, not the nominal one (#28). */
+    val effectiveCapacityKwh: Double get() = nominalCapacityKwh * sohFactor
+}
 
 @HiltViewModel
 class ChargesViewModel @Inject constructor(
@@ -288,6 +294,9 @@ class ChargesViewModel @Inject constructor(
                     autoserviceAllSentinel = allSentinel,
                     bmsLifetimeKm = state.lifetimeKm?.toDouble(),
                     bmsLifetimeKwh = state.lifetimeKwh?.toDouble(),
+                    sohFactor = state.sohPercent?.toDouble()
+                        ?.takeIf { soh -> soh in AutoserviceChargingDetector.SOH_SANITY_MIN..100.0 }
+                        ?.div(100.0) ?: 1.0,
                 )
             }
         }

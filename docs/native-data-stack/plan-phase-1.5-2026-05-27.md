@@ -2104,7 +2104,7 @@ Smoke is operator-in-car. The checklist is the deliverable; the actual smoke hap
   - [ ] Ignition off: ~30 s refresh.
 
   ## Alice (private build only)
-  - [ ] VPS POST every ~25 s carries fresh state (check pm2 logs on vlad-brain).
+  - [ ] VPS POST every ~25 s carries fresh state (check pm2 logs on the VPS).
 
   ## ABRP/Iternio
   - [ ] Driving: telemetry posts every 1 s.

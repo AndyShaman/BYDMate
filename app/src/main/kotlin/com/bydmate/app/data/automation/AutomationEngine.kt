@@ -53,12 +53,20 @@ class AutomationEngine @Inject constructor(
         const val ACTION_CONFIRM = "com.bydmate.app.AUTOMATION_CONFIRM"
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
         const val EXTRA_NOTIF_ID = "notif_id"
+
+        // How long after the first evaluate() the service_start trigger stays
+        // armed, giving cold-start params a few polls to warm up.
+        const val SERVICE_START_WINDOW_MS = 30_000L
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val pendingConfirmations = ConcurrentHashMap<Int, PendingAction>()
-    // Edge triggering: only fire when condition transitions from false→true
-    private val lastEvalResults = ConcurrentHashMap<Long, Boolean>()
+    // Edge triggering: only fire when condition transitions from false→true.
+    // triggersHash detects rule edits, so a saved edit reseeds instead of
+    // comparing the new condition against state of the OLD one — which fired
+    // rules right at save time (issue #51).
+    private data class EvalState(val triggersHash: Int, val matched: Boolean)
+    private val lastEvalResults = ConcurrentHashMap<Long, EvalState>()
     // Once-per-trip gate: ruleId -> tripStartedAt captured when rule last fired
     private val lastFiredTripByRule = ConcurrentHashMap<Long, Long>()
     // Per-rule consumption marker for the network_available trigger. Tracks the
@@ -66,11 +74,13 @@ class AutomationEngine @Inject constructor(
     // already responded to, so a single VALIDATED edge fires the rule at most
     // once even if the rule's other AND-conditions delay the actual fire.
     private val lastSeenNetworkAvailableAt = ConcurrentHashMap<Long, Long>()
-    // Service-start trigger: true on the very first evaluate() call after process
-    // start, then flipped to false. Lets the "Запуск BYDMate" trigger fire exactly
-    // once per service lifecycle without going through edge-detection (which would
-    // seed-only the first observation and never fire).
-    @Volatile private var serviceStartFiredOnce = false
+    // Service-start trigger: active during a short window after the first
+    // evaluate() of the process, consumed per rule on fire. The previous
+    // one-shot flag raced cold-start nulls: the very first tick often carries
+    // incomplete data, so "запуск BYDMate AND темп > 22" silently missed the
+    // whole trip when ExtTemp was still null on tick one (issue #51).
+    @Volatile private var serviceStartWindowEnd = 0L
+    private val serviceStartConsumed = ConcurrentHashMap.newKeySet<Long>()
 
     private data class PendingAction(
         val rule: RuleEntity,
@@ -92,16 +102,14 @@ class AutomationEngine @Inject constructor(
     suspend fun evaluate(data: DiParsData, tripStartedAt: Long?) {
         cleanupExpired()
 
-        // Capture-and-flip: only the first evaluate() after process start sees true.
-        // Read into a local so all rules in this loop see a consistent value.
-        val justStarted = !serviceStartFiredOnce
-        if (justStarted) serviceStartFiredOnce = true
-
         val location = TrackingService.lastLocation.value
         val placesById = placeRepository.getAllSnapshot().associateBy { it.id }
 
         val rules = ruleDao.getEnabled()
         val now = System.currentTimeMillis()
+
+        // Arm the service_start window on the very first evaluate() of the process.
+        if (serviceStartWindowEnd == 0L) serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
 
         // Prune per-rule state for rules that have been deleted (or disabled
         // and removed from the active set). Without this, `lastEvalResults`,
@@ -112,6 +120,7 @@ class AutomationEngine @Inject constructor(
         lastEvalResults.keys.retainAll(activeIds)
         lastFiredTripByRule.keys.retainAll(activeIds)
         lastSeenNetworkAvailableAt.keys.retainAll(activeIds)
+        serviceStartConsumed.retainAll(activeIds)
 
         for (rule in rules) {
             try {
@@ -150,14 +159,8 @@ class AutomationEngine @Inject constructor(
                     }
                 }
 
-                // Cooldown
-                val lastFired = rule.lastTriggeredAt ?: 0L
-                if (now - lastFired < rule.cooldownSeconds * 1000L) continue
-
-                // Park-only rule
-                if (rule.requirePark && data.gear != 1) continue
-
-                val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, justStarted, networkEdge)
+                val serviceStartActive = now <= serviceStartWindowEnd && rule.id !in serviceStartConsumed
+                val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
 
                 // Event-style triggers (service_start, network_available) bypass edge
@@ -166,15 +169,33 @@ class AutomationEngine @Inject constructor(
                 // would fire every poll where speed > 50 (after cooldown), because the
                 // bypass branch would see `hasEventTrigger=true` regardless of whether
                 // the event actually contributed to the match.
+                //
+                // Edge bookkeeping happens BEFORE the cooldown / park gates so that a
+                // front occurring while the rule is gated is consumed, not frozen and
+                // fired minutes later when the gate finally opens (issue #51: "сценарий
+                // сработал сам по себе"). A front must happen while the rule is able
+                // to act on it.
                 val matchedViaEvent = matchedViaEventTrigger(triggers, perTrigger, rule.triggerLogic)
-                if (matchedViaEvent) {
-                    lastEvalResults[rule.id] = matched
-                    if (!matched) continue
+                val triggersHash = (rule.triggers + rule.triggerLogic).hashCode()
+                val state = EvalState(triggersHash, matched)
+                val shouldFire = if (matchedViaEvent) {
+                    lastEvalResults[rule.id] = state
+                    matched
                 } else {
-                    val previous = lastEvalResults.put(rule.id, matched)
-                    if (previous == null) continue          // first observation — seed only, do not fire
-                    if (!matched || previous) continue       // edge trigger: fire only on false→true
+                    val previous = lastEvalResults.put(rule.id, state)
+                    // null = first observation, hash mismatch = rule just edited —
+                    // either way seed only, do not fire on a synthetic transition.
+                    previous != null && previous.triggersHash == triggersHash &&
+                        !previous.matched && matched
                 }
+                if (!shouldFire) continue
+
+                // Cooldown (the front above is already consumed, never deferred)
+                val lastFired = rule.lastTriggeredAt ?: 0L
+                if (now - lastFired < rule.cooldownSeconds * 1000L) continue
+
+                // Park-only rule
+                if (rule.requirePark && data.gear != 1) continue
 
                 // Once-per-trip gate: skip if already fired in the current trip
                 if (rule.fireOncePerTrip && tripStartedAt != null &&
@@ -185,6 +206,9 @@ class AutomationEngine @Inject constructor(
 
                 // Mark triggered immediately to prevent re-fire
                 ruleDao.updateLastTriggered(rule.id, now)
+                if (serviceStartActive && triggers.any { it.kind == "service_start" }) {
+                    serviceStartConsumed.add(rule.id)
+                }
                 if (rule.fireOncePerTrip && tripStartedAt != null) {
                     lastFiredTripByRule[rule.id] = tripStartedAt
                 }
@@ -237,7 +261,7 @@ class AutomationEngine @Inject constructor(
         data: DiParsData,
         location: Location?,
         places: Map<Long, PlaceEntity>,
-        isFirstEval: Boolean,
+        serviceStartActive: Boolean,
         networkAvailableEdge: Boolean
     ): List<Boolean> = triggers.map { trigger ->
         when (trigger.kind) {
@@ -245,7 +269,7 @@ class AutomationEngine @Inject constructor(
             "place_exit" -> evaluatePlace(trigger, location, places, enterKind = false)
             "time_of_day" -> evaluateTimeOfDay(trigger, location)
             "time_range" -> evaluateSchedule(trigger)
-            "service_start" -> isFirstEval
+            "service_start" -> serviceStartActive
             "network_available" -> networkAvailableEdge
             else -> { // "param" (default)
                 val actual = getParamValue(data, trigger.param) ?: return@map false

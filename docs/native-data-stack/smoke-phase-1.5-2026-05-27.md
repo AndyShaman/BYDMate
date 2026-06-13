@@ -40,7 +40,7 @@ Branch: `feature/native-data-stack` (HEAD `a85af4c` после Task 21)
 - [ ] Поле "Подключение" (`vehicleDataConnected`) корректно отражает состояние shared loop (true пока есть тики, false после ~3 пустых).
 
 ## Alice (private build only)
-- [ ] VPS POST каждые ~25 s содержит свежий state (проверить pm2 logs на vlad-brain).
+- [ ] VPS POST каждые ~25 s содержит свежий state (проверить pm2 logs на VPS).
 - [ ] AlicePollingManager продолжает poll'ить VPS на команды каждые 2.5 s (не сломано Task 18).
 - [ ] Команды из Yandex Alice исполняются (например, "открой окно").
 

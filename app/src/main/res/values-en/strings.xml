@@ -18,7 +18,15 @@
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
+    <string name="settings_display_size_width_desc">Window width as % of the cluster width</string>
     <string name="settings_display_size_height">Height</string>
+    <string name="settings_display_size_height_desc">Window height as % of the cluster height</string>
+    <string name="settings_display_offset_x">Horizontal shift</string>
+    <string name="settings_display_offset_x_desc">Window position: 0 - left edge, 50 - center, 100 - right edge</string>
+    <string name="settings_display_offset_y">Vertical shift</string>
+    <string name="settings_display_offset_y_desc">Window position: 0 - top, 50 - center, 100 - bottom</string>
+    <string name="settings_display_scale">Scale</string>
+    <string name="settings_display_scale_desc">UI size: lower value - smaller elements and more map in the window</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Right star</string>
     <string name="steering_button_left_star">Left star</string>

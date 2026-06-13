@@ -9,16 +9,44 @@ enum class ClusterMode { OFF, FULLSCREEN }
 /** Where Navi renders on the cluster overlay. VirtualDisplay size == SurfaceView size (1:1). */
 data class ClusterGeometry(val width: Int, val height: Int, val xOffset: Int, val yOffset: Int)
 
-/** Window size bounds (% of the cluster panel), shared by the settings sliders and [geometryFor]. */
-const val MIN_PROJECTION_PCT = 50
+/**
+ * Window size bounds (% of the cluster panel), shared by the settings sliders and [geometryFor].
+ * The minimum must stay below the native mini-window width: on Sea Lion 07 the mini zone is roughly
+ * a third of the 1920 px panel, so the old 50% floor made the window wider than the zone and the
+ * panel cut off Navi's left edge (where the maneuver/ETA panels live) (#48).
+ */
+const val MIN_PROJECTION_PCT = 20
 const val MAX_PROJECTION_PCT = 100
 
 /**
- * Geometry for [mode] on a [clusterW] x [clusterH] cluster. OFF → null. FULLSCREEN → a centered
+ * Window position bounds (% of the free space left by a sub-100% window), shared by the position
+ * sliders and [geometryFor]. 0 = pinned to the left/top edge, 50 = centered (legacy behaviour),
+ * 100 = pinned to the right/bottom edge. Lets the user slide the rendered map into the visible
+ * region of the native mini-cluster window (#48).
+ */
+const val MIN_OFFSET_PCT = 0
+const val MAX_OFFSET_PCT = 100
+const val CENTER_OFFSET_PCT = 50
+
+/**
+ * Content scale for the projected app, tuning what it renders INSIDE the window (how much map
+ * fits) rather than where/how big the window is. Orthogonal to [geometryFor].
+ *
+ * [MIN_SCALE_PCT]..[MAX_SCALE_PCT] set the VirtualDisplay density as a % of the cluster's native dpi:
+ * below 100 the app sees a "roomier" logical screen (UI smaller, more map), 100 = native (current
+ * behaviour), above 100 = bigger UI / less map.
+ */
+const val MIN_SCALE_PCT = 50
+const val MAX_SCALE_PCT = 150
+const val DEFAULT_SCALE_PCT = 100
+
+/**
+ * Geometry for [mode] on a [clusterW] x [clusterH] cluster. OFF → null. FULLSCREEN → a
  * rectangle scaled to [widthPct]/[heightPct] (% of the panel, each coerced to
- * [MIN_PROJECTION_PCT]..[MAX_PROJECTION_PCT]). 100/100 = the whole cluster (offsets 0). Smaller
- * values shrink Navi's render target and center it, so the native cluster shows through the
- * translucent overlay around the window.
+ * [MIN_PROJECTION_PCT]..[MAX_PROJECTION_PCT]) and positioned by [offsetXPct]/[offsetYPct] within
+ * the free space (% coerced to [MIN_OFFSET_PCT]..[MAX_OFFSET_PCT], 50 = centered). 100/100 size =
+ * the whole cluster (no free space, so position has no effect). Smaller values shrink Navi's render
+ * target, so the native cluster shows through the translucent overlay around the window.
  */
 fun geometryFor(
     mode: ClusterMode,
@@ -26,13 +54,38 @@ fun geometryFor(
     clusterH: Int,
     widthPct: Int = MAX_PROJECTION_PCT,
     heightPct: Int = MAX_PROJECTION_PCT,
+    offsetXPct: Int = CENTER_OFFSET_PCT,
+    offsetYPct: Int = CENTER_OFFSET_PCT,
 ): ClusterGeometry? = when (mode) {
     ClusterMode.OFF -> null
     ClusterMode.FULLSCREEN -> {
         val w = clusterW * widthPct.coerceIn(MIN_PROJECTION_PCT, MAX_PROJECTION_PCT) / 100
         val h = clusterH * heightPct.coerceIn(MIN_PROJECTION_PCT, MAX_PROJECTION_PCT) / 100
-        ClusterGeometry(w, h, (clusterW - w) / 2, (clusterH - h) / 2)
+        val x = (clusterW - w) * offsetXPct.coerceIn(MIN_OFFSET_PCT, MAX_OFFSET_PCT) / 100
+        val y = (clusterH - h) * offsetYPct.coerceIn(MIN_OFFSET_PCT, MAX_OFFSET_PCT) / 100
+        ClusterGeometry(w, h, x, y)
     }
+}
+
+/**
+ * VirtualDisplay buffer size + logical density for a window. [bufferWidth]/[bufferHeight] are the
+ * pixels the projected app renders into (== the window). [densityDpi] is the logical density the
+ * app sees.
+ */
+data class RenderPlan(val bufferWidth: Int, val bufferHeight: Int, val densityDpi: Int)
+
+/**
+ * Render plan for [geo] given the content scale. [clusterDensityDpi] is the cluster panel's
+ * native density; [scalePct] (coerced to [MIN_SCALE_PCT]..[MAX_SCALE_PCT]) scales it. The default
+ * reproduces native rendering: buffer == window, density == cluster dpi.
+ */
+fun renderPlanFor(
+    geo: ClusterGeometry,
+    clusterDensityDpi: Int,
+    scalePct: Int = DEFAULT_SCALE_PCT,
+): RenderPlan {
+    val dpi = clusterDensityDpi * scalePct.coerceIn(MIN_SCALE_PCT, MAX_SCALE_PCT) / 100
+    return RenderPlan(geo.width, geo.height, dpi)
 }
 
 /** The other projection state — drives the steering-wheel toggle (приборка ↔ центр). */

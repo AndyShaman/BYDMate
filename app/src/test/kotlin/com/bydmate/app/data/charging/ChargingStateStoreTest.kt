@@ -8,7 +8,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ChargingStateStoreTest {
@@ -19,6 +21,7 @@ class ChargingStateStoreTest {
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
+        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
         override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
@@ -77,6 +80,16 @@ class ChargingStateStoreTest {
     }
 
     @Test
+    fun `chargePending defaults to false and round-trips`() = runTest {
+        val s = store()
+        assertFalse(s.loadChargePending())
+        s.setChargePending(true)
+        assertTrue(s.loadChargePending())
+        s.setChargePending(false)
+        assertFalse(s.loadChargePending())
+    }
+
+    @Test
     fun `save with null capacityKwh persists as null`() = runTest {
         val s = store()
         s.save(socPercent = 70, mileageKm = null, capacityKwh = null, ts = 2000L)
@@ -84,5 +97,31 @@ class ChargingStateStoreTest {
         assertNull(state.mileageKm)
         assertNull(state.capacityKwh)
         assertEquals(2000L, state.ts)
+    }
+
+    @Test
+    fun `save writes the whole anchor in a single setAll batch`() = runTest {
+        // A process kill mid-save must never leave a mixed anchor (new mileage
+        // + stale SOC → false odometerMoved). Room makes a list-@Upsert one
+        // transaction, so save() must issue exactly one setAll and no set().
+        class RecordingDao : com.bydmate.app.data.local.dao.SettingsDao {
+            val map = mutableMapOf<String, String>()
+            var setCalls = 0
+            var setAllCalls = 0
+            override suspend fun get(key: String): String? = map[key]
+            override fun observe(key: String): Flow<String?> = flowOf(map[key])
+            override suspend fun set(entity: SettingEntity) {
+                setCalls++; map[entity.key] = entity.value ?: ""
+            }
+            override suspend fun setAll(settings: List<SettingEntity>) {
+                setAllCalls++; settings.forEach { map[it.key] = it.value ?: "" }
+            }
+            override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
+        }
+        val dao = RecordingDao()
+        val s = ChargingStateStore(SettingsRepository(dao, mockk(relaxed = true)))
+        s.save(socPercent = 85, mileageKm = 100f, capacityKwh = 5f, ts = 1000L)
+        assertEquals(1, dao.setAllCalls)
+        assertEquals(0, dao.setCalls)
     }
 }

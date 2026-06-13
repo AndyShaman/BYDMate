@@ -50,7 +50,8 @@ class LastStateDaoTest {
             LastStateEntity(
                 id = 1, ts = 2000L, soc = 75,
                 openTripId = 42L, tripStartTs = 1000L,
-                tripStartSoc = 80, tripStartMileage = 12345.6
+                tripStartSoc = 80, tripStartMileage = 12345.6,
+                tripStartTotalElec = 499.5
             )
         )
         dao.clearOpenTrip()
@@ -59,6 +60,13 @@ class LastStateDaoTest {
         assertNull(row.tripStartTs)
         assertNull(row.tripStartSoc)
         assertNull(row.tripStartMileage)
+        assertNull(row.tripStartTotalElec)
         assertEquals(75, row.soc) // unrelated fields untouched
+    }
+
+    @Test fun `openTrip stores trip_start_total_elec`() = runBlocking {
+        dao.upsert(LastStateEntity(id = 1, ts = 1000L, soc = 80))
+        dao.openTrip(startTs = 1000L, startSoc = 80, startMileage = 100.0, startTotalElec = 499.5, now = 1000L)
+        assertEquals(499.5, dao.getCurrent()!!.tripStartTotalElec!!, 0.001)
     }
 }

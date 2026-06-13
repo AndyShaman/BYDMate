@@ -67,6 +67,7 @@ class ChargesViewModelTest {
         override suspend fun get(key: String): String? = map[key]
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
+        override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
         override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
@@ -243,6 +244,25 @@ class ChargesViewModelTest {
     }
 
     // ─── Tests ────────────────────────────────────────────────────────────────
+
+    @Test
+    fun `effective capacity for manual kWh edit is nominal scaled by BMS SOH`() = runTest {
+        val vm = buildViewModel(
+            batteryReading = BatteryReading(
+                sohPercent = 90f, socPercent = 80f, lifetimeKwh = null,
+                lifetimeMileageKm = 1000f, voltage12v = 14f, readAtMs = 0L
+            )
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(72.9 * 0.9, vm.uiState.value.effectiveCapacityKwh, 0.001)
+    }
+
+    @Test
+    fun `effective capacity falls back to nominal when SOH unavailable`() = runTest {
+        val vm = buildViewModel(batteryReading = null, autoserviceAvailable = false)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(72.9, vm.uiState.value.effectiveCapacityKwh, 0.001)
+    }
 
     @Test
     fun `setPeriod_today_filtersChargesToToday`() = runTest {

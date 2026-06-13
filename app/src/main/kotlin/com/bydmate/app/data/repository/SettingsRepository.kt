@@ -65,6 +65,15 @@ open class SettingsRepository @Inject constructor(
         // cascade detector's pre-charging baseline survives polling and
         // runCatchUp can compute a real SOC delta on cold start.
         const val KEY_CHARGING_BASELINE_SOC = "charging_baseline_soc"
+        // Set when runCatchUp saw the gun connected (a charge session is in
+        // progress around the stored baseline); cleared once the session is
+        // reconstructed or dismissed. Lets a later catch-up create the row
+        // even if the odometer moved before the first successful run.
+        const val KEY_CHARGE_PENDING = "charge_pending"
+        // Persistent ring buffer of recent runCatchUp decisions (CatchUpJournal).
+        // Included in the diagnostic dump — logcat rotates out the startup
+        // window within minutes on DiLink, so field reports need this.
+        const val KEY_CATCHUP_JOURNAL = "catchup_journal"
         const val KEY_MIGRATION_V2_4_17 = "migration_v2_4_17_done"
         const val KEY_INSIGHT_CACHE_V2_MIGRATION_DONE = "insight_cache_v2_migration_done"
         // One-shot migration flag kept for compatibility with upstream native-stack builds.
@@ -277,6 +286,10 @@ open class SettingsRepository @Inject constructor(
     suspend fun setString(key: String, value: String) =
         settingsDao.set(SettingEntity(key, value))
 
+    /** Writes all key/value pairs in one Room transaction (all or nothing). */
+    suspend fun setStrings(values: Map<String, String>) =
+        settingsDao.setAll(values.map { (k, v) -> SettingEntity(k, v) })
+
     suspend fun getBatteryCapacity(): Double =
         getString(KEY_BATTERY_CAPACITY, DEFAULT_BATTERY_CAPACITY).parseNumericSetting() ?: 18.3
 
@@ -412,6 +425,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setChargingBaselineSoc(soc: Int) =
         setString(KEY_CHARGING_BASELINE_SOC, soc.toString())
+
+    suspend fun getChargePending(): Boolean =
+        getString(KEY_CHARGE_PENDING, "") == "true"
+
+    suspend fun setChargePending(pending: Boolean) =
+        setString(KEY_CHARGE_PENDING, pending.toString())
 
     suspend fun getLastMileageKm(): Float? =
         getString(KEY_LAST_MILEAGE_KM, "").toFloatOrNull()

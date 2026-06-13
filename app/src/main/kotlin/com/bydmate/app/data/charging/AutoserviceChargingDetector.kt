@@ -57,7 +57,8 @@ class AutoserviceChargingDetector @Inject constructor(
     private val stateStore: ChargingStateStore,
     private val classifier: ChargingTypeClassifier,
     private val settings: SettingsRepository,
-    private val parsReader: ParsReader
+    private val parsReader: ParsReader,
+    private val journal: CatchUpJournal
 ) {
     companion object {
         const val MIN_DELTA_KWH = 0.5
@@ -91,20 +92,44 @@ class AutoserviceChargingDetector @Inject constructor(
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Minimum SOC rise (percentage points) for a wake-up jump to count as a
-        // real charging session. A genuine plug-in adds far more; anything below
-        // this is BMS recalibration / regen noise, so we roll the anchor forward
-        // without a row instead of logging a phantom micro-charge.
-        const val MIN_SOC_DELTA_FOR_CHARGE = 3
+        // real charging session. 1 = any integer SOC rise with the odometer
+        // parked counts. Was 3 (recalibration-noise guard) until 2026-06-11:
+        // short-trip cars top up only 1-2% per night and every such session was
+        // silently dropped. A rare BMS recalibration may now log a ~1% phantom
+        // row — visible and hand-deletable, accepted over daily silent loss.
+        const val MIN_SOC_DELTA_FOR_CHARGE = 1
+        // SOC rise (percentage points) at or above which a charge is trusted
+        // UNCONDITIONALLY — the odometer gate no longer applies. Physics: the
+        // only non-charge SOC rises are regen (needs driving, sub-1% while the
+        // anchor is parked) and a BMS/LFP recalculation (~1%). Neither reaches
+        // 2%, so a >=2% rise is always a real charge. Field decision 2026-06-11:
+        // an anchor with stale mileage made the odometer gate eat a real 11%
+        // dacha charge (Song) — a daily loss; a rare 1% phantom is acceptable.
+        const val SOC_DELTA_TRUSTED_CHARGE = 2
         // Odometer movement (km) above which the gap between the parked anchor and
         // wake-up contained a drive — the stored start-of-charge SOC is then no
-        // longer the true charge start, so we skip reconstruction.
+        // longer the true charge start, so we skip reconstruction. Applies ONLY
+        // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 1%).
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
+        // A transient gun-fid glitch clears within a read or two; a gun fid
+        // that stays silent across this many consecutive runs while sibling
+        // fids answer is unsupported firmware — stop deferring so charge
+        // logging is not permanently blocked on such cars.
+        const val MAX_CONSECUTIVE_GUN_GLITCHES = 3
+        // Plausibility floor for BMS-reported SOH in the SOC→kWh conversion
+        // (#28). Readings below this are sentinels or garbage, not a real
+        // pack — fall back to nominal capacity.
+        const val SOH_SANITY_MIN = 50.0
         private const val TAG = "AutoserviceDetector"
     }
 
     private val mutex = Mutex()
+    // Consecutive gun-glitch verdicts (guarded by mutex). Reset on any
+    // successful gun read; past MAX_CONSECUTIVE_GUN_GLITCHES the gun fid is
+    // treated as unsupported and the cascade proceeds without it.
+    private var consecutiveGunGlitches = 0
     @Volatile private var lastSample: DiParsData? = null
     private val _state = MutableStateFlow(DetectorState.IDLE)
     val state: StateFlow<DetectorState> = _state
@@ -127,23 +152,42 @@ class AutoserviceChargingDetector @Inject constructor(
      * from it. That also makes the wake-up path race-free without a lock-step
      * flag: a post-charge 80% tick can never clobber the 10% anchor before
      * reconstruction reads it.
+     *
+     * @return true when the live SOC is STRICTLY ABOVE the anchor with the gun
+     *         out — a charge happened that catch-up has not reconstructed (e.g.
+     *         a stale autoservice read at wake resolved NO_DELTA). The caller
+     *         should re-arm catch-up — audit 2026-06-11, lost sleep-charge on
+     *         Song.
      */
-    suspend fun recordParkedAnchor(data: DiParsData, now: Long = System.currentTimeMillis()) {
+    suspend fun recordParkedAnchor(data: DiParsData, now: Long = System.currentTimeMillis()): Boolean {
         val gun = data.chargeGunState
         val gunConnected = gun != null && gun != GUN_STATE_NONE && gun != 0
-        if (gunConnected) return                       // live charge — keep the start anchor
-        val soc = data.soc?.takeIf { it in 0..100 } ?: return
-        mutex.withLock {
+        if (gunConnected) return false                 // live charge — keep the start anchor
+        val soc = data.soc?.takeIf { it in 0..100 } ?: return false
+        return mutex.withLock {
             val prevSoc = stateStore.load().socPercent
-            // prevSoc == null → seed; soc < prevSoc → driving roll-forward.
-            // soc >= prevSoc → charge pending or unchanged: leave the anchor.
-            if (prevSoc != null && soc >= prevSoc) return@withLock
-            stateStore.save(
-                socPercent = soc,
-                mileageKm = data.mileage?.toFloat(),
-                capacityKwh = null,
-                ts = now
-            )
+            when {
+                // Un-reconstructed charge — re-arm. Negative power means energy
+                // is flowing IN right now (live charge still in progress, e.g.
+                // Song reports gun=null while charging; also covers regen while
+                // driving) — never re-arm mid-charge, wait for power to settle.
+                prevSoc != null && soc > prevSoc -> (data.power ?: 0.0) >= 0.0
+                else -> {
+                    // prevSoc == null → seed; soc < prevSoc → driving roll-forward;
+                    // soc == prevSoc → SOC flat but the car may still be moving —
+                    // the mileage MUST keep rolling. Freezing it here let the
+                    // anchor's odometer go stale (a 7 km drive at constant SOC),
+                    // and the Step-5 odometer gate then ate a real dacha charge
+                    // (field report 2026-06-11, Song, 10 kWh lost).
+                    stateStore.save(
+                        socPercent = soc,
+                        mileageKm = data.mileage?.toFloat(),
+                        capacityKwh = null,
+                        ts = now
+                    )
+                    false
+                }
+            }
         }
     }
 
@@ -167,6 +211,7 @@ class AutoserviceChargingDetector @Inject constructor(
             // Step 1: liveness check
             if (!client.isAvailable()) {
                 android.util.Log.i(TAG, "runCatchUp: autoservice client not available")
+                logJournal(now, "UNAVAILABLE")
                 _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.AUTOSERVICE_UNAVAILABLE)
             }
@@ -184,6 +229,7 @@ class AutoserviceChargingDetector @Inject constructor(
             // state and let TrackingService re-run catch-up once the fid warms up.
             val currentSoc: Int = battery?.socPercent?.toInt() ?: run {
                 android.util.Log.i(TAG, "runCatchUp: autoservice SOC sentinel → SENTINEL (retry later)")
+                logJournal(now, "SENTINEL")
                 _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.SENTINEL)
             }
@@ -198,6 +244,7 @@ class AutoserviceChargingDetector @Inject constructor(
                     ts = now
                 )
                 android.util.Log.i(TAG, "runCatchUp: cold start, seeded state soc=$currentSoc")
+                logJournal(now, "BASELINE_INITIALIZED soc=$currentSoc")
                 _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.BASELINE_INITIALIZED)
             }
@@ -221,27 +268,49 @@ class AutoserviceChargingDetector @Inject constructor(
             // already treats it as null. We mirror that here so a firmware where 0
             // is the steady-state value doesn't permanently block charge logging.
             val gunResolved = gun?.takeIf { it != 0 }
+            if (gunResolved != null) consecutiveGunGlitches = 0
             val gunIsConnected = gunResolved != null && gunResolved != GUN_STATE_NONE
+            // Only DYNAMIC charging fids vouch for the gun fid. batteryType is
+            // a constant (LFP) that stays readable on firmwares where the gun
+            // fid is simply unsupported — counting it turned every catch-up
+            // into STILL_CHARGING and permanently blocked charge logging there.
             val chargingDeviceReadable = charging != null && (
                 charging.chargingType != null ||
-                    charging.batteryType != null ||
                     charging.bmsState != null ||
                     charging.chargingCapacityKwh != null ||
                     charging.chargeBatteryVoltV != null
                 )
-            val gunGlitch = gunResolved == null && chargingDeviceReadable
+            var gunGlitch = gunResolved == null && chargingDeviceReadable
+            if (gunGlitch) {
+                consecutiveGunGlitches++
+                if (consecutiveGunGlitches > MAX_CONSECUTIVE_GUN_GLITCHES) {
+                    android.util.Log.i(TAG, "runCatchUp: gun fid silent $consecutiveGunGlitches runs in a row → treating as unsupported, cascade proceeds")
+                    gunGlitch = false
+                }
+            }
             if (gunIsConnected || gunGlitch) {
+                // Persist the evidence that a session is in progress around the
+                // stored baseline. The gun physically blocks driving, so if the
+                // odometer later moves before a successful catch-up, the charge
+                // still happened — the pending flag keeps Step 5 from silently
+                // discarding it.
+                stateStore.setChargePending(true)
                 android.util.Log.i(TAG, "runCatchUp: gun=$gun, deviceReadable=$chargingDeviceReadable → STILL_CHARGING (defer to live edge)")
+                logJournal(now, "STILL_CHARGING gun=$gun" + if (gunGlitch) " glitch=$consecutiveGunGlitches" else "")
                 _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.STILL_CHARGING)
             }
 
             // Step 5: charge-detection gate. Create a row only for a real charge:
-            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (smaller = recalibration /
-            //     regen noise, never a plug-in), AND
-            //   - the odometer did not move since the anchor (a drive in the gap
-            //     makes the stored start-of-charge SOC untrustworthy — we'd log a
-            //     smeared session, so skip).
+            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (zero/negative = no
+            //     charge happened), AND
+            //   - for the 1% tier ONLY: the odometer did not move since the
+            //     anchor (a 1% rise after a drive could be regen or a BMS
+            //     recalculation). A rise >= SOC_DELTA_TRUSTED_CHARGE is beyond
+            //     what regen-while-parked or recalibration can produce, so it
+            //     is recorded regardless of the odometer — the anchor's mileage
+            //     can be stale (it freezes while SOC is flat), and trusting it
+            //     over physics lost real charges in the field (2026-06-11).
             // Every non-charge case rolls the baseline forward WITHOUT a row so the
             // anchor can never stick low and mis-attribute the next session. This
             // also subsumes the old socDelta <= 0 regression gate (lifetime_kwh
@@ -249,14 +318,29 @@ class AutoserviceChargingDetector @Inject constructor(
             val socDelta = currentSoc - prev.socPercent
             val odometerMoved = prev.mileageKm != null && battery?.lifetimeMileageKm != null &&
                 (battery.lifetimeMileageKm - prev.mileageKm) > ODOMETER_MOVED_EPSILON_KM
-            if (socDelta < MIN_SOC_DELTA_FOR_CHARGE || odometerMoved) {
-                android.util.Log.i(TAG, "runCatchUp: socDelta=$socDelta odometerMoved=$odometerMoved → NO_DELTA (roll forward, no row)")
+            // A pending charge (gun was seen connected) overrides the odometer
+            // gate: SOC can only rise via charging, and the gun blocks driving,
+            // so socDelta >= threshold with pending evidence means a real session
+            // that ended before the drive. The drive's consumption makes the SOC
+            // estimate a slight under-count — accepted over losing the row.
+            val chargePending = stateStore.loadChargePending()
+            if (socDelta < MIN_SOC_DELTA_FOR_CHARGE ||
+                (socDelta < SOC_DELTA_TRUSTED_CHARGE && odometerMoved && !chargePending)
+            ) {
+                android.util.Log.i(TAG, "runCatchUp: socDelta=$socDelta odometerMoved=$odometerMoved pending=$chargePending → NO_DELTA (roll forward, no row)")
+                logJournal(
+                    now,
+                    "NO_DELTA soc=$currentSoc prev=${prev.socPercent} " +
+                        "km=${battery?.lifetimeMileageKm} prevKm=${prev.mileageKm} " +
+                        "odoMoved=$odometerMoved pending=$chargePending"
+                )
                 stateStore.save(
                     socPercent = currentSoc,
                     mileageKm = battery?.lifetimeMileageKm,
                     capacityKwh = charging?.chargingCapacityKwh,
                     ts = now
                 )
+                stateStore.setChargePending(false)
                 _state.value = DetectorState.IDLE
                 return CatchUpResult(CatchUpOutcome.NO_DELTA)
             }
@@ -265,7 +349,13 @@ class AutoserviceChargingDetector @Inject constructor(
             val currentCap = charging?.chargingCapacityKwh?.toDouble()
             val prevCap = prev.capacityKwh?.toDouble()
             val nominalCapacity = settings.getBatteryCapacity()
-            val socEstimate = (socDelta / 100.0) * nominalCapacity
+            // #28: 1% of SOC on an aged pack holds nominal × SOH/100 kWh, so the
+            // SOC→kWh conversion uses BMS-reported SOH. Sanity-clamped: a sentinel
+            // or garbage reading falls back to nominal (factor 1.0).
+            val sohFactor = battery?.sohPercent?.toDouble()
+                ?.takeIf { it in SOH_SANITY_MIN..100.0 }?.div(100.0) ?: 1.0
+            val effectiveCapacity = nominalCapacity * sohFactor
+            val socEstimate = (socDelta / 100.0) * effectiveCapacity
 
             val delta: Double
             val detectionSource: String
@@ -340,7 +430,7 @@ class AutoserviceChargingDetector @Inject constructor(
                 socStart = socStart,
                 socEnd = socEnd,
                 kwhCharged = delta,
-                kwhChargedSoc = (socEnd - socStart) / 100.0 * nominalCapacity,
+                kwhChargedSoc = (socEnd - socStart) / 100.0 * effectiveCapacity,
                 type = type,
                 cost = cost,
                 status = "COMPLETED",
@@ -386,13 +476,26 @@ class AutoserviceChargingDetector @Inject constructor(
                 capacityKwh = charging?.chargingCapacityKwh,
                 ts = now
             )
+            stateStore.setChargePending(false)
 
             android.util.Log.i(TAG, "runCatchUp: SESSION_CREATED id=$chargeId, delta=${"%.3f".format(delta)}, source=$detectionSource, type=$type, socStart=$socStart, socEnd=$socEnd")
+            logJournal(
+                now,
+                "SESSION_CREATED kwh=${"%.2f".format(delta)} src=$detectionSource " +
+                    "type=$type soc=$socStart->$socEnd"
+            )
             _state.value = DetectorState.IDLE
             return CatchUpResult(CatchUpOutcome.SESSION_CREATED, chargeId, delta)
         } catch (e: Exception) {
+            android.util.Log.w(TAG, "runCatchUp: failed: ${e.message}", e)
+            logJournal(now, "ERROR ${e.message}")
             _state.value = DetectorState.ERROR
             return CatchUpResult(CatchUpOutcome.AUTOSERVICE_UNAVAILABLE)
         }
+    }
+
+    /** Best-effort journal write — a prefs failure must never break detection. */
+    private suspend fun logJournal(now: Long, payload: String) {
+        runCatching { journal.append(payload, now) }
     }
 }

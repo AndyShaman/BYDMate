@@ -29,11 +29,12 @@ interface LastStateDao {
             trip_start_ts = :startTs,
             trip_start_soc = :startSoc,
             trip_start_mileage = :startMileage,
+            trip_start_total_elec = :startTotalElec,
             ts = :now
         WHERE id = 1
         """
     )
-    suspend fun openTrip(startTs: Long, startSoc: Int?, startMileage: Double?, now: Long): Int
+    suspend fun openTrip(startTs: Long, startSoc: Int?, startMileage: Double?, startTotalElec: Double?, now: Long): Int
 
     @Query(
         """
@@ -41,7 +42,8 @@ interface LastStateDao {
         SET open_trip_id = NULL,
             trip_start_ts = NULL,
             trip_start_soc = NULL,
-            trip_start_mileage = NULL
+            trip_start_mileage = NULL,
+            trip_start_total_elec = NULL
         WHERE id = 1
         """
     )

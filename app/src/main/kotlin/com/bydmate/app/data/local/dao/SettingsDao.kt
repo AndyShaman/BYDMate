@@ -17,6 +17,10 @@ interface SettingsDao {
     @Upsert
     suspend fun set(setting: SettingEntity)
 
+    /** Upserts all rows in a single Room transaction — all or nothing. */
+    @Upsert
+    suspend fun setAll(settings: List<SettingEntity>)
+
     @Query("SELECT * FROM settings")
     fun getAll(): Flow<List<SettingEntity>>
 }

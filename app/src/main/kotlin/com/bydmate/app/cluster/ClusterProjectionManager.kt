@@ -68,6 +68,13 @@ object ClusterProjectionManager {
     // User-tunable window size, % of the cluster panel (MIN_PROJECTION_PCT..MAX, default = full).
     const val KEY_WIDTH_PCT = "width_pct"
     const val KEY_HEIGHT_PCT = "height_pct"
+    // User-tunable window position within the free space (MIN_OFFSET_PCT..MAX, default = centered).
+    const val KEY_OFFSET_X_PCT = "offset_x_pct"
+    const val KEY_OFFSET_Y_PCT = "offset_y_pct"
+    // User-tunable content scale: VirtualDisplay density as % of cluster dpi (MIN_SCALE_PCT..MAX,
+    // default 100 = native). Tunes what the projected app renders INSIDE the window — how big the
+    // UI is and how much map fits — independent of the window size/position.
+    const val KEY_SCALE_PCT = "scale_pct"
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
     const val KEY_TARGET_LABEL = "target_label"
@@ -176,14 +183,17 @@ object ClusterProjectionManager {
         val oldVdId = remoteDisplayId
         val display = resolveClusterDisplay(context) ?: return true
         val (widthPct, heightPct) = readSizePct(context)
-        val geo = geometryFor(ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct)
-            ?: return true
+        val (offsetXPct, offsetYPct) = readOffsetPct(context)
+        val geo = geometryFor(
+            ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
+        ) ?: return true
+        val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
 
         // addOverlayAndAwaitSurface points overlayView at the NEW container; oldOverlay keeps the old
         // one so we can drop it after Navi has moved. remoteDisplayId is untouched until we commit.
         val surface = try {
             withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
-                addOverlayAndAwaitSurface(context, display, geo, helper)
+                addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
         } catch (e: Exception) {
             Log.e(TAG, "resize: new overlay threw: ${e.message}"); null
@@ -193,14 +203,14 @@ object ClusterProjectionManager {
             discardNewOverlayKeepOld(oldOverlay); return true
         }
         val newVdId = helper.createVirtualDisplay(
-            VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+            VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
         )
         if (newVdId == null) {
             Log.e(TAG, "resize: createVirtualDisplay failed; keeping current size")
             discardNewOverlayKeepOld(oldOverlay); return true
         }
         val pkg = targetPackage(context)
-        if (!helper.launchAndForce(pkg, newVdId, geo.width, geo.height)) {
+        if (!helper.launchAndForce(pkg, newVdId, plan.bufferWidth, plan.bufferHeight)) {
             // Navi may already have been moved onto newVd; release it and let the caller rebuild.
             Log.e(TAG, "resize: launchAndForce failed")
             helper.releaseVirtualDisplay(newVdId)
@@ -243,6 +253,18 @@ object ClusterProjectionManager {
         return prefs.getInt(KEY_WIDTH_PCT, MAX_PROJECTION_PCT) to
             prefs.getInt(KEY_HEIGHT_PCT, MAX_PROJECTION_PCT)
     }
+
+    /** Saved window position as (offsetXPct, offsetYPct); defaults to centered. */
+    private fun readOffsetPct(context: Context): Pair<Int, Int> {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT) to
+            prefs.getInt(KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT)
+    }
+
+    /** Saved content scale %; the default reproduces native rendering. */
+    private fun readScalePct(context: Context): Int =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_SCALE_PCT, DEFAULT_SCALE_PCT)
 
     /** Package to project — user-selectable in settings, defaults to Yandex Navi. */
     private fun targetPackage(context: Context): String =
@@ -315,11 +337,15 @@ object ClusterProjectionManager {
             Log.e(TAG, "cluster display not found"); return false
         }
         val (widthPct, heightPct) = readSizePct(context)
-        val geo = geometryFor(mode, clusterWidth, clusterHeight, widthPct, heightPct) ?: return false
+        val (offsetXPct, offsetYPct) = readOffsetPct(context)
+        val geo = geometryFor(
+            mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
+        ) ?: return false
+        val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
-                addOverlayAndAwaitSurface(context, display, geo, helper)
+                addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
             if (surface == null) {
                 Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
@@ -342,7 +368,7 @@ object ClusterProjectionManager {
                 releaseOrphanedDisplay(context, helper)
             }
             val id = helper.createVirtualDisplay(
-                VD_NAME, geo.width, geo.height, clusterDensityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+                VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
             )
             if (id == null) {
                 Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return false
@@ -350,8 +376,8 @@ object ClusterProjectionManager {
             remoteDisplayId = id
             saveLastVdId(context, id)
             val pkg = targetPackage(context)
-            Log.i(TAG, "VirtualDisplay id=$id; launchAndForce $pkg")
-            val ok = helper.launchAndForce(pkg, id, geo.width, geo.height)
+            Log.i(TAG, "VirtualDisplay id=$id ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}; launchAndForce $pkg")
+            val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return false
             }
@@ -400,7 +426,7 @@ object ClusterProjectionManager {
      * Sets [overlayView] so a later hideOverlay() can tear it down even if we time out waiting.
      */
     private suspend fun addOverlayAndAwaitSurface(
-        context: Context, display: Display, geo: ClusterGeometry, helper: HelperClient,
+        context: Context, display: Display, geo: ClusterGeometry, plan: RenderPlan, helper: HelperClient,
     ): Surface {
         val ready = CompletableDeferred<Surface>()
         withContext(Dispatchers.Main) {
@@ -409,16 +435,18 @@ object ClusterProjectionManager {
 
             val container = FrameLayout(displayContext)
             val surfaceView = SurfaceView(displayContext)
+            // Layout = the physical window on the cluster (geo); the Surface buffer = the render
+            // plan. The compositor scales the buffer to the view (aspect preserved).
             val surfaceParams = FrameLayout.LayoutParams(geo.width, geo.height, Gravity.TOP or Gravity.START).apply {
                 leftMargin = geo.xOffset
                 topMargin = geo.yOffset
             }
             container.addView(surfaceView, surfaceParams)
 
-            surfaceView.holder.setFixedSize(geo.width, geo.height)
+            surfaceView.holder.setFixedSize(plan.bufferWidth, plan.bufferHeight)
             surfaceView.holder.addCallback(object : SurfaceHolder.Callback {
                 override fun surfaceCreated(holder: SurfaceHolder) {
-                    Log.d(TAG, "surfaceCreated ${geo.width}x${geo.height}")
+                    Log.d(TAG, "surfaceCreated buffer ${plan.bufferWidth}x${plan.bufferHeight} window ${geo.width}x${geo.height}")
                     if (!ready.isCompleted) ready.complete(holder.surface)
                 }
                 override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {}

@@ -21,7 +21,15 @@
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
     <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>
+    <string name="settings_display_size_width_desc">窗口宽度，占仪表盘宽度的百分比</string>
     <string name="settings_display_size_height">高度</string>
+    <string name="settings_display_size_height_desc">窗口高度，占仪表盘高度的百分比</string>
+    <string name="settings_display_offset_x">水平位置</string>
+    <string name="settings_display_offset_x_desc">窗口位置：0 - 左边缘，50 - 居中，100 - 右边缘</string>
+    <string name="settings_display_offset_y">垂直位置</string>
+    <string name="settings_display_offset_y_desc">窗口位置：0 - 顶部，50 - 居中，100 - 底部</string>
+    <string name="settings_display_scale">缩放</string>
+    <string name="settings_display_scale_desc">界面大小：数值越小，界面元素越小，地图显示越多</string>
     <string name="settings_section_places_title">地点</string>
     <string name="settings_section_application_title">应用</string>
     <string name="settings_smart_home_section_title">智能家居</string>

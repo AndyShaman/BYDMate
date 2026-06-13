@@ -6,8 +6,14 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.CENTER_OFFSET_PCT
+import com.bydmate.app.cluster.MAX_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_OFFSET_PCT
 import com.bydmate.app.cluster.MIN_PROJECTION_PCT
+import com.bydmate.app.cluster.MIN_SCALE_PCT
+import com.bydmate.app.cluster.MAX_SCALE_PCT
+import com.bydmate.app.cluster.DEFAULT_SCALE_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
@@ -1152,6 +1158,15 @@ private fun DisplaySection() {
     var heightPct by remember {
         mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_HEIGHT_PCT, MAX_PROJECTION_PCT))
     }
+    var offsetXPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, CENTER_OFFSET_PCT))
+    }
+    var offsetYPct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, CENTER_OFFSET_PCT))
+    }
+    var scalePct by remember {
+        mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_SCALE_PCT, DEFAULT_SCALE_PCT))
+    }
     var targetPkg by remember {
         mutableStateOf(prefs.getString(ClusterProjectionManager.KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE)
     }
@@ -1300,16 +1315,46 @@ private fun DisplaySection() {
     SectionHeader(text = stringResource(R.string.settings_display_size_header))
     // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
     // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
-    val applySize: () -> Unit = {
+    val applyGeometry: () -> Unit = {
         prefs.edit()
             .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
             .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, offsetXPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, offsetYPct)
+            .putInt(ClusterProjectionManager.KEY_SCALE_PCT, scalePct)
             .apply()
         ClusterProjectionManager.reproject(
             context, entryPoint.helperClient(), entryPoint.helperBootstrap())
     }
-    ClusterSizeSlider(stringResource(R.string.settings_display_size_width), widthPct, enabled, { widthPct = it }, applySize)
-    ClusterSizeSlider(stringResource(R.string.settings_display_size_height), heightPct, enabled, { heightPct = it }, applySize)
+    // Defaults (100/100 size, centered, scale 100) reproduce the plain fullscreen projection, so
+    // cars without a native mini zone (e.g. Leopard 3) need no tuning. The offset sliders only
+    // matter once the window is smaller than the panel; on Sea Lion 07 they let the user move the
+    // window into the native mini-cluster zone (#48).
+    ClusterSizeSlider(
+        stringResource(R.string.settings_display_size_width), widthPct, enabled,
+        { widthPct = it }, applyGeometry,
+        description = stringResource(R.string.settings_display_size_width_desc),
+    )
+    ClusterSizeSlider(
+        stringResource(R.string.settings_display_size_height), heightPct, enabled,
+        { heightPct = it }, applyGeometry,
+        description = stringResource(R.string.settings_display_size_height_desc),
+    )
+    ClusterSizeSlider(
+        stringResource(R.string.settings_display_offset_x), offsetXPct, enabled,
+        { offsetXPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT,
+        description = stringResource(R.string.settings_display_offset_x_desc),
+    )
+    ClusterSizeSlider(
+        stringResource(R.string.settings_display_offset_y), offsetYPct, enabled,
+        { offsetYPct = it }, applyGeometry, MIN_OFFSET_PCT, MAX_OFFSET_PCT,
+        description = stringResource(R.string.settings_display_offset_y_desc),
+    )
+    ClusterSizeSlider(
+        stringResource(R.string.settings_display_scale), scalePct, enabled,
+        { scalePct = it }, applyGeometry, MIN_SCALE_PCT, MAX_SCALE_PCT,
+        description = stringResource(R.string.settings_display_scale_desc),
+    )
 }
 
 /** App label for the cluster picker row; falls back to the package name when not installed/resolvable. */
@@ -1449,6 +1494,9 @@ private fun ClusterSizeSlider(
     enabled: Boolean,
     onChange: (Int) -> Unit,
     onFinished: () -> Unit,
+    min: Int = MIN_PROJECTION_PCT,
+    max: Int = MAX_PROJECTION_PCT,
+    description: String? = null,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
@@ -1464,12 +1512,15 @@ private fun ClusterSizeSlider(
                 fontWeight = FontWeight.Medium,
             )
         }
+        if (description != null) {
+            Text(description, color = TextSecondary, fontSize = 12.sp)
+        }
         Slider(
             value = pct.toFloat(),
             onValueChange = { onChange(it.roundToInt()) },
             onValueChangeFinished = onFinished,
-            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
-            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            valueRange = min.toFloat()..max.toFloat(),
+            steps = (max - min) / 2 - 1,
             enabled = enabled,
             colors = SliderDefaults.colors(
                 thumbColor = AccentGreen,
