@@ -44,6 +44,7 @@ import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
 import com.bydmate.app.domain.calculator.RangeAvgSource
 import com.bydmate.app.domain.calculator.SocInterpolator
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.ui.overlay.CameraOverlayManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -874,7 +875,7 @@ class TrackingService : Service(), LocationListener {
     /**
      * Grants GET_USAGE_STATS appop via the on-device ADB shell uid (no-op if
      * already granted) and starts the camera-foreground poller. Mirrors monitor
-     * state into the [cameraActive] companion flow so the widget can react.
+     * state into the [cameraActive] companion flow so floating surfaces can react.
      */
     private fun startCameraMonitor() {
         serviceScope.launch {
@@ -891,7 +892,10 @@ class TrackingService : Service(), LocationListener {
         }
         cameraStateMonitor.start()
         serviceScope.launch {
-            cameraStateMonitor.active.collect { _cameraActive.value = it }
+            cameraStateMonitor.active.collect { active ->
+                _cameraActive.value = active
+                if (active) CameraOverlayManager.close(this@TrackingService)
+            }
         }
     }
 
