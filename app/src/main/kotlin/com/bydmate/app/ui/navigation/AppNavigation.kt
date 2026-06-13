@@ -40,12 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -65,8 +60,6 @@ import com.bydmate.app.ui.automation.AutomationScreen
 import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.SettingsScreen
-import com.bydmate.app.ui.settings.UpdateDialog
-import com.bydmate.app.ui.settings.UpdateState
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
@@ -99,55 +92,17 @@ fun AppNavigation(
     // Автоматическая проверка обновлений при запуске приложения.
     // UpdateChecker сам throttle-ит запросы (10 мин между реальными походами в GitHub).
     val autoCheckContext = LocalContext.current
-    val autoCheckScope = rememberCoroutineScope()
-    var autoUpdateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
-    var autoUpdateState by remember { mutableStateOf<UpdateState?>(null) }
-    var autoUpdateDownloadJob by remember { mutableStateOf<Job?>(null) }
+    var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(Unit) {
         if (!UpdateChecker.isAutoCheckEnabled(autoCheckContext)) return@LaunchedEffect
         try {
             val info = updateChecker.checkForUpdate(autoCheckContext, forceCheck = false)
             if (info != null) {
-                autoUpdateInfo = info
-                autoUpdateState = UpdateState.Available(version = info.version, notes = info.releaseNotes)
+                availableUpdateVersion = info.version
             }
         } catch (_: Exception) {
             // тихо игнорируем — оффлайн, rate-limit и т.п.
         }
-    }
-    autoUpdateState?.let { dialogState ->
-        val currentVersion = runCatching {
-            autoCheckContext.packageManager.getPackageInfo(autoCheckContext.packageName, 0).versionName ?: "?"
-        }.getOrDefault("?")
-        UpdateDialog(
-            currentVersion = currentVersion,
-            state = dialogState,
-            onCheck = {
-                val info = autoUpdateInfo ?: return@UpdateDialog
-                autoUpdateState = UpdateState.Downloading(info.version, autoCheckContext.getString(R.string.update_downloading_start))
-                autoUpdateDownloadJob = autoCheckScope.launch {
-                    try {
-                        updateChecker.downloadAndInstall(autoCheckContext, info) { progress ->
-                            // Игнорируем поздний прогресс после отмены (нажат Закрыть),
-                            // иначе закрытый диалог «воскресает» в Downloading.
-                            if (isActive) {
-                                autoUpdateState = UpdateState.Downloading(info.version, progress)
-                            }
-                        }
-                    } catch (e: CancellationException) {
-                        throw e // кооперативная отмена из onDismiss, не ошибка
-                    } catch (e: Exception) {
-                        autoUpdateState = UpdateState.Error(e.message ?: "Download failed")
-                    }
-                }
-            },
-            onDismiss = {
-                autoUpdateDownloadJob?.cancel()
-                autoUpdateDownloadJob = null
-                autoUpdateState = null
-                autoUpdateInfo = null
-            }
-        )
     }
 
     // Post-install reminder: первый запуск новой версии → напомнить про Disable background Apps.
@@ -225,7 +180,7 @@ fun AppNavigation(
                 )
             }
             composable(Screen.Dashboard.route) {
-                DashboardScreen()
+                DashboardScreen(availableUpdateVersion = availableUpdateVersion)
             }
             composable(Screen.Trips.route) { TripsScreen() }
             composable(Screen.Charges.route) {

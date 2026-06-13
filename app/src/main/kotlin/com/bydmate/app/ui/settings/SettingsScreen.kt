@@ -176,10 +176,7 @@ fun SettingsScreen(
             currentVersion = state.appVersion,
             state = state.updateDialogState,
             onCheck = {
-                when (state.updateDialogState) {
-                    is UpdateState.Available -> viewModel.downloadUpdate()
-                    else -> viewModel.checkForUpdate()
-                }
+                viewModel.checkForUpdate()
             },
             onDismiss = { viewModel.hideUpdateDialog() }
         )

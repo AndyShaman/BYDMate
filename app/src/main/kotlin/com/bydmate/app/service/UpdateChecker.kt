@@ -86,22 +86,21 @@ class UpdateChecker @Inject constructor(
         }
 
         val assets = json.optJSONArray("assets")
-            ?: throw Exception("Нет assets в релизе $tagName")
         var apkUrl: String? = null
-        for (i in 0 until assets.length()) {
-            val asset = assets.getJSONObject(i)
-            val name = asset.optString("name", "")
-            if (name.endsWith(".apk")) {
-                apkUrl = asset.optString("browser_download_url")
-                break
+        if (assets != null) {
+            for (i in 0 until assets.length()) {
+                val asset = assets.getJSONObject(i)
+                val name = asset.optString("name", "")
+                if (name.endsWith(".apk")) {
+                    apkUrl = asset.optString("browser_download_url")
+                    break
+                }
             }
         }
 
-        if (apkUrl == null) throw Exception("Нет APK в релизе $tagName")
-
         UpdateInfo(
             version = tagName,
-            downloadUrl = apkUrl,
+            downloadUrl = apkUrl.orEmpty(),
             releaseNotes = json.optString("body", "")
         )
     }
@@ -124,6 +123,10 @@ class UpdateChecker @Inject constructor(
             "BYDMate-${update.version}.apk"
         )
         if (destFile.exists()) destFile.delete()
+
+        if (update.downloadUrl.isBlank()) {
+            throw Exception("Нет APK в релизе ${update.version}")
+        }
 
         val request = DownloadManager.Request(Uri.parse(update.downloadUrl))
             .setTitle("BYDMate ${update.version}")
@@ -223,8 +226,8 @@ class UpdateChecker @Inject constructor(
     }
 
     private fun isNewer(remote: String, local: String): Boolean {
-        val r = remote.split(".").mapNotNull { it.toIntOrNull() }
-        val l = local.split(".").mapNotNull { it.toIntOrNull() }
+        val r = versionParts(remote)
+        val l = versionParts(local)
         for (i in 0 until maxOf(r.size, l.size)) {
             val rv = r.getOrElse(i) { 0 }
             val lv = l.getOrElse(i) { 0 }
@@ -233,4 +236,9 @@ class UpdateChecker @Inject constructor(
         }
         return false
     }
+
+    private fun versionParts(version: String): List<Int> =
+        version.removePrefix("v")
+            .split(".", "-")
+            .mapNotNull { part -> part.takeWhile { it.isDigit() }.toIntOrNull() }
 }

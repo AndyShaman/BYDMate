@@ -113,7 +113,7 @@
     <string name="settings_autostart_recorded">自启动：%1$s</string>
     <string name="settings_autostart_not_recorded">自启动：未记录</string>
     <string name="settings_update_check_toggle_label">检查更新</string>
-    <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并提示更新</string>
+    <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并显示新版本提示</string>
     <string name="settings_update_check_button">立即检查更新</string>
 
     <!-- Settings: Autoservice status -->
@@ -132,7 +132,7 @@
     <string name="settings_update_up_to_date">已是最新版本</string>
     <string name="settings_update_available_version">可用版本：v%1$s</string>
     <string name="settings_update_whats_new_label">更新内容：</string>
-    <string name="settings_update_install_button">下载并安装</string>
+    <string name="settings_update_install_button">打开发布页</string>
     <string name="settings_update_downloading">正在下载 v%1$s</string>
     <string name="settings_update_error">错误：%1$s</string>
     <string name="settings_update_retry_button">重试</string>
@@ -456,6 +456,7 @@
     <string name="dashboard_adb_offline">ADB 无响应</string>
     <string name="dashboard_status_online">在线</string>
     <string name="dashboard_status_offline">离线</string>
+    <string name="dashboard_update_available_status">可更新至 v%1$s</string>
 
     <string name="dashboard_unit_km">公里</string>
     <string name="dashboard_unit_kwh">kWh</string>

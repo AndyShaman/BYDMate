@@ -158,7 +158,7 @@
     <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
     <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
     <string name="settings_update_check_toggle_label">Проверять обновления</string>
-    <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и предлагать обновиться</string>
+    <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и показывать индикатор новой версии</string>
     <string name="settings_update_check_button">Проверить обновления сейчас</string>
 
     <!-- Settings: Autoservice status -->
@@ -177,7 +177,7 @@
     <string name="settings_update_up_to_date">Установлена последняя версия</string>
     <string name="settings_update_available_version">Доступна версия: v%1$s</string>
     <string name="settings_update_whats_new_label">Что нового:</string>
-    <string name="settings_update_install_button">Скачать и установить</string>
+    <string name="settings_update_install_button">Открыть релиз</string>
     <string name="settings_update_downloading">Скачивается v%1$s</string>
     <string name="settings_update_error">Ошибка: %1$s</string>
     <string name="settings_update_retry_button">Попробовать снова</string>
@@ -525,6 +525,7 @@
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
+    <string name="dashboard_update_available_status">Доступна v%1$s</string>
 
     <!-- Left column - live stats -->
     <string name="dashboard_unit_km">км</string>
@@ -564,7 +565,7 @@
     <!-- Stat cards -->
     <string name="dashboard_stat_distance">Пробег</string>
     <string name="dashboard_stat_energy">Энергия</string>
-    <string name="dashboard_stat_consumption">Расход</string>
+    <string name="dashboard_stat_consumption">Расход на 100 км</string>
     <string name="dashboard_stat_cost">Стоимость</string>
     <string name="dashboard_trip_count">%1$d поездок</string>
 

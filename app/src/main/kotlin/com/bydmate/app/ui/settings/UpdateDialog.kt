@@ -114,14 +114,6 @@ fun UpdateDialog(
                                 // Release notes body stays as-is (user-facing Russian plain text from GitHub)
                                 Text(state.notes, color = TextPrimary, fontSize = 13.sp)
                             }
-                            Button(
-                                onClick = onCheck,
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
-                            ) {
-                                Text(stringResource(R.string.settings_update_install_button), color = Color.White, fontWeight = FontWeight.Bold)
-                            }
                         }
                         is UpdateState.Downloading -> {
                             Text(

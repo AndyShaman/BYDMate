@@ -140,7 +140,7 @@
     <string name="settings_autostart_recorded">Autostart: %1$s</string>
     <string name="settings_autostart_not_recorded">Autostart: not recorded</string>
     <string name="settings_update_check_toggle_label">Check for updates</string>
-    <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and suggest updating</string>
+    <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and show a new-version indicator</string>
     <string name="settings_update_check_button">Check for updates now</string>
     <string name="settings_autoservice_disconnected_title">not connected</string>
     <string name="settings_autoservice_disconnected_detail">restart the app if ADB is enabled in Developer settings</string>
@@ -155,7 +155,7 @@
     <string name="settings_update_up_to_date">Latest version installed</string>
     <string name="settings_update_available_version">Available version: v%1$s</string>
     <string name="settings_update_whats_new_label">What is new:</string>
-    <string name="settings_update_install_button">Download and install</string>
+    <string name="settings_update_install_button">Open release</string>
     <string name="settings_update_downloading">Downloading v%1$s</string>
     <string name="settings_update_error">Error: %1$s</string>
     <string name="settings_update_retry_button">Try again</string>
@@ -424,6 +424,7 @@
     <string name="dashboard_diplus_offline">DiPlus is not responding</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>
+    <string name="dashboard_update_available_status">v%1$s available</string>
     <string name="dashboard_unit_km">km</string>
     <string name="dashboard_unit_kwh">kWh</string>
     <string name="dashboard_range_label">estimated range</string>
@@ -451,7 +452,7 @@
     <string name="dashboard_period_all">All</string>
     <string name="dashboard_stat_distance">Mileage</string>
     <string name="dashboard_stat_energy">Energy</string>
-    <string name="dashboard_stat_consumption">Consumption</string>
+    <string name="dashboard_stat_consumption">Consumption per 100 km</string>
     <string name="dashboard_stat_cost">Cost</string>
     <string name="dashboard_trip_count">%1$d trips</string>
     <string name="dashboard_recent_trips_title">Recent trips</string>

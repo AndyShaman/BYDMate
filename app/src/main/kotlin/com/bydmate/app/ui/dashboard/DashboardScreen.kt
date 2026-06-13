@@ -75,6 +75,7 @@ import kotlinx.coroutines.delay
 @Composable
 fun DashboardScreen(
     viewModel: DashboardViewModel = hiltViewModel(),
+    availableUpdateVersion: String? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
@@ -93,7 +94,12 @@ fun DashboardScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        TopBar(isServiceRunning = state.isServiceRunning, vehicleDataConnected = state.vehicleDataConnected, adbConnected = state.adbConnected)
+        TopBar(
+            isServiceRunning = state.isServiceRunning,
+            vehicleDataConnected = state.vehicleDataConnected,
+            adbConnected = state.adbConnected,
+            availableUpdateVersion = availableUpdateVersion,
+        )
         Spacer(modifier = Modifier.height(4.dp))
 
         Row(
@@ -508,7 +514,7 @@ fun DashboardScreen(
                     val consColor = if (state.avgConsumption > 0) consumptionColor(state.avgConsumption) else TextSecondary
                     StatCard(
                         stringResource(R.string.dashboard_stat_consumption),
-                        if (state.avgConsumption > 0) "%.1f кВт·ч/100".format(state.avgConsumption) else "—",
+                        if (state.avgConsumption > 0) "%.1f кВт·ч".format(state.avgConsumption) else "—",
                         state.avgFuelConsumption.takeIf { it > 0.0 }?.let { "%.1f л/100".format(it) },
                         consColor,
                         Modifier.weight(1f)
@@ -551,7 +557,12 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun TopBar(isServiceRunning: Boolean, vehicleDataConnected: Boolean, adbConnected: Boolean? = null) {
+private fun TopBar(
+    isServiceRunning: Boolean,
+    vehicleDataConnected: Boolean,
+    adbConnected: Boolean? = null,
+    availableUpdateVersion: String? = null,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -587,8 +598,14 @@ private fun TopBar(isServiceRunning: Boolean, vehicleDataConnected: Boolean, adb
                     .background(if (isServiceRunning) AccentGreen else TextMuted)
             )
             Text(
-                text = if (isServiceRunning) stringResource(R.string.dashboard_status_online) else stringResource(R.string.dashboard_status_offline),
-                color = TextSecondary,
+                text = availableUpdateVersion?.let {
+                    stringResource(R.string.dashboard_update_available_status, it)
+                } ?: if (isServiceRunning) {
+                    stringResource(R.string.dashboard_status_online)
+                } else {
+                    stringResource(R.string.dashboard_status_offline)
+                },
+                color = if (availableUpdateVersion != null) SocYellow else TextSecondary,
                 fontSize = 12.sp
             )
         }
