@@ -92,24 +92,22 @@ class AutoserviceChargingDetector @Inject constructor(
         // Min SOC delta for BatterySnapshot capacity calculation (matches BatteryHealthRepository).
         const val MIN_SOC_DELTA_FOR_SNAPSHOT = 5
         // Minimum SOC rise (percentage points) for a wake-up jump to count as a
-        // real charging session. 1 = any integer SOC rise with the odometer
-        // parked counts. Was 3 (recalibration-noise guard) until 2026-06-11:
-        // short-trip cars top up only 1-2% per night and every such session was
-        // silently dropped. A rare BMS recalibration may now log a ~1% phantom
-        // row — visible and hand-deletable, accepted over daily silent loss.
-        const val MIN_SOC_DELTA_FOR_CHARGE = 1
+        // real charging session. Anything below this is noise: a BMS/LFP
+        // recalibration (~1%) or regen sub-1% while parked can nudge SOC up
+        // without any charge. 2 = a 1% rise is always dropped, never logged.
+        const val MIN_SOC_DELTA_FOR_CHARGE = 2
         // SOC rise (percentage points) at or above which a charge is trusted
-        // UNCONDITIONALLY — the odometer gate no longer applies. Physics: the
-        // only non-charge SOC rises are regen (needs driving, sub-1% while the
-        // anchor is parked) and a BMS/LFP recalculation (~1%). Neither reaches
-        // 2%, so a >=2% rise is always a real charge. Field decision 2026-06-11:
-        // an anchor with stale mileage made the odometer gate eat a real 11%
-        // dacha charge (Song) — a daily loss; a rare 1% phantom is acceptable.
-        const val SOC_DELTA_TRUSTED_CHARGE = 2
+        // UNCONDITIONALLY — the odometer gate no longer applies. The only
+        // non-charge SOC rises (recalibration ~1%, regen sub-1% while parked)
+        // stay under 2%, so a >=3% rise is always a real charge regardless of
+        // the odometer (the anchor's mileage can be stale — it freezes while
+        // SOC is flat; field report 2026-06-11, Song lost an 11% dacha charge
+        // to a stale-mileage odometer gate).
+        const val SOC_DELTA_TRUSTED_CHARGE = 3
         // Odometer movement (km) above which the gap between the parked anchor and
         // wake-up contained a drive — the stored start-of-charge SOC is then no
         // longer the true charge start, so we skip reconstruction. Applies ONLY
-        // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 1%).
+        // to socDelta below SOC_DELTA_TRUSTED_CHARGE (i.e. exactly 2%).
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
@@ -302,10 +300,10 @@ class AutoserviceChargingDetector @Inject constructor(
             }
 
             // Step 5: charge-detection gate. Create a row only for a real charge:
-            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (zero/negative = no
-            //     charge happened), AND
-            //   - for the 1% tier ONLY: the odometer did not move since the
-            //     anchor (a 1% rise after a drive could be regen or a BMS
+            //   - socDelta >= MIN_SOC_DELTA_FOR_CHARGE (a <2% rise is noise:
+            //     recalibration or parked regen, never a logged charge), AND
+            //   - for the 2% tier ONLY: the odometer did not move since the
+            //     anchor (a 2% rise after a drive could still be regen or a BMS
             //     recalculation). A rise >= SOC_DELTA_TRUSTED_CHARGE is beyond
             //     what regen-while-parked or recalibration can produce, so it
             //     is recorded regardless of the odometer — the anchor's mileage
