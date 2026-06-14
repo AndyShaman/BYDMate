@@ -15,6 +15,7 @@ import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -387,7 +388,8 @@ class DashboardViewModel @Inject constructor(
             } else {
                 _uiState.update { it.copy(
                     insightLoading = false,
-                    insightError = appContext.getString(R.string.dashboard_insight_refresh_error)
+                    // @ApplicationContext is not localized — resolve via the app-selected language.
+                    insightError = appContext.appLocalizedContext().getString(R.string.dashboard_insight_refresh_error)
                 ) }
             }
         }

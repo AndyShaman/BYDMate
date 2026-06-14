@@ -930,9 +930,9 @@ class AutoserviceChargingDetectorTest {
 
     @Test
     fun `1 percent rise with odometer moved skips reconstruction`() = runTest {
-        // The odometer gate applies ONLY to the 1% tier: a 1% rise after a
-        // drive could be regen or a BMS recalculation, not a charge. Skip the
-        // row; roll the baseline forward to current.
+        // A 1% rise is below MIN_SOC_DELTA_FOR_CHARGE(2) — noise (regen or a
+        // BMS recalculation), never a charge regardless of the odometer. Skip
+        // the row; roll the baseline forward to current.
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
@@ -949,16 +949,16 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `2 percent rise with odometer moved still creates a row`() = runTest {
+    fun `3 percent rise with odometer moved still creates a row`() = runTest {
         // SOC_DELTA_TRUSTED_CHARGE: regen-while-parked and BMS recalibration
-        // never reach 2%, so a >=2% rise is a charge no matter what the
+        // never reach 3%, so a >=3% rise is a charge no matter what the
         // odometer says — the anchor's mileage can be stale (it used to freeze
         // while SOC was flat, field report 2026-06-11).
         val fourHoursMs = 4L * 3_600_000L
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 78,
+            prevSoc = 77,
             prevMileageKm = 2091f,
             prevTs = 100L
         )
@@ -967,7 +967,7 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(78, ch.socStart)
+        assertEquals(77, ch.socStart)
         assertEquals(80, ch.socEnd)
     }
 
@@ -996,9 +996,9 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `1 percent SOC rise creates a row`() = runTest {
-        // Daily AC top-ups on short-trip cars add only 1-2% — these are real
-        // sessions, not noise (field report 2026-06-11). The gate is 1%.
+    fun `1 percent SOC rise does NOT create a row`() = runTest {
+        // A 1% rise is noise (BMS/LFP recalibration ~1%, parked regen sub-1%),
+        // below MIN_SOC_DELTA_FOR_CHARGE(2). Roll the anchor forward, no row.
         val setup = build(
             battery = battery(soc = 80f),
             charging = charging(capKwh = null, gunState = 1),
@@ -1007,10 +1007,8 @@ class AutoserviceChargingDetectorTest {
 
         val result = setup.detector.runCatchUp(now = 1500L)
 
-        assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
-        val ch = setup.chargeDao.inserted.single()
-        assertEquals(79, ch.socStart)
-        assertEquals(80, ch.socEnd)
+        assertEquals(CatchUpOutcome.NO_DELTA, result.outcome)
+        assertEquals(0, setup.chargeDao.inserted.size)
         assertEquals(80, setup.stateStore.load().socPercent)
     }
 
@@ -1036,8 +1034,8 @@ class AutoserviceChargingDetectorTest {
 
     @Test
     fun `2 percent SOC rise creates a row`() = runTest {
-        // Regression guard for the old MIN_SOC_DELTA_FOR_CHARGE=3 gate that
-        // silently dropped small overnight charges.
+        // 2% is the MIN_SOC_DELTA_FOR_CHARGE floor: with the odometer parked a
+        // 2% rise is a real charge and must be logged.
         val setup = build(
             battery = battery(soc = 80f),
             charging = charging(capKwh = null, gunState = 1),
@@ -1173,17 +1171,17 @@ class AutoserviceChargingDetectorTest {
     }
 
     @Test
-    fun `pending 1 percent charge with odometer moved still creates a row and clears pending`() = runTest {
+    fun `pending 2 percent charge with odometer moved still creates a row and clears pending`() = runTest {
         // Morning race lost: a wake during the charge set pending, the final
         // wake-up window failed, the user drove off. SOC can only RISE via
-        // charging, so with pending evidence even a 1% rise (the only tier the
-        // odometer gate still applies to) must become a row instead of a
-        // silent drop.
+        // charging, so with pending evidence even a 2% rise (the suspicious
+        // tier the odometer gate still applies to) must become a row instead
+        // of a silent drop.
         val fourHoursMs = 4L * 3_600_000L
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 79,
+            prevSoc = 78,
             prevMileageKm = 2091f,
             prevTs = 100L
         )
@@ -1193,17 +1191,17 @@ class AutoserviceChargingDetectorTest {
 
         assertEquals(CatchUpOutcome.SESSION_CREATED, result.outcome)
         val ch = setup.chargeDao.inserted.single()
-        assertEquals(79, ch.socStart)
+        assertEquals(78, ch.socStart)
         assertEquals(80, ch.socEnd)
         assertFalse(setup.stateStore.loadChargePending())
     }
 
     @Test
-    fun `1 percent rise with odometer moved WITHOUT pending still skips reconstruction`() = runTest {
+    fun `2 percent rise with odometer moved WITHOUT pending still skips reconstruction`() = runTest {
         val setup = build(
             battery = battery(soc = 80f, mileage = 2200f),
             charging = charging(capKwh = null, gunState = 1),
-            prevSoc = 79,
+            prevSoc = 78,
             prevMileageKm = 2091f,
             prevTs = 100L
         )

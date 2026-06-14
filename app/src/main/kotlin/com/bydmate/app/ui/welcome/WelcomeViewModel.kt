@@ -8,6 +8,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,7 +60,9 @@ class WelcomeViewModel @Inject constructor(
 
     fun startBydMate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, importStatus = appContext.getString(R.string.welcome_saving_settings_status)) }
+            // @ApplicationContext is not localized — resolve status strings via the app-selected language.
+            val ctx = appContext.appLocalizedContext()
+            _uiState.update { it.copy(isLoading = true, importStatus = ctx.getString(R.string.welcome_saving_settings_status)) }
 
             // Save all settings
             val state = _uiState.value
@@ -81,9 +84,9 @@ class WelcomeViewModel @Inject constructor(
 
             _uiState.update {
                 it.copy(importStatus = if (isUpgrade)
-                    appContext.getString(R.string.welcome_updating_data_status)
+                    ctx.getString(R.string.welcome_updating_data_status)
                 else
-                    appContext.getString(R.string.welcome_importing_trips_status))
+                    ctx.getString(R.string.welcome_importing_trips_status))
             }
 
             if (isUpgrade) {

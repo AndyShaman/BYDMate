@@ -400,6 +400,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideTripTracker(
+        tripPointDao: TripPointDao,
+    ): com.bydmate.app.domain.tracker.TripTracker =
+        com.bydmate.app.domain.tracker.TripTracker(tripPointDao = tripPointDao)
+
+    @Provides
+    @Singleton
     fun provideTripRecorder(
         tripDao: TripDao,
         lastStateDao: LastStateDao,
