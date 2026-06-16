@@ -344,10 +344,13 @@ class DashboardViewModel @Inject constructor(
 
     private fun loadInsight() {
         viewModelScope.launch {
-            val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
-            _uiState.update { it.copy(hasApiKey = apiKey.isNotBlank()) }
+            val enabled = insightsManager.canShowInsights()
+            _uiState.update { it.copy(hasApiKey = enabled) }
 
-            val cached = insightsManager.getCachedInsight()
+            var cached = insightsManager.getDisplayInsight()
+            if (cached == null && enabled) {
+                cached = insightsManager.refreshIfNeeded()
+            }
             if (cached != null) {
                 _uiState.update { current -> current.copy(
                     insightTitle = cached.title,

@@ -77,6 +77,7 @@ data class SettingsUiState(
     val openRouterApiKey: String = "",
     val openRouterModel: String = "",
     val openRouterModelName: String = "",
+    val insightCloudMode: Boolean = false,
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
     val modelsLoading: Boolean = false,
@@ -191,6 +192,10 @@ class SettingsViewModel @Inject constructor(
             // AI settings
             val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
             val modelId = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_MODEL, "")
+            val insightCloud = settingsRepository.getString(
+                SettingsRepository.KEY_INSIGHT_MODE,
+                SettingsRepository.INSIGHT_MODE_LOCAL,
+            ) == SettingsRepository.INSIGHT_MODE_CLOUD
 
             // Smart Home settings
             val aliceEndpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "")
@@ -219,6 +224,7 @@ class SettingsViewModel @Inject constructor(
                     openRouterApiKey = apiKey,
                     openRouterModel = modelId,
                     openRouterModelName = modelId.substringAfterLast("/").substringBefore(":"),
+                    insightCloudMode = insightCloud,
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
@@ -512,6 +518,33 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(openRouterApiKey = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value)
+        }
+    }
+
+    fun setInsightCloudMode(cloud: Boolean) {
+        _uiState.update { it.copy(insightCloudMode = cloud) }
+        viewModelScope.launch {
+            settingsRepository.setString(
+                SettingsRepository.KEY_INSIGHT_MODE,
+                if (cloud) SettingsRepository.INSIGHT_MODE_CLOUD else SettingsRepository.INSIGHT_MODE_LOCAL,
+            )
+        }
+    }
+
+    fun refreshLocalInsight() {
+        viewModelScope.launch {
+            val loading = appContext.getString(R.string.settings_ai_loading_label)
+            _uiState.update { it.copy(aiSaveStatus = loading) }
+            val insight = insightsManager.refresh()
+            _uiState.update {
+                it.copy(
+                    aiSaveStatus = if (insight != null) {
+                        appContext.getString(R.string.settings_ai_done)
+                    } else {
+                        appContext.getString(R.string.settings_ai_fetch_error)
+                    },
+                )
+            }
         }
     }
 

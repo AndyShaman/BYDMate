@@ -39,6 +39,10 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
+        /** "local" (default) = offline rules; "cloud" = OpenRouter LLM */
+        const val KEY_INSIGHT_MODE = "insight_mode"
+        const val INSIGHT_MODE_LOCAL = "local"
+        const val INSIGHT_MODE_CLOUD = "cloud"
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"

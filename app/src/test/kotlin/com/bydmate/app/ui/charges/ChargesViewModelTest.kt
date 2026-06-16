@@ -113,6 +113,11 @@ class ChargesViewModelTest {
         override suspend fun delete(charge: ChargeEntity) {
             chargesFlow.value = chargesFlow.value.filter { it.id != charge.id }
         }
+        override suspend fun getCompletedSince(since: Long): List<ChargeEntity> =
+            chargesFlow.value.filter {
+                it.startTs >= since && it.status == "COMPLETED" &&
+                    (it.kwhCharged ?: 0.0) >= 0.05
+            }
     }
 
     private class StubChargePointDao : ChargePointDao {
