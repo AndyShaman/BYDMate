@@ -53,6 +53,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 object ClusterProjectionManager {
     private const val TAG = "ClusterProjection"
     private const val DEFAULT_CLUSTER_DISPLAY_ID = 2          // Phase 0: fission display id
+    private const val DIRECT_CLUSTER_WIDTH = 1920              // Song L DM-i / DiLink 5 fission display
+    private const val DIRECT_CLUSTER_HEIGHT = 720
     private const val VIRTUAL_DISPLAY_FLAGS = 322             // TRUSTED | OWN_CONTENT_ONLY | PRESENTATION (OpenBYD)
     private const val VD_NAME = "BYDMate_Cluster_VD"
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
@@ -333,8 +335,13 @@ object ClusterProjectionManager {
         if (!ensureOverlayPermission(context, helper)) {
             Log.e(TAG, "overlay permission unavailable; aborting projection"); return false
         }
-        val display = resolveClusterDisplay(context) ?: run {
-            Log.e(TAG, "cluster display not found"); return false
+        val display = resolveClusterDisplay(context)
+        if (display == null) {
+            // Some DiLink 5 builds expose the fission display to ActivityTaskManager and shell uid,
+            // but deliberately hide it from third-party DisplayManager even with PROJECT_MEDIA.
+            // In that configuration an overlay cannot be created in the app process, while the
+            // helper can still move the selected task directly onto display 2.
+            return projectDirectlyToCluster(context, helper)
         }
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)
@@ -393,6 +400,36 @@ object ClusterProjectionManager {
     }
 
     /**
+     * DiLink 5 fallback for vehicles where display 2 is hidden from app-side DisplayManager.
+     * The shell helper owns the task move, so no app-side Display or overlay Surface is needed.
+     * Window size/position sliders do not apply in this mode; the target uses the full 1920x720
+     * fission display. OFF still returns the same task to display 0 via [pullBackToMain].
+     */
+    private suspend fun projectDirectlyToCluster(context: Context, helper: HelperClient): Boolean {
+        val pkg = targetPackage(context)
+        Log.w(
+            TAG,
+            "cluster display hidden from app; direct launchAndForce $pkg " +
+                "to display $DEFAULT_CLUSTER_DISPLAY_ID ${DIRECT_CLUSTER_WIDTH}x$DIRECT_CLUSTER_HEIGHT",
+        )
+        val ok = helper.launchAndForce(
+            pkg,
+            DEFAULT_CLUSTER_DISPLAY_ID,
+            DIRECT_CLUSTER_WIDTH,
+            DIRECT_CLUSTER_HEIGHT,
+        )
+        if (ok) {
+            projectedPackage = pkg
+            clusterWidth = DIRECT_CLUSTER_WIDTH
+            clusterHeight = DIRECT_CLUSTER_HEIGHT
+            Log.i(TAG, "direct cluster projection active on display $DEFAULT_CLUSTER_DISPLAY_ID")
+        } else {
+            Log.e(TAG, "direct cluster projection failed for $pkg")
+        }
+        return ok
+    }
+
+    /**
      * App-side display lookup. The cluster's projection surfaces are virtual displays owned by
      * com.byd.containerservice, named "*XDJAScreenProjection*" (1280x480). Validated on-car
      * 2026-06-02: the panel composites the "..._1" surface in Full mode, so we pick it by name;
@@ -401,7 +438,8 @@ object ClusterProjectionManager {
      */
     private fun resolveClusterDisplay(context: Context): Display? {
         val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-        val projectionDisplays = dm.displays.filter {
+        val displays = dm.displays
+        val projectionDisplays = displays.filter {
             it.name.contains("XDJAScreenProjection", ignoreCase = true)
         }
         val match = projectionDisplays.firstOrNull { it.name.endsWith("_1") }
@@ -416,6 +454,12 @@ object ClusterProjectionManager {
             @Suppress("DEPRECATION") match.getMetrics(metrics)
             if (metrics.densityDpi > 0) clusterDensityDpi = metrics.densityDpi
             Log.i(TAG, "cluster display id=${match.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+        } else {
+            Log.w(
+                TAG,
+                "cluster display unavailable to app; visible=" +
+                    displays.joinToString { "${it.displayId}:${it.name}" },
+            )
         }
         return match
     }
