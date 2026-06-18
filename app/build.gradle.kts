@@ -27,10 +27,10 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        // DM build based on upstream 3.1.5. Keep code above upstream 315
+        // DM build based on upstream 3.1.6. Keep code above upstream 316
         // so installed DM builds receive this update.
-        versionCode = 316
-        versionName = "3.1.5-dm.1"
+        versionCode = 317
+        versionName = "3.1.6-dm.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }

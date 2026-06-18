@@ -20,7 +20,8 @@ enum class TripState { IDLE, DRIVING }
  */
 @Singleton
 class TripTracker @Inject constructor(
-    private val tripPointDao: TripPointDao
+    private val tripPointDao: TripPointDao,
+    private val clock: () -> Long = { System.currentTimeMillis() },
 ) {
     private val _state = MutableStateFlow(TripState.IDLE)
     val state: StateFlow<TripState> = _state
@@ -46,8 +47,15 @@ class TripTracker @Inject constructor(
     }
 
     suspend fun onData(data: DiParsData, location: Location?) {
-        val speed = data.speed ?: 0
-        val now = System.currentTimeMillis()
+        // DiLink 4 has no readable autoservice speed fid (returns a sentinel →
+        // data.speed == null), which would freeze GPS collection in IDLE. Fall
+        // back to the GPS fix's own speed (m/s → km/h) so point collection is
+        // gated on GPS, not on a device-specific fid. On Leopard 3 data.speed
+        // is valid and takes precedence, so behaviour there is unchanged.
+        val speed = data.speed
+            ?: location?.takeIf { it.hasSpeed() }?.let { (it.speed * 3.6f).toInt() }
+            ?: 0
+        val now = clock()
 
         when (_state.value) {
             TripState.IDLE -> {

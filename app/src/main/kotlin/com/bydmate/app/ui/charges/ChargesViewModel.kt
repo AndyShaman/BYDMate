@@ -11,6 +11,7 @@ import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
+import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
@@ -195,7 +196,10 @@ class ChargesViewModel @Inject constructor(
     }
 
     internal fun groupChargesByMonthDay(charges: List<ChargeEntity>): List<ChargesMonthGroup> {
-        val appLocale = appContext.resources.configuration.locales[0]
+        // @ApplicationContext is not localized — use the app-selected language so
+        // weekday/month headers and today/yesterday labels match the app's locale.
+        val ctx = appContext.appLocalizedContext()
+        val appLocale = ctx.resources.configuration.locales[0]
         val monthKeyFmt = SimpleDateFormat("yyyy-MM", Locale.US)
         val dayKeyFmt = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val dayOfWeekFmt = SimpleDateFormat("EEE", appLocale)
@@ -233,8 +237,8 @@ class ChargesViewModel @Inject constructor(
                     .map { (dayKey, dayCharges) ->
                         val dow = dayOfWeekFmt.format(Date(dayCharges.first().startTs))
                         val dayLabel = when (dayKey) {
-                            todayKey -> appContext.getString(R.string.charges_day_today, dow)
-                            yesterdayKey -> appContext.getString(R.string.charges_day_yesterday)
+                            todayKey -> ctx.getString(R.string.charges_day_today, dow)
+                            yesterdayKey -> ctx.getString(R.string.charges_day_yesterday)
                             else -> {
                                 val ddMmm = SimpleDateFormat("dd MMM", appLocale).format(Date(dayCharges.first().startTs))
                                 "$ddMmm ($dow)"

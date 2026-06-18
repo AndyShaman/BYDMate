@@ -210,6 +210,9 @@ class ChargesViewModelTest {
             every { getString(any()) } returns ""
             every { getString(any(), any()) } returns ""
         }
+        // appLocalizedContext() rebuilds a localized context via createConfigurationContext;
+        // route it back to the same mock so locale ("ru") and getString stubs still apply.
+        every { ctx.createConfigurationContext(any()) } returns ctx
         return ChargesViewModel(ctx, chargeRepo, snapshotDao, settingsRepo, batteryStateRepo) to chargeDao
     }
 
