@@ -84,6 +84,16 @@ interface ChargeDao {
     @Query("DELETE FROM charges WHERE kwh_charged IS NULL OR kwh_charged < 0.05")
     suspend fun deleteEmpty(): Int
 
+    @Query("""
+        SELECT * FROM charges
+        WHERE start_ts >= :since
+          AND status = 'COMPLETED'
+          AND kwh_charged IS NOT NULL
+          AND kwh_charged >= 0.05
+        ORDER BY start_ts DESC
+    """)
+    suspend fun getCompletedSince(since: Long): List<ChargeEntity>
+
     /**
      * One-shot migration for v2.4.17: removes phantom autoservice rows where SOC
      * didn't change (the lifetime_kwh delta bug from v2.4.15/v2.4.16). Filter:

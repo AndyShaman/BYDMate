@@ -616,7 +616,8 @@ private fun InsightCard(
                 }
             } else {
                 Text(
-                    stringResource(R.string.dashboard_insight_setup_prompt),
+                    if (hasApiKey) stringResource(R.string.dashboard_insight_no_data)
+                    else stringResource(R.string.dashboard_insight_setup_prompt),
                     color = TextMuted,
                     fontSize = 12.sp
                 )

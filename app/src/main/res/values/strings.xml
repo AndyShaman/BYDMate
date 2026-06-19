@@ -98,6 +98,11 @@
     <string name="settings_openrouter_model_pick">Выбрать модель</string>
     <string name="settings_ai_loading_label">Загрузка...</string>
     <string name="settings_ai_save_button">Сохранить и получить инсайт</string>
+    <string name="settings_insight_mode_label">Источник анализа</string>
+    <string name="settings_insight_mode_local">Локальный (офлайн)</string>
+    <string name="settings_insight_mode_cloud">OpenRouter (облако)</string>
+    <string name="settings_insight_mode_local_hint">Правила на устройстве — без интернета и API-ключа. Работает автоматически раз в день.</string>
+    <string name="settings_insight_refresh_local">Обновить инсайт</string>
 
     <!-- Settings: Model picker dialog -->
     <string name="settings_model_picker_title">Выбор модели</string>
@@ -517,10 +522,10 @@
 
     <!-- AI Insight card -->
     <string name="dashboard_insight_loading">Анализ...</string>
-    <string name="dashboard_insight_setup_prompt">AI Инсайты - Настройте OpenRouter →</string>
+    <string name="dashboard_insight_setup_prompt">Облачные AI-инсайты — настройте OpenRouter →</string>
     <string name="dashboard_insight_refresh">Обновить</string>
     <string name="dashboard_insight_refreshing">Обновление...</string>
-    <string name="dashboard_insight_no_api_key">Для AI-инсайтов настройте OpenRouter API в Настройках</string>
+    <string name="dashboard_insight_no_api_key">Для облачных инсайтов укажите OpenRouter API в Настройках</string>
     <string name="dashboard_insight_no_data">Мало данных для анализа</string>
 
     <!-- Period chips -->
@@ -680,6 +685,55 @@
     <string name="insight_idle_prev">%1$s кВтч</string>
     <string name="insight_idle_minutes">%1$s мин</string>
     <string name="insight_idle_hours">%1$s ч</string>
+    <string name="insight_metric_night_idle">Ночь 22:00–06:00</string>
+    <string name="insight_night_idle_value">%1$.1f кВт·ч · %2$d%% простоя</string>
+    <string name="insight_night_idle_prev">%1$.1f кВт·ч</string>
+
+    <!-- Local insight engine (offline rules) -->
+    <string name="local_insight_not_enough_data_title">Данных мало для анализа</string>
+    <string name="local_insight_not_enough_data_summary">Нужно минимум 5 поездок за неделю</string>
+    <string name="local_insight_consumption_up_title">Расход ▲%1$.0f%% за неделю</string>
+    <string name="local_insight_consumption_up_summary_short">Много коротких поездок — прогрев забирает энергию</string>
+    <string name="local_insight_consumption_up_summary">Расход вырос: %1$.1f → %2$.1f кВт·ч/100</string>
+    <string name="local_insight_consumption_down_title">Расход ▼%1$.0f%%</string>
+    <string name="local_insight_consumption_down_summary">Средний %1$.1f кВт·ч/100 — экономнее прошлой недели</string>
+    <string name="local_insight_consumption_stable_title">Расход стабилен</string>
+    <string name="local_insight_consumption_stable_summary">Средний %1$.1f кВт·ч/100 за неделю</string>
+    <string name="local_insight_short_trips">%1$d из %2$d поездок короче 5 км (%3$d%%) — объединяйте короткие заезды</string>
+    <string name="local_insight_idle">На стоянке с мотором: %1$.1f кВт·ч за %2$s — %3$d%% недельного расхода</string>
+    <string name="local_insight_12v_critical_title">12V критично низкий</string>
+    <string name="local_insight_12v_critical_summary">Бортовая сеть %1$.1f В — проверьте аккумулятор</string>
+    <string name="local_insight_12v_low">12V сейчас %1$.1f В — ниже нормы 12.4 В</string>
+    <string name="local_insight_12v_falling">12V снижается: %1$.2f → %2$.2f В за неделю</string>
+    <string name="local_insight_cell_critical_title">Большой разброс банок</string>
+    <string name="local_insight_cell_critical_summary">Дельта %1$.0f мВ — следите за балансировкой</string>
+    <string name="local_insight_cell_delta">Разброс банок %1$.0f мВ — возможна слабая ячейка</string>
+    <string name="local_insight_cold">При %1$d°C средний расход %2$.1f кВт·ч/100 — зимой это ожидаемо</string>
+    <string name="local_insight_best_worst">Лучшая поездка %1$.1f, худшая %2$.1f кВт·ч/100</string>
+    <string name="local_insight_cost">За неделю %1$.0f %2$s на поездки</string>
+    <string name="local_insight_night_idle_title">Ночной расход на стоянке</string>
+    <string name="local_insight_night_idle_summary">%1$.1f кВт·ч ночью — %2$d%% простоя с мотором</string>
+    <string name="local_insight_night_idle">Ночью (22:00–06:00) с мотором ушло %1$.1f кВт·ч — %2$d%% всего простоя. Выключайте зажигание, если климат не нужен</string>
+    <string name="local_insight_dc_more_expensive">DC %1$.2f %4$s/кВт·ч vs AC %2$.2f — на %3$d%% дороже домашней зарядки</string>
+    <string name="local_insight_dc_heavy">DC %1$.0f кВт·ч (%2$d сессий) vs AC %3$.0f — для ежедневных поездок домашняя AC мягче для батареи</string>
+    <string name="local_insight_ac_only">Все %2$d зарядки AC (%1$.0f кВт·ч) — оптимально для батареи и бюджета</string>
+    <string name="local_insight_charge_cost_week">Зарядки за неделю: %1$.0f %2$s за %3$.0f кВт·ч</string>
+    <string name="local_insight_consumption_improved">Расход снизился на %1$.0f%% — хорошая динамика</string>
+    <string name="local_insight_highway_speed">Средняя скорость %1$.0f км/ч — на трассе расход %2$.1f кВт·ч/100, это ожидаемо</string>
+    <string name="local_insight_high_consumption">Средний расход %1$.1f кВт·ч/100 высокий — проверьте климат и стиль вождения</string>
+    <string name="local_insight_low_consumption">Отличный расход %1$.1f кВт·ч/100 за %2$.0f км за неделю</string>
+    <string name="local_insight_idle_rate_high">Высокий расход на стоянке ~%1$.1f кВт·ч/ч — скорее всего климат или обогрев</string>
+    <string name="local_insight_km_up">Пробег вырос: %1$.0f → %2$.0f км — это может объяснять изменение среднего расхода</string>
+    <string name="local_insight_trips_more">Поездок стало больше: %1$d vs %2$d на прошлой неделе</string>
+    <string name="local_insight_weekly_mileage">За неделю %1$.0f км в %2$d поездках — достаточно данных для точной оценки</string>
+    <string name="local_insight_12v_ok">12V %1$.1f В — бортовая сеть в норме</string>
+    <string name="local_insight_cell_ok">Разброс банок %1$.0f мВ — баланс в норме</string>
+    <string name="local_insight_heat_ac">При +%1$d°C расход %2$.1f кВт·ч/100 — кондиционер добавляет нагрузку</string>
+    <string name="local_insight_best_trip">Лучшая поездка %1$.1f кВт·ч/100 на %2$.0f км — удачный режим вождения</string>
+    <string name="local_insight_mixed_charging">Зарядка за неделю: AC %1$.0f кВт·ч, DC %2$.0f кВт·ч — для батареи чаще заряжайтесь дома</string>
+    <string name="local_insight_low_night_idle">Ночной простой всего %1$d%% — хорошая привычка глушить мотор</string>
+    <string name="local_insight_low_idle_share">Простой с мотором — всего %1$d%% недельного расхода, это хорошо</string>
+    <string name="local_insight_cost_per_100">Стоимость пробега ~%1$.2f %3$s/100 км (%2$.0f %3$s за неделю)</string>
 
     <!-- Config backup / restore -->
     <string name="settings_config_export_button">Экспорт конфигурации</string>

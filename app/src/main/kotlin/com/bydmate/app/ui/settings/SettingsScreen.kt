@@ -523,6 +523,57 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            Text(
+                stringResource(R.string.settings_insight_mode_label),
+                color = TextSecondary,
+                fontSize = 13.sp,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = !state.insightCloudMode,
+                    onClick = { viewModel.setInsightCloudMode(false) },
+                    label = { Text(stringResource(R.string.settings_insight_mode_local), fontSize = 13.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentGreen.copy(alpha = 0.25f),
+                        selectedLabelColor = AccentGreen,
+                    ),
+                )
+                FilterChip(
+                    selected = state.insightCloudMode,
+                    onClick = { viewModel.setInsightCloudMode(true) },
+                    label = { Text(stringResource(R.string.settings_insight_mode_cloud), fontSize = 13.sp) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = AccentBlue.copy(alpha = 0.25f),
+                        selectedLabelColor = AccentBlue,
+                    ),
+                )
+            }
+            if (!state.insightCloudMode) {
+                Text(
+                    stringResource(R.string.settings_insight_mode_local_hint),
+                    color = TextMuted,
+                    fontSize = 12.sp,
+                    lineHeight = 16.sp,
+                )
+                val aiLoadingLabel = stringResource(R.string.settings_ai_loading_label)
+                Button(
+                    onClick = { viewModel.refreshLocalInsight() },
+                    enabled = state.aiSaveStatus != aiLoadingLabel,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentGreen,
+                        contentColor = NavyDark,
+                    ),
+                ) {
+                    Text(
+                        if (state.aiSaveStatus == aiLoadingLabel) aiLoadingLabel
+                        else stringResource(R.string.settings_insight_refresh_local),
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
+            } else {
             SettingsTextField(
                 label = stringResource(R.string.settings_openrouter_api_key_label),
                 value = state.openRouterApiKey,
@@ -568,7 +619,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                     fontWeight = FontWeight.Medium
                 )
             }
-            if (state.aiSaveStatus != null && state.aiSaveStatus != aiLoadingLabel) {
+            }
+            if (state.aiSaveStatus != null && state.aiSaveStatus != stringResource(R.string.settings_ai_loading_label)) {
                 Text(
                     state.aiSaveStatus!!,
                     color = if (state.aiSaveStatus!!.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,

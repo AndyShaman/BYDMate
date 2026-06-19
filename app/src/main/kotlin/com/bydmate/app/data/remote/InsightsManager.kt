@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import androidx.annotation.VisibleForTesting
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.repository.SettingsRepository
@@ -25,6 +26,7 @@ class InsightsManager @Inject constructor(
     private val openRouterClient: OpenRouterClient,
     private val tripDao: TripDao,
     private val idleDrainDao: IdleDrainDao,
+    private val chargeDao: ChargeDao,
     private val settingsRepository: SettingsRepository,
     private val localePreferences: LocalePreferences = LocalePreferences(context)
 ) {
@@ -125,6 +127,12 @@ Anti-hallucination rules (CRITICAL):
         return parseInsight(json)
     }
 
+    /** Cached insight with local-only dynamics (e.g. night idle row) applied at read time. */
+    suspend fun getDisplayInsight(): InsightData? {
+        val cached = getCachedInsight() ?: return null
+        return enrichLocalInsight(cached)
+    }
+
     fun getCachedDate(): String? {
         val today = todayString()
         return if (prefs.contains(cacheKey(today, currentLanguage()))) today else null
@@ -164,9 +172,20 @@ Anti-hallucination rules (CRITICAL):
         editor.apply()
     }
 
+    /** Insights card is available: always in local mode; in cloud mode needs an API key. */
+    suspend fun canShowInsights(): Boolean {
+        if (!isCloudMode()) return true
+        return settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "").isNotBlank()
+    }
+
+    suspend fun isCloudMode(): Boolean =
+        settingsRepository.getString(
+            SettingsRepository.KEY_INSIGHT_MODE,
+            SettingsRepository.INSIGHT_MODE_LOCAL,
+        ) == SettingsRepository.INSIGHT_MODE_CLOUD
+
     suspend fun refreshIfNeeded(): InsightData? {
-        val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
-        if (apiKey.isBlank()) return getCachedInsight()
+        if (!canShowInsights()) return getCachedInsight()
         if (!needsRefresh()) return getCachedInsight()
         return refresh()
     }
@@ -195,6 +214,38 @@ Anti-hallucination rules (CRITICAL):
 
     suspend fun refresh(): InsightData? {
         append12VSample()
+        return if (isCloudMode()) refreshCloud() else refreshLocal()
+    }
+
+    private suspend fun refreshLocal(): InsightData? {
+        return try {
+            val lang = currentLanguage()
+            val stats = collectStats()
+            if (stats == null) {
+                Log.d(TAG, "Not enough data for local insights")
+                return null
+            }
+            val dynamics = buildDynamics(lang).toMutableList()
+            insertNightDrainMetricIfLocal(dynamics, lang)
+            val tone = determineTone(dynamics)
+            val text = LocalInsightEngine.generate(stats, localizedResources(lang))
+            val insight = InsightData(
+                title = text.title,
+                summary = text.summary,
+                dynamics = dynamics,
+                insights = text.insights,
+                tone = tone,
+            )
+            cacheInsight(insight, lang)
+            Log.i(TAG, "Local insight refreshed: ${insight.title}")
+            insight
+        } catch (e: Exception) {
+            Log.e(TAG, "refreshLocal failed: ${e.message}")
+            getCachedInsight()?.let { enrichLocalInsight(it) }
+        }
+    }
+
+    private suspend fun refreshCloud(): InsightData? {
         val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
         if (apiKey.isBlank()) return null
 
@@ -256,19 +307,41 @@ Anti-hallucination rules (CRITICAL):
 
             val insight = parseInsight(mergedJson)
             if (insight != null) {
-                val today = todayString()
-                prefs.edit()
-                    .putString(cacheKey(today, lang), mergedJson)
-                    .apply()
+                cacheInsight(insight, lang)
                 Log.i(TAG, "Insight refreshed: ${insight.title}")
             } else {
                 Log.w(TAG, "Failed to parse insight: $mergedJson")
             }
             insight ?: getCachedInsight()
         } catch (e: Exception) {
-            Log.e(TAG, "refresh failed: ${e.message}")
+            Log.e(TAG, "refreshCloud failed: ${e.message}")
             getCachedInsight()
         }
+    }
+
+    private fun cacheInsight(insight: InsightData, lang: String) {
+        val dynamicsArr = org.json.JSONArray()
+        for (m in insight.dynamics) {
+            dynamicsArr.put(JSONObject().apply {
+                put("label", m.label)
+                put("current", m.current)
+                if (m.previous != null) put("previous", m.previous)
+                if (m.changePct != null) put("changePct", m.changePct)
+                put("sentiment", m.sentiment)
+                if (m.section != null) put("section", m.section)
+                if (m.kind.isNotEmpty()) put("kind", m.kind)
+            })
+        }
+        val obj = JSONObject().apply {
+            put("title", insight.title)
+            put("summary", insight.summary)
+            put("tone", insight.tone)
+            put("dynamics", dynamicsArr)
+            put("insights", org.json.JSONArray(insight.insights))
+        }
+        prefs.edit()
+            .putString(cacheKey(todayString(), lang), obj.toString())
+            .apply()
     }
 
     private fun localizedResources(lang: String): android.content.res.Resources {
@@ -398,6 +471,70 @@ Anti-hallucination rules (CRITICAL):
         metrics
     }
 
+    private suspend fun enrichLocalInsight(insight: InsightData): InsightData {
+        if (isCloudMode() || insight.dynamics.any { it.kind == "night_idle" }) {
+            return insight
+        }
+        val metrics = insight.dynamics.toMutableList()
+        insertNightDrainMetricIfLocal(metrics, lang = currentLanguage())
+        return insight.copy(dynamics = metrics)
+    }
+
+    private suspend fun insertNightDrainMetricIfLocal(metrics: MutableList<DynamicMetric>, lang: String) {
+        if (isCloudMode() || metrics.any { it.kind == "night_idle" }) return
+        insertNightDrainMetric(metrics, lang)
+    }
+
+    private suspend fun insertNightDrainMetric(metrics: MutableList<DynamicMetric>, lang: String) {
+        val metric = buildNightDrainMetric(lang)
+        val idleIdx = metrics.indexOfFirst { it.kind == "idle" }
+        if (idleIdx >= 0) {
+            metrics.add(idleIdx + 1, metric)
+        } else {
+            metrics.add(metric)
+        }
+    }
+
+    private suspend fun buildNightDrainMetric(lang: String): DynamicMetric {
+        val res = localizedResources(lang)
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -7)
+        val weekAgo = cal.timeInMillis
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -14)
+        val twoWeeksAgo = cal.timeInMillis
+
+        val weekDrains = idleDrainDao.getSince(weekAgo)
+        val nightKwh = InsightStatsAggregator.nightDrainKwh(weekDrains)
+        val drainKwh = idleDrainDao.getKwhSince(weekAgo)
+        val share = if (drainKwh > 0.1) (nightKwh / drainKwh * 100).toInt() else 0
+
+        val prevDrains = idleDrainDao.getSince(twoWeeksAgo).filter { it.startTs < weekAgo }
+        val prevNightKwh = InsightStatsAggregator.nightDrainKwh(prevDrains)
+        val changePct = if (prevNightKwh > 0.1) {
+            (nightKwh - prevNightKwh) / prevNightKwh * 100
+        } else null
+
+        return DynamicMetric(
+            label = res.getString(com.bydmate.app.R.string.insight_metric_night_idle),
+            current = res.getString(
+                com.bydmate.app.R.string.insight_night_idle_value,
+                nightKwh,
+                share,
+            ),
+            previous = if (prevNightKwh > 0.1) {
+                res.getString(com.bydmate.app.R.string.insight_night_idle_prev, prevNightKwh)
+            } else null,
+            changePct = changePct,
+            sentiment = consumptionSentiment(changePct),
+            kind = "night_idle",
+        )
+    }
+
     // Deterministic tone based on consumption only (12V/cell-delta evaluated at display time)
     private fun determineTone(dynamics: List<DynamicMetric>): String {
         val consumption = dynamics.firstOrNull { it.kind == "consumption" }
@@ -418,6 +555,116 @@ Anti-hallucination rules (CRITICAL):
         changePct > 0.5 -> "good"
         changePct < -0.5 -> "bad"
         else -> "neutral"
+    }
+
+    suspend fun collectStats(): InsightStats? = withContext(Dispatchers.IO) {
+        val now = System.currentTimeMillis()
+        val cal = Calendar.getInstance()
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -7)
+        val weekAgo = cal.timeInMillis
+
+        cal.timeInMillis = now
+        cal.add(Calendar.DAY_OF_YEAR, -14)
+        val twoWeeksAgo = cal.timeInMillis
+
+        val allTrips = tripDao.getAllSnapshot()
+        val recentTrips = allTrips.filter { it.startTs >= weekAgo }
+        if (recentTrips.size < 5) return@withContext null
+
+        val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
+
+        val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
+        val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
+        val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
+        val recentAvgSpeed = recentTrips.mapNotNull { it.avgSpeedKmh }.let {
+            if (it.isNotEmpty()) it.average() else 0.0
+        }
+        val shortTripCount = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
+
+        val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
+        val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
+        val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
+        val consumptionChangePct = if (prevAvgCons > 0) {
+            (recentAvgCons - prevAvgCons) / prevAvgCons * 100
+        } else null
+
+        val tripsWithCons = recentTrips.filter {
+            (it.kwhPer100km ?: 0.0) > 0 && (it.distanceKm ?: 0.0) > 1.0
+        }
+        val best = tripsWithCons.minByOrNull { it.kwhPer100km!! }
+        val worst = tripsWithCons.maxByOrNull { it.kwhPer100km!! }
+
+        val recentCost = recentTrips.sumOf { it.cost ?: 0.0 }
+        val currency = settingsRepository.getCurrency()
+
+        val drainKwh = idleDrainDao.getKwhSince(weekAgo)
+        val drainHours = idleDrainDao.getHoursSince(weekAgo)
+
+        val liveData = TrackingService.lastData.value
+        val cellDeltaMv = if (liveData?.maxCellVoltage != null && liveData.minCellVoltage != null) {
+            (liveData.maxCellVoltage - liveData.minCellVoltage) * 1000.0
+        } else null
+
+        var v12TrendDelta: Double? = null
+        var v12Min: Double? = null
+        val v12Raw = prefs.getString(KEY_V12_HISTORY, null)
+        if (v12Raw != null) {
+            try {
+                val arr = org.json.JSONArray(v12Raw)
+                val values = (0 until arr.length()).map { arr.getJSONObject(it).getDouble("volts") }
+                if (values.size >= 2) {
+                    v12Min = values.min()
+                    val half = values.size / 2
+                    v12TrendDelta = values.takeLast(half).average() - values.take(half).average()
+                }
+            } catch (_: Exception) { /* ignore */ }
+        }
+
+        val temps = recentTrips.mapNotNull { it.exteriorTemp }
+        val avgExteriorTemp = if (temps.isNotEmpty()) temps.average().toInt() else null
+
+        val weekCharges = chargeDao.getCompletedSince(weekAgo)
+        val charging = InsightStatsAggregator.chargingWeek(weekCharges)
+        val weekDrains = idleDrainDao.getSince(weekAgo)
+        val nightDrainKwh = InsightStatsAggregator.nightDrainKwh(weekDrains)
+        val nightDrainSharePct = if (drainKwh > 0.1) nightDrainKwh / drainKwh * 100.0 else null
+
+        InsightStats(
+            recentTripCount = recentTrips.size,
+            recentKm = recentKm,
+            recentKwh = recentKwh,
+            recentAvgCons = recentAvgCons,
+            recentAvgSpeed = recentAvgSpeed,
+            shortTripCount = shortTripCount,
+            prevTripCount = prevTrips.size,
+            prevKm = prevKm,
+            prevAvgCons = prevAvgCons,
+            consumptionChangePct = consumptionChangePct,
+            bestTripCons = best?.kwhPer100km,
+            bestTripKm = best?.distanceKm,
+            worstTripCons = worst?.kwhPer100km,
+            worstTripKm = worst?.distanceKm,
+            recentCost = recentCost,
+            currencyCode = currency.code,
+            drainKwh = drainKwh,
+            drainHours = drainHours,
+            voltage12v = liveData?.voltage12v,
+            v12TrendDelta = v12TrendDelta,
+            v12Min = v12Min,
+            cellDeltaMv = cellDeltaMv,
+            avgExteriorTemp = avgExteriorTemp,
+            acKwhWeek = charging.acKwh,
+            dcKwhWeek = charging.dcKwh,
+            acSessionCount = charging.acSessions,
+            dcSessionCount = charging.dcSessions,
+            acCostPerKwh = charging.acCostPerKwh,
+            dcCostPerKwh = charging.dcCostPerKwh,
+            chargeCostWeek = charging.totalCost,
+            nightDrainKwh = nightDrainKwh,
+            nightDrainSharePct = nightDrainSharePct,
+        )
     }
 
     private suspend fun buildDataPrompt(): String? = withContext(Dispatchers.IO) {

@@ -132,6 +132,7 @@ class SettingsViewModelTest {
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
+        override suspend fun getCompletedSince(since: Long): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {}
     }
@@ -156,6 +157,7 @@ class SettingsViewModelTest {
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
+        override suspend fun getSince(since: Long): List<IdleDrainEntity> = emptyList()
     }
 
     private class StubBatterySnapshotDao : BatterySnapshotDao {
@@ -189,7 +191,8 @@ class SettingsViewModelTest {
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao)
 
-        val chargeRepo = ChargeRepository(StubChargeDao(), StubChargePointDao())
+        val chargeDao = StubChargeDao()
+        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
@@ -202,7 +205,7 @@ class SettingsViewModelTest {
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
-        val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, settingsRepo)
+        val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         // Stub BackupManager: no AppDatabase available in unit tests, use mockk
         val backupManager = mockk<BackupManager>(relaxed = true)

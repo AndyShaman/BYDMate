@@ -29,7 +29,7 @@ BYDMate is an Android app for the BYD DiLink 5.0 head unit (Leopard 3 / Fangchen
 
 The stock onboard computer **underestimates consumption by 10-30%**. BYDMate reads data directly from the BMS (energydata SQLite) and shows the real figure. Plus data the stock system does not surface: idle drain, cell balance, trip cost, AI insights.
 
-Two optional features can leave the car: AI insights via OpenRouter and live telemetry to A Better Route Planner. Both are off by default and enabled manually.
+Two optional features can leave the car: **cloud insights** via OpenRouter and live telemetry to A Better Route Planner. Both are off by default and enabled manually. **Local insights** on the dashboard run fully on-device with no network.
 
 ---
 
@@ -54,7 +54,7 @@ A major update. BYDMate moved to its own data stack and learned to mirror naviga
 | **BMS** | Real consumption | BMS data (energydata), not onboard estimates. Trend over a 25 km rolling window |
 | **GPS** | Trip logging | GPS routes, distance, speed |
 | **Charge** | Charges | Automatic AC/DC logging, period and lifetime stats, manual add and edit |
-| **AI** | AI Insights | Driving analysis via LLM (OpenRouter) |
+| **AI** | Insights | Driving analysis: on-device rules (default) or LLM via OpenRouter |
 | **Idle** | Idle drain | Idle consumption from energydata |
 | **Bat** | Battery health | Temperature, SoH (on Leopard 3), cell balance, 12V |
 | **Map** | Route map | osmdroid (OpenStreetMap) inside trip detail |
@@ -80,7 +80,7 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 
 <img src="docs/screenshots/dashboard-insight-expanded.jpg" alt="AI Insight expanded" width="800">
 
-*LLM driving efficiency analysis: consumption, trends, battery, recommendations*
+*Driving efficiency analysis — consumption, trends, battery, recommendations (local or LLM)*
 
 ### Battery health (expanded)
 
@@ -104,7 +104,7 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 
 <img src="docs/screenshots/settings.jpg" alt="Settings" width="800">
 
-*Battery, tariffs, currency, AI settings (OpenRouter API), data export*
+*Battery, tariffs, currency, insight source (local / OpenRouter), data export*
 
 ---
 
@@ -325,7 +325,7 @@ If something does not work or shows strange values, open an [Issue](https://gith
 ```
 BYD energydata (BMS SQLite)  →  HistoryImporter    →  Room DB  →  Compose UI
 autoservice (system Binder)  →  TrackingService     ↗     ↓
-Android LocationManager      →  TripTracker (GPS)   ↗   AI (OpenRouter)
+Android LocationManager      →  TripTracker (GPS)   ↗   LocalInsightEngine / OpenRouter
 autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 ```
 
@@ -335,7 +335,7 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | SOC, speed, temperatures | Car system service (autoservice Binder) |
 | Cell voltages, 12V, SoH | Car system service (autoservice Binder) |
 | GPS coordinates | Android LocationManager |
-| AI analytics | OpenRouter API (optional) |
+| AI analytics | On-device rules (default) or OpenRouter API (optional) |
 | Vehicle control | Car system service (command writes) |
 
 **No OBD adapter** and **no third-party D+**. BYDMate reads data and controls the car directly through the `autoservice` system service (the same one the stock BYD system uses) under shell access over wireless ADB.
@@ -398,25 +398,89 @@ In **Settings** you can change:
 
 ## AI Insights
 
-BYDMate can analyze your driving statistics with AI (LLM). This is an optional feature — the app fully works without it.
+The dashboard card analyzes your stats for the last 7 days (vs the previous 7) and shows a title, short summary, metrics table, and up to **5 recommendations**. **No internet** is required in the default mode.
 
-### Setup
+### Two modes
+
+| Mode | Where to enable | Internet | API key |
+|------|-----------------|----------|---------|
+| **Local (offline)** | Default | Not required | Not required |
+| **OpenRouter (cloud)** | Settings → Integrations → "OpenRouter (cloud)" | Required | OpenRouter API Key |
+
+Use the **"Analysis source"** switch in **Settings → Integrations**. In local mode, tap **"Refresh insight"** for a manual recalc. Auto-refresh is **once per day** (cached on device).
+
+### Data sources
+
+Everything is computed from the local Room database — **no GPS, routes, or personal identifiers**:
+
+- **Trips** — km, kWh, avg consumption, speed, short trips (&lt; 5 km), best/worst by consumption, cost
+- **Engine-on idle** — kWh and hours (`idle_drains`)
+- **Night idle** — sessions that started **10pm–6am**
+- **Charging** — AC/DC kWh, session count, price per kWh, weekly charge cost
+- **12V** — current voltage and weekly trend (up to 7 days of history)
+- **Cells** — max−min spread in mV from live vehicle data
+- **Temperature** — average exterior temp across trips
+
+**Minimum for analysis:** at least **5 trips** in the last 7 days. Otherwise the card shows "Not enough data to analyze".
+
+### Card layout
+
+1. **Title and summary** — one main weekly message from the highest-priority rule (see below).
+2. **Dynamics** — week-over-week table: consumption, trips, % short trips, avg distance, engine-on idle, night idle (local mode only).
+3. **Recommendations** — up to 5 bullets from matching rules, sorted by priority.
+
+Local logic lives in `LocalInsightEngine.kt`: deterministic thresholds + string templates (`local_insight_*`). Localized in ru / en / zh.
+
+### Title priority (local mode)
+
+| Priority | Condition | Example title |
+|----------|-----------|---------------|
+| 90 | 12V &lt; 11.8 V | "12V critically low" |
+| 85 | Cell spread &gt; 50 mV | "Large cell spread" |
+| 80 | Consumption up &gt; 15% vs last week | "Consumption up 15%" |
+| 78 | Night drain ≥ 4 kWh and ≥ 35% of idle | "Night idle drain" |
+| 70 | Consumption up &gt; 5% | "Consumption up 8%" |
+| 60 | Consumption down &gt; 5% | "Consumption down 10%" |
+| 10 | Otherwise | "Consumption stable" |
+
+### Recommendations (bullets)
+
+Many rules are evaluated in parallel; the **top 5** by priority are shown. Topics include:
+
+| Topic | When it fires |
+|-------|---------------|
+| Night idle | ≥ 0.3 kWh at night with engine on |
+| DC more expensive than AC | Both ≥ 3 kWh, DC 15%+ pricier |
+| Heavy DC use | ≥ 2 DC sessions, DC &gt; AC×1.5 |
+| Short trips | ≥ 40% of trips under 5 km |
+| Engine-on idle | ≥ 2 kWh while parked |
+| 12V low / falling | 11.8–12.4 V or downward weekly trend |
+| Cell spread | 31–50 mV |
+| Winter + higher consumption | ≤ 5°C and consumption up |
+| Best vs worst trip | Spread ≥ 5 kWh/100 |
+| Consumption improved | Down &gt; 5% vs last week |
+| Highway driving | Avg speed ≥ 75 km/h |
+| High / low consumption | ≥ 28 or ≤ 16 kWh/100 |
+| More mileage / trips | +20% vs last week |
+| Heat + A/C | ≥ 25°C, consumption ≥ 22 |
+| Mixed charging | AC and DC in the same week |
+| Cost | Currency per 100 km or weekly charging cost |
+| Good habits | Low night/day idle share, healthy 12V/cell balance |
+
+Full rules and thresholds: `LocalInsightEngine.kt` and `LocalInsightEngineTest.kt`.
+
+### Cloud mode (OpenRouter)
+
+Optional: an LLM generates text instead of templates. Setup:
 
 1. Sign up at [OpenRouter](https://openrouter.ai/) (free)
 2. Create an **API Key** in the OpenRouter dashboard (Keys section)
-3. In BYDMate open **Settings** → **AI Insights** block
+3. In BYDMate: **Settings → Integrations** → **"OpenRouter (cloud)"** mode
 4. Paste the API key into "OpenRouter API Key"
-5. Tap **"Pick model"** — a list of available LLMs opens (free ones included)
+5. Tap **"Pick model"** — list of LLMs (free ones included)
 6. Tap **"Save and get insight"**
 
-### What gets analyzed
-
-The AI receives anonymized statistics for 7 and 30 days and returns:
-
-- **Facts** — metrics computed from real data (consumption with trend, % of short trips, idle drain)
-- **Insights** — correlations, anomalies, and behavioral recommendations from the LLM
-
-The request is sent **once per day**. The result is cached locally. No personal data (GPS, routes) leaves the device — only aggregated statistics.
+In cloud mode only **aggregated statistics** are sent (same metrics as local rules) — no GPS or routes. Request **once per day**, response cached locally. The dynamics table is built the same as in local mode; the LLM supplies title, summary, and recommendation wording.
 
 ---
 
