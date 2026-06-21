@@ -973,10 +973,13 @@ class TrackingService : Service(), LocationListener {
         locationManager = lm
 
         val gpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
-        val netEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { false }
-        Log.i(TAG, "Location providers: gps=$gpsEnabled network=$netEnabled")
+        Log.i(TAG, "Location provider: gps=$gpsEnabled")
 
-        // GPS provider — same params as TripInfo (2000ms, 8m, explicit MainLooper)
+        // GPS only. NETWORK_PROVIDER was removed: its cell/WiFi fixes are off by
+        // kilometers yet report an optimistic accuracy, and they teleported the
+        // track — while parked the GPS provider goes quiet (8 m filter) and only
+        // network kept firing far-away points that got recorded into the route.
+        // Same params as TripInfo (2000ms, 8m, explicit MainLooper).
         if (gpsEnabled) {
             try {
                 lm.requestLocationUpdates(
@@ -990,25 +993,9 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
-        // Network provider for initial fix
-        if (netEnabled) {
-            try {
-                lm.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    2000L, 8.0f,
-                    this, Looper.getMainLooper()
-                )
-                Log.i(TAG, "requestLocationUpdates(NETWORK_PROVIDER) registered")
-            } catch (e: Exception) {
-                Log.w(TAG, "Network provider registration failed: ${e.message}")
-            }
-        }
-
-        // Get last known location for immediate fix (like TripInfo)
+        // Immediate fix from GPS last-known only (like TripInfo).
         try {
-            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                else if (netEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                else null
+            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
             if (lastKnown != null) {
                 _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: lat=${lastKnown.latitude} lon=${lastKnown.longitude} " +
@@ -1020,8 +1007,8 @@ class TrackingService : Service(), LocationListener {
             Log.w(TAG, "getLastKnownLocation failed: ${e.message}")
         }
 
-        if (!gpsEnabled && !netEnabled) {
-            Log.e(TAG, "No location provider enabled! GPS will not work.")
+        if (!gpsEnabled) {
+            Log.e(TAG, "GPS provider not enabled! GPS tracking will not work.")
         }
     }
 
