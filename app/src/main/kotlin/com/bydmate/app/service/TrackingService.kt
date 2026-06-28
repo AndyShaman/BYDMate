@@ -440,6 +440,9 @@ class TrackingService : Service(), LocationListener {
                 if (sessionStartTotalElecKwh == null && data.totalElecConsumption != null) {
                     sessionStartTotalElecKwh = data.totalElecConsumption
                 }
+                // Lazy-init the session start SOC too — the autoservice SOC fid can
+                // sentinel-out at the exact start tick (cold start), same as above.
+                data.soc?.let { lastSessionRepository.fillStartSocIfMissing(it) }
             }
         } else if (currentSession != null) {
             val idleFor = now - sessionLastActiveTs

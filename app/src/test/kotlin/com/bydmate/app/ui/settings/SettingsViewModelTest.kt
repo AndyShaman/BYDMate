@@ -201,7 +201,7 @@ class SettingsViewModelTest {
         val energyReader = EnergyDataReader(ctx)
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
-            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository()
+            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx)
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
