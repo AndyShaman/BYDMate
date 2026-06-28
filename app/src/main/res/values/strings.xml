@@ -200,7 +200,6 @@
     <string name="trip_detail_efficiency_label">Расход</string>
     <string name="trip_detail_cost_label">Стоимость</string>
     <string name="trip_detail_temp_label">Темп.</string>
-    <string name="trip_detail_max_speed_histogram">макс %1$d км/ч</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Все</string>

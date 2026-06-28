@@ -1,6 +1,5 @@
 package com.bydmate.app.ui.trips
 
-import android.graphics.Paint
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -31,7 +30,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -292,9 +290,6 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
     if (speeds.isEmpty()) return
     val maxSpeed = speeds.max()
 
-    // Hoist localized string for use inside Canvas (non-composable scope)
-    val maxSpeedLabel = stringResource(R.string.trip_detail_max_speed_histogram, maxSpeed.toInt())
-
     Canvas(modifier = modifier) {
         if (maxSpeed <= 0.0) return@Canvas
 
@@ -318,18 +313,6 @@ private fun SpeedHistogram(points: List<TripPointEntity>, modifier: Modifier = M
                 )
             )
         }
-
-        drawContext.canvas.nativeCanvas.drawText(
-            maxSpeedLabel,
-            size.width - 8f,
-            16f,
-            Paint().apply {
-                color = TextSecondary.toArgb()
-                textSize = 28f
-                textAlign = Paint.Align.RIGHT
-                isAntiAlias = true
-            }
-        )
     }
 }
 

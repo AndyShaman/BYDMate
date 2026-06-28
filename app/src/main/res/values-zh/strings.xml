@@ -176,7 +176,6 @@
     <string name="trip_detail_efficiency_label">百公里电耗</string>
     <string name="trip_detail_cost_label">费用</string>
     <string name="trip_detail_temp_label">温度</string>
-    <string name="trip_detail_max_speed_histogram">最高 %1$d km/h</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">全部</string>

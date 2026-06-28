@@ -173,7 +173,6 @@
     <string name="trip_detail_efficiency_label">Efficiency</string>
     <string name="trip_detail_cost_label">Cost</string>
     <string name="trip_detail_temp_label">Temp.</string>
-    <string name="trip_detail_max_speed_histogram">max %1$d km/h</string>
     <string name="charges_filter_all">All</string>
     <string name="charges_add_button">+ charging</string>
     <string name="charges_empty">No charging sessions for the selected period</string>
