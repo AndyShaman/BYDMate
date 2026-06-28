@@ -334,7 +334,7 @@ fun ChargeEditDialog(
     }
 
     if (showDatePicker) {
-        val dpState = rememberDatePickerState(initialSelectedDateMillis = startTs)
+        val dpState = rememberDatePickerState(initialSelectedDateMillis = localDateAsUtcMidnight(startTs))
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
@@ -356,6 +356,19 @@ fun ChargeEditDialog(
             DatePicker(state = dpState)
         }
     }
+}
+
+/**
+ * Material3 DatePicker reads/writes its selection in UTC, so seed it with the UTC
+ * midnight of [ts]'s LOCAL calendar day. Without this, in UTC+ zones an early-morning
+ * timestamp preselects the previous day. Mirror of [combineDateKeepingTime] on the way in.
+ */
+private fun localDateAsUtcMidnight(ts: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = ts }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
 }
 
 /**

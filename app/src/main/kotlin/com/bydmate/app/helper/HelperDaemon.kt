@@ -239,11 +239,12 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_PUT_GLOBAL_SETTING -> runCatching {
                     val key = data.readString() ?: ""
                     val value = data.readInt()
-                    // Hardcoded whitelist — ONLY the sentry-mode master switch. shell uid holds
-                    // WRITE_SECURE_SETTINGS, so `settings put global` sticks. NOT a generic
-                    // settings passthrough.
+                    // Hardcoded whitelist — ONLY the sentry-mode master switch, ONLY values
+                    // 0/1. shell uid holds WRITE_SECURE_SETTINGS, so `settings put global`
+                    // sticks; this is the privilege boundary and must not trust the caller, so
+                    // both key AND value are bounded here. NOT a generic settings passthrough.
                     val allowed = setOf("sentrymode_enabled_switch")
-                    val ok = if (key in allowed) {
+                    val ok = if (key in allowed && value in 0..1) {
                         shExec("settings put global \"\$1\" \"\$2\"", key, value.toString()).code == 0
                     } else false
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)

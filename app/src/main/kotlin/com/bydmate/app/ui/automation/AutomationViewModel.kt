@@ -359,7 +359,7 @@ class AutomationViewModel @Inject constructor(
                 }
                 "sentry" -> {
                     if (a.payload !in listOf("0", "1")) return localized(
-                        "动作 #$n：охранный режим — некорректное состояние",
+                        "动作 #$n：哨兵模式状态无效",
                         "Action #$n: invalid sentry mode state",
                         "Действие #$n: некорректное состояние охранного режима",
                         context
