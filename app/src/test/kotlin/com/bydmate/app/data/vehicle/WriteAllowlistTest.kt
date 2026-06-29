@@ -233,6 +233,27 @@ class WriteAllowlistTest {
         assertEquals(2, al.find("drl_off")!!.valueMin)
     }
 
+    // ── Seat heat/vent re-wired to validated dev=1000 switch+level 2026-06-29 ──
+    @Test fun `seat heat and vent switch plus level entries are validated on dev 1000`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val names = listOf(
+            "driver_seat_heat_switch", "driver_seat_heat_level",
+            "passenger_seat_heat_switch", "passenger_seat_heat_level",
+            "driver_seat_vent_switch", "driver_seat_vent_level",
+            "passenger_seat_vent_switch", "passenger_seat_vent_level",
+        )
+        for (name in names) {
+            val e = al.find(name)
+            assertNotNull("$name must be present", e)
+            assertTrue("$name must be validated", e!!.validated)
+            assertEquals("$name must be on dev 1000", 1000, e.dev)
+        }
+        val sw = al.find("driver_seat_heat_switch")!!
+        assertEquals(0, sw.valueMin); assertEquals(1, sw.valueMax)
+        val lvl = al.find("driver_seat_heat_level")!!
+        assertEquals(1, lvl.valueMin); assertEquals(5, lvl.valueMax)
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }

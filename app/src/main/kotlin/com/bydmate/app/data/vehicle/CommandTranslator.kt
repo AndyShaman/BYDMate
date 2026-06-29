@@ -63,27 +63,6 @@ object CommandTranslator {
         "吹前挡"      to Resolved("defrost_front_on",  1),  // competitor val=1
         "关闭吹前挡"  to Resolved("defrost_front_off", 0),  // competitor val=0
 
-        // ── Driver seat heat ── competitor-actions.json (dev=1001, safe) ──────
-        // Naming: off=1, on(lvl1)=2, lvl2=3, lvl3=4, lvl4=5, lvl5=6
-        "主驾座椅加热1档"  to Resolved("driver_seat_heat_on",   2),
-        "主驾座椅加热2档"  to Resolved("driver_seat_heat_lvl2", 3),
-        "主驾座椅加热关闭" to Resolved("driver_seat_heat_off",  1),
-
-        // ── Passenger seat heat ── competitor-actions.json ────────────────────
-        "副驾座椅加热1档"  to Resolved("passenger_seat_heat_on",   2),
-        "副驾座椅加热2档"  to Resolved("passenger_seat_heat_lvl2", 3),
-        "副驾座椅加热关闭" to Resolved("passenger_seat_heat_off",  1),
-
-        // ── Driver seat vent ── competitor-actions.json ───────────────────────
-        "主驾座椅通风1档"  to Resolved("driver_seat_vent_on",   2),
-        "主驾座椅通风2档"  to Resolved("driver_seat_vent_lvl2", 3),
-        "主驾座椅通风关闭" to Resolved("driver_seat_vent_off",  1),
-
-        // ── Passenger seat vent ── competitor-actions.json ────────────────────
-        "副驾座椅通风1档"  to Resolved("passenger_seat_vent_on",   2),
-        "副驾座椅通风2档"  to Resolved("passenger_seat_vent_lvl2", 3),
-        "副驾座椅通风关闭" to Resolved("passenger_seat_vent_off",  1),
-
         // ── Locks ── LIVE_VALIDATED ───────────────────────────────────────────
         "车门上锁"  to Resolved("doors_lock",   2),
         "车门解锁"  to Resolved("doors_unlock", 1),
@@ -117,6 +96,19 @@ object CommandTranslator {
     )
 
     /**
+     * Seat heat/vent fan out to the validated dev=1000 switch + level fids: "on at
+     * level N" writes switch=1 then level=N; "off" writes switch=0. Keys match the
+     * UI/voice command strings 主驾座椅加热{1..5}档 / 主驾座椅加热关闭.
+     */
+    private fun seatStages(prefix: String, switchAction: String, levelAction: String): Map<String, List<Resolved>> =
+        buildMap {
+            for (lvl in 1..5) {
+                put("$prefix${lvl}档", listOf(Resolved(switchAction, 1), Resolved(levelAction, lvl)))
+            }
+            put("${prefix}关闭", listOf(Resolved(switchAction, 0)))
+        }
+
+    /**
      * Composite commands fan out to several validated per-door % writes. All four
      * window fids (driver/passenger/rear-left/rear-right *_pos) are LIVE_VALIDATED.
      */
@@ -127,15 +119,21 @@ object CommandTranslator {
         Resolved("window_rear_right_pos", pct),
     )
 
-    private val composite: Map<String, List<Resolved>> = mapOf(
-        "车窗全开"     to allWindows(100),
-        "车窗关闭"     to allWindows(0),
-        "车窗半开"     to allWindows(50),
-        "前排车窗全开" to listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)),
-        "前排车窗关闭" to listOf(Resolved("window_driver_pos", 0),   Resolved("window_passenger_pos", 0)),
-        "后排车窗全开" to listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)),
-        "后排车窗关闭" to listOf(Resolved("window_rear_left_pos", 0),   Resolved("window_rear_right_pos", 0)),
-    )
+    private val composite: Map<String, List<Resolved>> = buildMap {
+        // ── Windows ── fan out to validated per-door % fids ───────────────────
+        put("车窗全开", allWindows(100))
+        put("车窗关闭", allWindows(0))
+        put("车窗半开", allWindows(50))
+        put("前排车窗全开", listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)))
+        put("前排车窗关闭", listOf(Resolved("window_driver_pos", 0), Resolved("window_passenger_pos", 0)))
+        put("后排车窗全开", listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)))
+        put("后排车窗关闭", listOf(Resolved("window_rear_left_pos", 0), Resolved("window_rear_right_pos", 0)))
+        // ── Seat heat/vent ── switch + level fan-out (dev=1000) ────────────────
+        putAll(seatStages("主驾座椅加热", "driver_seat_heat_switch", "driver_seat_heat_level"))
+        putAll(seatStages("副驾座椅加热", "passenger_seat_heat_switch", "passenger_seat_heat_level"))
+        putAll(seatStages("主驾座椅通风", "driver_seat_vent_switch", "driver_seat_vent_level"))
+        putAll(seatStages("副驾座椅通风", "passenger_seat_vent_switch", "passenger_seat_vent_level"))
+    }
 
     /**
      * Resolve a D+ command string. Strips leading "迪加" prefix if present.

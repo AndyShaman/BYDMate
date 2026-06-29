@@ -79,9 +79,10 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         internal fun isBanned(dev: Int, fid: Int): Boolean =
             dev in BANNED_DEVS && (dev to fid) !in BANNED_DEV_FID_EXCEPTIONS
 
-        // 31 native write entries on Leopard 3 via HelperDaemon. 22 live-validated
+        // 39 native write entries on Leopard 3 via HelperDaemon. 22 live-validated
         // 2026-05-28 (climate/windows/sunroof/sunshade/locks) + 8 live-validated
-        // 2026-05-29 (interior/ambient light, DRL, rear-window-defrost = mirror heat).
+        // 2026-05-29 (interior/ambient light, DRL, rear-window-defrost = mirror heat) +
+        // 8 live-validated 2026-06-29 (seat heat/vent switch+level, dev=1000).
         // ac_cycle_outer corrected 2026-06-28 from live autoservice reads: external
         // circulation reads 0 (internal reads 1), so the prior value 2 is not a valid
         // enum and autoservice rejected the setInt (the "helper.write returned false"
@@ -138,6 +139,17 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // mirror heat = rear-window defrost (single button on Leopard 3) — 1=on, 0=off, dev=1000
             WriteEntry("defrost_rear_on",  1000, 501219357, null, 1, 1, "climate", true, "live-leopard3-2026-05-29"),
             WriteEntry("defrost_rear_off", 1000, 501219357, null, 0, 0, "climate", true, "live-leopard3-2026-05-29"),
+            // seat heat/vent — dev=1000 switch (1/0) + level (1..5), validated 2026-06-29.
+            // "On at level N" = two writes (switch=1 + level=N); off = switch=0. heat and
+            // vent on a seat are mutually exclusive (climate module cancels the other).
+            WriteEntry("driver_seat_heat_switch",    1000, 1276248084, null, 0, 1, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("driver_seat_heat_level",     1000, 1276252180, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_heat_switch", 1000, 1276248092, null, 0, 1, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_heat_level",  1000, 1276252188, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("driver_seat_vent_switch",    1000, 1276248080, null, 0, 1, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("driver_seat_vent_level",     1000, 1276252176, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_vent_switch", 1000, 1276248088, null, 0, 1, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_vent_level",  1000, 1276252184, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
         )
 
         /**
