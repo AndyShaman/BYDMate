@@ -254,6 +254,87 @@ class AutomationEngine @Inject constructor(
         }
     }
 
+    /**
+     * Direct, explicit entry point for a widget button press. Runs every ENABLED
+     * rule whose button_press trigger value equals [buttonId] immediately —
+     * independent of the 3-second poll. The button press is an explicit user
+     * command, so:
+     *  - co-triggers on the matched rule are NOT evaluated (the press alone is
+     *    enough to run the rule),
+     *  - cooldownSeconds and fireOncePerTrip are bypassed (a repeatable manual
+     *    action),
+     *  - requirePark and confirmBeforeExecute are honored, and every per-action
+     *    ActionDispatcher safety gate stays in force (it reads the same snapshot).
+     * Safety snapshot is the latest TrackingService.lastData.value.
+     *
+     * Returns the number of rules matched by button number (0 ⇒ caller shows the
+     * "no rules for button N" toast). A matched-but-park-gated rule still counts,
+     * so the caller does not falsely report "no rules".
+     */
+    suspend fun onButtonPress(buttonId: Int): Int {
+        val matching = ruleDao.getEnabled().filter { rule ->
+            TriggerDef.listFromJson(rule.triggers).any {
+                it.kind == "button_press" && it.value.toIntOrNull() == buttonId
+            }
+        }
+        if (matching.isEmpty()) return 0
+
+        val now = System.currentTimeMillis()
+        val data = TrackingService.lastData.value
+        for (rule in matching) {
+            try {
+                // Honor requirePark even on the manual path. Reuse the engine's
+                // existing parked-check semantics: parked = gear == 1. When data
+                // is null the park gate is closed (null?.gear != 1 → true).
+                if (rule.requirePark && data?.gear != 1) continue
+
+                val actions = ActionDef.listFromJson(rule.actions)
+                if (actions.isEmpty()) continue
+
+                val triggers = TriggerDef.listFromJson(rule.triggers)
+                val snapshot = if (data != null) buildSnapshot(triggers, data) else "{}"
+
+                // Mark triggered before execution (same ordering as evaluate path).
+                ruleDao.updateLastTriggered(rule.id, now)
+
+                if (rule.confirmBeforeExecute) {
+                    val shown = ConfirmOverlayManager.show(
+                        context = context,
+                        ruleName = rule.name,
+                        actionsSummary = actions.joinToString(", ") { it.displayName },
+                        onConfirm = {
+                            scope.launch {
+                                executeAndLog(rule, actions, snapshot, TrackingService.lastData.value)
+                            }
+                        },
+                        onCancel = {
+                            scope.launch {
+                                ruleLogDao.insert(
+                                    RuleLogEntity(
+                                        ruleId = rule.id,
+                                        ruleName = rule.name,
+                                        triggeredAt = now,
+                                        triggersSnapshot = snapshot,
+                                        actionsResult = """[{"result":"cancelled"}]""",
+                                        success = false,
+                                    )
+                                )
+                            }
+                        },
+                    )
+                    if (!shown) showConfirmNotification(rule, actions, snapshot)
+                } else {
+                    // Awaited directly (not scope.launch) so the caller's
+                    // coroutine observes dispatch completion deterministically.
+                    executeAndLog(rule, actions, snapshot, data)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "onButtonPress error for rule '${rule.name}': ${e.message}")
+            }
+        }
+        return matching.size
+    }
+
     // --- Trigger evaluation ---
 
     private fun evaluateEachTrigger(
