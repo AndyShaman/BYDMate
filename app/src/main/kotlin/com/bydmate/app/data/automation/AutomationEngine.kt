@@ -271,6 +271,10 @@ class AutomationEngine @Inject constructor(
             "time_range" -> evaluateSchedule(trigger)
             "service_start" -> serviceStartActive
             "network_available" -> networkAvailableEdge
+            // Button-press triggers never match during the 3-second poll. They
+            // fire only through the explicit onButtonPress() entry point, so a
+            // rule built around a widget button can't be triggered by polling.
+            "button_press" -> false
             else -> { // "param" (default)
                 val actual = getParamValue(data, trigger.param) ?: return@map false
                 val expected = trigger.value.toDoubleOrNull() ?: return@map false
@@ -443,6 +447,7 @@ class AutomationEngine @Inject constructor(
                 "time_range" -> json.put("time_range", t.value)
                 "service_start" -> json.put("service_start", true)
                 "network_available" -> json.put("network_available", true)
+                "button_press" -> json.put("button_press", t.value)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
             }
         }

@@ -742,3 +742,20 @@ internal fun <T> List<T>.moveItem(index: Int, up: Boolean): List<T> {
         val tmp = this[index]; this[index] = this[target]; this[target] = tmp
     }
 }
+
+/**
+ * Builds the "button press N" trigger (widget button N). displayName carries a
+ * stable internal label used only for logs/snapshot; the UI renders the
+ * localized "Кнопка N" label via stringResource. value holds the button id as a
+ * string, matching how every other TriggerDef stores its value. The remaining
+ * fields are neutral placeholders so the trigger round-trips through
+ * TriggerDef.toJson/fromJson with no schema change.
+ */
+fun newButtonPressTrigger(buttonId: Int): TriggerDef = TriggerDef(
+    param = "button",
+    chineseName = "",
+    operator = "==",
+    value = buttonId.toString(),
+    displayName = "Кнопка $buttonId",
+    kind = "button_press",
+)
