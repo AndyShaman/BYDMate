@@ -56,7 +56,7 @@ object CommandTranslator {
         // entries here (the old 18/20/22/25-only table missed every other value).
         "自动空调"    to Resolved("ac_on",         0),   // competitor val=0 (ctrl_mode AUTO)
         "内循环"      to Resolved("ac_cycle_inner", 1),  // LIVE val=1
-        "外循环"      to Resolved("ac_cycle_outer", 2),  // LIVE val=2
+        "外循环"      to Resolved("ac_cycle_outer", 0),  // LIVE val=0 (fresh-air; inner=1 on same fid)
 
         // ── Climate ── competitor-actions.json ────────────────────────────────
         "打开空调通风" to Resolved("ac_flow_only_on",   1),  // competitor val=1
@@ -170,4 +170,12 @@ object CommandTranslator {
             composite.values.flatten().map { it.actionName } +
             DYNAMIC_ACTIONS)
             .toMutableSet()
+
+    /** All statically-resolved (action_name, value) pairs — every fixed [table] and
+     *  [composite] entry. Excludes dynamic actions (e.g. ac_temp_main), which resolve()
+     *  range-clamps at call time. Used by the allowlist-range invariant test so a
+     *  translator value can never silently fall outside its allowlist valueMin..valueMax
+     *  range (the bug where 外循环 stayed at 2 while the allowlist range was tightened to 0). */
+    fun allResolved(): List<Resolved> =
+        table.values + composite.values.flatten()
 }

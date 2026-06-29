@@ -43,6 +43,29 @@ class CommandTranslatorTest {
         )
     }
 
+    // ── Test 3b: every translator value falls within its allowlist range ──────
+    // Regression for the 外循环 bug: the allowlist range was tightened to [0..0]
+    // but the translator kept emitting value 2, so the dispatch was silently
+    // rejected ("value=2 out of range [0..0]"). Existence (Test 3) didn't catch
+    // it — only a value-vs-range check does.
+    @Test fun `every translator value falls within its allowlist range`() {
+        val projectRoot = generateSequence(File(".").canonicalFile) { it.parentFile }
+            .firstOrNull { File(it, "app/src/main/assets/competitor-actions.json").exists() }
+            ?: error("Cannot find app/src/main/assets/competitor-actions.json from ${File(".").canonicalPath}")
+        val jsonText = File(projectRoot, "app/src/main/assets/competitor-actions.json").readText()
+        val allowlist = WriteAllowlist.loadProduction { jsonText }
+        val violations = CommandTranslator.allResolved().mapNotNull { r ->
+            val entry = allowlist.find(r.actionName) ?: return@mapNotNull null // existence is Test 3's job
+            if (r.value < entry.valueMin || r.value > entry.valueMax)
+                "${r.actionName}=${r.value} outside [${entry.valueMin}..${entry.valueMax}]"
+            else null
+        }
+        assertTrue(
+            "Translator values outside their allowlist range: $violations",
+            violations.isEmpty(),
+        )
+    }
+
     // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
     @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
         val r = one("设置温度22")
