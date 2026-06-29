@@ -73,16 +73,19 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1023 to 1330643002,  // SET_INSIDE_LIGHT_STATE_SET (interior light on/off)
             1023 to 1069547536,  // SET_INTERIOR_ATMOSPHERE_LAMP_BRIGHTNESS_SET (ambient)
             1004 to 1125122118,  // DRL (daytime running lights) on/off
+            1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
+            1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
         )
 
         /** A (dev,fid) is banned unless explicitly carved out. */
         internal fun isBanned(dev: Int, fid: Int): Boolean =
             dev in BANNED_DEVS && (dev to fid) !in BANNED_DEV_FID_EXCEPTIONS
 
-        // 41 native write entries on Leopard 3 via HelperDaemon. 22 live-validated
+        // 44 native write entries on Leopard 3 via HelperDaemon. 22 live-validated
         // 2026-05-28 (climate/windows/sunroof/sunshade/locks) + 8 live-validated
         // 2026-05-29 (interior/ambient light, DRL, rear-window-defrost = mirror heat) +
-        // 8 live-validated 2026-06-29 (seat heat/vent switch+level, dev=1000).
+        // 8 live-validated 2026-06-29 (seat heat/vent switch+level, dev=1000) +
+        // 3 live-validated 2026-06-29 (fridge mode/temp cool/temp heat, dev=1023 carve-out).
         // ac_cycle_outer corrected 2026-06-28 from live autoservice reads: external
         // circulation reads 0 (internal reads 1), so the prior value 2 is not a valid
         // enum and autoservice rejected the setInt (the "helper.write returned false"
@@ -154,6 +157,11 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // Powered external panel; open is speed-0 gated in ActionDispatcher.
             WriteEntry("front_trunk_open",  1001, 1276182560, null, 1, 1, "trunk", true, "live-leopard3-2026-06-29"),
             WriteEntry("front_trunk_close", 1001, 1276182560, null, 3, 3, "trunk", true, "live-leopard3-2026-06-29"),
+            // fridge (com.byd.car.icebox) — dev=1023 carve-out. mode 1=cool/2=heat/3=off;
+            // temp on one fid, mode-dependent raw: cool=°C+19 (-6..+6→13..25), heat=°C (35..50).
+            WriteEntry("fridge_mode",      1023, 850427920, null, 1, 3,  "fridge", true, "live-leopard3-2026-06-29"),
+            WriteEntry("fridge_temp_cool", 1023, 850427928, null, 13, 25, "fridge", true, "live-leopard3-2026-06-29"),
+            WriteEntry("fridge_temp_heat", 1023, 850427928, null, 35, 50, "fridge", true, "live-leopard3-2026-06-29"),
         )
 
         /**

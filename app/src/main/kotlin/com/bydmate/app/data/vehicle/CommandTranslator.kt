@@ -75,6 +75,11 @@ object CommandTranslator {
         "前备箱打开" to Resolved("front_trunk_open",  1),
         "前备箱关闭" to Resolved("front_trunk_close", 3),
 
+        // ── Fridge mode ── LIVE_VALIDATED (dev=1023 carve-out) ───────────────
+        "冰箱制冷" to Resolved("fridge_mode", 1),
+        "冰箱制热" to Resolved("fridge_mode", 2),
+        "冰箱关闭" to Resolved("fridge_mode", 3),
+
         // ── Sunroof ── LIVE_VALIDATED ─────────────────────────────────────────
         "天窗打开100" to Resolved("sunroof_open",  1),  // full open
         "天窗打开50"  to Resolved("sunroof_tilt",  3),  // tilt/half — LIVE val=3
@@ -112,6 +117,13 @@ object CommandTranslator {
             put("${prefix}关闭", listOf(Resolved(switchAction, 0)))
         }
 
+    /** Fridge temperature presets fan out to [fridge_mode, fridge_temp_*]. Cooling raw
+     *  = °C + 19; heating raw = °C. Mode is set alongside so each action is self-contained. */
+    private fun fridgeCool(celsius: Int): List<Resolved> =
+        listOf(Resolved("fridge_mode", 1), Resolved("fridge_temp_cool", celsius + 19))
+    private fun fridgeHeat(celsius: Int): List<Resolved> =
+        listOf(Resolved("fridge_mode", 2), Resolved("fridge_temp_heat", celsius))
+
     /**
      * Composite commands fan out to several validated per-door % writes. All four
      * window fids (driver/passenger/rear-left/rear-right *_pos) are LIVE_VALIDATED.
@@ -137,6 +149,16 @@ object CommandTranslator {
         putAll(seatStages("副驾座椅加热", "passenger_seat_heat_switch", "passenger_seat_heat_level"))
         putAll(seatStages("主驾座椅通风", "driver_seat_vent_switch", "driver_seat_vent_level"))
         putAll(seatStages("副驾座椅通风", "passenger_seat_vent_switch", "passenger_seat_vent_level"))
+        // ── Fridge temperature presets ── mode + setpoint (dev=1023) ──────────
+        put("冰箱制冷-6度", fridgeCool(-6))
+        put("冰箱制冷-3度", fridgeCool(-3))
+        put("冰箱制冷0度", fridgeCool(0))
+        put("冰箱制冷3度", fridgeCool(3))
+        put("冰箱制冷6度", fridgeCool(6))
+        put("冰箱制热35度", fridgeHeat(35))
+        put("冰箱制热40度", fridgeHeat(40))
+        put("冰箱制热45度", fridgeHeat(45))
+        put("冰箱制热50度", fridgeHeat(50))
     }
 
     /**

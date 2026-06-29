@@ -307,6 +307,31 @@ class CommandTranslatorTest {
         assertEquals(3, r?.value)
     }
 
+    // ── Fridge ── dev=1023 carve-out; mode 1/2/3, temp mode-dependent raw ────
+    @Test fun `fridge cool mode maps to fridge_mode val 1`() {
+        val r = one("冰箱制冷")
+        assertEquals("fridge_mode", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `fridge off maps to fridge_mode val 3`() {
+        val r = one("冰箱关闭")
+        assertEquals("fridge_mode", r?.actionName)
+        assertEquals(3, r?.value)
+    }
+
+    @Test fun `fridge cool 0C fans out to mode 1 plus temp raw 19`() {
+        assertEquals(setOf("fridge_mode" to 1, "fridge_temp_cool" to 19), pairs("冰箱制冷0度"))
+    }
+
+    @Test fun `fridge cool minus 6C maps to temp raw 13`() {
+        assertEquals(setOf("fridge_mode" to 1, "fridge_temp_cool" to 13), pairs("冰箱制冷-6度"))
+    }
+
+    @Test fun `fridge heat 40C fans out to mode 2 plus temp raw 40`() {
+        assertEquals(setOf("fridge_mode" to 2, "fridge_temp_heat" to 40), pairs("冰箱制热40度"))
+    }
+
     // ── Test 12: allActions returns non-empty set of unique names ─────────────
     @Test fun `allActions returns non-empty set`() {
         val actions = CommandTranslator.allActions()

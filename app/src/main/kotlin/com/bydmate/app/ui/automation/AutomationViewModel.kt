@@ -201,6 +201,18 @@ val ACTION_COMMANDS = listOf(
     ActionOption("关后备箱", "Закрыть багажник", "关闭后备箱", "Close Trunk", "Кузов", "车身", "Body"),
     ActionOption("前备箱打开", "Открыть передний багажник", "打开前备箱", "Open Front Trunk", "Кузов", "车身", "Body"),
     ActionOption("前备箱关闭", "Закрыть передний багажник", "关闭前备箱", "Close Front Trunk", "Кузов", "车身", "Body"),
+    ActionOption("冰箱制冷", "Холодильник: охлаждение", "冰箱制冷", "Fridge Cool", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制热", "Холодильник: обогрев", "冰箱制热", "Fridge Heat", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱关闭", "Холодильник: выкл", "冰箱关闭", "Fridge Off", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制冷-6度", "Холодильник: охл -6°C", "冰箱制冷-6度", "Fridge Cool -6°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制冷-3度", "Холодильник: охл -3°C", "冰箱制冷-3度", "Fridge Cool -3°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制冷0度", "Холодильник: охл 0°C", "冰箱制冷0度", "Fridge Cool 0°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制冷3度", "Холодильник: охл +3°C", "冰箱制冷3度", "Fridge Cool +3°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制冷6度", "Холодильник: охл +6°C", "冰箱制冷6度", "Fridge Cool +6°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制热35度", "Холодильник: обогрев 35°C", "冰箱制热35度", "Fridge Heat 35°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制热40度", "Холодильник: обогрев 40°C", "冰箱制热40度", "Fridge Heat 40°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制热45度", "Холодильник: обогрев 45°C", "冰箱制热45度", "Fridge Heat 45°C", "Холодильник", "冰箱", "Fridge"),
+    ActionOption("冰箱制热50度", "Холодильник: обогрев 50°C", "冰箱制热50度", "Fridge Heat 50°C", "Холодильник", "冰箱", "Fridge")
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")

@@ -254,6 +254,26 @@ class WriteAllowlistTest {
         assertEquals(1, lvl.valueMin); assertEquals(5, lvl.valueMax)
     }
 
+    // ── Fridge carved out of banned dev 1023, validated 2026-06-29 ────────────
+    @Test fun `fridge fids are carved out of banned dev 1023`() {
+        assertTrue(
+            "fridge mode fid must be carved out of dev 1023 ban",
+            (1023 to 850427920) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        assertTrue(
+            "fridge temp fid must be carved out of dev 1023 ban",
+            (1023 to 850427928) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val mode = al.find("fridge_mode")
+        assertNotNull(mode); assertEquals(1023, mode!!.dev); assertTrue(mode.validated)
+        assertEquals(1, mode.valueMin); assertEquals(3, mode.valueMax)
+        val cool = al.find("fridge_temp_cool")
+        assertNotNull(cool); assertEquals(13, cool!!.valueMin); assertEquals(25, cool.valueMax)
+        val heat = al.find("fridge_temp_heat")
+        assertNotNull(heat); assertEquals(35, heat!!.valueMin); assertEquals(50, heat.valueMax)
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }
