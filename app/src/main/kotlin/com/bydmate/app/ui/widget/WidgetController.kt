@@ -338,7 +338,10 @@ object WidgetController {
                 // Hide widget while the BYD camera surface is up (rear, front
                 // auto-pop, 360°, parking app — all map to com.byd.avc).
                 val hideForCamera = snap.cameraActive
-                widgetView?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
+                // Hide the entire root (panel + button layer) so the 6 buttons
+                // don't stay drawn over the camera view when the panel is expanded.
+                // Re-show is symmetric: same view, VISIBLE.
+                rootContainer?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
                 if (hideForCamera) hideTrashZone()
             }
         }
@@ -663,7 +666,18 @@ object WidgetController {
                         longPressRunnable = null
                         singleTapRunnable?.let { longPressHandler.removeCallbacks(it) }
                         singleTapRunnable = null
-                        if (expandedState.value) collapsePanel()
+                        if (expandedState.value) {
+                            collapsePanel()
+                            // Re-anchor drag baseline to the collapsed window origin +
+                            // current finger so delta is zero at the instant of collapse.
+                            // Without this, initialParamX holds the expanded-window origin
+                            // (collapsedX - pocket) and every subsequent move positions the
+                            // now-collapsed panel one full pocket (~62dp) too far left.
+                            initialParamX = params.x
+                            initialParamY = params.y
+                            downX = event.rawX
+                            downY = event.rawY
+                        }
                         showTrashZone(context)
                     }
                     if (dragging) {
