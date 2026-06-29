@@ -316,6 +316,9 @@
     <string name="automation_trigger_type_schedule">Время / расписание</string>
     <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
     <string name="automation_trigger_type_internet">Доступен интернет</string>
+    <string name="automation_trigger_type_button_press">Нажатие кнопки</string>
+    <string name="automation_trigger_button_label">Кнопка %1$d</string>
+    <string name="automation_trigger_button_picker_label">Кнопка</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Точное</string>

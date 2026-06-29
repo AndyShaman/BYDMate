@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -294,6 +295,7 @@ private fun RuleCard(
             // Trigger → Action summary
             val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
             val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
+            val summaryCtx = LocalContext.current
             Text(
                 buildAnnotatedString {
                     triggers.forEachIndexed { i, t ->
@@ -302,16 +304,27 @@ private fun RuleCard(
                                 append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
-                        if (t.kind == "time_range") {
-                            // value is JSON (parsed by the engine); show the readable displayName instead.
-                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
-                        } else {
-                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-                            append(" ")
-                            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-                            append(" ")
-                            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                                append(t.value)
+                        when (t.kind) {
+                            "time_range" -> {
+                                // value is JSON (parsed by the engine); show the readable displayName instead.
+                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
+                            }
+                            "button_press" -> {
+                                // Localized "Кнопка N" — derived from value, not the
+                                // stored displayName, so language always matches the UI.
+                                val n = t.value.toIntOrNull() ?: 0
+                                withStyle(SpanStyle(color = AccentBlue)) {
+                                    append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
+                                }
+                            }
+                            else -> {
+                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
+                                append(" ")
+                                withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
+                                append(" ")
+                                withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                                    append(t.value)
+                                }
                             }
                         }
                     }
@@ -468,6 +481,9 @@ private fun EditorDialog(
                             },
                             onAddNetworkAvailable = {
                                 onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
+                            },
+                            onAddButtonPress = {
+                                onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
                             }
                         )
                     }
@@ -686,6 +702,7 @@ private fun TriggerRow(
             "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
+            "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
             else -> ParamTriggerControls(trigger, onUpdate)
         }
 
@@ -1107,6 +1124,60 @@ private fun NetworkAvailableTriggerControls() {
         color = AccentGreen,
         fontWeight = FontWeight.Bold
     )
+}
+
+@Composable
+private fun ButtonPressTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit,
+) {
+    val context = LocalContext.current
+    Icon(
+        Icons.Outlined.TouchApp,
+        contentDescription = null,
+        tint = AccentGreen,
+        modifier = Modifier.size(16.dp),
+    )
+    Spacer(Modifier.width(6.dp))
+    Text(
+        stringResource(R.string.automation_trigger_button_picker_label),
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.width(6.dp))
+
+    var expanded by remember { mutableStateOf(false) }
+    val current = trigger.value.toIntOrNull() ?: 1
+    Box {
+        Text(
+            current.toString(),
+            fontSize = 13.sp, color = AccentGreen, fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .clickable { expanded = true }
+                .padding(8.dp, 6.dp)
+                .width(30.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            (1..6).forEach { n ->
+                DropdownMenuItem(
+                    text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
+                    onClick = {
+                        expanded = false
+                        onUpdate(
+                            trigger.copy(
+                                value = n.toString(),
+                                displayName = context.getString(R.string.automation_trigger_button_label, n),
+                            )
+                        )
+                    },
+                )
+            }
+        }
+    }
 }
 
 // --- Action Row ---
@@ -2440,7 +2511,8 @@ private fun AddTriggerButton(
     onAddTimeOfDay: () -> Unit,
     onAddSchedule: () -> Unit,
     onAddServiceStart: () -> Unit,
-    onAddNetworkAvailable: () -> Unit
+    onAddNetworkAvailable: () -> Unit,
+    onAddButtonPress: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -2505,6 +2577,13 @@ private fun AddTriggerButton(
                 onClick = {
                     menuExpanded = false
                     onAddNetworkAvailable()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddButtonPress()
                 }
             )
         }

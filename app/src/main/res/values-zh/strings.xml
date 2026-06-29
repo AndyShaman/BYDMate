@@ -291,6 +291,9 @@
     <string name="automation_trigger_type_time_of_day">时段</string>
     <string name="automation_trigger_type_service_start">BYDMate 启动</string>
     <string name="automation_trigger_type_internet">网络可用</string>
+    <string name="automation_trigger_type_button_press">按钮按下</string>
+    <string name="automation_trigger_button_label">按钮 %1$d</string>
+    <string name="automation_trigger_button_picker_label">按钮</string>
     <string name="automation_trigger_type_schedule">定时</string>
 
     <!-- Schedule trigger controls -->

@@ -263,6 +263,9 @@
     <string name="automation_trigger_type_schedule">Time / schedule</string>
     <string name="automation_trigger_type_service_start">BYDMate startup</string>
     <string name="automation_trigger_type_internet">Internet available</string>
+    <string name="automation_trigger_type_button_press">Button press</string>
+    <string name="automation_trigger_button_label">Button %1$d</string>
+    <string name="automation_trigger_button_picker_label">Button</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exact</string>
