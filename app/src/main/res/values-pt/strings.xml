@@ -102,6 +102,9 @@
     <string name="settings_widget_reset_position_button">Redefinir posição</string>
     <string name="settings_reset_seat_channel">Redefinir canal dos bancos</string>
     <string name="settings_reset_seat_channel_hint">Se o aquecimento ou a ventilação dos bancos parar após trocar de carro</string>
+    <string name="settings_voice_native_assistant_header">Assistente de voz nativo da BYD</string>
+    <string name="settings_voice_disable_native_label">Desativar o assistente de voz integrado</string>
+    <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. Reversível.</string>
     <string name="settings_widget_opacity_label">Opacidade</string>
     <string name="settings_widget_scale_label">Tamanho</string>
     <string name="settings_widget_tap_section_header">Toque no widget</string>

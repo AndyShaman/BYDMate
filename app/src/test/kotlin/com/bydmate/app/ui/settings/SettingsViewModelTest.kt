@@ -40,14 +40,17 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import com.bydmate.app.data.vehicle.HelperClient
 import kotlinx.coroutines.delay
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -60,6 +63,7 @@ class SettingsViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
+    private val helperClient: HelperClient = mockk(relaxed = true)
 
     @Before
     fun setUp() {
@@ -232,6 +236,7 @@ class SettingsViewModelTest {
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
             seatChannelStore = seatChannelStore,
+            helperClient = helperClient,
         )
     }
 
@@ -289,5 +294,17 @@ class SettingsViewModelTest {
         val vm = buildViewModel()
         vm.resetSeatChannel()
         verify { seatChannelStore.setWinner(SeatChannel.UNKNOWN) }
+    }
+
+    @Test fun `setDisableNativeAssistant updates state and applies via helper`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { helperClient.setAppHidden("com.byd.autovoice", true) } returns true
+
+        vm.setDisableNativeAssistant(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+        coVerify { helperClient.setAppHidden("com.byd.autovoice", true) }
     }
 }

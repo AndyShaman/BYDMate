@@ -1586,6 +1586,35 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     ) {
         Text(stringResource(R.string.settings_reset_seat_channel), fontSize = 13.sp, color = TextPrimary)
     }
+
+    SectionHeader(text = stringResource(R.string.settings_voice_native_assistant_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    stringResource(R.string.settings_voice_disable_native_label),
+                    color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium
+                )
+                Text(
+                    stringResource(R.string.settings_voice_disable_native_description),
+                    color = TextSecondary, fontSize = 12.sp
+                )
+            }
+            Switch(
+                checked = state.disableNativeAssistant,
+                onCheckedChange = { viewModel.setDisableNativeAssistant(it) },
+                colors = bydSwitchColors(),
+            )
+        }
+    }
 }
 
 @Composable

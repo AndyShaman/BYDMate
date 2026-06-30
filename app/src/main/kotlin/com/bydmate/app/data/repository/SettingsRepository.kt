@@ -57,6 +57,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
+        /** "true" hides the native BYD voice assistant (pm disable-user); default "false". */
+        const val KEY_DISABLE_NATIVE_ASSISTANT = "disable_native_assistant"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"

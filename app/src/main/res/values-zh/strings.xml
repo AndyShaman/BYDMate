@@ -93,6 +93,9 @@
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
+    <string name="settings_voice_native_assistant_header">BYD 原车语音助手</string>
+    <string name="settings_voice_disable_native_label">关闭原车语音助手</string>
+    <string name="settings_voice_disable_native_description">隐藏 BYD 内置语音助手，避免其打断。可恢复。</string>
     <string name="settings_widget_opacity_label">不透明度</string>
     <string name="settings_widget_scale_label">大小</string>
     <string name="settings_widget_tap_section_header">点击小组件</string>

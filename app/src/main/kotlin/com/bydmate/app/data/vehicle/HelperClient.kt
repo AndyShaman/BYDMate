@@ -63,6 +63,10 @@ interface HelperClient {
     /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
      *  Daemon-whitelisted to sentrymode_enabled_switch. */
     suspend fun putGlobalSetting(key: String, value: Int): Boolean
+
+    /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
+     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
+    suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
 }
 
 @Singleton
@@ -150,6 +154,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     override suspend fun putGlobalSetting(key: String, value: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_PUT_GLOBAL_SETTING) {
             it.writeString(key); it.writeInt(value)
+        }
+
+    override suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_APP_HIDDEN) {
+            it.writeString(packageName); it.writeInt(if (hidden) 1 else 0)
         }
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */

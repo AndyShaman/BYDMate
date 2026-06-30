@@ -31,6 +31,8 @@ import android.os.IBinder
  *   TX_ENABLE_ACCESSIBILITY : (no args)                   -> reply: writeInt(status), writeInt(0)  // status 0 = our a11y service enabled
  *   TX_PUT_GLOBAL_SETTING : writeString(key), writeInt(value)
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = settings put global succeeded; -1 = not whitelisted / failed
+ *   TX_SET_APP_HIDDEN : writeString(packageName), writeInt(hidden: 1=disable 0=enable)
+ *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -59,6 +61,7 @@ object HelperBinderProtocol {
     const val TX_LAUNCH_AND_FORCE = IBinder.FIRST_CALL_TRANSACTION + 14         // 15
     const val TX_ENABLE_ACCESSIBILITY = IBinder.FIRST_CALL_TRANSACTION + 15     // 16
     const val TX_PUT_GLOBAL_SETTING = IBinder.FIRST_CALL_TRANSACTION + 16       // 17
+    const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"

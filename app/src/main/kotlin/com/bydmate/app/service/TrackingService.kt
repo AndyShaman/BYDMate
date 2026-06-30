@@ -348,6 +348,14 @@ class TrackingService : Service(), LocationListener {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
+                // Re-apply "disable native assistant" once the daemon is live so the choice
+                // survives reboot / OTA. Chained after ensureRunning() (not a separate coroutine)
+                // so it cannot race an unregistered binder on cold start.
+                if (ok && settingsRepository.getString(
+                        com.bydmate.app.data.repository.SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT,
+                        "false") == "true") {
+                    helperClient.setAppHidden("com.byd.autovoice", true)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")

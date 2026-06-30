@@ -102,6 +102,9 @@
     <string name="settings_widget_reset_position_button">Reset position</string>
     <string name="settings_reset_seat_channel">Reset seat channel</string>
     <string name="settings_reset_seat_channel_hint">If seat heating or ventilation stops working after switching cars</string>
+    <string name="settings_voice_native_assistant_header">Native BYD voice assistant</string>
+    <string name="settings_voice_disable_native_label">Disable built-in voice assistant</string>
+    <string name="settings_voice_disable_native_description">Hides the native BYD voice assistant so it does not interrupt. Reversible.</string>
     <string name="settings_widget_opacity_label">Opacity</string>
     <string name="settings_widget_scale_label">Size</string>
     <string name="settings_widget_tap_section_header">Widget tap</string>

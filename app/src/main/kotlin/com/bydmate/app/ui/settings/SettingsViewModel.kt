@@ -102,6 +102,8 @@ data class SettingsUiState(
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
+    /** When true, the native BYD voice assistant is disabled (pm disable-user). */
+    val disableNativeAssistant: Boolean = false,
 )
 
 @HiltViewModel
@@ -122,6 +124,7 @@ class SettingsViewModel @Inject constructor(
     private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
     private val catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal,
     private val seatChannelStore: SeatChannelStore,
+    private val helperClient: com.bydmate.app.data.vehicle.HelperClient,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -213,6 +216,8 @@ class SettingsViewModel @Inject constructor(
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
             val mapTileSource = settingsRepository.getMapTileSource()
+            val disableNativeAssistant =
+                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
 
             _uiState.update {
                 it.copy(
@@ -239,8 +244,21 @@ class SettingsViewModel @Inject constructor(
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
                     mapTileSource = mapTileSource,
+                    disableNativeAssistant = disableNativeAssistant,
                 )
             }
+        }
+    }
+
+    /**
+     * Toggle the native BYD voice assistant. Persists the choice and applies it immediately
+     * through the helper daemon: true -> pm disable-user, false -> pm enable. Reversible.
+     */
+    fun setDisableNativeAssistant(disabled: Boolean) {
+        _uiState.update { it.copy(disableNativeAssistant = disabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, disabled.toString())
+            helperClient.setAppHidden("com.byd.autovoice", disabled)
         }
     }
 

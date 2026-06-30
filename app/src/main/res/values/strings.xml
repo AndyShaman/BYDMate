@@ -116,6 +116,9 @@
     <string name="settings_widget_reset_position_button">Сбросить позицию</string>
     <string name="settings_reset_seat_channel">Сбросить канал сидений</string>
     <string name="settings_reset_seat_channel_hint">Если подогрев или вентиляция сидений не срабатывают после смены машины</string>
+    <string name="settings_voice_native_assistant_header">Штатный голосовой помощник BYD</string>
+    <string name="settings_voice_disable_native_label">Отключить штатный голосовой помощник</string>
+    <string name="settings_voice_disable_native_description">Скрывает встроенный голосовой ассистент BYD, чтобы он не перебивал. Обратимо.</string>
     <string name="settings_widget_opacity_label">Прозрачность</string>
     <string name="settings_widget_scale_label">Размер</string>
     <string name="settings_widget_tap_section_header">Тап по виджету</string>
