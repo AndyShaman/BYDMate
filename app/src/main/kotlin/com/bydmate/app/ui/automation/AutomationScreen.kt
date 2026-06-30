@@ -1162,7 +1162,7 @@ private fun ButtonPressTriggerControls(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            (1..6).forEach { n ->
+            (1..4).forEach { n ->
                 DropdownMenuItem(
                     text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
                     onClick = {

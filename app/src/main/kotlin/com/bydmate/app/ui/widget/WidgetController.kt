@@ -345,7 +345,7 @@ object WidgetController {
                 // Hide widget while the BYD camera surface is up (rear, front
                 // auto-pop, 360°, parking app — all map to com.byd.avc).
                 val hideForCamera = snap.cameraActive
-                // Hide the entire root (panel + button layer) so the 6 buttons
+                // Hide the entire root (panel + button layer) so the buttons
                 // don't stay drawn over the camera view when the panel is expanded.
                 // Re-show is symmetric: same view, VISIBLE.
                 rootContainer?.visibility = if (hideForCamera) View.GONE else View.VISIBLE

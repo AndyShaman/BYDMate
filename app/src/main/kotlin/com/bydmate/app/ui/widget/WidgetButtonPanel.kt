@@ -7,7 +7,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -49,16 +48,17 @@ object WidgetButtonLayout {
 
     /**
      * Returns the window box when the panel is expanded. The window grows by one
-     * pocket in each direction (left column + bottom row). The top-left shifts left
-     * by one pocket so the panel content stays visually fixed at the right/top of
-     * the container. The result is clamped to the screen so no button is cut off.
+     * pocket downward only (a single bottom row of buttons); its width and its
+     * top-left x stay fixed, so the panel never shifts horizontally when the
+     * buttons slide out. The result is clamped to the screen so no button is cut
+     * off near the bottom edge.
      *
      * @param collapsedX  current window x (px) while collapsed
      * @param collapsedY  current window y (px) while collapsed
      * @param panelWpx    collapsed panel width in pixels
      * @param panelHpx    collapsed panel height in pixels
      * @param buttonPx    button size in pixels
-     * @param gapPx       gap between button column/row and panel edge in pixels
+     * @param gapPx       gap between button row and panel edge in pixels
      * @param screenW     screen width in pixels
      * @param screenH     screen height in pixels
      */
@@ -73,10 +73,10 @@ object WidgetButtonLayout {
         screenH: Int,
     ): WindowBox {
         val pocket = pocketPx(buttonPx, gapPx)
-        val width = panelWpx + pocket
+        val width = panelWpx
         val height = panelHpx + pocket
         val (cx, cy) = DragGestureLogic.clampToScreen(
-            x = collapsedX - pocket,
+            x = collapsedX,
             y = collapsedY,
             widgetWidth = width,
             widgetHeight = height,
@@ -88,17 +88,14 @@ object WidgetButtonLayout {
 }
 
 /**
- * The 6-button overlay layer that fills the expanded window.
+ * The 4-button overlay layer that fills the expanded window.
  *
- * Layout:
- *  - Buttons 1, 2 form a left column that spans the panel height (space-between).
- *  - Buttons 3–6 form a bottom row that spans the panel width (space-between),
- *    offset right by one pocket so they sit under the panel, not under the column.
+ * Layout: buttons 1–4 form a single bottom row spanning the panel width
+ * (space-between), sitting in the pocket below the panel.
  *
- * Each button slides out from behind the panel edge and fades in when [expanded]
- * becomes true. The slide direction matches the side it appears from (left column
- * emerges leftward; bottom row emerges downward). Stagger index staggers the tween
- * so buttons pop in sequence.
+ * Each button is tucked up behind the panel's bottom edge while hidden and slides
+ * down into the pocket as it fades in when [expanded] becomes true. Stagger index
+ * staggers the tween so buttons pop in sequence.
  */
 @Composable
 fun WidgetButtonPanel(
@@ -119,102 +116,50 @@ fun WidgetButtonPanel(
         val panelW = WidgetButtonLayout.PANEL_WIDTH_DP.dp
         val panelH = WidgetButtonLayout.PANEL_HEIGHT_DP.dp
 
-        Box(modifier = Modifier.size(width = panelW + pocket, height = panelH + pocket)) {
-            // Left column (buttons 1, 2): top-left corner, button-wide, panel-tall.
-            Column(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .width(button)
-                    .height(panelH),
-                verticalArrangement = Arrangement.SpaceBetween,
-            ) {
-                ButtonCell(
-                    number = 1,
-                    expanded = expanded,
-                    staggerIndex = 0,
-                    fromLeft = true,
-                    onClick = onButtonClick,
-                )
-                ButtonCell(
-                    number = 2,
-                    expanded = expanded,
-                    staggerIndex = 1,
-                    fromLeft = true,
-                    onClick = onButtonClick,
-                )
-            }
-            // Bottom row (buttons 3–6): offset right by one pocket so they sit under
-            // the panel rather than under the left column.
+        Box(modifier = Modifier.size(width = panelW, height = panelH + pocket)) {
+            // Bottom row (buttons 1–4): spans the panel width in the pocket below.
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
-                    .offset(x = pocket)
                     .width(panelW)
                     .height(button),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                ButtonCell(
-                    number = 3,
-                    expanded = expanded,
-                    staggerIndex = 0,
-                    fromLeft = false,
-                    onClick = onButtonClick,
-                )
-                ButtonCell(
-                    number = 4,
-                    expanded = expanded,
-                    staggerIndex = 1,
-                    fromLeft = false,
-                    onClick = onButtonClick,
-                )
-                ButtonCell(
-                    number = 5,
-                    expanded = expanded,
-                    staggerIndex = 2,
-                    fromLeft = false,
-                    onClick = onButtonClick,
-                )
-                ButtonCell(
-                    number = 6,
-                    expanded = expanded,
-                    staggerIndex = 3,
-                    fromLeft = false,
-                    onClick = onButtonClick,
-                )
+                ButtonCell(number = 1, expanded = expanded, staggerIndex = 0, onClick = onButtonClick)
+                ButtonCell(number = 2, expanded = expanded, staggerIndex = 1, onClick = onButtonClick)
+                ButtonCell(number = 3, expanded = expanded, staggerIndex = 2, onClick = onButtonClick)
+                ButtonCell(number = 4, expanded = expanded, staggerIndex = 3, onClick = onButtonClick)
             }
         }
     }
 }
 
 /**
- * A single tappable button cell. When [fromLeft] it slides in from the right
- * (column appears left of panel). Otherwise it slides upward (row appears below
- * panel). [staggerIndex] delays the animation start so buttons fan out in turn.
+ * A single tappable button cell. It is tucked up behind the panel's bottom edge
+ * while hidden (offset up, alpha 0) and slides down into the pocket as it fades in.
+ * [staggerIndex] delays the animation start so buttons fan out in turn.
  */
 @Composable
 private fun ButtonCell(
     number: Int,
     expanded: Boolean,
     staggerIndex: Int,
-    fromLeft: Boolean,
     onClick: (Int) -> Unit,
 ) {
-    // progress: 0 = hidden at edge, 1 = fully visible in position.
+    // progress: 0 = hidden behind panel edge, 1 = fully visible in position.
     val progress by animateFloatAsState(
         targetValue = if (expanded) 1f else 0f,
         animationSpec = tween(durationMillis = 240, delayMillis = staggerIndex * 40),
         label = "buttonSlide$number",
     )
     val slidePx = WidgetButtonLayout.BUTTON_DP
-    // Left buttons emerge from the right (displaced right when hidden, slides to 0).
-    // Bottom buttons emerge from below (displaced down when hidden, slides to 0).
-    val dx = if (fromLeft) ((1f - progress) * slidePx).dp else 0.dp
-    val dy = if (fromLeft) 0.dp else ((1f - progress) * slidePx).dp
+    // Displaced up behind the panel when hidden, slides down into the pocket.
+    val dy = ((1f - progress) * slidePx).dp
 
     Box(
         modifier = Modifier
             .size(WidgetButtonLayout.BUTTON_DP.dp)
-            .offset(x = dx, y = -dy)
+            .offset(y = -dy)
             .alpha(progress)
             .background(CardSurfaceElevated, RoundedCornerShape(12.dp))
             .border(1.5.dp, CardBorder, RoundedCornerShape(12.dp))
