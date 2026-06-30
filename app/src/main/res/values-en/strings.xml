@@ -152,6 +152,7 @@
     <string name="trips_col_time">time</string>
     <string name="trips_col_duration">dur.</string>
     <string name="trips_col_km">km</string>
+    <string name="trips_col_soc">SOC</string>
     <string name="trips_col_kwh">kWh</string>
     <string name="trips_chart_kwh_chip">kWh</string>
     <string name="trips_chart_no_data">No data</string>

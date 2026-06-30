@@ -153,6 +153,7 @@
     <string name="trips_col_time">时间</string>
     <string name="trips_col_duration">时长</string>
     <string name="trips_col_km">公里</string>
+    <string name="trips_col_soc">SOC</string>
     <string name="trips_col_kwh">kWh</string>
     <string name="trips_chart_kwh_chip">kWh</string>
     <string name="trips_chart_no_data">暂无数据</string>

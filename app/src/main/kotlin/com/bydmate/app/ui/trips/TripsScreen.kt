@@ -255,6 +255,7 @@ private fun ColumnHeaders(currencySymbol: String) {
         Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
         Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(stringResource(R.string.trips_col_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+        Text(stringResource(R.string.trips_col_soc), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(58.dp))
         Text(stringResource(R.string.trips_col_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(currencySymbol.lowercase(), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(56.dp))
@@ -275,6 +276,8 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
     val per100 = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
     val cost = trip.cost?.let { "%.2f".format(it) } ?: "—"
     val consColor = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
+    val hasSoc = !isStop && trip.socStart != null && trip.socEnd != null
+    val socText = if (hasSoc) "${trip.socStart}→${trip.socEnd}" else "—"
 
     Column {
         Row(
@@ -305,6 +308,15 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
                 textAlign = TextAlign.End,
                 modifier = Modifier.width(48.dp)
+            )
+            // SOC start→end (— when no session bookmark matched, or this is a stop)
+            Text(
+                socText,
+                color = if (hasSoc) TextSecondary else TextMuted,
+                fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(58.dp)
             )
             // kWh
             Text(kwh, color = if (isStop) TextMuted else TextSecondary,

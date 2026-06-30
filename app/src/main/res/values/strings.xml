@@ -176,6 +176,7 @@
     <string name="trips_col_time">время</string>
     <string name="trips_col_duration">длит.</string>
     <string name="trips_col_km">км</string>
+    <string name="trips_col_soc">SOC</string>
     <string name="trips_col_kwh">кВт·ч</string>
     <string name="trips_chart_kwh_chip">кВтч</string>
     <string name="trips_chart_no_data">Нет данных</string>
