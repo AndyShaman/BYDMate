@@ -29,6 +29,8 @@ import javax.inject.Singleton
 interface HelperClient {
     suspend fun read(dev: Int, fid: Int, tx: Int = 5): Long?
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
+    /** Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable). */
+    suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int?
     suspend fun isAlive(): Boolean
 
     /** Creates a VirtualDisplay backed by [surface]; returns its displayId (>0) or null. */
@@ -57,6 +59,14 @@ interface HelperClient {
      * has no a11y settings UI, so this is how the star-control toggle self-enables key filtering.
      */
     suspend fun enableAccessibilityService(): Boolean
+
+    /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
+     *  Daemon-whitelisted to sentrymode_enabled_switch. */
+    suspend fun putGlobalSetting(key: String, value: Int): Boolean
+
+    /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
+     *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
+    suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
 }
 
 @Singleton
@@ -68,17 +78,20 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transact(HelperBinderProtocol.TX_READ) { it.writeInt(tx); it.writeInt(dev); it.writeInt(fid) }
             ?.let { (status, value) -> if (readAccepted(status)) value.toLong() else null }
 
-    override suspend fun write(dev: Int, fid: Int, value: Int): Boolean {
+    override suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int? {
         val status = transact(HelperBinderProtocol.TX_WRITE) {
             it.writeInt(dev); it.writeInt(fid); it.writeInt(value)
         }?.first
         // status forwarded from the autoservice setInt return code: 1 = real action,
         // 0 = accepted no-op (fid ineffective on this trim), <0 = error, null =
-        // daemon unreachable. Logged at INFO so a "green" automation that physically
-        // did nothing (no-op) is distinguishable from one that actually moved the actuator.
+        // daemon unreachable. INFO so a "green" automation that physically did
+        // nothing (no-op) is distinguishable from one that actually moved the actuator.
         Log.i(TAG, "write dev=$dev fid=$fid value=$value status=$status accepted=${status != null && writeAccepted(status)}")
-        return status?.let { writeAccepted(it) } ?: false
+        return status
     }
+
+    override suspend fun write(dev: Int, fid: Int, value: Int): Boolean =
+        writeStatus(dev, fid, value)?.let { writeAccepted(it) } ?: false
 
     override suspend fun isAlive(): Boolean =
         transact(HelperBinderProtocol.TX_PING) { }
@@ -137,6 +150,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
         } ?: false
+
+    override suspend fun putGlobalSetting(key: String, value: Int): Boolean =
+        statusOk(HelperBinderProtocol.TX_PUT_GLOBAL_SETTING) {
+            it.writeString(key); it.writeInt(value)
+        }
+
+    override suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_APP_HIDDEN) {
+            it.writeString(packageName); it.writeInt(if (hidden) 1 else 0)
+        }
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =

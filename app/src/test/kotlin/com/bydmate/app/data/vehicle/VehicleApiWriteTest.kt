@@ -32,7 +32,12 @@ class VehicleApiWriteTest {
         WriteAllowlist.LIVE_VALIDATED.associateBy { it.actionName.lowercase() }
     )
 
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao)
+    private val seatStore = object : SeatChannelStore {
+        override fun winner() = SeatChannel.UNKNOWN
+        override fun setWinner(channel: SeatChannel) {}
+    }
+
+    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
 
     // ── Test 1: writeAcOn happy path ──────────────────────────────────────────
 
@@ -88,7 +93,7 @@ class VehicleApiWriteTest {
     // ── Test 5: allowlist miss returns failure without crash ──────────────────
 
     @Test fun `write method with EMPTY allowlist returns failure AllowlistMiss without throwing`() = runTest {
-        val emptyApi: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, WriteAllowlist.EMPTY, writeLogDao)
+        val emptyApi: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, WriteAllowlist.EMPTY, writeLogDao, seatStore)
         val result = emptyApi.writeAcOn()
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.AllowlistMiss)
@@ -194,6 +199,18 @@ class VehicleApiWriteTest {
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.AllowlistMiss)
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
+    }
+
+    // ── Task 7: seat dispatch routes through adaptive channel ─────────────────
+
+    @Test fun `dispatch routes seat command through adaptive channel primary REAL`() = runTest {
+        val sw = allowlist.find("driver_seat_vent_switch")!!
+        val lv = allowlist.find("driver_seat_vent_level")!!
+        coEvery { helper.writeStatus(sw.dev, sw.writeFid, 1) } returns 1
+        coEvery { helper.writeStatus(lv.dev, lv.writeFid, 1) } returns 1
+        // resolveSeat → DRIVER_VENT level 1; UNKNOWN store → primary
+        assertTrue(api.dispatch("主驾座椅通风1档").isSuccess)
+        coVerify(exactly = 1) { helper.writeStatus(sw.dev, sw.writeFid, 1) }
     }
 
     // ── C.5: DAO receives audit entry on write ────────────────────────────────

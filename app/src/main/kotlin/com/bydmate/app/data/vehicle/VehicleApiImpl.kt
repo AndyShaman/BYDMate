@@ -17,7 +17,13 @@ class VehicleApiImpl @Inject constructor(
     private val helper: HelperClient,
     private val allowlist: WriteAllowlist,
     private val writeLogDao: VehicleWriteLogDao,
+    private val seatStore: SeatChannelStore,
 ) : VehicleApi {
+
+    private val seatChannel = AdaptiveSeatChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value) },
+        seatStore,
+    )
 
     // Liveness + snapshots — passthroughs.
     override suspend fun isAvailable(): Boolean = autoservice.isAvailable()
@@ -43,6 +49,10 @@ class VehicleApiImpl @Inject constructor(
     // ─── Writes ────────────────────────────────────────────────────────────────
 
     override suspend fun dispatch(commandString: String): Result<Unit> {
+        CommandTranslator.resolveSeat(commandString)?.let { seat ->
+            return if (seatChannel.actuate(seat.group, seat.level)) Result.success(Unit)
+            else Result.failure(VehicleWriteError.Unsupported("seat:${seat.group}:${seat.level}"))
+        }
         val resolved = CommandTranslator.resolve(commandString)
         if (resolved.isEmpty()) {
             Log.w(TAG, "dispatch: unknown command '$commandString'")
@@ -185,6 +195,38 @@ class VehicleApiImpl @Inject constructor(
         Log.i(TAG, "doWrite OK: action=$actionName dev=${entry.dev} fid=${entry.writeFid} value=$value readback=$readback validated=${entry.validated}")
         logWrite(actionName, entry.dev, entry.writeFid, value, readback?.toInt(), true, null, entry.validated)
         return Result.success(Unit)
+    }
+
+    /**
+     * Status-classified write for the seat adaptive channel. Same allowlist + range
+     * gate + audit row as [doWrite], but returns a [WriteOutcome] derived from the raw
+     * autoservice status instead of a Result. A config error (allowlist miss / out of
+     * range) maps to TRANSIENT so the adaptive channel never switches channels because
+     * of a code bug. seat entries have no readbackFid, so no read-back verification.
+     */
+    internal suspend fun doWriteOutcome(actionName: String, value: Int): WriteOutcome {
+        val entry = allowlist.find(actionName) ?: run {
+            Log.w(TAG, "doWriteOutcome: action=$actionName not in allowlist")
+            logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)
+            return WriteOutcome.TRANSIENT
+        }
+        if (value < entry.valueMin || value > entry.valueMax) {
+            Log.w(TAG, "doWriteOutcome: action=$actionName value=$value out of range [${entry.valueMin}..${entry.valueMax}]")
+            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "range", entry.validated)
+            return WriteOutcome.TRANSIENT
+        }
+        logAttempt(actionName, entry, value)
+        val status: Int? = try {
+            helper.writeStatus(entry.dev, entry.writeFid, value)
+        } catch (e: Exception) {
+            Log.w(TAG, "doWriteOutcome: action=$actionName helper threw: ${e.message}")
+            logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
+            return WriteOutcome.TRANSIENT
+        }
+        val outcome = WriteOutcome.fromStatus(status)
+        val ok = outcome == WriteOutcome.REAL
+        logWrite(actionName, entry.dev, entry.writeFid, value, status, ok, if (ok) null else "outcome_$outcome", entry.validated)
+        return outcome
     }
 
     // ─── Observability hook ────────────────────────────────────────────────────

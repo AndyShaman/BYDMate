@@ -55,4 +55,7 @@ interface IdleDrainDao {
 
     @Query("SELECT COALESCE(SUM(kwh_consumed), 0.0) FROM idle_drains WHERE start_ts >= :from AND start_ts < :to")
     suspend fun getKwhBetween(from: Long, to: Long): Double
+
+    @Query("SELECT * FROM idle_drains WHERE start_ts >= :since ORDER BY start_ts ASC")
+    suspend fun getSince(since: Long): List<IdleDrainEntity>
 }

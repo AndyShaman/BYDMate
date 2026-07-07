@@ -41,11 +41,17 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.bydmate.app.data.vehicle.SeatChannel
+import com.bydmate.app.data.vehicle.SeatChannelStore
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
+import io.mockk.verify
+import com.bydmate.app.data.vehicle.HelperClient
 import kotlinx.coroutines.delay
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -57,6 +63,8 @@ import org.robolectric.annotation.Config
 class SettingsViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
+    private val helperClient: HelperClient = mockk(relaxed = true)
 
     @Before
     fun setUp() {
@@ -133,6 +141,7 @@ class SettingsViewModelTest {
         override suspend fun getAllAutoserviceCharges(): List<ChargeEntity> = emptyList()
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
+        override suspend fun getCompletedSince(since: Long): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {}
     }
@@ -157,6 +166,7 @@ class SettingsViewModelTest {
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
+        override suspend fun getSince(since: Long): List<IdleDrainEntity> = emptyList()
     }
 
     private class StubBatterySnapshotDao : BatterySnapshotDao {
@@ -173,6 +183,7 @@ class SettingsViewModelTest {
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
         override suspend fun spawnHelper(): Boolean = false
+        override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null
         override suspend fun helperHeartbeat(): Boolean = false
         override suspend fun shutdown() {}
@@ -190,7 +201,8 @@ class SettingsViewModelTest {
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao)
 
-        val chargeRepo = ChargeRepository(StubChargeDao(), StubChargePointDao())
+        val chargeDao = StubChargeDao()
+        val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
@@ -199,11 +211,12 @@ class SettingsViewModelTest {
         val energyReader = EnergyDataReader(ctx)
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
-            DiPlusDbReader(), settingsRepo, com.bydmate.app.data.repository.LastSessionRepository()
+            DiPlusDbReader(),
+            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx)
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
-        val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, settingsRepo)
+        val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         // Stub BackupManager: no AppDatabase available in unit tests, use mockk
         val backupManager = mockk<BackupManager>(relaxed = true)
@@ -224,6 +237,8 @@ class SettingsViewModelTest {
             backupManager = backupManager,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
+            seatChannelStore = seatChannelStore,
+            helperClient = helperClient,
         )
     }
 
@@ -275,5 +290,23 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle() // cancelled job must not resurrect state
 
         assertEquals(UpdateState.Idle, vm.uiState.value.updateDialogState)
+    }
+
+    @Test fun `resetSeatChannel sets winner to UNKNOWN`() = runTest {
+        val vm = buildViewModel()
+        vm.resetSeatChannel()
+        verify { seatChannelStore.setWinner(SeatChannel.UNKNOWN) }
+    }
+
+    @Test fun `setDisableNativeAssistant updates state and applies via helper`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        coEvery { helperClient.setAppHidden("com.byd.autovoice", true) } returns true
+
+        vm.setDisableNativeAssistant(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.disableNativeAssistant)
+        coVerify { helperClient.setAppHidden("com.byd.autovoice", true) }
     }
 }

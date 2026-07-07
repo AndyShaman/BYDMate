@@ -20,12 +20,16 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DatePicker
+import androidx.compose.material3.DatePickerDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,6 +54,11 @@ import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Edit dialog for a charge row (long-press → bottom sheet → "Изменить").
@@ -61,6 +70,7 @@ import com.bydmate.app.ui.theme.TextSecondary
  * an editable manual input as a fallback.
  * Cost = finalKwh × tariff, displayed as a computed preview.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChargeEditDialog(
     charge: ChargeEntity,
@@ -93,6 +103,9 @@ fun ChargeEditDialog(
             tariffText = "%.3f".format(auto)
         }
     }
+
+    var startTs by remember(charge.id) { mutableStateOf(charge.startTs) }
+    var showDatePicker by remember(charge.id) { mutableStateOf(false) }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -131,6 +144,27 @@ fun ChargeEditDialog(
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
+
+                    // Date (start_ts) — editable so manual entries can be backdated
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.charges_edit_date_label),
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.width(80.dp)
+                        )
+                        Text(
+                            remember(startTs) {
+                                SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(startTs))
+                            },
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier
+                                .clickable { showDatePicker = true }
+                                .padding(vertical = 8.dp, horizontal = 4.dp)
+                        )
+                    }
 
                     // Type radio
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -272,6 +306,8 @@ fun ChargeEditDialog(
                             onClick = {
                                 onSave(
                                     charge.copy(
+                                        startTs = startTs,
+                                        endTs = charge.endTs?.plus(startTs - charge.startTs),
                                         type = type,
                                         socStart = socStart,
                                         socEnd = socEnd,
@@ -296,6 +332,57 @@ fun ChargeEditDialog(
             }
         }
     }
+
+    if (showDatePicker) {
+        val dpState = rememberDatePickerState(initialSelectedDateMillis = localDateAsUtcMidnight(startTs))
+        DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    dpState.selectedDateMillis?.let { picked ->
+                        startTs = combineDateKeepingTime(picked, startTs)
+                    }
+                    showDatePicker = false
+                }) {
+                    Text(stringResource(R.string.charges_edit_save_button), color = AccentGreen, fontSize = 14.sp)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDatePicker = false }) {
+                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
+                }
+            }
+        ) {
+            DatePicker(state = dpState)
+        }
+    }
+}
+
+/**
+ * Material3 DatePicker reads/writes its selection in UTC, so seed it with the UTC
+ * midnight of [ts]'s LOCAL calendar day. Without this, in UTC+ zones an early-morning
+ * timestamp preselects the previous day. Mirror of [combineDateKeepingTime] on the way in.
+ */
+private fun localDateAsUtcMidnight(ts: Long): Long {
+    val local = Calendar.getInstance().apply { timeInMillis = ts }
+    return Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+        clear()
+        set(local.get(Calendar.YEAR), local.get(Calendar.MONTH), local.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
+}
+
+/**
+ * Apply the picked day (DatePicker returns UTC midnight) onto [originalTs] while
+ * keeping its local time-of-day, so editing the date never zeroes the clock.
+ */
+private fun combineDateKeepingTime(pickedUtcMidnightMs: Long, originalTs: Long): Long {
+    val utc = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply { timeInMillis = pickedUtcMidnightMs }
+    return Calendar.getInstance().apply {
+        timeInMillis = originalTs
+        set(Calendar.YEAR, utc.get(Calendar.YEAR))
+        set(Calendar.MONTH, utc.get(Calendar.MONTH))
+        set(Calendar.DAY_OF_MONTH, utc.get(Calendar.DAY_OF_MONTH))
+    }.timeInMillis
 }
 
 @Composable

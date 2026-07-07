@@ -52,6 +52,15 @@ interface AdbOnDeviceClient {
      */
     suspend fun spawnHelper(): Boolean
 
+    /**
+     * Kills any running helper daemon (by exact nice-name) under shell uid, so a fresh
+     * daemon from a newer app version can re-take the binder service and the exclusive
+     * file lock. The lock auto-releases on process death. Hardcoded cmdline — no caller
+     * input; harmless no-op when no daemon is running. Returns true if the kill command
+     * was dispatched (NOT a guarantee the process is gone).
+     */
+    suspend fun killHelper(): Boolean
+
     /** Reads the daemon's stdout/stderr log (READY / ERR lines) for diagnostics. Null on transport error. */
     suspend fun readHelperLog(): String?
 
@@ -162,6 +171,26 @@ class AdbOnDeviceClientImpl @Inject constructor(
             true
         } catch (e: Exception) {
             Log.w(TAG, "spawnHelper failed: ${e.message}")
+            false
+        }
+    }
+
+    override suspend fun killHelper(): Boolean = withContext(Dispatchers.IO) {
+        val p = protocol ?: run {
+            val r = connect()
+            if (r.isFailure) return@withContext false
+            protocol ?: return@withContext false
+        }
+        try {
+            // Raw protocol exec (hardcoded, no caller input). Kill by exact nice-name so a
+            // fresh daemon (newer app version) can re-take the binder service + file lock;
+            // the exclusive flock auto-releases on death. Mirrors the manual
+            // `pgrep -f … | kill -9` path validated on-device. Empty pgrep → `kill -9` runs
+            // for no pids → harmless.
+            p.exec("for p in \$(pgrep -f $HELPER_PROCESS_NAME); do kill -9 \$p; done")
+            true
+        } catch (e: Exception) {
+            Log.w(TAG, "killHelper failed: ${e.message}")
             false
         }
     }

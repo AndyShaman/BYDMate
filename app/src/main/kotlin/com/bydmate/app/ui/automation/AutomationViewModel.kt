@@ -5,6 +5,9 @@ import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.LocalePreferences
+import androidx.annotation.StringRes
+import com.bydmate.app.R
+import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
@@ -27,166 +30,158 @@ import javax.inject.Inject
 
 data class TriggerParamOption(
     val param: String,
-    val chineseName: String,
-    val displayName: String,
-    val englishName: String = displayName,
-    val unit: String = "",
-    val category: String,
-    val chineseCategory: String = category,
-    val englishCategory: String = category,
-    val enumValues: List<Pair<String, String>>? = null // value to label
+    val chineseName: String,                          // canonical zh id, persisted into TriggerDef.chineseName (not display)
+    @StringRes val nameRes: Int,
+    @StringRes val categoryRes: Int,
+    @StringRes val unitRes: Int? = null,
+    val enumValues: List<Pair<String, Int>>? = null   // value -> @StringRes label
 )
 
 data class ActionOption(
     val command: String,
-    val displayName: String,
-    val chineseName: String = displayName,
-    val englishName: String = displayName,
-    val category: String,
-    val chineseCategory: String = category,
-    val englishCategory: String = category
+    @StringRes val nameRes: Int,
+    @StringRes val categoryRes: Int
 )
 
 internal fun currentLang(context: Context): String =
     LocalePreferences(context).getLanguage() ?: "en"
 
-internal fun localized(zh: String, en: String, ru: String, context: Context): String =
-    when (currentLang(context)) { "zh" -> zh; "en" -> en; else -> ru }
-
 fun TriggerParamOption.localizedName(context: Context): String =
-    when (currentLang(context)) {
-        "zh" -> chineseName
-        "en" -> englishName
-        else -> displayName
-    }
+    context.appLocalizedContext().getString(nameRes)
 
 fun TriggerParamOption.localizedCategory(context: Context): String =
-    when (currentLang(context)) {
-        "zh" -> chineseCategory
-        "en" -> englishCategory
-        else -> category
-    }
+    context.appLocalizedContext().getString(categoryRes)
+
+fun TriggerParamOption.localizedUnit(context: Context): String =
+    unitRes?.let { context.appLocalizedContext().getString(it) } ?: ""
+
+fun TriggerParamOption.localizedEnumLabel(value: String, context: Context): String =
+    enumValues?.firstOrNull { it.first == value }
+        ?.let { context.appLocalizedContext().getString(it.second) } ?: value
 
 fun ActionOption.localizedName(context: Context): String =
-    when (currentLang(context)) {
-        "zh" -> chineseName
-        "en" -> englishName
-        else -> displayName
-    }
+    context.appLocalizedContext().getString(nameRes)
 
 fun ActionOption.localizedCategory(context: Context): String =
-    when (currentLang(context)) {
-        "zh" -> chineseCategory
-        "en" -> englishCategory
-        else -> category
-    }
+    context.appLocalizedContext().getString(categoryRes)
 
 val TRIGGER_PARAMS = listOf(
-    TriggerParamOption("Speed", "车速", "Скорость", "Speed", "км/ч", "Движение", "行驶", "Driving"),
-    TriggerParamOption("Gear", "档位", "Передача", "Gear", "", "Движение", "行驶", "Driving",
-        enumValues = listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D")),
-    TriggerParamOption("DriveMode", "整车运行模式", "Режим вождения", "Drive Mode", "", "Движение", "行驶", "Driving",
-        enumValues = listOf("0" to "NORMAL", "1" to "ECO", "2" to "SPORT", "4" to "SNOW")),
-    TriggerParamOption("SOC", "电量百分比", "SOC", "SOC", "%", "Энергия", "能源", "Energy"),
-    TriggerParamOption("ChargingStatus", "充电状态", "Статус зарядки", "Charging Status", "", "Энергия", "能源", "Energy",
-        enumValues = listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается")),
-    TriggerParamOption("PowerState", "电源状态", "Питание", "Power State", "", "Энергия", "能源", "Energy",
-        enumValues = listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE")),
-    TriggerParamOption("Voltage12V", "蓄电池电压", "12V аккумулятор", "12V Battery", "В", "Энергия", "能源", "Energy"),
-    TriggerParamOption("MinCellVoltage", "单体最低电压", "Напряжение банки (min)", "Min Cell Voltage", "В", "Энергия", "能源", "Energy"),
-    TriggerParamOption("MaxCellVoltage", "单体最高电压", "Напряжение банки (max)", "Max Cell Voltage", "В", "Энергия", "能源", "Energy"),
-    TriggerParamOption("ExtTemp", "车外温度", "Темп. снаружи", "Outside Temp", "°C", "Температура", "温度", "Temperature"),
-    TriggerParamOption("InsideTemp", "车内温度", "Темп. салона", "Cabin Temp", "°C", "Температура", "温度", "Temperature"),
-    TriggerParamOption("AvgBatTemp", "平均电池温度", "Темп. батареи", "Battery Temp", "°C", "Температура", "温度", "Temperature"),
-    TriggerParamOption("WindowFL", "主驾车窗打开百分比", "Окно водителя", "Driver Window", "% откр.", "Кузов", "车身", "Body"),
-    TriggerParamOption("WindowFR", "副驾车窗打开百分比", "Окно пассажира", "Passenger Window", "% откр.", "Кузов", "车身", "Body"),
-    TriggerParamOption("WindowRL", "左后车窗打开百分比", "Окно ЛЗ", "Rear Left Window", "% откр.", "Кузов", "车身", "Body"),
-    TriggerParamOption("WindowRR", "右后车窗打开百分比", "Окно ПЗ", "Rear Right Window", "% откр.", "Кузов", "车身", "Body"),
-    TriggerParamOption("Sunroof", "天窗打开百分比", "Люк", "Sunroof", "% откр.", "Кузов", "车身", "Body"),
-    TriggerParamOption("DoorFL", "主驾车门", "Дверь водителя", "Driver Door", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorFR", "副驾车门", "Дверь пассажира", "Passenger Door", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorRL", "左后车门", "Дверь ЛЗ", "Rear Left Door", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("DoorRR", "右后车门", "Дверь ПЗ", "Rear Right Door", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыта", "1" to "Открыта")),
-    TriggerParamOption("Hood", "引擎盖", "Капот", "Hood", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
-    TriggerParamOption("LockFL", "主驾车门锁", "Замок двери водителя", "Driver Door Lock", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Разблокирован", "1" to "Заблокирован")),
-    TriggerParamOption("Trunk", "后备箱门", "Багажник", "Trunk", "", "Кузов", "车身", "Body",
-        enumValues = listOf("0" to "Закрыт", "1" to "Открыт")),
-    TriggerParamOption("ACStatus", "空调状态", "Кондиционер", "AC Status", "", "Климат", "空调", "Climate"),
-    TriggerParamOption("ACCirc", "空调循环方式", "Режим циркуляции", "AC Circulation", "", "Климат", "空调", "Climate",
-        enumValues = listOf("0" to "Внешний воздух", "1" to "Внутренний воздух")),
-    TriggerParamOption("ACTemp", "主驾驶空调温度", "Темп. AC", "AC Temp", "°C", "Климат", "空调", "Climate"),
-    TriggerParamOption("FanLevel", "风量档位", "Вентилятор", "Fan Level", "", "Климат", "空调", "Climate"),
-    TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", "Ремень водителя", "Driver Seatbelt", "", "Безопасность", "安全", "Safety",
-        enumValues = listOf("0" to "Не пристёгнут", "1" to "Пристёгнут")),
-    TriggerParamOption("TirePressFL", "左前轮气压", "Давление ЛП шины", "FL Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
-    TriggerParamOption("TirePressFR", "右前轮气压", "Давление ПП шины", "FR Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
-    TriggerParamOption("TirePressRL", "左后轮气压", "Давление ЛЗ шины", "RL Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
-    TriggerParamOption("TirePressRR", "右后轮气压", "Давление ПЗ шины", "RR Tire Pressure", "кПа", "Безопасность", "安全", "Safety"),
-    TriggerParamOption("Rain", "雨量", "Датчик дождя", "Rain Sensor", "(0=сухо)", "Безопасность", "安全", "Safety"),
-    TriggerParamOption("LightLow", "近光灯", "Ближний свет", "Low Beam", "", "Свет", "灯光", "Light",
-        enumValues = listOf("0" to "Выкл", "1" to "Вкл")),
-    TriggerParamOption("DRL", "日行灯", "Дневные ходовые", "DRL", "", "Свет", "灯光", "Light",
-        enumValues = listOf("0" to "Нет", "1" to "Вкл", "2" to "Выкл"))
+        TriggerParamOption("Speed", "车速", R.string.auto_param_speed, R.string.auto_cat_driving, R.string.auto_unit_kmh),
+        TriggerParamOption("Gear", "档位", R.string.auto_param_gear, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_p, "2" to R.string.auto_enum_code_r, "3" to R.string.auto_enum_code_n, "4" to R.string.auto_enum_code_d)),
+        TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("0" to R.string.auto_enum_code_normal, "1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "4" to R.string.auto_enum_code_snow)),
+        TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
+        TriggerParamOption("ChargingStatus", "充电状态", R.string.auto_param_chargingstatus, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_connected, "2" to R.string.auto_enum_charging)),
+        TriggerParamOption("PowerState", "电源状态", R.string.auto_param_powerstate, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_code_off, "1" to R.string.auto_enum_code_on, "2" to R.string.auto_enum_code_drive)),
+        TriggerParamOption("Voltage12V", "蓄电池电压", R.string.auto_param_voltage12v, R.string.auto_cat_energy, R.string.auto_unit_volt),
+        TriggerParamOption("MinCellVoltage", "单体最低电压", R.string.auto_param_mincellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
+        TriggerParamOption("MaxCellVoltage", "单体最高电压", R.string.auto_param_maxcellvoltage, R.string.auto_cat_energy, R.string.auto_unit_volt),
+        TriggerParamOption("ExtTemp", "车外温度", R.string.auto_param_exttemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
+        TriggerParamOption("InsideTemp", "车内温度", R.string.auto_param_insidetemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
+        TriggerParamOption("AvgBatTemp", "平均电池温度", R.string.auto_param_avgbattemp, R.string.auto_cat_temperature, R.string.auto_unit_celsius),
+        TriggerParamOption("WindowFL", "主驾车窗打开百分比", R.string.auto_param_windowfl, R.string.auto_cat_body, R.string.auto_unit_percent_open),
+        TriggerParamOption("WindowFR", "副驾车窗打开百分比", R.string.auto_param_windowfr, R.string.auto_cat_body, R.string.auto_unit_percent_open),
+        TriggerParamOption("WindowRL", "左后车窗打开百分比", R.string.auto_param_windowrl, R.string.auto_cat_body, R.string.auto_unit_percent_open),
+        TriggerParamOption("WindowRR", "右后车窗打开百分比", R.string.auto_param_windowrr, R.string.auto_cat_body, R.string.auto_unit_percent_open),
+        TriggerParamOption("Sunroof", "天窗打开百分比", R.string.auto_param_sunroof, R.string.auto_cat_body, R.string.auto_unit_percent_open),
+        TriggerParamOption("DoorFL", "主驾车门", R.string.auto_param_doorfl, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
+        TriggerParamOption("DoorFR", "副驾车门", R.string.auto_param_doorfr, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
+        TriggerParamOption("DoorRL", "左后车门", R.string.auto_param_doorrl, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
+        TriggerParamOption("DoorRR", "右后车门", R.string.auto_param_doorrr, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
+        TriggerParamOption("Hood", "引擎盖", R.string.auto_param_hood, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
+        TriggerParamOption("LockFL", "主驾车门锁", R.string.auto_param_lockfl, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_unlocked, "1" to R.string.auto_enum_locked)),
+        TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
+        TriggerParamOption("ACStatus", "空调状态", R.string.auto_param_acstatus, R.string.auto_cat_climate),
+        TriggerParamOption("ACCirc", "空调循环方式", R.string.auto_param_accirc, R.string.auto_cat_climate, enumValues = listOf("0" to R.string.auto_enum_fresh_air, "1" to R.string.auto_enum_recirc)),
+        TriggerParamOption("ACTemp", "主驾驶空调温度", R.string.auto_param_actemp, R.string.auto_cat_climate, R.string.auto_unit_celsius),
+        TriggerParamOption("FanLevel", "风量档位", R.string.auto_param_fanlevel, R.string.auto_cat_climate),
+        TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", R.string.auto_param_seatbeltfl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("TirePressFL", "左前轮气压", R.string.auto_param_tirepressfl, R.string.auto_cat_safety, R.string.auto_unit_kpa),
+        TriggerParamOption("TirePressFR", "右前轮气压", R.string.auto_param_tirepressfr, R.string.auto_cat_safety, R.string.auto_unit_kpa),
+        TriggerParamOption("TirePressRL", "左后轮气压", R.string.auto_param_tirepressrl, R.string.auto_cat_safety, R.string.auto_unit_kpa),
+        TriggerParamOption("TirePressRR", "右后轮气压", R.string.auto_param_tirepressrr, R.string.auto_cat_safety, R.string.auto_unit_kpa),
+        TriggerParamOption("Rain", "雨量", R.string.auto_param_rain, R.string.auto_cat_safety, R.string.auto_unit_dry_hint),
+        TriggerParamOption("LightLow", "近光灯", R.string.auto_param_lightlow, R.string.auto_cat_light, enumValues = listOf("0" to R.string.auto_enum_off, "1" to R.string.auto_enum_on)),
+        TriggerParamOption("DRL", "日行灯", R.string.auto_param_drl, R.string.auto_cat_light, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_on, "2" to R.string.auto_enum_off)),
 )
 
 val ACTION_COMMANDS = listOf(
-    ActionOption("车窗通风", "Проветривание", "车窗通风", "Vent Windows", "Окна", "车窗", "Windows"),
-    ActionOption("车窗关闭", "Закрыть все окна", "关闭所有车窗", "Close All Windows", "Окна", "车窗", "Windows"),
-    ActionOption("车窗全开", "Открыть все окна", "打开所有车窗", "Open All Windows", "Окна", "车窗", "Windows"),
-    ActionOption("车窗半开", "Все окна на 50%", "所有车窗半开", "All Windows 50%", "Окна", "车窗", "Windows"),
-    ActionOption("前排车窗关闭", "Закрыть передние", "关闭前排车窗", "Close Front Windows", "Окна", "车窗", "Windows"),
-    ActionOption("后排车窗关闭", "Закрыть задние", "关闭后排车窗", "Close Rear Windows", "Окна", "车窗", "Windows"),
-    ActionOption("前排车窗全开", "Открыть передние", "打开前排车窗", "Open Front Windows", "Окна", "车窗", "Windows"),
-    ActionOption("后排车窗全开", "Открыть задние", "打开后排车窗", "Open Rear Windows", "Окна", "车窗", "Windows"),
-    ActionOption("主驾打开100", "Открыть окно водителя", "打开主驾车窗", "Open Driver Window", "Окна", "车窗", "Windows"),
-    ActionOption("主驾打开0", "Закрыть окно водителя", "关闭主驾车窗", "Close Driver Window", "Окна", "车窗", "Windows"),
-    ActionOption("副驾打开100", "Открыть окно пассажира", "打开副驾车窗", "Open Passenger Window", "Окна", "车窗", "Windows"),
-    ActionOption("副驾打开0", "Закрыть окно пассажира", "关闭副驾车窗", "Close Passenger Window", "Окна", "车窗", "Windows"),
-    ActionOption("自动空调", "Авто AC", "自动空调", "Auto AC", "Климат", "空调", "Climate"),
-    ActionOption("打开空调通风", "Обдув без AC", "通风（不开AC）", "Ventilation (no AC)", "Климат", "空调", "Climate"),
-    ActionOption("设置温度18", "Темп. 18°C", "温度 18°C", "Temp 18°C", "Климат", "空调", "Climate"),
-    ActionOption("设置温度20", "Темп. 20°C", "温度 20°C", "Temp 20°C", "Климат", "空调", "Climate"),
-    ActionOption("设置温度22", "Темп. 22°C", "温度 22°C", "Temp 22°C", "Климат", "空调", "Climate"),
-    ActionOption("设置温度25", "Темп. 25°C", "温度 25°C", "Temp 25°C", "Климат", "空调", "Climate"),
-    ActionOption("内循环", "Циркуляция внутр.", "内循环", "Recirculation", "Климат", "空调", "Climate"),
-    ActionOption("外循环", "Циркуляция внешн.", "外循环", "Fresh Air", "Климат", "空调", "Climate"),
-    ActionOption("吹前挡", "Обдув лобового вкл", "前挡风除雾开", "Windshield Defog On", "Климат", "空调", "Climate"),
-    ActionOption("关闭吹前挡", "Обдув лобового выкл", "前挡风除雾关", "Windshield Defog Off", "Климат", "空调", "Climate"),
-    ActionOption("主驾座椅加热1档", "Подогрев водителя 1", "主驾座椅加热1档", "Driver Heat 1", "Сиденья", "座椅", "Seats"),
-    ActionOption("主驾座椅加热2档", "Подогрев водителя 2", "主驾座椅加热2档", "Driver Heat 2", "Сиденья", "座椅", "Seats"),
-    ActionOption("主驾座椅加热关闭", "Подогрев водителя выкл", "主驾座椅加热关", "Driver Heat Off", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅加热1档", "Подогрев пассажира 1", "副驾座椅加热1档", "Passenger Heat 1", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅加热2档", "Подогрев пассажира 2", "副驾座椅加热2档", "Passenger Heat 2", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅加热关闭", "Подогрев пассажира выкл", "副驾座椅加热关", "Passenger Heat Off", "Сиденья", "座椅", "Seats"),
-    ActionOption("主驾座椅通风1档", "Вентиляция водителя 1", "主驾座椅通风1档", "Driver Vent 1", "Сиденья", "座椅", "Seats"),
-    ActionOption("主驾座椅通风2档", "Вентиляция водителя 2", "主驾座椅通风2档", "Driver Vent 2", "Сиденья", "座椅", "Seats"),
-    ActionOption("主驾座椅通风关闭", "Вентиляция водителя выкл", "主驾座椅通风关", "Driver Vent Off", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅通风1档", "Вентиляция пассажира 1", "副驾座椅通风1档", "Passenger Vent 1", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅通风2档", "Вентиляция пассажира 2", "副驾座椅通风2档", "Passenger Vent 2", "Сиденья", "座椅", "Seats"),
-    ActionOption("副驾座椅通风关闭", "Вентиляция пассажира выкл", "副驾座椅通风关", "Passenger Vent Off", "Сиденья", "座椅", "Seats"),
-    ActionOption("后视镜加热", "Подогрев зеркал вкл", "后视镜加热开", "Mirror Heat On", "Зеркала", "后视镜", "Mirrors"),
-    ActionOption("关闭后视镜加热", "Подогрев зеркал выкл", "后视镜加热关", "Mirror Heat Off", "Зеркала", "后视镜", "Mirrors"),
-    ActionOption("氛围灯打开", "Амбиент вкл", "氛围灯开", "Ambient Light On", "Свет", "灯光", "Light"),
-    ActionOption("氛围灯关闭", "Амбиент выкл", "氛围灯关", "Ambient Light Off", "Свет", "灯光", "Light"),
-    ActionOption("打开日行灯", "ДХО вкл", "日行灯开", "DRL On", "Свет", "灯光", "Light"),
-    ActionOption("关闭日行灯", "ДХО выкл", "日行灯关", "DRL Off", "Свет", "灯光", "Light"),
-    ActionOption("打开车内灯", "Салонный свет вкл", "车内灯开", "Interior Light On", "Свет", "灯光", "Light"),
-    ActionOption("关闭车内灯", "Салонный свет выкл", "车内灯关", "Interior Light Off", "Свет", "灯光", "Light"),
-    ActionOption("车门上锁", "Заблокировать", "车门上锁", "Lock Doors", "Замки", "门锁", "Locks"),
-    ActionOption("车门解锁", "Разблокировать", "车门解锁", "Unlock Doors", "Замки", "门锁", "Locks"),
-    ActionOption("天窗打开100", "Люк открыть 100%", "天窗全开", "Sunroof Open 100%", "Люк", "天窗", "Sunroof"),
-    ActionOption("天窗打开50", "Люк открыть 50%", "天窗半开", "Sunroof Open 50%", "Люк", "天窗", "Sunroof"),
-    ActionOption("天窗打开0", "Люк закрыть", "天窗关闭", "Sunroof Close", "Люк", "天窗", "Sunroof"),
-    ActionOption("遮阳帘打开", "Шторка открыть", "遮阳帘打开", "Sunshade Open", "Люк", "天窗", "Sunroof"),
-    ActionOption("遮阳帘关闭", "Шторка закрыть", "遮阳帘关闭", "Sunshade Close", "Люк", "天窗", "Sunroof"),
-    ActionOption("开后备箱", "Открыть багажник", "打开后备箱", "Open Trunk", "Кузов", "车身", "Body"),
-    ActionOption("关后备箱", "Закрыть багажник", "关闭后备箱", "Close Trunk", "Кузов", "车身", "Body")
+        ActionOption("车窗通风", R.string.auto_act_vent_windows, R.string.auto_cat_windows),
+        ActionOption("车窗关闭", R.string.auto_act_close_all_windows, R.string.auto_cat_windows),
+        ActionOption("车窗全开", R.string.auto_act_open_all_windows, R.string.auto_cat_windows),
+        ActionOption("车窗半开", R.string.auto_act_all_windows_50, R.string.auto_cat_windows),
+        ActionOption("前排车窗关闭", R.string.auto_act_close_front_windows, R.string.auto_cat_windows),
+        ActionOption("后排车窗关闭", R.string.auto_act_close_rear_windows, R.string.auto_cat_windows),
+        ActionOption("前排车窗全开", R.string.auto_act_open_front_windows, R.string.auto_cat_windows),
+        ActionOption("后排车窗全开", R.string.auto_act_open_rear_windows, R.string.auto_cat_windows),
+        ActionOption("主驾打开100", R.string.auto_act_open_driver_window, R.string.auto_cat_windows),
+        ActionOption("主驾打开0", R.string.auto_act_close_driver_window, R.string.auto_cat_windows),
+        ActionOption("副驾打开100", R.string.auto_act_open_passenger_window, R.string.auto_cat_windows),
+        ActionOption("副驾打开0", R.string.auto_act_close_passenger_window, R.string.auto_cat_windows),
+        ActionOption("自动空调", R.string.auto_act_auto_ac, R.string.auto_cat_climate),
+        ActionOption("打开空调通风", R.string.auto_act_ventilation_no_ac, R.string.auto_cat_climate),
+        ActionOption("设置温度18", R.string.auto_act_temp_18c, R.string.auto_cat_climate),
+        ActionOption("设置温度20", R.string.auto_act_temp_20c, R.string.auto_cat_climate),
+        ActionOption("设置温度22", R.string.auto_act_temp_22c, R.string.auto_cat_climate),
+        ActionOption("设置温度25", R.string.auto_act_temp_25c, R.string.auto_cat_climate),
+        ActionOption("内循环", R.string.auto_act_recirculation, R.string.auto_cat_climate),
+        ActionOption("外循环", R.string.auto_act_fresh_air, R.string.auto_cat_climate),
+        ActionOption("吹前挡", R.string.auto_act_windshield_defog_on, R.string.auto_cat_climate),
+        ActionOption("关闭吹前挡", R.string.auto_act_windshield_defog_off, R.string.auto_cat_climate),
+        ActionOption("主驾座椅加热1档", R.string.auto_act_driver_heat_1, R.string.auto_cat_seats),
+        ActionOption("主驾座椅加热2档", R.string.auto_act_driver_heat_2, R.string.auto_cat_seats),
+        ActionOption("主驾座椅加热3档", R.string.auto_act_driver_heat_3, R.string.auto_cat_seats),
+        ActionOption("主驾座椅加热4档", R.string.auto_act_driver_heat_4, R.string.auto_cat_seats),
+        ActionOption("主驾座椅加热5档", R.string.auto_act_driver_heat_5, R.string.auto_cat_seats),
+        ActionOption("主驾座椅加热关闭", R.string.auto_act_driver_heat_off, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热1档", R.string.auto_act_passenger_heat_1, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热2档", R.string.auto_act_passenger_heat_2, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热3档", R.string.auto_act_passenger_heat_3, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热4档", R.string.auto_act_passenger_heat_4, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热5档", R.string.auto_act_passenger_heat_5, R.string.auto_cat_seats),
+        ActionOption("副驾座椅加热关闭", R.string.auto_act_passenger_heat_off, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风1档", R.string.auto_act_driver_vent_1, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风2档", R.string.auto_act_driver_vent_2, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风3档", R.string.auto_act_driver_vent_3, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风4档", R.string.auto_act_driver_vent_4, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风5档", R.string.auto_act_driver_vent_5, R.string.auto_cat_seats),
+        ActionOption("主驾座椅通风关闭", R.string.auto_act_driver_vent_off, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风1档", R.string.auto_act_passenger_vent_1, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风2档", R.string.auto_act_passenger_vent_2, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风3档", R.string.auto_act_passenger_vent_3, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风4档", R.string.auto_act_passenger_vent_4, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风5档", R.string.auto_act_passenger_vent_5, R.string.auto_cat_seats),
+        ActionOption("副驾座椅通风关闭", R.string.auto_act_passenger_vent_off, R.string.auto_cat_seats),
+        ActionOption("后视镜加热", R.string.auto_act_mirror_heat_on, R.string.auto_cat_mirrors),
+        ActionOption("关闭后视镜加热", R.string.auto_act_mirror_heat_off, R.string.auto_cat_mirrors),
+        ActionOption("氛围灯打开", R.string.auto_act_ambient_light_on, R.string.auto_cat_light),
+        ActionOption("氛围灯关闭", R.string.auto_act_ambient_light_off, R.string.auto_cat_light),
+        ActionOption("打开日行灯", R.string.auto_act_drl_on, R.string.auto_cat_light),
+        ActionOption("关闭日行灯", R.string.auto_act_drl_off, R.string.auto_cat_light),
+        ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
+        ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
+        ActionOption("车门上锁", R.string.auto_act_lock_doors, R.string.auto_cat_locks),
+        ActionOption("车门解锁", R.string.auto_act_unlock_doors, R.string.auto_cat_locks),
+        ActionOption("天窗打开100", R.string.auto_act_sunroof_open_100, R.string.auto_cat_sunroof),
+        ActionOption("天窗打开50", R.string.auto_act_sunroof_open_50, R.string.auto_cat_sunroof),
+        ActionOption("天窗打开0", R.string.auto_act_sunroof_close, R.string.auto_cat_sunroof),
+        ActionOption("遮阳帘打开", R.string.auto_act_sunshade_open, R.string.auto_cat_sunroof),
+        ActionOption("遮阳帘关闭", R.string.auto_act_sunshade_close, R.string.auto_cat_sunroof),
+        ActionOption("开后备箱", R.string.auto_act_open_trunk, R.string.auto_cat_body),
+        ActionOption("关后备箱", R.string.auto_act_close_trunk, R.string.auto_cat_body),
+        ActionOption("前备箱打开", R.string.auto_act_open_front_trunk, R.string.auto_cat_body),
+        ActionOption("前备箱关闭", R.string.auto_act_close_front_trunk, R.string.auto_cat_body),
+        ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
+        ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
+        ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
+        ActionOption("冰箱制冷-6度", R.string.auto_act_fridge_cool_minus6c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制冷-3度", R.string.auto_act_fridge_cool_minus3c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制冷0度", R.string.auto_act_fridge_cool_0c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制冷3度", R.string.auto_act_fridge_cool_plus_3c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制冷6度", R.string.auto_act_fridge_cool_plus_6c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制热35度", R.string.auto_act_fridge_heat_35c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制热40度", R.string.auto_act_fridge_heat_40c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制热45度", R.string.auto_act_fridge_heat_45c, R.string.auto_cat_fridge),
+        ActionOption("冰箱制热50度", R.string.auto_act_fridge_heat_50c, R.string.auto_cat_fridge),
 )
 
 val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
@@ -269,8 +264,12 @@ class AutomationViewModel @Inject constructor(
     fun executeNow(command: String) {
         viewModelScope.launch {
             val result = vehicleApi.dispatch(command)
-            val msg = if (result.isSuccess) "Отправлено"
-                      else "Ошибка: ${result.exceptionOrNull()?.message ?: "недоступно"}"
+            val lc = context.appLocalizedContext()
+            val msg = if (result.isSuccess) lc.getString(R.string.auto_msg_dispatch_sent)
+                      else lc.getString(
+                          R.string.auto_msg_dispatch_error,
+                          result.exceptionOrNull()?.message ?: lc.getString(R.string.auto_msg_unavailable),
+                      )
             Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
         }
     }
@@ -319,43 +318,47 @@ class AutomationViewModel @Inject constructor(
     }
 
     private fun validateActions(actions: List<ActionDef>): String? {
+        val ctx = context.appLocalizedContext()
         actions.forEachIndexed { idx, a ->
             val n = idx + 1
             when (a.kind) {
                 "param" -> {
-                    if (a.command.isBlank()) return localized("动作 #$n：未指定命令", "Action #$n: command not set", "Действие #$n: команда не задана", context)
+                    if (a.command.isBlank()) return ctx.getString(R.string.auto_msg_command_missing, n)
                 }
                 "notification_silent", "notification_sound" -> {
-                    if (a.notificationTitle().isBlank()) return localized("动作 #$n：通知标题为空", "Action #$n: notification title is empty", "Действие #$n: заголовок уведомления пуст", context)
+                    if (a.notificationTitle().isBlank()) return ctx.getString(R.string.auto_msg_notif_title_empty, n)
                 }
                 "app_launch" -> {
-                    if (a.appLaunchPackageName().isBlank()) return localized("动作 #$n：未选择应用", "Action #$n: app not selected", "Действие #$n: приложение не выбрано", context)
+                    if (a.appLaunchPackageName().isBlank()) return ctx.getString(R.string.auto_msg_app_not_selected, n)
                 }
                 "call" -> {
                     val phone = a.callPhone().trim()
-                    if (phone.length !in 5..20) return localized("动作 #$n：电话号码不正确", "Action #$n: phone number is invalid", "Действие #$n: номер телефона некорректен", context)
+                    if (phone.length !in 5..20) return ctx.getString(R.string.auto_msg_phone_invalid, n)
                 }
                 "navigate" -> {
                     val lat = a.navigateLat()
                     val lon = a.navigateLon()
                     if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
-                        return localized("动作 #$n：未选择导航目的地", "Action #$n: navigation destination not selected", "Действие #$n: место для маршрута не выбрано", context)
+                        return ctx.getString(R.string.auto_msg_nav_dest_missing, n)
                     }
                 }
                 "url" -> {
                     val u = a.urlString().trim()
-                    if (u.isEmpty()) return localized("动作 #$n：URL 为空", "Action #$n: URL is empty", "Действие #$n: URL пустой", context)
+                    if (u.isEmpty()) return ctx.getString(R.string.auto_msg_url_empty, n)
                     // Allow any scheme: http(s)://, yandexmusic://, tel:, intent://, geo:, etc.
                     if (!u.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))) {
-                        return localized("动作 #$n：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）", "Action #$n: URL must contain a scheme (http://, yandexmusic://, tel:, ...)", "Действие #$n: URL должен содержать схему (http://, yandexmusic://, tel:, ...)", context)
+                        return ctx.getString(R.string.auto_msg_url_no_scheme, n)
                     }
                 }
                 "yandex_music" -> {
-                    if (a.yandexMusicMode().isBlank()) return localized("动作 #$n：未选择 Yandex 音乐模式", "Action #$n: Yandex Music mode not selected", "Действие #$n: режим Я.Музыки не выбран", context)
+                    if (a.yandexMusicMode().isBlank()) return ctx.getString(R.string.auto_msg_ymusic_mode_missing, n)
                 }
                 "media_volume" -> {
                     val level = a.payload?.toIntOrNull()
-                    if (level == null || level < 0) return "Действие #$n: уровень громкости не задан"
+                    if (level == null || level < 0) return ctx.getString(R.string.auto_msg_media_volume_missing, n)
+                }
+                "sentry" -> {
+                    if (a.payload !in listOf("0", "1")) return ctx.getString(R.string.auto_msg_sentry_invalid, n)
                 }
             }
         }
@@ -366,7 +369,7 @@ class AutomationViewModel @Inject constructor(
         val e = _uiState.value.editing
         if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) {
             _uiState.value = _uiState.value.copy(editorError =
-                localized("名称和至少一个条件及动作是必需的", "Name and at least one condition and action are required", "Название и хотя бы одно условие и действие обязательны", context)
+                context.appLocalizedContext().getString(R.string.auto_msg_name_cond_action_required)
             )
             return
         }
@@ -404,7 +407,7 @@ class AutomationViewModel @Inject constructor(
             ruleDao.insert(
                 rule.copy(
                     id = 0,
-                    name = "${rule.name} (${localized("副本", "copy", "копия", context)})",
+                    name = "${rule.name} (${context.appLocalizedContext().getString(R.string.auto_rule_copy_suffix)})",
                     enabled = false,
                     lastTriggeredAt = null,
                     triggerCount = 0,
@@ -550,9 +553,9 @@ class AutomationViewModel @Inject constructor(
 
 fun newNotificationAction(silent: Boolean, context: Context): ActionDef {
     val name = if (silent)
-        localized("通知（静音）", "Notification (silent)", "Уведомление (без звука)", context)
+        context.getString(R.string.auto_act_notification_silent)
     else
-        localized("通知（带声音）", "Notification (sound)", "Уведомление (звук)", context)
+        context.getString(R.string.auto_act_notification_sound)
     return ActionDef(
         command = "",
         displayName = name,
@@ -580,7 +583,7 @@ fun ActionDef.withNotification(title: String, text: String): ActionDef = copy(
 
 fun newAppLaunchAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = localized("启动应用", "Launch app", "Запуск приложения", context),
+    displayName = context.getString(R.string.auto_act_launch_app),
     kind = "app_launch",
     payload = """{"packageName":"","appLabel":""}"""
 )
@@ -609,7 +612,7 @@ fun ActionDef.withAppLaunch(packageName: String, appLabel: String, minimize: Boo
 
 fun newCallAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = localized("拨打电话", "Call", "Звонок", context),
+    displayName = context.getString(R.string.auto_act_call),
     kind = "call",
     payload = """{"phone":""}"""
 )
@@ -638,7 +641,7 @@ fun ActionDef.withCall(phone: String, name: String, autoDial: Boolean): ActionDe
 
 fun newNavigateAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = localized("Yandex 导航路线", "Route in Y.Navigator", "Маршрут в Я.Навигаторе", context),
+    displayName = context.getString(R.string.auto_act_navigate),
     kind = "navigate",
     payload = """{"lat":0,"lon":0,"name":""}"""
 )
@@ -669,7 +672,7 @@ fun ActionDef.withNavigate(lat: Double, lon: Double, name: String): ActionDef = 
 
 fun newUrlAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = localized("打开 URL", "Open URL", "Открыть URL", context),
+    displayName = context.getString(R.string.auto_act_open_url),
     kind = "url",
     payload = """{"url":""}"""
 )
@@ -702,7 +705,7 @@ fun newCameraOverlayAction(): ActionDef = ActionDef(
 
 fun newYandexMusicAction(context: Context): ActionDef = ActionDef(
     command = "",
-    displayName = localized("Yandex 音乐", "Yandex Music", "Яндекс.Музыка", context),
+    displayName = context.getString(R.string.auto_act_yandex_music),
     kind = "yandex_music",
     payload = """{"mode":"mybeat","minimize":true}"""
 )
@@ -722,6 +725,15 @@ fun ActionDef.withYandexMusic(mode: String, minimize: Boolean): ActionDef = copy
     }.toString()
 )
 
+// --- Sentry helpers ---
+
+fun newSentryAction(context: Context): ActionDef = ActionDef(
+    command = "sentry",
+    displayName = context.getString(R.string.automation_action_sentry),
+    kind = "sentry",
+    payload = "1"
+)
+
 /**
  * Pure list reorder used by the automation editor's up/down arrows: returns a new
  * list with the item at [index] swapped with its neighbour. No-op (returns the same
@@ -734,3 +746,20 @@ internal fun <T> List<T>.moveItem(index: Int, up: Boolean): List<T> {
         val tmp = this[index]; this[index] = this[target]; this[target] = tmp
     }
 }
+
+/**
+ * Builds the "button press N" trigger (widget button N). displayName carries a
+ * stable internal label used only for logs/snapshot; the UI renders the
+ * localized "Кнопка N" label via stringResource. value holds the button id as a
+ * string, matching how every other TriggerDef stores its value. The remaining
+ * fields are neutral placeholders so the trigger round-trips through
+ * TriggerDef.toJson/fromJson with no schema change.
+ */
+fun newButtonPressTrigger(buttonId: Int): TriggerDef = TriggerDef(
+    param = "button",
+    chineseName = "",
+    operator = "==",
+    value = buttonId.toString(),
+    displayName = "Кнопка $buttonId",
+    kind = "button_press",
+)

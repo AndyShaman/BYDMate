@@ -56,6 +56,9 @@ object WidgetController {
     // the right two thirds always open BYDMate. Threshold uses the live view
     // width, so it stays proportional across the 70-200% widget size range.
     private const val LEFT_TAP_FRACTION = 1f / 3f
+    private const val DOUBLE_TAP_MS = 250L
+    private const val BUTTON_DP = WidgetButtonLayout.BUTTON_DP
+    private const val GAP_DP = WidgetButtonLayout.GAP_DP
 
     @Volatile private var appForegrounded: Boolean = false
     @Volatile private var previewMode: Boolean = false
@@ -91,6 +94,16 @@ object WidgetController {
     private var alphaState = mutableStateOf(1.0f)
     private var scaleState = mutableStateOf(1.0f)
     private var trashActive = mutableStateOf(false)
+
+    // Expandable-buttons state. expandedState drives the button layer's slide
+    // animation; collapsedX/Y remember the window origin so an edge-clamped
+    // expansion can be restored exactly on collapse.
+    private var expandedState = mutableStateOf(false)
+    @Volatile private var collapsedX: Int = 0
+    @Volatile private var collapsedY: Int = 0
+    private var buttonLayerView: ComposeView? = null
+    private var buttonLifecycle: OverlayLifecycleOwner? = null
+    private var rootContainer: android.widget.FrameLayout? = null
 
     @Synchronized
     fun attach(context: Context) {
@@ -145,7 +158,11 @@ object WidgetController {
         val lifecycleOwner = OverlayLifecycleOwner().also { it.onCreate() }
         widgetLifecycle = lifecycleOwner
 
-        val compose = ComposeView(viewCtx).apply {
+        collapsedX = startX
+        collapsedY = startY
+        expandedState.value = false
+
+        val panelCompose = ComposeView(viewCtx).apply {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -166,10 +183,53 @@ object WidgetController {
             }
             setOnTouchListener(WidgetTouchListener(viewCtx, prefs, metrics))
         }
-        widgetView = compose
+        widgetView = panelCompose
+
+        val buttonLifecycleOwner = OverlayLifecycleOwner().also { it.onCreate() }
+        buttonLifecycle = buttonLifecycleOwner
+        val buttonCompose = ComposeView(viewCtx).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewTreeLifecycleOwner(buttonLifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(buttonLifecycleOwner)
+            setContent {
+                WidgetButtonPanel(
+                    expanded = expandedState.value,
+                    scaleFactor = scaleState.value,
+                    onButtonClick = { n -> onWidgetButtonClick(viewCtx, n) },
+                )
+            }
+        }
+        buttonLayerView = buttonCompose
+
+        // Transparent container: button layer fills the window; the panel pins to
+        // the top so the single bottom-row button pocket appears below it on expand.
+        val root = android.widget.FrameLayout(viewCtx)
+        root.addView(
+            buttonCompose,
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
+            ),
+        )
+        root.addView(
+            panelCompose,
+            android.widget.FrameLayout.LayoutParams(
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT,
+                Gravity.TOP or Gravity.END,
+            ),
+        )
+        rootContainer = root
+
+        // WindowManager attaches this FrameLayout, so Compose resolves the window
+        // recomposer's lifecycle owner from the root view, not from the child
+        // ComposeViews. Without owners on the root, AbstractComposeView throws
+        // "ViewTreeLifecycleOwner not found" on attach and the overlay crashes.
+        root.setViewTreeLifecycleOwner(lifecycleOwner)
+        root.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
 
         try {
-            windowManager.addView(compose, params)
+            windowManager.addView(root, params)
         } catch (e: Exception) {
             Log.e(TAG, "addView failed: ${e.message}")
             detach()
@@ -218,17 +278,23 @@ object WidgetController {
 
         hideTrashZone()
 
-        widgetView?.let { v ->
+        widgetView?.let { v -> v.setOnTouchListener(null) }
+        rootContainer?.let { r ->
             try {
-                wm?.removeView(v)
+                wm?.removeView(r)
             } catch (e: Exception) {
-                Log.w(TAG, "removeView widget: ${e.message}")
+                Log.w(TAG, "removeView root: ${e.message}")
             }
         }
         widgetLifecycle?.onDestroy()
+        buttonLifecycle?.onDestroy()
         widgetView = null
+        buttonLayerView = null
+        rootContainer = null
         widgetLifecycle = null
+        buttonLifecycle = null
         widgetParams = null
+        expandedState.value = false
         wm = null
     }
 
@@ -281,7 +347,10 @@ object WidgetController {
                 // Hide widget while the BYD camera surface is up (rear, front
                 // auto-pop, 360°, parking app — all map to com.byd.avc).
                 val hideForCamera = snap.cameraActive
-                widgetView?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
+                // Hide the entire root (panel + button layer) so the buttons
+                // don't stay drawn over the camera view when the panel is expanded.
+                // Re-show is symmetric: same view, VISIBLE.
+                rootContainer?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
                 if (hideForCamera) hideTrashZone()
             }
         }
@@ -314,9 +383,15 @@ object WidgetController {
         params.x = clampedX
         params.y = clampedY
         try {
-            windowManager.updateViewLayout(view, params)
+            windowManager.updateViewLayout(rootContainer ?: view, params)
         } catch (e: Exception) {
             Log.w(TAG, "updateViewLayout scale: ${e.message}")
+        }
+        // If buttons are out while the user resizes, recompute the expanded box so
+        // the pockets track the new panel size.
+        if (expandedState.value) {
+            collapsePanel()
+            expandPanel()
         }
     }
 
@@ -337,6 +412,88 @@ object WidgetController {
         val scale: Float,
         val cameraActive: Boolean,
     )
+
+    // --- Button panel expand/collapse ---
+
+    @Synchronized
+    private fun expandPanel() {
+        if (expandedState.value) return
+        val root = rootContainer ?: return
+        val params = widgetParams ?: return
+        val windowManager = wm ?: return
+        val ctx = root.context ?: return
+        val metrics = ctx.resources.displayMetrics
+        // Remember the collapsed origin so collapse restores it exactly (an
+        // edge-clamped expansion may have shifted the panel).
+        collapsedX = params.x
+        collapsedY = params.y
+        val box = WidgetButtonLayout.expandedWindow(
+            collapsedX = params.x,
+            collapsedY = params.y,
+            panelWpx = currentWidgetWpx,
+            panelHpx = currentWidgetHpx,
+            buttonPx = dp(ctx, (BUTTON_DP * scaleState.value).toInt()),
+            gapPx = dp(ctx, (GAP_DP * scaleState.value).toInt()),
+            screenW = metrics.widthPixels,
+            screenH = metrics.heightPixels,
+        )
+        params.x = box.x
+        params.y = box.y
+        params.width = box.width
+        params.height = box.height
+        try {
+            windowManager.updateViewLayout(root, params)
+        } catch (e: Exception) {
+            Log.w(TAG, "expand updateViewLayout: ${e.message}")
+        }
+        expandedState.value = true
+    }
+
+    @Synchronized
+    private fun collapsePanel() {
+        if (!expandedState.value) return
+        val root = rootContainer ?: return
+        val params = widgetParams ?: return
+        val windowManager = wm ?: return
+        expandedState.value = false
+        // Shrink back to the panel-only window at the saved collapsed origin.
+        params.x = collapsedX
+        params.y = collapsedY
+        params.width = currentWidgetWpx
+        params.height = currentWidgetHpx
+        try {
+            windowManager.updateViewLayout(root, params)
+        } catch (e: Exception) {
+            Log.w(TAG, "collapse updateViewLayout: ${e.message}")
+        }
+    }
+
+    private fun togglePanel() {
+        if (expandedState.value) collapsePanel() else expandPanel()
+    }
+
+    /**
+     * Button N pressed: run its rules through the engine and auto-collapse. When
+     * the engine reports 0 matches (no rule for button N, or the service isn't
+     * running) show a fail-soft toast. Result callback may arrive off the main
+     * thread, so the toast is posted to the main looper.
+     */
+    private fun onWidgetButtonClick(context: Context, number: Int) {
+        TrackingService.fireAutomationButton(number) { matched ->
+            if (matched == 0) {
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    try {
+                        android.widget.Toast.makeText(
+                            context,
+                            context.getString(R.string.widget_button_no_rules, number),
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    } catch (_: Exception) {}
+                }
+            }
+        }
+        collapsePanel()
+    }
 
     // --- Trash zone ---
 
@@ -474,6 +631,8 @@ object WidgetController {
         private var dragging = false
         private val longPressHandler = android.os.Handler(android.os.Looper.getMainLooper())
         private var longPressRunnable: Runnable? = null
+        private var singleTapRunnable: Runnable? = null
+        private var lastTapUpMs: Long = 0L
 
         override fun onTouch(v: android.view.View, event: MotionEvent): Boolean {
             val params = widgetParams ?: return false
@@ -514,6 +673,20 @@ object WidgetController {
                         dragging = true
                         longPressRunnable?.let { longPressHandler.removeCallbacks(it) }
                         longPressRunnable = null
+                        singleTapRunnable?.let { longPressHandler.removeCallbacks(it) }
+                        singleTapRunnable = null
+                        if (expandedState.value) {
+                            collapsePanel()
+                            // Re-anchor drag baseline to the collapsed window origin +
+                            // current finger so delta is zero at the instant of collapse.
+                            // Without this, initialParamX holds the expanded-window origin
+                            // (collapsedX - pocket) and every subsequent move positions the
+                            // now-collapsed panel one full pocket (~62dp) too far left.
+                            initialParamX = params.x
+                            initialParamY = params.y
+                            downX = event.rawX
+                            downY = event.rawY
+                        }
                         showTrashZone(context)
                     }
                     if (dragging) {
@@ -528,7 +701,7 @@ object WidgetController {
                         params.x = clampedX
                         params.y = clampedY
                         try {
-                            windowManager.updateViewLayout(v, params)
+                            windowManager.updateViewLayout(rootContainer ?: v, params)
                         } catch (_: Exception) {}
 
                         // Trash zone hit-test (center-to-center)
@@ -555,48 +728,48 @@ object WidgetController {
                     val wasTap = DragGestureLogic.isTap(0, 0, dx, dy, thresholdPx)
 
                     if (wasTap) {
-                        if (isCameraTap(v, event, prefs)) {
-                            openParkingCamera(context, prefs)
-                            dragging = false
-                            return true
-                        }
-                        // Tap zoning is opt-in via WidgetPreferences. Default: a tap
-                        // anywhere opens BYDMate. When the user has flipped the
-                        // setting on, the LEFT third launches Yandex Navigator (if
-                        // installed; otherwise the tap is a no-op so we don't fall
-                        // back to BYDMate, which would be confusing). The right two
-                        // thirds always open BYDMate. event.x is relative to the
-                        // touched view, so the boundary follows the live widget
-                        // size after the user's resize setting.
                         val width = v.width
-                        val isLeftTap = prefs.isLeftTapZoningEnabled() &&
-                            width > 0 && event.x < width * LEFT_TAP_FRACTION
-                        try {
-                            val intent: Intent? = if (isLeftTap) {
-                                if (prefs.getLeftTapAction() == WidgetPreferences.LEFT_TAP_ACTION_CAMERA) {
-                                    openParkingCamera(context, prefs)
-                                    null
-                                } else {
-                                    context.packageManager.getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
-                                }
+                        val buttonsEnabled = prefs.isButtonsEnabled()
+                        val leftTap = WidgetGestureLogic.isLeftZone(
+                            eventX = event.x, viewWidth = width, fraction = LEFT_TAP_FRACTION,
+                        ) && prefs.isLeftTapZoningEnabled()
+
+                        if (leftTap) {
+                            launchLeftTapAction()
+                        } else if (!buttonsEnabled) {
+                            // Feature off: a right/center tap opens BYDMate, as before.
+                            openBydMate()
+                        } else {
+                            val now = android.os.SystemClock.uptimeMillis()
+                            val pending = singleTapRunnable
+                            if (pending != null &&
+                                WidgetGestureLogic.isWithinDoubleTapWindow(lastTapUpMs, now, DOUBLE_TAP_MS)
+                            ) {
+                                // Double tap: cancel the pending toggle, open BYDMate.
+                                longPressHandler.removeCallbacks(pending)
+                                singleTapRunnable = null
+                                lastTapUpMs = 0L
+                                openBydMate()
                             } else {
-                                Intent(context, MainActivity::class.java)
+                                // First tap: arm a single-tap timer that toggles the panel.
+                                lastTapUpMs = now
+                                val r = Runnable {
+                                    singleTapRunnable = null
+                                    togglePanel()
+                                }
+                                singleTapRunnable = r
+                                longPressHandler.postDelayed(r, DOUBLE_TAP_MS)
                             }
-                            if (intent != null) {
-                                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                context.startActivity(intent)
-                            }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "tap launch failed: ${e.message}")
                         }
                     } else {
                         // End drag
                         if (trashActive.value) {
-                            // Dropped into trash → hide + disable
                             prefs.setEnabled(false)
                             detach()
                             return true
                         } else {
+                            collapsedX = params.x
+                            collapsedY = params.y
                             prefs.savePosition(params.x, params.y)
                         }
                         hideTrashZone()
@@ -608,18 +781,38 @@ object WidgetController {
             return false
         }
 
-        private fun isCameraTap(
-            view: android.view.View,
-            event: MotionEvent,
-            prefs: WidgetPreferences,
-        ): Boolean {
-            val width = view.width
-            if (width <= 0) return false
-            val zonePx = (dpFromMetrics(metrics, CAMERA_TAP_ZONE_DP) * prefs.getScale()).toInt()
-            return event.x <= zonePx && event.y <= zonePx
+        private fun openBydMate() {
+            try {
+                val intent = Intent(context, MainActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                context.startActivity(intent)
+            } catch (e: Exception) {
+                Log.w(TAG, "openBydMate failed: ${e.message}")
+            }
         }
 
-        private fun openParkingCamera(context: Context, prefs: WidgetPreferences) {
+        private fun launchLeftTapAction() {
+            if (prefs.getLeftTapAction() == WidgetPreferences.LEFT_TAP_ACTION_CAMERA) {
+                openParkingCamera()
+            } else {
+                launchLeftApp()
+            }
+        }
+
+        private fun launchLeftApp() {
+            try {
+                val intent = context.packageManager
+                    .getLaunchIntentForPackage(prefs.getLeftTapAppPackage())
+                if (intent != null) {
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    context.startActivity(intent)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "launchLeftApp failed: ${e.message}")
+            }
+        }
+
+        private fun openParkingCamera() {
             val shown = CameraOverlayManager.show(context, prefs.getParkingCameras().first())
             if (!shown) {
                 try {

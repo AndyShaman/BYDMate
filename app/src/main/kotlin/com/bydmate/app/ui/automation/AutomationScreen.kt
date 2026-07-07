@@ -46,6 +46,7 @@ import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.AlertDialog
@@ -294,6 +295,7 @@ private fun RuleCard(
             // Trigger → Action summary
             val logicAndLabel = stringResource(R.string.automation_rule_logic_and)
             val logicOrLabel = stringResource(R.string.automation_rule_logic_or)
+            val summaryCtx = LocalContext.current
             Text(
                 buildAnnotatedString {
                     triggers.forEachIndexed { i, t ->
@@ -302,16 +304,27 @@ private fun RuleCard(
                                 append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
-                        if (t.kind == "time_range") {
-                            // value is JSON (parsed by the engine); show the readable displayName instead.
-                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
-                        } else {
-                            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-                            append(" ")
-                            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-                            append(" ")
-                            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                                append(t.value)
+                        when (t.kind) {
+                            "time_range" -> {
+                                // value is JSON (parsed by the engine); show the readable displayName instead.
+                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
+                            }
+                            "button_press" -> {
+                                // Localized "Кнопка N" — derived from value, not the
+                                // stored displayName, so language always matches the UI.
+                                val n = t.value.toIntOrNull() ?: 0
+                                withStyle(SpanStyle(color = AccentBlue)) {
+                                    append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
+                                }
+                            }
+                            else -> {
+                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
+                                append(" ")
+                                withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
+                                append(" ")
+                                withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                                    append(t.value)
+                                }
                             }
                         }
                     }
@@ -468,6 +481,9 @@ private fun EditorDialog(
                             },
                             onAddNetworkAvailable = {
                                 onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
+                            },
+                            onAddButtonPress = {
+                                onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
                             }
                         )
                     }
@@ -549,6 +565,9 @@ private fun EditorDialog(
                             },
                             onAddMediaVolume = {
                                 onUpdate { copy(actions = actions + newMediaVolumeAction(context)) }
+                            },
+                            onAddSentry = {
+                                onUpdate { copy(actions = actions + newSentryAction(context)) }
                             }
                         )
                     }
@@ -650,11 +669,11 @@ private fun EditorDialog(
 @Composable
 private fun ReorderArrows(onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?) {
     IconButton(onClick = { onMoveUp?.invoke() }, enabled = onMoveUp != null, modifier = Modifier.size(24.dp)) {
-        Icon(Icons.Outlined.KeyboardArrowUp, "выше",
+        Icon(Icons.Outlined.KeyboardArrowUp, stringResource(R.string.auto_a11y_move_up),
             tint = TextSecondary.copy(alpha = if (onMoveUp != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
     }
     IconButton(onClick = { onMoveDown?.invoke() }, enabled = onMoveDown != null, modifier = Modifier.size(24.dp)) {
-        Icon(Icons.Outlined.KeyboardArrowDown, "ниже",
+        Icon(Icons.Outlined.KeyboardArrowDown, stringResource(R.string.auto_a11y_move_down),
             tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
     }
 }
@@ -686,6 +705,7 @@ private fun TriggerRow(
             "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
+            "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
             else -> ParamTriggerControls(trigger, onUpdate)
         }
 
@@ -751,7 +771,7 @@ private fun ParamTriggerControls(
     if (paramOption?.enumValues != null) {
         // Enum dropdown
         var enumExpanded by remember { mutableStateOf(false) }
-        val enumLabel = paramOption.enumValues.find { it.first == trigger.value }?.second ?: trigger.value
+        val enumLabel = paramOption.localizedEnumLabel(trigger.value, context)
         Box {
             Text(
                 enumLabel,
@@ -763,9 +783,9 @@ private fun ParamTriggerControls(
                     .padding(8.dp, 6.dp)
             )
             DropdownMenu(expanded = enumExpanded, onDismissRequest = { enumExpanded = false }) {
-                paramOption.enumValues.forEach { (value, label) ->
+                paramOption.enumValues.forEach { (value, _) ->
                     DropdownMenuItem(
-                        text = { Text(label, fontSize = 13.sp) },
+                        text = { Text(paramOption.localizedEnumLabel(value, context), fontSize = 13.sp) },
                         onClick = {
                             enumExpanded = false
                             onUpdate(trigger.copy(value = value, operator = "=="))
@@ -789,9 +809,9 @@ private fun ParamTriggerControls(
                 fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center
             )
         )
-        if (paramOption?.unit?.isNotEmpty() == true) {
+        if (paramOption != null && paramOption.localizedUnit(context).isNotEmpty()) {
             Spacer(Modifier.width(4.dp))
-            Text(paramOption.unit, fontSize = 12.sp, color = TextMuted)
+            Text(paramOption.localizedUnit(context), fontSize = 12.sp, color = TextMuted)
         }
     }
 }
@@ -1109,6 +1129,60 @@ private fun NetworkAvailableTriggerControls() {
     )
 }
 
+@Composable
+private fun ButtonPressTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit,
+) {
+    val context = LocalContext.current
+    Icon(
+        Icons.Outlined.TouchApp,
+        contentDescription = null,
+        tint = AccentGreen,
+        modifier = Modifier.size(16.dp),
+    )
+    Spacer(Modifier.width(6.dp))
+    Text(
+        stringResource(R.string.automation_trigger_button_picker_label),
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.width(6.dp))
+
+    var expanded by remember { mutableStateOf(false) }
+    val current = trigger.value.toIntOrNull() ?: 1
+    Box {
+        Text(
+            current.toString(),
+            fontSize = 13.sp, color = AccentGreen, fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .clickable { expanded = true }
+                .padding(8.dp, 6.dp)
+                .width(30.dp),
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            (1..4).forEach { n ->
+                DropdownMenuItem(
+                    text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
+                    onClick = {
+                        expanded = false
+                        onUpdate(
+                            trigger.copy(
+                                value = n.toString(),
+                                displayName = context.getString(R.string.automation_trigger_button_label, n),
+                            )
+                        )
+                    },
+                )
+            }
+        }
+    }
+}
+
 // --- Action Row ---
 
 @Composable
@@ -1152,6 +1226,8 @@ private fun ActionRow(
                 DelayActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "media_volume" ->
                 MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "sentry" ->
+                SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1161,7 +1237,7 @@ private fun ActionRow(
         if (action.kind == "param" && action.command.isNotBlank()) {
             Spacer(Modifier.width(4.dp))
             IconButton(onClick = { onTest(action.command) }, modifier = Modifier.size(24.dp)) {
-                Icon(Icons.Outlined.PlayArrow, "выполнить сейчас", tint = AccentGreen, modifier = Modifier.size(16.dp))
+                Icon(Icons.Outlined.PlayArrow, stringResource(R.string.auto_a11y_run_now), tint = AccentGreen, modifier = Modifier.size(16.dp))
             }
         }
         Spacer(Modifier.width(4.dp))
@@ -1338,6 +1414,43 @@ private fun MediaVolumeActionControls(
             color = AccentTeal,
             fontWeight = FontWeight.Bold,
             modifier = Modifier.width(40.dp)
+        )
+    }
+}
+
+// --- Sentry Action Controls ---
+
+@Composable
+private fun SentryActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled = action.payload == "1"
+    val onLabel = stringResource(R.string.automation_action_sentry_on)
+    val offLabel = stringResource(R.string.automation_action_sentry_off)
+    val displayLabel = stringResource(R.string.automation_action_sentry)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.weight(1f))
+        Text(
+            if (isEnabled) onLabel else offLabel,
+            fontSize = 13.sp,
+            color = if (isEnabled) AccentGreen else TextSecondary
+        )
+        Spacer(Modifier.width(6.dp))
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { checked ->
+                val payload = if (checked) "1" else "0"
+                val name = if (checked) onLabel else offLabel
+                onUpdate(action.copy(payload = payload, displayName = "$displayLabel: $name"))
+            },
+            colors = bydSwitchColors()
         )
     }
 }
@@ -1578,7 +1691,8 @@ private fun AddActionButton(
     onAddCameraOverlay: () -> Unit,
     onAddYandexMusic: () -> Unit,
     onAddDelay: () -> Unit,
-    onAddMediaVolume: () -> Unit
+    onAddMediaVolume: () -> Unit,
+    onAddSentry: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1651,6 +1765,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddMediaVolume() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddSentry() }
             )
         }
     }
@@ -2436,7 +2554,8 @@ private fun AddTriggerButton(
     onAddTimeOfDay: () -> Unit,
     onAddSchedule: () -> Unit,
     onAddServiceStart: () -> Unit,
-    onAddNetworkAvailable: () -> Unit
+    onAddNetworkAvailable: () -> Unit,
+    onAddButtonPress: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -2503,6 +2622,13 @@ private fun AddTriggerButton(
                     onAddNetworkAvailable()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddButtonPress()
+                }
+            )
         }
     }
 }
@@ -2513,7 +2639,7 @@ private fun newPlaceTrigger(place: PlaceEntity, context: android.content.Context
         chineseName = "位置",
         operator = "==",
         value = "enter",
-        displayName = localized("进入「${place.name}」", "Enter «${place.name}»", "Въезд в «${place.name}»", context),
+        displayName = context.getString(R.string.auto_trig_place_enter, place.name),
         kind = "place_enter",
         placeId = place.id,
         placeName = place.name
@@ -2526,7 +2652,7 @@ private fun newServiceStartTrigger(context: android.content.Context): TriggerDef
         chineseName = "服务启动",
         operator = "==",
         value = "true",
-        displayName = localized("BYDMate 启动", "BYDMate startup", "Запуск BYDMate", context),
+        displayName = context.getString(R.string.auto_trig_service_start),
         kind = "service_start"
     )
 }
@@ -2537,21 +2663,21 @@ private fun newNetworkAvailableTrigger(context: android.content.Context): Trigge
         chineseName = "网络可用",
         operator = "==",
         value = "true",
-        displayName = localized("网络可用", "Internet available", "Доступен интернет", context),
+        displayName = context.getString(R.string.auto_trig_network_available),
         kind = "network_available"
     )
 }
 
 private fun newDelayAction(context: android.content.Context): ActionDef = ActionDef(
     command = "delay_1000",
-    displayName = localized("延迟 1 秒", "Delay 1 sec", "Пауза 1 сек", context),
+    displayName = context.getString(R.string.auto_act_delay_1s),
     kind = "delay",
     payload = "1000"
 )
 
 private fun newMediaVolumeAction(context: android.content.Context): ActionDef = ActionDef(
     command = "media_volume",
-    displayName = localized("媒体音量: 2", "Media volume: 2", "Громкость медиа: 2", context),
+    displayName = context.getString(R.string.auto_act_media_volume),
     kind = "media_volume",
     payload = "2"
 )
@@ -2562,7 +2688,7 @@ private fun newTimeOfDayTrigger(context: android.content.Context): TriggerDef {
         chineseName = "时间段",
         operator = "==",
         value = "NIGHT",
-        displayName = localized("夜晚", "Night", "Ночь", context),
+        displayName = context.getString(R.string.auto_trig_time_of_day_night),
         kind = "time_of_day"
     )
 }

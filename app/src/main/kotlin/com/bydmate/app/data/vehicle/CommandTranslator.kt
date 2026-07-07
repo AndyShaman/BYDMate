@@ -1,11 +1,17 @@
 package com.bydmate.app.data.vehicle
 
+/** A parsed seat comfort command. level: 0 = off, 1..5 = heat/vent stage. */
+data class SeatCommand(val group: SeatGroup, val level: Int)
+
 /**
- * Maps legacy D+ Chinese command strings to (action_name, value) for VehicleApi.dispatch.
+ * Maps the app's internal Chinese command vocabulary to (action_name, value) for
+ * VehicleApi.dispatch. These strings are the command tokens used by automations and
+ * Smart Home; they are NOT a live D+ HTTP path (the old D+ command bus no longer exists,
+ * writes now go through the native autoservice channel via VehicleApi).
  *
  * Source: AutomationViewModel.ACTION_COMMANDS (49 entries) + Smart Home VPS catalog
- * (same vocabulary). Both callers historically stripped the "迪加" prefix before sending
- * over HTTP; the prefix is now removed here if present.
+ * (same vocabulary). Some callers historically prefixed "迪加"; that prefix is stripped
+ * here if present.
  *
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.
@@ -56,33 +62,12 @@ object CommandTranslator {
         // entries here (the old 18/20/22/25-only table missed every other value).
         "自动空调"    to Resolved("ac_on",         0),   // competitor val=0 (ctrl_mode AUTO)
         "内循环"      to Resolved("ac_cycle_inner", 1),  // LIVE val=1
-        "外循环"      to Resolved("ac_cycle_outer", 2),  // LIVE val=2
+        "外循环"      to Resolved("ac_cycle_outer", 0),  // LIVE val=0 (fresh-air; inner=1 on same fid)
 
         // ── Climate ── competitor-actions.json ────────────────────────────────
         "打开空调通风" to Resolved("ac_flow_only_on",   1),  // competitor val=1
         "吹前挡"      to Resolved("defrost_front_on",  1),  // competitor val=1
         "关闭吹前挡"  to Resolved("defrost_front_off", 0),  // competitor val=0
-
-        // ── Driver seat heat ── competitor-actions.json (dev=1001, safe) ──────
-        // Naming: off=1, on(lvl1)=2, lvl2=3, lvl3=4, lvl4=5, lvl5=6
-        "主驾座椅加热1档"  to Resolved("driver_seat_heat_on",   2),
-        "主驾座椅加热2档"  to Resolved("driver_seat_heat_lvl2", 3),
-        "主驾座椅加热关闭" to Resolved("driver_seat_heat_off",  1),
-
-        // ── Passenger seat heat ── competitor-actions.json ────────────────────
-        "副驾座椅加热1档"  to Resolved("passenger_seat_heat_on",   2),
-        "副驾座椅加热2档"  to Resolved("passenger_seat_heat_lvl2", 3),
-        "副驾座椅加热关闭" to Resolved("passenger_seat_heat_off",  1),
-
-        // ── Driver seat vent ── competitor-actions.json ───────────────────────
-        "主驾座椅通风1档"  to Resolved("driver_seat_vent_on",   2),
-        "主驾座椅通风2档"  to Resolved("driver_seat_vent_lvl2", 3),
-        "主驾座椅通风关闭" to Resolved("driver_seat_vent_off",  1),
-
-        // ── Passenger seat vent ── competitor-actions.json ────────────────────
-        "副驾座椅通风1档"  to Resolved("passenger_seat_vent_on",   2),
-        "副驾座椅通风2档"  to Resolved("passenger_seat_vent_lvl2", 3),
-        "副驾座椅通风关闭" to Resolved("passenger_seat_vent_off",  1),
 
         // ── Locks ── LIVE_VALIDATED ───────────────────────────────────────────
         "车门上锁"  to Resolved("doors_lock",   2),
@@ -91,6 +76,15 @@ object CommandTranslator {
         // ── Trunk ── competitor-actions.json (dev=1001) ──────────────────────
         "开后备箱"  to Resolved("open_trunk",  1),  // competitor val=1
         "关后备箱"  to Resolved("close_trunk", 3),  // competitor val=3
+
+        // ── Front trunk (frunk) ── LIVE_VALIDATED (dev=1001, open speed-0 gated) ─
+        "前备箱打开" to Resolved("front_trunk_open",  1),
+        "前备箱关闭" to Resolved("front_trunk_close", 3),
+
+        // ── Fridge mode ── LIVE_VALIDATED (dev=1023 carve-out) ───────────────
+        "冰箱制冷" to Resolved("fridge_mode", 1),
+        "冰箱制热" to Resolved("fridge_mode", 2),
+        "冰箱关闭" to Resolved("fridge_mode", 3),
 
         // ── Sunroof ── LIVE_VALIDATED ─────────────────────────────────────────
         "天窗打开100" to Resolved("sunroof_open",  1),  // full open
@@ -116,6 +110,13 @@ object CommandTranslator {
         "关闭后视镜加热" to Resolved("defrost_rear_off", 0),
     )
 
+    /** Fridge temperature presets fan out to [fridge_mode, fridge_temp_*]. Cooling raw
+     *  = °C + 19; heating raw = °C. Mode is set alongside so each action is self-contained. */
+    private fun fridgeCool(celsius: Int): List<Resolved> =
+        listOf(Resolved("fridge_mode", 1), Resolved("fridge_temp_cool", celsius + 19))
+    private fun fridgeHeat(celsius: Int): List<Resolved> =
+        listOf(Resolved("fridge_mode", 2), Resolved("fridge_temp_heat", celsius))
+
     /**
      * Composite commands fan out to several validated per-door % writes. All four
      * window fids (driver/passenger/rear-left/rear-right *_pos) are LIVE_VALIDATED.
@@ -127,15 +128,26 @@ object CommandTranslator {
         Resolved("window_rear_right_pos", pct),
     )
 
-    private val composite: Map<String, List<Resolved>> = mapOf(
-        "车窗全开"     to allWindows(100),
-        "车窗关闭"     to allWindows(0),
-        "车窗半开"     to allWindows(50),
-        "前排车窗全开" to listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)),
-        "前排车窗关闭" to listOf(Resolved("window_driver_pos", 0),   Resolved("window_passenger_pos", 0)),
-        "后排车窗全开" to listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)),
-        "后排车窗关闭" to listOf(Resolved("window_rear_left_pos", 0),   Resolved("window_rear_right_pos", 0)),
-    )
+    private val composite: Map<String, List<Resolved>> = buildMap {
+        // ── Windows ── fan out to validated per-door % fids ───────────────────
+        put("车窗全开", allWindows(100))
+        put("车窗关闭", allWindows(0))
+        put("车窗半开", allWindows(50))
+        put("前排车窗全开", listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)))
+        put("前排车窗关闭", listOf(Resolved("window_driver_pos", 0), Resolved("window_passenger_pos", 0)))
+        put("后排车窗全开", listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)))
+        put("后排车窗关闭", listOf(Resolved("window_rear_left_pos", 0), Resolved("window_rear_right_pos", 0)))
+        // ── Fridge temperature presets ── mode + setpoint (dev=1023) ──────────
+        put("冰箱制冷-6度", fridgeCool(-6))
+        put("冰箱制冷-3度", fridgeCool(-3))
+        put("冰箱制冷0度", fridgeCool(0))
+        put("冰箱制冷3度", fridgeCool(3))
+        put("冰箱制冷6度", fridgeCool(6))
+        put("冰箱制热35度", fridgeHeat(35))
+        put("冰箱制热40度", fridgeHeat(40))
+        put("冰箱制热45度", fridgeHeat(45))
+        put("冰箱制热50度", fridgeHeat(50))
+    }
 
     /**
      * Resolve a D+ command string. Strips leading "迪加" prefix if present.
@@ -170,4 +182,33 @@ object CommandTranslator {
             composite.values.flatten().map { it.actionName } +
             DYNAMIC_ACTIONS)
             .toMutableSet()
+
+    /** All statically-resolved (action_name, value) pairs — every fixed [table] and
+     *  [composite] entry. Excludes dynamic actions (e.g. ac_temp_main), which resolve()
+     *  range-clamps at call time. Used by the allowlist-range invariant test so a
+     *  translator value can never silently fall outside its allowlist valueMin..valueMax
+     *  range (the bug where 外循环 stayed at 2 while the allowlist range was tightened to 0). */
+    fun allResolved(): List<Resolved> =
+        table.values + composite.values.flatten()
+
+    private val SEAT_PREFIXES: Map<String, SeatGroup> = mapOf(
+        "主驾座椅加热" to SeatGroup.DRIVER_HEAT,
+        "副驾座椅加热" to SeatGroup.PASSENGER_HEAT,
+        "主驾座椅通风" to SeatGroup.DRIVER_VENT,
+        "副驾座椅通风" to SeatGroup.PASSENGER_VENT,
+    )
+
+    /** Parse a seat heat/vent command into (group, level), or null if not a seat command. */
+    fun resolveSeat(commandString: String): SeatCommand? {
+        val s = commandString.removePrefix("迪加")
+        for ((prefix, group) in SEAT_PREFIXES) {
+            if (!s.startsWith(prefix)) continue
+            val tail = s.removePrefix(prefix)
+            if (tail == "关闭") return SeatCommand(group, 0)
+            val m = Regex("""(\d)档""").matchEntire(tail) ?: return null
+            val lvl = m.groupValues[1].toInt()
+            return if (lvl in 1..5) SeatCommand(group, lvl) else null
+        }
+        return null
+    }
 }

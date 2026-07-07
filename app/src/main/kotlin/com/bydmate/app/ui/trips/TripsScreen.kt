@@ -24,6 +24,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
@@ -44,13 +45,14 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.ui.components.consumptionColor
-import com.bydmate.app.ui.components.formatDuration
 import com.bydmate.app.ui.components.formatTime
 import com.bydmate.app.ui.theme.*
 import android.graphics.Paint as AndroidPaint
 import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
+import java.text.SimpleDateFormat
+import java.util.Date
 
 @Composable
 fun TripsScreen(
@@ -169,6 +171,14 @@ fun TripsScreen(
 
 @Composable
 private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: String, onClick: () -> Unit) {
+    // Reading LocalConfiguration ties this to the app language, so the label
+    // recomposes on an in-place locale switch instead of staying in the old language.
+    val locale = LocalConfiguration.current.locales[0]
+    val monthLabel = remember(month.yearMonth, locale) {
+        SimpleDateFormat("LLLL yyyy", locale)
+            .format(Date(month.days.first().trips.first().startTs))
+            .replaceFirstChar { it.uppercase() }
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -181,7 +191,7 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
         Row {
             Text(if (expanded) "▼" else "▶", color = AccentGreen, fontSize = 12.sp)
             Spacer(modifier = Modifier.width(6.dp))
-            Text(month.label, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            Text(monthLabel, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -207,6 +217,11 @@ private fun MonthHeader(month: MonthGroup, expanded: Boolean, currencySymbol: St
 
 @Composable
 private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, onClick: () -> Unit) {
+    // See MonthHeader: format the weekday in the UI so it follows the app language.
+    val locale = LocalConfiguration.current.locales[0]
+    val weekday = remember(day.date, locale) {
+        SimpleDateFormat("EEE", locale).format(Date(day.trips.first().startTs))
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -219,7 +234,7 @@ private fun DayHeader(day: DayGroup, expanded: Boolean, currencySymbol: String, 
         Row {
             Text(if (expanded) "▼" else "▶", color = AccentBlue, fontSize = 12.sp)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("${day.date} (${day.dayOfWeek})", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            Text("${day.date} ($weekday)", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
         }
         Row(
             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -255,6 +270,7 @@ private fun ColumnHeaders(currencySymbol: String) {
         Text(stringResource(R.string.trips_col_time), color = TextMuted, fontSize = 11.sp, modifier = Modifier.width(96.dp))
         Text(stringResource(R.string.trips_col_duration), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text(stringResource(R.string.trips_col_km), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(48.dp))
+        Text(stringResource(R.string.trips_col_soc), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(58.dp))
         Text(stringResource(R.string.trips_col_kwh), color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
         Text("л", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(36.dp))
         Text("/100", color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
@@ -266,17 +282,18 @@ private fun ColumnHeaders(currencySymbol: String) {
 
 @Composable
 private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Unit) {
-    val context = androidx.compose.ui.platform.LocalContext.current
     val isStop = (trip.distanceKm ?: 0.0) == 0.0
     val time = formatTime(trip.startTs)
     val endTime = trip.endTs?.let { formatTime(it) } ?: ""
     val dist = trip.distanceKm?.let { "%.1f".format(it) } ?: "—"
-    val dur = if (trip.endTs != null) formatDuration(context, trip.startTs, trip.endTs) else "—"
+    val dur = if (trip.endTs != null) formatDurationHm(trip.startTs, trip.endTs) else "—"
     val kwh = trip.kwhConsumed?.let { "%.1f".format(it) } ?: "—"
     val fuel = trip.fuelLiters?.let { "%.1f".format(it) } ?: "—"
     val per100 = trip.kwhPer100km?.let { "%.1f".format(it) } ?: "—"
     val cost = trip.cost?.let { "%.2f".format(it) } ?: "—"
     val consColor = trip.kwhPer100km?.let { consumptionColor(it) } ?: TextSecondary
+    val hasSoc = !isStop && trip.socStart != null && trip.socEnd != null
+    val socText = if (hasSoc) "${trip.socStart}→${trip.socEnd}" else "—"
 
     Column {
         Row(
@@ -295,9 +312,10 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 maxLines = 1,
                 modifier = Modifier.width(96.dp)
             )
-            // Duration
+            // Duration (compact H:MM, language-neutral so it never wraps the cell)
             Text(dur, color = if (isStop) TextMuted else TextSecondary,
                 fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                maxLines = 1,
                 textAlign = TextAlign.End, modifier = Modifier.width(44.dp))
             // Distance
             Text(
@@ -307,6 +325,15 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
                 fontWeight = if (!isStop) FontWeight.Medium else FontWeight.Normal,
                 textAlign = TextAlign.End,
                 modifier = Modifier.width(48.dp)
+            )
+            // SOC start→end (— when no session bookmark matched, or this is a stop)
+            Text(
+                socText,
+                color = if (hasSoc) TextSecondary else TextMuted,
+                fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+                maxLines = 1,
+                textAlign = TextAlign.End,
+                modifier = Modifier.width(58.dp)
             )
             // kWh
             Text(kwh, color = if (isStop) TextMuted else TextSecondary,
@@ -336,6 +363,16 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
         HorizontalDivider(color = CardBorder.copy(alpha = 0.3f), thickness = 0.5.dp,
             modifier = Modifier.padding(start = 36.dp, end = 12.dp))
     }
+}
+
+// Trip-list duration as compact H:MM (e.g. 1:40, 0:34). Language-neutral and
+// narrow enough to fit the "длит." column without wrapping; the trip detail
+// dialog keeps the full localized "1 ч 40 мин" form via components.formatDuration.
+private fun formatDurationHm(startTs: Long, endTs: Long): String {
+    val totalMin = ((endTs - startTs) / 60_000L).coerceAtLeast(0L)
+    val hours = totalMin / 60
+    val minutes = totalMin % 60
+    return "%d:%02d".format(hours, minutes)
 }
 
 @Composable

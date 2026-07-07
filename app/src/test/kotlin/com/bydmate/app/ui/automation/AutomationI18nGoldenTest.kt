@@ -1,0 +1,346 @@
+package com.bydmate.app.ui.automation
+
+import android.content.Context
+import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.local.LocalePreferences
+import org.junit.Assert.assertEquals
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
+import org.robolectric.annotation.Config
+
+/**
+ * Behaviour-lock for the automation i18n catalog. GENERATED from the original
+ * inline ru/zh/en literals (baseline.json) — proves the resource migration
+ * preserves every name/category 1:1 across ru/en/zh, and every unit/enum label
+ * in ru. Designed to stay green BOTH before and after the refactor.
+ */
+@RunWith(RobolectricTestRunner::class)
+@Config(sdk = [29])
+class AutomationI18nGoldenTest {
+    private val ctx: Context get() = ApplicationProvider.getApplicationContext()
+    private fun lang(l: String) = LocalePreferences(ctx).setLanguage(l)
+
+    // command -> Triple(ru, en, zh) name ; and category triple
+    private val actName = mapOf(
+        "车窗通风" to Triple("Проветривание", "Vent Windows", "车窗通风"),
+        "车窗关闭" to Triple("Закрыть все окна", "Close All Windows", "关闭所有车窗"),
+        "车窗全开" to Triple("Открыть все окна", "Open All Windows", "打开所有车窗"),
+        "车窗半开" to Triple("Все окна на 50%", "All Windows 50%", "所有车窗半开"),
+        "前排车窗关闭" to Triple("Закрыть передние", "Close Front Windows", "关闭前排车窗"),
+        "后排车窗关闭" to Triple("Закрыть задние", "Close Rear Windows", "关闭后排车窗"),
+        "前排车窗全开" to Triple("Открыть передние", "Open Front Windows", "打开前排车窗"),
+        "后排车窗全开" to Triple("Открыть задние", "Open Rear Windows", "打开后排车窗"),
+        "主驾打开100" to Triple("Открыть окно водителя", "Open Driver Window", "打开主驾车窗"),
+        "主驾打开0" to Triple("Закрыть окно водителя", "Close Driver Window", "关闭主驾车窗"),
+        "副驾打开100" to Triple("Открыть окно пассажира", "Open Passenger Window", "打开副驾车窗"),
+        "副驾打开0" to Triple("Закрыть окно пассажира", "Close Passenger Window", "关闭副驾车窗"),
+        "自动空调" to Triple("Авто AC", "Auto AC", "自动空调"),
+        "打开空调通风" to Triple("Обдув без AC", "Ventilation (no AC)", "通风（不开AC）"),
+        "设置温度18" to Triple("Темп. 18°C", "Temp 18°C", "温度 18°C"),
+        "设置温度20" to Triple("Темп. 20°C", "Temp 20°C", "温度 20°C"),
+        "设置温度22" to Triple("Темп. 22°C", "Temp 22°C", "温度 22°C"),
+        "设置温度25" to Triple("Темп. 25°C", "Temp 25°C", "温度 25°C"),
+        "内循环" to Triple("Циркуляция внутр.", "Recirculation", "内循环"),
+        "外循环" to Triple("Циркуляция внешн.", "Fresh Air", "外循环"),
+        "吹前挡" to Triple("Обдув лобового вкл", "Windshield Defog On", "前挡风除雾开"),
+        "关闭吹前挡" to Triple("Обдув лобового выкл", "Windshield Defog Off", "前挡风除雾关"),
+        "主驾座椅加热1档" to Triple("Подогрев водителя 1", "Driver Heat 1", "主驾座椅加热1档"),
+        "主驾座椅加热2档" to Triple("Подогрев водителя 2", "Driver Heat 2", "主驾座椅加热2档"),
+        "主驾座椅加热3档" to Triple("Подогрев водителя 3", "Driver Heat 3", "主驾座椅加热3档"),
+        "主驾座椅加热4档" to Triple("Подогрев водителя 4", "Driver Heat 4", "主驾座椅加热4档"),
+        "主驾座椅加热5档" to Triple("Подогрев водителя 5", "Driver Heat 5", "主驾座椅加热5档"),
+        "主驾座椅加热关闭" to Triple("Подогрев водителя выкл", "Driver Heat Off", "主驾座椅加热关"),
+        "副驾座椅加热1档" to Triple("Подогрев пассажира 1", "Passenger Heat 1", "副驾座椅加热1档"),
+        "副驾座椅加热2档" to Triple("Подогрев пассажира 2", "Passenger Heat 2", "副驾座椅加热2档"),
+        "副驾座椅加热3档" to Triple("Подогрев пассажира 3", "Passenger Heat 3", "副驾座椅加热3档"),
+        "副驾座椅加热4档" to Triple("Подогрев пассажира 4", "Passenger Heat 4", "副驾座椅加热4档"),
+        "副驾座椅加热5档" to Triple("Подогрев пассажира 5", "Passenger Heat 5", "副驾座椅加热5档"),
+        "副驾座椅加热关闭" to Triple("Подогрев пассажира выкл", "Passenger Heat Off", "副驾座椅加热关"),
+        "主驾座椅通风1档" to Triple("Вентиляция водителя 1", "Driver Vent 1", "主驾座椅通风1档"),
+        "主驾座椅通风2档" to Triple("Вентиляция водителя 2", "Driver Vent 2", "主驾座椅通风2档"),
+        "主驾座椅通风3档" to Triple("Вентиляция водителя 3", "Driver Vent 3", "主驾座椅通风3档"),
+        "主驾座椅通风4档" to Triple("Вентиляция водителя 4", "Driver Vent 4", "主驾座椅通风4档"),
+        "主驾座椅通风5档" to Triple("Вентиляция водителя 5", "Driver Vent 5", "主驾座椅通风5档"),
+        "主驾座椅通风关闭" to Triple("Вентиляция водителя выкл", "Driver Vent Off", "主驾座椅通风关"),
+        "副驾座椅通风1档" to Triple("Вентиляция пассажира 1", "Passenger Vent 1", "副驾座椅通风1档"),
+        "副驾座椅通风2档" to Triple("Вентиляция пассажира 2", "Passenger Vent 2", "副驾座椅通风2档"),
+        "副驾座椅通风3档" to Triple("Вентиляция пассажира 3", "Passenger Vent 3", "副驾座椅通风3档"),
+        "副驾座椅通风4档" to Triple("Вентиляция пассажира 4", "Passenger Vent 4", "副驾座椅通风4档"),
+        "副驾座椅通风5档" to Triple("Вентиляция пассажира 5", "Passenger Vent 5", "副驾座椅通风5档"),
+        "副驾座椅通风关闭" to Triple("Вентиляция пассажира выкл", "Passenger Vent Off", "副驾座椅通风关"),
+        "后视镜加热" to Triple("Подогрев зеркал вкл", "Mirror Heat On", "后视镜加热开"),
+        "关闭后视镜加热" to Triple("Подогрев зеркал выкл", "Mirror Heat Off", "后视镜加热关"),
+        "氛围灯打开" to Triple("Амбиент вкл", "Ambient Light On", "氛围灯开"),
+        "氛围灯关闭" to Triple("Амбиент выкл", "Ambient Light Off", "氛围灯关"),
+        "打开日行灯" to Triple("ДХО вкл", "DRL On", "日行灯开"),
+        "关闭日行灯" to Triple("ДХО выкл", "DRL Off", "日行灯关"),
+        "打开车内灯" to Triple("Салонный свет вкл", "Interior Light On", "车内灯开"),
+        "关闭车内灯" to Triple("Салонный свет выкл", "Interior Light Off", "车内灯关"),
+        "车门上锁" to Triple("Заблокировать", "Lock Doors", "车门上锁"),
+        "车门解锁" to Triple("Разблокировать", "Unlock Doors", "车门解锁"),
+        "天窗打开100" to Triple("Люк открыть 100%", "Sunroof Open 100%", "天窗全开"),
+        "天窗打开50" to Triple("Люк открыть 50%", "Sunroof Open 50%", "天窗半开"),
+        "天窗打开0" to Triple("Люк закрыть", "Sunroof Close", "天窗关闭"),
+        "遮阳帘打开" to Triple("Шторка открыть", "Sunshade Open", "遮阳帘打开"),
+        "遮阳帘关闭" to Triple("Шторка закрыть", "Sunshade Close", "遮阳帘关闭"),
+        "开后备箱" to Triple("Открыть багажник", "Open Trunk", "打开后备箱"),
+        "关后备箱" to Triple("Закрыть багажник", "Close Trunk", "关闭后备箱"),
+        "前备箱打开" to Triple("Открыть передний багажник", "Open Front Trunk", "打开前备箱"),
+        "前备箱关闭" to Triple("Закрыть передний багажник", "Close Front Trunk", "关闭前备箱"),
+        "冰箱制冷" to Triple("Холодильник: охлаждение", "Fridge Cool", "冰箱制冷"),
+        "冰箱制热" to Triple("Холодильник: обогрев", "Fridge Heat", "冰箱制热"),
+        "冰箱关闭" to Triple("Холодильник: выкл", "Fridge Off", "冰箱关闭"),
+        "冰箱制冷-6度" to Triple("Холодильник: охл -6°C", "Fridge Cool -6°C", "冰箱制冷-6度"),
+        "冰箱制冷-3度" to Triple("Холодильник: охл -3°C", "Fridge Cool -3°C", "冰箱制冷-3度"),
+        "冰箱制冷0度" to Triple("Холодильник: охл 0°C", "Fridge Cool 0°C", "冰箱制冷0度"),
+        "冰箱制冷3度" to Triple("Холодильник: охл +3°C", "Fridge Cool +3°C", "冰箱制冷3度"),
+        "冰箱制冷6度" to Triple("Холодильник: охл +6°C", "Fridge Cool +6°C", "冰箱制冷6度"),
+        "冰箱制热35度" to Triple("Холодильник: обогрев 35°C", "Fridge Heat 35°C", "冰箱制热35度"),
+        "冰箱制热40度" to Triple("Холодильник: обогрев 40°C", "Fridge Heat 40°C", "冰箱制热40度"),
+        "冰箱制热45度" to Triple("Холодильник: обогрев 45°C", "Fridge Heat 45°C", "冰箱制热45度"),
+        "冰箱制热50度" to Triple("Холодильник: обогрев 50°C", "Fridge Heat 50°C", "冰箱制热50度"),
+    )
+    private val actCat = mapOf(
+        "车窗通风" to Triple("Окна", "Windows", "车窗"),
+        "车窗关闭" to Triple("Окна", "Windows", "车窗"),
+        "车窗全开" to Triple("Окна", "Windows", "车窗"),
+        "车窗半开" to Triple("Окна", "Windows", "车窗"),
+        "前排车窗关闭" to Triple("Окна", "Windows", "车窗"),
+        "后排车窗关闭" to Triple("Окна", "Windows", "车窗"),
+        "前排车窗全开" to Triple("Окна", "Windows", "车窗"),
+        "后排车窗全开" to Triple("Окна", "Windows", "车窗"),
+        "主驾打开100" to Triple("Окна", "Windows", "车窗"),
+        "主驾打开0" to Triple("Окна", "Windows", "车窗"),
+        "副驾打开100" to Triple("Окна", "Windows", "车窗"),
+        "副驾打开0" to Triple("Окна", "Windows", "车窗"),
+        "自动空调" to Triple("Климат", "Climate", "空调"),
+        "打开空调通风" to Triple("Климат", "Climate", "空调"),
+        "设置温度18" to Triple("Климат", "Climate", "空调"),
+        "设置温度20" to Triple("Климат", "Climate", "空调"),
+        "设置温度22" to Triple("Климат", "Climate", "空调"),
+        "设置温度25" to Triple("Климат", "Climate", "空调"),
+        "内循环" to Triple("Климат", "Climate", "空调"),
+        "外循环" to Triple("Климат", "Climate", "空调"),
+        "吹前挡" to Triple("Климат", "Climate", "空调"),
+        "关闭吹前挡" to Triple("Климат", "Climate", "空调"),
+        "主驾座椅加热1档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅加热2档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅加热3档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅加热4档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅加热5档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅加热关闭" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热1档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热2档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热3档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热4档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热5档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅加热关闭" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风1档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风2档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风3档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风4档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风5档" to Triple("Сиденья", "Seats", "座椅"),
+        "主驾座椅通风关闭" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风1档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风2档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风3档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风4档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风5档" to Triple("Сиденья", "Seats", "座椅"),
+        "副驾座椅通风关闭" to Triple("Сиденья", "Seats", "座椅"),
+        "后视镜加热" to Triple("Зеркала", "Mirrors", "后视镜"),
+        "关闭后视镜加热" to Triple("Зеркала", "Mirrors", "后视镜"),
+        "氛围灯打开" to Triple("Свет", "Light", "灯光"),
+        "氛围灯关闭" to Triple("Свет", "Light", "灯光"),
+        "打开日行灯" to Triple("Свет", "Light", "灯光"),
+        "关闭日行灯" to Triple("Свет", "Light", "灯光"),
+        "打开车内灯" to Triple("Свет", "Light", "灯光"),
+        "关闭车内灯" to Triple("Свет", "Light", "灯光"),
+        "车门上锁" to Triple("Замки", "Locks", "门锁"),
+        "车门解锁" to Triple("Замки", "Locks", "门锁"),
+        "天窗打开100" to Triple("Люк", "Sunroof", "天窗"),
+        "天窗打开50" to Triple("Люк", "Sunroof", "天窗"),
+        "天窗打开0" to Triple("Люк", "Sunroof", "天窗"),
+        "遮阳帘打开" to Triple("Люк", "Sunroof", "天窗"),
+        "遮阳帘关闭" to Triple("Люк", "Sunroof", "天窗"),
+        "开后备箱" to Triple("Кузов", "Body", "车身"),
+        "关后备箱" to Triple("Кузов", "Body", "车身"),
+        "前备箱打开" to Triple("Кузов", "Body", "车身"),
+        "前备箱关闭" to Triple("Кузов", "Body", "车身"),
+        "冰箱制冷" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制热" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱关闭" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制冷-6度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制冷-3度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制冷0度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制冷3度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制冷6度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制热35度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制热40度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制热45度" to Triple("Холодильник", "Fridge", "冰箱"),
+        "冰箱制热50度" to Triple("Холодильник", "Fridge", "冰箱"),
+    )
+    private val parName = mapOf(
+        "Speed" to Triple("Скорость", "Speed", "车速"),
+        "Gear" to Triple("Передача", "Gear", "档位"),
+        "DriveMode" to Triple("Режим вождения", "Drive Mode", "整车运行模式"),
+        "SOC" to Triple("SOC", "SOC", "电量百分比"),
+        "ChargingStatus" to Triple("Статус зарядки", "Charging Status", "充电状态"),
+        "PowerState" to Triple("Питание", "Power State", "电源状态"),
+        "Voltage12V" to Triple("12V аккумулятор", "12V Battery", "蓄电池电压"),
+        "MinCellVoltage" to Triple("Напряжение банки (min)", "Min Cell Voltage", "单体最低电压"),
+        "MaxCellVoltage" to Triple("Напряжение банки (max)", "Max Cell Voltage", "单体最高电压"),
+        "ExtTemp" to Triple("Темп. снаружи", "Outside Temp", "车外温度"),
+        "InsideTemp" to Triple("Темп. салона", "Cabin Temp", "车内温度"),
+        "AvgBatTemp" to Triple("Темп. батареи", "Battery Temp", "平均电池温度"),
+        "WindowFL" to Triple("Окно водителя", "Driver Window", "主驾车窗打开百分比"),
+        "WindowFR" to Triple("Окно пассажира", "Passenger Window", "副驾车窗打开百分比"),
+        "WindowRL" to Triple("Окно ЛЗ", "Rear Left Window", "左后车窗打开百分比"),
+        "WindowRR" to Triple("Окно ПЗ", "Rear Right Window", "右后车窗打开百分比"),
+        "Sunroof" to Triple("Люк", "Sunroof", "天窗打开百分比"),
+        "DoorFL" to Triple("Дверь водителя", "Driver Door", "主驾车门"),
+        "DoorFR" to Triple("Дверь пассажира", "Passenger Door", "副驾车门"),
+        "DoorRL" to Triple("Дверь ЛЗ", "Rear Left Door", "左后车门"),
+        "DoorRR" to Triple("Дверь ПЗ", "Rear Right Door", "右后车门"),
+        "Hood" to Triple("Капот", "Hood", "引擎盖"),
+        "LockFL" to Triple("Замок двери водителя", "Driver Door Lock", "主驾车门锁"),
+        "Trunk" to Triple("Багажник", "Trunk", "后备箱门"),
+        "ACStatus" to Triple("Кондиционер", "AC Status", "空调状态"),
+        "ACCirc" to Triple("Режим циркуляции", "AC Circulation", "空调循环方式"),
+        "ACTemp" to Triple("Темп. AC", "AC Temp", "主驾驶空调温度"),
+        "FanLevel" to Triple("Вентилятор", "Fan Level", "风量档位"),
+        "SeatbeltFL" to Triple("Ремень водителя", "Driver Seatbelt", "主驾驶安全带状态"),
+        "TirePressFL" to Triple("Давление ЛП шины", "FL Tire Pressure", "左前轮气压"),
+        "TirePressFR" to Triple("Давление ПП шины", "FR Tire Pressure", "右前轮气压"),
+        "TirePressRL" to Triple("Давление ЛЗ шины", "RL Tire Pressure", "左后轮气压"),
+        "TirePressRR" to Triple("Давление ПЗ шины", "RR Tire Pressure", "右后轮气压"),
+        "Rain" to Triple("Датчик дождя", "Rain Sensor", "雨量"),
+        "LightLow" to Triple("Ближний свет", "Low Beam", "近光灯"),
+        "DRL" to Triple("Дневные ходовые", "DRL", "日行灯"),
+    )
+    private val parCat = mapOf(
+        "Speed" to Triple("Движение", "Driving", "行驶"),
+        "Gear" to Triple("Движение", "Driving", "行驶"),
+        "DriveMode" to Triple("Движение", "Driving", "行驶"),
+        "SOC" to Triple("Энергия", "Energy", "能源"),
+        "ChargingStatus" to Triple("Энергия", "Energy", "能源"),
+        "PowerState" to Triple("Энергия", "Energy", "能源"),
+        "Voltage12V" to Triple("Энергия", "Energy", "能源"),
+        "MinCellVoltage" to Triple("Энергия", "Energy", "能源"),
+        "MaxCellVoltage" to Triple("Энергия", "Energy", "能源"),
+        "ExtTemp" to Triple("Температура", "Temperature", "温度"),
+        "InsideTemp" to Triple("Температура", "Temperature", "温度"),
+        "AvgBatTemp" to Triple("Температура", "Temperature", "温度"),
+        "WindowFL" to Triple("Кузов", "Body", "车身"),
+        "WindowFR" to Triple("Кузов", "Body", "车身"),
+        "WindowRL" to Triple("Кузов", "Body", "车身"),
+        "WindowRR" to Triple("Кузов", "Body", "车身"),
+        "Sunroof" to Triple("Кузов", "Body", "车身"),
+        "DoorFL" to Triple("Кузов", "Body", "车身"),
+        "DoorFR" to Triple("Кузов", "Body", "车身"),
+        "DoorRL" to Triple("Кузов", "Body", "车身"),
+        "DoorRR" to Triple("Кузов", "Body", "车身"),
+        "Hood" to Triple("Кузов", "Body", "车身"),
+        "LockFL" to Triple("Кузов", "Body", "车身"),
+        "Trunk" to Triple("Кузов", "Body", "车身"),
+        "ACStatus" to Triple("Климат", "Climate", "空调"),
+        "ACCirc" to Triple("Климат", "Climate", "空调"),
+        "ACTemp" to Triple("Климат", "Climate", "空调"),
+        "FanLevel" to Triple("Климат", "Climate", "空调"),
+        "SeatbeltFL" to Triple("Безопасность", "Safety", "安全"),
+        "TirePressFL" to Triple("Безопасность", "Safety", "安全"),
+        "TirePressFR" to Triple("Безопасность", "Safety", "安全"),
+        "TirePressRL" to Triple("Безопасность", "Safety", "安全"),
+        "TirePressRR" to Triple("Безопасность", "Safety", "安全"),
+        "Rain" to Triple("Безопасность", "Safety", "安全"),
+        "LightLow" to Triple("Свет", "Light", "灯光"),
+        "DRL" to Triple("Свет", "Light", "灯光"),
+    )
+    private val parUnitRu = mapOf(
+        "Speed" to "км/ч",
+        "Gear" to "",
+        "DriveMode" to "",
+        "SOC" to "%",
+        "ChargingStatus" to "",
+        "PowerState" to "",
+        "Voltage12V" to "В",
+        "MinCellVoltage" to "В",
+        "MaxCellVoltage" to "В",
+        "ExtTemp" to "°C",
+        "InsideTemp" to "°C",
+        "AvgBatTemp" to "°C",
+        "WindowFL" to "% откр.",
+        "WindowFR" to "% откр.",
+        "WindowRL" to "% откр.",
+        "WindowRR" to "% откр.",
+        "Sunroof" to "% откр.",
+        "DoorFL" to "",
+        "DoorFR" to "",
+        "DoorRL" to "",
+        "DoorRR" to "",
+        "Hood" to "",
+        "LockFL" to "",
+        "Trunk" to "",
+        "ACStatus" to "",
+        "ACCirc" to "",
+        "ACTemp" to "°C",
+        "FanLevel" to "",
+        "SeatbeltFL" to "",
+        "TirePressFL" to "кПа",
+        "TirePressFR" to "кПа",
+        "TirePressRL" to "кПа",
+        "TirePressRR" to "кПа",
+        "Rain" to "(0=сухо)",
+        "LightLow" to "",
+        "DRL" to "",
+    )
+    // param -> list of (value, ru-label)
+    private val parEnumRu = mapOf<String, List<Pair<String, String>>>(
+        "Gear" to listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D"),
+        "DriveMode" to listOf("0" to "NORMAL", "1" to "ECO", "2" to "SPORT", "4" to "SNOW"),
+        "ChargingStatus" to listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается"),
+        "PowerState" to listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE"),
+        "DoorFL" to listOf("0" to "Закрыта", "1" to "Открыта"),
+        "DoorFR" to listOf("0" to "Закрыта", "1" to "Открыта"),
+        "DoorRL" to listOf("0" to "Закрыта", "1" to "Открыта"),
+        "DoorRR" to listOf("0" to "Закрыта", "1" to "Открыта"),
+        "Hood" to listOf("0" to "Закрыт", "1" to "Открыт"),
+        "LockFL" to listOf("0" to "Разблокирован", "1" to "Заблокирован"),
+        "Trunk" to listOf("0" to "Закрыт", "1" to "Открыт"),
+        "ACCirc" to listOf("0" to "Внешний воздух", "1" to "Внутренний воздух"),
+        "SeatbeltFL" to listOf("0" to "Не пристёгнут", "1" to "Пристёгнут"),
+        "LightLow" to listOf("0" to "Выкл", "1" to "Вкл"),
+        "DRL" to listOf("0" to "Нет", "1" to "Вкл", "2" to "Выкл"),
+    )
+
+    @Test fun action_names_and_categories_match_baseline_all_locales() {
+        for (a in ACTION_COMMANDS) {
+            val n = actName.getValue(a.command); val c = actCat.getValue(a.command)
+            lang("ru"); assertEquals("name ru ${a.command}", n.first,  a.localizedName(ctx)); assertEquals("cat ru ${a.command}", c.first,  a.localizedCategory(ctx))
+            lang("en"); assertEquals("name en ${a.command}", n.second, a.localizedName(ctx)); assertEquals("cat en ${a.command}", c.second, a.localizedCategory(ctx))
+            lang("zh"); assertEquals("name zh ${a.command}", n.third,  a.localizedName(ctx)); assertEquals("cat zh ${a.command}", c.third,  a.localizedCategory(ctx))
+        }
+        assertEquals(actName.size, ACTION_COMMANDS.size)
+    }
+
+    @Test fun param_names_and_categories_match_baseline_all_locales() {
+        for (t in TRIGGER_PARAMS) {
+            val n = parName.getValue(t.param); val c = parCat.getValue(t.param)
+            lang("ru"); assertEquals("pname ru ${t.param}", n.first,  t.localizedName(ctx)); assertEquals("pcat ru ${t.param}", c.first,  t.localizedCategory(ctx))
+            lang("en"); assertEquals("pname en ${t.param}", n.second, t.localizedName(ctx)); assertEquals("pcat en ${t.param}", c.second, t.localizedCategory(ctx))
+            lang("zh"); assertEquals("pname zh ${t.param}", n.third,  t.localizedName(ctx)); assertEquals("pcat zh ${t.param}", c.third,  t.localizedCategory(ctx))
+        }
+        assertEquals(parName.size, TRIGGER_PARAMS.size)
+    }
+
+    @Test fun param_units_and_enum_labels_match_baseline_ru() {
+        lang("ru")
+        for (t in TRIGGER_PARAMS) {
+            assertEquals("unit ru ${t.param}", parUnitRu.getValue(t.param), t.localizedUnit(ctx))
+            val enums = parEnumRu[t.param] ?: emptyList()
+            for ((value, ruLabel) in enums) {
+                assertEquals("enum ru ${t.param}=$value", ruLabel, t.localizedEnumLabel(value, ctx))
+            }
+        }
+    }
+}

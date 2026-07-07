@@ -1,6 +1,7 @@
 package com.bydmate.app.data.vehicle
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -228,6 +229,72 @@ class WriteAllowlistTest {
         assertEquals(2, al.find("drl_off")!!.valueMin)
     }
 
+    // ── Seat heat/vent re-wired to validated dev=1000 switch+level 2026-06-29 ──
+    @Test fun `seat heat and vent switch plus level entries are validated on dev 1000`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val names = listOf(
+            "driver_seat_heat_switch", "driver_seat_heat_level",
+            "passenger_seat_heat_switch", "passenger_seat_heat_level",
+            "driver_seat_vent_switch", "driver_seat_vent_level",
+            "passenger_seat_vent_switch", "passenger_seat_vent_level",
+        )
+        for (name in names) {
+            val e = al.find(name)
+            assertNotNull("$name must be present", e)
+            assertTrue("$name must be validated", e!!.validated)
+            assertEquals("$name must be on dev 1000", 1000, e.dev)
+        }
+        val sw = al.find("driver_seat_heat_switch")!!
+        // switch range 0..2: 1=on, 2=off (0 unused — silent no-op). Off code corrected 2026-07-01.
+        assertEquals(0, sw.valueMin); assertEquals(2, sw.valueMax)
+        val lvl = al.find("driver_seat_heat_level")!!
+        assertEquals(1, lvl.valueMin); assertEquals(5, lvl.valueMax)
+    }
+
+    // ── Fridge carved out of banned dev 1023, validated 2026-06-29 ────────────
+    @Test fun `fridge fids are carved out of banned dev 1023`() {
+        assertTrue(
+            "fridge mode fid must be carved out of dev 1023 ban",
+            (1023 to 850427920) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        assertTrue(
+            "fridge temp fid must be carved out of dev 1023 ban",
+            (1023 to 850427928) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val mode = al.find("fridge_mode")
+        assertNotNull(mode); assertEquals(1023, mode!!.dev); assertTrue(mode.validated)
+        assertEquals(1, mode.valueMin); assertEquals(3, mode.valueMax)
+        val cool = al.find("fridge_temp_cool")
+        assertNotNull(cool); assertEquals(13, cool!!.valueMin); assertEquals(25, cool.valueMax)
+        val heat = al.find("fridge_temp_heat")
+        assertNotNull(heat); assertEquals(35, heat!!.valueMin); assertEquals(50, heat.valueMax)
+    }
+
+    // ── Task 4: competitor dev=1001 fallback seat entries in CANDIDATE_UNVALIDATED ──
+    @Test fun `seat fallback entries are dev 1001 range 1 to 6 unvalidated`() {
+        val al = WriteAllowlist(
+            (WriteAllowlist.LIVE_VALIDATED + WriteAllowlist.CANDIDATE_UNVALIDATED)
+                .associateBy { it.actionName.lowercase() }
+        )
+        for (name in listOf(
+            "driver_seat_heat_fallback", "driver_seat_vent_fallback",
+            "passenger_seat_heat_fallback", "passenger_seat_vent_fallback",
+        )) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals(1001, e.dev)
+            assertEquals(1, e.valueMin)
+            assertEquals(6, e.valueMax)
+            assertEquals("seats", e.category)
+            assertFalse(e.validated)
+        }
+        // Guard T4: pin exact writeFid values so a heat↔vent fid swap is caught
+        assertEquals(1125122068, al.find("driver_seat_heat_fallback")!!.writeFid)
+        assertEquals(1125122064, al.find("driver_seat_vent_fallback")!!.writeFid)
+        assertEquals(1125122076, al.find("passenger_seat_heat_fallback")!!.writeFid)
+        assertEquals(1125122072, al.find("passenger_seat_vent_fallback")!!.writeFid)
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }
@@ -236,5 +303,28 @@ class WriteAllowlistTest {
             liveKeys.distinct().size,
             liveKeys.size,
         )
+    }
+
+    // ── Guard 1: loadProduction folds CANDIDATE_UNVALIDATED fallback entries in ─
+    // Exercises the runtime code path (loadProduction, not a direct LIVE+CANDIDATE map).
+    // If the CANDIDATE_UNVALIDATED fold-in block is ever removed from loadProduction,
+    // this test catches it before the Song Plus fallback silently dies at runtime.
+    @Test fun `loadProduction includes seat fallback entries`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        for (name in listOf(
+            "driver_seat_heat_fallback", "driver_seat_vent_fallback",
+            "passenger_seat_heat_fallback", "passenger_seat_vent_fallback",
+        )) {
+            val e = al.find(name)
+            assertNotNull("$name must be present after loadProduction fold-in", e)
+            assertEquals("$name must be dev 1001", 1001, e!!.dev)
+            assertEquals("$name valueMin must be 1", 1, e.valueMin)
+            assertEquals("$name valueMax must be 6", 6, e.valueMax)
+            assertFalse("$name must be unvalidated", e.validated)
+        }
+        assertEquals(1125122068, al.find("driver_seat_heat_fallback")!!.writeFid)
+        assertEquals(1125122064, al.find("driver_seat_vent_fallback")!!.writeFid)
+        assertEquals(1125122076, al.find("passenger_seat_heat_fallback")!!.writeFid)
+        assertEquals(1125122072, al.find("passenger_seat_vent_fallback")!!.writeFid)
     }
 }

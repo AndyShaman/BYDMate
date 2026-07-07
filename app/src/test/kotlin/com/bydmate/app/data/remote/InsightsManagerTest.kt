@@ -2,6 +2,7 @@ package com.bydmate.app.data.remote
 
 import android.content.Context
 import android.content.SharedPreferences
+import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.repository.SettingsRepository
@@ -59,6 +60,7 @@ class InsightsManagerTest {
             openRouterClient = mockk<OpenRouterClient>(relaxed = true),
             tripDao = mockk<TripDao>(relaxed = true),
             idleDrainDao = mockk<IdleDrainDao>(relaxed = true),
+            chargeDao = mockk<ChargeDao>(relaxed = true),
             settingsRepository = mockk<SettingsRepository>(relaxed = true),
         )
 

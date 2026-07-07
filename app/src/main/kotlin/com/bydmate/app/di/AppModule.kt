@@ -474,14 +474,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSeatChannelStore(@ApplicationContext ctx: Context): com.bydmate.app.data.vehicle.SeatChannelStore =
+        com.bydmate.app.data.vehicle.SeatChannelStorePrefs(ctx.getSharedPreferences("seat_channel", Context.MODE_PRIVATE))
+
+    @Provides
+    @Singleton
     fun provideVehicleApi(
         parsReader: com.bydmate.app.data.nativestack.ParsReader,
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
         helper: com.bydmate.app.data.vehicle.HelperClient,
         allowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
         writeLogDao: VehicleWriteLogDao,
+        seatChannelStore: com.bydmate.app.data.vehicle.SeatChannelStore,
     ): com.bydmate.app.data.vehicle.VehicleApi =
-        com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao)
+        com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore)
 
     @Provides
     @Singleton
@@ -506,7 +512,8 @@ object AppModule {
     fun provideHelperBootstrap(
         adb: com.bydmate.app.data.autoservice.AdbOnDeviceClient,
         helper: com.bydmate.app.data.vehicle.HelperClient,
+        @dagger.hilt.android.qualifiers.ApplicationContext context: android.content.Context,
     ): com.bydmate.app.data.vehicle.HelperBootstrap =
-        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper)
+        com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper, context)
 
 }

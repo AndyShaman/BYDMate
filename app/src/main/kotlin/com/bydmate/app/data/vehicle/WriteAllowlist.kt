@@ -73,26 +73,35 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1023 to 1330643002,  // SET_INSIDE_LIGHT_STATE_SET (interior light on/off)
             1023 to 1069547536,  // SET_INTERIOR_ATMOSPHERE_LAMP_BRIGHTNESS_SET (ambient)
             1004 to 1125122118,  // DRL (daytime running lights) on/off
+            1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
+            1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
         )
 
         /** A (dev,fid) is banned unless explicitly carved out. */
         internal fun isBanned(dev: Int, fid: Int): Boolean =
             dev in BANNED_DEVS && (dev to fid) !in BANNED_DEV_FID_EXCEPTIONS
 
-        // 31 native write entries on Leopard 3 via HelperDaemon: 22 live-validated
+        // 44 native write entries on Leopard 3 via HelperDaemon. 22 live-validated
         // 2026-05-28 (climate/windows/sunroof/sunshade/locks) + 8 live-validated
-        // 2026-05-29 (interior/ambient light, DRL, rear-window-defrost = mirror heat).
-        // The sole non-validated entry is ac_on: its address was corrected to the
-        // competitor ac_ctrl_mode channel (501219352=0) and awaits an in-vehicle
-        // confirmation snap before promotion to validated=true — the prior
-        // power-fid/value-2 guess never turned the AC on.
+        // 2026-05-29 (interior/ambient light, DRL, rear-window-defrost = mirror heat) +
+        // 8 live-validated 2026-06-29 (seat heat/vent switch+level, dev=1000) +
+        // 2 live-validated 2026-06-29 (front trunk open/close, dev=1001) +
+        // 3 live-validated 2026-06-29 (fridge mode/temp cool/temp heat, dev=1023 carve-out).
+        // ac_cycle_outer corrected 2026-06-28 from live autoservice reads: external
+        // circulation reads 0 (internal reads 1), so the prior value 2 is not a valid
+        // enum and autoservice rejected the setInt (the "helper.write returned false"
+        // the user hit). ac_on stays unvalidated: an in-car test 2026-06-28 showed the
+        // competitor ac_ctrl_mode write (501219352=0) is rejected on Leopard 3 even as
+        // a real change with the climate awake (ctrl_mode read 1, wrote 0, no effect) —
+        // likely a different write fid or a signature-permission gate. Pin via a
+        // com.byd.airconditioning decompile before promoting to validated=true.
         val LIVE_VALIDATED: List<WriteEntry> = listOf(
             // climate (dev=1000)
             WriteEntry("ac_on",          1000, 501219352, null, 0, 0,   "climate",  false, "competitor-v80"),
             WriteEntry("ac_off",         1000, 501219364, null, 1, 1,   "climate",  true, "live-leopard3-2026-05-28"),
             WriteEntry("ac_temp_main",   1000, 501219368, null, 16, 30, "climate",  true, "live-leopard3-2026-05-28"),
             WriteEntry("ac_cycle_inner", 1000, 501219355, null, 1, 1,   "climate",  true, "live-leopard3-2026-05-28"),
-            WriteEntry("ac_cycle_outer", 1000, 501219355, null, 2, 2,   "climate",  true, "live-leopard3-2026-05-28"),
+            WriteEntry("ac_cycle_outer", 1000, 501219355, null, 0, 0,   "climate",  true, "live-leopard3-2026-06-28"),
 
             // windows competitor short-form (front only)
             WriteEntry("window_driver_open",     1001, 1125122104, null, 1, 1, "windows", true, "live-leopard3-2026-05-28"),
@@ -134,15 +143,47 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // mirror heat = rear-window defrost (single button on Leopard 3) — 1=on, 0=off, dev=1000
             WriteEntry("defrost_rear_on",  1000, 501219357, null, 1, 1, "climate", true, "live-leopard3-2026-05-29"),
             WriteEntry("defrost_rear_off", 1000, 501219357, null, 0, 0, "climate", true, "live-leopard3-2026-05-29"),
+            // seat heat/vent — dev=1000 switch (1=on / 2=off) + level (1..5), validated 2026-06-29,
+            // off code corrected 2026-07-01. "On at level N" = two writes (switch=1 + level=N);
+            // off = switch=2 (NOT 0 — switch=0 is a silent no-op: autoservice returns status=1 but
+            // the seat stays on; 2 matches the read status enum 1=on/2=off). heat and vent on a
+            // seat are mutually exclusive (climate module cancels the other).
+            WriteEntry("driver_seat_heat_switch",    1000, 1276248084, null, 0, 2, "seats", true, "live-leopard3-2026-07-01"),
+            WriteEntry("driver_seat_heat_level",     1000, 1276252180, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_heat_switch", 1000, 1276248092, null, 0, 2, "seats", true, "live-leopard3-2026-07-01"),
+            WriteEntry("passenger_seat_heat_level",  1000, 1276252188, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("driver_seat_vent_switch",    1000, 1276248080, null, 0, 2, "seats", true, "live-leopard3-2026-07-01"),
+            WriteEntry("driver_seat_vent_level",     1000, 1276252176, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            WriteEntry("passenger_seat_vent_switch", 1000, 1276248088, null, 0, 2, "seats", true, "live-leopard3-2026-07-01"),
+            WriteEntry("passenger_seat_vent_level",  1000, 1276252184, null, 1, 5, "seats", true, "live-leopard3-2026-06-29"),
+            // front trunk (frunk) — dev=1001 SETTING_ELECTRIC_FORECABIN_SWITCH_SET, 1=open 3=close.
+            // Powered external panel; open is speed-0 gated in ActionDispatcher.
+            WriteEntry("front_trunk_open",  1001, 1276182560, null, 1, 1, "trunk", true, "live-leopard3-2026-06-29"),
+            WriteEntry("front_trunk_close", 1001, 1276182560, null, 3, 3, "trunk", true, "live-leopard3-2026-06-29"),
+            // fridge (com.byd.car.icebox) — dev=1023 carve-out. mode 1=cool/2=heat/3=off;
+            // temp on one fid, mode-dependent raw: cool=°C+19 (-6..+6→13..25), heat=°C (35..50).
+            WriteEntry("fridge_mode",      1023, 850427920, null, 1, 3,  "fridge", true, "live-leopard3-2026-06-29"),
+            WriteEntry("fridge_temp_cool", 1023, 850427928, null, 13, 25, "fridge", true, "live-leopard3-2026-06-29"),
+            WriteEntry("fridge_temp_heat", 1023, 850427928, null, 35, 50, "fridge", true, "live-leopard3-2026-06-29"),
         )
 
         /**
          * Candidate (unvalidated) native channels staged for an in-vehicle snap.
-         * Empty since 2026-05-29: the interior/ambient light entries graduated to
-         * [LIVE_VALIDATED] after a write+readback snap passed on Leopard 3. Kept as
-         * an extension point — the merge order in [loadProduction] still folds it in.
+         * Holds the seat heat/vent dev=1001 fallback channel (competitor-v80 fids)
+         * used by AdaptiveSeatChannel when the primary dev=1000 path returns a
+         * permanent error on non-Leopard-3 models. The merge order in [loadProduction]
+         * folds these in after competitor JSON; LIVE_VALIDATED wins on collision.
          */
-        val CANDIDATE_UNVALIDATED: List<WriteEntry> = emptyList()
+        val CANDIDATE_UNVALIDATED: List<WriteEntry> = listOf(
+            // Seat heat/vent fallback channel — competitor dev=1001, single write.
+            // value range 1..6: 1=off, 2=lvl1 ... 6=lvl5. Used by AdaptiveSeatChannel
+            // when dev=1000 primary returns NOOP/PERMANENT (e.g. Song Plus / DiLink 3).
+            // Not live-validated on those models yet — confirmed via competitor-v80.
+            WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
+            WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
+            WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),
+            WriteEntry("passenger_seat_vent_fallback", 1001, 1125122072, null, 1, 6, "seats", false, "competitor-v80"),
+        )
 
         /**
          * Category inference from action name prefix.

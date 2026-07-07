@@ -26,7 +26,12 @@ class VehicleApiFailSoftTest {
         WriteAllowlist.LIVE_VALIDATED.associateBy { it.actionName.lowercase() }
     )
 
-    private val api: VehicleApiImpl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao)
+    private val seatStore = object : SeatChannelStore {
+        override fun winner() = SeatChannel.UNKNOWN
+        override fun setWinner(channel: SeatChannel) {}
+    }
+
+    private val api: VehicleApiImpl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao, seatStore)
 
     // ── Test 1: allowlist miss returns Result failure AllowlistMiss ───────────
 
@@ -81,7 +86,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao)
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
 
         coEvery { helper.write(1001, 999999999, 1) } returns false
 
@@ -116,7 +121,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao)
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
         coEvery { helper.write(any(), any(), any()) } returns true
         coEvery { helper.read(any(), any()) } returns -10011L
 

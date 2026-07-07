@@ -179,8 +179,10 @@ class TrackingService : Service(), LocationListener {
         // contend with battery / charging snapshot reads.
         private const val GUN_STATE_POLL_EVERY_N_TICKS = 5
         // Tolerance between last "session active" tick and the current tick before we
-        // consider the session closed. 30 sec survives brief powerState blips and
-        // covers the DiLink wind-down after ignition-off.
+        // consider the session closed. 10 sec survives brief powerState blips; it stays
+        // short because DiLink dies almost instantly at ignition-off (onSessionEnd rarely
+        // fires), so reconcileStaleOpenSession promotes the stale pending after this idle.
+        // HistoryImporter.PENDING_SESSION_IDLE_CLOSE_MS mirrors this — keep them in sync.
         private const val SESSION_IDLE_CLOSE_MS = 10_000L
         // Throttle for the periodic INFO summary so logcat doesn't get flooded.
         private const val SUMMARY_LOG_INTERVAL_MS = 60_000L
@@ -238,6 +240,34 @@ class TrackingService : Service(), LocationListener {
         private val _cameraActive = MutableStateFlow(false)
         val cameraActive: StateFlow<Boolean> = _cameraActive
 
+        // Live reference to the running service so the floating widget can reach
+        // the singleton AutomationEngine without binding. Mirrors how widget data
+        // flows out through this companion. Set in onCreate, cleared in onDestroy.
+        @Volatile private var instance: TrackingService? = null
+
+        /**
+         * Widget → engine bridge. Runs button N's rules through the live engine on
+         * the service scope and reports the matched-rule count (0 ⇒ caller shows the
+         * "no rules for button N" toast). No running service ⇒ onResult(0), fail-soft.
+         * onResult may be invoked off the main thread; callers marshal UI work.
+         */
+        fun fireAutomationButton(buttonId: Int, onResult: (matched: Int) -> Unit) {
+            val svc = instance
+            if (svc == null) {
+                onResult(0)
+                return
+            }
+            svc.serviceScope.launch {
+                val matched = try {
+                    svc.automationEngine.onButtonPress(buttonId)
+                } catch (e: Exception) {
+                    Log.w(TAG, "fireAutomationButton failed: ${e.message}")
+                    0
+                }
+                onResult(matched)
+            }
+        }
+
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
             context.startForegroundService(intent)
@@ -286,6 +316,13 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
+        // Finalize a driving session left open by a hard power-cut at ignition-off
+        // (the head unit dies before the 30-sec idle-close can fire onSessionEnd),
+        // so its last live SOC still becomes a trip bookmark. No-op when there is
+        // no open session, or when it is still live (brief mid-drive restart).
+        lastSessionRepository.reconcileStaleOpenSession(
+            System.currentTimeMillis(), SESSION_IDLE_CLOSE_MS)
+
         // v2.4.8: clear odometer buffers poisoned by the startup-race that
         // shipped in v2.4.5–v2.4.7 (DiPars returned Mileage:0 on first poll
         // and the zero row stuck around, blocking every later real reading
@@ -314,6 +351,28 @@ class TrackingService : Service(), LocationListener {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
+                // Reconcile the native-assistant package state with the toggle in BOTH
+                // directions once the daemon is live, so a drift self-heals. An earlier
+                // enable/disable can silently miss the daemon (bootstrap race, or the daemon
+                // wasn't up yet when the toggle was flipped in Settings), leaving the pm
+                // enabled-state disagreeing with the stored choice. The old code only ever
+                // re-applied the *disable*, so a stuck-disabled state (toggle OFF but packages
+                // DISABLED_USER) never recovered. Now we assert the stored choice both ways.
+                // Only touch packages the user explicitly chose for (pref written at least
+                // once) — a fresh install that never toggled leaves the BYD default alone.
+                // The effect is visible after the next boot: the assistant is a boot-bound
+                // system service, so runtime enable/disable only takes hold on reload (this is
+                // why the Settings toggle warns about a required head-unit restart).
+                // Chained after ensureRunning() (not a separate coroutine) so it cannot race
+                // an unregistered binder on cold start.
+                if (ok) {
+                    val pref = settingsRepository.getString(
+                        com.bydmate.app.data.repository.SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT,
+                        "")
+                    if (pref.isNotEmpty()) {
+                        helperClient.setAppHidden("com.byd.autovoice", pref == "true")
+                    }
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
@@ -331,6 +390,7 @@ class TrackingService : Service(), LocationListener {
         networkAvailableMonitor.start()
         startPolling()
         startCameraMonitor()
+        instance = this
         _isRunning.value = true
         ChainLog.append(this, "TrackingService fully started")
 
@@ -442,6 +502,11 @@ class TrackingService : Service(), LocationListener {
                     sessionStartTotalElecKwh = data.totalElecConsumption
                 }
             }
+            // Persist the live SOC (the same value already read for ABRP and the
+            // widget) as the running session end on every active tick, so a hard
+            // power-cut at ignition-off can't drop it. Also lazily fills the start
+            // SOC if it sentinelled-out at the start tick. Single source: data.soc.
+            data.soc?.let { lastSessionRepository.updateLiveSoc(it, now) }
         } else if (currentSession != null) {
             val idleFor = now - sessionLastActiveTs
             if (idleFor >= SESSION_IDLE_CLOSE_MS) {
@@ -663,6 +728,7 @@ class TrackingService : Service(), LocationListener {
         }
 
         wakeLock?.let { if (it.isHeld) it.release() }
+        instance = null
         _isRunning.value = false
 
         // Auto-restart via WorkManager (like BydConnect AutoRestartReceiver)
@@ -977,10 +1043,13 @@ class TrackingService : Service(), LocationListener {
         locationManager = lm
 
         val gpsEnabled = try { lm.isProviderEnabled(LocationManager.GPS_PROVIDER) } catch (_: Exception) { false }
-        val netEnabled = try { lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER) } catch (_: Exception) { false }
-        Log.i(TAG, "Location providers: gps=$gpsEnabled network=$netEnabled")
+        Log.i(TAG, "Location provider: gps=$gpsEnabled")
 
-        // GPS provider — same params as TripInfo (2000ms, 8m, explicit MainLooper)
+        // GPS only. NETWORK_PROVIDER was removed: its cell/WiFi fixes are off by
+        // kilometers yet report an optimistic accuracy, and they teleported the
+        // track — while parked the GPS provider goes quiet (8 m filter) and only
+        // network kept firing far-away points that got recorded into the route.
+        // Same params as TripInfo (2000ms, 8m, explicit MainLooper).
         if (gpsEnabled) {
             try {
                 lm.requestLocationUpdates(
@@ -994,25 +1063,9 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
-        // Network provider for initial fix
-        if (netEnabled) {
-            try {
-                lm.requestLocationUpdates(
-                    LocationManager.NETWORK_PROVIDER,
-                    2000L, 8.0f,
-                    this, Looper.getMainLooper()
-                )
-                Log.i(TAG, "requestLocationUpdates(NETWORK_PROVIDER) registered")
-            } catch (e: Exception) {
-                Log.w(TAG, "Network provider registration failed: ${e.message}")
-            }
-        }
-
-        // Get last known location for immediate fix (like TripInfo)
+        // Immediate fix from GPS last-known only (like TripInfo).
         try {
-            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER)
-                else if (netEnabled) lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER)
-                else null
+            val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
             if (lastKnown != null) {
                 _lastLocation.value = lastKnown
                 Log.i(TAG, "lastKnownLocation: lat=${lastKnown.latitude} lon=${lastKnown.longitude} " +
@@ -1024,8 +1077,8 @@ class TrackingService : Service(), LocationListener {
             Log.w(TAG, "getLastKnownLocation failed: ${e.message}")
         }
 
-        if (!gpsEnabled && !netEnabled) {
-            Log.e(TAG, "No location provider enabled! GPS will not work.")
+        if (!gpsEnabled) {
+            Log.e(TAG, "GPS provider not enabled! GPS tracking will not work.")
         }
     }
 

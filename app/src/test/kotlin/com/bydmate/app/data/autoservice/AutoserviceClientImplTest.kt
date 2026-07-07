@@ -27,6 +27,7 @@ class AutoserviceClientImplTest {
         }
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = true
         override suspend fun spawnHelper(): Boolean = false
+        override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null
         override suspend fun helperHeartbeat(): Boolean = false
         override suspend fun shutdown() {}

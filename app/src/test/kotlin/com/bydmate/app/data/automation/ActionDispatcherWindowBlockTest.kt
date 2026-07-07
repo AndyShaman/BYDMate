@@ -79,4 +79,17 @@ class ActionDispatcherWindowBlockTest {
     @Test fun `climate command is not a window open`() {
         assertFalse(isOpen("自动空调"))
     }
+
+    // ── seat heat/vent shares 主驾/副驾 subject + 通风 keyword but is NOT a window ──
+    @Test fun `driver seat vent is not a window open`() {
+        assertFalse(isOpen("主驾座椅通风1档"))
+    }
+
+    @Test fun `passenger seat vent level 5 is not a window open`() {
+        assertFalse(isOpen("副驾座椅通风5档"))
+    }
+
+    @Test fun `driver seat heat is not a window open`() {
+        assertFalse(isOpen("主驾座椅加热3档"))
+    }
 }

@@ -35,6 +35,9 @@ class HistoryImporter @Inject constructor(
         private const val TAG = "HistoryImporter"
         private const val MIN_TRIP_DURATION_SEC = 30L
         private const val DEDUP_WINDOW_MS = 300_000L // ±5 min for time-based dedup
+        // Mirror of TrackingService.SESSION_IDLE_CLOSE_MS — the idle gap after which an
+        // open SOC session is considered finished and promotable to a completed bookmark.
+        private const val PENDING_SESSION_IDLE_CLOSE_MS = 10_000L
     }
 
     private val syncMutex = Mutex()
@@ -81,12 +84,23 @@ class HistoryImporter @Inject constructor(
     }
 
     private suspend fun doSync(): ImportResult {
+        // SOC enrichment ordering guard: a trip finishes in one process lifetime but is
+        // imported in a later one, and the DiLink head unit dies instantly at ignition-off
+        // (onSessionEnd rarely fires). The prior drive's SOC bookmark is therefore left as a
+        // stale `pending` on disk, promoted to `completed` only by reconcileStaleOpenSession.
+        // That promotion lives in TrackingService.onCreate, but runSync() also runs from
+        // BYDMateApp.onCreate (before the service reconcile) and from Settings/Welcome — so an
+        // import could match (takeMatch searches only `completed`) before the bookmark is
+        // promoted, write socStart/socEnd=null, and the watermark below would lock that loss
+        // in forever. Reconcile here so every import path promotes the stale pending first.
+        lastSessionRepository.reconcileStaleOpenSession(
+            System.currentTimeMillis(), PENDING_SESSION_IDLE_CLOSE_MS)
+
         val lastImportTs = settingsRepository.getLastEnergyImportTs()
         val bydRecords = energyDataReader.readTripsSince(lastImportTs)
-        // Snapshot session SOC bookmarks once per sync run so all freshly-imported
-        // trips in this batch share the same snapshot. Null when service is not running
-        // (cold import after app update) — socStart/socEnd stay null in that case.
-        val sessionSnap = lastSessionRepository.snapshot()
+        // SOC enrichment uses per-trip session bookmarks (lastSessionRepository.takeMatch
+        // below). Each imported trip consumes at most one bookmark, so a batch import matches
+        // each trip to its own driving session instead of sharing one snapshot.
 
         if (bydRecords.isEmpty()) {
             return ImportResult(trips = 0, details = "Нет новых записей")
@@ -156,18 +170,14 @@ class HistoryImporter @Inject constructor(
                 byd.tripKm / (byd.duration / 3600.0)
             } else null
 
-            // SOC enrichment: attach socStart/socEnd when this trip's endTs falls
-            // within the recorded session window [sessionStartTs .. sessionEndTs + 30s].
-            // Containment on endTs (not intersection) avoids enriching trips that merely
-            // overlap the session boundary but ended before the session started.
-            // Tolerance: +30 sec on sessionEnd covers the post-idle-close window.
-            // sessionSnap is Snapshot? — null when no session was recorded this process lifetime.
-            val sessionStartTs = sessionSnap?.startTs
-            val sessionEndTs = sessionSnap?.endTs
-            val withinSession = sessionStartTs != null && sessionEndTs != null &&
-                endTsMs in sessionStartTs..(sessionEndTs + 30_000L)
-            val socStart = if (withinSession) sessionSnap?.startSoc else null
-            val socEnd   = if (withinSession) sessionSnap?.endSoc   else null
+            // SOC enrichment: match this trip's endTs to a recorded driving session and
+            // graft its SOC bookmarks. Containment on endTs (within [sessionStart ..
+            // sessionEnd + 30s]) avoids enriching trips that ended before the session
+            // started; takeMatch consumes the bookmark so it can't bind to another trip in
+            // the same batch. Null when no session window contains endTs.
+            val sessionMatch = lastSessionRepository.takeMatch(endTsMs)
+            val socStart = sessionMatch?.startSoc
+            val socEnd = sessionMatch?.endSoc
 
             tripRepository.insertTrip(
                 TripEntity(

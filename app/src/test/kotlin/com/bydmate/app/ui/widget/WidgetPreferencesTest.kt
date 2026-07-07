@@ -108,6 +108,21 @@ class WidgetPreferencesTest {
         assertTrue(prefs.isLeftTapZoningEnabled())
     }
 
+    @Test fun `buttonsEnabled defaults to false`() {
+        assertFalse(prefs.isButtonsEnabled())
+    }
+
+    @Test fun `setButtonsEnabled true is persisted`() {
+        prefs.setButtonsEnabled(true)
+        assertTrue(prefs.isButtonsEnabled())
+    }
+
+    @Test fun `setButtonsEnabled toggles back to false`() {
+        prefs.setButtonsEnabled(true)
+        prefs.setButtonsEnabled(false)
+        assertFalse(prefs.isButtonsEnabled())
+    }
+
     @Test fun `leftTapAppPackage defaults to Yandex Navigator`() {
         assertEquals("ru.yandex.yandexnavi", prefs.getLeftTapAppPackage())
     }

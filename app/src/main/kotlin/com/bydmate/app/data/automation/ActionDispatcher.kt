@@ -13,6 +13,7 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.parking.ParkingCameraConfig
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.ui.overlay.CameraOverlayManager
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,6 +28,7 @@ data class DispatchResult(val success: Boolean, val reason: String? = null)
 class ActionDispatcher @Inject constructor(
     private val vehicleApi: VehicleApi,
     private val settingsRepository: SettingsRepository,
+    private val helper: HelperClient,
     @ApplicationContext private val context: Context
 ) {
     companion object {
@@ -51,8 +53,12 @@ class ActionDispatcher @Inject constructor(
          * "打开N" sets the aperture to N%; N==0 is a CLOSE (safe at speed) and must
          * not be treated as an open. A bare "打开" with no percentage is treated
          * conservatively as an open. 全开/半开/通风 are always opens.
+         *
+         * Seat commands (座椅, e.g. 主驾座椅通风N档) share the 主驾/副驾 subject and the
+         * 通风 keyword but are NOT apertures — they must never be window-gated.
          */
         internal fun isWindowOpenCommand(command: String): Boolean {
+            if (command.contains("座椅")) return false   // seat heat/vent is not a window
             val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
             if (subjects.none { command.contains(it) }) return false
             if (command.contains("关")) return false
@@ -62,6 +68,14 @@ class ActionDispatcher @Inject constructor(
             val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
             return opensViaPosition || opensViaWord
         }
+
+        /**
+         * True if [command] would OPEN the front trunk — a powered external panel
+         * gated to standstill (speed 0). Close is not gated. Pure predicate, kept in
+         * the companion so it is unit-testable without Android deps.
+         */
+        internal fun isFrontTrunkOpenCommand(command: String): Boolean =
+            command.contains("前备箱") && command.contains("打开") && !command.contains("关")
 
         private val POSITION_OPEN = Regex("打开(\\d+)")
 
@@ -88,11 +102,25 @@ class ActionDispatcher @Inject constructor(
             "yandex_music" -> launchYandexMusic(action)
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
+            "sentry" -> dispatchSentry(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
         Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.message}")
         DispatchResult(false, e.message ?: "Unknown error")
+    }
+
+    // --- sentry mode (Settings.Global via helper daemon) ---
+
+    private suspend fun dispatchSentry(action: ActionDef): DispatchResult {
+        val value = when (action.payload) {
+            "1" -> 1
+            "0" -> 0
+            else -> return DispatchResult(false, "Некорректное состояние охранного режима")
+        }
+        val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, "Не удалось переключить охранный режим")
     }
 
     private suspend fun dispatchDelay(action: ActionDef): DispatchResult {
@@ -135,6 +163,13 @@ class ActionDispatcher @Inject constructor(
 
     private fun getBlockReason(command: String, data: DiParsData?): String? {
         if (BLOCKED_PATTERNS.any { command.contains(it) }) return "Запрещённая команда"
+        // Frunk is a powered external panel — fail SAFE. Checked BEFORE the data==null
+        // guard so missing telemetry (or unknown speed) blocks the open rather than
+        // allowing it. Unlike windows, this aperture must never open above standstill.
+        if (isFrontTrunkOpenCommand(command)) {
+            val speed = data?.speed ?: return "Скорость неизвестна, передний багажник не открыть"
+            if (speed > 0) return "Передний багажник открывается только на стоянке (скорость $speed км/ч)"
+        }
         if (data == null) return null
         if (isWindowOpenCommand(command)) {
             val speed = data.speed ?: return "Скорость неизвестна"

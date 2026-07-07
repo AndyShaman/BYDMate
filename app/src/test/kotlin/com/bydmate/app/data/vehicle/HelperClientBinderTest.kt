@@ -152,4 +152,46 @@ class HelperClientBinderTest {
         assertEquals(7L, result)
         assertEquals("resolveBinder should be called exactly twice", 2, resolveCount)
     }
+
+    // ---------------------------------------------------------------------------
+    // writeStatus tests (TC-8 to TC-11)
+    // ---------------------------------------------------------------------------
+
+    /** TC-8: writeStatus returns the RAW status forwarded by the binder (status=1 real action). */
+    @Test
+    fun `writeStatus returns raw status 1 from binder`() = runBlocking {
+        val client = clientWith(liveFake(status = 1))
+        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
+        assertEquals(1, result)
+    }
+
+    /** TC-9: writeStatus returns raw status 0 (no-op) unmodified. */
+    @Test
+    fun `writeStatus returns raw status 0 from binder`() = runBlocking {
+        val client = clientWith(liveFake(status = 0))
+        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
+        assertEquals(0, result)
+    }
+
+    /** TC-10: writeStatus returns raw negative status (error code) unmodified. */
+    @Test
+    fun `writeStatus returns raw negative status from binder`() = runBlocking {
+        val client = clientWith(liveFake(status = -10011))
+        val result = client.writeStatus(dev = 1000, fid = 501219357, value = 1)
+        assertEquals(-10011, result)
+    }
+
+    /** TC-11a: writeStatus returns null when daemon is unreachable (binder == null). */
+    @Test
+    fun `writeStatus returns null when binder is null`() = runBlocking {
+        val client = clientWith(null)
+        assertNull(client.writeStatus(dev = 1000, fid = 501219357, value = 1))
+    }
+
+    /** TC-11b: writeStatus returns null when transact returns false (rejected). */
+    @Test
+    fun `writeStatus returns null when transact is rejected`() = runBlocking {
+        val client = clientWith(rejectingFake)
+        assertNull(client.writeStatus(dev = 1000, fid = 501219357, value = 1))
+    }
 }

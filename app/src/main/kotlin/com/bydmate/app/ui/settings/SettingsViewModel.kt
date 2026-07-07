@@ -42,6 +42,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bydmate.app.data.vehicle.SeatChannel
+import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
@@ -81,6 +83,7 @@ data class SettingsUiState(
     val openRouterApiKey: String = "",
     val openRouterModel: String = "",
     val openRouterModelName: String = "",
+    val insightCloudMode: Boolean = false,
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
     val modelsLoading: Boolean = false,
@@ -112,6 +115,8 @@ data class SettingsUiState(
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
+    /** When true, the native BYD voice assistant is disabled (pm disable-user). */
+    val disableNativeAssistant: Boolean = false,
 )
 
 @HiltViewModel
@@ -131,6 +136,8 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
     private val catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal,
+    private val seatChannelStore: SeatChannelStore,
+    private val helperClient: com.bydmate.app.data.vehicle.HelperClient,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -149,6 +156,9 @@ class SettingsViewModel @Inject constructor(
         // which leaves the floating widget rendering against the old language.
         WidgetController.relocale()
     }
+
+    /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */
+    fun resetSeatChannel() = seatChannelStore.setWinner(SeatChannel.UNKNOWN)
 
     private val _uiState = MutableStateFlow(SettingsUiState(
         appVersion = getVersion(),
@@ -208,6 +218,10 @@ class SettingsViewModel @Inject constructor(
             // AI settings
             val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
             val modelId = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_MODEL, "")
+            val insightCloud = settingsRepository.getString(
+                SettingsRepository.KEY_INSIGHT_MODE,
+                SettingsRepository.INSIGHT_MODE_LOCAL,
+            ) == SettingsRepository.INSIGHT_MODE_CLOUD
 
             // Smart Home settings
             val aliceEndpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "")
@@ -233,6 +247,8 @@ class SettingsViewModel @Inject constructor(
             )
             WidgetPreferences(appContext).setParkingCameras(parkingCameras)
             val mapTileSource = settingsRepository.getMapTileSource()
+            val disableNativeAssistant =
+                settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
 
             _uiState.update {
                 it.copy(
@@ -251,6 +267,7 @@ class SettingsViewModel @Inject constructor(
                     openRouterApiKey = apiKey,
                     openRouterModel = modelId,
                     openRouterModelName = modelId.substringAfterLast("/").substringBefore(":"),
+                    insightCloudMode = insightCloud,
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
@@ -266,6 +283,7 @@ class SettingsViewModel @Inject constructor(
                     parkingCameraUrl = parkingCameraUrl,
                     parkingCameras = parkingCameras,
                     mapTileSource = mapTileSource,
+                    disableNativeAssistant = disableNativeAssistant,
                 )
             }
         }
@@ -289,6 +307,18 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setVehicleProfile(profile)
             val r = historyImporter.runSync()
             _uiState.update { it.copy(dataSourceStatus = r.details ?: r.error ?: "Готово") }
+        }
+    }
+
+    /**
+     * Toggle the native BYD voice assistant. Persists the choice and applies it immediately
+     * through the helper daemon: true -> pm disable-user, false -> pm enable. Reversible.
+     */
+    fun setDisableNativeAssistant(disabled: Boolean) {
+        _uiState.update { it.copy(disableNativeAssistant = disabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, disabled.toString())
+            helperClient.setAppHidden("com.byd.autovoice", disabled)
         }
     }
 
@@ -601,6 +631,39 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(openRouterApiKey = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value)
+        }
+    }
+
+    fun setInsightCloudMode(cloud: Boolean) {
+        _uiState.update { it.copy(insightCloudMode = cloud) }
+        viewModelScope.launch {
+            settingsRepository.setString(
+                SettingsRepository.KEY_INSIGHT_MODE,
+                if (cloud) SettingsRepository.INSIGHT_MODE_CLOUD else SettingsRepository.INSIGHT_MODE_LOCAL,
+            )
+        }
+    }
+
+    fun refreshLocalInsight() {
+        viewModelScope.launch {
+            // Persist local mode in this same coroutine before refresh() reads it, so a fast
+            // switch-to-local then tap-refresh can't race the async write in setInsightCloudMode().
+            settingsRepository.setString(
+                SettingsRepository.KEY_INSIGHT_MODE,
+                SettingsRepository.INSIGHT_MODE_LOCAL,
+            )
+            val loading = appContext.getString(R.string.settings_ai_loading_label)
+            _uiState.update { it.copy(aiSaveStatus = loading) }
+            val insight = insightsManager.refresh()
+            _uiState.update {
+                it.copy(
+                    aiSaveStatus = if (insight != null) {
+                        appContext.getString(R.string.settings_ai_done)
+                    } else {
+                        appContext.getString(R.string.settings_ai_fetch_error)
+                    },
+                )
+            }
         }
     }
 

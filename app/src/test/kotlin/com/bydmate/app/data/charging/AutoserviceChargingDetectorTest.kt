@@ -81,6 +81,8 @@ class AutoserviceChargingDetectorTest {
         override suspend fun delete(charge: ChargeEntity) {
             inserted.removeAll { it.id == charge.id }
         }
+        override suspend fun getCompletedSince(since: Long): List<ChargeEntity> =
+            inserted.filter { it.startTs >= since && it.status == "COMPLETED" }
     }
 
     private object NullChargePointDao : com.bydmate.app.data.local.dao.ChargePointDao {

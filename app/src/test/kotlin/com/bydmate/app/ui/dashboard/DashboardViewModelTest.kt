@@ -123,6 +123,29 @@ class DashboardViewModelTest {
         override suspend fun getKwhSince(since: Long): Double = 0.0
         override suspend fun getHoursSince(since: Long): Double = 0.0
         override suspend fun getKwhBetween(from: Long, to: Long): Double = 0.0
+        override suspend fun getSince(since: Long): List<IdleDrainEntity> = emptyList()
+    }
+
+    private class StubChargeDao : com.bydmate.app.data.local.dao.ChargeDao {
+        override suspend fun insert(charge: com.bydmate.app.data.local.entity.ChargeEntity): Long = 0L
+        override suspend fun update(charge: com.bydmate.app.data.local.entity.ChargeEntity) {}
+        override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.ChargeEntity>> = flowOf(emptyList())
+        override suspend fun getById(id: Long): com.bydmate.app.data.local.entity.ChargeEntity? = null
+        override fun getByDateRange(from: Long, to: Long): Flow<List<com.bydmate.app.data.local.entity.ChargeEntity>> = flowOf(emptyList())
+        override suspend fun getPeriodSummary(from: Long, to: Long): com.bydmate.app.data.local.dao.ChargeSummary =
+            com.bydmate.app.data.local.dao.ChargeSummary(0, 0.0, 0.0)
+        override fun getLastCharge(): Flow<com.bydmate.app.data.local.entity.ChargeEntity?> = flowOf(null)
+        override suspend fun getLastSuspendedCharge(): com.bydmate.app.data.local.entity.ChargeEntity? = null
+        override suspend fun getStaleSessions(cutoffTs: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun getLastChargeSync(): com.bydmate.app.data.local.entity.ChargeEntity? = null
+        override suspend fun getRecentChargesWithBatteryData(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun getMaxLifetimeKwhAtFinish(): Double? = null
+        override suspend fun getAllAutoserviceCharges(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun hasLegacyCharges(): Boolean = false
+        override suspend fun deleteEmpty(): Int = 0
+        override suspend fun getCompletedSince(since: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun deletePhantomAutoserviceRows(): Int = 0
+        override suspend fun delete(charge: com.bydmate.app.data.local.entity.ChargeEntity) {}
     }
 
     private class StubBatterySnapshotDao : BatterySnapshotDao {
@@ -184,9 +207,10 @@ class DashboardViewModelTest {
         val tripRepo = TripRepository(tripDao, tripPointDao)
 
         val idleDrainDao = StubIdleDrainDao()
+        val chargeDao = StubChargeDao()
 
         val httpClient = OkHttpClient()
-        val insightsManager = InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, settingsRepo)
+        val insightsManager = InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
         val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo)

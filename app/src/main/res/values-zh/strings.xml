@@ -75,6 +75,11 @@
     <string name="settings_openrouter_model_pick">选择模型</string>
     <string name="settings_ai_loading_label">加载中...</string>
     <string name="settings_ai_save_button">保存并获取洞察</string>
+    <string name="settings_insight_mode_label">分析来源</string>
+    <string name="settings_insight_mode_local">本地（离线）</string>
+    <string name="settings_insight_mode_cloud">OpenRouter（云端）</string>
+    <string name="settings_insight_mode_local_hint">设备端规则，无需网络和 API 密钥，每天自动更新一次。</string>
+    <string name="settings_insight_refresh_local">刷新洞察</string>
 
     <!-- Settings: Model picker dialog -->
     <string name="settings_model_picker_title">选择模型</string>
@@ -86,6 +91,12 @@
     <string name="settings_widget_show_soc_label">显示 SOC 小组件</string>
     <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
     <string name="settings_widget_reset_position_button">重置位置</string>
+    <string name="settings_reset_seat_channel">重置座椅通道</string>
+    <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
+    <string name="settings_voice_native_assistant_header">BYD 原车语音助手</string>
+    <string name="settings_voice_disable_native_label">关闭原车语音助手</string>
+    <string name="settings_voice_disable_native_description">隐藏 BYD 内置语音助手，避免其打断。可恢复。</string>
+    <string name="settings_voice_native_assistant_reboot_note">重启车机后生效。</string>
     <string name="settings_widget_opacity_label">不透明度</string>
     <string name="settings_widget_scale_label">大小</string>
     <string name="settings_widget_tap_section_header">点击小组件</string>
@@ -93,6 +104,8 @@
     <string name="settings_widget_left_tap_zoning_description">左侧 1/3 - 打开选定应用；其余部分 - 打开 BYDMate。</string>
     <string name="settings_widget_left_tap_label">左侧点击的应用</string>
     <string name="settings_widget_left_tap_description">默认为 Yandex 导航。如果应用已卸载，点击将无效。</string>
+    <string name="settings_widget_buttons_label">小组件按钮</string>
+    <string name="settings_widget_buttons_description">单击滑出 4 个按钮，双击打开 BYDMate。按钮运行带有"按钮按下"触发器的规则。</string>
 
     <!-- Settings: Places section -->
     <string name="settings_places_section_header">地点</string>
@@ -146,6 +159,7 @@
     <string name="trips_col_time">时间</string>
     <string name="trips_col_duration">时长</string>
     <string name="trips_col_km">公里</string>
+    <string name="trips_col_soc">SOC</string>
     <string name="trips_col_kwh">kWh</string>
     <string name="trips_chart_kwh_chip">kWh</string>
     <string name="trips_chart_no_data">暂无数据</string>
@@ -171,7 +185,6 @@
     <string name="trip_detail_efficiency_label">百公里电耗</string>
     <string name="trip_detail_cost_label">费用</string>
     <string name="trip_detail_temp_label">温度</string>
-    <string name="trip_detail_max_speed_histogram">最高 %1$d km/h</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">全部</string>
@@ -207,6 +220,7 @@
 
     <!-- Charge edit dialog -->
     <string name="charges_edit_dialog_title">编辑充电记录</string>
+    <string name="charges_edit_date_label">日期</string>
     <string name="charges_edit_type_label">类型：</string>
     <string name="charges_edit_kwh_label">kWh：</string>
     <string name="charges_edit_kwh_from_soc">按 SOC 计算 × %1$.1f kWh</string>
@@ -286,6 +300,9 @@
     <string name="automation_trigger_type_time_of_day">时段</string>
     <string name="automation_trigger_type_service_start">BYDMate 启动</string>
     <string name="automation_trigger_type_internet">网络可用</string>
+    <string name="automation_trigger_type_button_press">按钮按下</string>
+    <string name="automation_trigger_button_label">按钮 %1$d</string>
+    <string name="automation_trigger_button_picker_label">按钮</string>
     <string name="automation_trigger_type_schedule">定时</string>
 
     <!-- Schedule trigger controls -->
@@ -446,6 +463,7 @@
     <string name="widget_trip_km_value">%1$.1f 公里</string>
     <string name="widget_voltage_value">%1$.1f V</string>
     <string name="widget_toast_hidden">小组件已隐藏。打开 BYDMate 即可恢复。</string>
+    <string name="widget_button_no_rules">按钮 %1$d 没有规则</string>
     <string name="widget_trash_release">松手 - 隐藏小组件</string>
     <string name="widget_trash_hint">拖到这里隐藏</string>
     <string name="widget_km_per_percent">%1$.1f</string>
@@ -623,6 +641,55 @@
     <string name="insight_idle_prev">%1$s kWh</string>
     <string name="insight_idle_minutes">%1$s 分钟</string>
     <string name="insight_idle_hours">%1$s 小时</string>
+    <string name="insight_metric_night_idle">夜间 22:00–06:00</string>
+    <string name="insight_night_idle_value">%1$.1f kWh · 占怠速 %2$d%%</string>
+    <string name="insight_night_idle_prev">%1$.1f kWh</string>
+
+    <!-- Local insight engine -->
+    <string name="local_insight_not_enough_data_title">数据不足</string>
+    <string name="local_insight_not_enough_data_summary">最近 7 天至少需要 5 次行程</string>
+    <string name="local_insight_consumption_up_title">能耗上升 %1$.0f%%</string>
+    <string name="local_insight_consumption_up_summary_short">短途较多，预热消耗额外电量</string>
+    <string name="local_insight_consumption_up_summary">能耗上升：%1$.1f → %2$.1f kWh/100</string>
+    <string name="local_insight_consumption_down_title">能耗下降 %1$.0f%%</string>
+    <string name="local_insight_consumption_down_summary">平均 %1$.1f kWh/100，优于上周</string>
+    <string name="local_insight_consumption_stable_title">能耗稳定</string>
+    <string name="local_insight_consumption_stable_summary">本周平均 %1$.1f kWh/100</string>
+    <string name="local_insight_short_trips">%1$d/%2$d 次行程不足 5 公里（%3$d%%），建议合并短途</string>
+    <string name="local_insight_idle">怠速耗电 %1$.1f kWh / %2$s，占本周 %3$d%%</string>
+    <string name="local_insight_12v_critical_title">12V 电压过低</string>
+    <string name="local_insight_12v_critical_summary">辅电池 %1$.1f V，请检查</string>
+    <string name="local_insight_12v_low">12V 当前 %1$.1f V，低于正常 12.4 V</string>
+    <string name="local_insight_12v_falling">12V 一周下降：%1$.2f → %2$.2f V</string>
+    <string name="local_insight_cell_critical_title">电芯压差过大</string>
+    <string name="local_insight_cell_critical_summary">压差 %1$.0f mV，请关注均衡</string>
+    <string name="local_insight_cell_delta">电芯压差 %1$.0f mV，可能有弱电芯</string>
+    <string name="local_insight_cold">平均 %1$d°C 时能耗 %2$.1f kWh/100，冬季正常</string>
+    <string name="local_insight_best_worst">最佳 %1$.1f，最差 %2$.1f kWh/100</string>
+    <string name="local_insight_cost">本周行程花费 %1$.0f %2$s</string>
+    <string name="local_insight_night_idle_title">夜间怠速耗电</string>
+    <string name="local_insight_night_idle_summary">夜间 %1$.1f kWh，占怠速 %2$d%%</string>
+    <string name="local_insight_night_idle">夜间（22:00–06:00）怠速 %1$.1f kWh，占全部 %2$d%%。不需要空调时可熄火</string>
+    <string name="local_insight_dc_more_expensive">快充 %1$.2f %4$s/kWh，比交流 %2$.2f 贵 %3$d%%</string>
+    <string name="local_insight_dc_heavy">快充 %1$.0f kWh（%2$d 次）vs 交流 %3$.0f — 日常建议家用交流</string>
+    <string name="local_insight_ac_only">本周 %2$d 次均为交流充电（%1$.0f kWh），对电池和预算更友好</string>
+    <string name="local_insight_charge_cost_week">本周充电 %3$.0f kWh，花费 %1$.0f %2$s</string>
+    <string name="local_insight_consumption_improved">能耗下降 %1$.0f%% — 趋势良好</string>
+    <string name="local_insight_highway_speed">平均速度 %1$.0f km/h — 高速能耗 %2$.1f kWh/100 属正常</string>
+    <string name="local_insight_high_consumption">平均能耗 %1$.1f kWh/100 偏高 — 请检查空调与驾驶习惯</string>
+    <string name="local_insight_low_consumption">本周 %2$.0f km 平均仅 %1$.1f kWh/100 — 表现优秀</string>
+    <string name="local_insight_idle_rate_high">怠速耗电约 %1$.1f kWh/h — 多为空调或加热</string>
+    <string name="local_insight_km_up">里程上升：%1$.0f → %2$.0f km — 可能影响平均能耗</string>
+    <string name="local_insight_trips_more">本周 %1$d 次行程，上周 %2$d 次</string>
+    <string name="local_insight_weekly_mileage">本周 %1$.0f km / %2$d 次行程 — 数据量充足</string>
+    <string name="local_insight_12v_ok">12V %1$.1f V — 辅电池正常</string>
+    <string name="local_insight_cell_ok">电芯压差 %1$.0f mV — 均衡良好</string>
+    <string name="local_insight_heat_ac">%1$d°C 时平均 %2$.1f kWh/100 — 空调增加负载</string>
+    <string name="local_insight_best_trip">最佳行程 %1$.1f kWh/100（%2$.0f km）— 驾驶高效</string>
+    <string name="local_insight_mixed_charging">本周充电：交流 %1$.0f kWh，快充 %2$.0f kWh — 日常建议多用家用交流</string>
+    <string name="local_insight_low_night_idle">夜间怠速仅占 %1$d%% — 熄火习惯良好</string>
+    <string name="local_insight_low_idle_share">发动机怠速仅占本周 %1$d%% — 很好</string>
+    <string name="local_insight_cost_per_100">行驶成本约 %1$.2f %3$s/100 km（本周 %2$.0f %3$s）</string>
 
     <!-- v3.0.1-3.0.3 feature strings (backup / steering-button / media-volume), added by the
          maintainer during PR #39 integration since they were absent from the PR base (v3.0.0). -->
@@ -653,4 +720,207 @@
     <string name="steering_button_surround_view">360°全景</string>
     <string name="steering_button_unknown">按键（代码 %1$d）</string>
     <string name="steering_button_voice">语音助手</string>
+    <!-- ==== Automation i18n (systematized) ==== -->
+    <!-- categories -->
+    <string name="auto_cat_body">车身</string>
+    <string name="auto_cat_climate">空调</string>
+    <string name="auto_cat_driving">行驶</string>
+    <string name="auto_cat_energy">能源</string>
+    <string name="auto_cat_fridge">冰箱</string>
+    <string name="auto_cat_light">灯光</string>
+    <string name="auto_cat_locks">门锁</string>
+    <string name="auto_cat_mirrors">后视镜</string>
+    <string name="auto_cat_safety">安全</string>
+    <string name="auto_cat_seats">座椅</string>
+    <string name="auto_cat_sunroof">天窗</string>
+    <string name="auto_cat_temperature">温度</string>
+    <string name="auto_cat_windows">车窗</string>
+    <!-- units -->
+    <string name="auto_unit_celsius">°C</string>
+    <string name="auto_unit_dry_hint">(0=干)</string>
+    <string name="auto_unit_kmh">km/h</string>
+    <string name="auto_unit_kpa">kPa</string>
+    <string name="auto_unit_percent">%</string>
+    <string name="auto_unit_percent_open">开度%</string>
+    <string name="auto_unit_volt">V</string>
+    <!-- enum labels -->
+    <string name="auto_enum_charging">充电中</string>
+    <string name="auto_enum_closed_f">关闭</string>
+    <string name="auto_enum_closed_m">关闭</string>
+    <string name="auto_enum_code_d">D</string>
+    <string name="auto_enum_code_drive">DRIVE</string>
+    <string name="auto_enum_code_eco">ECO</string>
+    <string name="auto_enum_code_n">N</string>
+    <string name="auto_enum_code_normal">NORMAL</string>
+    <string name="auto_enum_code_off">OFF</string>
+    <string name="auto_enum_code_on">ON</string>
+    <string name="auto_enum_code_p">P</string>
+    <string name="auto_enum_code_r">R</string>
+    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_sport">SPORT</string>
+    <string name="auto_enum_connected">已连接</string>
+    <string name="auto_enum_fastened">已系</string>
+    <string name="auto_enum_fresh_air">外循环</string>
+    <string name="auto_enum_locked">已锁</string>
+    <string name="auto_enum_none">无</string>
+    <string name="auto_enum_off">关</string>
+    <string name="auto_enum_on">开</string>
+    <string name="auto_enum_open_f">打开</string>
+    <string name="auto_enum_open_m">打开</string>
+    <string name="auto_enum_recirc">内循环</string>
+    <string name="auto_enum_unfastened">未系</string>
+    <string name="auto_enum_unlocked">已解锁</string>
+    <!-- trigger param names -->
+    <string name="auto_param_speed">车速</string>
+    <string name="auto_param_gear">档位</string>
+    <string name="auto_param_drivemode">整车运行模式</string>
+    <string name="auto_param_soc">电量百分比</string>
+    <string name="auto_param_chargingstatus">充电状态</string>
+    <string name="auto_param_powerstate">电源状态</string>
+    <string name="auto_param_voltage12v">蓄电池电压</string>
+    <string name="auto_param_mincellvoltage">单体最低电压</string>
+    <string name="auto_param_maxcellvoltage">单体最高电压</string>
+    <string name="auto_param_exttemp">车外温度</string>
+    <string name="auto_param_insidetemp">车内温度</string>
+    <string name="auto_param_avgbattemp">平均电池温度</string>
+    <string name="auto_param_windowfl">主驾车窗打开百分比</string>
+    <string name="auto_param_windowfr">副驾车窗打开百分比</string>
+    <string name="auto_param_windowrl">左后车窗打开百分比</string>
+    <string name="auto_param_windowrr">右后车窗打开百分比</string>
+    <string name="auto_param_sunroof">天窗打开百分比</string>
+    <string name="auto_param_doorfl">主驾车门</string>
+    <string name="auto_param_doorfr">副驾车门</string>
+    <string name="auto_param_doorrl">左后车门</string>
+    <string name="auto_param_doorrr">右后车门</string>
+    <string name="auto_param_hood">引擎盖</string>
+    <string name="auto_param_lockfl">主驾车门锁</string>
+    <string name="auto_param_trunk">后备箱门</string>
+    <string name="auto_param_acstatus">空调状态</string>
+    <string name="auto_param_accirc">空调循环方式</string>
+    <string name="auto_param_actemp">主驾驶空调温度</string>
+    <string name="auto_param_fanlevel">风量档位</string>
+    <string name="auto_param_seatbeltfl">主驾驶安全带状态</string>
+    <string name="auto_param_tirepressfl">左前轮气压</string>
+    <string name="auto_param_tirepressfr">右前轮气压</string>
+    <string name="auto_param_tirepressrl">左后轮气压</string>
+    <string name="auto_param_tirepressrr">右后轮气压</string>
+    <string name="auto_param_rain">雨量</string>
+    <string name="auto_param_lightlow">近光灯</string>
+    <string name="auto_param_drl">日行灯</string>
+    <!-- action names -->
+    <string name="auto_act_vent_windows">车窗通风</string>
+    <string name="auto_act_close_all_windows">关闭所有车窗</string>
+    <string name="auto_act_open_all_windows">打开所有车窗</string>
+    <string name="auto_act_all_windows_50">所有车窗半开</string>
+    <string name="auto_act_close_front_windows">关闭前排车窗</string>
+    <string name="auto_act_close_rear_windows">关闭后排车窗</string>
+    <string name="auto_act_open_front_windows">打开前排车窗</string>
+    <string name="auto_act_open_rear_windows">打开后排车窗</string>
+    <string name="auto_act_open_driver_window">打开主驾车窗</string>
+    <string name="auto_act_close_driver_window">关闭主驾车窗</string>
+    <string name="auto_act_open_passenger_window">打开副驾车窗</string>
+    <string name="auto_act_close_passenger_window">关闭副驾车窗</string>
+    <string name="auto_act_auto_ac">自动空调</string>
+    <string name="auto_act_ventilation_no_ac">通风（不开AC）</string>
+    <string name="auto_act_temp_18c">温度 18°C</string>
+    <string name="auto_act_temp_20c">温度 20°C</string>
+    <string name="auto_act_temp_22c">温度 22°C</string>
+    <string name="auto_act_temp_25c">温度 25°C</string>
+    <string name="auto_act_recirculation">内循环</string>
+    <string name="auto_act_fresh_air">外循环</string>
+    <string name="auto_act_windshield_defog_on">前挡风除雾开</string>
+    <string name="auto_act_windshield_defog_off">前挡风除雾关</string>
+    <string name="auto_act_driver_heat_1">主驾座椅加热1档</string>
+    <string name="auto_act_driver_heat_2">主驾座椅加热2档</string>
+    <string name="auto_act_driver_heat_3">主驾座椅加热3档</string>
+    <string name="auto_act_driver_heat_4">主驾座椅加热4档</string>
+    <string name="auto_act_driver_heat_5">主驾座椅加热5档</string>
+    <string name="auto_act_driver_heat_off">主驾座椅加热关</string>
+    <string name="auto_act_passenger_heat_1">副驾座椅加热1档</string>
+    <string name="auto_act_passenger_heat_2">副驾座椅加热2档</string>
+    <string name="auto_act_passenger_heat_3">副驾座椅加热3档</string>
+    <string name="auto_act_passenger_heat_4">副驾座椅加热4档</string>
+    <string name="auto_act_passenger_heat_5">副驾座椅加热5档</string>
+    <string name="auto_act_passenger_heat_off">副驾座椅加热关</string>
+    <string name="auto_act_driver_vent_1">主驾座椅通风1档</string>
+    <string name="auto_act_driver_vent_2">主驾座椅通风2档</string>
+    <string name="auto_act_driver_vent_3">主驾座椅通风3档</string>
+    <string name="auto_act_driver_vent_4">主驾座椅通风4档</string>
+    <string name="auto_act_driver_vent_5">主驾座椅通风5档</string>
+    <string name="auto_act_driver_vent_off">主驾座椅通风关</string>
+    <string name="auto_act_passenger_vent_1">副驾座椅通风1档</string>
+    <string name="auto_act_passenger_vent_2">副驾座椅通风2档</string>
+    <string name="auto_act_passenger_vent_3">副驾座椅通风3档</string>
+    <string name="auto_act_passenger_vent_4">副驾座椅通风4档</string>
+    <string name="auto_act_passenger_vent_5">副驾座椅通风5档</string>
+    <string name="auto_act_passenger_vent_off">副驾座椅通风关</string>
+    <string name="auto_act_mirror_heat_on">后视镜加热开</string>
+    <string name="auto_act_mirror_heat_off">后视镜加热关</string>
+    <string name="auto_act_ambient_light_on">氛围灯开</string>
+    <string name="auto_act_ambient_light_off">氛围灯关</string>
+    <string name="auto_act_drl_on">日行灯开</string>
+    <string name="auto_act_drl_off">日行灯关</string>
+    <string name="auto_act_interior_light_on">车内灯开</string>
+    <string name="auto_act_interior_light_off">车内灯关</string>
+    <string name="auto_act_lock_doors">车门上锁</string>
+    <string name="auto_act_unlock_doors">车门解锁</string>
+    <string name="auto_act_sunroof_open_100">天窗全开</string>
+    <string name="auto_act_sunroof_open_50">天窗半开</string>
+    <string name="auto_act_sunroof_close">天窗关闭</string>
+    <string name="auto_act_sunshade_open">遮阳帘打开</string>
+    <string name="auto_act_sunshade_close">遮阳帘关闭</string>
+    <string name="auto_act_open_trunk">打开后备箱</string>
+    <string name="auto_act_close_trunk">关闭后备箱</string>
+    <string name="auto_act_open_front_trunk">打开前备箱</string>
+    <string name="auto_act_close_front_trunk">关闭前备箱</string>
+    <string name="auto_act_fridge_cool">冰箱制冷</string>
+    <string name="auto_act_fridge_heat">冰箱制热</string>
+    <string name="auto_act_fridge_off">冰箱关闭</string>
+    <string name="auto_act_fridge_cool_minus6c">冰箱制冷-6度</string>
+    <string name="auto_act_fridge_cool_minus3c">冰箱制冷-3度</string>
+    <string name="auto_act_fridge_cool_0c">冰箱制冷0度</string>
+    <string name="auto_act_fridge_cool_plus_3c">冰箱制冷3度</string>
+    <string name="auto_act_fridge_cool_plus_6c">冰箱制冷6度</string>
+    <string name="auto_act_fridge_heat_35c">冰箱制热35度</string>
+    <string name="auto_act_fridge_heat_40c">冰箱制热40度</string>
+    <string name="auto_act_fridge_heat_45c">冰箱制热45度</string>
+    <string name="auto_act_fridge_heat_50c">冰箱制热50度</string>
+    <!-- automation messages + special-view labels -->
+    <string name="auto_msg_command_missing">动作 #%1$d：未指定命令</string>
+    <string name="auto_msg_notif_title_empty">动作 #%1$d：通知标题为空</string>
+    <string name="auto_msg_app_not_selected">动作 #%1$d：未选择应用</string>
+    <string name="auto_msg_phone_invalid">动作 #%1$d：电话号码不正确</string>
+    <string name="auto_msg_nav_dest_missing">动作 #%1$d：未选择导航目的地</string>
+    <string name="auto_msg_url_empty">动作 #%1$d：URL 为空</string>
+    <string name="auto_msg_url_no_scheme">动作 #%1$d：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）</string>
+    <string name="auto_msg_ymusic_mode_missing">动作 #%1$d：未选择 Yandex 音乐模式</string>
+    <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
+    <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
+    <string name="auto_rule_copy_suffix">副本</string>
+    <string name="auto_act_notification_silent">通知（静音）</string>
+    <string name="auto_act_notification_sound">通知（带声音）</string>
+    <string name="auto_act_launch_app">启动应用</string>
+    <string name="auto_act_call">拨打电话</string>
+    <string name="auto_act_navigate">Yandex 导航路线</string>
+    <string name="auto_act_open_url">打开 URL</string>
+    <string name="auto_act_yandex_music">Yandex 音乐</string>
+    <!-- sentry (zh was missing) -->
+    <string name="automation_action_sentry">哨兵模式</string>
+    <string name="automation_action_sentry_on">开启</string>
+    <string name="automation_action_sentry_off">关闭</string>
+    <string name="auto_msg_media_volume_missing">动作 #%1$d：未设置音量</string>
+    <!-- automation special triggers/actions -->
+    <string name="auto_trig_place_enter">进入「%1$s」</string>
+    <string name="auto_trig_service_start">BYDMate 启动</string>
+    <string name="auto_trig_network_available">网络可用</string>
+    <string name="auto_act_delay_1s">延迟 1 秒</string>
+    <string name="auto_act_media_volume">媒体音量: 2</string>
+    <string name="auto_trig_time_of_day_night">夜晚</string>
+    <!-- automation: executeNow toast + a11y -->
+    <string name="auto_msg_dispatch_sent">已发送</string>
+    <string name="auto_msg_dispatch_error">错误：%1$s</string>
+    <string name="auto_msg_unavailable">不可用</string>
+    <string name="auto_a11y_move_up">上移</string>
+    <string name="auto_a11y_move_down">下移</string>
+    <string name="auto_a11y_run_now">立即执行</string>
 </resources>

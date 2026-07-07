@@ -40,6 +40,10 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
+        /** "local" (default) = offline rules; "cloud" = OpenRouter LLM */
+        const val KEY_INSIGHT_MODE = "insight_mode"
+        const val INSIGHT_MODE_LOCAL = "local"
+        const val INSIGHT_MODE_CLOUD = "cloud"
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
@@ -57,6 +61,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
+        /** "true" hides the native BYD voice assistant (pm disable-user); default "false". */
+        const val KEY_DISABLE_NATIVE_ASSISTANT = "disable_native_assistant"
         const val KEY_LAST_MILEAGE_KM = "last_mileage_km"
         const val KEY_LAST_CAPACITY_KWH = "last_capacity_kwh"
         const val KEY_LAST_STATE_TS = "last_state_ts"

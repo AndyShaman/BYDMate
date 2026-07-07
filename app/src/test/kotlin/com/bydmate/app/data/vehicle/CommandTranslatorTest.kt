@@ -43,6 +43,29 @@ class CommandTranslatorTest {
         )
     }
 
+    // ── Test 3b: every translator value falls within its allowlist range ──────
+    // Regression for the 外循环 bug: the allowlist range was tightened to [0..0]
+    // but the translator kept emitting value 2, so the dispatch was silently
+    // rejected ("value=2 out of range [0..0]"). Existence (Test 3) didn't catch
+    // it — only a value-vs-range check does.
+    @Test fun `every translator value falls within its allowlist range`() {
+        val projectRoot = generateSequence(File(".").canonicalFile) { it.parentFile }
+            .firstOrNull { File(it, "app/src/main/assets/competitor-actions.json").exists() }
+            ?: error("Cannot find app/src/main/assets/competitor-actions.json from ${File(".").canonicalPath}")
+        val jsonText = File(projectRoot, "app/src/main/assets/competitor-actions.json").readText()
+        val allowlist = WriteAllowlist.loadProduction { jsonText }
+        val violations = CommandTranslator.allResolved().mapNotNull { r ->
+            val entry = allowlist.find(r.actionName) ?: return@mapNotNull null // existence is Test 3's job
+            if (r.value < entry.valueMin || r.value > entry.valueMax)
+                "${r.actionName}=${r.value} outside [${entry.valueMin}..${entry.valueMax}]"
+            else null
+        }
+        assertTrue(
+            "Translator values outside their allowlist range: $violations",
+            violations.isEmpty(),
+        )
+    }
+
     // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
     @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
         val r = one("设置温度22")
@@ -55,13 +78,6 @@ class CommandTranslatorTest {
         val r = one("车门解锁")
         assertEquals("doors_unlock", r?.actionName)
         assertEquals(1, r?.value)
-    }
-
-    // ── Test 6: seat heat level 1 maps to _on val=2 ──────────────────────────
-    @Test fun `seat heat level 1 maps to driver_seat_heat_on val 2`() {
-        val r = one("主驾座椅加热1档")
-        assertEquals("driver_seat_heat_on", r?.actionName)
-        assertEquals(2, r?.value)
     }
 
     // ── Test 9: sunroof 50 maps to sunroof_tilt val=3 ────────────────────────
@@ -252,9 +268,65 @@ class CommandTranslatorTest {
         assertEquals(3, r?.value)
     }
 
+    // ── Front trunk (frunk) ── dev=1001, open=1 close=3 ──────────────────────
+    @Test fun `front trunk open maps to front_trunk_open val 1`() {
+        val r = one("前备箱打开")
+        assertEquals("front_trunk_open", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `front trunk close maps to front_trunk_close val 3`() {
+        val r = one("前备箱关闭")
+        assertEquals("front_trunk_close", r?.actionName)
+        assertEquals(3, r?.value)
+    }
+
+    // ── Fridge ── dev=1023 carve-out; mode 1/2/3, temp mode-dependent raw ────
+    @Test fun `fridge cool mode maps to fridge_mode val 1`() {
+        val r = one("冰箱制冷")
+        assertEquals("fridge_mode", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `fridge off maps to fridge_mode val 3`() {
+        val r = one("冰箱关闭")
+        assertEquals("fridge_mode", r?.actionName)
+        assertEquals(3, r?.value)
+    }
+
+    @Test fun `fridge cool 0C fans out to mode 1 plus temp raw 19`() {
+        assertEquals(setOf("fridge_mode" to 1, "fridge_temp_cool" to 19), pairs("冰箱制冷0度"))
+    }
+
+    @Test fun `fridge cool minus 6C maps to temp raw 13`() {
+        assertEquals(setOf("fridge_mode" to 1, "fridge_temp_cool" to 13), pairs("冰箱制冷-6度"))
+    }
+
+    @Test fun `fridge heat 40C fans out to mode 2 plus temp raw 40`() {
+        assertEquals(setOf("fridge_mode" to 2, "fridge_temp_heat" to 40), pairs("冰箱制热40度"))
+    }
+
     // ── Test 12: allActions returns non-empty set of unique names ─────────────
     @Test fun `allActions returns non-empty set`() {
         val actions = CommandTranslator.allActions()
         assertTrue("allActions must be non-empty", actions.isNotEmpty())
+    }
+
+    // ── resolveSeat: dedicated seat parser, out of composite fan-out ──────────
+    @Test fun `resolveSeat parses driver vent level`() {
+        assertEquals(SeatCommand(SeatGroup.DRIVER_VENT, 1), CommandTranslator.resolveSeat("主驾座椅通风1档"))
+        assertEquals(SeatCommand(SeatGroup.DRIVER_VENT, 5), CommandTranslator.resolveSeat("主驾座椅通风5档"))
+    }
+    @Test fun `resolveSeat parses off`() {
+        assertEquals(SeatCommand(SeatGroup.PASSENGER_HEAT, 0), CommandTranslator.resolveSeat("副驾座椅加热关闭"))
+    }
+    @Test fun `resolveSeat strips prefix`() {
+        assertEquals(SeatCommand(SeatGroup.DRIVER_HEAT, 2), CommandTranslator.resolveSeat("迪加主驾座椅加热2档"))
+    }
+    @Test fun `resolveSeat returns null for non-seat`() {
+        assertEquals(null, CommandTranslator.resolveSeat("车窗全开"))
+    }
+    @Test fun `seat commands no longer in composite fan-out`() {
+        assertEquals(emptyList<CommandTranslator.Resolved>(), CommandTranslator.resolve("主驾座椅通风1档"))
     }
 }

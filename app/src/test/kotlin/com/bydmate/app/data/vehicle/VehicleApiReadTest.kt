@@ -20,7 +20,11 @@ class VehicleApiReadTest {
     private val helper: HelperClient = mockk(relaxed = true)
     private val allowlist = WriteAllowlist.EMPTY
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao)
+    private val seatStore = object : SeatChannelStore {
+        override fun winner() = SeatChannel.UNKNOWN
+        override fun setWinner(channel: SeatChannel) {}
+    }
+    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
 
     @Test fun `readSnapshot delegates to ParsReader fetch`() = runTest {
         val expected = diParsData(soc = 73, speed = 0)
