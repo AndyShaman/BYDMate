@@ -28,6 +28,8 @@ import androidx.compose.material.icons.outlined.TrendingFlat
 import androidx.compose.material.icons.outlined.TrendingUp
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -253,8 +255,6 @@ fun DashboardScreen(
                         InsightCard(
                             title = state.insightTitle,
                             summary = state.insightSummary,
-                            hasApiKey = state.hasApiKey,
-                            loading = state.insightLoading,
                             borderColor = insightColor,
                             onClick = { viewModel.toggleInsightExpanded() }
                         )
@@ -328,6 +328,27 @@ fun DashboardScreen(
                             val insights = state.insightInsights
                             val hasContent = dynamics.isNotEmpty() || insights.isNotEmpty()
                             if (hasContent) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    FilterChip(
+                                        selected = state.insightPeriodDays == 7,
+                                        onClick = { viewModel.setInsightPeriod(7) },
+                                        label = { Text(stringResource(R.string.insight_period_week), fontSize = 12.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = AccentGreen.copy(alpha = 0.25f),
+                                            selectedLabelColor = AccentGreen
+                                        ),
+                                    )
+                                    FilterChip(
+                                        selected = state.insightPeriodDays == 30,
+                                        onClick = { viewModel.setInsightPeriod(30) },
+                                        label = { Text(stringResource(R.string.insight_period_month), fontSize = 12.sp) },
+                                        colors = FilterChipDefaults.filterChipColors(
+                                            selectedContainerColor = AccentGreen.copy(alpha = 0.25f),
+                                            selectedLabelColor = AccentGreen
+                                        ),
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
                                 // Dynamics table
                                 if (dynamics.isNotEmpty()) {
                                     Column {
@@ -383,31 +404,7 @@ fun DashboardScreen(
                                     state.insightDate?.let {
                                         Text(it, color = TextMuted, fontSize = 11.sp)
                                     }
-                                    state.insightError?.let { err ->
-                                        Text(err, color = SocRed, fontSize = 11.sp)
-                                    }
-                                    androidx.compose.material3.Button(
-                                        onClick = { viewModel.refreshInsight() },
-                                        enabled = !state.insightLoading,
-                                        shape = RoundedCornerShape(8.dp),
-                                        colors = androidx.compose.material3.ButtonDefaults.buttonColors(
-                                            containerColor = insightDialogColor,
-                                            contentColor = NavyDark
-                                        )
-                                    ) {
-                                        Text(
-                                            if (state.insightLoading) stringResource(R.string.dashboard_insight_refreshing) else stringResource(R.string.dashboard_insight_refresh),
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
                                 }
-                            } else if (!state.hasApiKey) {
-                                Text(
-                                    stringResource(R.string.dashboard_insight_no_api_key),
-                                    color = TextSecondary,
-                                    fontSize = 13.sp
-                                )
                             } else {
                                 Text(stringResource(R.string.dashboard_insight_no_data), color = TextMuted, fontSize = 13.sp)
                             }
@@ -570,8 +567,6 @@ private fun TopBar(isServiceRunning: Boolean, vehicleDataConnected: Boolean, adb
 private fun InsightCard(
     title: String?,
     summary: String?,
-    hasApiKey: Boolean,
-    loading: Boolean,
     borderColor: Color,
     onClick: () -> Unit
 ) {
@@ -580,7 +575,7 @@ private fun InsightCard(
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         border = androidx.compose.foundation.BorderStroke(
             1.5.dp,
-            if (hasApiKey && title != null) borderColor.copy(alpha = 0.5f) else TextMuted.copy(alpha = 0.3f)
+            if (title != null) borderColor.copy(alpha = 0.5f) else TextMuted.copy(alpha = 0.3f)
         ),
         modifier = Modifier
             .fillMaxWidth()
@@ -592,11 +587,9 @@ private fun InsightCard(
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text("✦", fontSize = 16.sp, color = if (hasApiKey && title != null) borderColor else TextMuted)
+            Text("✦", fontSize = 16.sp, color = if (title != null) borderColor else TextMuted)
             Spacer(modifier = Modifier.width(8.dp))
-            if (loading) {
-                Text(stringResource(R.string.dashboard_insight_loading), color = TextSecondary, fontSize = 13.sp)
-            } else if (title != null && hasApiKey) {
+            if (title != null) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         title,
@@ -616,8 +609,7 @@ private fun InsightCard(
                 }
             } else {
                 Text(
-                    if (hasApiKey) stringResource(R.string.dashboard_insight_no_data)
-                    else stringResource(R.string.dashboard_insight_setup_prompt),
+                    stringResource(R.string.dashboard_insight_no_data),
                     color = TextMuted,
                     fontSize = 12.sp
                 )

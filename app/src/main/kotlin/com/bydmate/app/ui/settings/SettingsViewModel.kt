@@ -11,6 +11,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Intent
 import android.net.Uri
+import android.util.Log
+import android.os.SystemClock
+import com.bydmate.app.agent.AgentOrchestrator
+import com.bydmate.app.agent.AgentResult
+import com.bydmate.app.agent.LlmConnectionResolver
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.EnergyDataReader
@@ -19,12 +24,18 @@ import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.remote.InsightsManager
+import com.bydmate.app.data.remote.LlmHttpException
+import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.remote.OpenRouterModel
+import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.R
+import org.json.JSONArray
+import org.json.JSONObject
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -44,6 +55,19 @@ import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
 import com.bydmate.app.ui.widget.WidgetController
+import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
+import com.bydmate.app.voice.AgentPersona
+import com.bydmate.app.voice.TtsGender
+import com.bydmate.app.voice.VoiceController
+import com.bydmate.app.voice.VoiceLang
+import com.bydmate.app.voice.VoiceModelManager
+import com.bydmate.app.voice.RuStressMarker
+import com.bydmate.app.voice.TtsEngine
+import com.bydmate.app.voice.TtsModelManager
+import com.bydmate.app.voice.TtsVoiceCatalog
+import com.bydmate.app.voice.GigaAmModelManager
+import com.bydmate.app.voice.ContinuousAsr
+import com.bydmate.app.voice.online.TtsRouter
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -78,12 +102,12 @@ data class SettingsUiState(
     val chainLog: String? = null,
     val openRouterApiKey: String = "",
     val openRouterModel: String = "",
+    /** Exa (api.exa.ai) BYOK for the web_search tool. Empty = openrouter:web_search fallback. */
+    val exaApiKey: String = "",
     val openRouterModelName: String = "",
-    val insightCloudMode: Boolean = false,
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
     val modelsLoading: Boolean = false,
-    val aiSaveStatus: String? = null,
     val tariffSaveStatus: String? = null,
     val recalcStatus: String? = null,
     val showRecalcConfirm: Boolean = false,
@@ -102,9 +126,73 @@ data class SettingsUiState(
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
+    // Voice settings
+    val voiceEnabled: Boolean = false,
+    /** "RU", "EN", or "" (follow app language) */
+    val voiceLang: String = "",
+    val voiceKeycode: Int = 0,
+    val voiceModelReadyRu: Boolean = false,
+    val voiceModelReadyEn: Boolean = false,
+    val voiceDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
+    val voiceDownloadLang: VoiceLang? = null,   // which lang is currently downloading
+    val voiceDownloadErrorLang: VoiceLang? = null,  // which lang's last download failed; null = no error
+    // TTS settings (offline synthesis of agent replies)
+    val ttsEnabled: Boolean = false,
+    val ttsVoice: String = TtsModelManager.DEFAULT_VOICE_ID,
+    /** Voice ids whose model is on disk. Voices sharing a modelDirId (artem/alena) are
+     *  always both present or both absent, since they share the download. */
+    val ttsReadyVoices: Set<String> = emptySet(),
+    /** voiceId -> 0..100 while downloading; absent = idle. Independent per voice. */
+    val ttsDownloadProgress: Map<String, Int> = emptyMap(),
+    val ttsDownloadFailed: Set<String> = emptySet(),
+    val ttsRate: Float = 1.0f,
+    val ttsLiveliness: Int = 33,
+    // Wave N: online TTS source ("offline" or a backend id: "gemini"/"minimax")
+    val ttsSource: String = TtsRouter.OFFLINE,
+    val minimaxProvider: String = "official",
+    /** Never expose the raw MiniMax key in state -- only whether one is saved. */
+    val minimaxKeySet: Boolean = false,
+    // GigaAM v2 ASR settings (free-form Russian speech recognition, offline)
+    val gigaAmModelReady: Boolean = false,
+    val gigaAmDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
+    val gigaAmDownloadFailed: Boolean = false,
     /** When true, the native BYD voice assistant is disabled (pm disable-user). */
     val disableNativeAssistant: Boolean = false,
-)
+    // Voice agent (Phase 1, hidden)
+    val agentEnabled: Boolean = false,
+    val modelTestResult: String? = null,
+    val modelTestRunning: Boolean = false,
+    // Agent identity: display/wake name + persona (spoken-reply style) + gender ("m"/"f")
+    val agentName: String = "",
+    val agentPersona: String = AgentPersona.NAVIGATOR.id,
+    val agentGender: String = "m",
+    // Wave J: multi-provider LLM connections (OpenRouter / z.ai / custom)
+    val zaiApiKey: String = "",
+    val customName: String = "",
+    val customBaseUrl: String = "",
+    val customApiKey: String = "",
+    val customModel: String = "",
+    val primaryConn: String = "openrouter",
+    val fallbackConn: String = "",
+    val connTestRunning: String? = null,
+    val connTestResults: Map<String, String> = emptyMap(),
+    // Wave O T11: custom connection model list
+    val customModelList: List<String> = emptyList(),
+    val customModelsError: String? = null,
+    val showCustomModelPicker: Boolean = false,
+    val customModelsLoading: Boolean = false,
+
+) {
+    val openRouterConfigured: Boolean get() = openRouterApiKey.isNotBlank() && openRouterModel.isNotBlank()
+    val zaiConfigured: Boolean get() = zaiApiKey.isNotBlank()
+    val customConfigured: Boolean get() =
+        customBaseUrl.isNotBlank() && customApiKey.isNotBlank() && customModel.isNotBlank()
+    val agentConnConfigured: Boolean get() = when (primaryConn.ifBlank { "openrouter" }) {
+        "zai" -> zaiConfigured
+        "custom" -> customConfigured
+        else -> openRouterConfigured
+    }
+}
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
@@ -123,12 +211,36 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
     private val catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal,
+    private val voiceModelManager: VoiceModelManager,
+    private val ttsModelManager: TtsModelManager,
+    private val ruStressMarker: RuStressMarker,
+    private val gigaAmModelManager: GigaAmModelManager,
+    private val continuousAsr: ContinuousAsr,
+    private val ttsEngine: TtsEngine,
+    private val voiceController: VoiceController,
     private val seatChannelStore: SeatChannelStore,
     private val helperClient: com.bydmate.app.data.vehicle.HelperClient,
+    private val helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap,
+    private val agentOrchestrator: AgentOrchestrator,
+    private val llmConnectionResolver: LlmConnectionResolver,
+    private val openRouterClient: OpenRouterClient,
+    private val placeRepository: PlaceRepository,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
+
+    private val _agentName = MutableStateFlow(
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .getString("agent_name", "") ?: ""
+    )
+    val agentName: StateFlow<String> = _agentName.asStateFlow()
+
+    private val _agentPersona = MutableStateFlow(
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .getString("agent_persona", AgentPersona.NAVIGATOR.id) ?: AgentPersona.NAVIGATOR.id
+    )
+    val agentPersona: StateFlow<String> = _agentPersona.asStateFlow()
 
     fun setAppLanguage(lang: String) {
         localePreferences.setLanguage(lang)
@@ -201,10 +313,7 @@ class SettingsViewModel @Inject constructor(
             // AI settings
             val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
             val modelId = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_MODEL, "")
-            val insightCloud = settingsRepository.getString(
-                SettingsRepository.KEY_INSIGHT_MODE,
-                SettingsRepository.INSIGHT_MODE_LOCAL,
-            ) == SettingsRepository.INSIGHT_MODE_CLOUD
+            val exaApiKey = settingsRepository.getString(SettingsRepository.KEY_EXA_API_KEY, "")
 
             // Smart Home settings
             val aliceEndpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "")
@@ -218,6 +327,59 @@ class SettingsViewModel @Inject constructor(
             val mapTileSource = settingsRepository.getMapTileSource()
             val disableNativeAssistant =
                 settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
+
+            // Voice settings
+            val voiceEnabled = settingsRepository.isVoiceEnabled()
+            val voiceLang = settingsRepository.getVoiceLang()
+            val voiceKeycode = settingsRepository.getVoiceKeycode().let {
+                if (it == 0) DEFAULT_VOICE_KEYCODE else it
+            }
+            val voiceReadyRu = voiceModelManager.isReady(VoiceLang.RU)
+            val voiceReadyEn = voiceModelManager.isReady(VoiceLang.EN)
+
+            val ttsEnabled = settingsRepository.isTtsEnabled()
+            // Resolve through the catalog so a legacy id (retired "denis"/"dmitri") shows its
+            // migrated voice selected in the UI, same as playback already resolves it.
+            val ttsVoice = TtsVoiceCatalog.byId(
+                appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                    .getString("tts_voice", TtsModelManager.DEFAULT_VOICE_ID) ?: TtsModelManager.DEFAULT_VOICE_ID,
+            ).id
+            val ttsReadyVoices = TtsVoiceCatalog.ALL.filter { ttsModelManager.isReady(it) }
+                .map { it.id }.toSet()
+            val ttsRate = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getFloat("tts_rate", 1.0f)
+            val ttsLiveliness = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getInt("tts_liveliness", 33)
+            val voicePrefsForTts = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            val rawTtsSource = voicePrefsForTts.getString("tts_source", TtsRouter.OFFLINE) ?: TtsRouter.OFFLINE
+            // Wave O T3: "openai" backend was removed (model not available on OpenRouter) --
+            // rewrite persisted "openai" to "offline" so no backend lookup ever silently fails.
+            val ttsSource = if (rawTtsSource == "openai") {
+                Log.i("SettingsViewModel", "tts_source was 'openai' (backend removed) -- migrating to offline")
+                voicePrefsForTts.edit().putString("tts_source", TtsRouter.OFFLINE).apply()
+                TtsRouter.OFFLINE
+            } else rawTtsSource
+            val minimaxProvider = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, "official")
+            val minimaxKeySet = settingsRepository.getString(SettingsRepository.KEY_MINIMAX_TTS_KEY, "").isNotBlank()
+
+            val gigaAmReady = gigaAmModelManager.isReady()
+
+            val agentEnabled = settingsRepository.isAgentEnabled()
+            val agentName = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getString("agent_name", "") ?: ""
+            val agentPersona = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getString("agent_persona", null) ?: AgentPersona.NAVIGATOR.id
+            val agentGender = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getString("agent_gender", "m") ?: "m"
+
+            // Wave J: multi-provider LLM connections
+            val zaiApiKey = settingsRepository.getString(SettingsRepository.KEY_ZAI_API_KEY, "")
+            val customName = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_NAME, "")
+            val customBaseUrl = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_BASE_URL, "")
+            val customApiKey = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_API_KEY, "")
+            val customModel = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_MODEL, "")
+            val primaryConn = settingsRepository.getString(SettingsRepository.KEY_AGENT_PRIMARY_CONN, "openrouter")
+            val fallbackConn = settingsRepository.getString(SettingsRepository.KEY_AGENT_FALLBACK_CONN, "")
 
             _uiState.update {
                 it.copy(
@@ -234,8 +396,8 @@ class SettingsViewModel @Inject constructor(
                     chainLog = chainLog,
                     openRouterApiKey = apiKey,
                     openRouterModel = modelId,
+                    exaApiKey = exaApiKey,
                     openRouterModelName = modelId.substringAfterLast("/").substringBefore(":"),
-                    insightCloudMode = insightCloud,
                     aliceEndpoint = aliceEndpoint,
                     aliceApiKey = aliceApiKey,
                     aliceEnabled = aliceEnabled,
@@ -245,6 +407,31 @@ class SettingsViewModel @Inject constructor(
                     abrpCarModel = abrpCarModel,
                     mapTileSource = mapTileSource,
                     disableNativeAssistant = disableNativeAssistant,
+                    voiceEnabled = voiceEnabled,
+                    voiceLang = voiceLang,
+                    voiceKeycode = voiceKeycode,
+                    voiceModelReadyRu = voiceReadyRu,
+                    voiceModelReadyEn = voiceReadyEn,
+                    ttsEnabled = ttsEnabled,
+                    ttsVoice = ttsVoice,
+                    ttsReadyVoices = ttsReadyVoices,
+                    ttsRate = ttsRate,
+                    ttsLiveliness = ttsLiveliness,
+                    ttsSource = ttsSource,
+                    minimaxProvider = minimaxProvider,
+                    minimaxKeySet = minimaxKeySet,
+                    gigaAmModelReady = gigaAmReady,
+                    agentEnabled = agentEnabled,
+                    agentName = agentName,
+                    agentPersona = agentPersona,
+                    agentGender = agentGender,
+                    zaiApiKey = zaiApiKey,
+                    customName = customName,
+                    customBaseUrl = customBaseUrl,
+                    customApiKey = customApiKey,
+                    customModel = customModel,
+                    primaryConn = primaryConn,
+                    fallbackConn = fallbackConn,
                 )
             }
         }
@@ -542,40 +729,141 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(openRouterApiKey = value) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_API_KEY, value)
-        }
-    }
-
-    fun setInsightCloudMode(cloud: Boolean) {
-        _uiState.update { it.copy(insightCloudMode = cloud) }
-        viewModelScope.launch {
-            settingsRepository.setString(
-                SettingsRepository.KEY_INSIGHT_MODE,
-                if (cloud) SettingsRepository.INSIGHT_MODE_CLOUD else SettingsRepository.INSIGHT_MODE_LOCAL,
-            )
-        }
-    }
-
-    fun refreshLocalInsight() {
-        viewModelScope.launch {
-            // Persist local mode in this same coroutine before refresh() reads it, so a fast
-            // switch-to-local then tap-refresh can't race the async write in setInsightCloudMode().
-            settingsRepository.setString(
-                SettingsRepository.KEY_INSIGHT_MODE,
-                SettingsRepository.INSIGHT_MODE_LOCAL,
-            )
-            val loading = appContext.getString(R.string.settings_ai_loading_label)
-            _uiState.update { it.copy(aiSaveStatus = loading) }
-            val insight = insightsManager.refresh()
-            _uiState.update {
-                it.copy(
-                    aiSaveStatus = if (insight != null) {
-                        appContext.getString(R.string.settings_ai_done)
+            // When a key is entered but no model has been chosen yet, fill in the default.
+            // Decision is made against the CURRENT state inside the CAS loop so a concurrent
+            // selectModel() call cannot be overwritten by a stale snapshot.
+            if (value.isNotBlank()) {
+                var filled = false
+                _uiState.update {
+                    if (it.openRouterModel.isBlank()) {
+                        filled = true
+                        it.copy(
+                            openRouterModel = DEFAULT_OPENROUTER_MODEL,
+                            openRouterModelName = DEFAULT_OPENROUTER_MODEL.substringAfterLast("/").substringBefore(":"),
+                        )
                     } else {
-                        appContext.getString(R.string.settings_ai_fetch_error)
-                    },
-                )
+                        filled = false // reset on CAS retry
+                        it
+                    }
+                }
+                if (filled) {
+                    settingsRepository.setString(SettingsRepository.KEY_OPENROUTER_MODEL, DEFAULT_OPENROUTER_MODEL)
+                }
             }
         }
+    }
+
+    fun saveExaApiKey(value: String) {
+        _uiState.update { it.copy(exaApiKey = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_EXA_API_KEY, value)
+        }
+    }
+
+    // Wave J: multi-provider LLM connections (OpenRouter / z.ai / custom)
+
+    fun saveZaiApiKey(value: String) = saveConnField(value, SettingsRepository.KEY_ZAI_API_KEY) { s, v -> s.copy(zaiApiKey = v) }
+    fun saveCustomName(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_NAME) { s, v -> s.copy(customName = v) }
+    fun saveCustomBaseUrl(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_BASE_URL) { s, v -> s.copy(customBaseUrl = v, customModelList = emptyList(), customModelsError = null) }
+    fun saveCustomApiKey(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_API_KEY) { s, v -> s.copy(customApiKey = v) }
+    fun saveCustomModel(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_MODEL) { s, v -> s.copy(customModel = v) }
+
+    private fun saveConnField(
+        value: String,
+        key: String,
+        update: (SettingsUiState, String) -> SettingsUiState,
+    ) {
+        _uiState.update { update(it, value) }
+        viewModelScope.launch { settingsRepository.setString(key, value.trim()) }
+    }
+
+    fun applyCustomPreset(name: String, baseUrl: String, model: String) {
+        saveCustomName(name)
+        saveCustomBaseUrl(baseUrl)
+        saveCustomModel(model)
+    }
+
+    fun selectPrimaryConn(id: String) {
+        _uiState.update { it.copy(primaryConn = id) }
+        viewModelScope.launch { settingsRepository.setString(SettingsRepository.KEY_AGENT_PRIMARY_CONN, id) }
+    }
+
+    fun selectFallbackConn(id: String) {
+        _uiState.update { it.copy(fallbackConn = id) }
+        viewModelScope.launch { settingsRepository.setString(SettingsRepository.KEY_AGENT_FALLBACK_CONN, id) }
+    }
+
+    /**
+     * Round-trips a canned prompt through the given connection to verify it actually works
+     * (not just that the fields are filled in). One in-flight guard per screen: a tap while
+     * another check is running is ignored.
+     */
+    fun testConnection(connId: String) {
+        if (_uiState.value.connTestRunning != null) return
+        _uiState.update { it.copy(connTestRunning = connId) }
+        viewModelScope.launch {
+            val conn = runCatching { llmConnectionResolver.get(connId) }.getOrNull()
+            val text = if (conn == null) {
+                appContext.getString(R.string.settings_conn_not_configured)
+            } else {
+                val start = SystemClock.elapsedRealtime()
+                val messages = JSONArray().put(
+                    JSONObject().put("role", "user").put("content", "Ответь одним словом: готов")
+                )
+                val result = openRouterClient.chatRaw(conn.baseUrl, conn.apiKey, conn.model, messages, null)
+                val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
+                result.fold(
+                    onSuccess = { appContext.getString(R.string.settings_conn_check_ok, elapsedSec) },
+                    onFailure = { networkErrorMessage(it) },
+                )
+            }
+            _uiState.update {
+                it.copy(connTestRunning = null, connTestResults = it.connTestResults + (connId to text))
+            }
+        }
+    }
+
+    /** Maps network exceptions to Russian user-readable messages. Used by testConnection and loadCustomModels.
+     * Walks the cause chain (up to 5 hops) so wrapped exceptions (e.g. IOException("…", UnknownHostException))
+     * are matched correctly. */
+    private fun networkErrorMessage(t: Throwable): String {
+        var cur: Throwable? = t
+        var depth = 0
+        while (cur != null && depth < 5) {
+            when (cur) {
+                is java.net.UnknownHostException -> return appContext.getString(R.string.settings_error_dns)
+                is java.net.SocketTimeoutException -> return appContext.getString(R.string.settings_error_timeout)
+                is LlmHttpException -> return appContext.getString(R.string.settings_error_with_message, "HTTP ${cur.code}")
+            }
+            cur = cur.cause
+            depth++
+        }
+        return appContext.getString(R.string.settings_error_with_message, t.message ?: "?")
+    }
+
+    /** Fetches model list from the custom connection's base URL and shows the picker dialog. */
+    fun loadCustomModels() {
+        val baseUrl = _uiState.value.customBaseUrl
+        val apiKey = _uiState.value.customApiKey
+        if (baseUrl.isBlank() || apiKey.isBlank()) return
+        _uiState.update { it.copy(customModelsLoading = true, customModelsError = null, customModelList = emptyList(), showCustomModelPicker = true) }
+        viewModelScope.launch {
+            val result = openRouterClient.fetchModelsFromUrl(baseUrl, apiKey)
+            result.fold(
+                onSuccess = { models ->
+                    _uiState.update { it.copy(customModelList = models, customModelsLoading = false) }
+                },
+                onFailure = { t ->
+                    _uiState.update {
+                        it.copy(customModelsError = networkErrorMessage(t), customModelsLoading = false)
+                    }
+                },
+            )
+        }
+    }
+
+    fun hideCustomModelPickerDialog() {
+        _uiState.update { it.copy(showCustomModelPicker = false) }
     }
 
     fun selectModel(model: OpenRouterModel) {
@@ -592,34 +880,26 @@ class SettingsViewModel @Inject constructor(
     fun showModelPicker() {
         val apiKey = _uiState.value.openRouterApiKey
         if (apiKey.isBlank()) return
-        _uiState.update { it.copy(showModelPicker = true, modelsLoading = true) }
-        viewModelScope.launch {
-            val models = insightsManager.getModels(apiKey)
-            _uiState.update { it.copy(availableModels = models, modelsLoading = false) }
-        }
+        _uiState.update { it.copy(showModelPicker = true) }
+        loadModels(apiKey)
     }
 
     fun hideModelPicker() {
         _uiState.update { it.copy(showModelPicker = false) }
     }
 
-    fun saveAiSettings() {
-        val apiKey = _uiState.value.openRouterApiKey
-        val model = _uiState.value.openRouterModel
-        if (apiKey.isBlank() || model.isBlank()) {
-            _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_no_key_model)) }
-            return
-        }
-        // "Загрузка инсайта..." is a programmatic state key used in SettingsScreen for comparison
-        // AND as display text; keep in sync with R.string.settings_ai_loading_label
-        _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_loading_label)) }
+    /**
+     * Fetches the OpenRouter model list into [SettingsUiState.availableModels], shared by both the
+     * AI-insights model picker (IntegrationsSection) and the agent model picker (Voice-agent section) so the
+     * list is fetched once regardless of which picker triggers it. Uses the same OpenRouter API key
+     * from Integrations for both.
+     */
+    private fun loadModels(apiKey: String = _uiState.value.openRouterApiKey) {
+        if (apiKey.isBlank()) return
+        _uiState.update { it.copy(modelsLoading = true) }
         viewModelScope.launch {
-            val insight = insightsManager.refresh()
-            if (insight != null) {
-                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_done)) }
-            } else {
-                _uiState.update { it.copy(aiSaveStatus = appContext.getString(R.string.settings_ai_fetch_error)) }
-            }
+            val models = insightsManager.getModels(apiKey)
+            _uiState.update { it.copy(availableModels = models, modelsLoading = false) }
         }
     }
 
@@ -730,13 +1010,385 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // -------------------------------------------------------------------------
+    // Voice settings actions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Writes [enabled] to Room AND to SharedPreferences("voice") so the
+     * AccessibilityService (SteeringWheelKeyService) picks it up synchronously.
+     * Room (SettingsRepository) is the primary store; the prefs file is a mirror
+     * required because AccessibilityServices cannot query Room on a background thread.
+     */
+    fun setVoiceEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(voiceEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setVoiceEnabled(enabled)
+            // Mirror into "voice" SharedPreferences for SteeringWheelKeyService
+            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putBoolean(SettingsRepository.KEY_VOICE_ENABLED, enabled).apply()
+            // Best-effort re-bind of the a11y key service (PTT is dead without it), same
+            // pattern as ClusterProjectionManager.enableStarControl: bootstrap the daemon
+            // FIRST — HelperClient only resolves an existing binder, so without ensureRunning()
+            // the call silently no-ops when the daemon is not up. Only needed on enable.
+            if (enabled) {
+                if (helperBootstrap.ensureRunning()) {
+                    helperClient.enableAccessibilityService()
+                } else {
+                    Log.e(TAG, "helper daemon not running; cannot self-enable a11y for voice PTT")
+                }
+                // Pre-warm the recognizer so the first PTT after enabling voice doesn't pay the
+                // cold model-load cost (Task 5). No-op if the model isn't downloaded yet.
+                viewModelScope.launch(Dispatchers.IO) { runCatching { continuousAsr.warmUp() } }
+            }
+        }
+    }
+
+    fun setVoiceLanguage(lang: String) {
+        _uiState.update { it.copy(voiceLang = lang) }
+        viewModelScope.launch {
+            settingsRepository.setVoiceLang(lang)
+            // Mirror into SharedPreferences("voice") so VoiceGate.preferredLang()
+            // and SteeringWheelKeyService can read it without querying Room.
+            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putString("voice_lang", lang).apply()
+        }
+    }
+
+    private var voiceDownloadJob: Job? = null
+
+    fun downloadVoiceModel(lang: VoiceLang) {
+        if (_uiState.value.voiceDownloadProgress >= 0) return   // already downloading
+        voiceDownloadJob = viewModelScope.launch {
+            _uiState.update { it.copy(voiceDownloadProgress = 0, voiceDownloadLang = lang, voiceDownloadErrorLang = null) }
+            val result = voiceModelManager.download(lang) { progress ->
+                _uiState.update { it.copy(voiceDownloadProgress = progress) }
+            }
+            val ready = voiceModelManager.isReady(lang)
+            _uiState.update {
+                it.copy(
+                    voiceDownloadProgress = -1,
+                    voiceDownloadLang = null,
+                    voiceDownloadErrorLang = if (result.isFailure) lang else null,
+                    voiceModelReadyRu = if (lang == VoiceLang.RU) ready else it.voiceModelReadyRu,
+                    voiceModelReadyEn = if (lang == VoiceLang.EN) ready else it.voiceModelReadyEn,
+                )
+            }
+        }
+    }
+
+    fun cancelVoiceDownload() {
+        voiceDownloadJob?.cancel()
+        voiceDownloadJob = null
+        _uiState.update { it.copy(voiceDownloadProgress = -1, voiceDownloadLang = null) }
+    }
+
+    fun deleteVoiceModel(lang: VoiceLang) {
+        voiceModelManager.delete(lang)
+        _uiState.update {
+            it.copy(
+                voiceModelReadyRu = if (lang == VoiceLang.RU) false else it.voiceModelReadyRu,
+                voiceModelReadyEn = if (lang == VoiceLang.EN) false else it.voiceModelReadyEn,
+            )
+        }
+    }
+
+    /**
+     * Persists the keycode learned from [LearnButtonDialog] into Room and into
+     * SharedPreferences("voice") so SteeringWheelKeyService reads the new value immediately.
+     */
+    fun saveVoiceKeycode(keycode: Int) {
+        _uiState.update { it.copy(voiceKeycode = keycode) }
+        viewModelScope.launch {
+            settingsRepository.setVoiceKeycode(keycode)
+            // Mirror for SteeringWheelKeyService
+            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putInt(SettingsRepository.KEY_VOICE_KEYCODE, keycode).apply()
+        }
+    }
+
+    // --- TTS (offline synthesis of agent replies) ---
+
+    /**
+     * Toggle offline TTS for agent replies. Persists via SettingsRepository (Room)
+     * and mirrors into SharedPreferences("voice") under the same key, same pattern
+     * as setVoiceEnabled, so VoiceGate.ttsEnabled() can read it without querying Room.
+     */
+    fun setTtsEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(ttsEnabled = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setTtsEnabled(enabled)
+            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putBoolean(SettingsRepository.KEY_TTS_ENABLED, enabled).apply()
+        }
+    }
+
+    /**
+     * Switches the voice used for offline TTS. Persists into SharedPreferences("voice")
+     * under "tts_voice", same access pattern as setTtsEnabled/KEY_TTS_ENABLED, so
+     * SherpaTtsEngine's selectedVoice() can read it without querying Room. Download state
+     * is tracked per voice (see downloadTtsVoice/deleteTtsVoice), so switching voices no
+     * longer needs to cancel or reset anything here.
+     */
+    fun setTtsVoice(voiceId: String) {
+        _uiState.update { it.copy(ttsVoice = voiceId) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putString("tts_voice", voiceId).apply()
+        ttsEngine.reload()
+    }
+
+    private val ttsDownloadJobs = mutableMapOf<String, Job>()
+
+    /** Downloads the model for [voiceId]. Voices sharing a modelDirId (artem/alena) become
+     *  ready together, since they share the same on-disk download. */
+    fun downloadTtsVoice(voiceId: String) {
+        if (_uiState.value.ttsDownloadProgress.containsKey(voiceId)) return   // already downloading
+        val voice = TtsVoiceCatalog.byId(voiceId)
+        val siblingIds = TtsVoiceCatalog.ALL.filter { it.modelDirId == voice.modelDirId }.map { it.id }.toSet()
+        ttsDownloadJobs[voiceId] = viewModelScope.launch {
+            _uiState.update {
+                it.copy(
+                    ttsDownloadProgress = it.ttsDownloadProgress + (voiceId to 0),
+                    ttsDownloadFailed = it.ttsDownloadFailed - voiceId,
+                )
+            }
+            val result = ttsModelManager.download(voice) { pct ->
+                // A late delivery after deleteTtsVoice() removed this voice's progress
+                // entry (idle) must not resurrect an in-progress state.
+                _uiState.update {
+                    if (!it.ttsDownloadProgress.containsKey(voiceId)) it
+                    else it.copy(ttsDownloadProgress = it.ttsDownloadProgress + (voiceId to pct))
+                }
+            }
+            if (result.isSuccess && ttsModelManager.ensureStressDict(voice)) {
+                ruStressMarker.preload()
+            }
+            val ready = ttsModelManager.isReady(voice)
+            _uiState.update {
+                it.copy(
+                    ttsDownloadProgress = it.ttsDownloadProgress - voiceId,
+                    ttsReadyVoices = if (ready) it.ttsReadyVoices + siblingIds else it.ttsReadyVoices - siblingIds,
+                    ttsDownloadFailed = if (result.isFailure) it.ttsDownloadFailed + voiceId else it.ttsDownloadFailed - voiceId,
+                )
+            }
+            ttsDownloadJobs.remove(voiceId)
+        }
+    }
+
+    /** Deletes the on-disk model for [voiceId]. Clears readiness for every voice sharing
+     *  its modelDirId (artem/alena), since the delete removes their shared download. */
+    fun deleteTtsVoice(voiceId: String) {
+        ttsDownloadJobs.remove(voiceId)?.cancel()
+        val voice = TtsVoiceCatalog.byId(voiceId)
+        val siblingIds = TtsVoiceCatalog.ALL.filter { it.modelDirId == voice.modelDirId }.map { it.id }.toSet()
+        _uiState.update {
+            it.copy(
+                ttsReadyVoices = it.ttsReadyVoices - siblingIds,
+                ttsDownloadProgress = it.ttsDownloadProgress - voiceId,
+                ttsDownloadFailed = it.ttsDownloadFailed - voiceId,
+            )
+        }
+        // Suspend delete: serialized against download's commit section inside
+        // the manager, so a cancelled download can't recreate the dir after us.
+        viewModelScope.launch { ttsModelManager.delete(voice.modelDirId) }
+    }
+
+    /** Speed slider (0.7-1.4). Reloads the engine so the new rate takes effect immediately. */
+    fun setTtsRate(rate: Float) {
+        _uiState.update { it.copy(ttsRate = rate) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putFloat("tts_rate", rate).apply()
+        ttsEngine.reload()
+    }
+
+    /** Intonation liveliness slider (0-100%). Baked into the engine config at creation,
+     *  so it requires a reload to take effect. */
+    fun setTtsLiveliness(value: Int) {
+        _uiState.update { it.copy(ttsLiveliness = value) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putInt("tts_liveliness", value).apply()
+        ttsEngine.reload()
+    }
+
+    /** Reloads the engine against the current voice/rate/liveliness and speaks a sample
+     *  line through the LOCAL offline engine, so the preview always demonstrates the piper
+     *  voice regardless of which online source is currently selected. */
+    fun previewVoice() {
+        ttsEngine.reload()
+        ttsEngine.speakOffline(PREVIEW_VOICE_TEXT)
+    }
+
+    // --- Wave N: online TTS source (Gemini via OpenRouter, MiniMax) ---
+
+    /**
+     * Switches which voice renders agent replies: "offline" (the local voice list) or an
+     * online backend id ("gemini"/"minimax"). Persists into SharedPreferences("voice")
+     * under "tts_source", the same access pattern as setTtsVoice/setTtsRate -- TtsRouter
+     * (VoiceModule.provideTtsEngine) reads it directly with no Room round-trip and no reload,
+     * since it re-checks the source on every speak() call. Selecting "minimax" while its key
+     * is unset is rejected here too, mirroring the disabled row in the UI.
+     */
+    fun setTtsSource(source: String) {
+        if (source == MINIMAX_SOURCE && !_uiState.value.minimaxKeySet) return
+        _uiState.update { it.copy(ttsSource = source) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putString("tts_source", source).apply()
+    }
+
+    /** Persists the MiniMax transport ("official"/"fal"/"replicate") read by MiniMaxTtsBackend. */
+    fun setMinimaxProvider(provider: String) {
+        _uiState.update { it.copy(minimaxProvider = provider) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_MINIMAX_TTS_PROVIDER, provider)
+        }
+    }
+
+    /**
+     * Persists the MiniMax API key. The raw value never enters [SettingsUiState] -- only
+     * [SettingsUiState.minimaxKeySet] does, so the Settings screen can never echo it back.
+     * Clearing the key while it's the active tts_source falls back to offline via
+     * [setTtsSource], since a selected-but-disabled MiniMax row would otherwise be stuck.
+     */
+    fun setMinimaxKey(key: String) {
+        val trimmed = key.trim()
+        _uiState.update { it.copy(minimaxKeySet = trimmed.isNotBlank()) }
+        if (trimmed.isBlank() && _uiState.value.ttsSource == MINIMAX_SOURCE) {
+            setTtsSource(TtsRouter.OFFLINE)
+        }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_MINIMAX_TTS_KEY, trimmed)
+        }
+    }
+
+    // --- GigaAM v2 ASR (free-form Russian speech recognition, offline) ---
+
+    private var gigaAmDownloadJob: Job? = null
+
+    fun downloadGigaAmModel() {
+        if (_uiState.value.gigaAmDownloadProgress >= 0) return   // already downloading
+        gigaAmDownloadJob = viewModelScope.launch {
+            _uiState.update { it.copy(gigaAmDownloadProgress = 0, gigaAmDownloadFailed = false) }
+            val result = gigaAmModelManager.download { pct ->
+                // A late delivery after deleteGigaAmModel() reset progress to -1 (idle) must
+                // not resurrect an in-progress state.
+                _uiState.update {
+                    if (it.gigaAmDownloadProgress < 0) it else it.copy(gigaAmDownloadProgress = pct)
+                }
+            }
+            _uiState.update {
+                it.copy(
+                    gigaAmDownloadProgress = -1,
+                    gigaAmModelReady = gigaAmModelManager.isReady(),
+                    gigaAmDownloadFailed = result.isFailure,
+                )
+            }
+            // Pre-warm the recognizer right after a successful download so the first PTT
+            // doesn't pay the cold model-load cost (Task 5).
+            if (result.isSuccess) {
+                viewModelScope.launch(Dispatchers.IO) { runCatching { continuousAsr.warmUp() } }
+            }
+            gigaAmDownloadJob = null
+        }
+    }
+
+    fun deleteGigaAmModel() {
+        gigaAmDownloadJob?.cancel()
+        gigaAmDownloadJob = null
+        _uiState.update { it.copy(gigaAmModelReady = false, gigaAmDownloadProgress = -1, gigaAmDownloadFailed = false) }
+        // Suspend delete: serialized against download's commit section inside
+        // the manager, so a cancelled download can't recreate the files after us.
+        viewModelScope.launch { gigaAmModelManager.delete() }
+    }
+
+    // --- Voice agent (hidden) ---
+
+    fun setAgentEnabled(enabled: Boolean) {
+        _uiState.update { it.copy(agentEnabled = enabled) }
+        viewModelScope.launch { settingsRepository.setAgentEnabled(enabled) }
+    }
+
+    /**
+     * Persists the agent's wake/display name into SharedPreferences("voice") under
+     * "agent_name", same access pattern as setTtsEnabled/setTtsVoice, so
+     * VoiceModule.provideAgentIdentity() can read it without querying Room.
+     */
+    fun setAgentName(name: String) {
+        _agentName.value = name
+        _uiState.update { it.copy(agentName = name) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putString("agent_name", name).apply()
+    }
+
+    /**
+     * Switches the agent's persona (spoken-reply style). Persists into
+     * SharedPreferences("voice") under "agent_persona", same access pattern as
+     * setAgentName, so VoiceModule.provideAgentIdentity() can read it without querying Room.
+     */
+    fun setAgentPersona(id: String) {
+        _agentPersona.value = id
+        _uiState.update { it.copy(agentPersona = id) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putString("agent_persona", id).apply()
+    }
+
+    /**
+     * Switches the agent's gender ("m"/"f"). Persists into SharedPreferences("voice")
+     * under "agent_gender", same access pattern as setAgentPersona. If the currently
+     * selected TTS voice doesn't match the new gender, switches it to its counterpart
+     * (all catalog voices are local; online voices are added by a later task).
+     */
+    fun setAgentGender(gender: String) {
+        _uiState.update { it.copy(agentGender = gender) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putString("agent_gender", gender).apply()
+        val wantGender = if (gender == "f") TtsGender.FEMALE else TtsGender.MALE
+        val currentVoice = TtsVoiceCatalog.byId(_uiState.value.ttsVoice)
+        if (currentVoice.gender != wantGender) {
+            setTtsVoice(TtsVoiceCatalog.counterpart(currentVoice).id)
+        }
+    }
+
+    /**
+     * Runs a canned prompt through the REAL agent pipeline (AgentOrchestrator, tools
+     * included) so the timing matches actual voice usage, and reports wall time + answer.
+     * One in-flight guard: a tap while already running is ignored.
+     */
+    fun testAgentModel() {
+        if (_uiState.value.modelTestRunning) return
+        _uiState.update { it.copy(modelTestRunning = true) }
+        val state = _uiState.value
+        val modelLabel = state.openRouterModel.ifBlank { "?" }
+        viewModelScope.launch {
+            val start = SystemClock.elapsedRealtime()
+            val result = agentOrchestrator.ask(AGENT_TEST_PROMPT)
+            val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
+            val text = when (result) {
+                is AgentResult.Answer -> appContext.getString(
+                    R.string.agent_test_model_result, modelLabel, elapsedSec, result.text.take(80)
+                )
+                AgentResult.Disabled -> appContext.getString(R.string.agent_test_model_disabled)
+                is AgentResult.Error -> appContext.getString(R.string.settings_error_with_message, result.message)
+            }
+            _uiState.update { it.copy(modelTestRunning = false, modelTestResult = text) }
+        }
+    }
+
     private var logProcess: Process? = null
     private var logFile: File? = null
     private var logAutoStopJob: Job? = null
 
     companion object {
+        private const val TAG = "SettingsViewModel"
         private const val LOG_MAX_DURATION_MS = 2 * 60 * 60 * 1000L // 2 hours auto-stop
+        /** Slug verified in the live OpenRouter catalog (2026-07-08). */
+        internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-lite"
         private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
+        private const val PREVIEW_VOICE_TEXT =
+            "Маршрут построен. Через двести метров поверните направо."
+        private const val AGENT_TEST_PROMPT =
+            "Проверка связи. Вызови инструмент get_vehicle_state и ответь одним коротким " +
+                "предложением: какой заряд батареи."
+        private const val MINIMAX_SOURCE = "minimax"
     }
 
     /**

@@ -2,18 +2,26 @@ package com.bydmate.app.data.automation
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.SearchManager
 import android.content.ActivityNotFoundException
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.media.AudioManager
+import android.media.session.MediaController
+import android.media.session.MediaSessionManager
 import android.net.Uri
+import android.os.Bundle
+import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
+import com.bydmate.app.media.MediaSessionListenerService
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -37,32 +45,86 @@ class ActionDispatcher @Inject constructor(
         private const val BT_CALL_PACKAGE = "com.byd.bluetoothcall"
         private const val BT_CALL_ACTION_DIAL_HANGUP = "com.byd.btcall.action.DIAL_HANGUP"
         private const val BT_CALL_KEYCODE_DIAL = 313
+        private const val YANDEX_MUSIC_PACKAGE = "ru.yandex.music"
+        private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
         // Hard cap on user-set delay action; protects against typos like "60000000".
         private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
 
         /**
-         * True if [command] would OPEN a window/sunroof/sunshade (apertures that
-         * are blocked above 80 km/h). Pure predicate — kept in the companion so it
-         * is unit-testable without Android deps.
+         * True if [command] would OPEN a side window (车窗/主驾/副驾/后左/后右) --
+         * gated above 120 km/h. Sunroof (天窗) and sunshade (遮阳帘) are NOT
+         * included: sunroof has its own lower threshold, sunshade is interior and
+         * ungated. Pure predicate -- unit-testable without Android deps.
          *
          * "打开N" sets the aperture to N%; N==0 is a CLOSE (safe at speed) and must
          * not be treated as an open. A bare "打开" with no percentage is treated
          * conservatively as an open. 全开/半开/通风 are always opens.
          *
          * Seat commands (座椅, e.g. 主驾座椅通风N档) share the 主驾/副驾 subject and the
-         * 通风 keyword but are NOT apertures — they must never be window-gated.
+         * 通风 keyword but are NOT apertures -- they must never be window-gated.
          */
         internal fun isWindowOpenCommand(command: String): Boolean {
-            if (command.contains("座椅")) return false   // seat heat/vent is not a window
-            val subjects = listOf("车窗", "天窗", "主驾", "副驾", "后左", "后右", "遮阳帘")
+            if (command.contains("座椅")) return false
+            val subjects = listOf("车窗", "主驾", "副驾", "后左", "后右")
             if (subjects.none { command.contains(it) }) return false
             if (command.contains("关")) return false
             val opensViaPosition = POSITION_OPEN.find(command)
                 ?.let { it.groupValues[1].toInt() > 0 }
-                ?: command.contains("打开")        // bare "打开" (no %) — treat as open
+                ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
             val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
             return opensViaPosition || opensViaWord
+        }
+
+        /**
+         * True if [command] would OPEN the sunroof (天窗) -- gated above 80 km/h.
+         * Close and stop commands are not gated. Pure predicate -- unit-testable
+         * without Android deps.
+         */
+        internal fun isSunroofOpenCommand(command: String): Boolean {
+            if (!command.contains("天窗")) return false
+            if (command.contains("关")) return false
+            val opensViaPosition = POSITION_OPEN.find(command)
+                ?.let { it.groupValues[1].toInt() > 0 }
+                ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
+            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
+            return opensViaPosition || opensViaWord
+        }
+
+        /**
+         * True if [command] would OPEN the sunshade (遮阳帘). NEVER speed-gated
+         * (interior shade) -- used only by the voice early-fire guard, which must
+         * hold ALL aperture opens for the final because a bare-noun partial can
+         * still be qualified. Pure predicate -- unit-testable without Android deps.
+         */
+        internal fun isSunshadeOpenCommand(command: String): Boolean {
+            if (!command.contains("遮阳帘")) return false
+            if (command.contains("关")) return false
+            val opensViaPosition = POSITION_OPEN.find(command)
+                ?.let { it.groupValues[1].toInt() > 0 }
+                ?: command.contains("打开")        // bare "打开" (no %) -- treat as open
+            val opensViaWord = listOf("全开", "半开", "通风").any { command.contains(it) }
+            return opensViaPosition || opensViaWord
+        }
+
+        /**
+         * Returns a block reason string if [command] is an aperture-open that is
+         * forbidden at [speed], or null if the command is allowed. Sunshade (遮阳帘)
+         * is interior and always returns null. Pure function -- unit-testable.
+         *
+         *  - Sunroof (天窗): blocked when speed > 80 or speed is null.
+         *  - Windows (车窗/主驾/副驾/后左/后右): blocked when speed > 120 or speed is null.
+         */
+        internal fun speedGateBlockReason(command: String, speed: Int?): String? {
+            if (isSunroofOpenCommand(command)) {
+                val s = speed ?: return "Скорость неизвестна"
+                if (s > 80) return "Открытие люка заблокировано на скорости ${s} км/ч (>80)"
+            }
+            if (isWindowOpenCommand(command)) {
+                val s = speed ?: return "Скорость неизвестна"
+                if (s > 120) return "Открытие окон заблокировано на скорости ${s} км/ч (>120)"
+            }
+            return null
         }
 
         /**
@@ -77,9 +139,36 @@ class ActionDispatcher @Inject constructor(
 
         /** Clamp a requested media volume level to the device's valid [0, max] range. Pure — unit-testable. */
         internal fun clampVolume(level: Int, max: Int): Int = level.coerceIn(0, max.coerceAtLeast(0))
+
+        /** Parse a media_volume payload into a concrete operation. Pure, unit-testable.
+         *  Plain int -> set+clamp (back-compat with automation actions); "+k"/"-k" ->
+         *  step from current+clamp; "mute"/"unmute" -> AudioManager mute. */
+        internal fun resolveVolumeOp(payload: String, current: Int, max: Int): VolumeOp {
+            if (payload == "mute") return VolumeOp.Mute
+            if (payload == "unmute") return VolumeOp.Unmute
+            val signed = payload.startsWith("+") || payload.startsWith("-")
+            val n = payload.toIntOrNull() ?: return VolumeOp.Invalid
+            val target = if (signed) current + n else n
+            return VolumeOp.SetTo(clampVolume(target, max))
+        }
+    }
+
+    sealed interface VolumeOp {
+        data class SetTo(val level: Int) : VolumeOp
+        data object Mute : VolumeOp
+        data object Unmute : VolumeOp
+        data object Invalid : VolumeOp
     }
 
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
+
+    // Test seam: real impl asks MediaSessionManager for active sessions via our listener component.
+    internal var activeMediaControllers: () -> List<MediaController> = {
+        runCatching {
+            val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
+            msm.getActiveSessions(ComponentName(context, MediaSessionListenerService::class.java))
+        }.getOrDefault(emptyList())
+    }
 
     init {
         createUserChannels()
@@ -95,12 +184,17 @@ class ActionDispatcher @Inject constructor(
             "navigate" -> navigate(action)
             "url" -> openUrl(action)
             "yandex_music" -> launchYandexMusic(action)
+            "youtube" -> launchYoutube(action)
+            "go_home" -> goHome()
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "sentry" -> dispatchSentry(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
+        // CancellationException must propagate so the voice routing job can be
+        // cancelled by the orb hard-stop without swallowing the signal as a failure.
+        if (e is CancellationException) throw e
         Log.e(TAG, "dispatch failed for kind=${action.kind}: ${e.message}")
         DispatchResult(false, e.message ?: "Unknown error")
     }
@@ -131,13 +225,26 @@ class ActionDispatcher @Inject constructor(
     // --- media volume (standard AudioManager, no autoservice) ---
 
     private fun setMediaVolume(action: ActionDef): DispatchResult {
-        val level = action.payload?.toIntOrNull()
-            ?: return DispatchResult(false, "Уровень громкости не задан")
+        val payload = action.payload ?: return DispatchResult(false, "Уровень громкости не задан")
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             ?: return DispatchResult(false, "AudioManager недоступен")
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        am.setStreamVolume(AudioManager.STREAM_MUSIC, clampVolume(level, max), 0)
-        return DispatchResult(true)
+        val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        return when (val op = resolveVolumeOp(payload, current, max)) {
+            is VolumeOp.SetTo -> {
+                am.setStreamVolume(AudioManager.STREAM_MUSIC, op.level, 0)
+                DispatchResult(true)
+            }
+            VolumeOp.Mute -> {
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0)
+                DispatchResult(true)
+            }
+            VolumeOp.Unmute -> {
+                am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0)
+                DispatchResult(true)
+            }
+            VolumeOp.Invalid -> DispatchResult(false, "Некорректный уровень громкости: $payload")
+        }
     }
 
     // --- param (native autoservice via VehicleApi) ---
@@ -166,11 +273,7 @@ class ActionDispatcher @Inject constructor(
             if (speed > 0) return "Передний багажник открывается только на стоянке (скорость $speed км/ч)"
         }
         if (data == null) return null
-        if (isWindowOpenCommand(command)) {
-            val speed = data.speed ?: return "Скорость неизвестна"
-            if (speed > 80) return "Открытие окон заблокировано на скорости ${speed} км/ч (>80)"
-        }
-        return null
+        return speedGateBlockReason(command, data.speed)
     }
 
     // --- notifications (user-visible) ---
@@ -227,9 +330,20 @@ class ActionDispatcher @Inject constructor(
         val payload = parsePayload(action.payload)
         val pkg = payload?.optString("packageName")?.takeIf(String::isNotBlank)
             ?: return DispatchResult(false, "packageName не задан")
-        val intent = context.packageManager.getLaunchIntentForPackage(pkg)
-            ?: return DispatchResult(false, "Приложение не установлено: $pkg")
-        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        if (context.packageManager.getLaunchIntentForPackage(pkg) == null) {
+            return DispatchResult(false, "Приложение не установлено: $pkg")
+        }
+        // Authoritative launch via the shell-uid daemon (am start): a startActivity from
+        // this @ApplicationContext can lose the foreground race when BYDMate is on top
+        // (e.g. a voice session started from the Settings screen), so the launched app
+        // would snap back behind us. Fall back to startActivity only when the daemon is
+        // unreachable.
+        if (helper.launchApp(pkg)) {
+            maybeMinimize(payload)
+            return DispatchResult(true)
+        }
+        val intent = context.packageManager.getLaunchIntentForPackage(pkg)!!
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val result = tryStartActivity(intent, "app_launch:$pkg")
         if (result.success) maybeMinimize(payload)
         return result
@@ -259,6 +373,15 @@ class ActionDispatcher @Inject constructor(
 
     private fun navigate(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
+        // Free-text destination: open Navigator's map search (route needs coordinates,
+        // which the agent does not have for arbitrary addresses).
+        val query = payload.optString("query").takeIf(String::isNotBlank)
+        if (query != null) {
+            val intent = Intent(Intent.ACTION_VIEW,
+                Uri.parse("yandexnavi://map_search?text=${Uri.encode(query)}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return tryStartActivity(intent, "navigate_search:$query")
+        }
         val lat = payload.optDouble("lat", Double.NaN)
         val lon = payload.optDouble("lon", Double.NaN)
         if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
@@ -282,6 +405,39 @@ class ActionDispatcher @Inject constructor(
     private suspend fun launchYandexMusic(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val mode = payload?.optString("mode")?.takeIf(String::isNotBlank) ?: "mybeat"
+        if (mode == "play") {
+            val playPayload = payload ?: return DispatchResult(false, "query не задан")
+            val query = playPayload.optString("query").takeIf(String::isNotBlank)
+                ?: return DispatchResult(false, "query не задан")
+            // Real playback path: playFromSearch on Yandex Music's live MediaSession actually
+            // starts the top hit; the MEDIA_PLAY_FROM_SEARCH intent below only opens the search
+            // screen (field defect APK 337). Needs notification-listener access (self-granted).
+            val controller = runCatching { activeMediaControllers() }
+                .getOrDefault(emptyList())
+                .firstOrNull { it.packageName == YANDEX_MUSIC_PACKAGE }
+            if (controller != null) {
+                val ok = runCatching {
+                    controller.transportControls.playFromSearch(query, Bundle())
+                }.isSuccess
+                if (ok) { maybeMinimize(playPayload); return DispatchResult(true) }
+            }
+            // No live session / no listener access: fall through to the search intent so the
+            // command still does something visible.
+            return launchYandexMusic(action.copy(
+                payload = playPayload.put("mode", "search").toString()))
+        }
+        if (mode == "search") {
+            val query = payload?.optString("query")?.takeIf(String::isNotBlank)
+                ?: return DispatchResult(false, "query не задан")
+            val intent = Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .setPackage(YANDEX_MUSIC_PACKAGE)
+                .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                .putExtra(SearchManager.QUERY, query)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            val result = tryStartActivity(intent, "yandex_music_search:$query")
+            if (result.success) maybeMinimize(payload)
+            return result
+        }
         val deeplink = when (mode) {
             "mybeat" -> "yandexmusic://radio/user/onyourwave?play=true"
             else -> return DispatchResult(false, "Неизвестный режим Я.Музыки: $mode")
@@ -291,6 +447,45 @@ class ActionDispatcher @Inject constructor(
         val result = tryStartActivity(intent, "yandex_music:$mode")
         if (result.success) maybeMinimize(payload)
         return result
+    }
+
+    // --- youtube (search / play-from-search) ---
+
+    private suspend fun launchYoutube(action: ActionDef): DispatchResult {
+        val payload = parsePayload(action.payload)
+        val query = payload?.optString("query")?.takeIf(String::isNotBlank)
+            ?: return DispatchResult(false, "query не задан")
+        val pkg = YOUTUBE_PACKAGES.firstOrNull { isPackageInstalled(it) }
+            ?: return DispatchResult(false, "Приложение YouTube не установлено")
+        val mode = payload.optString("mode").takeIf(String::isNotBlank) ?: "play"
+        val intent = when (mode) {
+            // Assistant-style voice search: stock YouTube auto-plays the top hit for this intent.
+            // Whether the anddea (ReVanced) build keeps that behavior is validated on-car; the
+            // search screen it opens otherwise is an acceptable degradation.
+            "play" -> Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH)
+                .setPackage(pkg)
+                .putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                .putExtra(SearchManager.QUERY, query)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            "search" -> Intent(Intent.ACTION_VIEW,
+                Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(query)))
+                .setPackage(pkg)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            else -> return DispatchResult(false, "Неизвестный режим YouTube: $mode")
+        }
+        val result = tryStartActivity(intent, "youtube_$mode:$query")
+        if (result.success) maybeMinimize(payload)
+        return result
+    }
+
+    private fun isPackageInstalled(pkg: String): Boolean =
+        context.packageManager.getLaunchIntentForPackage(pkg) != null
+
+    private fun goHome(): DispatchResult {
+        val home = Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_HOME)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return tryStartActivity(home, "go_home")
     }
 
     private suspend fun maybeMinimize(payload: JSONObject?) {

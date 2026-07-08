@@ -305,7 +305,7 @@ class AutomationI18nGoldenTest {
         "DoorRL" to listOf("0" to "Закрыта", "1" to "Открыта"),
         "DoorRR" to listOf("0" to "Закрыта", "1" to "Открыта"),
         "Hood" to listOf("0" to "Закрыт", "1" to "Открыт"),
-        "LockFL" to listOf("0" to "Разблокирован", "1" to "Заблокирован"),
+        "LockFL" to listOf("1" to "Разблокирован", "2" to "Заблокирован"),
         "Trunk" to listOf("0" to "Закрыт", "1" to "Открыт"),
         "ACCirc" to listOf("0" to "Внешний воздух", "1" to "Внутренний воздух"),
         "SeatbeltFL" to listOf("0" to "Не пристёгнут", "1" to "Пристёгнут"),

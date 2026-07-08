@@ -2,7 +2,6 @@ package com.bydmate.app.data.remote
 
 import android.content.Context
 import android.util.Log
-import androidx.annotation.VisibleForTesting
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
@@ -38,104 +37,30 @@ class InsightsManager @Inject constructor(
         private const val KEY_MODELS_JSON = "models_json"
         private const val KEY_MODELS_DATE = "models_date"
         private const val KEY_V12_HISTORY = "v12_history"   // JSON array of {date:"yyyy-MM-dd", volts:Double}, max 7 entries
-        private val LANGUAGE_CACHE_KEY = Regex("^insight_\\d{4}-\\d{2}-\\d{2}_[a-z]{2}$")
+        private val LANGUAGE_CACHE_KEY = Regex("^insight_\\d{4}-\\d{2}-\\d{2}_[a-z]{2}_\\d+$")
 
         @JvmStatic
-        fun cacheKey(date: String, lang: String): String = "insight_${date}_${lang}"
-
-        private const val SYSTEM_PROMPT_RU = """You are an EV driving analyst for BYD Leopard 3 (Fangchengbao Bao 3), a plug-in hybrid SUV with a 72.9 kWh LFP Blade Battery.
-
-Analyze the provided driving statistics and return actionable insights in Russian. Respond only на русском.
-
-Focus on:
-- Consumption patterns and trends (week-over-week AND month-over-month)
-- Cost optimization opportunities
-- Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
-- Driving habit impact (short trips vs long, speed impact on consumption)
-- Seasonal/temperature effects on range and consumption
-- Correlations the user wouldn't notice (time of day vs efficiency, temperature vs consumption)
-
-IMPORTANT about "Stationary consumption":
-This is energy used while the vehicle is RUNNING but NOT MOVING — engine warmup, waiting with A/C on, configuring the car, etc. This is NORMAL behavior, NOT a parasitic drain or anomaly. Do NOT recommend checking remote access, alarm systems, or parking mode settings. Only mention it if the proportion is notably high compared to driving consumption, and frame advice as "reduce idle time" not "diagnose a problem".
-
-Be specific — reference actual numbers from the data. Give practical advice.
-Do NOT mention SoH percentage or battery capacity estimation — we cannot measure it accurately.
-
-Key metrics and dynamics (consumption, mileage, trends) are shown separately in the UI — do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
-
-Return ONLY valid JSON (no markdown, no code fences):
-{"title":"key change in 3-5 words","summary":"cause or advice, max 60 chars","insights":["insight 1","insight 2","insight 3"],"tone":"good|warning|critical"}
-
-title: the most important change or finding — e.g. "Расход ▲8% за неделю", "Расход стабилен", "Батарея в норме". NEVER write generic titles like "Анализ эффективности", "Обзор статистики", "Итоги недели" — always the KEY FINDING with a number.
-summary: the cause or actionable advice — e.g. "Много коротких поездок — прогрев забирает энергию". Max 60 chars.
-Each insight: 1-2 sentences in Russian. Start with the key finding. Reference specific numbers. Max 3 insights.
-
-tone guidelines:
-- "good": everything looks normal or improving
-- "warning": notable degradation or concerning pattern
-- "critical": anomaly that needs immediate attention
-
-Anti-hallucination rules (CRITICAL):
-- If the data block shows fewer than 5 trips, fewer than 2 days of 12V history, or a section is entirely missing — do NOT invent trends, percentages, or correlations for that aspect. Either omit that topic or say data is insufficient.
-- Never quote numbers the data block does not contain. If you are uncertain about a figure, do not mention it.
-- If the data is too thin overall, return {"title":"Данных мало для анализа","summary":"Нужно больше поездок на неделе","insights":[],"tone":"good"} and nothing else."""
-
-        private const val SYSTEM_PROMPT_EN = """You are an EV driving analyst for BYD Leopard 3 (Fangchengbao Bao 3), a plug-in hybrid SUV with a 72.9 kWh LFP Blade Battery.
-
-Analyze the provided driving statistics and return actionable insights in English. Respond only in English.
-
-Focus on:
-- Consumption patterns and trends (week-over-week AND month-over-month)
-- Cost optimization opportunities
-- Battery health indicators (cell voltage delta, 12V battery voltage, temperature)
-- Driving habit impact (short trips vs long, speed impact on consumption)
-- Seasonal/temperature effects on range and consumption
-- Correlations the user would not notice (time of day vs efficiency, temperature vs consumption)
-
-IMPORTANT about "Stationary consumption":
-This is energy used while the vehicle is RUNNING but NOT MOVING - engine warmup, waiting with A/C on, configuring the car, etc. This is NORMAL behavior, NOT a parasitic drain or anomaly. Do NOT recommend checking remote access, alarm systems, or parking mode settings. Only mention it if the proportion is notably high compared to driving consumption, and frame advice as "reduce idle time" not "diagnose a problem".
-
-Be specific - reference actual numbers from the data. Give practical advice.
-Do NOT mention SoH percentage or battery capacity estimation - we cannot measure it accurately.
-
-Key metrics and dynamics (consumption, mileage, trends) are shown separately in the UI - do NOT repeat raw numbers. Focus ONLY on non-obvious correlations and actionable advice.
-
-Return ONLY valid JSON (no markdown, no code fences):
-{"title":"key change in 3-5 words","summary":"cause or advice, max 60 chars","insights":["insight 1","insight 2","insight 3"],"tone":"good|warning|critical"}
-
-title: the most important change or finding, e.g. "Consumption up 8%" or "Battery looks normal". NEVER write generic titles like "Efficiency analysis", "Statistics overview", or "Weekly summary". Always state the key finding with a number.
-summary: the cause or actionable advice, max 60 chars.
-Each insight: 1-2 sentences in English. Start with the key finding. Reference specific numbers. Max 3 insights.
-
-tone guidelines:
-- "good": everything looks normal or improving
-- "warning": notable degradation or concerning pattern
-- "critical": anomaly that needs immediate attention
-
-Anti-hallucination rules (CRITICAL):
-- If the data block shows fewer than 5 trips, fewer than 2 days of 12V history, or a section is entirely missing, do NOT invent trends, percentages, or correlations for that aspect. Either omit that topic or say data is insufficient.
-- Never quote numbers the data block does not contain. If you are uncertain about a figure, do not mention it.
-- If the data is too thin overall, return {"title":"Not enough data","summary":"More weekly trips are needed","insights":[],"tone":"good"} and nothing else."""
+        fun cacheKey(date: String, lang: String, periodDays: Int = 7): String = "insight_${date}_${lang}_${periodDays}"
     }
 
     private val prefs by lazy {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
     }
 
-    fun getCachedInsight(): InsightData? {
-        val json = prefs.getString(cacheKey(todayString(), currentLanguage()), null) ?: return null
+    fun getCachedInsight(periodDays: Int = 7): InsightData? {
+        val json = prefs.getString(cacheKey(todayString(), currentLanguage(), periodDays), null) ?: return null
         return parseInsight(json)
     }
 
     /** Cached insight with local-only dynamics (e.g. night idle row) applied at read time. */
-    suspend fun getDisplayInsight(): InsightData? {
-        val cached = getCachedInsight() ?: return null
-        return enrichLocalInsight(cached)
+    suspend fun getDisplayInsight(periodDays: Int = 7): InsightData? {
+        val cached = getCachedInsight(periodDays) ?: return null
+        return enrichLocalInsight(cached, periodDays)
     }
 
-    fun getCachedDate(): String? {
+    fun getCachedDate(periodDays: Int = 7): String? {
         val today = todayString()
-        return if (prefs.contains(cacheKey(today, currentLanguage()))) today else null
+        return if (prefs.contains(cacheKey(today, currentLanguage(), periodDays))) today else null
     }
 
     private fun todayString(): String =
@@ -147,18 +72,8 @@ Anti-hallucination rules (CRITICAL):
     private fun currentLanguage(): String =
         localePreferences.getLanguage() ?: "ru"
 
-    private fun buildPrompt(lang: String): String =
-        when (lang) {
-            "en" -> SYSTEM_PROMPT_EN
-            else -> SYSTEM_PROMPT_RU
-        }
-
-    @VisibleForTesting
-    @Suppress("UNUSED_PARAMETER")
-    fun buildPromptForTest(data: InsightData, lang: String): String = buildPrompt(lang)
-
-    fun needsRefresh(): Boolean {
-        return !prefs.contains(cacheKey(todayString(), currentLanguage()))
+    fun needsRefresh(periodDays: Int = 7): Boolean {
+        return !prefs.contains(cacheKey(todayString(), currentLanguage(), periodDays))
     }
 
     fun migrateLegacyCache() {
@@ -172,22 +87,9 @@ Anti-hallucination rules (CRITICAL):
         editor.apply()
     }
 
-    /** Insights card is available: always in local mode; in cloud mode needs an API key. */
-    suspend fun canShowInsights(): Boolean {
-        if (!isCloudMode()) return true
-        return settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "").isNotBlank()
-    }
-
-    suspend fun isCloudMode(): Boolean =
-        settingsRepository.getString(
-            SettingsRepository.KEY_INSIGHT_MODE,
-            SettingsRepository.INSIGHT_MODE_LOCAL,
-        ) == SettingsRepository.INSIGHT_MODE_CLOUD
-
-    suspend fun refreshIfNeeded(): InsightData? {
-        if (!canShowInsights()) return getCachedInsight()
-        if (!needsRefresh()) return getCachedInsight()
-        return refresh()
+    suspend fun refreshIfNeeded(periodDays: Int = 7): InsightData? {
+        if (!needsRefresh(periodDays)) return getCachedInsight(periodDays)
+        return refresh(periodDays)
     }
 
     /** Record today's 12V reading (if available). Keeps the last 7 unique dates. */
@@ -212,23 +114,24 @@ Anti-hallucination rules (CRITICAL):
         prefs.edit().putString(KEY_V12_HISTORY, trimmed.toString()).apply()
     }
 
-    suspend fun refresh(): InsightData? {
+    /** Generate (or serve from today's cache) the insight for a 7- or 30-day window. */
+    suspend fun refresh(periodDays: Int = 7): InsightData? {
         append12VSample()
-        return if (isCloudMode()) refreshCloud() else refreshLocal()
+        return refreshLocal(periodDays)
     }
 
-    private suspend fun refreshLocal(): InsightData? {
+    private suspend fun refreshLocal(periodDays: Int): InsightData? {
         return try {
             val lang = currentLanguage()
-            val stats = collectStats()
+            val stats = collectStats(periodDays)
             if (stats == null) {
                 Log.d(TAG, "Not enough data for local insights")
                 return null
             }
-            val dynamics = buildDynamics(lang).toMutableList()
-            insertNightDrainMetricIfLocal(dynamics, lang)
+            val dynamics = buildDynamics(lang, periodDays).toMutableList()
+            insertNightDrainMetricIfLocal(dynamics, lang, periodDays)
             val tone = determineTone(dynamics)
-            val text = LocalInsightEngine.generate(stats, localizedResources(lang))
+            val text = LocalInsightEngine.generate(stats, localizedResources(lang), periodDays)
             val insight = InsightData(
                 title = text.title,
                 summary = text.summary,
@@ -236,90 +139,16 @@ Anti-hallucination rules (CRITICAL):
                 insights = text.insights,
                 tone = tone,
             )
-            cacheInsight(insight, lang)
+            cacheInsight(insight, lang, periodDays)
             Log.i(TAG, "Local insight refreshed: ${insight.title}")
             insight
         } catch (e: Exception) {
             Log.e(TAG, "refreshLocal failed: ${e.message}")
-            getCachedInsight()?.let { enrichLocalInsight(it) }
+            getCachedInsight(periodDays)?.let { enrichLocalInsight(it, periodDays) }
         }
     }
 
-    private suspend fun refreshCloud(): InsightData? {
-        val apiKey = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_API_KEY, "")
-        if (apiKey.isBlank()) return null
-
-        val modelId = settingsRepository.getString(SettingsRepository.KEY_OPENROUTER_MODEL, "")
-        if (modelId.isBlank()) return null
-
-        return try {
-            val lang = currentLanguage()
-            val dataPrompt = buildDataPrompt()
-            if (dataPrompt == null) {
-                Log.d(TAG, "Not enough data for insights")
-                return null
-            }
-
-            val response = openRouterClient.chat(apiKey, modelId, buildPrompt(lang), dataPrompt)
-            if (response == null) {
-                Log.w(TAG, "No response from OpenRouter")
-                return getCachedInsight()
-            }
-
-            // Strip markdown code fences if model wraps JSON in them
-            val cleaned = response
-                .trim()
-                .removePrefix("```json")
-                .removePrefix("```")
-                .removeSuffix("```")
-                .trim()
-
-            // Build deterministic dynamics from actual data (not LLM)
-            val dynamics = buildDynamics(lang)
-
-            // Serialize dynamics into JSON array for caching
-            val dynamicsArr = org.json.JSONArray()
-            for (m in dynamics) {
-                dynamicsArr.put(JSONObject().apply {
-                    put("label", m.label)
-                    put("current", m.current)
-                    if (m.previous != null) put("previous", m.previous)
-                    if (m.changePct != null) put("changePct", m.changePct)
-                    put("sentiment", m.sentiment)
-                    if (m.section != null) put("section", m.section)
-                    if (m.kind.isNotEmpty()) put("kind", m.kind)
-                })
-            }
-
-            // Determine tone from data (not LLM)
-            val deterministicTone = determineTone(dynamics)
-
-            // Merge dynamics + override tone into LLM response before caching
-            val mergedJson = try {
-                val obj = JSONObject(cleaned)
-                obj.put("dynamics", dynamicsArr)
-                obj.put("tone", deterministicTone)
-                obj.toString()
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to merge dynamics into JSON: ${e.message}")
-                cleaned
-            }
-
-            val insight = parseInsight(mergedJson)
-            if (insight != null) {
-                cacheInsight(insight, lang)
-                Log.i(TAG, "Insight refreshed: ${insight.title}")
-            } else {
-                Log.w(TAG, "Failed to parse insight: $mergedJson")
-            }
-            insight ?: getCachedInsight()
-        } catch (e: Exception) {
-            Log.e(TAG, "refreshCloud failed: ${e.message}")
-            getCachedInsight()
-        }
-    }
-
-    private fun cacheInsight(insight: InsightData, lang: String) {
+    private fun cacheInsight(insight: InsightData, lang: String, periodDays: Int) {
         val dynamicsArr = org.json.JSONArray()
         for (m in insight.dynamics) {
             dynamicsArr.put(JSONObject().apply {
@@ -340,7 +169,7 @@ Anti-hallucination rules (CRITICAL):
             put("insights", org.json.JSONArray(insight.insights))
         }
         prefs.edit()
-            .putString(cacheKey(todayString(), lang), obj.toString())
+            .putString(cacheKey(todayString(), lang, periodDays), obj.toString())
             .apply()
     }
 
@@ -350,22 +179,28 @@ Anti-hallucination rules (CRITICAL):
         return context.createConfigurationContext(config).resources
     }
 
-    private suspend fun buildDynamics(lang: String): List<DynamicMetric> = withContext(Dispatchers.IO) {
+    /** Deterministic dynamics for an arbitrary window (7 = week, 30 = month). Used by the
+     *  voice agent's get_stats_summary tool, and internally by refreshLocal() for the
+     *  dashboard's own period toggle. */
+    suspend fun dynamicsFor(periodDays: Int): List<DynamicMetric> =
+        buildDynamics(currentLanguage(), periodDays)
+
+    private suspend fun buildDynamics(lang: String, periodDays: Int = 7): List<DynamicMetric> = withContext(Dispatchers.IO) {
         val res = localizedResources(lang)
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance()
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -7)
-        val weekAgo = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
+        val periodStart = cal.timeInMillis
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -14)
-        val twoWeeksAgo = cal.timeInMillis
+        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
+        val prevStart = cal.timeInMillis
 
         val allTrips = tripDao.getAllSnapshot()
-        val recentTrips = allTrips.filter { it.startTs >= weekAgo }
-        val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
+        val recentTrips = allTrips.filter { it.startTs >= periodStart }
+        val prevTrips = allTrips.filter { it.startTs in prevStart until periodStart }
 
         val metrics = mutableListOf<DynamicMetric>()
 
@@ -386,7 +221,9 @@ Anti-hallucination rules (CRITICAL):
                 previous = if (prevCons > 0) res.getString(com.bydmate.app.R.string.insight_unit_kwh_per_100_prev, prevCons) else null,
                 changePct = pct,
                 sentiment = consumptionSentiment(pct),
-                section = res.getString(com.bydmate.app.R.string.insight_section_week_to_week),
+                section = res.getString(
+                    if (periodDays >= 28) com.bydmate.app.R.string.insight_section_month_to_month
+                    else com.bydmate.app.R.string.insight_section_week_to_week),
                 kind = "consumption"
             ))
         }
@@ -446,9 +283,9 @@ Anti-hallucination rules (CRITICAL):
         }
 
         // --- Stationary consumption ---
-        val drainKwh = idleDrainDao.getKwhSince(weekAgo)
-        val drainHours = idleDrainDao.getHoursSince(weekAgo)
-        val prevDrainKwh = idleDrainDao.getKwhBetween(twoWeeksAgo, weekAgo)
+        val drainKwh = idleDrainDao.getKwhSince(periodStart)
+        val drainHours = idleDrainDao.getHoursSince(periodStart)
+        val prevDrainKwh = idleDrainDao.getKwhBetween(prevStart, periodStart)
 
         if (drainKwh > 0.1) {
             val rate = if (drainHours > 0) drainKwh / drainHours else 0.0
@@ -471,22 +308,22 @@ Anti-hallucination rules (CRITICAL):
         metrics
     }
 
-    private suspend fun enrichLocalInsight(insight: InsightData): InsightData {
-        if (isCloudMode() || insight.dynamics.any { it.kind == "night_idle" }) {
+    private suspend fun enrichLocalInsight(insight: InsightData, periodDays: Int): InsightData {
+        if (insight.dynamics.any { it.kind == "night_idle" }) {
             return insight
         }
         val metrics = insight.dynamics.toMutableList()
-        insertNightDrainMetricIfLocal(metrics, lang = currentLanguage())
+        insertNightDrainMetricIfLocal(metrics, lang = currentLanguage(), periodDays)
         return insight.copy(dynamics = metrics)
     }
 
-    private suspend fun insertNightDrainMetricIfLocal(metrics: MutableList<DynamicMetric>, lang: String) {
-        if (isCloudMode() || metrics.any { it.kind == "night_idle" }) return
-        insertNightDrainMetric(metrics, lang)
+    private suspend fun insertNightDrainMetricIfLocal(metrics: MutableList<DynamicMetric>, lang: String, periodDays: Int) {
+        if (metrics.any { it.kind == "night_idle" }) return
+        insertNightDrainMetric(metrics, lang, periodDays)
     }
 
-    private suspend fun insertNightDrainMetric(metrics: MutableList<DynamicMetric>, lang: String) {
-        val metric = buildNightDrainMetric(lang)
+    private suspend fun insertNightDrainMetric(metrics: MutableList<DynamicMetric>, lang: String, periodDays: Int) {
+        val metric = buildNightDrainMetric(lang, periodDays)
         val idleIdx = metrics.indexOfFirst { it.kind == "idle" }
         if (idleIdx >= 0) {
             metrics.add(idleIdx + 1, metric)
@@ -495,17 +332,20 @@ Anti-hallucination rules (CRITICAL):
         }
     }
 
-    private suspend fun buildNightDrainMetric(lang: String): DynamicMetric {
+    /** Same current/previous window convention as buildDynamics()/collectStats() (periodDays,
+     *  2 * periodDays) -- was hard-coded to 7/14 days regardless of the caller's period, so a
+     *  30-day insight could carry a weekly night-idle row. */
+    private suspend fun buildNightDrainMetric(lang: String, periodDays: Int): DynamicMetric {
         val res = localizedResources(lang)
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance()
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -7)
+        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
         val weekAgo = cal.timeInMillis
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -14)
+        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
         val twoWeeksAgo = cal.timeInMillis
 
         val weekDrains = idleDrainDao.getSince(weekAgo)
@@ -557,16 +397,16 @@ Anti-hallucination rules (CRITICAL):
         else -> "neutral"
     }
 
-    suspend fun collectStats(): InsightStats? = withContext(Dispatchers.IO) {
+    suspend fun collectStats(periodDays: Int = 7): InsightStats? = withContext(Dispatchers.IO) {
         val now = System.currentTimeMillis()
         val cal = Calendar.getInstance()
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -7)
+        cal.add(Calendar.DAY_OF_YEAR, -periodDays)
         val weekAgo = cal.timeInMillis
 
         cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -14)
+        cal.add(Calendar.DAY_OF_YEAR, -2 * periodDays)
         val twoWeeksAgo = cal.timeInMillis
 
         val allTrips = tripDao.getAllSnapshot()
@@ -665,164 +505,6 @@ Anti-hallucination rules (CRITICAL):
             nightDrainKwh = nightDrainKwh,
             nightDrainSharePct = nightDrainSharePct,
         )
-    }
-
-    private suspend fun buildDataPrompt(): String? = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
-        val cal = Calendar.getInstance()
-
-        // Last 7 days
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -7)
-        val weekAgo = cal.timeInMillis
-
-        // Previous 7 days (7-14 days ago)
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -14)
-        val twoWeeksAgo = cal.timeInMillis
-
-        // Last 30 days
-        cal.timeInMillis = now
-        cal.add(Calendar.DAY_OF_YEAR, -30)
-        val monthAgo = cal.timeInMillis
-
-        val allTrips = tripDao.getAllSnapshot()
-        val recentTrips = allTrips.filter { it.startTs >= weekAgo }
-        if (recentTrips.size < 5) {
-            Log.d(TAG, "Less than 5 trips in last 7 days — skip LLM call")
-            return@withContext null
-        }
-        val prevTrips = allTrips.filter { it.startTs in twoWeeksAgo until weekAgo }
-        val monthTrips = allTrips.filter { it.startTs >= monthAgo }
-
-        if (recentTrips.isEmpty() && monthTrips.isEmpty()) return@withContext null
-
-        val sb = StringBuilder()
-
-        // Recent period stats
-        val recentKm = recentTrips.sumOf { it.distanceKm ?: 0.0 }
-        val recentKwh = recentTrips.sumOf { it.kwhConsumed ?: 0.0 }
-        val recentAvgCons = if (recentKm > 0) recentKwh / recentKm * 100 else 0.0
-        val recentAvgSpeed = recentTrips.mapNotNull { it.avgSpeedKmh }.let {
-            if (it.isNotEmpty()) it.average() else 0.0
-        }
-        val shortTrips = recentTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
-
-        sb.appendLine("=== Last 7 days ===")
-        sb.appendLine("Trips: ${recentTrips.size}, Total: %.1f km, %.1f kWh".format(recentKm, recentKwh))
-        sb.appendLine("Avg consumption: %.1f kWh/100km, Avg speed: %.0f km/h".format(recentAvgCons, recentAvgSpeed))
-        sb.appendLine("Short trips (<5km): $shortTrips of ${recentTrips.size}")
-
-        // Best/worst trip
-        val tripsWithCons = recentTrips.filter { (it.kwhPer100km ?: 0.0) > 0 && (it.distanceKm ?: 0.0) > 1.0 }
-        tripsWithCons.minByOrNull { it.kwhPer100km!! }?.let {
-            sb.appendLine("Best trip: %.1f/100 (%.1f km, %.0f km/h)".format(it.kwhPer100km, it.distanceKm, it.avgSpeedKmh ?: 0.0))
-        }
-        tripsWithCons.maxByOrNull { it.kwhPer100km!! }?.let {
-            sb.appendLine("Worst trip: %.1f/100 (%.1f km, %.0f km/h)".format(it.kwhPer100km, it.distanceKm, it.avgSpeedKmh ?: 0.0))
-        }
-
-        // Cost
-        val recentCost = recentTrips.sumOf { it.cost ?: 0.0 }
-        val currency = settingsRepository.getCurrency()
-        if (recentCost > 0) {
-            sb.appendLine("Cost: %.2f %s (%.2f %s/km)".format(recentCost, currency.code,
-                if (recentKm > 0) recentCost / recentKm else 0.0, currency.code))
-        }
-
-        // Previous period comparison
-        if (prevTrips.isNotEmpty()) {
-            val prevKm = prevTrips.sumOf { it.distanceKm ?: 0.0 }
-            val prevKwh = prevTrips.sumOf { it.kwhConsumed ?: 0.0 }
-            val prevAvgCons = if (prevKm > 0) prevKwh / prevKm * 100 else 0.0
-            sb.appendLine("\n=== Previous 7 days (comparison) ===")
-            sb.appendLine("Trips: ${prevTrips.size}, Total: %.1f km, %.1f kWh".format(prevKm, prevKwh))
-            sb.appendLine("Avg consumption: %.1f kWh/100km".format(prevAvgCons))
-        }
-
-        // Monthly summary (30 days)
-        if (monthTrips.size > recentTrips.size) {
-            val monthKm = monthTrips.sumOf { it.distanceKm ?: 0.0 }
-            val monthKwh = monthTrips.sumOf { it.kwhConsumed ?: 0.0 }
-            val monthAvgCons = if (monthKm > 0) monthKwh / monthKm * 100 else 0.0
-            val monthCost = monthTrips.sumOf { it.cost ?: 0.0 }
-            val monthShort = monthTrips.count { (it.distanceKm ?: 0.0) < 5.0 }
-            sb.appendLine("\n=== Last 30 days (monthly) ===")
-            sb.appendLine("Trips: ${monthTrips.size}, Total: %.1f km, %.1f kWh".format(monthKm, monthKwh))
-            sb.appendLine("Avg consumption: %.1f kWh/100km".format(monthAvgCons))
-            sb.appendLine("Short trips (<5km): $monthShort of ${monthTrips.size}")
-            if (monthCost > 0) {
-                sb.appendLine("Total cost: %.2f %s".format(monthCost, currency.code))
-            }
-        }
-
-        // Stationary consumption (vehicle running, not moving: warmup, waiting, A/C)
-        val drainKwh = idleDrainDao.getKwhSince(weekAgo)
-        val drainHours = idleDrainDao.getHoursSince(weekAgo)
-        val drainKwhMonth = idleDrainDao.getKwhSince(monthAgo)
-        val drainHoursMonth = idleDrainDao.getHoursSince(monthAgo)
-        if (drainKwh > 0 || drainKwhMonth > 0) {
-            sb.appendLine("\n=== Stationary consumption (engine running, not moving) ===")
-            if (drainKwh > 0) {
-                sb.appendLine("7 days: %.1f kWh in %.0f hours".format(drainKwh, drainHours))
-                if (drainHours > 0) {
-                    sb.appendLine("Rate: %.2f kWh/hour".format(drainKwh / drainHours))
-                }
-            }
-            if (drainKwhMonth > drainKwh) {
-                sb.appendLine("30 days: %.1f kWh in %.0f hours".format(drainKwhMonth, drainHoursMonth))
-            }
-        }
-
-        // Live vehicle data
-        val liveData = TrackingService.lastData.value
-        if (liveData != null) {
-            sb.appendLine("\n=== Current vehicle state ===")
-            liveData.soc?.let { sb.appendLine("SOC: $it%") }
-            liveData.avgBatTemp?.let { sb.appendLine("Battery temp: ${it}°C") }
-            liveData.exteriorTemp?.let { sb.appendLine("Exterior temp: ${it}°C") }
-            liveData.voltage12v?.let { sb.appendLine("12V battery: ${"%.1f".format(it)}V") }
-            if (liveData.maxCellVoltage != null && liveData.minCellVoltage != null) {
-                val delta = liveData.maxCellVoltage - liveData.minCellVoltage
-                sb.appendLine("Cell voltages: ${"%.3f".format(liveData.minCellVoltage)}–${"%.3f".format(liveData.maxCellVoltage)}V (delta: ${"%.0f".format(delta * 1000)}mV)")
-            }
-            liveData.mileage?.let { sb.appendLine("Odometer: ${"%.1f".format(it)} km") }
-        }
-
-        // --- 12V 7-day history ---
-        val v12Raw = prefs.getString(KEY_V12_HISTORY, null)
-        if (v12Raw != null) {
-            try {
-                val arr = org.json.JSONArray(v12Raw)
-                val values = (0 until arr.length()).map { arr.getJSONObject(it).getDouble("volts") }
-                if (values.size >= 2) {
-                    val avg = values.average()
-                    val minV = values.min()
-                    val maxV = values.max()
-                    // Simple trend: last half vs first half
-                    val half = values.size / 2
-                    val firstAvg = values.take(half).average()
-                    val lastAvg = values.takeLast(half).average()
-                    val delta = lastAvg - firstAvg
-                    val trend = when {
-                        delta > 0.1 -> "rising"
-                        delta < -0.1 -> "falling"
-                        else -> "stable"
-                    }
-                    sb.appendLine("\n=== 12V battery history (last ${values.size} days) ===")
-                    sb.appendLine("Avg: %.2fV, Min: %.2fV, Max: %.2fV, Trend: %s (Δ%+.2fV)".format(avg, minV, maxV, trend, delta))
-                }
-            } catch (_: Exception) { /* ignore malformed cache */ }
-        }
-
-        // Temperature from recent trips
-        val temps = recentTrips.mapNotNull { it.exteriorTemp }
-        if (temps.isNotEmpty()) {
-            sb.appendLine("\n=== Temperature during trips ===")
-            sb.appendLine("Avg: ${temps.average().toInt()}°C, Min: ${temps.min()}°C, Max: ${temps.max()}°C")
-        }
-
-        sb.toString()
     }
 
     private fun parseInsight(json: String): InsightData? {

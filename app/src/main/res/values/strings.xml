@@ -18,6 +18,8 @@
     <string name="settings_display_mirror_header">Вывод на приборку</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
+    <string name="settings_cluster_auto_container_title">Автовключение приборки</string>
+    <string name="settings_cluster_auto_container_desc">Перед проекцией включать экран приборки автоматически</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
@@ -92,17 +94,12 @@
     <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся - ABRP читает координаты сам.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
-    <string name="settings_ai_section_header">AI Инсайты</string>
+    <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Модель: %1$s</string>
     <string name="settings_openrouter_model_pick">Выбрать модель</string>
-    <string name="settings_ai_loading_label">Загрузка...</string>
-    <string name="settings_ai_save_button">Сохранить и получить инсайт</string>
-    <string name="settings_insight_mode_label">Источник анализа</string>
-    <string name="settings_insight_mode_local">Локальный (офлайн)</string>
-    <string name="settings_insight_mode_cloud">OpenRouter (облако)</string>
-    <string name="settings_insight_mode_local_hint">Правила на устройстве — без интернета и API-ключа. Работает автоматически раз в день.</string>
-    <string name="settings_insight_refresh_local">Обновить инсайт</string>
+    <string name="settings_exa_section_header">Exa</string>
+    <string name="settings_exa_search_hint">Для поиска в интернете голосовым агентом. Без ключа поиск идёт через OpenRouter</string>
 
     <!-- Settings: Model picker dialog -->
     <string name="settings_model_picker_title">Выбор модели</string>
@@ -116,6 +113,8 @@
     <string name="settings_widget_reset_position_button">Сбросить позицию</string>
     <string name="settings_reset_seat_channel">Сбросить канал сидений</string>
     <string name="settings_reset_seat_channel_hint">Если подогрев или вентиляция сидений не срабатывают после смены машины</string>
+    <string name="orb_you">Ты:</string>
+    <string name="orb_agent">Агент:</string>
     <string name="settings_voice_native_assistant_header">Штатный голосовой помощник BYD</string>
     <string name="settings_voice_disable_native_label">Отключить штатный голосовой помощник</string>
     <string name="settings_voice_disable_native_description">Скрывает встроенный голосовой ассистент BYD, чтобы он не перебивал. Обратимо.</string>
@@ -146,6 +145,7 @@
     <string name="settings_log_recording_stop_button">Остановить запись</string>
     <string name="settings_about_header">О приложении</string>
     <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_weather_attribution">Данные о погоде: Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
     <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
     <string name="settings_update_check_toggle_label">Проверять обновления</string>
@@ -328,6 +328,11 @@
     <string name="automation_trigger_type_button_press">Нажатие кнопки</string>
     <string name="automation_trigger_button_label">Кнопка %1$d</string>
     <string name="automation_trigger_button_picker_label">Кнопка</string>
+    <string name="automation_trigger_type_voice">Голос</string>
+    <string name="automation_trigger_voice_phrase_label">Фраза-триггер</string>
+    <string name="automation_voice_phrase_empty">Голосовая фраза пуста</string>
+    <string name="automation_voice_phrase_builtin">Фраза уже занята встроенной командой</string>
+    <string name="automation_voice_phrase_taken">Фраза уже занята другой автоматизацией</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Точное</string>
@@ -537,12 +542,9 @@
     <string name="dashboard_battery_voltage_label">борт. сеть</string>
 
     <!-- AI Insight card -->
-    <string name="dashboard_insight_loading">Анализ...</string>
-    <string name="dashboard_insight_setup_prompt">Облачные AI-инсайты — настройте OpenRouter →</string>
-    <string name="dashboard_insight_refresh">Обновить</string>
-    <string name="dashboard_insight_refreshing">Обновление...</string>
-    <string name="dashboard_insight_no_api_key">Для облачных инсайтов укажите OpenRouter API в Настройках</string>
     <string name="dashboard_insight_no_data">Мало данных для анализа</string>
+    <string name="insight_period_week">Неделя</string>
+    <string name="insight_period_month">Месяц</string>
 
     <!-- Period chips -->
     <string name="dashboard_period_day">День</string>
@@ -572,8 +574,6 @@
     <string name="dashboard_stat_kwh_value">%1$.1f кВт·ч</string>
     <!-- %1$.1f = 12V voltage -->
     <string name="dashboard_voltage_value">%1$.1fВ</string>
-    <!-- Insight refresh error (shown in insight card) -->
-    <string name="dashboard_insight_refresh_error">Не удалось обновить</string>
 
     <!-- Navigation bar tab labels -->
     <string name="nav_tab_dashboard">Главная</string>
@@ -656,9 +656,6 @@
     <string name="settings_update_check_in_progress">Проверка...</string>
     <!-- %1$s = version string -->
     <string name="settings_update_available_short">Доступна v%1$s</string>
-    <string name="settings_ai_no_key_model">Укажите API-ключ и модель</string>
-    <string name="settings_ai_done">Готово! Переключитесь на Главную</string>
-    <string name="settings_ai_fetch_error">Ошибка получения инсайта</string>
 
     <!-- UpdateChecker: download progress strings (passed via callback) -->
     <string name="update_downloading_progress">Скачивание: %1$d%%</string>
@@ -690,6 +687,7 @@
     <string name="insight_metric_avg_distance">Ср. дистанция</string>
     <string name="insight_metric_idle">Стоянка</string>
     <string name="insight_section_week_to_week">Неделя к неделе</string>
+    <string name="insight_section_month_to_month">Месяц к месяцу</string>
     <string name="insight_unit_kwh_per_100">%.1f кВтч/100</string>
     <string name="insight_unit_kwh_per_100_prev">%.1f</string>
     <string name="insight_trips_value">%1$d · %2$s км</string>
@@ -709,47 +707,61 @@
     <string name="local_insight_not_enough_data_title">Данных мало для анализа</string>
     <string name="local_insight_not_enough_data_summary">Нужно минимум 5 поездок за неделю</string>
     <string name="local_insight_consumption_up_title">Расход ▲%1$.0f%% за неделю</string>
+    <string name="local_insight_consumption_up_title_month">Расход ▲%1$.0f%% за месяц</string>
     <string name="local_insight_consumption_up_summary_short">Много коротких поездок — прогрев забирает энергию</string>
     <string name="local_insight_consumption_up_summary">Расход вырос: %1$.1f → %2$.1f кВт·ч/100</string>
     <string name="local_insight_consumption_down_title">Расход ▼%1$.0f%%</string>
     <string name="local_insight_consumption_down_summary">Средний %1$.1f кВт·ч/100 — экономнее прошлой недели</string>
+    <string name="local_insight_consumption_down_summary_month">Средний %1$.1f кВт·ч/100, экономнее прошлого месяца</string>
     <string name="local_insight_consumption_stable_title">Расход стабилен</string>
     <string name="local_insight_consumption_stable_summary">Средний %1$.1f кВт·ч/100 за неделю</string>
+    <string name="local_insight_consumption_stable_summary_month">Средний %1$.1f кВт·ч/100 за месяц</string>
     <string name="local_insight_short_trips">%1$d из %2$d поездок короче 5 км (%3$d%%) — объединяйте короткие заезды</string>
     <string name="local_insight_idle">На стоянке с мотором: %1$.1f кВт·ч за %2$s — %3$d%% недельного расхода</string>
+    <string name="local_insight_idle_month">На стоянке с мотором: %1$.1f кВт·ч за %2$s, %3$d%% месячного расхода</string>
     <string name="local_insight_12v_critical_title">12V критично низкий</string>
     <string name="local_insight_12v_critical_summary">Бортовая сеть %1$.1f В — проверьте аккумулятор</string>
     <string name="local_insight_12v_low">12V сейчас %1$.1f В — ниже нормы 12.4 В</string>
     <string name="local_insight_12v_falling">12V снижается: %1$.2f → %2$.2f В за неделю</string>
+    <string name="local_insight_12v_falling_month">12V снижается: %1$.2f → %2$.2f В за месяц</string>
     <string name="local_insight_cell_critical_title">Большой разброс банок</string>
     <string name="local_insight_cell_critical_summary">Дельта %1$.0f мВ — следите за балансировкой</string>
     <string name="local_insight_cell_delta">Разброс банок %1$.0f мВ — возможна слабая ячейка</string>
     <string name="local_insight_cold">При %1$d°C средний расход %2$.1f кВт·ч/100 — зимой это ожидаемо</string>
     <string name="local_insight_best_worst">Лучшая поездка %1$.1f, худшая %2$.1f кВт·ч/100</string>
     <string name="local_insight_cost">За неделю %1$.0f %2$s на поездки</string>
+    <string name="local_insight_cost_month">За месяц %1$.0f %2$s на поездки</string>
     <string name="local_insight_night_idle_title">Ночной расход на стоянке</string>
     <string name="local_insight_night_idle_summary">%1$.1f кВт·ч ночью — %2$d%% простоя с мотором</string>
     <string name="local_insight_night_idle">Ночью (22:00–06:00) с мотором ушло %1$.1f кВт·ч — %2$d%% всего простоя. Выключайте зажигание, если климат не нужен</string>
     <string name="local_insight_dc_more_expensive">DC %1$.2f %4$s/кВт·ч vs AC %2$.2f — на %3$d%% дороже домашней зарядки</string>
     <string name="local_insight_dc_heavy">DC %1$.0f кВт·ч (%2$d сессий) vs AC %3$.0f — для ежедневных поездок домашняя AC мягче для батареи</string>
     <string name="local_insight_ac_only">Все %2$d зарядки AC (%1$.0f кВт·ч) — оптимально для батареи и бюджета</string>
+    <string name="local_insight_ac_only_month">Все %2$d зарядки AC за месяц (%1$.0f кВт·ч), оптимально для батареи и бюджета</string>
     <string name="local_insight_charge_cost_week">Зарядки за неделю: %1$.0f %2$s за %3$.0f кВт·ч</string>
+    <string name="local_insight_charge_cost_month">Зарядки за месяц: %1$.0f %2$s за %3$.0f кВт·ч</string>
     <string name="local_insight_consumption_improved">Расход снизился на %1$.0f%% — хорошая динамика</string>
     <string name="local_insight_highway_speed">Средняя скорость %1$.0f км/ч — на трассе расход %2$.1f кВт·ч/100, это ожидаемо</string>
     <string name="local_insight_high_consumption">Средний расход %1$.1f кВт·ч/100 высокий — проверьте климат и стиль вождения</string>
     <string name="local_insight_low_consumption">Отличный расход %1$.1f кВт·ч/100 за %2$.0f км за неделю</string>
+    <string name="local_insight_low_consumption_month">Отличный расход %1$.1f кВт·ч/100 за %2$.0f км за месяц</string>
     <string name="local_insight_idle_rate_high">Высокий расход на стоянке ~%1$.1f кВт·ч/ч — скорее всего климат или обогрев</string>
     <string name="local_insight_km_up">Пробег вырос: %1$.0f → %2$.0f км — это может объяснять изменение среднего расхода</string>
     <string name="local_insight_trips_more">Поездок стало больше: %1$d vs %2$d на прошлой неделе</string>
+    <string name="local_insight_trips_more_month">Поездок стало больше: %1$d vs %2$d за прошлый месяц</string>
     <string name="local_insight_weekly_mileage">За неделю %1$.0f км в %2$d поездках — достаточно данных для точной оценки</string>
+    <string name="local_insight_monthly_mileage">За месяц %1$.0f км в %2$d поездках, достаточно данных для точной оценки</string>
     <string name="local_insight_12v_ok">12V %1$.1f В — бортовая сеть в норме</string>
     <string name="local_insight_cell_ok">Разброс банок %1$.0f мВ — баланс в норме</string>
     <string name="local_insight_heat_ac">При +%1$d°C расход %2$.1f кВт·ч/100 — кондиционер добавляет нагрузку</string>
     <string name="local_insight_best_trip">Лучшая поездка %1$.1f кВт·ч/100 на %2$.0f км — удачный режим вождения</string>
     <string name="local_insight_mixed_charging">Зарядка за неделю: AC %1$.0f кВт·ч, DC %2$.0f кВт·ч — для батареи чаще заряжайтесь дома</string>
+    <string name="local_insight_mixed_charging_month">Зарядка за месяц: AC %1$.0f кВт·ч, DC %2$.0f кВт·ч, для батареи чаще заряжайтесь дома</string>
     <string name="local_insight_low_night_idle">Ночной простой всего %1$d%% — хорошая привычка глушить мотор</string>
     <string name="local_insight_low_idle_share">Простой с мотором — всего %1$d%% недельного расхода, это хорошо</string>
+    <string name="local_insight_low_idle_share_month">Простой с мотором, всего %1$d%% месячного расхода, это хорошо</string>
     <string name="local_insight_cost_per_100">Стоимость пробега ~%1$.2f %3$s/100 км (%2$.0f %3$s за неделю)</string>
+    <string name="local_insight_cost_per_100_month">Стоимость пробега ~%1$.2f %3$s/100 км (%2$.0f %3$s за месяц)</string>
 
     <!-- Config backup / restore -->
     <string name="settings_config_export_button">Экспорт конфигурации</string>
@@ -959,4 +971,159 @@
     <string name="auto_a11y_move_up">выше</string>
     <string name="auto_a11y_move_down">ниже</string>
     <string name="auto_a11y_run_now">выполнить сейчас</string>
+
+    <!-- Voice control (Phase 0) -->
+    <string name="settings_section_voice_agent">Голос-агент</string>
+    <string name="settings_voice_button_mic_header">Кнопка и микрофон</string>
+    <string name="settings_voice_enable_label">Голосовые команды</string>
+    <string name="settings_voice_enable_description">Команды кнопкой руля без интернета</string>
+    <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
+    <string name="voice_listening">Слушаю</string>
+    <string name="voice_thinking">Думаю</string>
+
+    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <string name="settings_asr_gigaam_title">Распознавание речи</string>
+    <string name="settings_asr_gigaam_ready">Модель готова</string>
+    <string name="settings_asr_gigaam_download">Скачать (%1$s)</string>
+    <string name="settings_asr_gigaam_delete">Удалить модель</string>
+    <string name="settings_asr_gigaam_download_failed">Не удалось скачать модель</string>
+
+    <string name="settings_voice_button_label">Назначить кнопку</string>
+    <string name="settings_voice_button_current">Текущая: %1$s</string>
+    <string name="settings_voice_a11y_hint">Запуск кнопкой руля требует службы специальных возможностей (включается автоматически в разделе Дисплей).</string>
+
+    <!-- call_contact tool: contacts permission row -->
+    <string name="settings_voice_contacts_label">Доступ к контактам</string>
+    <string name="settings_voice_contacts_description">Нужен для звонка контакту по имени голосом</string>
+    <string name="settings_voice_contacts_granted">Разрешено</string>
+    <string name="settings_voice_contacts_grant">Разрешить</string>
+
+    <!-- Voice journal: debug screen with the last voice sessions -->
+    <string name="settings_voice_journal_entry_title">Журнал голоса</string>
+    <string name="settings_voice_journal_entry_description">Последние 50 голосовых сессий</string>
+
+    <!-- TTS: offline synthesis of agent replies (Phase 2) -->
+    <string name="settings_tts_header">Ответы агента</string>
+    <string name="settings_tts_toggle">Озвучивать ответы агента</string>
+    <string name="settings_tts_subtitle">Оффлайн-синтез речи, русский голос</string>
+    <string name="settings_tts_model_delete">Удалить</string>
+    <string name="settings_tts_download_failed">Не удалось скачать голос</string>
+    <string name="settings_voice_volume_hint">Громкость ответов регулируется системным каналом Voice: кнопки громкости на руле или Настройки звука машины</string>
+    <string name="settings_tts_voice_irina">Irina</string>
+    <string name="settings_tts_voice_dmitri">Дмитрий</string>
+    <string name="settings_tts_voice_ruslan">Ruslan</string>
+    <string name="settings_tts_voice_alena">Алёна</string>
+    <string name="settings_tts_voice_mark">Марк</string>
+    <string name="settings_tts_voice_sofia">Софья</string>
+    <string name="settings_tts_voice_local_badge">Локально</string>
+    <string name="settings_tts_voice_ready">Скачан</string>
+    <string name="settings_tts_voice_download_label">Скачать · %1$d МБ</string>
+    <string name="settings_tts_voice_locked_hint">Сначала скачайте голос</string>
+    <string name="settings_tts_voice_desc_piper">Классический синтез, экономичный</string>
+    <string name="settings_tts_voice_desc_vits">Более естественное звучание</string>
+    <string name="settings_tts_voice_desc_supertonic">Новый движок, самое естественное звучание</string>
+
+    <!-- TTS: online voices (Wave N) -->
+    <string name="settings_tts_voice_online_gemini_desc">Живой русский · начало ответа чуть позже локального</string>
+    <string name="settings_tts_voice_online_gemini_badge">ключ OpenRouter</string>
+    <string name="settings_tts_voice_online_minimax_desc">Живой русский · начало ответа чуть позже локального</string>
+    <string name="settings_tts_voice_online_minimax_badge">нужен ключ MiniMax</string>
+    <string name="settings_tts_online_fallback_hint">Онлайн-голоса: нужна сеть; если сервис не ответил за 2 секунды, реплика останется без звука</string>
+
+    <!-- TTS: keys for online voices (Wave N) -->
+    <string name="settings_tts_keys_header">Ключи для онлайн-голосов</string>
+    <string name="settings_tts_keys_openrouter_hint">Ключ и модель берутся из раздела «AI подключения».</string>
+    <string name="settings_minimax_provider_label">Провайдер</string>
+    <string name="settings_minimax_provider_official">Официальный</string>
+    <string name="settings_minimax_provider_fal">fal.ai</string>
+    <string name="settings_minimax_provider_replicate">Replicate</string>
+    <string name="settings_minimax_price_hint">$0.06 за 1000 знаков · официальный - самый быстрый старт</string>
+    <string name="settings_minimax_key_saved_placeholder">Ключ сохранён</string>
+
+    <!-- Voice tuning: speed/liveliness sliders + preview (local voices only) -->
+    <string name="settings_tts_tuning_header">Настройки локального голоса</string>
+    <string name="settings_tts_rate_label">Скорость речи</string>
+    <string name="settings_tts_rate_hint">Влево - медленнее и разборчивее, вправо - быстрее</string>
+    <string name="settings_tts_liveliness_label">Живость интонации</string>
+    <string name="settings_tts_liveliness_hint">Влево - ровный \"диктор\", вправо - выразительнее, но может дрожать</string>
+    <string name="settings_tts_preview_button">Прослушать пример</string>
+
+    <!-- Agent identity: name + persona + gender -->
+    <string name="settings_agent_section_header">Агент</string>
+    <string name="settings_agent_name_label">Имя агента</string>
+    <string name="settings_agent_name_hint">Например: Лео. Лучше 2-3 слога, отчётливое слово</string>
+    <string name="settings_agent_persona_label">Характер</string>
+    <string name="settings_persona_snarky">Едкий напарник</string>
+    <string name="settings_persona_navigator">Штурман</string>
+    <string name="settings_persona_engineer">Бортинженер</string>
+    <string name="settings_agent_gender_label">Пол агента</string>
+    <string name="settings_agent_gender_male">Мужской</string>
+    <string name="settings_agent_gender_female">Женский</string>
+    <string name="settings_agent_gender_hint">Действует на все голоса: у каждого источника есть мужской и женский вариант</string>
+
+    <!-- Voice agent (Phase 1) -->
+    <string name="agent_enable_title">Голосовой AI-агент</string>
+    <string name="agent_enable_desc">Свободные вопросы и команды через LLM (OpenRouter). Ключ API берётся из раздела «Интеграции».</string>
+    <string name="agent_model_shared_caption">Ключ OpenRouter и модель для агента настраиваются в разделе Интеграции</string>
+    <string name="agent_chat_open">Чат с агентом (отладка)</string>
+    <string name="agent_test_model_button">Тест модели</string>
+    <string name="agent_test_model_running">Проверка модели...</string>
+    <string name="agent_test_model_result">%1$s: ответ за %2$.1f с - \"%3$s\"</string>
+    <string name="agent_test_model_disabled">Ошибка: агент выключен или не настроен</string>
+    <string name="agent_exa_api_key_label">Exa API Key (веб-поиск)</string>
+
+    <!-- Voice agent (Wave J): multi-provider LLM connections -->
+    <string name="settings_conn_not_configured">Подключение не настроено</string>
+    <string name="settings_conn_check_ok">Модель ответила за %1$.1f с</string>
+
+    <!-- Wave J: AI connections -->
+    <string name="settings_ai_connections_header">AI подключения</string>
+    <string name="settings_conn_custom_title">Своё подключение</string>
+    <string name="settings_conn_configured">Настроено</string>
+    <string name="settings_conn_api_key_label">API ключ</string>
+    <string name="settings_conn_name_label">Название</string>
+    <string name="settings_conn_base_url_label">Base URL</string>
+    <string name="settings_conn_model_label">Модель (id)</string>
+    <string name="settings_conn_check">Проверить</string>
+    <string name="settings_conn_checking">Проверяю…</string>
+    <string name="settings_zai_hint">Бесплатная glm-4.7-flash, рекомендуется как основная</string>
+    <string name="settings_custom_hint">Любой OpenAI-совместимый API. Пресет подставляет адрес и модель, ключ свой.</string>
+    <!-- Wave O T11: custom model list + human-readable network errors -->
+    <string name="settings_custom_list_models">Список моделей</string>
+    <string name="settings_error_dns">Сервер недоступен: интернет машины не видит этот адрес (DNS)</string>
+    <string name="settings_error_timeout">Сервер не ответил за отведённое время</string>
+    <string name="settings_preset_hint_cloudflare">Замените ACCOUNT_ID в адресе на ID аккаунта из панели Cloudflare. Бесплатно около 450 запросов в день (glm-4.7-flash).</string>
+    <string name="settings_preset_hint_vercel">Кредит 5$ в месяц без карты. Часть моделей на бесплатном тарифе может отдавать ошибку 403.</string>
+    <string name="settings_preset_hint_kimi">1000 запросов в день бесплатно.</string>
+    <string name="settings_preset_hint_nanogpt">Подписка 8$ в месяц, оплата криптой.</string>
+    <string name="settings_preset_hint_deepseek">Оплата по факту, скидка 50% ночью по Москве.</string>
+    <string name="settings_preset_hint_mistral">Бесплатно с верификацией телефона.</string>
+    <string name="settings_models_header">Выбор моделей</string>
+    <string name="settings_model_primary">Основная модель</string>
+    <string name="settings_model_fallback">Резервная модель</string>
+    <string name="settings_model_none">Нет</string>
+    <string name="settings_models_hint">Резервная модель включается сама, если основная не отвечает (после повторной попытки). В списке только настроенные подключения.</string>
+    <string name="settings_search_status_title">Поиск в интернете</string>
+    <string name="settings_search_source_exa">Exa</string>
+    <string name="settings_search_source_native">встроенный поиск подключения</string>
+    <string name="settings_search_source_none">недоступен</string>
+    <string name="settings_search_status_hint">Без ключа Exa агент использует встроенный поиск текущего подключения. Если и он недоступен, агент честно скажет, что поиск не работает.</string>
+
+    <!-- Donation dialog + support card -->
+    <string name="donate_auto_title">Спасибо, что вы с BYDMate</string>
+    <string name="donate_auto_body">Проект некоммерческий и полностью бесплатный, развивается на чистом энтузиазме. Если BYDMate оказался вам полезен и вы хотите сказать спасибо, поддержите разработку переводом USDT в любой из сетей ниже.</string>
+    <string name="donate_settings_title">Поддержать проект</string>
+    <string name="donate_settings_body">BYDMate некоммерческий и бесплатный. Если хотите поддержать разработку, переведите USDT на адрес ниже в любой из сетей EVM.</string>
+    <string name="donate_qr_hint">Наведите камеру телефона на код</string>
+    <string name="donate_address_label">Адрес USDT · сети EVM</string>
+    <string name="donate_copy_button">Скопировать адрес</string>
+    <string name="donate_copied_toast">Адрес скопирован</string>
+    <string name="donate_networks">Сети: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
+    <string name="donate_warning">Не отправляйте через TON, TRON (TRC-20) или Solana. Средства будут потеряны.</string>
+    <string name="donate_later_button">Позже</string>
+    <string name="donate_already_button">Я уже поддержал</string>
+    <string name="donate_close_button">Закрыть</string>
+    <string name="settings_donate_header">Поддержка</string>
+    <string name="settings_donate_card_body">BYDMate бесплатный и некоммерческий. Если он вам полезен, вы можете поддержать разработку.</string>
+    <string name="settings_donate_button">Поддержать проект</string>
 </resources>

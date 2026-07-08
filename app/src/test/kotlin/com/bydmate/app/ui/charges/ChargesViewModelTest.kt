@@ -274,7 +274,10 @@ class ChargesViewModelTest {
 
     @Test
     fun `setPeriod_today_filtersChargesToToday`() = runTest {
-        val today = startOfToday() + 3_600_000L
+        // Clamped to real now: the VM's TODAY upper bound is System.currentTimeMillis(), so a
+        // fixed startOfToday()+1h charge lands in the future when the suite runs before 01:00
+        // local time and gets filtered out (flaked on a 00:04 run).
+        val today = minOf(startOfToday() + 3_600_000L, System.currentTimeMillis())
         val yesterdayTs = startOfToday() - 3_600_000L // 1 hour before midnight today
 
         val flow = MutableStateFlow(listOf(

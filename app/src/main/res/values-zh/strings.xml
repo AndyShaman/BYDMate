@@ -18,6 +18,8 @@
     <string name="settings_display_mirror_header">投射到仪表盘</string>
     <string name="settings_display_mirror_title">方向盘按键投射到仪表盘</string>
     <string name="settings_display_mirror_desc">短按所选方向盘按键，将所选应用投射到仪表盘或返回屏幕。</string>
+    <string name="settings_cluster_auto_container_title">仪表自动开启</string>
+    <string name="settings_cluster_auto_container_desc">投屏前自动开启仪表屏幕</string>
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
     <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>
@@ -69,17 +71,12 @@
     <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。不发送 GPS 坐标，ABRP 自行读取。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
-    <string name="settings_ai_section_header">AI 洞察</string>
+    <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API 密钥</string>
     <string name="settings_openrouter_model_selected">模型：%1$s</string>
     <string name="settings_openrouter_model_pick">选择模型</string>
-    <string name="settings_ai_loading_label">加载中...</string>
-    <string name="settings_ai_save_button">保存并获取洞察</string>
-    <string name="settings_insight_mode_label">分析来源</string>
-    <string name="settings_insight_mode_local">本地（离线）</string>
-    <string name="settings_insight_mode_cloud">OpenRouter（云端）</string>
-    <string name="settings_insight_mode_local_hint">设备端规则，无需网络和 API 密钥，每天自动更新一次。</string>
-    <string name="settings_insight_refresh_local">刷新洞察</string>
+    <string name="settings_exa_section_header">Exa</string>
+    <string name="settings_exa_search_hint">供语音智能体进行网络搜索。没有密钥时，搜索通过 OpenRouter 进行</string>
 
     <!-- Settings: Model picker dialog -->
     <string name="settings_model_picker_title">选择模型</string>
@@ -93,6 +90,8 @@
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
+    <string name="orb_you">你：</string>
+    <string name="orb_agent">助手：</string>
     <string name="settings_voice_native_assistant_header">BYD 原车语音助手</string>
     <string name="settings_voice_disable_native_label">关闭原车语音助手</string>
     <string name="settings_voice_disable_native_description">隐藏 BYD 内置语音助手，避免其打断。可恢复。</string>
@@ -123,6 +122,7 @@
     <string name="settings_log_recording_stop_button">停止录制</string>
     <string name="settings_about_header">关于</string>
     <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_weather_attribution">天气数据来自 Open-Meteo.com</string>
     <string name="settings_autostart_recorded">自启动：%1$s</string>
     <string name="settings_autostart_not_recorded">自启动：未记录</string>
     <string name="settings_update_check_toggle_label">检查更新</string>
@@ -303,6 +303,11 @@
     <string name="automation_trigger_type_button_press">按钮按下</string>
     <string name="automation_trigger_button_label">按钮 %1$d</string>
     <string name="automation_trigger_button_picker_label">按钮</string>
+    <string name="automation_trigger_type_voice">语音</string>
+    <string name="automation_trigger_voice_phrase_label">触发短语</string>
+    <string name="automation_voice_phrase_empty">语音短语为空</string>
+    <string name="automation_voice_phrase_builtin">该短语已被内置命令占用</string>
+    <string name="automation_voice_phrase_taken">该短语已被其他自动化占用</string>
     <string name="automation_trigger_type_schedule">定时</string>
 
     <!-- Schedule trigger controls -->
@@ -495,12 +500,9 @@
     <string name="dashboard_battery_voltage_label">车载电源</string>
 
     <!-- AI Insight card -->
-    <string name="dashboard_insight_loading">分析中...</string>
-    <string name="dashboard_insight_setup_prompt">AI 洞察 - 设置 OpenRouter →</string>
-    <string name="dashboard_insight_refresh">刷新</string>
-    <string name="dashboard_insight_refreshing">刷新中...</string>
-    <string name="dashboard_insight_no_api_key">请在设置中配置 OpenRouter API 以获取 AI 洞察</string>
     <string name="dashboard_insight_no_data">数据不足，无法分析</string>
+    <string name="insight_period_week">周</string>
+    <string name="insight_period_month">月</string>
 
     <!-- Period chips -->
     <string name="dashboard_period_day">日</string>
@@ -526,7 +528,6 @@
     <string name="dashboard_stat_km_value">%1$.1f 公里</string>
     <string name="dashboard_stat_kwh_value">%1$.1f kWh</string>
     <string name="dashboard_voltage_value">%1$.1fV</string>
-    <string name="dashboard_insight_refresh_error">刷新失败</string>
 
     <!-- Navigation bar tab labels -->
     <string name="nav_tab_dashboard">首页</string>
@@ -598,9 +599,6 @@
     <string name="settings_log_error_no_fs_access">错误：无法访问文件系统</string>
     <string name="settings_update_check_in_progress">检查中...</string>
     <string name="settings_update_available_short">可更新至 v%1$s</string>
-    <string name="settings_ai_no_key_model">请输入 API 密钥和模型</string>
-    <string name="settings_ai_done">完成！请切换到首页</string>
-    <string name="settings_ai_fetch_error">获取洞察失败</string>
 
     <!-- UpdateChecker: download progress strings -->
     <string name="update_downloading_progress">下载中：%1$d%%</string>
@@ -629,6 +627,7 @@
     <string name="insight_metric_avg_distance">平均距离</string>
     <string name="insight_metric_idle">停车</string>
     <string name="insight_section_week_to_week">周环比</string>
+    <string name="insight_section_month_to_month">月环比</string>
     <string name="insight_unit_kwh_per_100">%.1f kWh/100</string>
     <string name="insight_unit_kwh_per_100_prev">%.1f</string>
     <string name="insight_trips_value">%1$d · %2$s 公里</string>
@@ -648,47 +647,61 @@
     <string name="local_insight_not_enough_data_title">数据不足</string>
     <string name="local_insight_not_enough_data_summary">最近 7 天至少需要 5 次行程</string>
     <string name="local_insight_consumption_up_title">能耗上升 %1$.0f%%</string>
+    <string name="local_insight_consumption_up_title_month">能耗上升 %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">短途较多，预热消耗额外电量</string>
     <string name="local_insight_consumption_up_summary">能耗上升：%1$.1f → %2$.1f kWh/100</string>
     <string name="local_insight_consumption_down_title">能耗下降 %1$.0f%%</string>
     <string name="local_insight_consumption_down_summary">平均 %1$.1f kWh/100，优于上周</string>
+    <string name="local_insight_consumption_down_summary_month">平均 %1$.1f kWh/100，优于上月</string>
     <string name="local_insight_consumption_stable_title">能耗稳定</string>
     <string name="local_insight_consumption_stable_summary">本周平均 %1$.1f kWh/100</string>
+    <string name="local_insight_consumption_stable_summary_month">本月平均 %1$.1f kWh/100</string>
     <string name="local_insight_short_trips">%1$d/%2$d 次行程不足 5 公里（%3$d%%），建议合并短途</string>
     <string name="local_insight_idle">怠速耗电 %1$.1f kWh / %2$s，占本周 %3$d%%</string>
+    <string name="local_insight_idle_month">怠速耗电 %1$.1f kWh / %2$s，占本月 %3$d%%</string>
     <string name="local_insight_12v_critical_title">12V 电压过低</string>
     <string name="local_insight_12v_critical_summary">辅电池 %1$.1f V，请检查</string>
     <string name="local_insight_12v_low">12V 当前 %1$.1f V，低于正常 12.4 V</string>
     <string name="local_insight_12v_falling">12V 一周下降：%1$.2f → %2$.2f V</string>
+    <string name="local_insight_12v_falling_month">12V 一个月下降：%1$.2f → %2$.2f V</string>
     <string name="local_insight_cell_critical_title">电芯压差过大</string>
     <string name="local_insight_cell_critical_summary">压差 %1$.0f mV，请关注均衡</string>
     <string name="local_insight_cell_delta">电芯压差 %1$.0f mV，可能有弱电芯</string>
     <string name="local_insight_cold">平均 %1$d°C 时能耗 %2$.1f kWh/100，冬季正常</string>
     <string name="local_insight_best_worst">最佳 %1$.1f，最差 %2$.1f kWh/100</string>
     <string name="local_insight_cost">本周行程花费 %1$.0f %2$s</string>
+    <string name="local_insight_cost_month">本月行程花费 %1$.0f %2$s</string>
     <string name="local_insight_night_idle_title">夜间怠速耗电</string>
     <string name="local_insight_night_idle_summary">夜间 %1$.1f kWh，占怠速 %2$d%%</string>
     <string name="local_insight_night_idle">夜间（22:00–06:00）怠速 %1$.1f kWh，占全部 %2$d%%。不需要空调时可熄火</string>
     <string name="local_insight_dc_more_expensive">快充 %1$.2f %4$s/kWh，比交流 %2$.2f 贵 %3$d%%</string>
     <string name="local_insight_dc_heavy">快充 %1$.0f kWh（%2$d 次）vs 交流 %3$.0f — 日常建议家用交流</string>
     <string name="local_insight_ac_only">本周 %2$d 次均为交流充电（%1$.0f kWh），对电池和预算更友好</string>
+    <string name="local_insight_ac_only_month">本月 %2$d 次均为交流充电（%1$.0f kWh），对电池和预算更友好</string>
     <string name="local_insight_charge_cost_week">本周充电 %3$.0f kWh，花费 %1$.0f %2$s</string>
+    <string name="local_insight_charge_cost_month">本月充电 %3$.0f kWh，花费 %1$.0f %2$s</string>
     <string name="local_insight_consumption_improved">能耗下降 %1$.0f%% — 趋势良好</string>
     <string name="local_insight_highway_speed">平均速度 %1$.0f km/h — 高速能耗 %2$.1f kWh/100 属正常</string>
     <string name="local_insight_high_consumption">平均能耗 %1$.1f kWh/100 偏高 — 请检查空调与驾驶习惯</string>
     <string name="local_insight_low_consumption">本周 %2$.0f km 平均仅 %1$.1f kWh/100 — 表现优秀</string>
+    <string name="local_insight_low_consumption_month">本月 %2$.0f km 平均仅 %1$.1f kWh/100，表现优秀</string>
     <string name="local_insight_idle_rate_high">怠速耗电约 %1$.1f kWh/h — 多为空调或加热</string>
     <string name="local_insight_km_up">里程上升：%1$.0f → %2$.0f km — 可能影响平均能耗</string>
     <string name="local_insight_trips_more">本周 %1$d 次行程，上周 %2$d 次</string>
+    <string name="local_insight_trips_more_month">本月 %1$d 次行程，上月 %2$d 次</string>
     <string name="local_insight_weekly_mileage">本周 %1$.0f km / %2$d 次行程 — 数据量充足</string>
+    <string name="local_insight_monthly_mileage">本月 %1$.0f km / %2$d 次行程，数据量充足</string>
     <string name="local_insight_12v_ok">12V %1$.1f V — 辅电池正常</string>
     <string name="local_insight_cell_ok">电芯压差 %1$.0f mV — 均衡良好</string>
     <string name="local_insight_heat_ac">%1$d°C 时平均 %2$.1f kWh/100 — 空调增加负载</string>
     <string name="local_insight_best_trip">最佳行程 %1$.1f kWh/100（%2$.0f km）— 驾驶高效</string>
     <string name="local_insight_mixed_charging">本周充电：交流 %1$.0f kWh，快充 %2$.0f kWh — 日常建议多用家用交流</string>
+    <string name="local_insight_mixed_charging_month">本月充电：交流 %1$.0f kWh，快充 %2$.0f kWh，日常建议多用家用交流</string>
     <string name="local_insight_low_night_idle">夜间怠速仅占 %1$d%% — 熄火习惯良好</string>
     <string name="local_insight_low_idle_share">发动机怠速仅占本周 %1$d%% — 很好</string>
+    <string name="local_insight_low_idle_share_month">发动机怠速仅占本月 %1$d%%，很好</string>
     <string name="local_insight_cost_per_100">行驶成本约 %1$.2f %3$s/100 km（本周 %2$.0f %3$s）</string>
+    <string name="local_insight_cost_per_100_month">行驶成本约 %1$.2f %3$s/100 km（本月 %2$.0f %3$s）</string>
 
     <!-- v3.0.1-3.0.3 feature strings (backup / steering-button / media-volume), added by the
          maintainer during PR #39 integration since they were absent from the PR base (v3.0.0). -->
@@ -922,4 +935,158 @@
     <string name="auto_a11y_move_up">上移</string>
     <string name="auto_a11y_move_down">下移</string>
     <string name="auto_a11y_run_now">立即执行</string>
+
+    <!-- Voice control (Phase 0) -->
+    <string name="settings_section_voice_agent">语音智能体</string>
+    <string name="settings_voice_button_mic_header">按键与麦克风</string>
+    <string name="settings_voice_enable_label">语音指令</string>
+    <string name="settings_voice_enable_description">方向盘按键离线语音控制</string>
+    <string name="settings_voice_model_downloading">下载中… %1$d%%</string>
+    <string name="voice_listening">聆听中</string>
+    <string name="voice_thinking">思考中</string>
+
+    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <string name="settings_asr_gigaam_title">语音识别</string>
+    <string name="settings_asr_gigaam_ready">模型已就绪</string>
+    <string name="settings_asr_gigaam_download">下载（%1$s）</string>
+    <string name="settings_asr_gigaam_delete">删除模型</string>
+    <string name="settings_asr_gigaam_download_failed">模型下载失败</string>
+
+    <string name="settings_voice_button_label">分配按键</string>
+    <string name="settings_voice_button_current">当前：%1$s</string>
+    <string name="settings_voice_a11y_hint">方向盘触发需要无障碍服务（在"显示"中自动启用）。</string>
+
+    <!-- call_contact tool: contacts permission row -->
+    <string name="settings_voice_contacts_label">通讯录访问权限</string>
+    <string name="settings_voice_contacts_description">用于按姓名语音拨打联系人</string>
+    <string name="settings_voice_contacts_granted">已授权</string>
+    <string name="settings_voice_contacts_grant">授权</string>
+
+    <!-- Voice journal: debug screen with the last voice sessions -->
+    <string name="settings_voice_journal_entry_title">语音日志</string>
+    <string name="settings_voice_journal_entry_description">最近50次语音会话</string>
+
+    <!-- TTS: offline synthesis of agent replies (Phase 2) -->
+    <string name="settings_tts_header">智能体回复</string>
+    <string name="settings_tts_toggle">朗读智能体回复</string>
+    <string name="settings_tts_subtitle">离线语音合成，俄语音色</string>
+    <string name="settings_tts_model_delete">删除</string>
+    <string name="settings_tts_download_failed">语音包下载失败</string>
+    <string name="settings_voice_volume_hint">回复音量由系统 Voice 声道控制：方向盘音量按键或车辆的声音设置</string>
+    <string name="settings_tts_voice_irina">Irina</string>
+    <string name="settings_tts_voice_ruslan">Ruslan</string>
+    <string name="settings_tts_voice_alena">Alyona</string>
+    <string name="settings_tts_voice_dmitri">德米特里</string>
+    <string name="settings_tts_voice_mark">马克</string>
+    <string name="settings_tts_voice_sofia">索菲娅</string>
+    <string name="settings_tts_voice_local_badge">本地</string>
+    <string name="settings_tts_voice_ready">已下载</string>
+    <string name="settings_tts_voice_download_label">下载 · %1$d MB</string>
+    <string name="settings_tts_voice_locked_hint">请先下载该语音包</string>
+    <string name="settings_tts_voice_desc_piper">经典合成，体积小</string>
+    <string name="settings_tts_voice_desc_vits">音色更自然</string>
+    <string name="settings_tts_voice_desc_supertonic">新引擎，最自然的声音</string>
+
+    <!-- TTS: online voices (Wave N) -->
+    <string name="settings_tts_voice_online_gemini_desc">自然俄语音色 · 回复开始时间比本地语音稍晚</string>
+    <string name="settings_tts_voice_online_gemini_badge">OpenRouter 密钥</string>
+    <string name="settings_tts_voice_online_minimax_desc">自然俄语音色 · 回复开始时间比本地语音稍晚</string>
+    <string name="settings_tts_voice_online_minimax_badge">需要 MiniMax 密钥</string>
+    <string name="settings_tts_online_fallback_hint">在线语音需要网络；若服务2秒内未响应，该回复将不发声</string>
+
+    <!-- TTS: keys for online voices (Wave N) -->
+    <string name="settings_tts_keys_header">在线语音密钥</string>
+    <string name="settings_tts_keys_openrouter_hint">密钥和模型在「AI 连接」中配置。</string>
+    <string name="settings_minimax_provider_label">提供方</string>
+    <string name="settings_minimax_provider_official">官方</string>
+    <string name="settings_minimax_provider_fal">fal.ai</string>
+    <string name="settings_minimax_provider_replicate">Replicate</string>
+    <string name="settings_minimax_price_hint">每1000字符 $0.06 · 官方启动最快</string>
+    <string name="settings_minimax_key_saved_placeholder">密钥已保存</string>
+
+    <!-- Voice tuning: speed/liveliness sliders + preview (local voices only) -->
+    <string name="settings_tts_tuning_header">本地语音设置</string>
+    <string name="settings_tts_rate_label">语速</string>
+    <string name="settings_tts_rate_hint">左侧更慢更清晰，右侧更快</string>
+    <string name="settings_tts_liveliness_label">语调活泼度</string>
+    <string name="settings_tts_liveliness_hint">左侧语调平稳如播音员，右侧更有表现力，但可能不稳定</string>
+    <string name="settings_tts_preview_button">试听示例</string>
+
+    <!-- Agent identity: name + persona + gender -->
+    <string name="settings_agent_section_header">智能体</string>
+    <string name="settings_agent_name_label">助手名字</string>
+    <string name="settings_agent_name_hint">例如:Leo。建议2-3个音节、发音清晰的词</string>
+    <string name="settings_agent_persona_label">性格</string>
+    <string name="settings_persona_snarky">毒舌搭档</string>
+    <string name="settings_persona_navigator">领航员</string>
+    <string name="settings_persona_engineer">随车工程师</string>
+    <string name="settings_agent_gender_label">智能体性别</string>
+    <string name="settings_agent_gender_male">男声</string>
+    <string name="settings_agent_gender_female">女声</string>
+    <string name="settings_agent_gender_hint">对所有语音生效：每种音色都有男声和女声版本</string>
+
+    <!-- Voice agent (Phase 1) -->
+    <string name="agent_enable_title">语音AI助手</string>
+    <string name="agent_enable_desc">通过LLM（OpenRouter）自由提问和控制。使用「集成」中的API密钥。</string>
+    <string name="agent_model_shared_caption">智能体的 OpenRouter 密钥和模型在"集成"页中配置</string>
+    <string name="agent_chat_open">智能体聊天（调试）</string>
+    <string name="agent_test_model_button">测试模型</string>
+    <string name="agent_test_model_running">正在测试模型...</string>
+    <string name="agent_test_model_result">%1$s：%2$.1f 秒后回复 - \"%3$s\"</string>
+    <string name="agent_test_model_disabled">错误：智能体已禁用或未配置</string>
+    <string name="agent_exa_api_key_label">Exa API Key（网络搜索）</string>
+
+    <!-- Voice agent (Wave J): multi-provider LLM connections -->
+    <string name="settings_conn_not_configured">连接未配置</string>
+    <string name="settings_conn_check_ok">模型在 %1$.1f 秒内回复</string>
+
+    <!-- Wave J: AI connections -->
+    <string name="settings_ai_connections_header">AI 连接</string>
+    <string name="settings_conn_custom_title">自定义连接</string>
+    <string name="settings_conn_configured">已配置</string>
+    <string name="settings_conn_api_key_label">API 密钥</string>
+    <string name="settings_conn_name_label">名称</string>
+    <string name="settings_conn_base_url_label">Base URL</string>
+    <string name="settings_conn_model_label">模型 (id)</string>
+    <string name="settings_conn_check">检查</string>
+    <string name="settings_conn_checking">检查中…</string>
+    <string name="settings_zai_hint">免费 glm-4.7-flash，推荐设为主模型</string>
+    <string name="settings_custom_hint">任何兼容 OpenAI 的 API。预设会填入地址和模型，密钥需自备。</string>
+    <string name="settings_custom_list_models">模型列表</string>
+    <string name="settings_error_dns">服务器不可达：车机网络无法解析该地址 (DNS)</string>
+    <string name="settings_error_timeout">服务器未在规定时间内响应</string>
+    <string name="settings_preset_hint_cloudflare">将地址中的 ACCOUNT_ID 替换为 Cloudflare 控制台中的账户 ID。免费约每天 450 次请求（glm-4.7-flash）。</string>
+    <string name="settings_preset_hint_vercel">每月 5$ 额度，无需银行卡。免费套餐部分模型可能返回 403 错误。</string>
+    <string name="settings_preset_hint_kimi">每天 1000 次免费请求。</string>
+    <string name="settings_preset_hint_nanogpt">每月 8$ 订阅，加密货币支付。</string>
+    <string name="settings_preset_hint_deepseek">按量付费，莫斯科时间夜间五折。</string>
+    <string name="settings_preset_hint_mistral">免费，需手机验证。</string>
+    <string name="settings_models_header">模型选择</string>
+    <string name="settings_model_primary">主模型</string>
+    <string name="settings_model_fallback">备用模型</string>
+    <string name="settings_model_none">无</string>
+    <string name="settings_models_hint">主模型无响应时（重试一次后）会自动切换到备用模型。列表中仅显示已配置的连接。</string>
+    <string name="settings_search_status_title">网络搜索</string>
+    <string name="settings_search_source_exa">Exa</string>
+    <string name="settings_search_source_native">连接自带搜索</string>
+    <string name="settings_search_source_none">不可用</string>
+    <string name="settings_search_status_hint">未配置 Exa 密钥时，代理使用当前连接的自带搜索。如果它也不可用，代理会如实告知搜索无法使用。</string>
+
+    <!-- Donation dialog + support card -->
+    <string name="donate_auto_title">感谢您使用 BYDMate</string>
+    <string name="donate_auto_body">该项目非商业化且完全免费，完全出于个人热情开发维护。如果 BYDMate 对您有帮助，想表示感谢，可以通过以下任意网络转账 USDT 支持开发。</string>
+    <string name="donate_settings_title">支持项目</string>
+    <string name="donate_settings_body">BYDMate 非商业化且免费。如果想支持开发，请通过以下任意 EVM 网络将 USDT 转到下方地址。</string>
+    <string name="donate_qr_hint">用手机摄像头扫描二维码</string>
+    <string name="donate_address_label">USDT 地址 · EVM 网络</string>
+    <string name="donate_copy_button">复制地址</string>
+    <string name="donate_copied_toast">地址已复制</string>
+    <string name="donate_networks">网络：Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
+    <string name="donate_warning">请勿通过 TON、TRON (TRC-20) 或 Solana 转账，资金将无法找回。</string>
+    <string name="donate_later_button">稍后</string>
+    <string name="donate_already_button">我已支持</string>
+    <string name="donate_close_button">关闭</string>
+    <string name="settings_donate_header">支持</string>
+    <string name="settings_donate_card_body">BYDMate 免费且非商业化。如果它对您有帮助，您可以支持开发。</string>
+    <string name="settings_donate_button">支持项目</string>
 </resources>

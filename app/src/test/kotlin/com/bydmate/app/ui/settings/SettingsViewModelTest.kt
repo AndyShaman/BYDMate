@@ -47,10 +47,17 @@ import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.coVerifyOrder
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
+import com.bydmate.app.agent.AgentOrchestrator
+import com.bydmate.app.agent.AgentResult
+import com.bydmate.app.agent.LlmConnectionResolver
+import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.voice.online.TtsRouter
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -64,6 +71,9 @@ class SettingsViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
     private val helperClient: HelperClient = mockk(relaxed = true)
+    // relaxed → ensureRunning() defaults to false; tests that need the daemon "up" stub it true.
+    private val helperBootstrap: HelperBootstrap = mockk(relaxed = true)
+    private val agentOrchestrator: AgentOrchestrator = mockk(relaxed = true)
 
     @Before
     fun setUp() {
@@ -190,10 +200,18 @@ class SettingsViewModelTest {
 
     // --- Factory ---
 
-    private fun buildViewModel(updateChecker: UpdateChecker? = null): SettingsViewModel {
+    private lateinit var settingsDao: FakeSettingsDao
+
+    private fun buildViewModel(
+        updateChecker: UpdateChecker? = null,
+        ttsModelManager: com.bydmate.app.voice.TtsModelManager? = null,
+        ttsEngine: com.bydmate.app.voice.TtsEngine? = null,
+        gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager? = null,
+        llmConnectionResolver: LlmConnectionResolver? = null,
+    ): SettingsViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
-        val settingsDao = FakeSettingsDao()
+        settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = StubTripDao()
@@ -219,6 +237,14 @@ class SettingsViewModelTest {
         // Stub BackupManager: no AppDatabase available in unit tests, use mockk
         val backupManager = mockk<BackupManager>(relaxed = true)
 
+        // Voice deps are not exercised by most settings tests; relaxed mocks keep them inert.
+        val voiceModelManager = mockk<com.bydmate.app.voice.VoiceModelManager>(relaxed = true)
+        val resolvedTtsModelManager = ttsModelManager ?: mockk(relaxed = true)
+        val resolvedTtsEngine = ttsEngine ?: mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val resolvedGigaAmModelManager = gigaAmModelManager ?: mockk(relaxed = true)
+        val continuousAsr = mockk<com.bydmate.app.voice.ContinuousAsr>(relaxed = true)
+        val voiceController = mockk<com.bydmate.app.voice.VoiceController>(relaxed = true)
+
         return SettingsViewModel(
             appContext = ctx,
             settingsRepository = settingsRepo,
@@ -235,8 +261,20 @@ class SettingsViewModelTest {
             backupManager = backupManager,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
+            voiceModelManager = voiceModelManager,
+            ttsModelManager = resolvedTtsModelManager,
+            ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
+            gigaAmModelManager = resolvedGigaAmModelManager,
+            continuousAsr = continuousAsr,
+            ttsEngine = resolvedTtsEngine,
+            voiceController = voiceController,
             seatChannelStore = seatChannelStore,
             helperClient = helperClient,
+            helperBootstrap = helperBootstrap,
+            agentOrchestrator = agentOrchestrator,
+            llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
+            openRouterClient = openRouterClient,
+            placeRepository = mockk(relaxed = true),
         )
     }
 
@@ -306,5 +344,764 @@ class SettingsViewModelTest {
 
         assertTrue(vm.uiState.value.disableNativeAssistant)
         coVerify { helperClient.setAppHidden("com.byd.autovoice", true) }
+    }
+
+    @Test fun `setVoiceEnabled persists and mirrors into voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setVoiceEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.voiceEnabled)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertTrue(
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+        )
+    }
+
+    /**
+     * Fix (Finding 3b): enabling Voice must best-effort re-bind the a11y key service (the same
+     * daemon call ClusterProjectionManager.enableStarControl uses) — otherwise the PTT key filter
+     * (SteeringWheelKeyService) is never bound on a fresh install with no cluster-projection toggle.
+     * The daemon must be bootstrapped FIRST: HelperClient only resolves an existing binder, so
+     * without ensureRunning() the re-bind silently no-ops when the daemon is not up.
+     */
+    @Test fun `setVoiceEnabled true bootstraps daemon then triggers accessibility re-bind`() = runTest {
+        coEvery { helperBootstrap.ensureRunning() } returns true
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setVoiceEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerifyOrder {
+            helperBootstrap.ensureRunning()
+            helperClient.enableAccessibilityService()
+        }
+    }
+
+    @Test fun `setVoiceEnabled true skips a11y re-bind when daemon bootstrap fails`() = runTest {
+        coEvery { helperBootstrap.ensureRunning() } returns false
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setVoiceEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { helperClient.enableAccessibilityService() }
+    }
+
+    @Test fun `setVoiceEnabled false does not touch daemon or accessibility re-bind`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setVoiceEnabled(false)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 0) { helperBootstrap.ensureRunning() }
+        coVerify(exactly = 0) { helperClient.enableAccessibilityService() }
+    }
+
+    @Test fun `setTtsEnabled persists and mirrors to voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.ttsEnabled)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertTrue(
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .getBoolean(SettingsRepository.KEY_TTS_ENABLED, false)
+        )
+    }
+
+    @Test fun `setTtsVoice persists, mirrors to voice prefs, and reloads the engine`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager, ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsVoice("irina")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("irina", vm.uiState.value.ttsVoice)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "irina",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_voice", null)
+        )
+        verify(exactly = 1) { ttsEngine.reload() }
+    }
+
+    @Test fun `agent identity state flows initialize from voice prefs`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit()
+            .putString("agent_name", "Лео")
+            .putString("agent_persona", "snarky")
+            .apply()
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Лео", vm.agentName.value)
+        assertEquals("snarky", vm.agentPersona.value)
+        assertEquals("Лео", vm.uiState.value.agentName)
+        assertEquals("snarky", vm.uiState.value.agentPersona)
+    }
+
+    // Final review fix, finding 3: a legacy "denis"/"dmitri" id read verbatim into state left no
+    // radio row selected in Settings, even though playback already resolves it via byId(). State
+    // must resolve through the same catalog lookup so the migrated voice shows selected.
+    @Test fun `state resolves a legacy persisted voice id to its migrated catalog id`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit()
+            .putString("tts_voice", "denis")
+            .apply()
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("dmitri", vm.uiState.value.ttsVoice)
+    }
+
+    @Test fun `setAgentName and setAgentPersona mirror to voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setAgentName("Майк")
+        vm.setAgentPersona("engineer")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Майк", vm.agentName.value)
+        assertEquals("engineer", vm.agentPersona.value)
+        assertEquals("Майк", vm.uiState.value.agentName)
+        assertEquals("engineer", vm.uiState.value.agentPersona)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val prefs = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        assertEquals("Майк", prefs.getString("agent_name", null))
+        assertEquals("engineer", prefs.getString("agent_persona", null))
+    }
+
+    @Test fun `downloadTtsVoice success adds voice to ttsReadyVoices`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        coEvery { ttsModelManager.download(any(), any()) } returns Result.success(Unit)
+        coEvery { ttsModelManager.isReady(any()) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("alena")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(!vm.uiState.value.ttsDownloadProgress.containsKey("alena"))
+        assertTrue("alena" in vm.uiState.value.ttsReadyVoices)
+        assertTrue("alena" !in vm.uiState.value.ttsDownloadFailed)
+    }
+
+    @Test fun `downloadTtsVoice failure sets ttsDownloadFailed for that voice`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        coEvery { ttsModelManager.download(any(), any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { ttsModelManager.isReady(any()) } returns false
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("artem" in vm.uiState.value.ttsDownloadFailed)
+        assertTrue("artem" !in vm.uiState.value.ttsReadyVoices)
+    }
+
+    /**
+     * Fix: downloadTtsModel lacked the in-flight guard that downloadVoiceModel has
+     * (`voiceDownloadProgress >= 0` early-return). A re-entrant call while a download is
+     * already running must be a no-op — the manager's download() must be invoked only once.
+     */
+    @Test fun `downloadTtsVoice ignores re-entry for the same voice while in flight`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { ttsModelManager.download(any(), any()) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { ttsModelManager.isReady(any()) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.downloadTtsVoice("artem") // re-entry while the first download is still in flight
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { ttsModelManager.download(any(), any()) }
+    }
+
+    /**
+     * Per-voice download state must not clobber another voice's state: downloading "irina"
+     * while "artem" is already ready (or mid-download) must leave artem's state untouched.
+     */
+    @Test fun `downloadTtsVoice for one voice does not affect another voice's state`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("ruslan")) } returns true
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { ttsModelManager.download(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina"), any()) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("irina")) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+        // ruslan is already ready from initial load (isReady stubbed true above)
+        assertTrue("ruslan" in vm.uiState.value.ttsReadyVoices)
+
+        vm.downloadTtsVoice("irina")
+        testDispatcher.scheduler.advanceUntilIdle() // irina's download now in flight
+
+        assertTrue("irina" in vm.uiState.value.ttsDownloadProgress)
+        assertTrue("ruslan" !in vm.uiState.value.ttsDownloadProgress)
+        assertTrue("ruslan" in vm.uiState.value.ttsReadyVoices) // untouched by irina's download
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("irina" in vm.uiState.value.ttsReadyVoices)
+        assertTrue("ruslan" in vm.uiState.value.ttsReadyVoices)
+    }
+
+    /**
+     * mark and sofia share the "supertonic-ru" model dir: downloading one must mark both
+     * ready, since they share the same on-disk model.
+     */
+    @Test fun `downloadTtsVoice marks sibling voice ready when they share a modelDirId`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        coEvery { ttsModelManager.download(any(), any()) } returns Result.success(Unit)
+        coEvery { ttsModelManager.isReady(com.bydmate.app.voice.TtsVoiceCatalog.byId("mark")) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("mark")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("mark" in vm.uiState.value.ttsReadyVoices)
+        assertTrue("sofia" in vm.uiState.value.ttsReadyVoices)
+    }
+
+    /**
+     * Fix: deleteTtsModel did not cancel an active download job, so a stale download
+     * completion could resurrect ready/progress state after delete. Must cancel the
+     * voice's download job first, then delete, then reset state deterministically.
+     */
+    @Test fun `deleteTtsVoice cancels in-flight download`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { ttsModelManager.download(any(), any()) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { ttsModelManager.isReady(any()) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle() // download now in flight, awaiting gate
+
+        vm.deleteTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(!vm.uiState.value.ttsDownloadProgress.containsKey("artem"))
+        assertTrue("artem" !in vm.uiState.value.ttsReadyVoices)
+        assertTrue("artem" !in vm.uiState.value.ttsDownloadFailed)
+
+        // Even if the (cancelled) download coroutine's suspended await were to resume, the
+        // cancellation must have already torn it down — no stale write flips state back.
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(!vm.uiState.value.ttsDownloadProgress.containsKey("artem"))
+        assertTrue("artem" !in vm.uiState.value.ttsReadyVoices)
+
+        coVerify(exactly = 1) { ttsModelManager.delete(any()) }
+    }
+
+    /**
+     * Fix: the onProgress lambda passed to ttsModelManager.download() wrote unconditionally
+     * into _uiState. deleteTtsVoice() removes the voice's progress entry (idle), but a stale
+     * progress delivery arriving afterward (from an already-cancelled download coroutine
+     * still winding down) must not resurrect an in-progress state.
+     */
+    @Test fun `late progress callback after delete is ignored`() = runTest {
+        val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val progressSlot = slot<(Int) -> Unit>()
+        coEvery { ttsModelManager.download(any(), capture(progressSlot)) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { ttsModelManager.isReady(any()) } returns true
+
+        val vm = buildViewModel(ttsModelManager = ttsModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle() // download now in flight, awaiting gate
+
+        vm.deleteTtsVoice("artem")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        progressSlot.captured(55) // stale progress delivery after delete reset state to idle
+
+        assertTrue(!vm.uiState.value.ttsDownloadProgress.containsKey("artem"))
+    }
+
+    @Test fun `setAgentGender switches selected local voice to its counterpart`() = runTest {
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val vm = buildViewModel(ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("dmitri", vm.uiState.value.ttsVoice) // default voice, male
+
+        vm.setAgentGender("f")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("f", vm.uiState.value.agentGender)
+        assertEquals("irina", vm.uiState.value.ttsVoice)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals("f", ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_gender", null))
+    }
+
+    @Test fun `setAgentGender is a no-op on the voice when it already matches`() = runTest {
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val vm = buildViewModel(ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setAgentGender("m") // already male (default voice is dmitri)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("dmitri", vm.uiState.value.ttsVoice)
+        verify(exactly = 0) { ttsEngine.reload() }
+    }
+
+    @Test fun `setTtsRate persists, mirrors to voice prefs, and reloads the engine`() = runTest {
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val vm = buildViewModel(ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsRate(1.2f)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1.2f, vm.uiState.value.ttsRate)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(1.2f, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getFloat("tts_rate", -1f))
+        verify(exactly = 1) { ttsEngine.reload() }
+    }
+
+    @Test fun `setTtsLiveliness persists, mirrors to voice prefs, and reloads the engine`() = runTest {
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val vm = buildViewModel(ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsLiveliness(80)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(80, vm.uiState.value.ttsLiveliness)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(80, ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getInt("tts_liveliness", -1))
+        verify(exactly = 1) { ttsEngine.reload() }
+    }
+
+    @Test fun `previewVoice reloads the engine and speaks the sample line via speakOffline`() = runTest {
+        val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
+        val vm = buildViewModel(ttsEngine = ttsEngine)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.previewVoice()
+
+        verify(exactly = 1) { ttsEngine.reload() }
+        verify(exactly = 1) { ttsEngine.speakOffline(any()) }
+    }
+
+    // --- Wave N: online TTS source (Gemini/OpenAI via OpenRouter, MiniMax) ---
+
+    @Test fun `initial ttsSource defaults to offline`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TtsRouter.OFFLINE, vm.uiState.value.ttsSource)
+    }
+
+    @Test fun `setTtsSource persists an online id to voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsSource("gemini")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("gemini", vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "gemini",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
+    @Test fun `setTtsSource minimax is rejected while no key is saved`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setTtsSource("minimax")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TtsRouter.OFFLINE, vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            null,
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
+    @Test fun `setTtsSource minimax is accepted once a key is saved`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setTtsSource("minimax")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("minimax", vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "minimax",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
+    @Test fun `setMinimaxProvider persists via SettingsRepository`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setMinimaxProvider("fal")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("fal", vm.uiState.value.minimaxProvider)
+        assertEquals("fal", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_PROVIDER])
+    }
+
+    @Test fun `setMinimaxKey persists via SettingsRepository and flips minimaxKeySet`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(!vm.uiState.value.minimaxKeySet)
+
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.minimaxKeySet)
+        assertEquals("mm-key", settingsDao.map[SettingsRepository.KEY_MINIMAX_TTS_KEY])
+    }
+
+    @Test fun `setMinimaxKey with a blank value clears minimaxKeySet`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue(vm.uiState.value.minimaxKeySet)
+
+        vm.setMinimaxKey("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(!vm.uiState.value.minimaxKeySet)
+    }
+
+    @Test fun `setMinimaxKey with a blank value resets tts_source from minimax to offline`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setTtsSource("minimax")
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("minimax", vm.uiState.value.ttsSource)
+
+        vm.setMinimaxKey("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TtsRouter.OFFLINE, vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            TtsRouter.OFFLINE,
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
+    @Test fun `setMinimaxKey with a blank value leaves a non-minimax source untouched`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setMinimaxKey("mm-key")
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setTtsSource("gemini")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setMinimaxKey("")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("gemini", vm.uiState.value.ttsSource)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "gemini",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
+    }
+
+    // --- GigaAM v2 ASR (free-form Russian speech recognition, offline) ---
+
+    @Test fun `initial state reflects gigaAmModelManager isReady`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.gigaAmModelReady)
+    }
+
+    @Test fun `downloadGigaAmModel success flips gigaAmModelReady`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        coEvery { gigaAmModelManager.download(any()) } returns Result.success(Unit)
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(-1, vm.uiState.value.gigaAmDownloadProgress)
+        assertTrue(vm.uiState.value.gigaAmModelReady)
+        assertTrue(!vm.uiState.value.gigaAmDownloadFailed)
+    }
+
+    @Test fun `downloadGigaAmModel failure sets gigaAmDownloadFailed`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        coEvery { gigaAmModelManager.download(any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { gigaAmModelManager.isReady() } returns false
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.gigaAmDownloadFailed)
+        assertTrue(!vm.uiState.value.gigaAmModelReady)
+    }
+
+    /** A re-entrant call while a download is already running must be a no-op. */
+    @Test fun `downloadGigaAmModel ignores re-entry while in flight`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { gigaAmModelManager.download(any()) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.downloadGigaAmModel() // re-entry while the first download is still in flight
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { gigaAmModelManager.download(any()) }
+    }
+
+    /** deleteGigaAmModel() must cancel an in-flight download so a stale completion can't
+     *  resurrect ready/progress state after delete (same stale-guard as deleteTtsVoice). */
+    @Test fun `deleteGigaAmModel cancels in-flight download`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        coEvery { gigaAmModelManager.download(any()) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle() // download now in flight, awaiting gate
+
+        vm.deleteGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(-1, vm.uiState.value.gigaAmDownloadProgress)
+        assertTrue(!vm.uiState.value.gigaAmModelReady)
+        assertTrue(!vm.uiState.value.gigaAmDownloadFailed)
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(-1, vm.uiState.value.gigaAmDownloadProgress)
+        assertTrue(!vm.uiState.value.gigaAmModelReady)
+        assertTrue(!vm.uiState.value.gigaAmDownloadFailed)
+
+        coVerify(exactly = 1) { gigaAmModelManager.delete() }
+    }
+
+    /** A stale progress delivery arriving after deleteGigaAmModel() reset progress to idle
+     *  must not resurrect an in-progress state. */
+    @Test fun `late gigaAm progress callback after delete is ignored`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val progressSlot = slot<(Int) -> Unit>()
+        coEvery { gigaAmModelManager.download(capture(progressSlot)) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle() // download now in flight, awaiting gate
+
+        vm.deleteGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        progressSlot.captured(55) // stale progress delivery after delete reset state to idle
+
+        assertEquals(-1, vm.uiState.value.gigaAmDownloadProgress)
+    }
+
+    @Test fun `setAgentEnabled persists and updates state`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setAgentEnabled(true)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.agentEnabled)
+    }
+
+    @Test fun `setAgentName persists and mirrors into voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setAgentName("Лео")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("Лео", vm.uiState.value.agentName)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "Лео",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_name", "")
+        )
+    }
+
+    @Test fun `setAgentPersona persists and mirrors into voice prefs`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setAgentPersona("engineer")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("engineer", vm.uiState.value.agentPersona)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            "engineer",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_persona", "")
+        )
+    }
+
+    @Test fun `testAgentModel on Answer sets result with seconds and answer prefix`() = runTest {
+        coEvery { agentOrchestrator.ask(any()) } returns AgentResult.Answer("Заряд батареи 62 процента.")
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.testAgentModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val result = vm.uiState.value.modelTestResult
+        assertTrue(result != null)
+        assertTrue(result!!.contains(Regex("""\d+\.\d""")))
+        assertTrue(result.contains("Заряд батареи 62 процента."))
+        assertTrue(!vm.uiState.value.modelTestRunning)
+    }
+
+    @Test fun `testAgentModel on Error sets result with error prefix`() = runTest {
+        coEvery { agentOrchestrator.ask(any()) } returns AgentResult.Error("Не получилось связаться с сервером")
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.testAgentModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val expected = ctx.getString(
+            com.bydmate.app.R.string.settings_error_with_message, "Не получилось связаться с сервером"
+        )
+        assertEquals(expected, vm.uiState.value.modelTestResult)
+        assertTrue(!vm.uiState.value.modelTestRunning)
+    }
+
+    @Test fun `testAgentModel second tap while running is ignored`() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        coEvery { agentOrchestrator.ask(any()) } coAnswers {
+            gate.await()
+            AgentResult.Answer("ok")
+        }
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.testAgentModel()
+        testDispatcher.scheduler.runCurrent() // in flight, suspended on gate
+        assertTrue(vm.uiState.value.modelTestRunning)
+
+        vm.testAgentModel() // second tap while running — must be ignored
+        testDispatcher.scheduler.runCurrent()
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify(exactly = 1) { agentOrchestrator.ask(any()) }
+    }
+
+    // Wave O T3: stored "openai" tts_source must be migrated to "offline" on first load,
+    // because the OpenAI TTS backend was removed (model not available on OpenRouter).
+    @Test fun `stored openai tts_source is migrated to offline on load and prefs are rewritten`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit()
+            .putString("tts_source", "openai")
+            .apply()
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("offline", vm.uiState.value.ttsSource)
+        assertEquals(
+            "offline",
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
+        )
     }
 }

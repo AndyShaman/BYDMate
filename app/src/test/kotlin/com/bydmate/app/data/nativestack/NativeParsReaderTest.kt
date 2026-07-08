@@ -230,4 +230,45 @@ class NativeParsReaderTest {
         val result = reader.fetch()
         assertNull("fetch() must return null when soc + mileage + voltage12v are all null", result)
     }
+
+    /**
+     * Phase 0 voice-agent enrichment: the 9 validated climate/seat/light fids
+     * (fid-candidates.yaml status=validated, previously unwired) must decode
+     * into the new DiParsData fields.
+     */
+    @Test
+    fun `climate seat and light fids decode into new DiParsData fields`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+        // Liveness gate: provide mileage (raw 37998 × 0.1 = 3799.8 km).
+        coEvery { auto.getInt(1014, 1246765072) } returns 37998
+        coEvery { auto.getInt(1000, 1077936150) } returns 1  // acDefrostFront on
+        coEvery { auto.getInt(1000, 1077936152) } returns 5  // acWindMode defrost-front
+        coEvery { auto.getInt(1000, 1077936146) } returns 0  // acCtrlMode auto
+        coEvery { auto.getInt(1000, 702545948) } returns 3   // seatHeatDriver level 3
+        coEvery { auto.getInt(1000, 702545944) } returns 0   // seatVentDriver off
+        coEvery { auto.getInt(1000, 711983132) } returns 2   // seatHeatPassenger level 2
+        coEvery { auto.getInt(1000, 711983128) } returns 1   // seatVentPassenger level 1
+        coEvery { auto.getInt(1004, 950009864) } returns 1   // lightSide on
+        coEvery { auto.getInt(1004, 950009868) } returns 0   // lightHigh off
+
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+
+        val data = NativeParsReader(auto, settings).fetch()
+        assertNotNull("fetch() returned null", data)
+        checkNotNull(data)
+
+        assertEquals(1, data.acDefrostFront)
+        assertEquals(5, data.acWindMode)
+        assertEquals(0, data.acCtrlMode)
+        assertEquals(3, data.seatHeatDriver)
+        assertEquals(0, data.seatVentDriver)
+        assertEquals(2, data.seatHeatPassenger)
+        assertEquals(1, data.seatVentPassenger)
+        assertEquals(1, data.lightSide)
+        assertEquals(0, data.lightHigh)
+    }
 }

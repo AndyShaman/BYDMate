@@ -14,6 +14,8 @@
     <string name="settings_display_mirror_header">Projection to cluster</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
     <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
+    <string name="settings_cluster_auto_container_title">Cluster auto power-on</string>
+    <string name="settings_cluster_auto_container_desc">Power the cluster screen automatically before projecting</string>
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
@@ -82,17 +84,12 @@
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent - ABRP reads coordinates itself.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
-    <string name="settings_ai_section_header">AI Insights</string>
+    <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Model: %1$s</string>
     <string name="settings_openrouter_model_pick">Choose model</string>
-    <string name="settings_ai_loading_label">Loading...</string>
-    <string name="settings_ai_save_button">Save and get insight</string>
-    <string name="settings_insight_mode_label">Analysis source</string>
-    <string name="settings_insight_mode_local">Local (offline)</string>
-    <string name="settings_insight_mode_cloud">OpenRouter (cloud)</string>
-    <string name="settings_insight_mode_local_hint">On-device rules — no internet or API key. Refreshes once a day automatically.</string>
-    <string name="settings_insight_refresh_local">Refresh insight</string>
+    <string name="settings_exa_section_header">Exa</string>
+    <string name="settings_exa_search_hint">For internet search by the voice agent. Without a key, search goes through OpenRouter</string>
     <string name="settings_model_picker_title">Choose model</string>
     <string name="settings_model_picker_search_label">Search</string>
     <string name="settings_model_picker_loading">Loading models...</string>
@@ -102,6 +99,8 @@
     <string name="settings_widget_reset_position_button">Reset position</string>
     <string name="settings_reset_seat_channel">Reset seat channel</string>
     <string name="settings_reset_seat_channel_hint">If seat heating or ventilation stops working after switching cars</string>
+    <string name="orb_you">You:</string>
+    <string name="orb_agent">Agent:</string>
     <string name="settings_voice_native_assistant_header">Native BYD voice assistant</string>
     <string name="settings_voice_disable_native_label">Disable built-in voice assistant</string>
     <string name="settings_voice_disable_native_description">Hides the native BYD voice assistant so it does not interrupt. Reversible.</string>
@@ -128,6 +127,7 @@
     <string name="settings_log_recording_stop_button">Stop recording</string>
     <string name="settings_about_header">About</string>
     <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_weather_attribution">Weather data by Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Autostart: %1$s</string>
     <string name="settings_autostart_not_recorded">Autostart: not recorded</string>
     <string name="settings_update_check_toggle_label">Check for updates</string>
@@ -275,6 +275,11 @@
     <string name="automation_trigger_type_button_press">Button press</string>
     <string name="automation_trigger_button_label">Button %1$d</string>
     <string name="automation_trigger_button_picker_label">Button</string>
+    <string name="automation_trigger_type_voice">Voice</string>
+    <string name="automation_trigger_voice_phrase_label">Trigger phrase</string>
+    <string name="automation_voice_phrase_empty">Voice phrase is empty</string>
+    <string name="automation_voice_phrase_builtin">Phrase is already a built-in command</string>
+    <string name="automation_voice_phrase_taken">Phrase is already used by another automation</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exact</string>
@@ -430,12 +435,9 @@
     <string name="dashboard_idle_drain_avg_day_label">Avg. per day</string>
     <string name="dashboard_battery_temp_label">battery temp.</string>
     <string name="dashboard_battery_voltage_label">12V system</string>
-    <string name="dashboard_insight_loading">Analyzing...</string>
-    <string name="dashboard_insight_setup_prompt">Cloud AI insights — set up OpenRouter -></string>
-    <string name="dashboard_insight_refresh">Refresh</string>
-    <string name="dashboard_insight_refreshing">Refreshing...</string>
-    <string name="dashboard_insight_no_api_key">Set up OpenRouter API in Settings for cloud insights</string>
     <string name="dashboard_insight_no_data">Not enough data to analyze</string>
+    <string name="insight_period_week">Week</string>
+    <string name="insight_period_month">Month</string>
     <string name="dashboard_period_day">Day</string>
     <string name="dashboard_period_week">Week</string>
     <string name="dashboard_period_month">Month</string>
@@ -454,7 +456,6 @@
     <string name="dashboard_stat_km_value">%1$.1f km</string>
     <string name="dashboard_stat_kwh_value">%1$.1f kWh</string>
     <string name="dashboard_voltage_value">%1$.1fV</string>
-    <string name="dashboard_insight_refresh_error">Could not refresh</string>
     <string name="nav_tab_dashboard">Dashboard</string>
     <string name="nav_tab_trips">Trips</string>
     <string name="nav_tab_charges">Charging</string>
@@ -508,9 +509,6 @@
     <string name="settings_log_error_no_fs_access">Error: no file system access</string>
     <string name="settings_update_check_in_progress">Checking...</string>
     <string name="settings_update_available_short">v%1$s available</string>
-    <string name="settings_ai_no_key_model">Enter API key and model</string>
-    <string name="settings_ai_done">Done! Switch to Dashboard</string>
-    <string name="settings_ai_fetch_error">Error getting insight</string>
     <string name="update_downloading_progress">Downloading: %1$d%%</string>
     <string name="update_downloading_done">Downloaded. Installing...</string>
     <string name="update_downloading_paused">Paused...</string>
@@ -535,6 +533,7 @@
     <string name="insight_metric_avg_distance">Avg distance</string>
     <string name="insight_metric_idle">Idle</string>
     <string name="insight_section_week_to_week">Week over week</string>
+    <string name="insight_section_month_to_month">Month to month</string>
     <string name="insight_unit_kwh_per_100">%.1f kWh/100</string>
     <string name="insight_unit_kwh_per_100_prev">%.1f</string>
     <string name="insight_trips_value">%1$d · %2$s km</string>
@@ -554,47 +553,61 @@
     <string name="local_insight_not_enough_data_title">Not enough data</string>
     <string name="local_insight_not_enough_data_summary">Need at least 5 trips in the last 7 days</string>
     <string name="local_insight_consumption_up_title">Consumption up %1$.0f%%</string>
+    <string name="local_insight_consumption_up_title_month">Consumption up %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">Many short trips — warmup uses extra energy</string>
     <string name="local_insight_consumption_up_summary">Consumption rose: %1$.1f to %2$.1f kWh/100</string>
     <string name="local_insight_consumption_down_title">Consumption down %1$.0f%%</string>
     <string name="local_insight_consumption_down_summary">Avg %1$.1f kWh/100 — better than last week</string>
+    <string name="local_insight_consumption_down_summary_month">Avg %1$.1f kWh/100, better than last month</string>
     <string name="local_insight_consumption_stable_title">Consumption stable</string>
     <string name="local_insight_consumption_stable_summary">Weekly avg %1$.1f kWh/100</string>
+    <string name="local_insight_consumption_stable_summary_month">Monthly avg %1$.1f kWh/100</string>
     <string name="local_insight_short_trips">%1$d of %2$d trips under 5 km (%3$d%%) — combine short errands</string>
     <string name="local_insight_idle">Idle with engine on: %1$.1f kWh over %2$s — %3$d%% of weekly use</string>
+    <string name="local_insight_idle_month">Idle with engine on: %1$.1f kWh over %2$s, %3$d%% of monthly use</string>
     <string name="local_insight_12v_critical_title">12V critically low</string>
     <string name="local_insight_12v_critical_summary">Aux battery %1$.1f V — have it checked</string>
     <string name="local_insight_12v_low">12V now %1$.1f V — below normal 12.4 V</string>
     <string name="local_insight_12v_falling">12V falling: %1$.2f to %2$.2f V over the week</string>
+    <string name="local_insight_12v_falling_month">12V falling: %1$.2f to %2$.2f V over the month</string>
     <string name="local_insight_cell_critical_title">Large cell spread</string>
     <string name="local_insight_cell_critical_summary">Delta %1$.0f mV — watch cell balance</string>
     <string name="local_insight_cell_delta">Cell spread %1$.0f mV — possible weak cell</string>
     <string name="local_insight_cold">At %1$d°C avg consumption %2$.1f kWh/100 — normal in winter</string>
     <string name="local_insight_best_worst">Best trip %1$.1f, worst %2$.1f kWh/100</string>
     <string name="local_insight_cost">%1$.0f %2$s spent on trips this week</string>
+    <string name="local_insight_cost_month">%1$.0f %2$s spent on trips this month</string>
     <string name="local_insight_night_idle_title">Night idle drain</string>
     <string name="local_insight_night_idle_summary">%1$.1f kWh at night — %2$d%% of engine-on idle</string>
     <string name="local_insight_night_idle">Night (10pm–6am) idle: %1$.1f kWh (%2$d%% of total). Turn off ignition if climate is not needed</string>
     <string name="local_insight_dc_more_expensive">DC %1$.2f %4$s/kWh vs AC %2$.2f — %3$d%% more than home charging</string>
     <string name="local_insight_dc_heavy">DC %1$.0f kWh (%2$d sessions) vs AC %3$.0f — home AC is gentler for daily use</string>
     <string name="local_insight_ac_only">All %2$d charges were AC (%1$.0f kWh) — good for battery and budget</string>
+    <string name="local_insight_ac_only_month">All %2$d charges this month were AC (%1$.0f kWh), good for battery and budget</string>
     <string name="local_insight_charge_cost_week">Charging this week: %1$.0f %2$s for %3$.0f kWh</string>
+    <string name="local_insight_charge_cost_month">Charging this month: %1$.0f %2$s for %3$.0f kWh</string>
     <string name="local_insight_consumption_improved">Consumption down %1$.0f%% — good trend</string>
     <string name="local_insight_highway_speed">Avg speed %1$.0f km/h — highway consumption %2$.1f kWh/100 is expected</string>
     <string name="local_insight_high_consumption">High avg consumption %1$.1f kWh/100 — check climate and driving style</string>
     <string name="local_insight_low_consumption">Great avg %1$.1f kWh/100 over %2$.0f km this week</string>
+    <string name="local_insight_low_consumption_month">Great avg %1$.1f kWh/100 over %2$.0f km this month</string>
     <string name="local_insight_idle_rate_high">High idle draw ~%1$.1f kWh/h — likely climate or heating</string>
     <string name="local_insight_km_up">Mileage up: %1$.0f to %2$.0f km — may explain average consumption shift</string>
     <string name="local_insight_trips_more">More trips: %1$d vs %2$d last week</string>
+    <string name="local_insight_trips_more_month">More trips: %1$d vs %2$d last month</string>
     <string name="local_insight_weekly_mileage">%1$.0f km in %2$d trips this week — solid data for analysis</string>
+    <string name="local_insight_monthly_mileage">%1$.0f km in %2$d trips this month, solid data for analysis</string>
     <string name="local_insight_12v_ok">12V %1$.1f V — aux battery looks healthy</string>
     <string name="local_insight_cell_ok">Cell spread %1$.0f mV — balance looks fine</string>
     <string name="local_insight_heat_ac">At %1$d°C avg consumption %2$.1f kWh/100 — A/C adds load</string>
     <string name="local_insight_best_trip">Best trip %1$.1f kWh/100 over %2$.0f km — efficient driving</string>
     <string name="local_insight_mixed_charging">Charging this week: AC %1$.0f kWh, DC %2$.0f kWh — home AC is gentler for daily use</string>
+    <string name="local_insight_mixed_charging_month">Charging this month: AC %1$.0f kWh, DC %2$.0f kWh, home AC is gentler for daily use</string>
     <string name="local_insight_low_night_idle">Night idle only %1$d%% — good habit turning ignition off</string>
     <string name="local_insight_low_idle_share">Engine-on idle only %1$d%% of weekly use — well done</string>
+    <string name="local_insight_low_idle_share_month">Engine-on idle only %1$d%% of monthly use, well done</string>
     <string name="local_insight_cost_per_100">Driving cost ~%1$.2f %3$s/100 km (%2$.0f %3$s this week)</string>
+    <string name="local_insight_cost_per_100_month">Driving cost ~%1$.2f %3$s/100 km (%2$.0f %3$s this month)</string>
 
     <!-- Config backup / restore -->
     <string name="settings_config_export_button">Export config</string>
@@ -804,4 +817,158 @@
     <string name="auto_a11y_move_up">Move up</string>
     <string name="auto_a11y_move_down">Move down</string>
     <string name="auto_a11y_run_now">Run now</string>
+
+    <!-- Voice control (Phase 0) -->
+    <string name="settings_section_voice_agent">Voice agent</string>
+    <string name="settings_voice_button_mic_header">Button and microphone</string>
+    <string name="settings_voice_enable_label">Voice commands</string>
+    <string name="settings_voice_enable_description">Steering-wheel commands, fully offline</string>
+    <string name="settings_voice_model_downloading">Downloading… %1$d%%</string>
+    <string name="voice_listening">Listening</string>
+    <string name="voice_thinking">Thinking</string>
+
+    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <string name="settings_asr_gigaam_title">Speech recognition</string>
+    <string name="settings_asr_gigaam_ready">Model ready</string>
+    <string name="settings_asr_gigaam_download">Download (%1$s)</string>
+    <string name="settings_asr_gigaam_delete">Delete model</string>
+    <string name="settings_asr_gigaam_download_failed">Failed to download the model</string>
+
+    <string name="settings_voice_button_label">Assign button</string>
+    <string name="settings_voice_button_current">Current: %1$s</string>
+    <string name="settings_voice_a11y_hint">Steering-wheel trigger requires the accessibility service (auto-enabled in the Display section).</string>
+
+    <!-- call_contact tool: contacts permission row -->
+    <string name="settings_voice_contacts_label">Contacts access</string>
+    <string name="settings_voice_contacts_description">Needed to call a contact by name using voice</string>
+    <string name="settings_voice_contacts_granted">Granted</string>
+    <string name="settings_voice_contacts_grant">Grant</string>
+
+    <!-- Voice journal: debug screen with the last voice sessions -->
+    <string name="settings_voice_journal_entry_title">Voice journal</string>
+    <string name="settings_voice_journal_entry_description">Last 50 voice sessions</string>
+
+    <!-- TTS: offline synthesis of agent replies (Phase 2) -->
+    <string name="settings_tts_header">Agent replies</string>
+    <string name="settings_tts_toggle">Speak agent replies aloud</string>
+    <string name="settings_tts_subtitle">Offline speech synthesis, Russian voice</string>
+    <string name="settings_tts_model_delete">Delete</string>
+    <string name="settings_tts_download_failed">Failed to download voice</string>
+    <string name="settings_voice_volume_hint">Reply volume is controlled by the system Voice channel: steering-wheel volume buttons or the car\'s Sound settings</string>
+    <string name="settings_tts_voice_irina">Irina</string>
+    <string name="settings_tts_voice_ruslan">Ruslan</string>
+    <string name="settings_tts_voice_alena">Alyona</string>
+    <string name="settings_tts_voice_dmitri">Dmitri</string>
+    <string name="settings_tts_voice_mark">Mark</string>
+    <string name="settings_tts_voice_sofia">Sofia</string>
+    <string name="settings_tts_voice_local_badge">Local</string>
+    <string name="settings_tts_voice_ready">Downloaded</string>
+    <string name="settings_tts_voice_download_label">Download · %1$d MB</string>
+    <string name="settings_tts_voice_locked_hint">Download the voice first</string>
+    <string name="settings_tts_voice_desc_piper">Classic synthesis, lightweight</string>
+    <string name="settings_tts_voice_desc_vits">More natural-sounding</string>
+    <string name="settings_tts_voice_desc_supertonic">New engine, the most natural sound</string>
+
+    <!-- TTS: online voices (Wave N) -->
+    <string name="settings_tts_voice_online_gemini_desc">Natural Russian voice · reply starts slightly later than the local voice</string>
+    <string name="settings_tts_voice_online_gemini_badge">OpenRouter key</string>
+    <string name="settings_tts_voice_online_minimax_desc">Natural Russian voice · reply starts slightly later than the local voice</string>
+    <string name="settings_tts_voice_online_minimax_badge">MiniMax key needed</string>
+    <string name="settings_tts_online_fallback_hint">Online voices need a network connection; if the service does not answer within 2 seconds, the reply stays silent</string>
+
+    <!-- TTS: keys for online voices (Wave N) -->
+    <string name="settings_tts_keys_header">Keys for online voices</string>
+    <string name="settings_tts_keys_openrouter_hint">The key and model are configured in AI connections.</string>
+    <string name="settings_minimax_provider_label">Provider</string>
+    <string name="settings_minimax_provider_official">Official</string>
+    <string name="settings_minimax_provider_fal">fal.ai</string>
+    <string name="settings_minimax_provider_replicate">Replicate</string>
+    <string name="settings_minimax_price_hint">$0.06 per 1000 characters · official is the fastest to start</string>
+    <string name="settings_minimax_key_saved_placeholder">Key saved</string>
+
+    <!-- Voice tuning: speed/liveliness sliders + preview (local voices only) -->
+    <string name="settings_tts_tuning_header">Local voice settings</string>
+    <string name="settings_tts_rate_label">Speech rate</string>
+    <string name="settings_tts_rate_hint">Left - slower and clearer, right - faster</string>
+    <string name="settings_tts_liveliness_label">Intonation liveliness</string>
+    <string name="settings_tts_liveliness_hint">Left - flat \"announcer\" tone, right - more expressive, but may waver</string>
+    <string name="settings_tts_preview_button">Play a sample</string>
+
+    <!-- Agent identity: name + persona + gender -->
+    <string name="settings_agent_section_header">Agent</string>
+    <string name="settings_agent_name_label">Agent name</string>
+    <string name="settings_agent_name_hint">For example: Leo. 2-3 syllables, a distinct word works best</string>
+    <string name="settings_agent_persona_label">Personality</string>
+    <string name="settings_persona_snarky">Snarky sidekick</string>
+    <string name="settings_persona_navigator">Navigator</string>
+    <string name="settings_persona_engineer">Flight engineer</string>
+    <string name="settings_agent_gender_label">Agent gender</string>
+    <string name="settings_agent_gender_male">Male</string>
+    <string name="settings_agent_gender_female">Female</string>
+    <string name="settings_agent_gender_hint">Applies to all voices: each source has a male and a female option</string>
+
+    <!-- Voice agent (Phase 1) -->
+    <string name="agent_enable_title">Voice AI agent</string>
+    <string name="agent_enable_desc">Free-form questions and commands via an LLM (OpenRouter). Uses the API key from Integrations.</string>
+    <string name="agent_model_shared_caption">The OpenRouter key and model for the agent are configured in Integrations</string>
+    <string name="agent_chat_open">Agent chat (debug)</string>
+    <string name="agent_test_model_button">Test model</string>
+    <string name="agent_test_model_running">Testing model...</string>
+    <string name="agent_test_model_result">%1$s: answered in %2$.1f s - \"%3$s\"</string>
+    <string name="agent_test_model_disabled">Error: agent disabled or not configured</string>
+    <string name="agent_exa_api_key_label">Exa API Key (web search)</string>
+
+    <!-- Voice agent (Wave J): multi-provider LLM connections -->
+    <string name="settings_conn_not_configured">Connection not configured</string>
+    <string name="settings_conn_check_ok">Model answered in %1$.1f s</string>
+
+    <!-- Wave J: AI connections -->
+    <string name="settings_ai_connections_header">AI connections</string>
+    <string name="settings_conn_custom_title">Custom connection</string>
+    <string name="settings_conn_configured">Configured</string>
+    <string name="settings_conn_api_key_label">API key</string>
+    <string name="settings_conn_name_label">Name</string>
+    <string name="settings_conn_base_url_label">Base URL</string>
+    <string name="settings_conn_model_label">Model (id)</string>
+    <string name="settings_conn_check">Check</string>
+    <string name="settings_conn_checking">Checking…</string>
+    <string name="settings_zai_hint">Free glm-4.7-flash, recommended as the primary model</string>
+    <string name="settings_custom_hint">Any OpenAI-compatible API. A preset fills in the URL and model, bring your own key.</string>
+    <string name="settings_custom_list_models">Model list</string>
+    <string name="settings_error_dns">Server unreachable: the car\'s internet cannot resolve this address (DNS)</string>
+    <string name="settings_error_timeout">Server did not respond in time</string>
+    <string name="settings_preset_hint_cloudflare">Replace ACCOUNT_ID in the URL with your account ID from the Cloudflare dashboard. Free tier is about 450 requests per day (glm-4.7-flash).</string>
+    <string name="settings_preset_hint_vercel">5$ monthly credit, no card required. Some models on the free tier may return a 403 error.</string>
+    <string name="settings_preset_hint_kimi">1000 free requests per day.</string>
+    <string name="settings_preset_hint_nanogpt">8$ monthly subscription, paid in crypto.</string>
+    <string name="settings_preset_hint_deepseek">Pay as you go, 50% off at night (Moscow time).</string>
+    <string name="settings_preset_hint_mistral">Free with phone verification.</string>
+    <string name="settings_models_header">Model selection</string>
+    <string name="settings_model_primary">Primary model</string>
+    <string name="settings_model_fallback">Fallback model</string>
+    <string name="settings_model_none">None</string>
+    <string name="settings_models_hint">The fallback model kicks in automatically when the primary does not respond (after one retry). Only configured connections are listed.</string>
+    <string name="settings_search_status_title">Web search</string>
+    <string name="settings_search_source_exa">Exa</string>
+    <string name="settings_search_source_native">connection built-in search</string>
+    <string name="settings_search_source_none">unavailable</string>
+    <string name="settings_search_status_hint">Without an Exa key the agent uses the current connection\'s built-in search. If that is unavailable too, the agent will honestly say search is not working.</string>
+
+    <!-- Donation dialog + support card -->
+    <string name="donate_auto_title">Thanks for using BYDMate</string>
+    <string name="donate_auto_body">The project is non-commercial and completely free, built purely out of enthusiasm. If BYDMate has been useful to you and you would like to say thanks, you can support development with a USDT transfer on any of the networks below.</string>
+    <string name="donate_settings_title">Support the project</string>
+    <string name="donate_settings_body">BYDMate is non-commercial and free. If you would like to support development, send USDT to the address below on any EVM network.</string>
+    <string name="donate_qr_hint">Point your phone\'s camera at the code</string>
+    <string name="donate_address_label">USDT address · EVM networks</string>
+    <string name="donate_copy_button">Copy address</string>
+    <string name="donate_copied_toast">Address copied</string>
+    <string name="donate_networks">Networks: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
+    <string name="donate_warning">Do not send via TON, TRON (TRC-20), or Solana. Funds will be lost.</string>
+    <string name="donate_later_button">Later</string>
+    <string name="donate_already_button">Already donated</string>
+    <string name="donate_close_button">Close</string>
+    <string name="settings_donate_header">Support</string>
+    <string name="settings_donate_card_body">BYDMate is free and non-commercial. If it\'s useful to you, you can support development.</string>
+    <string name="settings_donate_button">Support the project</string>
 </resources>

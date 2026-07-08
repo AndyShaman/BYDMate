@@ -182,12 +182,16 @@ class AdbOnDeviceClientImpl @Inject constructor(
             protocol ?: return@withContext false
         }
         try {
-            // Raw protocol exec (hardcoded, no caller input). Kill by exact nice-name so a
-            // fresh daemon (newer app version) can re-take the binder service + file lock;
-            // the exclusive flock auto-releases on death. Mirrors the manual
-            // `pgrep -f … | kill -9` path validated on-device. Empty pgrep → `kill -9` runs
-            // for no pids → harmless.
-            p.exec("for p in \$(pgrep -f $HELPER_PROCESS_NAME); do kill -9 \$p; done")
+            // Raw protocol exec (hardcoded, no caller input). Kill by exact process NAME (comm)
+            // so a fresh daemon (newer app version) can re-take the binder service + file lock;
+            // the exclusive flock auto-releases on death. Selecting via `ps -A -o PID,NAME` +
+            // exact `==` match (same discipline as helperHeartbeat below) — NOT `pgrep -f`:
+            // `pgrep -f` matches the whole cmdline, and this kill shell's OWN argv contains
+            // "bydmate_helper", so it self-matched and could `kill -9` itself before reaching
+            // the daemon (pid-order dependent), leaving the stale daemon alive. The ps/awk/sh
+            // shells here have comm != "bydmate_helper" and cannot self-match. Empty match →
+            // `kill -9` runs for no pids → harmless.
+            p.exec("for p in \$(ps -A -o PID,NAME | awk '\$2==\"$HELPER_PROCESS_NAME\"{print \$1}'); do kill -9 \$p; done")
             true
         } catch (e: Exception) {
             Log.w(TAG, "killHelper failed: ${e.message}")

@@ -27,10 +27,12 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 332
-        versionName = "3.2.2"
+        versionCode = 349
+        versionName = "3.5"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        ndk { abiFilters += listOf("arm64-v8a") }  // DiLink is arm64-only; single ABI keeps the Vosk native libs small
     }
 
     signingConfigs {
@@ -175,6 +177,7 @@ dependencies {
     testImplementation("androidx.room:room-testing:2.6.1")
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
+    testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.1")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
@@ -183,4 +186,14 @@ dependencies {
     // com.cgutman:adblib does not exist on MavenCentral (only com.tananaev:adblib does).
     // Task 4 will use a hand-rolled ADB client fallback.
     // implementation("com.cgutman:adblib:1.0.0")
+
+    // Offline ASR (arm64 only — DiLink is arm64)
+    implementation("com.alphacephei:vosk-android:0.3.47")
+
+    // Offline TTS: sherpa-onnx piper VITS. No Maven artifact exists — prebuilt AAR from
+    // GitHub releases, onnxruntime statically linked (single libsherpa-onnx-jni.so, arm64).
+    // STRICTLY >= 1.13.3: 1.13.2 crashed on int8 re-generation (k2-fsa/sherpa-onnx#3675).
+    implementation(files("libs/sherpa-onnx-static-link-onnxruntime-1.13.3.aar"))
+    // tar.bz2 unpack for downloaded piper voice archives
+    implementation("org.apache.commons:commons-compress:1.27.1")
 }

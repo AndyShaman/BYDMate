@@ -33,6 +33,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.IternioIntervalPolicy
 import com.bydmate.app.data.remote.IternioRateLimitException
 import com.bydmate.app.data.remote.IternioServerErrorException
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.TripState
@@ -88,6 +89,8 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
+    @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
+    @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -371,11 +374,23 @@ class TrackingService : Service(), LocationListener {
                     if (pref.isNotEmpty()) {
                         helperClient.setAppHidden("com.byd.autovoice", pref == "true")
                     }
+                    // Self-grant notification-listener access so real Yandex Music playback
+                    // (MediaController.playFromSearch) works. Fail-soft: falls back to the
+                    // search-intent path in ActionDispatcher when no session is available.
+                    com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
             }
+        }
+
+        // Pre-warm the GigaAM recognizer (Task 5): building it now, off the main thread, means
+        // the first PTT's transcribe() doesn't pay the ~1.3 s cold model-load cost before the
+        // mic starts recording (field defect: first words swallowed). Fire-and-forget, gated on
+        // the voice toggle so we don't load a 226 MiB model for drivers who never enabled voice.
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { if (voiceGate.isEnabled()) continuousAsr.warmUp() }
         }
 
         // Keep steering-wheel star control bound across boot and every wake. The bind can lose the
@@ -1105,8 +1120,9 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
-     * Keep the steering-wheel a11y key filter alive when cluster projection is enabled. The system
-     * binds a11y services very early at boot — before our process is ready — so our bind can lose the
+     * Keep the steering-wheel a11y key filter alive when cluster projection OR voice push-to-talk
+     * is enabled (both are served by the same SteeringWheelKeyService). The system binds a11y
+     * services very early at boot — before our process is ready — so our bind can lose the
      * race and the framework parks the service without retrying. A single early re-assert (the old
      * behaviour) often fired before the race settled. OpenBYD survives the same environment by re-
      * checking until the service is actually RUNNING and re-asserting on every wake, not once. We copy
@@ -1115,7 +1131,12 @@ class TrackingService : Service(), LocationListener {
      */
     private suspend fun ensureStarServiceRunning(reason: String) {
         val prefs = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
-        if (!prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)) return
+        val mirrorEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
+        // Voice PTT depends on the same a11y service (SteeringWheelKeyService reads "voice" prefs
+        // itself); without this, enabling Voice alone never re-binds the service (Finding 3).
+        val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+        if (!mirrorEnabled && !voiceEnabled) return
         repeat(STAR_REASSERT_ATTEMPTS) { attempt ->
             if (starServiceRunning()) {
                 if (attempt > 0) Log.i(TAG, "star a11y confirmed running ($reason, try ${attempt + 1})")

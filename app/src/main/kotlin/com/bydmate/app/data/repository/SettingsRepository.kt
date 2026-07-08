@@ -39,10 +39,19 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
-        /** "local" (default) = offline rules; "cloud" = OpenRouter LLM */
-        const val KEY_INSIGHT_MODE = "insight_mode"
-        const val INSIGHT_MODE_LOCAL = "local"
-        const val INSIGHT_MODE_CLOUD = "cloud"
+        /** Exa (api.exa.ai) BYOK for the web_search tool. Blank = openrouter:web_search server tool
+         *  (billed from OpenRouter credits); non-blank = Exa. */
+        const val KEY_EXA_API_KEY = "exa_api_key"
+        // Wave J: multi-provider LLM connections for the voice agent
+        const val KEY_ZAI_API_KEY = "zai_api_key"
+        const val KEY_CUSTOM_NAME = "custom_llm_name"
+        const val KEY_CUSTOM_BASE_URL = "custom_llm_base_url"
+        const val KEY_CUSTOM_API_KEY = "custom_llm_api_key"
+        const val KEY_CUSTOM_MODEL = "custom_llm_model"
+        /** "openrouter" | "zai" | "custom"; blank = openrouter (pre-wave-J default). */
+        const val KEY_AGENT_PRIMARY_CONN = "agent_primary_conn"
+        /** Same values; blank = no fallback. */
+        const val KEY_AGENT_FALLBACK_CONN = "agent_fallback_conn"
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
@@ -82,6 +91,21 @@ open class SettingsRepository @Inject constructor(
         // left from pre-native-stack versions. The DataSource.DIPLUS enum was removed
         // in the native-stack migration; getDataSource() now always returns ENERGYDATA.
         const val KEY_MIGRATION_V281_DATA_SOURCE = "migration_v281_data_source_done"
+
+        // Voice feature keys (also mirrored into SharedPreferences("voice") for SteeringWheelKeyService)
+        const val KEY_VOICE_ENABLED = "voice_enabled"
+        /** "" = follow app language; "RU" or "EN" to override */
+        const val KEY_VOICE_LANG = "voice_lang"
+        const val KEY_VOICE_KEYCODE = "voice_keycode"
+        /** Offline TTS for agent replies; also mirrored into SharedPreferences("voice") for VoiceGate. */
+        const val KEY_TTS_ENABLED = "tts_enabled"
+        // Wave N: online TTS backends (provider selection is wired in a later task)
+        const val KEY_MINIMAX_TTS_PROVIDER = "minimax_tts_provider" // "official" | "fal" | "replicate", default "official"
+        const val KEY_MINIMAX_TTS_KEY = "minimax_tts_key"
+
+        const val KEY_AGENT_ENABLED = "agent_enabled"
+        // legacy, unused since field-fix wave (agent uses KEY_OPENROUTER_MODEL)
+        const val KEY_AGENT_MODEL = "agent_model"
 
         const val DEFAULT_BATTERY_CAPACITY = "72.9"
         const val DEFAULT_HOME_TARIFF = "0.20"
@@ -263,6 +287,35 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setInsightCacheV2MigrationDone() =
         setString(KEY_INSIGHT_CACHE_V2_MIGRATION_DONE, "true")
+
+    // --- Voice settings ---
+
+    suspend fun isVoiceEnabled(): Boolean =
+        getString(KEY_VOICE_ENABLED, "false") == "true"
+
+    suspend fun setVoiceEnabled(enabled: Boolean) =
+        setString(KEY_VOICE_ENABLED, enabled.toString())
+
+    suspend fun getVoiceLang(): String =
+        getString(KEY_VOICE_LANG, "")
+
+    suspend fun setVoiceLang(lang: String) =
+        setString(KEY_VOICE_LANG, lang)
+
+    suspend fun getVoiceKeycode(): Int =
+        getString(KEY_VOICE_KEYCODE, "").toIntOrNull() ?: 0
+
+    suspend fun setVoiceKeycode(keycode: Int) =
+        setString(KEY_VOICE_KEYCODE, keycode.toString())
+
+    suspend fun isTtsEnabled(): Boolean =
+        getString(KEY_TTS_ENABLED, "false") == "true"
+
+    suspend fun setTtsEnabled(enabled: Boolean) =
+        setString(KEY_TTS_ENABLED, enabled.toString())
+
+    suspend fun isAgentEnabled(): Boolean = getString(KEY_AGENT_ENABLED, "false") == "true"
+    suspend fun setAgentEnabled(enabled: Boolean) = setString(KEY_AGENT_ENABLED, enabled.toString())
 
     /**
      * One-shot: if KEY_DATA_SOURCE is still "DIPLUS" (persisted by a pre-native-stack

@@ -79,10 +79,20 @@ class HelperBootstrap @Inject constructor(
             // already false → the loop never runs.
             var stillAlive = adb.helperHeartbeat()
             var attempts = 0
-            while (stillAlive && attempts < KILL_CONFIRM_ATTEMPTS) {
-                delay(KILL_CONFIRM_INTERVAL_MS)
-                attempts++
-                stillAlive = adb.helperHeartbeat()
+            var killRounds = 0
+            while (stillAlive && killRounds < KILL_ROUNDS) {
+                attempts = 0
+                while (stillAlive && attempts < KILL_CONFIRM_ATTEMPTS) {
+                    delay(KILL_CONFIRM_INTERVAL_MS)
+                    attempts++
+                    stillAlive = adb.helperHeartbeat()
+                }
+                killRounds++
+                // The first kill can be lost on a stale ADB socket (field incident 2026-07-05:
+                // 26 consecutive bails over 2 minutes). One re-dispatched kill per ensureRunning
+                // call is cheap and bounded; more rounds would just stack latency on a daemon
+                // that genuinely refuses to die.
+                if (stillAlive && killRounds < KILL_ROUNDS && !adb.killHelper()) break
             }
             // If the stale daemon refuses to die, do NOT spawn over it: the fresh daemon would
             // lose the lock race and exit, and helper.isAlive() would then confirm the OLD daemon
@@ -137,5 +147,8 @@ class HelperBootstrap @Inject constructor(
         // Bounded wait for the killed daemon to actually exit before respawning.
         private const val KILL_CONFIRM_ATTEMPTS = 10
         private const val KILL_CONFIRM_INTERVAL_MS = 100L
+        // Kill-then-wait rounds before giving up on a stale daemon (the initial kill counts as
+        // round 1; one extra kill is re-dispatched before round 2 if it is still alive).
+        private const val KILL_ROUNDS = 2
     }
 }

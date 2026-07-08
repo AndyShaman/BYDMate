@@ -23,14 +23,14 @@ class FidMapTest {
         assertTrue("Missing FidMap entries for: $missing", missing.isEmpty())
     }
 
-    @Test fun `FidMap coverage at least 40 of DiParsData fields`() {
+    @Test fun `FidMap coverage at least 48 of DiParsData fields`() {
         val dataFields = com.bydmate.app.data.remote.DiParsData::class
             .memberProperties.map { it.name }.toSet()
         val mappedFields = FidMap.entries.map { it.field }.toSet()
         val covered = mappedFields.intersect(dataFields)
         assertTrue(
-            "Expected >= 39 DiParsData fields covered, got ${covered.size}: $covered",
-            covered.size >= 39
+            "Expected >= 48 DiParsData fields covered, got ${covered.size}: $covered",
+            covered.size >= 48
         )
     }
 

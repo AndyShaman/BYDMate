@@ -7,6 +7,9 @@ import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -50,8 +53,13 @@ class VehicleApiImpl @Inject constructor(
 
     override suspend fun dispatch(commandString: String): Result<Unit> {
         CommandTranslator.resolveSeat(commandString)?.let { seat ->
-            return if (seatChannel.actuate(seat.group, seat.level)) Result.success(Unit)
-            else Result.failure(VehicleWriteError.Unsupported("seat:${seat.group}:${seat.level}"))
+            // Seat writes are switch then level (two binder transacts). Wrap in NonCancellable
+            // so a hard stop between the two writes never leaves the seat half-commanded
+            // (e.g. heat switched on but level unset).
+            return withContext(NonCancellable) {
+                if (seatChannel.actuate(seat.group, seat.level)) Result.success(Unit)
+                else Result.failure(VehicleWriteError.Unsupported("seat:${seat.group}:${seat.level}"))
+            }
         }
         val resolved = CommandTranslator.resolve(commandString)
         if (resolved.isEmpty()) {
@@ -63,20 +71,25 @@ class VehicleApiImpl @Inject constructor(
             val r = resolved[0]
             return doWrite(r.actionName, r.value)
         }
-        // Composite command (e.g. window aggregates) → fan out to several
-        // per-door writes. Attempt every sub-write (no short-circuit: a partial
-        // open beats stopping at the first stuck pane); succeed only if all do.
+        // Composite command (e.g. window aggregates, fridge presets) → fan out to several
+        // per-door writes. Attempt every sub-write (no short-circuit: a partial open beats
+        // stopping at the first stuck pane); succeed only if all do.
+        // NonCancellable: once the sequence has started, run ALL writes to completion so a
+        // hard stop between sub-writes never leaves the car half-commanded (e.g. two windows
+        // open, two still closed). Cancellation takes effect after the loop exits.
         var firstError: Throwable? = null
-        for (r in resolved) {
-            val res = doWrite(r.actionName, r.value)
-            if (res.isFailure && firstError == null) firstError = res.exceptionOrNull()
+        withContext(NonCancellable) {
+            for (r in resolved) {
+                val res = doWrite(r.actionName, r.value)
+                if (res.isFailure && firstError == null) firstError = res.exceptionOrNull()
+            }
         }
         return firstError?.let { Result.failure(it) } ?: Result.success(Unit)
     }
 
     // Climate
-    override suspend fun writeAcOn(): Result<Unit> = doWrite("ac_on", 0)
-    override suspend fun writeAcOff(): Result<Unit> = doWrite("ac_off", 1)
+    override suspend fun writeAcOn(): Result<Unit> = doWrite("ac_on", 1)
+    override suspend fun writeAcOff(): Result<Unit> = doWrite("ac_off", 0)
     override suspend fun writeSetDriverTemp(celsius: Int): Result<Unit> =
         doWrite("ac_temp_main", celsius)
 
@@ -148,6 +161,9 @@ class VehicleApiImpl @Inject constructor(
         val wrote: Boolean = try {
             helper.write(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
+            // Rethrow cancellation so callers outside the NonCancellable write unit
+            // (status reads, channel resolution) can still be cancelled normally.
+            if (e is CancellationException) throw e
             Log.w(TAG, "doWrite: action=$actionName helper.write threw: ${e.message}")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
             val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
@@ -219,6 +235,9 @@ class VehicleApiImpl @Inject constructor(
         val status: Int? = try {
             helper.writeStatus(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
+            // Rethrow cancellation so callers outside the NonCancellable write unit
+            // (channel resolution, probe logic) can still be cancelled normally.
+            if (e is CancellationException) throw e
             Log.w(TAG, "doWriteOutcome: action=$actionName helper threw: ${e.message}")
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
             return WriteOutcome.TRANSIENT

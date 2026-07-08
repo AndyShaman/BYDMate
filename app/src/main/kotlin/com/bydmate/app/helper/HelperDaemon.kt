@@ -251,6 +251,12 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_ENABLE_NOTIFICATION_LISTENER -> runCatching {
+                    val ok = enableNotificationListener()
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_SET_APP_HIDDEN -> runCatching {
                     val pkg = data.readString() ?: ""
                     val hidden = data.readInt()    // 1 = disable, 0 = enable
@@ -280,6 +286,24 @@ fun main(args: Array<String>) {
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_CLUSTER_MODE -> {
+                    val on = data.readInt() != 0
+                    // Cluster compositor power (validated on Leopard 3, 2026-07-06): cmd 16 turns the
+                    // compositor on; 18 then, after a beat, 0 turns it off. The whole off-sequence runs
+                    // inside this one transaction so the client never has to sequence or sleep. The
+                    // whitelist below is the ONLY set of auto_container commands this daemon will issue.
+                    val ok = if (on) {
+                        autoContainerCall(16)
+                    } else {
+                        val detached = autoContainerCall(18)
+                        Thread.sleep(1000L)
+                        autoContainerCall(0) && detached
+                    }
+                    reply?.writeInt(if (ok) 0 else -1)
+                    reply?.writeInt(0)
+                    true
+                }
 
                 else -> super.onTransact(code, data, reply, flags)
             }
@@ -484,6 +508,13 @@ private fun shExec(script: String, vararg args: String): CmdResult {
     return CmdResult(process.waitFor(), out)
 }
 
+/** The single gateway for auto_container: hard whitelist {16, 18, 0}, device id fixed
+ *  at 1000. Anything else is a programming error, not a runtime input. */
+private fun autoContainerCall(cmd: Int): Boolean {
+    require(cmd == 16 || cmd == 18 || cmd == 0) { "auto_container cmd $cmd not whitelisted" }
+    return shExec("service call auto_container 2 i32 1000 i32 \"$1\" s16 \"\"", cmd.toString()).code == 0
+}
+
 /**
  * Enables our steering-wheel accessibility service so it starts filtering steering-wheel keys.
  * DiLink has no a11y settings UI, so the user cannot toggle it; we do it under shell uid via the
@@ -518,6 +549,26 @@ private fun enableAccessibilityService(): Boolean {
 }
 
 /**
+ * Self-grants notification-listener access for our MediaSessionListenerService stub, mirroring
+ * enableAccessibilityService's remove-wait-readd cycle: NotificationManagerService's Settings
+ * observer only re-binds listeners when the enabled_notification_listeners string actually
+ * changes value, so re-adding a component already present would silently no-op after a crash.
+ * Read-modify-write preserves other apps' listeners (our component is the only one we ever touch).
+ * App-scoped, reversible Secure setting only; touches nothing on the vehicle (no autoservice/CAN).
+ */
+private fun enableNotificationListener(): Boolean {
+    val component = HelperBinderProtocol.NOTIFICATION_LISTENER_COMPONENT
+    val target = canonicalComponent(component)
+    val current = readSecure("enabled_notification_listeners") ?: return false
+    val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
+    if (shExec("settings put secure enabled_notification_listeners \"\$1\"", others.joinToString(":")).code != 0) return false
+    Thread.sleep(200L)
+    if (shExec("settings put secure enabled_notification_listeners \"\$1\"", (others + component).joinToString(":")).code != 0) return false
+    val after = (readSecure("enabled_notification_listeners") ?: return false).split(':').filter { it.isNotEmpty() }
+    return after.any { canonicalComponent(it) == target }
+}
+
+/**
  * Expands a flattened component string to a canonical `pkg/fully.qualified.Class`, mirroring
  * ComponentName.unflattenFromString's leading-dot rule (`pkg/.A.B` -> `pkg/pkg.A.B`). Lets the short
  * and full spellings of one service compare equal. Returns the input unchanged when it has no '/'.
@@ -546,6 +597,10 @@ private fun readSecure(key: String): String? {
  * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
  */
 private fun launchApp(packageName: String): Boolean {
+    // Defense-in-depth: packageName is interpolated into `sh -c` below (and via launchAndForce).
+    // Android package names are strictly [A-Za-z0-9_.]; reject anything else so a caller can't
+    // smuggle shell metacharacters into this shell-uid daemon. No real package is ever rejected.
+    if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
     val resolve = execShell("cmd package resolve-activity --brief -c android.intent.category.LAUNCHER $packageName")
     val component = resolve.lineSequence().firstOrNull { it.contains("/") && !it.startsWith("No ") }?.trim()
     if (component != null) {

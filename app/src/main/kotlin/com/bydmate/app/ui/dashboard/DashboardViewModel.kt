@@ -3,7 +3,6 @@ package com.bydmate.app.ui.dashboard
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DynamicMetric
@@ -15,7 +14,6 @@ import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
-import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,10 +68,8 @@ data class DashboardUiState(
     val insightTone: String = "good",
     val effectiveInsightTone: String = "good",
     val insightDate: String? = null,
-    val insightLoading: Boolean = false,
-    val insightError: String? = null,
+    val insightPeriodDays: Int = 7,
     val insightExpanded: Boolean = false,
-    val hasApiKey: Boolean = false,
     val batteryHealthExpanded: Boolean = false,
     val idleDrainExpanded: Boolean = false,
     val idleDrainKwhWeek: Double = 0.0,
@@ -121,6 +117,33 @@ class DashboardViewModel @Inject constructor(
     fun setPeriod(period: DashboardPeriod) {
         _uiState.update { it.copy(period = period) }
         loadPeriodSummary()
+    }
+
+    /** Recompute both the dynamics table and the generated text for a 7- or
+     *  30-day window (dialog toggle). InsightsManager caches per period/day,
+     *  so re-toggling within the same day is served from cache. On failure
+     *  (unguarded Room/derived-text errors) leave state untouched: chip stays
+     *  on the old period, no label/data mismatch. */
+    fun setInsightPeriod(days: Int) {
+        viewModelScope.launch {
+            val insight = runCatching {
+                insightsManager.getDisplayInsight(days) ?: insightsManager.refreshIfNeeded(days)
+            }.getOrNull() ?: return@launch
+            _uiState.update { current -> current.copy(
+                insightPeriodDays = days,
+                insightTitle = insight.title,
+                insightSummary = insight.summary,
+                insightDynamics = insight.dynamics,
+                insightInsights = insight.insights,
+                insightTone = insight.tone,
+                effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
+                    insight.tone,
+                    com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
+                    com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
+                ),
+                insightDate = insightsManager.getCachedDate(days)
+            ) }
+        }
     }
 
     /**
@@ -344,18 +367,16 @@ class DashboardViewModel @Inject constructor(
 
     private fun loadInsight() {
         viewModelScope.launch {
-            val enabled = insightsManager.canShowInsights()
-            _uiState.update { it.copy(hasApiKey = enabled) }
-
             var cached = insightsManager.getDisplayInsight()
-            if (cached == null && enabled) {
-                cached = insightsManager.refreshIfNeeded()
-            }
+            if (cached == null) cached = insightsManager.refreshIfNeeded()
             if (cached != null) {
                 _uiState.update { current -> current.copy(
                     insightTitle = cached.title,
                     insightSummary = cached.summary,
                     insightDynamics = cached.dynamics,
+                    // Cached insight dynamics are always weekly — reset the chip so
+                    // it doesn't show a stale "Месяц" selection over weekly data.
+                    insightPeriodDays = 7,
                     insightInsights = cached.insights,
                     insightTone = cached.tone,
                     effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
@@ -364,35 +385,6 @@ class DashboardViewModel @Inject constructor(
                         com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
                     ),
                     insightDate = insightsManager.getCachedDate()
-                ) }
-            }
-        }
-    }
-
-    fun refreshInsight() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(insightLoading = true, insightError = null) }
-            val insight = insightsManager.refresh()
-            if (insight != null) {
-                _uiState.update { current -> current.copy(
-                    insightTitle = insight.title,
-                    insightSummary = insight.summary,
-                    insightDynamics = insight.dynamics,
-                    insightInsights = insight.insights,
-                    insightTone = insight.tone,
-                    effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
-                        insight.tone,
-                        com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
-                        com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
-                    ),
-                    insightDate = insightsManager.getCachedDate(),
-                    insightLoading = false
-                ) }
-            } else {
-                _uiState.update { it.copy(
-                    insightLoading = false,
-                    // @ApplicationContext is not localized — resolve via the app-selected language.
-                    insightError = appContext.appLocalizedContext().getString(R.string.dashboard_insight_refresh_error)
                 ) }
             }
         }

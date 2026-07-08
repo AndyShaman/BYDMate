@@ -56,12 +56,27 @@ class VehicleApiFailSoftTest {
     // ── Test 3: readback sentinel -10011 returns Result failure Sentinel ──────
 
     @Test fun `readback sentinel returns Result failure Sentinel`() = runTest {
-        // doors_lock has readbackFid; -10011 triggers Sentinel error
-        val entry = allowlist.find("doors_lock")!!
-        coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
-        coEvery { helper.read(entry.dev, entry.readbackFid!!) } returns -10011L
+        // No production entry has a readbackFid anymore (doors_lock dropped it —
+        // see WriteAllowlist), so the sentinel path is exercised via a synthetic
+        // validated entry with a readbackFid.
+        val customAllowlist = WriteAllowlist(mapOf(
+            "synthetic_readback_action" to WriteEntry(
+                actionName = "synthetic_readback_action",
+                dev = 1001,
+                writeFid = 999000003,
+                readbackFid = 999000004,
+                valueMin = 2,
+                valueMax = 2,
+                category = "other",
+                validated = true,
+                source = "test",
+            )
+        ))
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
+        coEvery { helper.write(1001, 999000003, 2) } returns true
+        coEvery { helper.read(1001, 999000004) } returns -10011L
 
-        val result = api.writeLockDoors()
+        val result = customApi.doWrite("synthetic_readback_action", 2)
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.Sentinel)
     }

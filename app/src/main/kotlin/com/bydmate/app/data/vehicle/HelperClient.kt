@@ -67,6 +67,17 @@ interface HelperClient {
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
      *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
     suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
+
+    /**
+     * Enables our MediaSessionListenerService stub via the daemon (force re-bind of our entry in
+     * Settings.Secure enabled_notification_listeners, never clobbering other apps' listeners).
+     * Grants MediaSessionManager.getActiveSessions() access, needed for real Yandex Music playback
+     * control. Mirrors enableAccessibilityService.
+     */
+    suspend fun enableNotificationListenerAccess(): Boolean
+
+    /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
+    suspend fun setClusterContainerMode(on: Boolean): Boolean
 }
 
 @Singleton
@@ -156,10 +167,21 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             it.writeString(key); it.writeInt(value)
         }
 
+    override suspend fun setClusterContainerMode(on: Boolean): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }
+
     override suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_APP_HIDDEN) {
             it.writeString(packageName); it.writeInt(if (hidden) 1 else 0)
         }
+
+    // FORCE_TIMEOUT_MS, not the default 2s: mirrors enableAccessibilityService (200ms re-bind
+    // pause plus several `settings` process spawns). status 0 = ok.
+    override suspend fun enableNotificationListenerAccess(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_ENABLE_NOTIFICATION_LISTENER, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
+            status == 0
+        } ?: false
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =

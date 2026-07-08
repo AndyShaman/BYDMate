@@ -81,12 +81,20 @@ object ClusterProjectionManager {
     // Last VirtualDisplay id we created. Persisted so a fresh app process can release the display
     // a prior (dead) process left orphaned in the long-lived daemon, instead of leaking it.
     private const val KEY_LAST_VD_ID = "last_vd_id"
+    /** Wave P: power the cluster compositor automatically around projection (default ON). */
+    const val KEY_AUTO_CONTAINER = "auto_container_enabled"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
 
     @Volatile
     var currentMode: ClusterMode = ClusterMode.OFF
+        private set
+
+    /** Why the last FULLSCREEN attempt failed, for honest voice answers; null after success/OFF.
+     *  "daemon" = helper daemon unreachable (transient, retry later); anything else is a free-form
+     *  reason for the log. */
+    @Volatile var lastFailure: String? = null
         private set
 
     private var overlayView: View? = null
@@ -271,6 +279,10 @@ object ClusterProjectionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
 
+    private fun autoContainerEnabled(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_CONTAINER, true)
+
     /** Persist the user's chosen trigger keycode (from the learn-button dialog). */
     fun setTriggerKeyCode(context: Context, keyCode: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -306,10 +318,18 @@ object ClusterProjectionManager {
                 hideOverlay(helper)
                 projectedPackage = null
                 currentMode = ClusterMode.OFF
+                lastFailure = null
+                if (autoContainerEnabled(context)) {
+                    // Wave P: 18 -> pause -> 0 powers the compositor back down. The daemon runs the whole
+                    // sequence in one transaction, so the 1s pause never blocks this coroutine's caller.
+                    runCatching { helper.setClusterContainerMode(false) }
+                }
             }
             ClusterMode.FULLSCREEN -> {
-                if (project(context, mode, helper, bootstrap)) {
+                val failure = project(context, mode, helper, bootstrap)
+                if (failure == null) {
                     currentMode = mode
+                    lastFailure = null
                 } else {
                     // projection failed: keep state honest. project() already tore down the
                     // overlay/VD on its failure paths; make sure Navi is back on the main screen.
@@ -317,30 +337,44 @@ object ClusterProjectionManager {
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
                     currentMode = ClusterMode.OFF
+                    lastFailure = failure
+                    if (autoContainerEnabled(context)) {
+                        // Wave P: 18 -> pause -> 0 powers the compositor back down. The daemon runs the whole
+                        // sequence in one transaction, so the 1s pause never blocks this coroutine's caller.
+                        runCatching { helper.setClusterContainerMode(false) }
+                    }
                 }
             }
         }
     }
 
-    /** Returns true only when the overlay is up, the VirtualDisplay exists, and Navi is pinned. */
+    /** Returns null only when the overlay is up, the VirtualDisplay exists, and Navi is pinned;
+     *  otherwise a failure reason ("daemon" = helper daemon unreachable, "projection" = anything
+     *  else) so [applyModeLocked] can report an honest [lastFailure]. */
     private suspend fun project(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
-    ): Boolean {
+    ): String? {
         if (!bootstrap.ensureRunning()) {
-            Log.e(TAG, "helper daemon not running; aborting projection"); return false
+            Log.e(TAG, "helper daemon not running; aborting projection"); return "daemon"
+        }
+        if (autoContainerEnabled(context)) {
+            // Wave P: power the cluster compositor up before projecting; replaces the manual
+            // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
+            // fails (the compositor may already be on).
+            runCatching { helper.setClusterContainerMode(true) }
         }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
         if (!ensureOverlayPermission(context, helper)) {
-            Log.e(TAG, "overlay permission unavailable; aborting projection"); return false
+            Log.e(TAG, "overlay permission unavailable; aborting projection"); return "projection"
         }
         val display = resolveClusterDisplay(context) ?: run {
-            Log.e(TAG, "cluster display not found"); return false
+            Log.e(TAG, "cluster display not found"); return "projection"
         }
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)
         val geo = geometryFor(
             mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
-        ) ?: return false
+        ) ?: return "projection"
         val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
 
         return try {
@@ -349,7 +383,7 @@ object ClusterProjectionManager {
             }
             if (surface == null) {
                 Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
-                hideOverlay(helper); return false
+                hideOverlay(helper); return "projection"
             }
             // Release a stale VD (a prior release that failed) before overwriting the id. If it
             // fails AGAIN, abort rather than dropping the only handle — otherwise the daemon-side
@@ -358,7 +392,7 @@ object ClusterProjectionManager {
                 val staleId = remoteDisplayId
                 if (!helper.releaseVirtualDisplay(staleId)) {
                     Log.w(TAG, "stale releaseVirtualDisplay($staleId) failed; aborting to keep retry handle")
-                    hideOverlay(helper); return false
+                    hideOverlay(helper); return "projection"
                 }
                 remoteDisplayId = -1
             } else {
@@ -371,7 +405,7 @@ object ClusterProjectionManager {
                 VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
             )
             if (id == null) {
-                Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return false
+                Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return "projection"
             }
             remoteDisplayId = id
             saveLastVdId(context, id)
@@ -379,16 +413,16 @@ object ClusterProjectionManager {
             Log.i(TAG, "VirtualDisplay id=$id ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}; launchAndForce $pkg")
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
-                Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return false
+                Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return "projection"
             }
             projectedPackage = pkg
-            true
+            null
         } catch (e: Exception) {
             // wm.addView (BadTokenException) or any reflective daemon call can throw — tear the
             // overlay down and report failure so applyModeLocked falls back to OFF + pull-back,
             // keeping currentMode honest.
             Log.e(TAG, "projection threw: ${e.message}", e)
-            hideOverlay(helper); false
+            hideOverlay(helper); "projection"
         }
     }
 

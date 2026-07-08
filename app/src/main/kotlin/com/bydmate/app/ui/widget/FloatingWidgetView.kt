@@ -1,6 +1,11 @@
 package com.bydmate.app.ui.widget
 
 import android.content.Context
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -33,8 +38,18 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathMeasure
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -79,6 +94,7 @@ fun FloatingWidgetView(
     voltage12v: Double?,
     alpha: Float,
     scaleFactor: Float = 1.0f,
+    listening: Boolean = false,
 ) {
     val status = widgetStatus(soc, voltage12v)
     val borderColor = when (status) {
@@ -94,6 +110,15 @@ fun FloatingWidgetView(
         fontScale = baseDensity.fontScale,
     )
 
+    // Snake border while a continuous voice session (Wave B) is listening; unchanged static
+    // border otherwise. The status color is preserved either way.
+    val borderModifier = if (listening) {
+        val phase = rememberSnakePhase()
+        Modifier.drawBehind { drawSnakeBorder(color = borderColor, phase = phase) }
+    } else {
+        Modifier.border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+    }
+
     CompositionLocalProvider(LocalDensity provides scaledDensity) {
         Column(
             modifier = Modifier
@@ -101,7 +126,7 @@ fun FloatingWidgetView(
                 .size(width = 260.dp, height = 108.dp)
                 .shadow(elevation = 8.dp, shape = RoundedCornerShape(14.dp))
                 .background(CardSurface, RoundedCornerShape(14.dp))
-                .border(1.5.dp, borderColor, RoundedCornerShape(14.dp))
+                .then(borderModifier)
                 .padding(horizontal = 14.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.SpaceBetween,
         ) {
@@ -132,6 +157,65 @@ fun FloatingWidgetView(
 }
 
 internal const val TRIP_DISTANCE_TREND_THRESHOLD_KM = 0.3
+
+// ---- Snake border (Wave B listening indication) ----
+
+private const val SNAKE_PERIOD_MS = 1200
+private const val SNAKE_FRACTION = 0.35f
+private val SNAKE_STROKE_WIDTH = 2.5.dp
+private val SNAKE_CORNER_RADIUS = 14.dp
+
+/** Loops phase 0f..1f every [SNAKE_PERIOD_MS] -- the moving segment's position along the border. */
+@Composable
+private fun rememberSnakePhase(): Float {
+    val transition = rememberInfiniteTransition(label = "widgetSnake")
+    val phase by transition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(animation = tween(SNAKE_PERIOD_MS, easing = LinearEasing)),
+        label = "widgetSnakePhase",
+    )
+    return phase
+}
+
+/** Draws a dim full outline plus a brighter moving segment on top, tracing the same rounded-rect
+ *  the static border() would have drawn. Pure DrawScope logic (no Compose state) so it only needs
+ *  [phase] as input. */
+private fun DrawScope.drawSnakeBorder(color: Color, phase: Float) {
+    val strokeWidthPx = SNAKE_STROKE_WIDTH.toPx()
+    val cornerPx = SNAKE_CORNER_RADIUS.toPx()
+    val path = Path().apply {
+        addRoundRect(RoundRect(Rect(Offset.Zero, size), CornerRadius(cornerPx)))
+    }
+    val measure = PathMeasure().apply { setPath(path, forceClosed = true) }
+    val length = measure.length
+
+    drawPath(path, color = color.copy(alpha = 0.25f), style = Stroke(width = strokeWidthPx))
+
+    val (start, end) = snakeSegment(phase, length, SNAKE_FRACTION)
+    val segment = Path()
+    if (end >= start) {
+        measure.getSegment(start, end, segment, true)
+    } else {
+        // Wrapped past the path's end -- draw tail then head so the segment stays visually
+        // continuous across the 0-length seam instead of jumping.
+        measure.getSegment(start, length, segment, true)
+        measure.getSegment(0f, end, segment, true)
+    }
+    drawPath(segment, color = color, style = Stroke(width = strokeWidthPx, cap = StrokeCap.Round))
+}
+
+/** Pure fractional-position math, kept separate from DrawScope so it's unit-testable without a
+ *  Compose runtime. Returns (start, end) offsets along a path of [length], both in [0, length];
+ *  end < start signals the segment wrapped past the path's end (see drawSnakeBorder). */
+internal fun snakeSegment(phase: Float, length: Float, fraction: Float): Pair<Float, Float> {
+    if (length <= 0f) return 0f to 0f
+    val start = phase.mod(1f) * length
+    val segmentLength = fraction * length
+    val rawEnd = start + segmentLength
+    val end = if (rawEnd > length) rawEnd - length else rawEnd
+    return start to end
+}
 
 @Composable
 private fun RowEnergy(

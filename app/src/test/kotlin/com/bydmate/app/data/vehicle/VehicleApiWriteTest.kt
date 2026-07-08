@@ -41,13 +41,13 @@ class VehicleApiWriteTest {
 
     // ── Test 1: writeAcOn happy path ──────────────────────────────────────────
 
-    @Test fun `writeAcOn calls helper write with dev=1000 fid=501219352 val=0 and returns success`() = runTest {
+    @Test fun `writeAcOn calls helper write with dev=1000 fid=501219364 val=1 and returns success`() = runTest {
         val entry = allowlist.find("ac_on")!!
-        // ac_on = competitor ac_ctrl_mode (501219352) set to 0 (AUTO); no readbackFid
-        coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
+        // ac_on = ac_power (501219364) set to 1 (ON); no readbackFid
+        coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
 
         assertTrue(api.writeAcOn().isSuccess)
-        coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 0) }
+        coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 1) }
         // No readback for ac_on
         coVerify(exactly = 0) { helper.read(any(), any()) }
     }
@@ -73,7 +73,7 @@ class VehicleApiWriteTest {
     @Test fun `writeUnlockDoors calls helper with val=1 and returns success`() = runTest {
         val entry = allowlist.find("doors_unlock")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
-        coEvery { helper.read(entry.dev, entry.readbackFid!!) } returns 1L
+        // No readback for doors_unlock (see WriteAllowlist comment).
 
         assertTrue(api.writeUnlockDoors().isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 1) }
@@ -84,7 +84,7 @@ class VehicleApiWriteTest {
     @Test fun `writeLockDoors calls helper with val=2 and returns success`() = runTest {
         val entry = allowlist.find("doors_lock")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
-        coEvery { helper.read(entry.dev, entry.readbackFid!!) } returns 2L
+        // No readback for doors_lock (see WriteAllowlist comment).
 
         assertTrue(api.writeLockDoors().isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 2) }
@@ -100,29 +100,20 @@ class VehicleApiWriteTest {
         coVerify(exactly = 0) { helper.write(any(), any(), any()) }
     }
 
-    // ── Test 6: readback mismatch returns failure ─────────────────────────────
+    // ── Test 6: doors_lock has no readback — a stale/mismatched read (the old
+    // false-error case, field report 2026-06-25) must not affect the outcome ──
 
-    @Test fun `writeLockDoors returns failure ReadbackMismatch when readback value does not match`() = runTest {
+    @Test fun `writeLockDoors succeeds and never touches helper read (readback removed)`() = runTest {
         val entry = allowlist.find("doors_lock")!!
-        // Write succeeds but readback returns wrong value (1 instead of 2)
+        assertTrue(entry.readbackFid == null)
         coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
-        coEvery { helper.read(entry.dev, entry.readbackFid!!) } returns 1L
+        // Simulates the field bug: dev=1001 read of 1081081864 returns the old
+        // state (1) right after writing 2. Stub is unreachable if the fix holds.
+        coEvery { helper.read(entry.dev, 1081081864) } returns 1L
 
         val result = api.writeLockDoors()
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is VehicleWriteError.ReadbackMismatch)
-    }
-
-    // ── Bonus: readback sentinel -10011 returns failure Sentinel ─────────────
-
-    @Test fun `writeLockDoors returns failure Sentinel when readback returns -10011`() = runTest {
-        val entry = allowlist.find("doors_lock")!!
-        coEvery { helper.write(entry.dev, entry.writeFid, 2) } returns true
-        coEvery { helper.read(entry.dev, entry.readbackFid!!) } returns -10011L
-
-        val result = api.writeLockDoors()
-        assertTrue(result.isFailure)
-        assertTrue(result.exceptionOrNull() is VehicleWriteError.Sentinel)
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 0) { helper.read(any(), any()) }
     }
 
     // ── Window pos: happy path + helper failure ───────────────────────────────
@@ -217,7 +208,7 @@ class VehicleApiWriteTest {
 
     @Test fun `writeAcOn persists audit log entries (attempt + outcome)`() = runTest {
         val insertions = mutableListOf<VehicleWriteLogEntity>()
-        coEvery { helper.write(1000, 501219352, 0) } returns true
+        coEvery { helper.write(1000, 501219364, 1) } returns true
         coEvery { writeLogDao.insert(capture(insertions)) } returns Unit
         api.writeAcOn()
         // Expect 2 rows: attempt (status=-2) + outcome (status=0)
@@ -225,11 +216,11 @@ class VehicleApiWriteTest {
         val attempt = insertions.first { it.status == -2 }
         assertEquals("ac_on", attempt.actionName)
         assertEquals(1000, attempt.dev)
-        assertEquals(0, attempt.requested)
+        assertEquals(1, attempt.requested)
         assertEquals("attempt", attempt.error)
         val outcome = insertions.first { it.status == 0 }
         assertEquals("ac_on", outcome.actionName)
         assertEquals(1000, outcome.dev)
-        assertEquals(0, outcome.requested)
+        assertEquals(1, outcome.requested)
     }
 }

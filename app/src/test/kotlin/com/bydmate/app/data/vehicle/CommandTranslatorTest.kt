@@ -167,6 +167,19 @@ class CommandTranslatorTest {
         )
     }
 
+    // ── All windows vent — fan-out to all four % fids at VENT_PCT (was driver-only fid) ──
+    @Test fun `all windows vent fans out to all four pos fids at 10`() {
+        assertEquals(
+            setOf(
+                "window_driver_pos" to 10,
+                "window_passenger_pos" to 10,
+                "window_rear_left_pos" to 10,
+                "window_rear_right_pos" to 10,
+            ),
+            pairs("车窗通风"),
+        )
+    }
+
     // ── Interior / ambient light (candidate, dev=1023 carve-out) ──────────────
     @Test fun `open interior light maps to interior_light_on`() {
         val r = one("打开车内灯")
@@ -222,11 +235,32 @@ class CommandTranslatorTest {
         assertEquals(0, r?.value)
     }
 
-    // ── Auto AC must use competitor ac_on value 0 (ctrl_mode AUTO), not 2 ──────
-    @Test fun `auto AC maps to ac_on val 0`() {
+    // ── ac_power fid 501219364: 0=off, 1=on (live-validated 2026-07-03) ────────
+    @Test fun `auto AC maps to ac_on val 1`() {
         val r = one("自动空调")
         assertEquals("ac_on", r?.actionName)
-        assertEquals(0, r?.value)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `ac power semantics - off sends 0, on sends 1 on fid 501219364`() {
+        val off = one("关闭空调")
+        assertEquals("ac_off", off?.actionName)
+        assertEquals(0, off?.value)
+        val on = one("自动空调")
+        assertEquals("ac_on", on?.actionName)
+        assertEquals(1, on?.value)
+
+        val allowlist = WriteAllowlist.loadProduction { "{}" }
+        val offEntry = allowlist.find("ac_off")!!
+        assertEquals(501219364, offEntry.writeFid)
+        assertEquals(0, offEntry.valueMin)
+        assertEquals(0, offEntry.valueMax)
+        val onEntry = allowlist.find("ac_on")!!
+        assertEquals(501219364, onEntry.writeFid)
+        assertEquals(1, onEntry.valueMin)
+        assertEquals(1, onEntry.valueMax)
+        assertTrue(offEntry.validated)
+        assertTrue(onEntry.validated)
     }
 
     // ── Temperature: dynamic parse over full 16..30 range ────────────────────

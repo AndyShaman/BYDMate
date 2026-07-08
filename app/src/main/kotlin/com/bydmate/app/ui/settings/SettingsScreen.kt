@@ -24,17 +24,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.BugReport
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +48,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -52,7 +57,10 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Switch
@@ -84,6 +92,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -109,10 +118,21 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import androidx.compose.material.icons.outlined.Mic
+import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
+import com.bydmate.app.voice.AgentPersona
+import com.bydmate.app.voice.TtsGender
+import com.bydmate.app.voice.TtsVoiceCatalog
+import com.bydmate.app.voice.online.TtsRouter
+import java.util.Locale
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
+    VOICE(R.string.settings_section_voice_agent, Icons.Outlined.Mic),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
@@ -126,6 +146,8 @@ private val PrimaryColor = AccentGreen
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToPlaces: () -> Unit = {},
+    onNavigateToAgentChat: () -> Unit = {},
+    onNavigateToVoiceJournal: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
@@ -205,7 +227,8 @@ fun SettingsScreen(
         Spacer(modifier = Modifier.height(12.dp))
 
         var selected by rememberSaveable { mutableStateOf(SettingsSection.BATTERY) }
-        val safeSelected = if (selected == SettingsSection.SMART_HOME && !state.devModeUnlocked) {
+        val hiddenSelected = selected == SettingsSection.SMART_HOME
+        val safeSelected = if (hiddenSelected && !state.devModeUnlocked) {
             SettingsSection.BATTERY
         } else {
             selected
@@ -238,6 +261,7 @@ fun SettingsScreen(
                     when (safeSelected) {
                         SettingsSection.BATTERY -> BatterySection(state, viewModel)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
+                        SettingsSection.VOICE -> VoiceSettingsContent(state, viewModel, onNavigateToVoiceJournal, onNavigateToAgentChat)
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.PLACES -> PlacesSection(onNavigateToPlaces)
@@ -513,7 +537,140 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
-    SectionHeader(text = stringResource(R.string.settings_ai_section_header))
+    SectionHeader(text = stringResource(R.string.settings_ai_connections_header))
+
+    ConnectionCard(
+        title = "OpenRouter",
+        configured = state.openRouterConfigured,
+        testResult = state.connTestResults["openrouter"],
+        testRunning = state.connTestRunning == "openrouter",
+        onTest = { viewModel.testConnection("openrouter") },
+    ) {
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_api_key_label),
+            value = state.openRouterApiKey,
+            onValueChange = { viewModel.saveOpenRouterApiKey(it) },
+            keyboardType = KeyboardType.Password
+        )
+        Button(
+            onClick = { viewModel.showModelPicker() },
+            enabled = state.openRouterApiKey.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = NavyDark)
+        ) {
+            Text(
+                if (state.openRouterModelName.isNotBlank())
+                    stringResource(R.string.settings_openrouter_model_selected, state.openRouterModelName)
+                else stringResource(R.string.settings_openrouter_model_pick),
+                fontSize = 14.sp, fontWeight = FontWeight.Medium, maxLines = 1
+            )
+        }
+    }
+
+    ConnectionCard(
+        title = "z.ai",
+        configured = state.zaiConfigured,
+        testResult = state.connTestResults["zai"],
+        testRunning = state.connTestRunning == "zai",
+        onTest = { viewModel.testConnection("zai") },
+    ) {
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_api_key_label),
+            value = state.zaiApiKey,
+            onValueChange = { viewModel.saveZaiApiKey(it) },
+            keyboardType = KeyboardType.Password
+        )
+        Text(stringResource(R.string.settings_zai_hint),
+            color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+    }
+
+    ConnectionCard(
+        title = stringResource(R.string.settings_conn_custom_title),
+        configured = state.customConfigured,
+        testResult = state.connTestResults["custom"],
+        testRunning = state.connTestRunning == "custom",
+        onTest = { viewModel.testConnection("custom") },
+    ) {
+        var presetHint by remember { mutableStateOf<Int?>(null) }
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.horizontalScroll(rememberScrollState())
+        ) {
+            CUSTOM_PRESETS.forEach { preset ->
+                UnitChip(
+                    label = preset.name,
+                    selected = state.customName == preset.name,
+                    onClick = {
+                        viewModel.applyCustomPreset(preset.name, preset.baseUrl, preset.model)
+                        presetHint = preset.hintRes
+                    }
+                )
+            }
+        }
+        Text(
+            stringResource(presetHint ?: R.string.settings_custom_hint),
+            color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp
+        )
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_name_label),
+            value = state.customName,
+            onValueChange = { viewModel.saveCustomName(it) },
+            keyboardType = KeyboardType.Text
+        )
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_base_url_label),
+            value = state.customBaseUrl,
+            onValueChange = { viewModel.saveCustomBaseUrl(it) },
+            keyboardType = KeyboardType.Uri
+        )
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_api_key_label),
+            value = state.customApiKey,
+            onValueChange = { viewModel.saveCustomApiKey(it) },
+            keyboardType = KeyboardType.Password
+        )
+        SettingsTextField(
+            label = stringResource(R.string.settings_conn_model_label),
+            value = state.customModel,
+            onValueChange = { viewModel.saveCustomModel(it) },
+            keyboardType = KeyboardType.Text
+        )
+        Button(
+            onClick = { viewModel.loadCustomModels() },
+            enabled = state.customBaseUrl.isNotBlank() && state.customApiKey.isNotBlank(),
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(8.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentBlue, contentColor = NavyDark)
+        ) {
+            Text(
+                stringResource(R.string.settings_custom_list_models),
+                fontSize = 14.sp, fontWeight = FontWeight.Medium
+            )
+        }
+        state.customModelsError?.let {
+            Text(it, color = SocRed, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+    }
+
+    // Custom model picker dialog
+    if (state.showCustomModelPicker) {
+        CustomModelPickerDialog(
+            models = state.customModelList,
+            loading = state.customModelsLoading,
+            selectedId = state.customModel,
+            onSelect = { id ->
+                viewModel.saveCustomModel(id)
+                viewModel.hideCustomModelPickerDialog()
+            },
+            onDismiss = { viewModel.hideCustomModelPickerDialog() }
+        )
+    }
+
+    ModelSelectionCard(state, viewModel)
+    SearchStatusCard(state)
+
+    SectionHeader(text = stringResource(R.string.settings_exa_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
@@ -523,110 +680,18 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                stringResource(R.string.settings_insight_mode_label),
-                color = TextSecondary,
-                fontSize = 13.sp,
-            )
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                FilterChip(
-                    selected = !state.insightCloudMode,
-                    onClick = { viewModel.setInsightCloudMode(false) },
-                    label = { Text(stringResource(R.string.settings_insight_mode_local), fontSize = 13.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentGreen.copy(alpha = 0.25f),
-                        selectedLabelColor = AccentGreen,
-                    ),
-                )
-                FilterChip(
-                    selected = state.insightCloudMode,
-                    onClick = { viewModel.setInsightCloudMode(true) },
-                    label = { Text(stringResource(R.string.settings_insight_mode_cloud), fontSize = 13.sp) },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = AccentBlue.copy(alpha = 0.25f),
-                        selectedLabelColor = AccentBlue,
-                    ),
-                )
-            }
-            if (!state.insightCloudMode) {
-                Text(
-                    stringResource(R.string.settings_insight_mode_local_hint),
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                    lineHeight = 16.sp,
-                )
-                val aiLoadingLabel = stringResource(R.string.settings_ai_loading_label)
-                Button(
-                    onClick = { viewModel.refreshLocalInsight() },
-                    enabled = state.aiSaveStatus != aiLoadingLabel,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = AccentGreen,
-                        contentColor = NavyDark,
-                    ),
-                ) {
-                    Text(
-                        if (state.aiSaveStatus == aiLoadingLabel) aiLoadingLabel
-                        else stringResource(R.string.settings_insight_refresh_local),
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            } else {
             SettingsTextField(
-                label = stringResource(R.string.settings_openrouter_api_key_label),
-                value = state.openRouterApiKey,
-                onValueChange = { viewModel.saveOpenRouterApiKey(it) },
-                keyboardType = KeyboardType.Password
+                label = stringResource(R.string.agent_exa_api_key_label),
+                value = state.exaApiKey,
+                onValueChange = { viewModel.saveExaApiKey(it) },
+                keyboardType = KeyboardType.Password,
             )
-            Button(
-                onClick = { viewModel.showModelPicker() },
-                enabled = state.openRouterApiKey.isNotBlank(),
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentBlue,
-                    contentColor = NavyDark
-                )
-            ) {
-                Text(
-                    if (state.openRouterModelName.isNotBlank())
-                        stringResource(R.string.settings_openrouter_model_selected, state.openRouterModelName)
-                    else stringResource(R.string.settings_openrouter_model_pick),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1
-                )
-            }
-            val aiLoadingLabel = stringResource(R.string.settings_ai_loading_label)
-            Button(
-                onClick = { viewModel.saveAiSettings() },
-                enabled = state.openRouterApiKey.isNotBlank() &&
-                    state.openRouterModel.isNotBlank() &&
-                    state.aiSaveStatus != aiLoadingLabel,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = AccentGreen,
-                    contentColor = NavyDark
-                )
-            ) {
-                Text(
-                    if (state.aiSaveStatus == aiLoadingLabel) aiLoadingLabel
-                    else stringResource(R.string.settings_ai_save_button),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            }
-            if (state.aiSaveStatus != null && state.aiSaveStatus != stringResource(R.string.settings_ai_loading_label)) {
-                Text(
-                    state.aiSaveStatus!!,
-                    color = if (state.aiSaveStatus!!.startsWith(stringResource(R.string.settings_error_prefix))) SocRed else AccentGreen,
-                    fontSize = 12.sp
-                )
-            }
+            Text(
+                stringResource(R.string.settings_exa_search_hint),
+                color = TextSecondary,
+                fontSize = 12.sp,
+                lineHeight = 16.sp,
+            )
         }
     }
 
@@ -971,6 +1036,9 @@ private fun DisplaySection() {
     var triggerKey by remember {
         mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE))
     }
+    var autoContainer by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, true))
+    }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -1008,6 +1076,43 @@ private fun DisplaySection() {
                         ClusterProjectionManager.enableStarControl(
                             entryPoint.helperClient(), entryPoint.helperBootstrap())
                     }
+                },
+                colors = bydSwitchColors(),
+            )
+        }
+    }
+
+    // Auto power-on toggle: when enabled, ClusterProjectionManager wakes the cluster compositor
+    // before sending the projection window. Matches the mirror-toggle Card structure above.
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.PowerSettingsNew,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(stringResource(R.string.settings_cluster_auto_container_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(R.string.settings_cluster_auto_container_desc),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+            Switch(
+                checked = autoContainer,
+                onCheckedChange = {
+                    autoContainer = it
+                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
                 },
                 colors = bydSwitchColors(),
             )
@@ -1330,6 +1435,10 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         if (uri != null) viewModel.restoreConfig(uri)
     }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showDonate by remember { mutableStateOf(false) }
+    if (showDonate) {
+        DonateDialog(entry = DonateEntry.SETTINGS, onDismiss = { showDonate = false })
+    }
 
     // Confirm dialog for destructive restore operation
     if (showRestoreConfirm) {
@@ -1542,6 +1651,11 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                         Uri.parse("https://github.com/AndyShaman/BYDMate")))
                 }
             )
+            Text(
+                text = stringResource(R.string.settings_weather_attribution),
+                color = TextSecondary,
+                fontSize = 12.sp,
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1573,6 +1687,28 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         }
     }
 
+    SectionHeader(text = stringResource(R.string.settings_donate_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(stringResource(R.string.settings_donate_card_body), color = TextSecondary, fontSize = 14.sp)
+            Button(
+                onClick = { showDonate = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark)
+            ) {
+                Text(stringResource(R.string.settings_donate_button), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            }
+        }
+    }
+
     Text(
         text = stringResource(R.string.settings_reset_seat_channel_hint),
         color = TextSecondary,
@@ -1586,7 +1722,591 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     ) {
         Text(stringResource(R.string.settings_reset_seat_channel), fontSize = 13.sp, color = TextPrimary)
     }
+}
 
+@Composable
+private fun VoiceSettingsContent(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    onNavigateToVoiceJournal: () -> Unit,
+    onNavigateToAgentChat: () -> Unit,
+) {
+    val context = LocalContext.current
+
+    // Tracks which action requested the RECORD_AUDIO permission so the onResult
+    // callback dispatches the right operation (ENABLE toggle).
+    var pendingVoiceAction by remember { mutableStateOf("") }  // "ENABLE" | ""
+
+    // RECORD_AUDIO permission launcher — requested on enable
+    val audioPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            when (pendingVoiceAction) {
+                "ENABLE" -> viewModel.setVoiceEnabled(true)
+            }
+        }
+        pendingVoiceAction = ""
+    }
+
+    fun hasAudioPerm() = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.RECORD_AUDIO
+    ) == PackageManager.PERMISSION_GRANTED
+
+    fun hasContactsPerm() = ContextCompat.checkSelfPermission(
+        context, Manifest.permission.READ_CONTACTS
+    ) == PackageManager.PERMISSION_GRANTED
+
+    // READ_CONTACTS permission for call_contact — standard runtime dialog only, no ADB.
+    var contactsPermGranted by remember { mutableStateOf(hasContactsPerm()) }
+    val contactsPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted -> contactsPermGranted = granted }
+
+    // --- Section 1: Агент (enable toggle, name, persona, gender, debug tools) ---
+    SectionHeader(text = stringResource(R.string.settings_agent_section_header))
+
+    // --- Agent enable toggle ---
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.agent_enable_title), color = TextPrimary, fontSize = 14.sp)
+                    Text(
+                        stringResource(R.string.agent_enable_desc),
+                        color = TextSecondary, fontSize = 11.sp,
+                    )
+                }
+                Switch(
+                    checked = state.agentEnabled,
+                    onCheckedChange = { viewModel.setAgentEnabled(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+        }
+    }
+
+    // --- Agent identity: display/wake name + persona (spoken-reply style) + gender ---
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                value = state.agentName,
+                onValueChange = { viewModel.setAgentName(it) },
+                label = { Text(stringResource(R.string.settings_agent_name_label)) },
+                supportingText = { Text(stringResource(R.string.settings_agent_name_hint)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedTextColor = Color.White,
+                    unfocusedTextColor = Color.White,
+                    focusedBorderColor = AccentGreen,
+                    unfocusedBorderColor = CardBorder,
+                    focusedLabelColor = PrimaryColor,
+                    unfocusedLabelColor = TextSecondary,
+                    cursorColor = PrimaryColor
+                )
+            )
+            Text(
+                stringResource(R.string.settings_agent_persona_label),
+                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip(
+                    label = stringResource(R.string.settings_persona_snarky),
+                    selected = state.agentPersona == AgentPersona.SNARKY.id,
+                    onClick = { viewModel.setAgentPersona(AgentPersona.SNARKY.id) },
+                )
+                UnitChip(
+                    label = stringResource(R.string.settings_persona_navigator),
+                    selected = state.agentPersona == AgentPersona.NAVIGATOR.id,
+                    onClick = { viewModel.setAgentPersona(AgentPersona.NAVIGATOR.id) },
+                )
+                UnitChip(
+                    label = stringResource(R.string.settings_persona_engineer),
+                    selected = state.agentPersona == AgentPersona.ENGINEER.id,
+                    onClick = { viewModel.setAgentPersona(AgentPersona.ENGINEER.id) },
+                )
+            }
+            Text(
+                stringResource(R.string.settings_agent_gender_label),
+                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                UnitChip(
+                    label = stringResource(R.string.settings_agent_gender_male),
+                    selected = state.agentGender == "m",
+                    onClick = { viewModel.setAgentGender("m") },
+                )
+                UnitChip(
+                    label = stringResource(R.string.settings_agent_gender_female),
+                    selected = state.agentGender == "f",
+                    onClick = { viewModel.setAgentGender("f") },
+                )
+            }
+            Text(
+                stringResource(R.string.settings_agent_gender_hint),
+                color = TextSecondary, fontSize = 12.sp,
+            )
+        }
+    }
+
+    // --- Agent debug tools ---
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(onClick = onNavigateToAgentChat, enabled = state.agentEnabled) {
+                Text(stringResource(R.string.agent_chat_open), color = AccentGreen, fontSize = 13.sp)
+            }
+
+            HorizontalDivider(color = CardBorder)
+
+            val agentConfigured = state.agentConnConfigured
+            TextButton(
+                onClick = { viewModel.testAgentModel() },
+                enabled = agentConfigured && !state.modelTestRunning,
+            ) {
+                Text(
+                    if (state.modelTestRunning) stringResource(R.string.agent_test_model_running)
+                    else stringResource(R.string.agent_test_model_button),
+                    color = AccentGreen, fontSize = 13.sp,
+                )
+            }
+            state.modelTestResult?.let {
+                Text(it, color = TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+            }
+
+            HorizontalDivider(color = CardBorder)
+
+            Text(
+                stringResource(R.string.agent_model_shared_caption),
+                color = TextSecondary, fontSize = 11.sp,
+            )
+        }
+    }
+
+    // --- Section 2: Ответы агента (TTS toggle + per-voice list, filtered by agent gender) ---
+    SectionHeader(text = stringResource(R.string.settings_tts_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_tts_toggle),
+                        color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        stringResource(R.string.settings_tts_subtitle),
+                        color = TextSecondary, fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = state.ttsEnabled,
+                    onCheckedChange = { viewModel.setTtsEnabled(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
+        }
+    }
+
+    // --- Voice list: local voices matching the current agent gender, then the online voices
+    // (Gemini via OpenRouter, MiniMax). Selecting any row sets tts_source. ---
+    val currentGender = if (state.agentGender == "f") TtsGender.FEMALE else TtsGender.MALE
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            TtsVoiceCatalog.byGender(currentGender).forEach { voice ->
+                TtsVoiceRow(voice = voice, state = state, viewModel = viewModel)
+            }
+            OnlineTtsVoiceRow(
+                id = "gemini",
+                label = "Gemini",
+                description = stringResource(R.string.settings_tts_voice_online_gemini_desc),
+                badge = stringResource(R.string.settings_tts_voice_online_gemini_badge),
+                enabled = true,
+                state = state, viewModel = viewModel,
+            )
+            OnlineTtsVoiceRow(
+                id = "minimax",
+                label = "MiniMax",
+                description = stringResource(R.string.settings_tts_voice_online_minimax_desc),
+                badge = stringResource(R.string.settings_tts_voice_online_minimax_badge),
+                enabled = state.minimaxKeySet,
+                state = state, viewModel = viewModel,
+            )
+        }
+    }
+    Text(
+        stringResource(R.string.settings_tts_online_fallback_hint),
+        color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+
+    // --- Ключи для онлайн-голосов: OpenRouter status (key lives in AI connections) + MiniMax
+    // provider/price/key ---
+    SectionHeader(text = stringResource(R.string.settings_tts_keys_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text("OpenRouter", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text(
+                    stringResource(
+                        if (state.openRouterConfigured) R.string.settings_conn_configured
+                        else R.string.settings_conn_not_configured
+                    ),
+                    color = if (state.openRouterConfigured) AccentGreen else TextMuted, fontSize = 12.sp,
+                )
+            }
+            Text(
+                stringResource(R.string.settings_tts_keys_openrouter_hint),
+                color = TextSecondary, fontSize = 12.sp,
+            )
+        }
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("MiniMax", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+            ConnDropdown(
+                label = stringResource(R.string.settings_minimax_provider_label),
+                options = listOf(
+                    "official" to stringResource(R.string.settings_minimax_provider_official),
+                    "fal" to stringResource(R.string.settings_minimax_provider_fal),
+                    "replicate" to stringResource(R.string.settings_minimax_provider_replicate),
+                ),
+                selectedId = state.minimaxProvider,
+                allowNone = false,
+                onSelect = { viewModel.setMinimaxProvider(it) },
+            )
+            Text(
+                stringResource(R.string.settings_minimax_price_hint),
+                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+            )
+            MiniMaxKeyField(keySet = state.minimaxKeySet, onSave = { viewModel.setMinimaxKey(it) })
+        }
+    }
+
+    // --- Section 3: Настройки локального голоса (speed/liveliness sliders + preview) ---
+    SectionHeader(text = stringResource(R.string.settings_tts_tuning_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            var ratePct by remember(state.ttsRate) { mutableStateOf((state.ttsRate * 100).roundToInt()) }
+            TtsRateSlider(
+                label = stringResource(R.string.settings_tts_rate_label),
+                pct = ratePct,
+                onChange = { ratePct = it },
+                onFinished = { viewModel.setTtsRate(ratePct / 100f) },
+                description = stringResource(R.string.settings_tts_rate_hint),
+            )
+            var liveliness by remember(state.ttsLiveliness) { mutableStateOf(state.ttsLiveliness) }
+            ClusterSizeSlider(
+                label = stringResource(R.string.settings_tts_liveliness_label),
+                pct = liveliness,
+                enabled = true,
+                onChange = { liveliness = it },
+                onFinished = { viewModel.setTtsLiveliness(liveliness) },
+                min = 0,
+                max = 100,
+                description = stringResource(R.string.settings_tts_liveliness_hint),
+            )
+            Button(
+                onClick = { viewModel.previewVoice() },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = AccentGreen,
+                    contentColor = NavyDark,
+                ),
+            ) {
+                Text(
+                    stringResource(R.string.settings_tts_preview_button),
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+            }
+        }
+    }
+
+    // --- Volume hint: reply volume follows the system Voice channel, no in-app slider ---
+    Text(
+        stringResource(R.string.settings_voice_volume_hint),
+        color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+
+    // --- Section 4: Распознавание речи (GigaAM), unchanged ---
+    SectionHeader(text = stringResource(R.string.settings_asr_gigaam_title))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            val gigaAmDownloading = state.gigaAmDownloadProgress >= 0
+            if (gigaAmDownloading) {
+                Text(
+                    stringResource(R.string.settings_voice_model_downloading, state.gigaAmDownloadProgress),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = AccentGreen,
+                )
+            } else if (state.gigaAmModelReady) {
+                Text(
+                    stringResource(R.string.settings_asr_gigaam_ready),
+                    color = AccentGreen, fontSize = 12.sp,
+                )
+                Button(
+                    onClick = { viewModel.deleteGigaAmModel() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = CardSurface,
+                        contentColor = SocRed,
+                    ),
+                ) {
+                    Text(
+                        stringResource(R.string.settings_asr_gigaam_delete),
+                        fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    )
+                }
+            } else {
+                if (state.gigaAmDownloadFailed) {
+                    Text(
+                        stringResource(R.string.settings_asr_gigaam_download_failed),
+                        color = SocRed, fontSize = 12.sp,
+                    )
+                }
+                Button(
+                    onClick = { viewModel.downloadGigaAmModel() },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = AccentGreen,
+                        contentColor = NavyDark,
+                    ),
+                ) {
+                    Text(
+                        stringResource(
+                            R.string.settings_asr_gigaam_download,
+                            com.bydmate.app.voice.GigaAmModelManager.MODEL_SIZE_LABEL,
+                        ),
+                        fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    )
+                }
+            }
+        }
+    }
+
+    // --- Section 5: Кнопка и микрофон ---
+    SectionHeader(text = stringResource(R.string.settings_voice_button_mic_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_voice_enable_label),
+                        color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                    )
+                    Text(
+                        stringResource(R.string.settings_voice_enable_description),
+                        color = TextSecondary, fontSize = 12.sp,
+                    )
+                }
+                Switch(
+                    checked = state.voiceEnabled,
+                    onCheckedChange = { on ->
+                        if (on && !hasAudioPerm()) {
+                            pendingVoiceAction = "ENABLE"
+                            audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        } else {
+                            viewModel.setVoiceEnabled(on)
+                        }
+                    },
+                    colors = bydSwitchColors(),
+                )
+            }
+        }
+    }
+
+    // --- Steering-button assignment --- (reuses LearnButtonDialog from DisplaySection)
+    var learningVoiceKey by remember { mutableStateOf(false) }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { learningVoiceKey = true },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.Mic,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_voice_button_label),
+                    color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+                val keyLabel = steeringButtonLabel(
+                    if (state.voiceKeycode == 0) DEFAULT_VOICE_KEYCODE else state.voiceKeycode
+                )
+                Text(
+                    stringResource(R.string.settings_voice_button_current, keyLabel),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+            Text(
+                stringResource(R.string.settings_display_button_change),
+                color = AccentGreen, fontSize = 13.sp,
+            )
+        }
+    }
+
+    if (learningVoiceKey) {
+        LearnButtonDialog(
+            onSave = { code ->
+                viewModel.saveVoiceKeycode(code)
+                learningVoiceKey = false
+            },
+            onDismiss = { learningVoiceKey = false },
+        )
+    }
+
+    // --- Contacts permission (call_contact tool) ---
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text(
+                    stringResource(R.string.settings_voice_contacts_label),
+                    color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stringResource(R.string.settings_voice_contacts_description),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+            if (contactsPermGranted) {
+                Text(
+                    stringResource(R.string.settings_voice_contacts_granted),
+                    color = TextSecondary, fontSize = 13.sp,
+                )
+            } else {
+                Button(
+                    onClick = { contactsPermLauncher.launch(Manifest.permission.READ_CONTACTS) },
+                    shape = RoundedCornerShape(8.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+                ) {
+                    Text(stringResource(R.string.settings_voice_contacts_grant), fontSize = 13.sp, color = TextPrimary)
+                }
+            }
+        }
+    }
+
+    // --- Accessibility hint ---
+    Text(
+        stringResource(R.string.settings_voice_a11y_hint),
+        color = TextMuted, fontSize = 11.sp, lineHeight = 15.sp,
+        modifier = Modifier.padding(top = 4.dp),
+    )
+
+    // --- Voice journal (debug: last MAX voice sessions, what was heard and how it went) ---
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onNavigateToVoiceJournal() },
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Outlined.BugReport,
+                contentDescription = null,
+                tint = AccentGreen,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    stringResource(R.string.settings_voice_journal_entry_title),
+                    color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stringResource(R.string.settings_voice_journal_entry_description),
+                    color = TextSecondary, fontSize = 12.sp,
+                )
+            }
+        }
+    }
+
+    // --- Section 6: Штатный помощник BYD (moved verbatim from AppSection) ---
     SectionHeader(text = stringResource(R.string.settings_voice_native_assistant_header))
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -1621,6 +2341,182 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 colors = bydSwitchColors(),
             )
         }
+    }
+}
+
+/** One row in the "Ответы агента" voice list: radio button, name + description + "Локально"
+ *  badge, and per-voice download/ready/delete controls. A voice with no model on disk cannot
+ *  be selected. */
+@Composable
+private fun TtsVoiceRow(
+    voice: com.bydmate.app.voice.TtsVoice,
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    val ready = voice.id in state.ttsReadyVoices
+    val downloadProgress = state.ttsDownloadProgress[voice.id]
+    val failed = voice.id in state.ttsDownloadFailed
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = state.ttsSource == TtsRouter.OFFLINE && state.ttsVoice == voice.id,
+            enabled = ready,
+            onClick = {
+                viewModel.setTtsVoice(voice.id)
+                viewModel.setTtsSource(TtsRouter.OFFLINE)
+            },
+            colors = RadioButtonDefaults.colors(
+                selectedColor = AccentGreen,
+                unselectedColor = TextMuted,
+            ),
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    stringResource(voice.labelRes),
+                    color = if (ready) TextPrimary else TextMuted,
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+                Text(
+                    stringResource(R.string.settings_tts_voice_local_badge),
+                    color = TextSecondary, fontSize = 10.sp,
+                    modifier = Modifier
+                        .background(CardSurface, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                )
+            }
+            Text(
+                stringResource(
+                    when (voice.engine) {
+                        com.bydmate.app.voice.TtsVoiceEngine.PIPER -> R.string.settings_tts_voice_desc_piper
+                        com.bydmate.app.voice.TtsVoiceEngine.VITS_MULTI -> R.string.settings_tts_voice_desc_vits
+                        com.bydmate.app.voice.TtsVoiceEngine.SUPERTONIC -> R.string.settings_tts_voice_desc_supertonic
+                    }
+                ),
+                color = TextSecondary, fontSize = 12.sp,
+            )
+            if (!ready) {
+                Text(
+                    stringResource(R.string.settings_tts_voice_locked_hint),
+                    color = TextMuted, fontSize = 11.sp,
+                )
+            }
+        }
+        when {
+            downloadProgress != null -> Text(
+                stringResource(R.string.settings_voice_model_downloading, downloadProgress),
+                color = TextSecondary, fontSize = 12.sp,
+            )
+            ready -> Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.settings_tts_voice_ready), color = AccentGreen, fontSize = 12.sp)
+                Text(" · ", color = TextMuted, fontSize = 12.sp)
+                Text(
+                    stringResource(R.string.settings_tts_model_delete),
+                    color = SocRed, fontSize = 12.sp,
+                    modifier = Modifier.clickable { viewModel.deleteTtsVoice(voice.id) },
+                )
+            }
+            else -> Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    stringResource(R.string.settings_tts_voice_download_label, voice.sizeMb),
+                    color = AccentGreen, fontSize = 12.sp,
+                    modifier = Modifier.clickable { viewModel.downloadTtsVoice(voice.id) },
+                )
+                if (failed) {
+                    Text(
+                        stringResource(R.string.settings_tts_download_failed),
+                        color = SocRed, fontSize = 11.sp,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** One row in the voice list for an online TTS backend (Gemini/MiniMax): radio button,
+ *  name + description + an optional badge. Unlike [TtsVoiceRow] there is no download/ready
+ *  state -- [enabled] gates selection instead (MiniMax until its key is saved). */
+@Composable
+private fun OnlineTtsVoiceRow(
+    id: String,
+    label: String,
+    description: String,
+    badge: String?,
+    enabled: Boolean,
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(
+            selected = state.ttsSource == id,
+            enabled = enabled,
+            onClick = { viewModel.setTtsSource(id) },
+            colors = RadioButtonDefaults.colors(
+                selectedColor = AccentGreen,
+                unselectedColor = TextMuted,
+            ),
+        )
+        Column(modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    label,
+                    color = if (enabled) TextPrimary else TextMuted,
+                    fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                )
+                if (badge != null) {
+                    Text(
+                        badge,
+                        color = TextSecondary, fontSize = 10.sp,
+                        modifier = Modifier
+                            .background(CardSurface, RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp),
+                    )
+                }
+            }
+            Text(description, color = TextSecondary, fontSize = 12.sp)
+        }
+    }
+}
+
+/** Speed slider (0.7-1.4, step 0.05). Percent-based like ClusterSizeSlider, but displays the
+ *  underlying float rate instead of "%". */
+@Composable
+private fun TtsRateSlider(
+    label: String,
+    pct: Int,
+    onChange: (Int) -> Unit,
+    onFinished: () -> Unit,
+    description: String,
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(label, color = TextPrimary, fontSize = 14.sp)
+            Text(
+                String.format(Locale.US, "%.2f", pct / 100f),
+                color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            )
+        }
+        Text(description, color = TextSecondary, fontSize = 12.sp)
+        Slider(
+            value = pct.toFloat(),
+            onValueChange = { onChange(it.roundToInt()) },
+            onValueChangeFinished = onFinished,
+            valueRange = 70f..140f,
+            steps = 13, // (140-70)/5 - 1, i.e. 0.05 increments
+            colors = SliderDefaults.colors(
+                thumbColor = AccentGreen,
+                activeTrackColor = AccentGreen,
+            ),
+        )
     }
 }
 
@@ -1752,6 +2648,177 @@ private fun LanguageOption(label: String, selected: Boolean, onClick: () -> Unit
     }
 }
 
+/** Preset for the custom connection card: fills URL and model, key stays the user's. */
+private data class CustomPreset(val name: String, val baseUrl: String, val model: String, val hintRes: Int)
+
+private val CUSTOM_PRESETS = listOf(
+    CustomPreset("Cloudflare", "https://api.cloudflare.com/client/v4/accounts/ACCOUNT_ID/ai/v1",
+        "@cf/zai-org/glm-4.7-flash", R.string.settings_preset_hint_cloudflare),
+    CustomPreset("Vercel", "https://ai-gateway.vercel.sh/v1",
+        "openai/gpt-oss-120b", R.string.settings_preset_hint_vercel),
+    CustomPreset("Kimi", "https://api.moonshot.ai/v1", "", R.string.settings_preset_hint_kimi),
+    CustomPreset("NanoGPT", "https://nano-gpt.com/api/subscription/v1", "", R.string.settings_preset_hint_nanogpt),
+    CustomPreset("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat", R.string.settings_preset_hint_deepseek),
+    CustomPreset("Mistral", "https://api.mistral.ai/v1", "", R.string.settings_preset_hint_mistral),
+)
+
+@Composable
+private fun ConnectionCard(
+    title: String,
+    configured: Boolean,
+    testResult: String?,
+    testRunning: Boolean,
+    onTest: () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
+) {
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(9.dp)
+                        .background(if (configured) AccentGreen else TextMuted, CircleShape)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(title, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(
+                        if (configured) R.string.settings_conn_configured
+                        else R.string.settings_conn_not_configured
+                    ),
+                    color = if (configured) AccentGreen else TextMuted, fontSize = 12.sp
+                )
+            }
+            content()
+            OutlinedButton(
+                onClick = onTest,
+                enabled = configured && !testRunning,
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(
+                    stringResource(
+                        if (testRunning) R.string.settings_conn_checking else R.string.settings_conn_check
+                    ),
+                    fontSize = 13.sp
+                )
+            }
+            testResult?.let {
+                Text(it, color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun ModelSelectionCard(state: SettingsUiState, viewModel: SettingsViewModel) {
+    // Options: configured connections as id -> "label · model" pairs.
+    // stringResource is resolved OUTSIDE buildList (its lambda is not composable).
+    val customTitle = stringResource(R.string.settings_conn_custom_title)
+    val options = buildList {
+        if (state.openRouterConfigured) add("openrouter" to "OpenRouter · ${state.openRouterModelName.ifBlank { state.openRouterModel }}")
+        if (state.zaiConfigured) add("zai" to "z.ai · glm-4.7-flash")
+        if (state.customConfigured) add("custom" to "${state.customName.ifBlank { customTitle }} · ${state.customModel}")
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.settings_models_header),
+                color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold
+            )
+            ConnDropdown(
+                label = stringResource(R.string.settings_model_primary),
+                options = options,
+                selectedId = state.primaryConn.ifBlank { "openrouter" },
+                allowNone = false,
+                onSelect = { viewModel.selectPrimaryConn(it) },
+            )
+            ConnDropdown(
+                label = stringResource(R.string.settings_model_fallback),
+                options = options,
+                selectedId = state.fallbackConn,
+                allowNone = true,
+                onSelect = { viewModel.selectFallbackConn(it) },
+            )
+            Text(
+                stringResource(R.string.settings_models_hint),
+                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp
+            )
+        }
+    }
+}
+
+@Composable
+private fun ConnDropdown(
+    label: String,
+    options: List<Pair<String, String>>,
+    selectedId: String,
+    allowNone: Boolean,
+    onSelect: (String) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val noneLabel = stringResource(R.string.settings_model_none)
+    val selectedLabel = options.firstOrNull { it.first == selectedId }?.second
+        ?: if (allowNone) noneLabel else options.firstOrNull()?.second ?: noneLabel
+    Column {
+        Text(label, color = TextMuted, fontSize = 12.sp)
+        Box {
+            OutlinedButton(
+                onClick = { expanded = true },
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(selectedLabel, fontSize = 13.sp, maxLines = 1)
+            }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                if (allowNone) {
+                    DropdownMenuItem(text = { Text(noneLabel) }, onClick = { onSelect(""); expanded = false })
+                }
+                options.forEach { (id, text) ->
+                    DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(id); expanded = false })
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SearchStatusCard(state: SettingsUiState) {
+    val source = when {
+        state.exaApiKey.isNotBlank() -> stringResource(R.string.settings_search_source_exa)
+        state.primaryConn.ifBlank { "openrouter" } != "custom" && state.agentConnConfigured ->
+            stringResource(R.string.settings_search_source_native)
+        else -> stringResource(R.string.settings_search_source_none)
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row {
+                Text(
+                    stringResource(R.string.settings_search_status_title) + ": ",
+                    color = TextPrimary, fontSize = 13.sp
+                )
+                Text(source, color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+            Text(
+                stringResource(R.string.settings_search_status_hint),
+                color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp
+            )
+        }
+    }
+}
+
 @Composable
 private fun SectionHeader(text: String) {
     Text(
@@ -1790,6 +2857,36 @@ private fun SettingsTextField(
     )
 }
 
+/** MiniMax API key field. The real key lives only in SettingsRepository -- [keySet] (never
+ *  the key itself) comes back from the ViewModel, so a saved key shows as a placeholder
+ *  instead of being echoed into the field. */
+@Composable
+private fun MiniMaxKeyField(keySet: Boolean, onSave: (String) -> Unit) {
+    var input by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = input,
+        onValueChange = { input = it; onSave(it) },
+        label = { Text(stringResource(R.string.settings_conn_api_key_label)) },
+        placeholder = if (keySet) {
+            { Text(stringResource(R.string.settings_minimax_key_saved_placeholder), color = TextMuted) }
+        } else null,
+        singleLine = true,
+        visualTransformation = PasswordVisualTransformation(),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(8.dp),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedTextColor = Color.White,
+            unfocusedTextColor = Color.White,
+            focusedBorderColor = AccentGreen,
+            unfocusedBorderColor = CardBorder,
+            focusedLabelColor = PrimaryColor,
+            unfocusedLabelColor = TextSecondary,
+            cursorColor = PrimaryColor,
+        ),
+    )
+}
+
 @Composable
 private fun UnitChip(
     label: String,
@@ -1816,6 +2913,69 @@ private fun UnitChip(
             selected = selected
         )
     )
+}
+
+@Composable
+private fun CustomModelPickerDialog(
+    models: List<String>,
+    loading: Boolean,
+    selectedId: String,
+    onSelect: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            shape = RoundedCornerShape(16.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurface),
+            modifier = Modifier
+                .fillMaxWidth(0.6f)
+                .heightIn(max = 500.dp)
+                .padding(16.dp)
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    stringResource(R.string.settings_model_picker_title),
+                    color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                if (loading) {
+                    Text(
+                        stringResource(R.string.settings_model_picker_loading),
+                        color = TextSecondary, fontSize = 14.sp
+                    )
+                } else {
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                        modifier = Modifier.weight(1f, fill = false)
+                    ) {
+                        items(models) { id ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onSelect(id) }
+                                    .background(
+                                        if (id == selectedId) AccentGreen.copy(alpha = 0.15f)
+                                        else Color.Transparent,
+                                        RoundedCornerShape(8.dp)
+                                    )
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(
+                                    id,
+                                    color = if (id == selectedId) AccentGreen else TextPrimary,
+                                    fontSize = 13.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable

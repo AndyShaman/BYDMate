@@ -484,7 +484,10 @@ private fun EditorDialog(
                             },
                             onAddButtonPress = {
                                 onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
-                            }
+                            },
+                            onAddVoice = {
+                                onUpdate { copy(triggers = triggers + newVoiceTrigger(context)) }
+                            },
                         )
                     }
                 }
@@ -703,6 +706,7 @@ private fun TriggerRow(
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
             "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
+            "voice" -> VoiceTriggerControls(trigger, onUpdate)
             else -> ParamTriggerControls(trigger, onUpdate)
         }
 
@@ -1123,6 +1127,24 @@ private fun NetworkAvailableTriggerControls() {
         fontSize = 13.sp,
         color = AccentGreen,
         fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun VoiceTriggerControls(trigger: TriggerDef, onUpdate: (TriggerDef) -> Unit) {
+    val voiceLabel = stringResource(R.string.automation_trigger_type_voice)
+    OutlinedTextField(
+        value = trigger.value,
+        onValueChange = { phrase ->
+            onUpdate(trigger.copy(value = phrase, displayName = phrase.ifBlank { voiceLabel }))
+        },
+        label = { Text(stringResource(R.string.automation_trigger_voice_phrase_label), fontSize = 12.sp) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+        colors = OutlinedTextFieldDefaults.colors(
+            focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
+            focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
+        )
     )
 }
 
@@ -2513,6 +2535,7 @@ private fun AddTriggerButton(
     onAddServiceStart: () -> Unit,
     onAddNetworkAvailable: () -> Unit,
     onAddButtonPress: () -> Unit,
+    onAddVoice: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
     Box {
@@ -2586,6 +2609,13 @@ private fun AddTriggerButton(
                     onAddButtonPress()
                 }
             )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddVoice()
+                }
+            )
         }
     }
 }
@@ -2624,6 +2654,15 @@ private fun newNetworkAvailableTrigger(context: android.content.Context): Trigge
         kind = "network_available"
     )
 }
+
+private fun newVoiceTrigger(context: android.content.Context): TriggerDef = TriggerDef(
+    param = "Voice",
+    chineseName = "语音",
+    operator = "==",
+    value = "",
+    displayName = context.getString(R.string.automation_trigger_type_voice),
+    kind = "voice"
+)
 
 private fun newDelayAction(context: android.content.Context): ActionDef = ActionDef(
     command = "delay_1000",

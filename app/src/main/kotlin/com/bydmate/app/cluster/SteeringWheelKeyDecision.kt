@@ -65,3 +65,17 @@ fun learnDecision(keyCode: Int, isDown: Boolean): LearnAction {
     if (!isDown) return LearnAction.CONSUME
     return if (isAssignable(keyCode)) LearnAction.CAPTURE else LearnAction.REJECT
 }
+
+const val DEFAULT_VOICE_KEYCODE = 320  // steering "voice" button on Leopard 3 (learnable)
+
+enum class VoiceKeyDecision { TRIGGER, CONSUME, IGNORE }
+
+/** Pure gate for the voice push-to-talk button. Independent of star/projection
+ *  handling: TRIGGER on key-DOWN of the configured voice keycode while voice is enabled;
+ *  CONSUME on that same key's UP edge — swallowed so it never falls through to the native
+ *  BYD assistant, which owns the same hardware keycode. Any other key, or voice disabled,
+ *  is IGNORE (pass through untouched). */
+fun voiceDecision(keyCode: Int, isDown: Boolean, voiceEnabled: Boolean, voiceKeyCode: Int): VoiceKeyDecision {
+    if (!voiceEnabled || keyCode != voiceKeyCode) return VoiceKeyDecision.IGNORE
+    return if (isDown) VoiceKeyDecision.TRIGGER else VoiceKeyDecision.CONSUME
+}

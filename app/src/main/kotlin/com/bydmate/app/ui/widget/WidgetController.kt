@@ -19,9 +19,11 @@ import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
+import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
+import dagger.hilt.android.EntryPointAccessors
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -92,6 +94,8 @@ object WidgetController {
     private var alphaState = mutableStateOf(1.0f)
     private var scaleState = mutableStateOf(1.0f)
     private var trashActive = mutableStateOf(false)
+    // Continuous voice session (Wave B): drives the snake-border listening indication.
+    private var listeningState = mutableStateOf(false)
 
     // Expandable-buttons state. expandedState drives the button layer's slide
     // animation; collapsedX/Y remember the window origin so an edge-clamped
@@ -177,6 +181,7 @@ object WidgetController {
                     voltage12v = voltsState.value,
                     alpha = alphaState.value,
                     scaleFactor = scaleState.value,
+                    listening = listeningState.value,
                 )
             }
             setOnTouchListener(WidgetTouchListener(viewCtx, prefs, metrics))
@@ -234,7 +239,7 @@ object WidgetController {
             return
         }
 
-        startDataSubscription()
+        startDataSubscription(appCtx)
     }
 
     @Synchronized
@@ -293,10 +298,11 @@ object WidgetController {
         buttonLifecycle = null
         widgetParams = null
         expandedState.value = false
+        listeningState.value = false
         wm = null
     }
 
-    private fun startDataSubscription() {
+    private fun startDataSubscription(appCtx: Context) {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
@@ -350,6 +356,20 @@ object WidgetController {
                 // Re-show is symmetric: same view, VISIBLE.
                 rootContainer?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
                 if (hideForCamera) hideTrashZone()
+            }
+        }
+
+        // Voice-session listening indicator (Wave B): reuses the existing ClusterEntryPoint Hilt
+        // bridge (already used by SteeringWheelKeyService) to reach the @Singleton VoiceController
+        // instead of adding a new global singleton.
+        scope.launch {
+            try {
+                val voiceController = EntryPointAccessors
+                    .fromApplication(appCtx, ClusterEntryPoint::class.java)
+                    .voiceController()
+                voiceController.listening.collect { listeningState.value = it }
+            } catch (e: Exception) {
+                Log.w(TAG, "listening subscription failed: ${e.message}")
             }
         }
     }
