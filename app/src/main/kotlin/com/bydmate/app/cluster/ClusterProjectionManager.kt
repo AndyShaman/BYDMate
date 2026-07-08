@@ -58,6 +58,11 @@ object ClusterProjectionManager {
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
     private const val OVERLAY_FLAGS = 264                     // FLAG_NOT_FOCUSABLE(8) | FLAG_LAYOUT_IN_SCREEN(256)
     private const val SURFACE_TIMEOUT_MS = 3000L              // give up if the overlay Surface never gets created
+    // DiLink 5 full-screen projection (AutoContainer sendInfo) timings.
+    private const val FULLSCREEN_SETTLE_MS = 500L             // let Qt switch into projection mode after sendInfo(16)
+    private const val CLUSTER_DISPLAY_RETRY_TIMEOUT_MS = 3000L // poll window for the cluster display after sendInfo(16)
+    private const val CLUSTER_DISPLAY_POLL_MS = 300L          // poll interval within the retry window
+    private const val RESTORE_STEP_DELAY_MS = 1000L           // pause between sendInfo(18) and sendInfo(0) on restore
 
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
@@ -78,6 +83,10 @@ object ClusterProjectionManager {
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
     const val KEY_TARGET_LABEL = "target_label"
+    // Auto-enable the system full-screen projection mode on DiLink 5 before projecting (sendInfo 16).
+    const val KEY_AUTO_ENABLE_FULLSCREEN = "auto_enable_fullscreen"
+    // Restore the native cluster when projection stops (sendInfo 18 → 0).
+    const val KEY_RESTORE_NATIVE_ON_STOP = "restore_native_on_stop"
     // Last VirtualDisplay id we created. Persisted so a fresh app process can release the display
     // a prior (dead) process left orphaned in the long-lived daemon, instead of leaking it.
     private const val KEY_LAST_VD_ID = "last_vd_id"
@@ -271,6 +280,16 @@ object ClusterProjectionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
 
+    /** Whether to auto-enable the DiLink 5 system full-screen projection (sendInfo 16) before projecting. */
+    private fun autoEnableFullscreen(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_AUTO_ENABLE_FULLSCREEN, false)
+
+    /** Whether to restore the native cluster (sendInfo 18 → 0) when projection stops. */
+    private fun restoreNativeOnStop(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_RESTORE_NATIVE_ON_STOP, false)
+
     /** Persist the user's chosen trigger keycode (from the learn-button dialog). */
     fun setTriggerKeyCode(context: Context, keyCode: Int) {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -296,6 +315,14 @@ object ClusterProjectionManager {
         }
     }
 
+    /** Restore the native cluster: sendInfo(18) → pause → sendInfo(0). cmd=0 alone is not enough. */
+    private suspend fun restoreNativeCluster(helper: HelperClient) {
+        val stopped = helper.stopClusterProjection()
+        delay(RESTORE_STEP_DELAY_MS)
+        val refreshed = helper.refreshNativeClusterStream()
+        Log.i(TAG, "restoreNativeCluster: stop(18)=$stopped refresh(0)=$refreshed")
+    }
+
     /** Caller MUST hold [mutex]. Sets currentMode = mode only on full success, else OFF. */
     private suspend fun applyModeLocked(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
@@ -304,6 +331,9 @@ object ClusterProjectionManager {
             ClusterMode.OFF -> {
                 pullBackToMain(context, helper, focus = true)
                 hideOverlay(helper)
+                if (restoreNativeOnStop(context)) {
+                    restoreNativeCluster(helper)   // sendInfo(18) → delay → sendInfo(0)
+                }
                 projectedPackage = null
                 currentMode = ClusterMode.OFF
             }
@@ -333,7 +363,20 @@ object ClusterProjectionManager {
         if (!ensureOverlayPermission(context, helper)) {
             Log.e(TAG, "overlay permission unavailable; aborting projection"); return false
         }
-        val display = resolveClusterDisplay(context) ?: run {
+        // Enable the DiLink 5 system full-screen projection mode before looking up the cluster
+        // display. The XDJAScreenProjection display appears/switches asynchronously after sendInfo(16),
+        // so we retry the lookup for a few seconds instead of failing immediately.
+        val fullscreenRequested = autoEnableFullscreen(context)
+        if (fullscreenRequested) {
+            val ok = helper.enableClusterFullscreen()
+            // WARN on failure: the projection continues (the display may already be in projection
+            // mode), but a false here is the likely cause of a blank/native cluster.
+            if (ok) Log.i(TAG, "auto-enable DL5 fullscreen (sendInfo 16): ok=true")
+            else Log.w(TAG, "auto-enable DL5 fullscreen (sendInfo 16) failed; projection may not show")
+            delay(FULLSCREEN_SETTLE_MS)
+        }
+        val display = (if (fullscreenRequested) resolveClusterDisplayWithRetry(context)
+                       else resolveClusterDisplay(context)) ?: run {
             Log.e(TAG, "cluster display not found"); return false
         }
         val (widthPct, heightPct) = readSizePct(context)
@@ -418,6 +461,21 @@ object ClusterProjectionManager {
             Log.i(TAG, "cluster display id=${match.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
         }
         return match
+    }
+
+    /**
+     * After sendInfo(16) the cluster display appears/switches asynchronously, so poll every 300ms up
+     * to ~3s for the named XDJAScreenProjection display. On timeout we fall back to whatever
+     * [resolveClusterDisplay] returns (it already falls back to DEFAULT_CLUSTER_DISPLAY_ID).
+     */
+    private suspend fun resolveClusterDisplayWithRetry(context: Context): Display? {
+        val deadline = android.os.SystemClock.uptimeMillis() + CLUSTER_DISPLAY_RETRY_TIMEOUT_MS
+        while (android.os.SystemClock.uptimeMillis() < deadline) {
+            val d = resolveClusterDisplay(context)
+            if (d != null && d.name.contains("XDJAScreenProjection", ignoreCase = true)) return d
+            delay(CLUSTER_DISPLAY_POLL_MS)
+        }
+        return resolveClusterDisplay(context)
     }
 
     /**

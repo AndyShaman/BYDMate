@@ -33,6 +33,8 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = settings put global succeeded; -1 = not whitelisted / failed
  *   TX_SET_APP_HIDDEN : writeString(packageName), writeInt(hidden: 1=disable 0=enable)
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
+ *   TX_AUTO_CONTAINER_SEND_INFO : writeInt(info)  // ONLY info; type=1000 and str="" are fixed in the daemon
+ *       -> reply: writeInt(status), writeInt(0)   // status 0 = sendInfo accepted; -1 = not in whitelist {16,18,0} / failed
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -62,6 +64,9 @@ object HelperBinderProtocol {
     const val TX_ENABLE_ACCESSIBILITY = IBinder.FIRST_CALL_TRANSACTION + 15     // 16
     const val TX_PUT_GLOBAL_SETTING = IBinder.FIRST_CALL_TRANSACTION + 16       // 17
     const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
+    // AutoContainer.sendInfo(1000, info, "") for DiLink 5 cluster projection. Only info is sent over
+    // the wire; type=1000 and str="" are fixed daemon-side. Whitelisted to info in {16, 18, 0}.
+    const val TX_AUTO_CONTAINER_SEND_INFO = IBinder.FIRST_CALL_TRANSACTION + 18 // 19
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"

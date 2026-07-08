@@ -67,6 +67,14 @@ interface HelperClient {
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
      *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
     suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
+
+    /** Enable DiLink 5 full-screen cluster projection: AutoContainer.sendInfo(1000, 16, "").
+     *  Daemon-whitelisted to info in {16, 18, 0}. */
+    suspend fun enableClusterFullscreen(): Boolean
+    /** Stop cluster projection: AutoContainer.sendInfo(1000, 18, ""). */
+    suspend fun stopClusterProjection(): Boolean
+    /** Refresh/restore the native cluster video stream: AutoContainer.sendInfo(1000, 0, ""). */
+    suspend fun refreshNativeClusterStream(): Boolean
 }
 
 @Singleton
@@ -160,6 +168,17 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         statusOk(HelperBinderProtocol.TX_SET_APP_HIDDEN) {
             it.writeString(packageName); it.writeInt(if (hidden) 1 else 0)
         }
+
+    // AutoContainer cluster projection: only `info` is sent over the wire; type=1000 and str=""
+    // are fixed daemon-side, and the daemon rejects any info outside {16, 18, 0}.
+    override suspend fun enableClusterFullscreen(): Boolean =
+        statusOk(HelperBinderProtocol.TX_AUTO_CONTAINER_SEND_INFO) { it.writeInt(16) }
+
+    override suspend fun stopClusterProjection(): Boolean =
+        statusOk(HelperBinderProtocol.TX_AUTO_CONTAINER_SEND_INFO) { it.writeInt(18) }
+
+    override suspend fun refreshNativeClusterStream(): Boolean =
+        statusOk(HelperBinderProtocol.TX_AUTO_CONTAINER_SEND_INFO) { it.writeInt(0) }
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =

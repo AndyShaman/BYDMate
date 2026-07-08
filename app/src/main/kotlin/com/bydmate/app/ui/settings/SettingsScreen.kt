@@ -971,6 +971,12 @@ private fun DisplaySection() {
     var triggerKey by remember {
         mutableStateOf(prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE))
     }
+    var autoFullscreen by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_AUTO_ENABLE_FULLSCREEN, false))
+    }
+    var restoreNative by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_RESTORE_NATIVE_ON_STOP, false))
+    }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -1042,6 +1048,78 @@ private fun DisplaySection() {
                     Text(steeringButtonLabel(triggerKey), color = TextSecondary, fontSize = 12.sp, maxLines = 1)
                 }
                 Text(stringResource(R.string.settings_display_button_change), color = AccentGreen, fontSize = 13.sp)
+            }
+        }
+    }
+
+    // DiLink 5 auto full-screen projection + native-cluster restore. Only meaningful while the
+    // feature is on, so both toggles are gated on the master switch.
+    if (enabled) {
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.DirectionsCar,
+                    contentDescription = null,
+                    tint = AccentGreen,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_display_auto_fullscreen_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_display_auto_fullscreen_desc), color = TextSecondary, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = autoFullscreen,
+                    onCheckedChange = {
+                        autoFullscreen = it
+                        prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_ENABLE_FULLSCREEN, it).apply()
+                    },
+                    colors = bydSwitchColors(),
+                )
+            }
+        }
+
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Settings,
+                    contentDescription = null,
+                    tint = AccentGreen,
+                )
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(stringResource(R.string.settings_display_restore_native_title), color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text(stringResource(R.string.settings_display_restore_native_desc), color = TextSecondary, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = restoreNative,
+                    onCheckedChange = {
+                        restoreNative = it
+                        prefs.edit().putBoolean(ClusterProjectionManager.KEY_RESTORE_NATIVE_ON_STOP, it).apply()
+                    },
+                    colors = bydSwitchColors(),
+                )
             }
         }
     }

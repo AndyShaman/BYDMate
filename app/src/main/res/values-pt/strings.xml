@@ -38,6 +38,11 @@
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Botão de acionamento</string>
     <string name="settings_display_button_change">Alterar</string>
+    <!-- DiLink 5 auto full-screen projection toggles -->
+    <string name="settings_display_auto_fullscreen_title">Ativar Full Screen Projection automaticamente (DiLink 5)</string>
+    <string name="settings_display_auto_fullscreen_desc">O BYDMate ativa a projeção em tela cheia do painel antes de abrir o app</string>
+    <string name="settings_display_restore_native_title">Restaurar painel nativo</string>
+    <string name="settings_display_restore_native_desc">Retorna a imagem original do painel quando a projeção é interrompida</string>
     <string name="learn_button_dialog_title">Atribuir botão</string>
     <string name="learn_button_waiting">Pressione um botão do volante…</string>
     <string name="learn_button_rejected">Este botão não pode ser atribuído. Pressione outro.</string>

@@ -38,6 +38,11 @@
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Trigger button</string>
     <string name="settings_display_button_change">Change</string>
+    <!-- DiLink 5 auto full-screen projection toggles -->
+    <string name="settings_display_auto_fullscreen_title">Auto-enable Full Screen Projection (DiLink 5)</string>
+    <string name="settings_display_auto_fullscreen_desc">BYDMate enables cluster full-screen projection before launching the app</string>
+    <string name="settings_display_restore_native_title">Restore native cluster</string>
+    <string name="settings_display_restore_native_desc">Bring the native instrument cluster back when projection stops</string>
     <string name="learn_button_dialog_title">Assign button</string>
     <string name="learn_button_waiting">Press a steering-wheel button…</string>
     <string name="learn_button_rejected">This button can\'t be assigned. Press another.</string>

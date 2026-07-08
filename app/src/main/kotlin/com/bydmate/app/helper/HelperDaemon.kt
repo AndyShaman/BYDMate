@@ -281,6 +281,18 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_AUTO_CONTAINER_SEND_INFO -> runCatching {
+                    val info = data.readInt()
+                    // Whitelist enforced by isAllowedAutoContainerInfo — ONLY 16/18/0. type=1000 and
+                    // str="" are fixed here, NOT taken from the caller: this is the privilege
+                    // boundary, not a generic passthrough.
+                    val ok = if (isAllowedAutoContainerInfo(info)) {
+                        autoContainerSendInfo(type = 1000, info = info, str = "")
+                    } else false
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -343,6 +355,66 @@ private fun autoserviceTransact(
     } finally {
         data2.recycle()
         reply2.recycle()
+    }
+}
+
+// The AutoContainer service is registered under different names per platform:
+//   DiLink 5.0 (BYD-AUTO, API 32) → "auto_container" (snake_case)
+//   DiLink 3.0 (Seal EU / Atto 3) → "AutoContainer"  (PascalCase)
+// Try DL5 first (our primary target), then DL3, so the daemon works on both without needing
+// platform detection here. Confirmed against byd-dashcast AdbLocalClient.autoContainerSvcName.
+// Internal so a unit test can guard the DL5-first ordering (the original bug was the wrong name).
+internal val AUTO_CONTAINER_SERVICE_NAMES = arrayOf("auto_container", "AutoContainer")
+
+/**
+ * Whitelist for AutoContainer sendInfo values. ONLY 16 (enable fullscreen projection), 18 (stop),
+ * and 0 (refresh the native cluster stream) are permitted. Value 1 disconnects Qt entirely and
+ * destroys cluster display 1 — it MUST stay rejected. Extracted as internal so the privilege
+ * boundary is unit-tested (see HelperDaemonAutoContainerTest).
+ */
+internal fun isAllowedAutoContainerInfo(info: Int): Boolean =
+    info == 16 || info == 18 || info == 0
+
+/**
+ * Sends AutoContainer.sendInfo(type, info, str) via in-process binder.transact(#2).
+ * The interface descriptor is read at runtime (INTERFACE_TRANSACTION) so an OEM rebrand still works.
+ * We do NOT shell out `service call`. Mirrors byd-dashcast Phase4ProcessVerbs.autoContainerSendInfo.
+ *
+ * The Java whitelist AutoContainerManager enforces (/system/etc/container_comm_cfg.json, only
+ * com.xdja.clusterdemo) is bypassed by the direct binder call under shell uid — which is why this
+ * only works from the daemon, not from the app process.
+ */
+private fun autoContainerSendInfo(type: Int, info: Int, str: String): Boolean {
+    val sm = Class.forName("android.os.ServiceManager")
+    val getService = sm.getMethod("getService", String::class.java)
+    val binder = AUTO_CONTAINER_SERVICE_NAMES
+        .firstNotNullOfOrNull { name ->
+            (getService.invoke(null, name) as? IBinder)?.takeIf { it.isBinderAlive }
+        } ?: return false
+
+    // Read the descriptor at runtime (INTERFACE_TRANSACTION) rather than hardcoding
+    // android.os.IAutoContainer.
+    val descriptor = run {
+        val d = Parcel.obtain(); val r = Parcel.obtain()
+        try {
+            binder.transact(IBinder.INTERFACE_TRANSACTION, d, r, 0)
+            r.readString()
+        } catch (e: Exception) { null } finally { r.recycle(); d.recycle() }
+    }?.takeIf { it.isNotEmpty() } ?: return false
+
+    val data = Parcel.obtain(); val reply = Parcel.obtain()
+    return try {
+        data.writeInterfaceToken(descriptor)
+        data.writeInt(type)
+        data.writeInt(info)
+        data.writeString(str)
+        binder.transact(2 /* sendInfo */, data, reply, 0)
+        reply.readException()   // throws on a remote-side exception → caller's getOrElse writes -1
+        true
+    } catch (e: Exception) {
+        false
+    } finally {
+        reply.recycle(); data.recycle()
     }
 }
 

@@ -42,6 +42,11 @@
     <!-- Cluster trigger-button picker + learn dialog -->
     <string name="settings_display_button_title">Кнопка запуска</string>
     <string name="settings_display_button_change">Изменить</string>
+    <!-- DiLink 5 auto full-screen projection toggles -->
+    <string name="settings_display_auto_fullscreen_title">Автовключение Full Screen Projection (DiLink 5)</string>
+    <string name="settings_display_auto_fullscreen_desc">Перед выводом приложения BYDMate сам включит полноэкранную проекцию приборки</string>
+    <string name="settings_display_restore_native_title">Восстанавливать штатную приборку</string>
+    <string name="settings_display_restore_native_desc">При остановке проекции вернуть штатное изображение приборной панели</string>
     <string name="learn_button_dialog_title">Назначить кнопку</string>
     <string name="learn_button_waiting">Нажмите кнопку на руле…</string>
     <string name="learn_button_rejected">Эту кнопку нельзя назначить. Нажмите другую.</string>
