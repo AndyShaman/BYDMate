@@ -723,6 +723,7 @@ cd BYDMate
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** (`org.jayb.bydapp`) by jayb — оригинальное приложение для DiLink, вдохновение для BYDMate
 - **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — приложение-мост к данным автомобиля, использовалось в ранних версиях BYDMate (с 3.0.0 больше не требуется)
 - Weather data by [Open-Meteo.com](https://open-meteo.com/)
+- **[@klimuts](https://github.com/klimuts)** - подсказал механизм auto_container для вывода навигатора на приборку
 
 ---
 
