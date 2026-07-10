@@ -2,30 +2,25 @@
 
 Проект некоммерческий, делаю как хобби. Если захочется поблагодарить, реквизиты ниже. Если нет, всё равно спасибо за доверие. Без обязательств и подписок.
 
-## USDT
+## USDT · сети EVM
 
-USDT принимается в разных сетях. Выберите ту, которой пользуетесь, и отправьте на адрес ниже. Адреса в разных сетях разные, не перепутайте сеть при переводе.
+Один адрес для всех сетей EVM:
 
-### Сеть TON
+`0x24919d8a46357D83fe935F02BEbE55b1b7c360B8`
 
-`UQCT1PCMjDbXQTqhstP5_RzrYWLjZgdz0Ijanbpj-EJBufAA`
+<img src="docs/donations/usdt-evm.png" alt="USDT EVM QR" width="200">
 
-<img src="docs/donations/usdt-ton.png" alt="USDT TON QR" width="200">
+Принимаемые сети (все ведут на этот адрес): Arbitrum One, Optimism, Polygon, BNB Smart Chain (BEP20), Avalanche C-Chain, Ethereum (ERC20).
 
-### Сеть TRC20 (Tron)
+### Комиссии
 
-`TEH45zbJ4GgUDj797JRtTjuN8oG3AAsvZT`
+| Сеть | Комиссия |
+|---|---|
+| Arbitrum One / Optimism / Polygon / BNB Smart Chain / Avalanche C-Chain | низкая, доли цента |
+| Ethereum (ERC20) | работает, но газ дорогой - используйте, только если нет варианта дешевле |
 
-<img src="docs/donations/usdt-trc20.png" alt="USDT TRC20 QR" width="200">
+### Как отправить
 
-### Сеть Solana
+Выведите USDT с биржи (например, Binance, Bybit, OKX) на адрес выше, выбрав одну из сетей EVM из списка. Перед отправкой всегда сверяйте, что выбранная сеть совпадает с одной из перечисленных.
 
-`93YSrj6L58vutF2wZDmQdmcbcdXcogFjhjVLrcNe4uSu`
-
-<img src="docs/donations/usdt-sol.png" alt="USDT Solana QR" width="200">
-
-### Сеть BEP20 (BNB Smart Chain)
-
-`0x8cb5345c73293bb07edf02a7f08fca43c2d0536e`
-
-<img src="docs/donations/usdt-bep20.png" alt="USDT BEP20 QR" width="200">
+> **Адрес работает только в сетях EVM.** Не отправляйте через TON, TRON (TRC-20) или Solana - средства будут потеряны.

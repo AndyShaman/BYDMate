@@ -9,11 +9,14 @@
     <string name="settings_section_integrations_title">Integrações</string>
     <string name="settings_section_widget_title">Widget</string>
     <string name="settings_section_display_title">Tela</string>
+    <string name="settings_section_voice_agent">Agente de voz</string>
     <!-- Settings: Display section (cluster projection) -->
     <string name="cluster_a11y_description">Intercepta os botões do volante para projetar a navegação no painel de instrumentos. Ativado manualmente, funciona apenas quando o recurso está ligado.</string>
     <string name="settings_display_mirror_header">Projeção no painel de instrumentos</string>
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
     <string name="settings_display_mirror_desc">Um toque curto no botão escolhido do volante move o aplicativo selecionado para o painel de instrumentos e vice-versa.</string>
+    <string name="settings_cluster_auto_container_title">Ativação automática do painel</string>
+    <string name="settings_cluster_auto_container_desc">Ligar a tela do painel automaticamente antes da projeção</string>
     <string name="settings_display_app_title">Aplicativo no painel</string>
     <string name="settings_display_size_header">Tamanho da janela no painel</string>
     <string name="settings_display_size_width">Largura</string>
@@ -82,17 +85,9 @@
     <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado - o ABRP lê as coordenadas por conta própria.</string>
     <string name="settings_abrp_token_label">Token de dados ao vivo do ABRP</string>
     <string name="settings_abrp_save_button">Salvar ABRP</string>
-    <string name="settings_ai_section_header">Insights por IA</string>
     <string name="settings_openrouter_api_key_label">Chave de API do OpenRouter</string>
     <string name="settings_openrouter_model_selected">Modelo: %1$s</string>
     <string name="settings_openrouter_model_pick">Escolher modelo</string>
-    <string name="settings_ai_loading_label">Carregando...</string>
-    <string name="settings_ai_save_button">Salvar e obter insight</string>
-    <string name="settings_insight_mode_label">Fonte de análise</string>
-    <string name="settings_insight_mode_local">Local (offline)</string>
-    <string name="settings_insight_mode_cloud">OpenRouter (nuvem)</string>
-    <string name="settings_insight_mode_local_hint">Regras no dispositivo — sem internet ou chave de API. Atualiza uma vez por dia automaticamente.</string>
-    <string name="settings_insight_refresh_local">Atualizar insight</string>
     <string name="settings_model_picker_title">Escolher modelo</string>
     <string name="settings_model_picker_search_label">Pesquisar</string>
     <string name="settings_model_picker_loading">Carregando modelos...</string>
@@ -102,6 +97,8 @@
     <string name="settings_widget_reset_position_button">Redefinir posição</string>
     <string name="settings_reset_seat_channel">Redefinir canal dos bancos</string>
     <string name="settings_reset_seat_channel_hint">Se o aquecimento ou a ventilação dos bancos parar após trocar de carro</string>
+    <string name="orb_you">Você:</string>
+    <string name="orb_agent">Agente:</string>
     <string name="settings_voice_native_assistant_header">Assistente de voz nativo da BYD</string>
     <string name="settings_voice_disable_native_label">Desativar o assistente de voz integrado</string>
     <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. Reversível.</string>
@@ -430,12 +427,9 @@
     <string name="dashboard_idle_drain_avg_day_label">Média por dia</string>
     <string name="dashboard_battery_temp_label">temp. bateria</string>
     <string name="dashboard_battery_voltage_label">Sistema 12V</string>
-    <string name="dashboard_insight_loading">Analisando...</string>
-    <string name="dashboard_insight_setup_prompt">Insights de IA na nuvem — configurar OpenRouter -&gt;</string>
-    <string name="dashboard_insight_refresh">Atualizar</string>
-    <string name="dashboard_insight_refreshing">Atualizando...</string>
-    <string name="dashboard_insight_no_api_key">Configure a API do OpenRouter nas Configurações para insights na nuvem</string>
     <string name="dashboard_insight_no_data">Dados insuficientes para analisar</string>
+    <string name="insight_period_week">Semana</string>
+    <string name="insight_period_month">Mês</string>
     <string name="dashboard_period_day">Dia</string>
     <string name="dashboard_period_week">Semana</string>
     <string name="dashboard_period_month">Mês</string>
@@ -454,7 +448,6 @@
     <string name="dashboard_stat_km_value">%1$.1f km</string>
     <string name="dashboard_stat_kwh_value">%1$.1f kWh</string>
     <string name="dashboard_voltage_value">%1$.1fV</string>
-    <string name="dashboard_insight_refresh_error">Não foi possível atualizar</string>
     <string name="nav_tab_dashboard">Painel</string>
     <string name="nav_tab_trips">Viagens</string>
     <string name="nav_tab_charges">Carregamento</string>
@@ -508,9 +501,6 @@
     <string name="settings_log_error_no_fs_access">Erro: sem acesso ao sistema de arquivos</string>
     <string name="settings_update_check_in_progress">Verificando...</string>
     <string name="settings_update_available_short">v%1$s disponível</string>
-    <string name="settings_ai_no_key_model">Insira a chave de API e o modelo</string>
-    <string name="settings_ai_done">Concluído! Volte para o Painel</string>
-    <string name="settings_ai_fetch_error">Erro ao obter insight</string>
     <string name="update_downloading_progress">Baixando: %1$d%%</string>
     <string name="update_downloading_done">Baixado. Instalando...</string>
     <string name="update_downloading_paused">Pausado...</string>
@@ -535,6 +525,7 @@
     <string name="insight_metric_avg_distance">Distância méd.</string>
     <string name="insight_metric_idle">Inativo</string>
     <string name="insight_section_week_to_week">Semana a semana</string>
+    <string name="insight_section_month_to_month">Mês a mês</string>
     <string name="insight_unit_kwh_per_100">%.1f kWh/100</string>
     <string name="insight_unit_kwh_per_100_prev">%.1f</string>
     <string name="insight_trips_value">%1$d · %2$s km</string>
@@ -554,47 +545,61 @@
     <string name="local_insight_not_enough_data_title">Dados insuficientes</string>
     <string name="local_insight_not_enough_data_summary">Necessário pelo menos 5 viagens nos últimos 7 dias</string>
     <string name="local_insight_consumption_up_title">Consumo aumentou %1$.0f%%</string>
+    <string name="local_insight_consumption_up_title_month">Consumo aumentou %1$.0f%%</string>
     <string name="local_insight_consumption_up_summary_short">Muitas viagens curtas — o aquecimento consome energia extra</string>
     <string name="local_insight_consumption_up_summary">O consumo subiu: %1$.1f para %2$.1f kWh/100</string>
     <string name="local_insight_consumption_down_title">Consumo diminuiu %1$.0f%%</string>
     <string name="local_insight_consumption_down_summary">Média %1$.1f kWh/100 — melhor que a semana passada</string>
+    <string name="local_insight_consumption_down_summary_month">Média %1$.1f kWh/100, melhor que o mês passado</string>
     <string name="local_insight_consumption_stable_title">Consumo estável</string>
     <string name="local_insight_consumption_stable_summary">Média semanal %1$.1f kWh/100</string>
+    <string name="local_insight_consumption_stable_summary_month">Média mensal %1$.1f kWh/100</string>
     <string name="local_insight_short_trips">%1$d de %2$d viagens com menos de 5 km (%3$d%%) — combine tarefas curtas</string>
     <string name="local_insight_idle">Inativo com o motor ligado: %1$.1f kWh durante %2$s — %3$d%% do uso semanal</string>
+    <string name="local_insight_idle_month">Inativo com o motor ligado: %1$.1f kWh durante %2$s, %3$d%% do uso mensal</string>
     <string name="local_insight_12v_critical_title">12V criticamente baixa</string>
     <string name="local_insight_12v_critical_summary">Bateria aux. %1$.1f V — verifique-a</string>
     <string name="local_insight_12v_low">12V agora %1$.1f V — abaixo do normal 12.4 V</string>
     <string name="local_insight_12v_falling">12V caindo: %1$.2f para %2$.2f V durante a semana</string>
+    <string name="local_insight_12v_falling_month">12V caindo: %1$.2f para %2$.2f V durante o mês</string>
     <string name="local_insight_cell_critical_title">Grande variação entre células</string>
     <string name="local_insight_cell_critical_summary">Delta %1$.0f mV — observe o balanceamento das células</string>
     <string name="local_insight_cell_delta">Variação das células %1$.0f mV — possível célula fraca</string>
     <string name="local_insight_cold">A %1$d°C consumo médio %2$.1f kWh/100 — normal no inverno</string>
     <string name="local_insight_best_worst">Melhor viagem %1$.1f, pior %2$.1f kWh/100</string>
     <string name="local_insight_cost">%1$.0f %2$s gasto em viagens nesta semana</string>
+    <string name="local_insight_cost_month">%1$.0f %2$s gasto em viagens neste mês</string>
     <string name="local_insight_night_idle_title">Consumo inativo noturno</string>
     <string name="local_insight_night_idle_summary">%1$.1f kWh à noite — %2$d%% do tempo inativo com motor ligado</string>
     <string name="local_insight_night_idle">Inatividade à noite (22h–6h): %1$.1f kWh (%2$d%% do total). Desligue a ignição se a climatização não for necessária</string>
     <string name="local_insight_dc_more_expensive">DC %1$.2f %4$s/kWh vs AC %2$.2f — %3$d%% mais caro que o carregamento residencial</string>
     <string name="local_insight_dc_heavy">DC %1$.0f kWh (%2$d sessões) vs AC %3$.0f — o carregamento AC residencial é mais suave para uso diário</string>
     <string name="local_insight_ac_only">Todos os %2$d carregamentos foram AC (%1$.0f kWh) — bom para a bateria e para o bolso</string>
+    <string name="local_insight_ac_only_month">Todos os %2$d carregamentos deste mês foram AC (%1$.0f kWh), bom para a bateria e para o bolso</string>
     <string name="local_insight_charge_cost_week">Carregamento nesta semana: %1$.0f %2$s por %3$.0f kWh</string>
+    <string name="local_insight_charge_cost_month">Carregamento neste mês: %1$.0f %2$s por %3$.0f kWh</string>
     <string name="local_insight_consumption_improved">Consumo caiu %1$.0f%% — boa tendência</string>
     <string name="local_insight_highway_speed">Vel. média %1$.0f km/h — consumo rodoviário de %2$.1f kWh/100 é esperado</string>
     <string name="local_insight_high_consumption">Alto consumo médio %1$.1f kWh/100 — verifique o clima e o estilo de direção</string>
     <string name="local_insight_low_consumption">Ótima média de %1$.1f kWh/100 em %2$.0f km nesta semana</string>
+    <string name="local_insight_low_consumption_month">Ótima média de %1$.1f kWh/100 em %2$.0f km neste mês</string>
     <string name="local_insight_idle_rate_high">Alto consumo inativo ~%1$.1f kWh/h — provavelmente climatização ou aquecimento</string>
     <string name="local_insight_km_up">Quilometragem aumentou: %1$.0f para %2$.0f km — pode explicar a mudança no consumo médio</string>
     <string name="local_insight_trips_more">Mais viagens: %1$d vs %2$d na semana passada</string>
+    <string name="local_insight_trips_more_month">Mais viagens: %1$d vs %2$d no mês passado</string>
     <string name="local_insight_weekly_mileage">%1$.0f km em %2$d viagens nesta semana — dados sólidos para análise</string>
+    <string name="local_insight_monthly_mileage">%1$.0f km em %2$d viagens neste mês, dados sólidos para análise</string>
     <string name="local_insight_12v_ok">12V %1$.1f V — bateria aux. parece saudável</string>
     <string name="local_insight_cell_ok">Variação das células %1$.0f mV — o balanceamento parece bom</string>
     <string name="local_insight_heat_ac">A %1$d°C consumo médio de %2$.1f kWh/100 — o A/C adiciona carga</string>
     <string name="local_insight_best_trip">Melhor viagem %1$.1f kWh/100 em %2$.0f km — direção eficiente</string>
     <string name="local_insight_mixed_charging">Carregamento nesta semana: AC %1$.0f kWh, DC %2$.0f kWh — o carregamento AC residencial é mais suave para uso diário</string>
+    <string name="local_insight_mixed_charging_month">Carregamento neste mês: AC %1$.0f kWh, DC %2$.0f kWh, o carregamento AC residencial é mais suave para uso diário</string>
     <string name="local_insight_low_night_idle">Tempo inativo noturno apenas %1$d%% — bom hábito desligar a ignição</string>
     <string name="local_insight_low_idle_share">Tempo inativo com motor ligado apenas %1$d%% do uso semanal — muito bem</string>
+    <string name="local_insight_low_idle_share_month">Tempo inativo com motor ligado apenas %1$d%% do uso mensal, muito bem</string>
     <string name="local_insight_cost_per_100">Custo de condução ~%1$.2f %3$s/100 km (%2$.0f %3$s nesta semana)</string>
+    <string name="local_insight_cost_per_100_month">Custo de condução ~%1$.2f %3$s/100 km (%2$.0f %3$s neste mês)</string>
 
     <!-- Config backup / restore -->
     <string name="settings_config_export_button">Exportar configuração</string>
@@ -804,4 +809,112 @@
     <string name="auto_a11y_move_up">Mover para cima</string>
     <string name="auto_a11y_move_down">Mover para baixo</string>
     <string name="auto_a11y_run_now">Executar agora</string>
+
+    <!-- Voice agent (Wave J): multi-provider LLM connections -->
+    <string name="settings_conn_not_configured">Conexão não configurada</string>
+    <string name="settings_conn_check_ok">O modelo respondeu em %1$.1f s</string>
+
+    <!-- Wave J: AI connections -->
+    <string name="settings_ai_connections_header">Conexões de IA</string>
+    <string name="settings_conn_custom_title">Conexão personalizada</string>
+    <string name="settings_conn_configured">Configurado</string>
+    <string name="settings_conn_api_key_label">Chave de API</string>
+    <string name="settings_conn_name_label">Nome</string>
+    <string name="settings_conn_base_url_label">Base URL</string>
+    <string name="settings_conn_model_label">Modelo (id)</string>
+    <string name="settings_conn_check">Verificar</string>
+    <string name="settings_conn_checking">Verificando…</string>
+    <string name="settings_zai_hint">glm-4.7-flash gratuita, recomendada como principal</string>
+    <string name="settings_custom_hint">Qualquer API compatível com OpenAI. A predefinição preenche o endereço e o modelo, a chave é sua.</string>
+    <string name="settings_custom_list_models">Lista de modelos</string>
+    <string name="settings_error_dns">Servidor inacessivel: a internet do carro nao consegue resolver este endereco (DNS)</string>
+    <string name="settings_error_timeout">O servidor nao respondeu a tempo</string>
+    <string name="settings_preset_hint_cloudflare">Substitua ACCOUNT_ID no endereço pelo ID da conta no painel da Cloudflare. Gratuito, cerca de 450 solicitações por dia (glm-4.7-flash).</string>
+    <string name="settings_preset_hint_vercel">Crédito de 5$ por mês sem cartão. Alguns modelos no plano gratuito podem retornar erro 403.</string>
+    <string name="settings_preset_hint_kimi">1000 solicitações gratuitas por dia.</string>
+    <string name="settings_preset_hint_nanogpt">Assinatura de 8$ por mês, pagamento em cripto.</string>
+    <string name="settings_preset_hint_deepseek">Pagamento por uso, 50% de desconto à noite (horário de Moscou).</string>
+    <string name="settings_preset_hint_mistral">Gratuito com verificação de telefone.</string>
+    <string name="settings_models_header">Seleção de modelos</string>
+    <string name="settings_model_primary">Modelo principal</string>
+    <string name="settings_model_fallback">Modelo de reserva</string>
+    <string name="settings_model_none">Nenhum</string>
+    <string name="settings_models_hint">O modelo de reserva entra automaticamente quando o principal não responde (após uma nova tentativa). Somente conexões configuradas são listadas.</string>
+    <string name="settings_search_status_title">Busca na internet</string>
+    <string name="settings_search_source_exa">Exa</string>
+    <string name="settings_search_source_native">busca integrada da conexão</string>
+    <string name="settings_search_source_none">indisponível</string>
+    <string name="settings_search_status_hint">Sem a chave Exa, o agente usa a busca integrada da conexão atual. Se ela também não estiver disponível, o agente dirá honestamente que a busca não funciona.</string>
+
+    <!-- TTS voice picker -->
+    <string name="settings_tts_voice_irina">Irina</string>
+    <string name="settings_tts_voice_ruslan">Ruslan</string>
+    <string name="settings_tts_voice_alena">Aliona</string>
+    <string name="settings_tts_voice_dmitri">Dmitri</string>
+    <string name="settings_tts_voice_mark">Mark</string>
+    <string name="settings_tts_voice_sofia">Sofia</string>
+    <string name="settings_tts_voice_local_badge">Local</string>
+    <string name="settings_tts_voice_ready">Baixada</string>
+    <string name="settings_tts_voice_download_label">Baixar · %1$d MB</string>
+    <string name="settings_tts_voice_locked_hint">Baixe a voz primeiro</string>
+    <string name="settings_tts_voice_desc_piper">Síntese clássica, leve</string>
+    <string name="settings_tts_voice_desc_vits">Som mais natural</string>
+    <string name="settings_tts_voice_desc_supertonic">Motor novo, som mais natural</string>
+
+    <!-- TTS: online voices (Wave N) -->
+    <string name="settings_tts_voice_online_gemini_desc">Voz russa natural · a resposta começa um pouco depois da voz local</string>
+    <string name="settings_tts_voice_online_gemini_badge">chave OpenRouter</string>
+    <string name="settings_tts_voice_online_minimax_desc">Voz russa natural · a resposta começa um pouco depois da voz local</string>
+    <string name="settings_tts_voice_online_minimax_badge">chave MiniMax necessária</string>
+    <string name="settings_tts_online_fallback_hint">Vozes online precisam de rede; se o serviço não responder em 2 segundos, a fala fica sem áudio</string>
+
+    <!-- TTS: keys for online voices (Wave N) -->
+    <string name="settings_tts_keys_header">Chaves para vozes online</string>
+    <string name="settings_tts_keys_openrouter_hint">A chave e o modelo são configurados em «Conexões de IA».</string>
+    <string name="settings_minimax_provider_label">Provedor</string>
+    <string name="settings_minimax_provider_official">Oficial</string>
+    <string name="settings_minimax_provider_fal">fal.ai</string>
+    <string name="settings_minimax_provider_replicate">Replicate</string>
+    <string name="settings_minimax_price_hint">$0.06 por 1000 caracteres · o oficial inicia mais rápido</string>
+    <string name="settings_minimax_key_saved_placeholder">Chave salva</string>
+
+    <!-- Voice tuning: speed/liveliness sliders + preview (local voices only) -->
+    <string name="settings_tts_tuning_header">Configurações de voz local</string>
+    <string name="settings_tts_rate_label">Velocidade da fala</string>
+    <string name="settings_tts_rate_hint">Esquerda - mais lenta e clara, direita - mais rápida</string>
+    <string name="settings_tts_liveliness_label">Vivacidade da entonação</string>
+    <string name="settings_tts_liveliness_hint">Esquerda - tom uniforme de \"locutor\", direita - mais expressiva, mas pode oscilar</string>
+    <string name="settings_tts_preview_button">Ouvir exemplo</string>
+
+    <!-- Agent identity: name + persona -->
+    <string name="settings_agent_section_header">Agente</string>
+    <string name="settings_agent_name_label">Nome do agente</string>
+    <string name="settings_agent_name_hint">Por exemplo: Leo. Melhor 2-3 sílabas, uma palavra distinta</string>
+    <string name="settings_agent_persona_label">Personalidade</string>
+    <string name="settings_persona_snarky">Parceiro sarcástico</string>
+    <string name="settings_persona_navigator">Navegador</string>
+    <string name="settings_persona_engineer">Engenheiro de bordo</string>
+    <string name="settings_agent_gender_label">Gênero do agente</string>
+    <string name="settings_agent_gender_male">Masculino</string>
+    <string name="settings_agent_gender_female">Feminino</string>
+    <string name="settings_agent_gender_hint">Aplica-se a todas as vozes: cada fonte tem uma opção masculina e feminina</string>
+    <string name="settings_voice_button_mic_header">Botão e microfone</string>
+
+    <!-- Donation dialog + support card -->
+    <string name="donate_auto_title">Obrigado por usar o BYDMate</string>
+    <string name="donate_auto_body">O projeto é sem fins lucrativos e totalmente gratuito, desenvolvido por puro entusiasmo. Se o BYDMate foi útil para você e quiser agradecer, apoie o desenvolvimento com uma transferência de USDT em qualquer uma das redes abaixo.</string>
+    <string name="donate_settings_title">Apoiar o projeto</string>
+    <string name="donate_settings_body">O BYDMate é sem fins lucrativos e gratuito. Se quiser apoiar o desenvolvimento, envie USDT para o endereço abaixo em qualquer uma das redes EVM.</string>
+    <string name="donate_qr_hint">Aponte a câmera do celular para o código</string>
+    <string name="donate_address_label">Endereço USDT · redes EVM</string>
+    <string name="donate_copy_button">Copiar endereço</string>
+    <string name="donate_copied_toast">Endereço copiado</string>
+    <string name="donate_networks">Redes: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
+    <string name="donate_warning">Não envie via TON, TRON (TRC-20) ou Solana. Os fundos serão perdidos.</string>
+    <string name="donate_later_button">Mais tarde</string>
+    <string name="donate_already_button">Já apoiei</string>
+    <string name="donate_close_button">Fechar</string>
+    <string name="settings_donate_header">Apoio</string>
+    <string name="settings_donate_card_body">O BYDMate é gratuito e sem fins lucrativos. Se ele é útil para você, você pode apoiar o desenvolvimento.</string>
+    <string name="settings_donate_button">Apoiar o projeto</string>
 </resources>

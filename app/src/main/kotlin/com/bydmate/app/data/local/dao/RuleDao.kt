@@ -25,6 +25,9 @@ interface RuleDao {
     @Query("SELECT * FROM automation_rules WHERE enabled = 1")
     suspend fun getEnabled(): List<RuleEntity>
 
+    @Query("SELECT * FROM automation_rules ORDER BY created_at DESC")
+    suspend fun getAllList(): List<RuleEntity>
+
     @Query("SELECT * FROM automation_rules WHERE id = :id")
     suspend fun getById(id: Long): RuleEntity?
 

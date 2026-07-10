@@ -16,6 +16,8 @@ import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
+import com.bydmate.app.data.remote.DynamicMetric
+import com.bydmate.app.data.remote.InsightData
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.BatteryHealthRepository
@@ -37,6 +39,7 @@ import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import io.mockk.coEvery
 import io.mockk.mockk
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -195,7 +198,8 @@ class DashboardViewModelTest {
     // --- Factory ---
 
     private fun buildViewModel(
-        fakeAutoservice: VehicleApi
+        fakeAutoservice: VehicleApi,
+        insightsManager: InsightsManager? = null
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
@@ -210,7 +214,8 @@ class DashboardViewModelTest {
         val chargeDao = StubChargeDao()
 
         val httpClient = OkHttpClient()
-        val insightsManager = InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, chargeDao, settingsRepo)
+        val resolvedInsightsManager = insightsManager
+            ?: InsightsManager(ctx, OpenRouterClient(httpClient), tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         val batteryHealthRepo = BatteryHealthRepository(StubBatterySnapshotDao())
         val batteryStateRepo = BatteryStateRepository(fakeAutoservice, batteryHealthRepo)
@@ -220,7 +225,7 @@ class DashboardViewModelTest {
             tripRepository = tripRepo,
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,
-            insightsManager = insightsManager,
+            insightsManager = resolvedInsightsManager,
             batteryStateRepository = batteryStateRepo
         )
     }
@@ -264,5 +269,84 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(100f, vm.uiState.value.currentSoh!!, 0.01f)
+    }
+
+    @Test
+    fun setInsightPeriod_reloads_dynamics_for_month() = runTest {
+        val mockInsightsManager = mockk<InsightsManager>(relaxed = true)
+        coEvery { mockInsightsManager.getDisplayInsight(30) } returns InsightData(
+            title = "Расход за месяц", summary = "Средний 18.0 кВт·ч/100 за месяц",
+            dynamics = listOf(
+                DynamicMetric(label = "Расход", current = "18.0", previous = null,
+                    changePct = null, sentiment = "neutral", section = null, kind = "consumption")
+            ),
+            insights = emptyList(), tone = "good"
+        )
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true),
+            insightsManager = mockInsightsManager
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setInsightPeriod(30)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(30, vm.uiState.value.insightPeriodDays)
+        assertEquals("Расход", vm.uiState.value.insightDynamics.single().label)
+    }
+
+    @Test
+    fun `setInsightPeriod leaves state unchanged when getDisplayInsight throws`() = runTest {
+        val mockInsightsManager = mockk<InsightsManager>(relaxed = true)
+        coEvery { mockInsightsManager.getDisplayInsight(30) } throws RuntimeException("DAO failure")
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true),
+            insightsManager = mockInsightsManager
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        val before = vm.uiState.value
+
+        vm.setInsightPeriod(30)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(before.insightPeriodDays, vm.uiState.value.insightPeriodDays)
+        assertEquals(before.insightDynamics, vm.uiState.value.insightDynamics)
+    }
+
+    @Test
+    fun `refresh after setInsightPeriod resets period back to 7`() = runTest {
+        val mockInsightsManager = mockk<InsightsManager>(relaxed = true)
+        coEvery { mockInsightsManager.getDisplayInsight(30) } returns InsightData(
+            title = "Расход за месяц", summary = "Средний 18.0 кВт·ч/100 за месяц",
+            dynamics = listOf(
+                DynamicMetric(label = "Расход", current = "18.0", previous = null,
+                    changePct = null, sentiment = "neutral", section = null, kind = "consumption")
+            ),
+            insights = emptyList(), tone = "good"
+        )
+        coEvery { mockInsightsManager.getDisplayInsight(7) } returns InsightData(
+            title = "Title", summary = "Summary",
+            dynamics = listOf(
+                DynamicMetric(label = "Расход", current = "20.0", previous = null,
+                    changePct = null, sentiment = "neutral", section = null, kind = "consumption")
+            ),
+            insights = emptyList(), tone = "good"
+        )
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true),
+            insightsManager = mockInsightsManager
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.setInsightPeriod(30)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(30, vm.uiState.value.insightPeriodDays)
+
+        // loadInsight() (run by refresh()) always assigns the cached 7-day insight —
+        // the period chip must snap back to 7 to match, no stale Месяц label over weekly data.
+        vm.refresh()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(7, vm.uiState.value.insightPeriodDays)
     }
 }

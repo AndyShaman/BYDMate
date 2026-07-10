@@ -25,6 +25,14 @@ class ParamDecoderTest {
         assertNull(ParamDecoder.decodeInt(0xFFFFD8E5.toInt(), Decoder.INT_RAW))
     }
 
+    // Phase 0 climate/seat/light fids on Leopard 3 permanently return -10011
+    // (wrong-direction sentinel). INT_ENUM must reject it exactly like INT_RAW,
+    // since SentinelDecoder runs before the decoder-kind branch.
+    @Test fun `sentinel int returns null for int_enum`() {
+        assertNull(ParamDecoder.decodeInt(-10011, Decoder.INT_ENUM))
+        assertNull(ParamDecoder.decodeInt(0xFFFFD8E5.toInt(), Decoder.INT_ENUM))
+    }
+
     @Test fun `int_percent clamps invalid range`() {
         assertEquals(50, ParamDecoder.decodeInt(50, Decoder.INT_PERCENT))
         assertNull(ParamDecoder.decodeInt(200, Decoder.INT_PERCENT))

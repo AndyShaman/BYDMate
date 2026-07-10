@@ -32,7 +32,7 @@ class LocalInsightEngineTest {
     @Test
     fun `stable consumption produces stable title`() {
         val stats = baseStats(consumptionChangePct = 2.0)
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.title.contains("стабилен", ignoreCase = true))
         assertEquals(18.0, extractAvgFromSummary(result.summary), 0.1)
     }
@@ -44,7 +44,7 @@ class LocalInsightEngineTest {
             shortTripCount = 6,
             recentTripCount = 10,
         )
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.title.contains("▲"))
         assertTrue(result.summary.contains("коротк", ignoreCase = true))
         assertTrue(result.insights.any { it.contains("короче 5 км") })
@@ -53,14 +53,14 @@ class LocalInsightEngineTest {
     @Test
     fun `consumption drop title`() {
         val stats = baseStats(consumptionChangePct = -8.0)
-        val result = LocalInsightEngine.generate(stats, res("en"))
+        val result = LocalInsightEngine.generate(stats, res("en"), 7)
         assertTrue(result.title.contains("down", ignoreCase = true))
     }
 
     @Test
     fun `12v critical overrides consumption title`() {
         val stats = baseStats(consumptionChangePct = 20.0, voltage12v = 11.5)
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.title.contains("12V", ignoreCase = true))
     }
 
@@ -71,7 +71,7 @@ class LocalInsightEngineTest {
             drainKwh = 5.0,
             drainHours = 4.0,
         )
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.insights.any { it.contains("стоянке") || it.contains("кВт") })
     }
 
@@ -89,7 +89,7 @@ class LocalInsightEngineTest {
             nightDrainKwh = 4.5,
             nightDrainSharePct = 75.0,
         )
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(
             result.title.contains("ночн", ignoreCase = true) ||
                 result.insights.any { it.contains("Ночью") || it.contains("22:00") },
@@ -107,7 +107,7 @@ class LocalInsightEngineTest {
             dcCostPerKwh = 12.0,
             currencyCode = "RUB",
         )
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.insights.any { it.contains("DC", ignoreCase = true) })
     }
 
@@ -118,14 +118,14 @@ class LocalInsightEngineTest {
             dcKwhWeek = 40.0,
             dcSessionCount = 4,
         )
-        val result = LocalInsightEngine.generate(stats, res("en"))
+        val result = LocalInsightEngine.generate(stats, res("en"), 7)
         assertTrue(result.insights.any { it.contains("DC", ignoreCase = true) })
     }
 
     @Test
     fun `consumption drop adds improvement bullet`() {
         val stats = baseStats(consumptionChangePct = -10.0)
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.insights.any { it.contains("снизился", ignoreCase = true) })
     }
 
@@ -153,9 +153,43 @@ class LocalInsightEngineTest {
             dcCostPerKwh = 12.0,
             avgExteriorTemp = -2,
         )
-        val result = LocalInsightEngine.generate(stats, res("ru"))
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
         assertTrue(result.insights.size >= 4)
         assertTrue(result.insights.size <= 5)
+    }
+
+    @Test
+    fun `monthly period uses month wording not week`() {
+        val stats = baseStats(consumptionChangePct = 2.0).copy(
+            recentKm = 1200.0,
+            recentCost = 1000.0,
+        )
+        val result = LocalInsightEngine.generate(stats, res("ru"), 30)
+        val combined = result.title + result.summary + result.insights.joinToString()
+        assertTrue(!combined.contains("недел", ignoreCase = true))
+        assertTrue(result.summary.contains("месяц"))
+        assertTrue(result.insights.any { it.contains("месяц") })
+    }
+
+    @Test
+    fun `ac only bullet uses month wording not week in monthly period`() {
+        val stats = baseStats(consumptionChangePct = 2.0).copy(
+            acKwhWeek = 40.0,
+            acSessionCount = 3,
+        )
+        val result = LocalInsightEngine.generate(stats, res("ru"), 30)
+        val combined = result.title + result.summary + result.insights.joinToString()
+        assertTrue(!combined.contains("недел", ignoreCase = true))
+        assertTrue(result.insights.any { it.contains("AC") && it.contains("месяц") })
+    }
+
+    @Test
+    fun `mileage bullet threshold scales with period`() {
+        val stats = baseStats(consumptionChangePct = 2.0).copy(recentKm = 300.0)
+        val weekly = LocalInsightEngine.generate(stats, res("ru"), 7)
+        val monthly = LocalInsightEngine.generate(stats, res("ru"), 30)
+        assertTrue(weekly.insights.any { it.contains("300") })
+        assertTrue(monthly.insights.none { it.contains("300") })
     }
 
     private fun baseStats(

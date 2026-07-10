@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -59,10 +60,19 @@ import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
 import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
+import com.bydmate.app.ui.settings.DonateDialog
+import com.bydmate.app.ui.settings.DonateEntry
+import com.bydmate.app.ui.settings.DonationReminder
 import com.bydmate.app.ui.settings.SettingsScreen
+import com.bydmate.app.ui.settings.UpdateDialog
+import com.bydmate.app.ui.settings.UpdateState
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 
 enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
@@ -93,24 +103,77 @@ fun AppNavigation(
     // UpdateChecker сам throttle-ит запросы (10 мин между реальными походами в GitHub).
     val autoCheckContext = LocalContext.current
     var availableUpdateVersion by remember { mutableStateOf<String?>(null) }
+    val autoCheckScope = rememberCoroutineScope()
+    var autoUpdateInfo by remember { mutableStateOf<UpdateChecker.UpdateInfo?>(null) }
+    var autoUpdateState by remember { mutableStateOf<UpdateState?>(null) }
+    var autoUpdateDownloadJob by remember { mutableStateOf<Job?>(null) }
+
+    val currentAppVersion = remember {
+        runCatching {
+            autoCheckContext.packageManager.getPackageInfo(autoCheckContext.packageName, 0).versionName ?: "?"
+        }.getOrDefault("?")
+    }
+    // Donation prompt: from the second entry of a new version onward (the first entry is taken
+    // by the post-install reminder), at most once per version, never after opt-out. Shown
+    // before the update dialog — support first, then offer the update once it is dismissed.
+    var showDonation by remember { mutableStateOf(false) }
+    LaunchedEffect(startDestination) {
+        if (startDestination == "dashboard" &&
+            UpdateChecker.getLastSeenVersion(autoCheckContext) == currentAppVersion &&
+            DonationReminder.shouldShow(autoCheckContext, currentAppVersion)
+        ) {
+            DonationReminder.markSeen(autoCheckContext, currentAppVersion)
+            showDonation = true
+        }
+    }
+
     LaunchedEffect(Unit) {
         if (!UpdateChecker.isAutoCheckEnabled(autoCheckContext)) return@LaunchedEffect
         try {
             val info = updateChecker.checkForUpdate(autoCheckContext, forceCheck = false)
             if (info != null) {
                 availableUpdateVersion = info.version
+                autoUpdateInfo = info
+                autoUpdateState = UpdateState.Available(info.version, info.notes)
             }
         } catch (_: Exception) {
             // тихо игнорируем — оффлайн, rate-limit и т.п.
         }
     }
 
-    // Post-install reminder: первый запуск новой версии → напомнить про Disable background Apps.
-    val currentAppVersion = remember {
-        runCatching {
-            autoCheckContext.packageManager.getPackageInfo(autoCheckContext.packageName, 0).versionName ?: "?"
-        }.getOrDefault("?")
+    if (!showDonation) autoUpdateState?.let { dialogState ->
+        UpdateDialog(
+            currentVersion = currentAppVersion,
+            state = dialogState,
+            onCheck = {
+                val info = autoUpdateInfo ?: return@UpdateDialog
+                autoUpdateState = UpdateState.Downloading(info.version, autoCheckContext.getString(R.string.update_downloading_start))
+                autoUpdateDownloadJob = autoCheckScope.launch {
+                    try {
+                        updateChecker.downloadAndInstall(autoCheckContext, info) { progress ->
+                            // Игнорируем поздний прогресс после отмены (нажат Закрыть),
+                            // иначе закрытый диалог «воскресает» в Downloading.
+                            if (isActive) {
+                                autoUpdateState = UpdateState.Downloading(info.version, progress)
+                            }
+                        }
+                    } catch (e: CancellationException) {
+                        throw e // кооперативная отмена из onDismiss, не ошибка
+                    } catch (e: Exception) {
+                        autoUpdateState = UpdateState.Error(e.message ?: "Download failed")
+                    }
+                }
+            },
+            onDismiss = {
+                autoUpdateDownloadJob?.cancel()
+                autoUpdateDownloadJob = null
+                autoUpdateState = null
+                autoUpdateInfo = null
+            }
+        )
     }
+
+    // Post-install reminder: первый запуск новой версии → напомнить про Disable background Apps.
     var showPostInstallReminder by remember {
         mutableStateOf(UpdateChecker.getLastSeenVersion(autoCheckContext) != currentAppVersion)
     }
@@ -121,6 +184,17 @@ fun AppNavigation(
                 UpdateChecker.setLastSeenVersion(autoCheckContext, currentAppVersion)
                 showPostInstallReminder = false
             }
+        )
+    }
+
+    if (showDonation) {
+        DonateDialog(
+            entry = DonateEntry.AUTO,
+            onDismiss = { showDonation = false },
+            onAlreadySupported = {
+                DonationReminder.setOptedOut(autoCheckContext)
+                showDonation = false
+            },
         )
     }
 
@@ -190,9 +264,17 @@ fun AppNavigation(
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToPlaces = { navController.navigate("places") },
+                    onNavigateToAgentChat = { navController.navigate("agent_chat") },
+                    onNavigateToVoiceJournal = { navController.navigate("voice_journal") },
                 )
             }
             composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
+            composable("agent_chat") {
+                com.bydmate.app.ui.debug.AgentChatScreen(onBack = { navController.popBackStack() })
+            }
+            composable("voice_journal") {
+                com.bydmate.app.ui.debug.VoiceJournalScreen(onBack = { navController.popBackStack() })
+            }
         }
     }
 }

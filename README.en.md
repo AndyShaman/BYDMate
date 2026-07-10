@@ -33,6 +33,16 @@ Two optional features can leave the car: **cloud insights** via OpenRouter and l
 
 ---
 
+## What's new in v3.5
+
+**Russian offline voice AI assistant.** A full voice agent whose speech recognition runs on-device (no cloud) and understands spoken Russian: it reads live car data, controls the body (windows, climate, seats, locks, sunroof, trunk, fridge, lights), builds routes, plays music, runs and creates automations, and replies by voice with neural TTS. An LLM (OpenRouter / free z.ai / your own server) drives the agent; simple commands run instantly offline with no network.
+
+The assistant is **Russian-only by design** — the stock BYD assistant already covers English and Chinese, so BYDMate fills the language the car lacks. It is documented in full in the [Russian README](README.md#голосовой-ai-агент).
+
+Also in 3.5: voice-driven Yandex Navigator projection to the cluster, a new "spoken phrase" automation trigger, and weekly/monthly insights computed on-device.
+
+---
+
 ## What's new in v3.0.0
 
 A major update. BYDMate moved to its own data stack and learned to mirror navigation onto the instrument cluster.

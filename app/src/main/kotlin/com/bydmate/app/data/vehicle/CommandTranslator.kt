@@ -16,7 +16,7 @@ data class SeatCommand(val group: SeatGroup, val level: Int)
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.
  *
- * Window aggregates (车窗全开/关闭/半开, 前排/后排车窗全开/关闭) and individual rear
+ * Window aggregates (车窗全开/关闭/半开/通风, 前排/后排车窗全开/关闭) and individual rear
  * windows (后左/后右打开{n}) fan out to the validated per-door % fids — see the
  * [composite] map. The competitor "aggregate" fids all target the driver
  * short-form fid (1125122104) and the rear short-form fids are no-ops on
@@ -42,10 +42,6 @@ object CommandTranslator {
     data class Resolved(val actionName: String, val value: Int)
 
     private val table: Map<String, Resolved> = mapOf(
-        // ── Windows (vent) ── competitor windows_vent (driver-only fid). Aggregate
-        // open/close/half are handled by the composite fan-out below ──────────
-        "车窗通风"   to Resolved("windows_vent",  5),   // competitor val=5 (vent mode)
-
         // ── Windows (individual %, 0..100) ── LIVE_VALIDATED ──────────────────
         "主驾打开100" to Resolved("window_driver_pos",      100),
         "主驾打开0"   to Resolved("window_driver_pos",        0),
@@ -56,13 +52,27 @@ object CommandTranslator {
         "后右打开100" to Resolved("window_rear_right_pos",  100),
         "后右打开0"   to Resolved("window_rear_right_pos",    0),
 
-        // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_cycle_*) ──────────────
-        // 自动空调 = competitor ac_on (ac_ctrl_mode AUTO = 0). 设置温度<N> resolves
-        // dynamically over 16..30 in resolve(), so there are no per-temperature
-        // entries here (the old 18/20/22/25-only table missed every other value).
-        "自动空调"    to Resolved("ac_on",         0),   // competitor val=0 (ctrl_mode AUTO)
+        // ── Windows (vent, individual) ── crack one window to VENT_PCT via the
+        // validated % path. The all-window vent (车窗通风) is a composite fan-out
+        // below (the competitor windows_vent fid 1125122104 val=5 only moved the
+        // driver window on real hardware). >80 km/h gate still applies (string-based). ─
+        "主驾通风" to Resolved("window_driver_pos",     VENT_PCT),
+        "副驾通风" to Resolved("window_passenger_pos",  VENT_PCT),
+        "后左通风" to Resolved("window_rear_left_pos",  VENT_PCT),
+        "后右通风" to Resolved("window_rear_right_pos", VENT_PCT),
+
+        // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_cycle_*/ac_auto_*) ──────
+        // ac_power fid 501219364: 0=off, 1=on (LIVE 2026-07-03, both directions
+        // physically confirmed in-car). 设置温度<N> resolves dynamically over
+        // 16..30 in resolve(), so there are no per-temperature entries here (the
+        // old 18/20/22/25-only table missed every other value).
+        "自动空调"    to Resolved("ac_on",         1),  // LIVE 2026-07-03: ac_power fid, 1=on
+        "关闭空调"    to Resolved("ac_off",        0),  // LIVE 2026-07-03: ac_power fid, 0=off
         "内循环"      to Resolved("ac_cycle_inner", 1),  // LIVE val=1
         "外循环"      to Resolved("ac_cycle_outer", 0),  // LIVE val=0 (fresh-air; inner=1 on same fid)
+        // ac auto mode (acCtrlMode fid 501219352): INVERTED — 0=enable auto, 1=disable.
+        "空调自动"    to Resolved("ac_auto_on",    0),  // LIVE 2026-07-07: acCtrlMode, 0=auto
+        "空调手动"    to Resolved("ac_auto_off",   1),  // LIVE 2026-07-07: acCtrlMode, 1=manual
 
         // ── Climate ── competitor-actions.json ────────────────────────────────
         "打开空调通风" to Resolved("ac_flow_only_on",   1),  // competitor val=1
@@ -90,6 +100,14 @@ object CommandTranslator {
         "天窗打开100" to Resolved("sunroof_open",  1),  // full open
         "天窗打开50"  to Resolved("sunroof_tilt",  3),  // tilt/half — LIVE val=3
         "天窗打开0"   to Resolved("sunroof_close", 2),
+
+        // ── Sunroof extra positions ── allowlist sunroof_stop/updip/comfort vals 4/5/6
+        // (live-validated 2026-05-28). 天窗通风 (tilt-up vent) and 天窗舒适打开 (comfort)
+        // open the aperture and are caught by ActionDispatcher.isSunroofOpenCommand
+        // (通风 / bare 打开); 天窗停止 (stop) is deliberately NOT speed-gated.
+        "天窗停止"     to Resolved("sunroof_stop",    4),
+        "天窗通风"     to Resolved("sunroof_updip",   5),
+        "天窗舒适打开" to Resolved("sunroof_comfort", 6),
 
         // ── Sunshade ── LIVE_VALIDATED ────────────────────────────────────────
         "遮阳帘打开" to Resolved("sunshade_open",  1),
@@ -133,6 +151,7 @@ object CommandTranslator {
         put("车窗全开", allWindows(100))
         put("车窗关闭", allWindows(0))
         put("车窗半开", allWindows(50))
+        put("车窗通风", allWindows(VENT_PCT))
         put("前排车窗全开", listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)))
         put("前排车窗关闭", listOf(Resolved("window_driver_pos", 0), Resolved("window_passenger_pos", 0)))
         put("后排车窗全开", listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)))
@@ -165,6 +184,18 @@ object CommandTranslator {
             val celsius = m.groupValues[1].toInt().coerceIn(TEMP_MIN, TEMP_MAX)
             return listOf(Resolved("ac_temp_main", celsius))
         }
+        // Dynamic fridge setpoints: 冰箱制冷<N>度 / 冰箱制热<N>度 for ANY N — the agent
+        // catalog exposes the full validated ranges (-6..6 cool / 35..50 heat) while the
+        // composite presets above cover only the fixed UI steps. Clamped to the
+        // allowlist-validated windows; fridgeCool applies the raw +19 shift.
+        FRIDGE_COOL_REGEX.matchEntire(stripped)?.let { m ->
+            val c = m.groupValues[1].toIntOrNull() ?: return emptyList()
+            return fridgeCool(c.coerceIn(FRIDGE_COOL_MIN, FRIDGE_COOL_MAX))
+        }
+        FRIDGE_HEAT_REGEX.matchEntire(stripped)?.let { m ->
+            val c = m.groupValues[1].toIntOrNull() ?: return emptyList()
+            return fridgeHeat(c.coerceIn(FRIDGE_HEAT_MIN, FRIDGE_HEAT_MAX))
+        }
         return emptyList()
     }
 
@@ -172,6 +203,18 @@ object CommandTranslator {
     private val TEMP_REGEX = Regex("""设置温度(\d+)""")
     private const val TEMP_MIN = 16
     private const val TEMP_MAX = 30
+
+    // Dynamic fridge commands: 冰箱制冷<N>度 (cool, C in -6..6) / 冰箱制热<N>度 (heat, 35..50).
+    private val FRIDGE_COOL_REGEX = Regex("""冰箱制冷(-?\d+)度""")
+    private val FRIDGE_HEAT_REGEX = Regex("""冰箱制热(\d+)度""")
+    private const val FRIDGE_COOL_MIN = -6
+    private const val FRIDGE_COOL_MAX = 6
+    private const val FRIDGE_HEAT_MIN = 35
+    private const val FRIDGE_HEAT_MAX = 50
+
+    // Vent = crack windows to this aperture % (validated per-door % path). Small
+    // opening for fresh air; tune from user feedback. Stays under the >80 km/h gate.
+    private const val VENT_PCT = 10
 
     /** Action names produced only by dynamic resolution (absent from [table]). */
     private val DYNAMIC_ACTIONS = setOf("ac_temp_main")

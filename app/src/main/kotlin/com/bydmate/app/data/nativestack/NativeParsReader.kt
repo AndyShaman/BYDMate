@@ -130,6 +130,15 @@ class NativeParsReader @Inject constructor(
             rain                = null,  // not in FidMap (user setting, no live sensor fid)
             lightLow            = field<Int>("lightLow"),
             drl                 = field<Int>("drl"),
+            acDefrostFront      = field<Int>("acDefrostFront"),
+            acWindMode          = field<Int>("acWindMode"),
+            acCtrlMode          = field<Int>("acCtrlMode"),
+            seatHeatDriver      = field<Int>("seatHeatDriver"),
+            seatVentDriver      = field<Int>("seatVentDriver"),
+            seatHeatPassenger   = field<Int>("seatHeatPassenger"),
+            seatVentPassenger   = field<Int>("seatVentPassenger"),
+            lightSide           = field<Int>("lightSide"),
+            lightHigh           = field<Int>("lightHigh"),
         )
     }
 }

@@ -13,11 +13,6 @@ data class FidEntry(
  * Static map: each DiParsData property → autoservice address + decoder.
  * Generated from scripts/native-stack/fid-candidates.yaml status=validated entries.
  * Update via the validation suite, not by hand.
- *
- * Validated yaml params excluded here (no DiParsData field — Phase 2 reads):
- *   ACDefrostFront, ACWindMode, ACCtrlMode,
- *   SeatHeatD, SeatVentD, SeatHeatP, SeatVentP,
- *   LightSide, LightHigh
  */
 object FidMap {
     val entries: List<FidEntry> = listOf(
@@ -73,5 +68,18 @@ object FidMap {
         FidEntry("lockFL",               1032, 1081081864,   5, Decoder.INT_ENUM),
         FidEntry("driveMode",            1006, 555745294,    5, Decoder.INT_ENUM),
         FidEntry("workMode",             1006, 874512420,    5, Decoder.INT_ENUM),
+        // Voice agent Phase 0 (2026-07-02): validated yaml entries, previously unwired.
+        // Climate extras
+        FidEntry("acDefrostFront",       1000, 1077936150,   5, Decoder.INT_ENUM),
+        FidEntry("acWindMode",           1000, 1077936152,   5, Decoder.INT_ENUM),
+        FidEntry("acCtrlMode",           1000, 1077936146,   5, Decoder.INT_ENUM),
+        // Seat heat/vent levels (READ keys, dev=1000; 0=off, 1..5=level)
+        FidEntry("seatHeatDriver",       1000, 702545948,    5, Decoder.INT_RAW),
+        FidEntry("seatVentDriver",       1000, 702545944,    5, Decoder.INT_RAW),
+        FidEntry("seatHeatPassenger",    1000, 711983132,    5, Decoder.INT_RAW),
+        FidEntry("seatVentPassenger",    1000, 711983128,    5, Decoder.INT_RAW),
+        // Lights
+        FidEntry("lightSide",            1004, 950009864,    5, Decoder.INT_ENUM),
+        FidEntry("lightHigh",            1004, 950009868,    5, Decoder.INT_ENUM),
     )
 }

@@ -44,6 +44,12 @@ class HelperBootstrapTest {
         // When false, killHelper() reports a failed dispatch (no ADB connection / exec threw),
         // exercising the "kill could not be dispatched → bail" guard.
         var killSucceeds = true
+        // How many killHelper() calls it takes before the process actually dies (models a first
+        // kill lost on a stale ADB socket that a re-dispatched kill then clears).
+        var killsNeededToDie = 1
+        // Kill dispatches from this call number on report failure (models ADB dropping
+        // mid-sequence: the initial kill dispatches, the retry kill cannot).
+        var failDispatchFromCall = Int.MAX_VALUE
         var onSpawn: () -> Boolean = { true }
         override suspend fun connect() = Result.success(Unit)
         override suspend fun isConnected() = true
@@ -52,7 +58,8 @@ class HelperBootstrapTest {
         override suspend fun spawnHelper(): Boolean { spawnCalls++; return onSpawn() }
         override suspend fun killHelper(): Boolean {
             killCalls++
-            if (killSucceeds && killEffective) processAlive = false
+            if (killCalls >= failDispatchFromCall) return false
+            if (killSucceeds && killEffective && killCalls >= killsNeededToDie) processAlive = false
             return killSucceeds
         }
         override suspend fun readHelperLog(): String? = null
@@ -107,8 +114,9 @@ class HelperBootstrapTest {
     }
 
     @Test
-    fun `stale daemon that refuses to die is not spawned over`() = runTest {
-        // Stale version recorded; the old process stays alive even after kill (killEffective=false).
+    fun `stale daemon that refuses to die after both kill rounds is not spawned over`() = runTest {
+        // Stale version recorded; the old process stays alive through both kill rounds
+        // (killEffective=false — it never dies), exercising the full retry-then-bail path.
         prefs().edit().putLong(KEY, baselineVersion() xor 1L).apply()
         val adb = FakeAdb()
         adb.processAlive = true
@@ -118,7 +126,45 @@ class HelperBootstrapTest {
         val boot = HelperBootstrap(adb, helper, ctx())
 
         assertFalse("must not claim success over a live stale daemon", boot.ensureRunning())
-        assertEquals("must attempt the kill", 1, adb.killCalls)
+        assertEquals("must attempt the initial kill plus one retry", 2, adb.killCalls)
+        assertEquals("must NOT spawn over the live stale daemon", 0, adb.spawnCalls)
+        assertEquals("must not persist a version", baselineVersion() xor 1L, prefs().getLong(KEY, -1L))
+    }
+
+    @Test
+    fun `second kill round clears a stale daemon lost on the first kill`() = runTest {
+        // The first kill is lost (e.g. a stale ADB socket); the re-dispatched kill in round 2
+        // actually clears the process, so ensureRunning proceeds to spawn instead of bailing.
+        prefs().edit().putLong(KEY, baselineVersion() xor 1L).apply()
+        val adb = FakeAdb()
+        adb.processAlive = true
+        adb.killsNeededToDie = 2
+        val helper = FakeHelper(alive = true)
+        adb.onSpawn = { helper.alive = true; true }
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        assertTrue("the second kill round must let the spawn proceed", boot.ensureRunning())
+        assertEquals("must dispatch exactly two kills", 2, adb.killCalls)
+        assertEquals("must spawn once the stale daemon is actually gone", 1, adb.spawnCalls)
+        assertEquals("records the current version", baselineVersion(), prefs().getLong(KEY, -1L))
+    }
+
+    @Test
+    fun `failed retry kill dispatch breaks out and bails without spawning`() = runTest {
+        // The first kill dispatches but the process survives round 1; the round-2 retry kill
+        // then cannot be dispatched (ADB drops mid-sequence). The retry loop must break out
+        // immediately and bail via the stale-alive guard, never spawning over the live daemon.
+        prefs().edit().putLong(KEY, baselineVersion() xor 1L).apply()
+        val adb = FakeAdb()
+        adb.processAlive = true
+        adb.killEffective = false          // round 1 kill lands but the process survives
+        adb.failDispatchFromCall = 2       // the retry kill fails to dispatch
+        val helper = FakeHelper(alive = true)
+        adb.onSpawn = { helper.alive = true; true }
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        assertFalse("must not claim success", boot.ensureRunning())
+        assertEquals("initial kill plus the failed retry dispatch", 2, adb.killCalls)
         assertEquals("must NOT spawn over the live stale daemon", 0, adb.spawnCalls)
         assertEquals("must not persist a version", baselineVersion() xor 1L, prefs().getLong(KEY, -1L))
     }

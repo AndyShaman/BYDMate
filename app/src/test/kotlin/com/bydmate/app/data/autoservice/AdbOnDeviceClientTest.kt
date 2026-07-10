@@ -163,4 +163,29 @@ class AdbOnDeviceClientTest {
         assertFalse("must not contain echo", cmd.contains("echo"))
         assertFalse("must not contain helper.dex", cmd.contains("helper.dex"))
     }
+
+    @Test
+    fun `killHelper selects by exact process name and never uses pgrep -f`() = runTest {
+        val fake = FakeProtocol(connectResult = true)
+        val client = newClient(fake)
+
+        client.connect()
+        val result = client.killHelper()
+
+        assertTrue("killHelper should return true on successful dispatch", result)
+        assertEquals("exactly one exec call should be made", 1, fake.execCalls.size)
+
+        val cmd = fake.execCalls.single()
+        // Regression guard: `pgrep -f bydmate_helper` self-matched this very kill shell's
+        // cmdline (which contains "bydmate_helper"), so the loop could kill itself before
+        // reaching the daemon and leave the stale daemon alive (on-car incident, APK 338).
+        assertFalse("must NOT use pgrep -f (self-match bug)", cmd.contains("pgrep"))
+        // Must select via ps + exact NAME (comm) equality — the discipline helperHeartbeat uses.
+        assertTrue("must select via ps -A -o PID,NAME", cmd.contains("ps -A -o PID,NAME"))
+        assertTrue(
+            "must match the process NAME exactly (== \"bydmate_helper\")",
+            cmd.contains("\$2==\"bydmate_helper\"")
+        )
+        assertTrue("must kill -9 the selected pids", cmd.contains("kill -9"))
+    }
 }

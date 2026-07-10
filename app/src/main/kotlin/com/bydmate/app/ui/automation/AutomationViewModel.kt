@@ -8,6 +8,9 @@ import com.bydmate.app.data.local.LocalePreferences
 import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
+import com.bydmate.app.data.automation.ActionValidationError
+import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
@@ -88,7 +91,7 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("DoorRL", "左后车门", R.string.auto_param_doorrl, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
         TriggerParamOption("DoorRR", "右后车门", R.string.auto_param_doorrr, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_f, "1" to R.string.auto_enum_open_f)),
         TriggerParamOption("Hood", "引擎盖", R.string.auto_param_hood, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
-        TriggerParamOption("LockFL", "主驾车门锁", R.string.auto_param_lockfl, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_unlocked, "1" to R.string.auto_enum_locked)),
+        TriggerParamOption("LockFL", "主驾车门锁", R.string.auto_param_lockfl, R.string.auto_cat_body, enumValues = listOf("1" to R.string.auto_enum_unlocked, "2" to R.string.auto_enum_locked)),  // codes match DiParsData.lockFL runtime: 1=unlocked, 2=locked
         TriggerParamOption("Trunk", "后备箱门", R.string.auto_param_trunk, R.string.auto_cat_body, enumValues = listOf("0" to R.string.auto_enum_closed_m, "1" to R.string.auto_enum_open_m)),
         TriggerParamOption("ACStatus", "空调状态", R.string.auto_param_acstatus, R.string.auto_cat_climate),
         TriggerParamOption("ACCirc", "空调循环方式", R.string.auto_param_accirc, R.string.auto_cat_climate, enumValues = listOf("0" to R.string.auto_enum_fresh_air, "1" to R.string.auto_enum_recirc)),
@@ -319,50 +322,29 @@ class AutomationViewModel @Inject constructor(
 
     private fun validateActions(actions: List<ActionDef>): String? {
         val ctx = context.appLocalizedContext()
-        actions.forEachIndexed { idx, a ->
-            val n = idx + 1
-            when (a.kind) {
-                "param" -> {
-                    if (a.command.isBlank()) return ctx.getString(R.string.auto_msg_command_missing, n)
-                }
-                "notification_silent", "notification_sound" -> {
-                    if (a.notificationTitle().isBlank()) return ctx.getString(R.string.auto_msg_notif_title_empty, n)
-                }
-                "app_launch" -> {
-                    if (a.appLaunchPackageName().isBlank()) return ctx.getString(R.string.auto_msg_app_not_selected, n)
-                }
-                "call" -> {
-                    val phone = a.callPhone().trim()
-                    if (phone.length !in 5..20) return ctx.getString(R.string.auto_msg_phone_invalid, n)
-                }
-                "navigate" -> {
-                    val lat = a.navigateLat()
-                    val lon = a.navigateLon()
-                    if (lat == null || lon == null || (lat == 0.0 && lon == 0.0)) {
-                        return ctx.getString(R.string.auto_msg_nav_dest_missing, n)
-                    }
-                }
-                "url" -> {
-                    val u = a.urlString().trim()
-                    if (u.isEmpty()) return ctx.getString(R.string.auto_msg_url_empty, n)
-                    // Allow any scheme: http(s)://, yandexmusic://, tel:, intent://, geo:, etc.
-                    if (!u.matches(Regex("^[a-zA-Z][a-zA-Z0-9+.\\-]*:.+"))) {
-                        return ctx.getString(R.string.auto_msg_url_no_scheme, n)
-                    }
-                }
-                "yandex_music" -> {
-                    if (a.yandexMusicMode().isBlank()) return ctx.getString(R.string.auto_msg_ymusic_mode_missing, n)
-                }
-                "media_volume" -> {
-                    val level = a.payload?.toIntOrNull()
-                    if (level == null || level < 0) return ctx.getString(R.string.auto_msg_media_volume_missing, n)
-                }
-                "sentry" -> {
-                    if (a.payload !in listOf("0", "1")) return ctx.getString(R.string.auto_msg_sentry_invalid, n)
-                }
-            }
+        return when (val err = RuleDraftValidator.validateActions(actions)) {
+            is ActionValidationError.CommandMissing -> ctx.getString(R.string.auto_msg_command_missing, err.index)
+            is ActionValidationError.NotifTitleEmpty -> ctx.getString(R.string.auto_msg_notif_title_empty, err.index)
+            is ActionValidationError.AppNotSelected -> ctx.getString(R.string.auto_msg_app_not_selected, err.index)
+            is ActionValidationError.PhoneInvalid -> ctx.getString(R.string.auto_msg_phone_invalid, err.index)
+            is ActionValidationError.NavDestMissing -> ctx.getString(R.string.auto_msg_nav_dest_missing, err.index)
+            is ActionValidationError.UrlEmpty -> ctx.getString(R.string.auto_msg_url_empty, err.index)
+            is ActionValidationError.UrlNoScheme -> ctx.getString(R.string.auto_msg_url_no_scheme, err.index)
+            is ActionValidationError.YandexMusicModeMissing -> ctx.getString(R.string.auto_msg_ymusic_mode_missing, err.index)
+            is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
+            is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
+            null -> null
         }
-        return null
+    }
+
+    private fun validateTriggers(triggers: List<TriggerDef>, editingId: Long): String? {
+        val ctx = context.appLocalizedContext()
+        return when (RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules)) {
+            TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
+            TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_builtin)
+            TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken)
+            null -> null
+        }
     }
 
     fun saveRule() {
@@ -376,6 +358,11 @@ class AutomationViewModel @Inject constructor(
         val actionError = validateActions(e.actions)
         if (actionError != null) {
             _uiState.value = _uiState.value.copy(editorError = actionError)
+            return
+        }
+        val triggerError = validateTriggers(e.triggers, if (e.isNew) -1L else e.id)
+        if (triggerError != null) {
+            _uiState.value = _uiState.value.copy(editorError = triggerError)
             return
         }
         // Clear previous error on success path

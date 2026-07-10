@@ -55,6 +55,21 @@ class SteeringWheelKeyService : AccessibilityService() {
                 LearnAction.CONSUME -> true
             }
         }
+        // Voice check: runs after learn-mode, before star decision. Returns true only when voice is
+        // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
+        val voicePrefs = applicationContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        val voiceEnabled = voicePrefs.getBoolean("voice_enabled", false)
+        val voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)
+        when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey)) {
+            VoiceKeyDecision.TRIGGER -> {
+                entryPoint().voiceController().onPttPressed()
+                return true
+            }
+            // Swallow the matching key's UP edge too — otherwise it falls through to the
+            // native BYD assistant, which owns the same hardware keycode (Finding 2).
+            VoiceKeyDecision.CONSUME -> return true
+            VoiceKeyDecision.IGNORE -> {}
+        }
         val enabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
         val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)
         return when (starDecision(event.keyCode, isDown, enabled, trigger)) {

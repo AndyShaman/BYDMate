@@ -33,6 +33,8 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = settings put global succeeded; -1 = not whitelisted / failed
  *   TX_SET_APP_HIDDEN : writeString(packageName), writeInt(hidden: 1=disable 0=enable)
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
+ *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
+ *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -62,6 +64,9 @@ object HelperBinderProtocol {
     const val TX_ENABLE_ACCESSIBILITY = IBinder.FIRST_CALL_TRANSACTION + 15     // 16
     const val TX_PUT_GLOBAL_SETTING = IBinder.FIRST_CALL_TRANSACTION + 16       // 17
     const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
+    const val TX_ENABLE_NOTIFICATION_LISTENER = IBinder.FIRST_CALL_TRANSACTION + 18  // 19
+    /** Cluster compositor power via the auto_container service (Wave P). [int on] -> [int status]. */
+    val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"
@@ -73,4 +78,13 @@ object HelperBinderProtocol {
      */
     const val ACCESSIBILITY_SERVICE_COMPONENT =
         "com.bydmate.app/com.bydmate.app.cluster.SteeringWheelKeyService"
+
+    /**
+     * Flattened ComponentName of our notification-listener stub — appended (never clobbering
+     * existing entries) to Settings.Secure enabled_notification_listeners by the narrow
+     * enableNotificationListener daemon op, mirroring ACCESSIBILITY_SERVICE_COMPONENT. Grants
+     * MediaSessionManager.getActiveSessions() access to our process for real Yandex Music playback.
+     */
+    const val NOTIFICATION_LISTENER_COMPONENT =
+        "com.bydmate.app/com.bydmate.app.media.MediaSessionListenerService"
 }

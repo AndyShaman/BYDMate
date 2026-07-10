@@ -356,6 +356,7 @@ class AutomationEngine @Inject constructor(
             // fire only through the explicit onButtonPress() entry point, so a
             // rule built around a widget button can't be triggered by polling.
             "button_press" -> false
+            "voice" -> false   // event trigger; fired on demand via fireVoiceRule, never polled
             else -> { // "param" (default)
                 val actual = getParamValue(data, trigger.param) ?: return@map false
                 val expected = trigger.value.toDoubleOrNull() ?: return@map false
@@ -489,7 +490,7 @@ class AutomationEngine @Inject constructor(
         actions: List<ActionDef>,
         snapshot: String,
         data: DiParsData?
-    ) {
+    ): Boolean {
         val results = JSONArray()
         var allSuccess = true
 
@@ -516,6 +517,66 @@ class AutomationEngine @Inject constructor(
             )
         )
         Log.i(TAG, "Rule '${rule.name}' executed: success=$allSuccess")
+        return allSuccess
+    }
+
+    /**
+     * Fire a voice-triggered rule's actions on demand (outside the polling loop).
+     * Honors requirePark and confirmBeforeExecute; bypasses cooldown / fireOncePerTrip
+     * (anti-spam concepts for automatic triggers, irrelevant to a spoken command).
+     * Param actions still pass through the per-action speed gate in ActionDispatcher.
+     */
+    suspend fun fireVoiceRule(ruleId: Long, data: DiParsData?): VoiceFireResult {
+        val rule = ruleDao.getById(ruleId) ?: return VoiceFireResult.NotFound
+        if (!rule.enabled) return VoiceFireResult.NotFound
+        val actions = ActionDef.listFromJson(rule.actions)
+        if (actions.isEmpty()) return VoiceFireResult.NotFound
+
+        // requirePark: gear 1 = P.
+        if (rule.requirePark && data?.gear != 1) return VoiceFireResult.ParkRequired
+
+        // Fail-closed: getBlockReason() allows window/sunroof-open when the whole snapshot
+        // is missing. Guard here so voice automations can't open either at unknown speed
+        // (both are speed-gated predicates after the T12 split; sunshade is not held).
+        if (data == null && actions.any {
+                ActionDispatcher.isWindowOpenCommand(it.command) ||
+                    ActionDispatcher.isSunroofOpenCommand(it.command)
+            }) {
+            return VoiceFireResult.SpeedUnknown
+        }
+
+        ruleDao.updateLastTriggered(rule.id, System.currentTimeMillis())
+        val snapshot = JSONObject().put("voice", true).toString()
+
+        if (rule.confirmBeforeExecute) {
+            val shown = ConfirmOverlayManager.show(
+                context = context,
+                ruleName = rule.name,
+                actionsSummary = actions.joinToString(", ") { it.displayName },
+                // Re-read live vehicle data at confirm time (the overlay can sit
+                // open while the car accelerates); mirrors the polling confirm path
+                // so the >80km/h window gate runs against current speed, not speak-time.
+                onConfirm = { scope.launch { executeAndLog(rule, actions, snapshot, TrackingService.lastData.value) } },
+                onCancel = {
+                    scope.launch {
+                        ruleLogDao.insert(
+                            RuleLogEntity(
+                                ruleId = rule.id, ruleName = rule.name,
+                                triggeredAt = System.currentTimeMillis(),
+                                triggersSnapshot = snapshot,
+                                actionsResult = """[{"result":"cancelled"}]""",
+                                success = false,
+                            )
+                        )
+                    }
+                },
+            )
+            if (!shown) showConfirmNotification(rule, actions, snapshot)
+            return VoiceFireResult.Confirming
+        }
+
+        val success = executeAndLog(rule, actions, snapshot, data)
+        return VoiceFireResult.Fired(success)
     }
 
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {

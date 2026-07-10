@@ -27,7 +27,7 @@ object LocalInsightEngine {
         val text: String,
     )
 
-    fun generate(stats: InsightStats, res: Resources): TextResult {
+    fun generate(stats: InsightStats, res: Resources, periodDays: Int): TextResult {
         val candidates = mutableListOf<Candidate>()
         val bullets = mutableListOf<InsightBullet>()
 
@@ -35,6 +35,14 @@ object LocalInsightEngine {
         val shortPct = if (stats.recentTripCount > 0) {
             stats.shortTripCount * 100.0 / stats.recentTripCount
         } else 0.0
+
+        // Thresholds below are tuned for a 7-day window. Scale km/kWh magnitude
+        // thresholds linearly so a 30-day window needs proportionally more before
+        // triggering; trip/session COUNT gates stay unscaled (a handful of trips
+        // is thin data for a month too). Strings switch to the "_month" resource
+        // pair so period wording in the text always matches periodDays.
+        val monthly = periodDays >= 28
+        val scale = periodDays / 7.0
 
         // --- Title / summary drivers (highest priority wins) ---
 
@@ -62,11 +70,14 @@ object LocalInsightEngine {
             changePct != null && changePct > 15.0 -> {
                 candidates += Candidate(
                     priority = 80,
-                    title = res.getString(R.string.local_insight_consumption_up_title, changePct),
-                    summary = summaryForConsumptionRise(stats, shortPct, res),
+                    title = res.getString(
+                        if (monthly) R.string.local_insight_consumption_up_title_month else R.string.local_insight_consumption_up_title,
+                        changePct,
+                    ),
+                    summary = summaryForConsumptionRise(stats, shortPct, res, monthly),
                 )
             }
-            stats.nightDrainKwh >= 4.0 &&
+            stats.nightDrainKwh >= 4.0 * scale &&
                 (stats.nightDrainSharePct ?: 0.0) >= 35.0 -> {
                 candidates += Candidate(
                     priority = 78,
@@ -81,8 +92,11 @@ object LocalInsightEngine {
             changePct != null && changePct > 5.0 -> {
                 candidates += Candidate(
                     priority = 70,
-                    title = res.getString(R.string.local_insight_consumption_up_title, changePct),
-                    summary = summaryForConsumptionRise(stats, shortPct, res),
+                    title = res.getString(
+                        if (monthly) R.string.local_insight_consumption_up_title_month else R.string.local_insight_consumption_up_title,
+                        changePct,
+                    ),
+                    summary = summaryForConsumptionRise(stats, shortPct, res, monthly),
                 )
             }
             changePct != null && changePct < -5.0 -> {
@@ -90,7 +104,7 @@ object LocalInsightEngine {
                     priority = 60,
                     title = res.getString(R.string.local_insight_consumption_down_title, -changePct),
                     summary = res.getString(
-                        R.string.local_insight_consumption_down_summary,
+                        if (monthly) R.string.local_insight_consumption_down_summary_month else R.string.local_insight_consumption_down_summary,
                         stats.recentAvgCons,
                     ),
                 )
@@ -100,7 +114,7 @@ object LocalInsightEngine {
                     priority = 10,
                     title = res.getString(R.string.local_insight_consumption_stable_title),
                     summary = res.getString(
-                        R.string.local_insight_consumption_stable_summary,
+                        if (monthly) R.string.local_insight_consumption_stable_summary_month else R.string.local_insight_consumption_stable_summary,
                         stats.recentAvgCons,
                     ),
                 )
@@ -109,7 +123,7 @@ object LocalInsightEngine {
 
         // --- Insight bullets (top 5 by priority) ---
 
-        if (stats.nightDrainKwh >= 0.3) {
+        if (stats.nightDrainKwh >= 0.3 * scale) {
             val share = stats.nightDrainSharePct?.toInt() ?: 0
             bullets += InsightBullet(
                 priority = 78,
@@ -123,7 +137,7 @@ object LocalInsightEngine {
 
         val acCost = stats.acCostPerKwh
         val dcCost = stats.dcCostPerKwh
-        if (stats.acKwhWeek >= 3.0 && stats.dcKwhWeek >= 3.0 &&
+        if (stats.acKwhWeek >= 3.0 * scale && stats.dcKwhWeek >= 3.0 * scale &&
             acCost != null && dcCost != null && dcCost > acCost * 1.15
         ) {
             val pctMore = ((dcCost / acCost - 1.0) * 100.0).toInt()
@@ -140,7 +154,7 @@ object LocalInsightEngine {
         }
 
         if (stats.dcSessionCount >= 2 && stats.dcKwhWeek > stats.acKwhWeek * 1.5 &&
-            stats.dcKwhWeek >= 15.0
+            stats.dcKwhWeek >= 15.0 * scale
         ) {
             bullets += InsightBullet(
                 priority = 72,
@@ -153,11 +167,11 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.acSessionCount >= 2 && stats.dcSessionCount == 0 && stats.acKwhWeek >= 8.0) {
+        if (stats.acSessionCount >= 2 && stats.dcSessionCount == 0 && stats.acKwhWeek >= 8.0 * scale) {
             bullets += InsightBullet(
                 priority = 45,
                 text = res.getString(
-                    R.string.local_insight_ac_only,
+                    if (monthly) R.string.local_insight_ac_only_month else R.string.local_insight_ac_only,
                     stats.acKwhWeek,
                     stats.acSessionCount,
                 ),
@@ -177,7 +191,7 @@ object LocalInsightEngine {
         }
 
         val drainShare = if (stats.recentKwh > 0.1) stats.drainKwh / stats.recentKwh * 100.0 else 0.0
-        if (stats.drainKwh >= 2.0 && (drainShare >= 15.0 || stats.drainKwh >= 5.0)) {
+        if (stats.drainKwh >= 2.0 * scale && (drainShare >= 15.0 || stats.drainKwh >= 5.0 * scale)) {
             val timeLabel = if (stats.drainHours < 1.0) {
                 res.getString(R.string.insight_idle_minutes, "%.0f".format(stats.drainHours * 60))
             } else {
@@ -186,7 +200,7 @@ object LocalInsightEngine {
             bullets += InsightBullet(
                 priority = 55,
                 text = res.getString(
-                    R.string.local_insight_idle,
+                    if (monthly) R.string.local_insight_idle_month else R.string.local_insight_idle,
                     stats.drainKwh,
                     timeLabel,
                     drainShare.toInt(),
@@ -204,7 +218,11 @@ object LocalInsightEngine {
             val last = stats.v12Min + stats.v12TrendDelta * 2
             bullets += InsightBullet(
                 priority = 50,
-                text = res.getString(R.string.local_insight_12v_falling, first, last),
+                text = res.getString(
+                    if (monthly) R.string.local_insight_12v_falling_month else R.string.local_insight_12v_falling,
+                    first,
+                    last,
+                ),
             )
         }
 
@@ -251,7 +269,7 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.recentAvgSpeed >= 75.0 && stats.recentAvgCons >= 17.0 && stats.recentKm >= 80.0) {
+        if (stats.recentAvgSpeed >= 75.0 && stats.recentAvgCons >= 17.0 && stats.recentKm >= 80.0 * scale) {
             bullets += InsightBullet(
                 priority = 58,
                 text = res.getString(
@@ -262,7 +280,7 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.recentAvgCons >= 28.0 && stats.recentKm >= 30.0) {
+        if (stats.recentAvgCons >= 28.0 && stats.recentKm >= 30.0 * scale) {
             bullets += InsightBullet(
                 priority = 57,
                 text = res.getString(
@@ -272,7 +290,7 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.drainHours >= 0.3 && stats.drainKwh / stats.drainHours >= 1.2) {
+        if (stats.drainHours >= 0.3 * scale && stats.drainKwh / stats.drainHours >= 1.2) {
             bullets += InsightBullet(
                 priority = 56,
                 text = res.getString(
@@ -282,7 +300,7 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.prevKm >= 50.0 && stats.recentKm > stats.prevKm * 1.2) {
+        if (stats.prevKm >= 50.0 * scale && stats.recentKm > stats.prevKm * 1.2) {
             bullets += InsightBullet(
                 priority = 54,
                 text = res.getString(
@@ -312,7 +330,7 @@ object LocalInsightEngine {
             bullets += InsightBullet(
                 priority = 52,
                 text = res.getString(
-                    R.string.local_insight_trips_more,
+                    if (monthly) R.string.local_insight_trips_more_month else R.string.local_insight_trips_more,
                     stats.recentTripCount,
                     stats.prevTripCount,
                 ),
@@ -332,11 +350,11 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.recentAvgCons <= 16.0 && stats.recentKm >= 50.0) {
+        if (stats.recentAvgCons <= 16.0 && stats.recentKm >= 50.0 * scale) {
             bullets += InsightBullet(
                 priority = 49,
                 text = res.getString(
-                    R.string.local_insight_low_consumption,
+                    if (monthly) R.string.local_insight_low_consumption_month else R.string.local_insight_low_consumption,
                     stats.recentAvgCons,
                     stats.recentKm,
                 ),
@@ -344,35 +362,35 @@ object LocalInsightEngine {
         }
 
         if (stats.acSessionCount >= 1 && stats.dcSessionCount >= 1 &&
-            stats.acKwhWeek + stats.dcKwhWeek >= 5.0
+            stats.acKwhWeek + stats.dcKwhWeek >= 5.0 * scale
         ) {
             bullets += InsightBullet(
                 priority = 47,
                 text = res.getString(
-                    R.string.local_insight_mixed_charging,
+                    if (monthly) R.string.local_insight_mixed_charging_month else R.string.local_insight_mixed_charging,
                     stats.acKwhWeek,
                     stats.dcKwhWeek,
                 ),
             )
         }
 
-        if (stats.recentKm >= 250.0) {
+        if (stats.recentKm >= 250.0 * scale) {
             bullets += InsightBullet(
                 priority = 44,
                 text = res.getString(
-                    R.string.local_insight_weekly_mileage,
+                    if (monthly) R.string.local_insight_monthly_mileage else R.string.local_insight_weekly_mileage,
                     stats.recentKm,
                     stats.recentTripCount,
                 ),
             )
         }
 
-        if (stats.recentCost > 0 && stats.recentKm >= 20.0) {
+        if (stats.recentCost > 0 && stats.recentKm >= 20.0 * scale) {
             val costPer100 = stats.recentCost / stats.recentKm * 100.0
             bullets += InsightBullet(
                 priority = 42,
                 text = res.getString(
-                    R.string.local_insight_cost_per_100,
+                    if (monthly) R.string.local_insight_cost_per_100_month else R.string.local_insight_cost_per_100,
                     costPer100,
                     stats.recentCost,
                     stats.currencyCode,
@@ -384,7 +402,7 @@ object LocalInsightEngine {
             bullets += InsightBullet(
                 priority = 38,
                 text = res.getString(
-                    R.string.local_insight_charge_cost_week,
+                    if (monthly) R.string.local_insight_charge_cost_month else R.string.local_insight_charge_cost_week,
                     stats.chargeCostWeek,
                     stats.currencyCode,
                     stats.acKwhWeek + stats.dcKwhWeek,
@@ -394,15 +412,15 @@ object LocalInsightEngine {
             bullets += InsightBullet(
                 priority = 35,
                 text = res.getString(
-                    R.string.local_insight_cost,
+                    if (monthly) R.string.local_insight_cost_month else R.string.local_insight_cost,
                     stats.recentCost,
                     stats.currencyCode,
                 ),
             )
         }
 
-        if (stats.nightDrainSharePct != null && stats.nightDrainKwh >= 0.1 &&
-            stats.nightDrainSharePct < 20.0 && stats.drainKwh >= 1.0
+        if (stats.nightDrainSharePct != null && stats.nightDrainKwh >= 0.1 * scale &&
+            stats.nightDrainSharePct < 20.0 && stats.drainKwh >= 1.0 * scale
         ) {
             bullets += InsightBullet(
                 priority = 34,
@@ -413,11 +431,11 @@ object LocalInsightEngine {
             )
         }
 
-        if (drainShare in 0.1..8.0 && stats.drainKwh >= 0.5 && stats.recentKwh >= 5.0) {
+        if (drainShare in 0.1..8.0 && stats.drainKwh >= 0.5 * scale && stats.recentKwh >= 5.0 * scale) {
             bullets += InsightBullet(
                 priority = 33,
                 text = res.getString(
-                    R.string.local_insight_low_idle_share,
+                    if (monthly) R.string.local_insight_low_idle_share_month else R.string.local_insight_low_idle_share,
                     drainShare.toInt(),
                 ),
             )
@@ -461,6 +479,7 @@ object LocalInsightEngine {
         stats: InsightStats,
         shortPct: Double,
         res: Resources,
+        monthly: Boolean,
     ): String {
         if (shortPct >= 40.0 && stats.shortTripCount >= 2) {
             return res.getString(R.string.local_insight_consumption_up_summary_short)
@@ -473,7 +492,7 @@ object LocalInsightEngine {
             )
         }
         return res.getString(
-            R.string.local_insight_consumption_stable_summary,
+            if (monthly) R.string.local_insight_consumption_stable_summary_month else R.string.local_insight_consumption_stable_summary,
             stats.recentAvgCons,
         )
     }

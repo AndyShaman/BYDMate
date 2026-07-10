@@ -46,5 +46,16 @@ data class DiParsData(
     val autoPark: Int?,           // 0=disabled, 1=standby, 2=active
     val rain: Int?,
     val lightLow: Int?,           // 0=OFF, 1=ON
-    val drl: Int?                 // 0=invalid, 1=ON, 2=OFF
+    val drl: Int?,                // 0=invalid, 1=ON, 2=OFF
+    // Voice agent Phase 0 (2026-07-02): validated read fids wired for get_vehicle_state.
+    // Defaults keep every existing construction site source-compatible.
+    val acDefrostFront: Int? = null,     // front windshield defrost: 1=on
+    val acWindMode: Int? = null,         // 2=default, 5=defrost-front
+    val acCtrlMode: Int? = null,         // 0=auto, 1=manual
+    val seatHeatDriver: Int? = null,     // 0=off, 1..5=level (READ key, dev=1000)
+    val seatVentDriver: Int? = null,     // 0=off, 1..5=level
+    val seatHeatPassenger: Int? = null,  // 0=off, 1..5=level
+    val seatVentPassenger: Int? = null,  // 0=off, 1..5=level
+    val lightSide: Int? = null,          // side/position lights: 1=on
+    val lightHigh: Int? = null           // high beam: 1=on
 )

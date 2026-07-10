@@ -90,15 +90,23 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         // ac_cycle_outer corrected 2026-06-28 from live autoservice reads: external
         // circulation reads 0 (internal reads 1), so the prior value 2 is not a valid
         // enum and autoservice rejected the setInt (the "helper.write returned false"
-        // the user hit). ac_on stays unvalidated: an in-car test 2026-06-28 showed the
-        // competitor ac_ctrl_mode write (501219352=0) is rejected on Leopard 3 even as
-        // a real change with the climate awake (ctrl_mode read 1, wrote 0, no effect) —
-        // likely a different write fid or a signature-permission gate. Pin via a
-        // com.byd.airconditioning decompile before promoting to validated=true.
+        // the user hit).
+        // fid 501219364 = climate POWER toggle: 0=off, 1=on. BOTH directions physically
+        // validated in-car 2026-07-03 (shell uid write, user confirmed AC state change).
+        // Old entries were wrong: ac_off val=1 actually turned AC ON (status=1, no effect
+        // visible as "success"). fid 501219352 was tried earlier as a POWER toggle and
+        // rejected on Leopard 3; it is in fact the AUTO MODE toggle (acCtrlMode,
+        // FidMap read fid 1077936146): 0=enable auto, 1=disable (switch to manual).
+        // Both directions physically validated in-car 2026-07-07 (status=1, user confirmed).
         val LIVE_VALIDATED: List<WriteEntry> = listOf(
             // climate (dev=1000)
-            WriteEntry("ac_on",          1000, 501219352, null, 0, 0,   "climate",  false, "competitor-v80"),
-            WriteEntry("ac_off",         1000, 501219364, null, 1, 1,   "climate",  true, "live-leopard3-2026-05-28"),
+            WriteEntry("ac_on",          1000, 501219364, null, 1, 1,   "climate",  true, "live-leopard3-2026-07-03"),
+            WriteEntry("ac_off",         1000, 501219364, null, 0, 0,   "climate",  true, "live-leopard3-2026-07-03"),
+            // ac auto mode toggle — fid 501219352 (acCtrlMode write, READ via 1077936146).
+            // INVERTED vs ac_on: 0=enable auto, 1=disable (switch to manual).
+            // Both values physically validated in-car 2026-07-07.
+            WriteEntry("ac_auto_on",     1000, 501219352, null, 0, 0,   "climate",  true, "live-leopard3-2026-07-07"),
+            WriteEntry("ac_auto_off",    1000, 501219352, null, 1, 1,   "climate",  true, "live-leopard3-2026-07-07"),
             WriteEntry("ac_temp_main",   1000, 501219368, null, 16, 30, "climate",  true, "live-leopard3-2026-05-28"),
             WriteEntry("ac_cycle_inner", 1000, 501219355, null, 1, 1,   "climate",  true, "live-leopard3-2026-05-28"),
             WriteEntry("ac_cycle_outer", 1000, 501219355, null, 0, 0,   "climate",  true, "live-leopard3-2026-06-28"),
@@ -127,9 +135,13 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("sunshade_open",  1001, 1125122060, null, 1, 1, "sunshade", true, "live-leopard3-2026-05-28"),
             WriteEntry("sunshade_close", 1001, 1125122060, null, 2, 2, "sunshade", true, "live-leopard3-2026-05-28"),
 
-            // locks (readback fid 1081081864 mirrors write value)
-            WriteEntry("doors_unlock", 1001, 1276141590, 1081081864, 1, 1, "locks", true, "live-leopard3-2026-05-28"),
-            WriteEntry("doors_lock",   1001, 1276141590, 1081081864, 2, 2, "locks", true, "live-leopard3-2026-05-28"),
+            // locks — no readback: 1081081864 is the lock state-of-truth on dev=1032
+            // (banned dev, see FidMap lockFL), not on dev=1001 where the write lands.
+            // Reading it back on dev=1001 returned a stale/other value, producing a
+            // false ReadbackMismatch even though the write physically actuates the
+            // lock (field report 2026-06-25). Lock state stays visible via lockFL.
+            WriteEntry("doors_unlock", 1001, 1276141590, null, 1, 1, "locks", true, "live-leopard3-2026-05-28"),
+            WriteEntry("doors_lock",   1001, 1276141590, null, 2, 2, "locks", true, "live-leopard3-2026-05-28"),
 
             // interior/cabin light — SET_INSIDE_LIGHT_STATE_SET (1=off, 2=on), dev=1023 carve-out
             WriteEntry("interior_light_on",  1023, 1330643002, null, 2, 2, "lights", true, "live-leopard3-2026-05-29"),

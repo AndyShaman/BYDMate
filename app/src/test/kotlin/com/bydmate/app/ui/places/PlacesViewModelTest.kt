@@ -75,6 +75,7 @@ class PlacesViewModelTest {
         override suspend fun delete(rule: RuleEntity) {}
         override fun getAll(): Flow<List<RuleEntity>> = MutableStateFlow(emptyList())
         override suspend fun getEnabled(): List<RuleEntity> = emptyList()
+        override suspend fun getAllList(): List<RuleEntity> = emptyList()
         override suspend fun getById(id: Long): RuleEntity? = null
         override suspend fun updateLastTriggered(id: Long, ts: Long) {}
         override suspend fun setEnabled(id: Long, enabled: Boolean) {}
