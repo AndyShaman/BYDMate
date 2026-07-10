@@ -24,6 +24,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.R
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -461,6 +462,14 @@ class AutomationEngine @Inject constructor(
         "Trunk" -> data.trunk?.toDouble()
         "Hood" -> data.hood?.toDouble()
         "SeatbeltFL" -> data.seatbeltFL?.toDouble()
+        "SeatbeltFR" -> data.seatbeltFR?.toDouble()
+        "OccupancyFL" -> data.occupancyFL?.toDouble()
+        "OccupancyFR" -> data.occupancyFR?.toDouble()
+        "OccupancyRL" -> data.occupancyRL?.toDouble()
+        "OccupancyRM" -> data.occupancyRM?.toDouble()
+        "OccupancyRR" -> data.occupancyRR?.toDouble()
+        "LightLevel" -> data.lightLevel?.toDouble()
+        "KeyBattery" -> data.keyBatteryStatus?.toDouble()
         "LockFL" -> data.lockFL?.toDouble()
         "TirePressFL" -> data.tirePressFL?.toDouble()
         "TirePressFR" -> data.tirePressFR?.toDouble()
@@ -491,6 +500,11 @@ class AutomationEngine @Inject constructor(
         snapshot: String,
         data: DiParsData?
     ): Boolean {
+        // One chime per rule firing, regardless of action kinds (per-rule "Выполнять со звуком").
+        if (rule.playSound) {
+            OverlayNotificationManager.playNotificationSound(context)
+        }
+
         val results = JSONArray()
         var allSuccess = true
 

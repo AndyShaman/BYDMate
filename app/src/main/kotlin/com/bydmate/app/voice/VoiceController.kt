@@ -75,6 +75,13 @@ class VoiceController @Inject constructor(
     // is that signal. @Volatile: written by the collect coroutine, read from the test thread.
     @Volatile private var droppedWhileBusy = 0
 
+    /**
+     * Returns true when any voice session is active: either the continuous GigaAM session
+     * (sets _listening) or the legacy one-shot path (sets busy but not _listening).
+     * Used by VoiceAutomationActions to gate speak/agent_query actions.
+     */
+    fun sessionActive(): Boolean = listening.value || busy.get()
+
     /** Test seams, same rationale as [lastSpeakingSeenMs]: deterministic await conditions
      *  instead of fixed sleeps, no public API surface added. */
     internal fun routingJobForTest(): Job? = routingJob

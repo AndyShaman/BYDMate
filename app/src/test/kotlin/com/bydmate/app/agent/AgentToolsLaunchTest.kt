@@ -58,7 +58,7 @@ class AgentToolsLaunchTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    ).apply { clusterVerifyDelayMs = 0L }
+    ).apply { clusterPollIntervalMs = 0L; clusterPollAttempts = 5 }
 
     // (a) destination matches a saved place (case-insensitively) -> route by lat/lon.
     @Test fun navigate_to_saved_place_routes_by_coords() = runTest {
@@ -379,6 +379,19 @@ class AgentToolsLaunchTest {
         val note = out.getString("note")
         assertTrue(note.contains("попробуй ещё раз"))
         assertFalse(note.contains("Navi"))
+        verify { clusterVoiceControl.apply(true) }
+    }
+
+    // (g) Regression: the mode lands on a later poll — the tool must keep polling and
+    // report success instead of the old single-check false negative.
+    @Test fun cluster_projection_on_succeeds_when_mode_lands_on_later_poll() = runTest {
+        every { clusterVoiceControl.projectionMode() } returnsMany
+            listOf(ClusterMode.OFF, ClusterMode.OFF, ClusterMode.OFF, ClusterMode.FULLSCREEN)
+        every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
+        val out = JSONObject(tools().execute(
+            AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
+        assertTrue(out.getBoolean("ok"))
+        assertEquals("Навигатор", out.getString("app"))
         verify { clusterVoiceControl.apply(true) }
     }
 

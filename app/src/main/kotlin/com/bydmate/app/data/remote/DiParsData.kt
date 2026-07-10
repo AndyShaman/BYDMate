@@ -57,5 +57,16 @@ data class DiParsData(
     val seatHeatPassenger: Int? = null,  // 0=off, 1..5=level
     val seatVentPassenger: Int? = null,  // 0=off, 1..5=level
     val lightSide: Int? = null,          // side/position lights: 1=on
-    val lightHigh: Int? = null           // high beam: 1=on
+    val lightHigh: Int? = null,          // high beam: 1=on
+    // Sensors wave (2026-07-09): cabin sensors validated on Leopard 3 2026-07-07.
+    val seatbeltFR: Int? = null,         // front passenger belt: 0=unbuckled, 1=buckled
+    val occupancyFL: Int? = null,        // seat occupancy: 1=free, 2=occupied (NOT 0/1)
+    val occupancyFR: Int? = null,
+    val occupancyRL: Int? = null,
+    val occupancyRM: Int? = null,
+    val occupancyRR: Int? = null,
+    val lightLevel: Int? = null,         // ambient light: 1=dark .. 5=bright
+    val keyBatteryStatus: Int? = null,   // key fob battery: 0=ok, non-zero=low
+    val wiperRelay: Int? = null,         // 0=idle, non-zero=wiping (raw signal for rain derivation)
+    val autoWipers: Int? = null,         // rain-sensing auto wipers: 1=enabled
 )

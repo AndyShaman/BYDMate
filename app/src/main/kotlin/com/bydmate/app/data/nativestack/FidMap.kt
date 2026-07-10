@@ -81,5 +81,17 @@ object FidMap {
         // Lights
         FidEntry("lightSide",            1004, 950009864,    5, Decoder.INT_ENUM),
         FidEntry("lightHigh",            1004, 950009868,    5, Decoder.INT_ENUM),
+        // Sensors wave (validated live on Leopard 3, 2026-07-07;
+        // probe: .research/probe/sensors-probe-2026-07-07.sh)
+        FidEntry("seatbeltFR",       1042, 315621439,   5, Decoder.INT_ENUM),  // 0=unbuckled, 1=buckled
+        FidEntry("occupancyFL",      1042, 824180800,   5, Decoder.INT_ENUM),  // 1=free, 2=occupied (NOT 0/1!)
+        FidEntry("occupancyFR",      1042, 824180758,   5, Decoder.INT_ENUM),
+        FidEntry("occupancyRL",      1042, 824180760,   5, Decoder.INT_ENUM),
+        FidEntry("occupancyRM",      1042, 824180762,   5, Decoder.INT_ENUM),
+        FidEntry("occupancyRR",      1042, 824180764,   5, Decoder.INT_ENUM),
+        FidEntry("lightLevel",       1043, 315621396,   5, Decoder.INT_RAW),   // 1=dark .. 5=bright
+        FidEntry("keyBatteryStatus", 1014, 402653200,   5, Decoder.INT_ENUM),  // 0=ok, non-zero=low
+        FidEntry("wiperRelay",       1046, 1336934438,  5, Decoder.INT_ENUM),  // 0=idle, non-zero=wiping
+        FidEntry("autoWipers",       1046, 321912862,   5, Decoder.INT_ENUM),  // 1=rain-sensing wipe enabled
     )
 }

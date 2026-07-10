@@ -1,5 +1,6 @@
 package com.bydmate.app.data.trips
 
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -17,7 +18,7 @@ class PowerStateFallbackTest {
         val tripDao = mockk<TripDao>(relaxed = true)
         val ls = mockk<LastStateDao>(relaxed = true)
         val en = mockk<EnergyDataReader> { every { isAvailable() } returns false }
-        val rec = TripRecorder(tripDao, ls, en, batteryCapacityKwh = { 72.9 })
+        val rec = TripRecorder(tripDao, ls, en, mockk<EnergyDataDeadDetector>(relaxed = true), batteryCapacityKwh = { 72.9 })
 
         // 5 ticks with powerState null → fallback armed.
         repeat(5) { rec.consume(diParsData(powerState = null, gear = 1, soc = 80, mileage = 100.0)) }

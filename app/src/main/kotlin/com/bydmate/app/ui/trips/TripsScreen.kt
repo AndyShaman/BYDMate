@@ -1,8 +1,10 @@
 package com.bydmate.app.ui.trips
 
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,10 +19,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -124,7 +131,8 @@ fun TripsScreen(
                                             TripRow(
                                                 trip = trip,
                                                 currencySymbol = state.currencySymbol,
-                                                onClick = { viewModel.selectTrip(trip) }
+                                                onClick = { viewModel.selectTrip(trip) },
+                                                onLongClick = { viewModel.onLongPressTrip(trip) },
                                             )
                                         }
                                     }
@@ -165,6 +173,37 @@ fun TripsScreen(
             currencySymbol = state.currencySymbol,
             tileSource = state.mapTileSource,
             onDismiss = { viewModel.clearSelectedTrip() }
+        )
+    }
+
+    // Long-press action sheet
+    state.selectedTripForAction?.let { trip ->
+        TripActionSheet(
+            trip = trip,
+            onDismiss = { viewModel.onDismissActionSheet() },
+            onDeletePrompt = { viewModel.onConfirmDeletePrompt() },
+        )
+    }
+
+    // Delete confirmation dialog
+    state.deleteConfirmTrip?.let { trip ->
+        AlertDialog(
+            onDismissRequest = { viewModel.onDismissDeleteConfirm() },
+            title = { Text(stringResource(R.string.trips_delete_dialog_title)) },
+            text = {
+                Text(stringResource(R.string.trips_delete_dialog_text, trip.distanceKm?.let { "%.1f".format(it) } ?: "-"))
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.onConfirmDelete() }) {
+                    Text(stringResource(R.string.charges_action_delete), color = SocRed)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onDismissDeleteConfirm() }) {
+                    Text(stringResource(R.string.settings_cancel_button))
+                }
+            },
+            containerColor = CardSurface,
         )
     }
 }
@@ -279,8 +318,9 @@ private fun ColumnHeaders(currencySymbol: String) {
         modifier = Modifier.padding(start = 36.dp, end = 12.dp))
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Unit) {
+private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Unit, onLongClick: () -> Unit) {
     val isStop = (trip.distanceKm ?: 0.0) == 0.0
     val time = formatTime(trip.startTs)
     val endTime = trip.endTs?.let { formatTime(it) } ?: ""
@@ -297,7 +337,7 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { onClick() }
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
                 .padding(start = 36.dp, end = 12.dp, top = 6.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -357,6 +397,40 @@ private fun TripRow(trip: TripEntity, currencySymbol: String, onClick: () -> Uni
         }
         HorizontalDivider(color = CardBorder.copy(alpha = 0.3f), thickness = 0.5.dp,
             modifier = Modifier.padding(start = 36.dp, end = 12.dp))
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TripActionSheet(
+    trip: TripEntity,
+    onDismiss: () -> Unit,
+    onDeletePrompt: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState()
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+        containerColor = CardSurface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "${formatTime(trip.startTs)} • ${trip.distanceKm?.let { "%.1f".format(it) } ?: "-"} ${stringResource(R.string.trips_col_km)}",
+                color = TextSecondary, fontSize = 12.sp
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+        }
     }
 }
 

@@ -16,6 +16,7 @@ import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.EnergyDataReader
@@ -293,6 +294,24 @@ object AppModule {
         }
     }
 
+    // Keep in lockstep with AppModuleMigrationsForTest.MIGRATION_16_17.
+    internal val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE automation_rules ADD COLUMN play_sound INTEGER NOT NULL DEFAULT 0")
+            // Rules that used the audible notification action keep sounding via the new
+            // per-rule flag. Must run BEFORE the kind rewrite below.
+            db.execSQL("""UPDATE automation_rules SET play_sound = 1 WHERE actions LIKE '%"kind":"notification_sound"%'""")
+            db.execSQL("""UPDATE automation_rules SET actions = replace(replace(actions, '"kind":"notification_sound"', '"kind":"notification"'), '"kind":"notification_silent"', '"kind":"notification"')""")
+        }
+    }
+
+    // Keep in lockstep with AppModuleMigrationsForTest.MIGRATION_17_18.
+    internal val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS trip_tombstones (byd_id INTEGER NOT NULL PRIMARY KEY)")
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -301,7 +320,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18)
             .build()
     }
 
@@ -321,6 +340,9 @@ object AppModule {
 
     @Provides
     fun provideVehicleWriteLogDao(db: AppDatabase): VehicleWriteLogDao = db.vehicleWriteLogDao()
+
+    @Provides
+    fun provideTripTombstoneDao(db: AppDatabase): TripTombstoneDao = db.tripTombstoneDao()
 
     @Provides
     @Singleton
@@ -407,15 +429,30 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideEnergyDataDeadDetector(
+        @ApplicationContext ctx: Context,
+        energyDataReader: EnergyDataReader,
+    ): com.bydmate.app.data.local.EnergyDataDeadDetector =
+        com.bydmate.app.data.local.EnergyDataDeadDetector(
+            reader = energyDataReader,
+            store = com.bydmate.app.data.local.EnergyDataLivenessStorePrefs(
+                ctx.getSharedPreferences("energydata_liveness", Context.MODE_PRIVATE)
+            ),
+        )
+
+    @Provides
+    @Singleton
     fun provideTripRecorder(
         tripDao: TripDao,
         lastStateDao: LastStateDao,
         energyDataReader: EnergyDataReader,
+        deadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
         settingsRepository: SettingsRepository,
     ): TripRecorder = TripRecorder(
         tripDao = tripDao,
         lastStateDao = lastStateDao,
         energyDataReader = energyDataReader,
+        deadDetector = deadDetector,
         batteryCapacityKwh = { settingsRepository.getBatteryCapacity() },
     )
 

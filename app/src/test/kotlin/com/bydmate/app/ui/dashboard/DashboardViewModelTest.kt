@@ -11,6 +11,8 @@ import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripSummary
+import com.bydmate.app.data.local.dao.TripTombstoneDao
+import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
@@ -111,6 +113,7 @@ class DashboardViewModelTest {
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
         override suspend fun insert(point: TripPointEntity): Long = 0L
+        override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
     private class StubIdleDrainDao : IdleDrainDao {
@@ -208,7 +211,7 @@ class DashboardViewModelTest {
 
         val tripDao = StubTripDao()
         val tripPointDao = StubTripPointDao()
-        val tripRepo = TripRepository(tripDao, tripPointDao)
+        val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
         val idleDrainDao = StubIdleDrainDao()
         val chargeDao = StubChargeDao()

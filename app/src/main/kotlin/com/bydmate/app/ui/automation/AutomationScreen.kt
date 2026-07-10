@@ -41,11 +41,12 @@ import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Navigation
 import androidx.compose.material.icons.outlined.Notifications
-import androidx.compose.material.icons.outlined.NotificationsOff
 import androidx.compose.material.icons.outlined.Pause
 import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PlayArrow
 import androidx.compose.material.icons.outlined.VolumeUp
+import androidx.compose.material.icons.outlined.Chat
+import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
@@ -542,8 +543,8 @@ private fun EditorDialog(
                                 val a = ACTION_COMMANDS.first()
                                 onUpdate { copy(actions = actions + ActionDef(a.command, a.localizedName(context))) }
                             },
-                            onAddNotification = { silent ->
-                                onUpdate { copy(actions = actions + newNotificationAction(silent, context)) }
+                            onAddNotification = {
+                                onUpdate { copy(actions = actions + newNotificationAction(context)) }
                             },
                             onAddAppLaunch = {
                                 onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
@@ -568,6 +569,12 @@ private fun EditorDialog(
                             },
                             onAddSentry = {
                                 onUpdate { copy(actions = actions + newSentryAction(context)) }
+                            },
+                            onAddSpeak = {
+                                onUpdate { copy(actions = actions + newSpeakAction(context)) }
+                            },
+                            onAddAgentQuery = {
+                                onUpdate { copy(actions = actions + newAgentQueryAction(context)) }
                             }
                         )
                     }
@@ -619,6 +626,15 @@ private fun EditorDialog(
                         Switch(
                             checked = editing.fireOncePerTrip,
                             onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
+                            colors = bydSwitchColors(),
+                        )
+                    }
+
+                    // Play chime once when the rule fires
+                    SettingRow(stringResource(R.string.automation_setting_play_sound)) {
+                        Switch(
+                            checked = editing.playSound,
+                            onCheckedChange = { v -> onUpdate { copy(playSound = v) } },
                             colors = bydSwitchColors(),
                         )
                     }
@@ -1227,7 +1243,7 @@ private fun ActionRow(
             modifier = Modifier.width(16.dp))
 
         when (action.kind) {
-            "notification_silent", "notification_sound" ->
+            "notification", "notification_silent", "notification_sound" ->
                 NotificationActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "app_launch" ->
                 AppLaunchActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
@@ -1245,6 +1261,10 @@ private fun ActionRow(
                 MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "sentry" ->
                 SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "speak" ->
+                SpeakActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "agent_query" ->
+                AgentQueryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             else -> // "param" (default)
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
@@ -1673,7 +1693,7 @@ private fun SettingRow(label: String, content: @Composable () -> Unit) {
 @Composable
 private fun AddActionButton(
     onAddParam: () -> Unit,
-    onAddNotification: (silent: Boolean) -> Unit,
+    onAddNotification: () -> Unit,
     onAddAppLaunch: () -> Unit,
     onAddCall: () -> Unit,
     onAddNavigate: () -> Unit,
@@ -1681,7 +1701,9 @@ private fun AddActionButton(
     onAddYandexMusic: () -> Unit,
     onAddDelay: () -> Unit,
     onAddMediaVolume: () -> Unit,
-    onAddSentry: () -> Unit
+    onAddSentry: () -> Unit,
+    onAddSpeak: () -> Unit,
+    onAddAgentQuery: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1704,14 +1726,10 @@ private fun AddActionButton(
                 onClick = { menuExpanded = false; onAddParam() }
             )
             DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_notification_silent), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddNotification(true) }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_notification_sound), fontSize = 13.sp) },
+                text = { Text(stringResource(R.string.automation_action_notification), fontSize = 13.sp) },
                 onClick = {
                     menuExpanded = false
-                    onAddNotification(false)
+                    onAddNotification()
                     if (!android.provider.Settings.canDrawOverlays(context)) {
                         showOverlayPrompt = true
                     }
@@ -1748,6 +1766,14 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddSentry() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_speak), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddSpeak() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_agent_query), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddAgentQuery() }
             )
         }
     }
@@ -1792,7 +1818,6 @@ private fun NotificationActionControls(
     modifier: Modifier = Modifier
 ) {
     var editing by remember { mutableStateOf(false) }
-    val silent = action.kind == "notification_silent"
     val title = action.notificationTitle()
     val text = action.notificationText()
     val preview = when {
@@ -1811,7 +1836,7 @@ private fun NotificationActionControls(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Icon(
-            imageVector = if (silent) Icons.Outlined.NotificationsOff else Icons.Outlined.Notifications,
+            imageVector = Icons.Outlined.Notifications,
             contentDescription = null,
             tint = AccentTeal,
             modifier = Modifier.size(14.dp)
@@ -1829,7 +1854,6 @@ private fun NotificationActionControls(
         NotificationEditDialog(
             initialTitle = title,
             initialText = text,
-            silent = silent,
             onDismiss = { editing = false },
             onSave = { newTitle, newText ->
                 onUpdate(action.withNotification(newTitle, newText))
@@ -1843,7 +1867,6 @@ private fun NotificationActionControls(
 private fun NotificationEditDialog(
     initialTitle: String,
     initialText: String,
-    silent: Boolean,
     onDismiss: () -> Unit,
     onSave: (String, String) -> Unit
 ) {
@@ -1866,7 +1889,7 @@ private fun NotificationEditDialog(
         containerColor = CardSurface,
         title = {
             Text(
-                text = if (silent) stringResource(R.string.automation_action_notification_silent) else stringResource(R.string.automation_action_notification_sound),
+                text = stringResource(R.string.automation_action_notification),
                 color = TextPrimary,
                 fontSize = 16.sp
             )
@@ -1896,6 +1919,210 @@ private fun NotificationEditDialog(
         },
         confirmButton = {
             TextButton(onClick = { if (canSave) onSave(titleText.trim(), bodyText.trim()) }, enabled = canSave) {
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
+            }
+        }
+    )
+}
+
+// --- Speak Action Controls (v3.6) ---
+
+@Composable
+private fun SpeakActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val text = action.speakText()
+    val preview = if (text.isNotBlank()) text else stringResource(R.string.automation_speak_text_label)
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.RecordVoiceOver,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (text.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1
+        )
+    }
+
+    if (editing) {
+        SpeakEditDialog(
+            initialText = text,
+            onDismiss = { editing = false },
+            onSave = { newText ->
+                onUpdate(action.withSpeakText(newText))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun SpeakEditDialog(
+    initialText: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var textValue by rememberSaveable { mutableStateOf(initialText) }
+    val canSave = textValue.trim().isNotBlank() && textValue.length <= 200
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = {
+            Text(
+                text = stringResource(R.string.automation_action_speak),
+                color = TextPrimary,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = textValue,
+                    onValueChange = { if (it.length <= 200) textValue = it },
+                    label = { Text(stringResource(R.string.automation_speak_text_label)) },
+                    maxLines = 4,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (canSave) onSave(textValue.trim()) }, enabled = canSave) {
+                Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.automation_cancel_button), color = TextSecondary)
+            }
+        }
+    )
+}
+
+// --- Agent Query Action Controls (v3.6) ---
+
+@Composable
+private fun AgentQueryActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var editing by remember { mutableStateOf(false) }
+    val prompt = action.agentPrompt()
+    val preview = if (prompt.isNotBlank()) prompt else stringResource(R.string.automation_agent_prompt_label)
+
+    Row(
+        modifier = modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { editing = true }
+            .padding(8.dp, 7.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Chat,
+            contentDescription = null,
+            tint = AccentTeal,
+            modifier = Modifier.size(14.dp)
+        )
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = preview,
+            fontSize = 13.sp,
+            color = if (prompt.isBlank()) TextMuted else TextPrimary,
+            maxLines = 1
+        )
+    }
+
+    if (editing) {
+        AgentQueryEditDialog(
+            initialPrompt = prompt,
+            onDismiss = { editing = false },
+            onSave = { newPrompt ->
+                onUpdate(action.withAgentPrompt(newPrompt))
+                editing = false
+            }
+        )
+    }
+}
+
+@Composable
+private fun AgentQueryEditDialog(
+    initialPrompt: String,
+    onDismiss: () -> Unit,
+    onSave: (String) -> Unit
+) {
+    var promptValue by rememberSaveable { mutableStateOf(initialPrompt) }
+    val canSave = promptValue.trim().isNotBlank() && promptValue.length <= 500
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = {
+            Text(
+                text = stringResource(R.string.automation_action_agent_query),
+                color = TextPrimary,
+                fontSize = 16.sp
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = promptValue,
+                    onValueChange = { if (it.length <= 500) promptValue = it },
+                    label = { Text(stringResource(R.string.automation_agent_prompt_label)) },
+                    maxLines = 6,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { if (canSave) onSave(promptValue.trim()) }, enabled = canSave) {
                 Text(stringResource(R.string.automation_save_button), color = if (canSave) AccentGreen else TextMuted)
             }
         },

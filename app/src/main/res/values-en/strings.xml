@@ -99,6 +99,8 @@
     <string name="settings_widget_reset_position_button">Reset position</string>
     <string name="settings_reset_seat_channel">Reset seat channel</string>
     <string name="settings_reset_seat_channel_hint">If seat heating or ventilation stops working after switching cars</string>
+    <string name="settings_reset_trip_source">Reset trip source detection</string>
+    <string name="settings_reset_trip_source_hint">If trips are not being recorded: the app will re-check whether the car maintains its own trip database and enable built-in recording when needed</string>
     <string name="orb_you">You:</string>
     <string name="orb_agent">Agent:</string>
     <string name="settings_voice_native_assistant_header">Native BYD voice assistant</string>
@@ -192,6 +194,8 @@
     <string name="charges_action_delete">Delete</string>
     <string name="charges_delete_dialog_title">Delete charging session?</string>
     <string name="charges_delete_dialog_text">%1$s kWh - cannot be restored.</string>
+    <string name="trips_delete_dialog_title">Delete trip?</string>
+    <string name="trips_delete_dialog_text">%1$s km - the trip and its route will be deleted and cannot be restored.</string>
     <string name="charges_onboarding_empty_text">Charging statistics are unavailable. To see kWh and cost for each charging session, enable \"System data\" in Settings.</string>
     <string name="charges_go_to_settings_button">Go to Settings</string>
     <string name="charges_sentinel_empty_text">Charging statistics are unavailable for your car model - diagnostic data cannot be read. SoH is not shown either.</string>
@@ -305,8 +309,7 @@
     <string name="automation_delay_display_name">Delay %1$s</string>
     <string name="automation_add_action_button">+ Add action</string>
     <string name="automation_action_dplus_command">Vehicle command</string>
-    <string name="automation_action_notification_silent">Notification (silent)</string>
-    <string name="automation_action_notification_sound">Notification (sound)</string>
+    <string name="automation_action_notification">Notification</string>
     <string name="automation_action_app_launch">Launch app</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Call</string>
@@ -318,6 +321,12 @@
     <string name="automation_action_sentry">Sentry mode</string>
     <string name="automation_action_sentry_on">Enable</string>
     <string name="automation_action_sentry_off">Disable</string>
+    <string name="automation_action_speak">Speak text</string>
+    <string name="automation_action_agent_query">Ask the agent</string>
+    <string name="auto_act_speak">Speak text</string>
+    <string name="auto_act_agent_query">Ask the agent</string>
+    <string name="automation_speak_text_label">Text to speak</string>
+    <string name="automation_agent_prompt_label">Prompt for the voice agent</string>
     <string name="automation_overlay_permission_title">Permission required</string>
     <string name="automation_overlay_permission_text">Sound notifications are shown as a popup over other apps. Open system settings and enable \"Display over other apps\" for BYDMate.</string>
     <string name="automation_overlay_open_settings">Open settings</string>
@@ -636,6 +645,8 @@
     <!-- units -->
     <string name="auto_unit_celsius">°C</string>
     <string name="auto_unit_dry_hint">(0=dry)</string>
+    <string name="auto_unit_light_hint">(1=dark, 5=bright)</string>
+    <string name="auto_unit_key_ok_hint">(0=OK)</string>
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
@@ -658,6 +669,8 @@
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Connected</string>
     <string name="auto_enum_fastened">Fastened</string>
+    <string name="auto_enum_seat_free">Free</string>
+    <string name="auto_enum_seat_occupied">Occupied</string>
     <string name="auto_enum_fresh_air">Fresh air</string>
     <string name="auto_enum_locked">Locked</string>
     <string name="auto_enum_none">None</string>
@@ -698,6 +711,14 @@
     <string name="auto_param_actemp">AC Temp</string>
     <string name="auto_param_fanlevel">Fan Level</string>
     <string name="auto_param_seatbeltfl">Driver Seatbelt</string>
+    <string name="auto_param_seatbeltfr">Passenger Seatbelt</string>
+    <string name="auto_param_occupancyfl">Driver Seat</string>
+    <string name="auto_param_occupancyfr">Front Passenger Seat</string>
+    <string name="auto_param_occupancyrl">Rear Left Seat</string>
+    <string name="auto_param_occupancyrm">Rear Middle Seat</string>
+    <string name="auto_param_occupancyrr">Rear Right Seat</string>
+    <string name="auto_param_lightlevel">Ambient Light</string>
+    <string name="auto_param_keybattery">Key Fob Battery</string>
     <string name="auto_param_tirepressfl">FL Tire Pressure</string>
     <string name="auto_param_tirepressfr">FR Tire Pressure</string>
     <string name="auto_param_tirepressrl">RL Tire Pressure</string>
@@ -718,6 +739,14 @@
     <string name="auto_act_close_driver_window">Close Driver Window</string>
     <string name="auto_act_open_passenger_window">Open Passenger Window</string>
     <string name="auto_act_close_passenger_window">Close Passenger Window</string>
+    <string name="auto_act_open_rear_left_window">Open Rear Left Window</string>
+    <string name="auto_act_close_rear_left_window">Close Rear Left Window</string>
+    <string name="auto_act_open_rear_right_window">Open Rear Right Window</string>
+    <string name="auto_act_close_rear_right_window">Close Rear Right Window</string>
+    <string name="auto_act_vent_driver_window">Vent Driver Window</string>
+    <string name="auto_act_vent_passenger_window">Vent Passenger Window</string>
+    <string name="auto_act_vent_rear_left_window">Vent Rear Left Window</string>
+    <string name="auto_act_vent_rear_right_window">Vent Rear Right Window</string>
     <string name="auto_act_auto_ac">Auto AC</string>
     <string name="auto_act_ventilation_no_ac">Ventilation (no AC)</string>
     <string name="auto_act_temp_18c">Temp 18°C</string>
@@ -728,6 +757,9 @@
     <string name="auto_act_fresh_air">Fresh Air</string>
     <string name="auto_act_windshield_defog_on">Windshield Defog On</string>
     <string name="auto_act_windshield_defog_off">Windshield Defog Off</string>
+    <string name="auto_act_ac_off">AC Off</string>
+    <string name="auto_act_ac_auto_on">AC Auto Mode</string>
+    <string name="auto_act_ac_auto_off">AC Manual Mode</string>
     <string name="auto_act_driver_heat_1">Driver Heat 1</string>
     <string name="auto_act_driver_heat_2">Driver Heat 2</string>
     <string name="auto_act_driver_heat_3">Driver Heat 3</string>
@@ -767,6 +799,9 @@
     <string name="auto_act_sunroof_close">Sunroof Close</string>
     <string name="auto_act_sunshade_open">Sunshade Open</string>
     <string name="auto_act_sunshade_close">Sunshade Close</string>
+    <string name="auto_act_sunroof_stop">Sunroof Stop</string>
+    <string name="auto_act_sunroof_updip">Sunroof Tilt</string>
+    <string name="auto_act_sunroof_comfort">Sunroof Comfort</string>
     <string name="auto_act_open_trunk">Open Trunk</string>
     <string name="auto_act_close_trunk">Close Trunk</string>
     <string name="auto_act_open_front_trunk">Open Front Trunk</string>
@@ -793,10 +828,12 @@
     <string name="auto_msg_url_no_scheme">Action #%1$d: URL must contain a scheme (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Action #%1$d: Yandex Music mode not selected</string>
     <string name="auto_msg_sentry_invalid">Action #%1$d: invalid sentry mode state</string>
+    <string name="auto_msg_speak_text_empty">Action #%1$d: speak text is not set</string>
+    <string name="auto_msg_agent_query_prompt_empty">Action #%1$d: agent query prompt is not set</string>
     <string name="auto_msg_name_cond_action_required">Name and at least one condition and action are required</string>
     <string name="auto_rule_copy_suffix">copy</string>
-    <string name="auto_act_notification_silent">Notification (silent)</string>
-    <string name="auto_act_notification_sound">Notification (sound)</string>
+    <string name="auto_act_notification">Notification</string>
+    <string name="automation_setting_play_sound">Play sound on trigger</string>
     <string name="auto_act_launch_app">Launch app</string>
     <string name="auto_act_call">Call</string>
     <string name="auto_act_navigate">Route in Y.Navigator</string>

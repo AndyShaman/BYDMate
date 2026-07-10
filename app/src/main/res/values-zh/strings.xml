@@ -90,6 +90,8 @@
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
+    <string name="settings_reset_trip_source">重置行程数据源检测</string>
+    <string name="settings_reset_trip_source_hint">如果行程未被记录：应用将重新检测车辆是否维护自己的行程数据库，必要时启用内置记录</string>
     <string name="orb_you">你：</string>
     <string name="orb_agent">助手：</string>
     <string name="settings_voice_native_assistant_header">BYD 原车语音助手</string>
@@ -197,6 +199,8 @@
     <string name="charges_action_delete">删除</string>
     <string name="charges_delete_dialog_title">删除充电记录？</string>
     <string name="charges_delete_dialog_text">%1$s kWh - 删除后无法恢复。</string>
+    <string name="trips_delete_dialog_title">删除行程？</string>
+    <string name="trips_delete_dialog_text">%1$s km - 该行程及其路线将被删除，无法恢复。</string>
     <string name="charges_onboarding_empty_text">充电统计不可用。要在每次充电中查看 kWh 和费用，请在设置中启用"系统数据"。</string>
     <string name="charges_go_to_settings_button">前往设置</string>
     <string name="charges_sentinel_empty_text">您的车型不支持充电统计 - 无法读取诊断数据。SoH 也不会显示。</string>
@@ -338,8 +342,7 @@
     <!-- Add action button -->
     <string name="automation_add_action_button">+ 添加动作</string>
     <string name="automation_action_dplus_command">D+ 指令</string>
-    <string name="automation_action_notification_silent">通知（静音）</string>
-    <string name="automation_action_notification_sound">通知（带声音）</string>
+    <string name="automation_action_notification">通知</string>
     <string name="automation_action_app_launch">启动应用</string>
     <string name="automation_action_yandex_music">Yandex 音乐</string>
     <string name="automation_action_call">拨打电话</string>
@@ -750,6 +753,8 @@
     <!-- units -->
     <string name="auto_unit_celsius">°C</string>
     <string name="auto_unit_dry_hint">(0=干)</string>
+    <string name="auto_unit_light_hint">(1=暗, 5=亮)</string>
+    <string name="auto_unit_key_ok_hint">(0=正常)</string>
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
@@ -772,6 +777,8 @@
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">已连接</string>
     <string name="auto_enum_fastened">已系</string>
+    <string name="auto_enum_seat_free">空闲</string>
+    <string name="auto_enum_seat_occupied">占用</string>
     <string name="auto_enum_fresh_air">外循环</string>
     <string name="auto_enum_locked">已锁</string>
     <string name="auto_enum_none">无</string>
@@ -812,6 +819,14 @@
     <string name="auto_param_actemp">主驾驶空调温度</string>
     <string name="auto_param_fanlevel">风量档位</string>
     <string name="auto_param_seatbeltfl">主驾驶安全带状态</string>
+    <string name="auto_param_seatbeltfr">副驾安全带</string>
+    <string name="auto_param_occupancyfl">主驾座椅占用</string>
+    <string name="auto_param_occupancyfr">副驾座椅占用</string>
+    <string name="auto_param_occupancyrl">左后座椅占用</string>
+    <string name="auto_param_occupancyrm">后中座椅占用</string>
+    <string name="auto_param_occupancyrr">右后座椅占用</string>
+    <string name="auto_param_lightlevel">光照等级</string>
+    <string name="auto_param_keybattery">钥匙电池</string>
     <string name="auto_param_tirepressfl">左前轮气压</string>
     <string name="auto_param_tirepressfr">右前轮气压</string>
     <string name="auto_param_tirepressrl">左后轮气压</string>
@@ -832,6 +847,14 @@
     <string name="auto_act_close_driver_window">关闭主驾车窗</string>
     <string name="auto_act_open_passenger_window">打开副驾车窗</string>
     <string name="auto_act_close_passenger_window">关闭副驾车窗</string>
+    <string name="auto_act_open_rear_left_window">打开后左车窗</string>
+    <string name="auto_act_close_rear_left_window">关闭后左车窗</string>
+    <string name="auto_act_open_rear_right_window">打开后右车窗</string>
+    <string name="auto_act_close_rear_right_window">关闭后右车窗</string>
+    <string name="auto_act_vent_driver_window">主驾车窗通风</string>
+    <string name="auto_act_vent_passenger_window">副驾车窗通风</string>
+    <string name="auto_act_vent_rear_left_window">后左车窗通风</string>
+    <string name="auto_act_vent_rear_right_window">后右车窗通风</string>
     <string name="auto_act_auto_ac">自动空调</string>
     <string name="auto_act_ventilation_no_ac">通风（不开AC）</string>
     <string name="auto_act_temp_18c">温度 18°C</string>
@@ -842,6 +865,9 @@
     <string name="auto_act_fresh_air">外循环</string>
     <string name="auto_act_windshield_defog_on">前挡风除雾开</string>
     <string name="auto_act_windshield_defog_off">前挡风除雾关</string>
+    <string name="auto_act_ac_off">关闭空调</string>
+    <string name="auto_act_ac_auto_on">空调自动</string>
+    <string name="auto_act_ac_auto_off">空调手动</string>
     <string name="auto_act_driver_heat_1">主驾座椅加热1档</string>
     <string name="auto_act_driver_heat_2">主驾座椅加热2档</string>
     <string name="auto_act_driver_heat_3">主驾座椅加热3档</string>
@@ -881,6 +907,9 @@
     <string name="auto_act_sunroof_close">天窗关闭</string>
     <string name="auto_act_sunshade_open">遮阳帘打开</string>
     <string name="auto_act_sunshade_close">遮阳帘关闭</string>
+    <string name="auto_act_sunroof_stop">天窗停止</string>
+    <string name="auto_act_sunroof_updip">天窗通风</string>
+    <string name="auto_act_sunroof_comfort">天窗舒适打开</string>
     <string name="auto_act_open_trunk">打开后备箱</string>
     <string name="auto_act_close_trunk">关闭后备箱</string>
     <string name="auto_act_open_front_trunk">打开前备箱</string>
@@ -907,10 +936,12 @@
     <string name="auto_msg_url_no_scheme">动作 #%1$d：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）</string>
     <string name="auto_msg_ymusic_mode_missing">动作 #%1$d：未选择 Yandex 音乐模式</string>
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
+    <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
+    <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
     <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
     <string name="auto_rule_copy_suffix">副本</string>
-    <string name="auto_act_notification_silent">通知（静音）</string>
-    <string name="auto_act_notification_sound">通知（带声音）</string>
+    <string name="auto_act_notification">通知</string>
+    <string name="automation_setting_play_sound">执行时播放提示音</string>
     <string name="auto_act_launch_app">启动应用</string>
     <string name="auto_act_call">拨打电话</string>
     <string name="auto_act_navigate">Yandex 导航路线</string>
@@ -920,6 +951,12 @@
     <string name="automation_action_sentry">哨兵模式</string>
     <string name="automation_action_sentry_on">开启</string>
     <string name="automation_action_sentry_off">关闭</string>
+    <string name="automation_action_speak">朗读文字</string>
+    <string name="automation_action_agent_query">询问语音助手</string>
+    <string name="auto_act_speak">朗读文字</string>
+    <string name="auto_act_agent_query">询问语音助手</string>
+    <string name="automation_speak_text_label">要朗读的文字</string>
+    <string name="automation_agent_prompt_label">发给语音助手的请求</string>
     <string name="auto_msg_media_volume_missing">动作 #%1$d：未设置音量</string>
     <!-- automation special triggers/actions -->
     <string name="auto_trig_place_enter">进入「%1$s」</string>

@@ -225,6 +225,7 @@ class SettingsViewModel @Inject constructor(
     private val llmConnectionResolver: LlmConnectionResolver,
     private val openRouterClient: OpenRouterClient,
     private val placeRepository: PlaceRepository,
+    private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -258,6 +259,9 @@ class SettingsViewModel @Inject constructor(
 
     /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */
     fun resetSeatChannel() = seatChannelStore.setWinner(SeatChannel.UNKNOWN)
+
+    /** Forget the dead-energydata verdict; the next drives re-detect the trip source (#63). */
+    fun resetTripSourceDetection() = energyDataDeadDetector.reset()
 
     private val _uiState = MutableStateFlow(SettingsUiState(
         appVersion = getVersion(),
@@ -1469,10 +1473,41 @@ class SettingsViewModel @Inject constructor(
                     } else {
                         files.forEach { appendLine("  ${it.name} (${it.length()}B, mtime=${it.lastModified()})") }
                     }
+                    appendLine("liveness: ${energyDataDeadDetector.debugState()}")
                 }
             } catch (e: Exception) {
                 appendLine("(failed to gather vehicle data sources: ${e.message})")
             }
+
+            appendLine("--- audio ---")
+            try {
+                val am = appContext.getSystemService(Context.AUDIO_SERVICE) as android.media.AudioManager
+                val musicVol = am.getStreamVolume(android.media.AudioManager.STREAM_MUSIC)
+                val musicMax = am.getStreamMaxVolume(android.media.AudioManager.STREAM_MUSIC)
+                appendLine("music_stream: vol=$musicVol/$musicMax active=${am.isMusicActive}")
+                // BYD firmwares expose a dedicated voice stream 17 (BTTS); its absence on a
+                // platform means agent TTS falls back into the (ducked) media stream.
+                val bttsMax = runCatching { am.getStreamMaxVolume(17) }.getOrNull()
+                val bttsVol = runCatching { am.getStreamVolume(17) }.getOrNull()
+                appendLine("byd_btts_stream17: " + if (bttsMax != null) "present vol=$bttsVol/$bttsMax" else "absent")
+                val preDuck = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                    .getInt("pre_duck_volume", -1)
+                appendLine("pre_duck_volume: " + if (preDuck >= 0) "$preDuck" else "(none)")
+            } catch (e: Exception) { appendLine("(failed to gather audio state: ${e.message})") }
+
+            appendLine("--- native assistant packages ---")
+            try {
+                val pref = settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "")
+                appendLine("disable_native_assistant pref: \"$pref\"")
+                // Same package family the helper daemon disables via TX_SET_APP_HIDDEN.
+                val pm = appContext.packageManager
+                for (pkg in listOf("com.byd.autovoice", "com.byd.autovoice.engine", "com.byd.autovoice.tts")) {
+                    val state = runCatching { enabledSettingName(pm.getApplicationEnabledSetting(pkg)) }
+                        .getOrElse { "not installed" }
+                    appendLine("$pkg: $state")
+                }
+            } catch (e: Exception) { appendLine("(failed to gather assistant package state: ${e.message})") }
+
             appendLine("===============================")
             appendLine()
         }
@@ -1523,7 +1558,9 @@ class SettingsViewModel @Inject constructor(
                     "HelperClient:*", "HelperBootstrap:*",
                     "ActionDispatcher:*", "VehicleApiImpl:*",
                     "AutomationEngine:*", "AutoserviceDetector:*",
-                    "SteeringWheelKeySvc:*"
+                    "SteeringWheelKeySvc:*",
+                    // v3.6: voice/audio diagnostics (issue #78 + Song volume reports)
+                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*"
                 ))
 
                 // Background thread to pipe logcat to file with size limit.
@@ -1735,4 +1772,14 @@ class SettingsViewModel @Inject constructor(
             }
         }
     }
+}
+
+/** Human-readable name for [android.content.pm.PackageManager.getApplicationEnabledSetting] values. */
+internal fun enabledSettingName(state: Int): String = when (state) {
+    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> "DEFAULT (enabled)"
+    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> "ENABLED"
+    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED -> "DISABLED"
+    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_USER -> "DISABLED_USER"
+    android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DISABLED_UNTIL_USED -> "DISABLED_UNTIL_USED"
+    else -> "UNKNOWN($state)"
 }

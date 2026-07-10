@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 object OverlayNotificationManager {
 
     private const val TAG = "OverlayNotif"
-    private const val AUTO_DISMISS_MS = 6000L
+    private const val AUTO_DISMISS_MS = 15_000L
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
@@ -130,11 +130,11 @@ object OverlayNotificationManager {
         }
 
         wm.addView(composeView, params)
-        playNotificationSound(context)
         Handler(Looper.getMainLooper()).postDelayed(dismiss, AUTO_DISMISS_MS)
     }
 
-    private fun playNotificationSound(context: Context) {
+    /** Rule-level chime: played once per rule firing by AutomationEngine when rule.playSound. */
+    fun playNotificationSound(context: Context) {
         try {
             val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
             RingtoneManager.getRingtone(context, uri)?.play()

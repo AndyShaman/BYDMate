@@ -6,6 +6,7 @@ import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.AgentPersonaPrompt
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -56,77 +57,11 @@ class AgentOrchestrator @Inject constructor(
             history += AgentMessage.User(text)
             try {
                 trimHistory()
-                val outcomes = mutableListOf<AgentToolOutcome>()
-                val callCounts = mutableMapOf<String, Int>()
-                var loopStrikes = 0
-
-                val toolSchemas = tools.schemas()
-                // Terse mode while driving: same system prompt plus one line asking for a single
-                // short confirmation instead of the usual 1-2 sentences.
-                val systemPrompt = SYSTEM_PROMPT +
-                    "\nСегодня " + SimpleDateFormat("d MMMM yyyy 'года,' EEEE", Locale("ru"))
-                        .format(Date(nowMs())) + "." +
-                    AgentPersonaPrompt.block(identity()) +
-                    if (isMoving()) "\nМашина сейчас движется: отвечай максимально коротко, одним подтверждением." else ""
-                repeat(MAX_ITERATIONS) {
-                    // Fresh chunker per LLM turn: a tool round's unterminated tail is discarded when
-                    // the chunker falls out of scope at the end of this iteration (only completed
-                    // sentences were forwarded); the final turn flushes its tail below.
-                    val chunker = if (onSentence != null) SentenceChunker() else null
-                    val onDelta: ((String) -> Unit)? = if (onSentence != null && chunker != null) {
-                        { d -> chunker.feed(d).forEach(onSentence) }
-                    } else null
-                    val reply = backend
-                        .chat(listOf(AgentMessage.System(systemPrompt)) + history, toolSchemas, onDelta)
-                        .getOrElse {
-                            return AgentResult.Error(
-                                (it as? LlmError)?.userMessage ?: "Нет связи с сервером, скажи простую команду"
-                            )
-                        }
-
-                    if (reply.toolCalls.isEmpty()) {
-                        val answer = reply.content?.trim().orEmpty()
-                        if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
-                        if (onSentence != null) chunker?.flush()?.let(onSentence)
-                        history += AgentMessage.Assistant(answer)
-                        lastAnswerAt = nowMs()
-                        return AgentResult.Answer(answer, outcomes.toList())
-                    }
-
-                    history += AgentMessage.Assistant(reply.content, reply.toolCalls)
-                    for ((i, call) in reply.toolCalls.withIndex()) {
-                        val key = call.name + "|" + call.arguments
-                        val seen = callCounts.getOrDefault(key, 0)
-                        if (seen >= MAX_IDENTICAL_CALLS) {
-                            // Loop guard: the model re-requests an identical call; feed it a synthetic
-                            // error instead of executing, and give up after MAX_LOOP_STRIKES rounds.
-                            loopStrikes++
-                            outcomes += AgentToolOutcome(call.name, false)
-                            history += AgentMessage.Tool(call.id, LOOP_ERROR)
-                            if (loopStrikes >= MAX_LOOP_STRIKES) {
-                                // The Assistant message just appended above carries every tool_call in
-                                // this round; close out any calls after this one too, or the next ask()
-                                // would replay an Assistant tool_call with no paired Tool message and
-                                // the backend would reject it.
-                                for (rest in reply.toolCalls.subList(i + 1, reply.toolCalls.size)) {
-                                    history += AgentMessage.Tool(rest.id, LOOP_ERROR)
-                                }
-                                lastAnswerAt = nowMs()
-                                return AgentResult.Error("Модель зациклилась, попробуй переформулировать")
-                            }
-                            continue
-                        }
-                        callCounts[key] = seen + 1
-                        val res = tools.execute(call)
-                        // ok = the tool JSON has no "error" key; unparseable output counts as ok
-                        // (free-form success payloads like web_search results are not errors).
-                        val ok = runCatching { !JSONObject(res).has("error") }.getOrDefault(true)
-                        outcomes += AgentToolOutcome(call.name, ok)
-                        history += AgentMessage.Tool(call.id, res)
-                    }
-                }
-                lastAnswerAt = nowMs()
-                return AgentResult.Error("Слишком длинная цепочка инструментов")
+                return runLoop(
+                    history, buildSystemPrompt(), tools.schemas(),
+                    allowAutomationTools = true, onSentence,
+                    onTerminal = { lastAnswerAt = nowMs() },
+                )
             } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
                 // Roll history back to the entry snapshot: a cancelled turn must not leave an
                 // unpaired tool_calls Assistant (the next ask would be rejected by the provider).
@@ -158,6 +93,107 @@ class AgentOrchestrator @Inject constructor(
         if (nowMs() - lastAnswerAt > FOLLOW_UP_WINDOW_MS) return false
         val last = history.lastOrNull() as? AgentMessage.Assistant ?: return false
         last.toolCalls.isEmpty() && last.content?.trimEnd()?.endsWith("?") == true
+    }
+
+    /** Automation-origin agent turn: single prompt, throwaway message list. Never touches the
+     *  shared [history] or [lastAnswerAt] (no follow-up window, no context bleed into the live
+     *  conversation), and refuses automation-management tools (see AgentTools.AUTOMATION_TOOLS).
+     *  A live ask() in flight wins: tryLock instead of queueing, so a scheduled morning summary
+     *  can never barge into the middle of a real dialog. */
+    suspend fun askDetached(userText: String): AgentResult {
+        if (!mutex.tryLock()) return AgentResult.Error("агент занят")
+        try {
+            if (!settingsRepository.isAgentEnabled()) return AgentResult.Disabled
+            if (!backend.isConfigured()) return AgentResult.Error("Агент не настроен: нужен API-ключ и модель")
+            val text = userText.trim()
+            if (text.isEmpty()) return AgentResult.Disabled
+            val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
+            return runLoop(messages, buildSystemPrompt(), tools.schemas(includeAutomationTools = false),
+                allowAutomationTools = false, onSentence = null, onTerminal = {})
+        } finally {
+            mutex.unlock()
+        }
+    }
+
+    // Terse mode while driving: same system prompt plus one line asking for a single
+    // short confirmation instead of the usual 1-2 sentences.
+    private fun buildSystemPrompt(): String = SYSTEM_PROMPT +
+        "\nСегодня " + SimpleDateFormat("d MMMM yyyy 'года,' EEEE", Locale("ru"))
+            .format(Date(nowMs())) + "." +
+        AgentPersonaPrompt.block(identity()) +
+        if (isMoving()) "\nМашина сейчас движется: отвечай максимально коротко, одним подтверждением." else ""
+
+    /** The LLM/tool loop shared by [ask] (live, persistent history) and [askDetached]
+     *  (automation origin, throwaway messages). [onTerminal] fires exactly where the live
+     *  path used to stamp lastAnswerAt. Caller must hold [mutex]. */
+    private suspend fun runLoop(
+        messages: MutableList<AgentMessage>,
+        systemPrompt: String,
+        toolSchemas: JSONArray,
+        allowAutomationTools: Boolean,
+        onSentence: ((String) -> Unit)?,
+        onTerminal: () -> Unit,
+    ): AgentResult {
+        val outcomes = mutableListOf<AgentToolOutcome>()
+        val callCounts = mutableMapOf<String, Int>()
+        var loopStrikes = 0
+        repeat(MAX_ITERATIONS) {
+            // Fresh chunker per LLM turn: a tool round's unterminated tail is discarded when
+            // the chunker falls out of scope at the end of this iteration (only completed
+            // sentences were forwarded); the final turn flushes its tail below.
+            val chunker = if (onSentence != null) SentenceChunker() else null
+            val onDelta: ((String) -> Unit)? = if (onSentence != null && chunker != null) {
+                { d -> chunker.feed(d).forEach(onSentence) }
+            } else null
+            val reply = backend
+                .chat(listOf(AgentMessage.System(systemPrompt)) + messages, toolSchemas, onDelta)
+                .getOrElse {
+                    return AgentResult.Error(
+                        (it as? LlmError)?.userMessage ?: "Нет связи с сервером, скажи простую команду"
+                    )
+                }
+            if (reply.toolCalls.isEmpty()) {
+                val answer = reply.content?.trim().orEmpty()
+                if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
+                if (onSentence != null) chunker?.flush()?.let(onSentence)
+                messages += AgentMessage.Assistant(answer)
+                onTerminal()
+                return AgentResult.Answer(answer, outcomes.toList())
+            }
+            messages += AgentMessage.Assistant(reply.content, reply.toolCalls)
+            for ((i, call) in reply.toolCalls.withIndex()) {
+                val key = call.name + "|" + call.arguments
+                val seen = callCounts.getOrDefault(key, 0)
+                if (seen >= MAX_IDENTICAL_CALLS) {
+                    // Loop guard: the model re-requests an identical call; feed it a synthetic
+                    // error instead of executing, and give up after MAX_LOOP_STRIKES rounds.
+                    loopStrikes++
+                    outcomes += AgentToolOutcome(call.name, false)
+                    messages += AgentMessage.Tool(call.id, LOOP_ERROR)
+                    if (loopStrikes >= MAX_LOOP_STRIKES) {
+                        // The Assistant message just appended above carries every tool_call in
+                        // this round; close out any calls after this one too, or the next ask()
+                        // would replay an Assistant tool_call with no paired Tool message and
+                        // the backend would reject it.
+                        for (rest in reply.toolCalls.subList(i + 1, reply.toolCalls.size)) {
+                            messages += AgentMessage.Tool(rest.id, LOOP_ERROR)
+                        }
+                        onTerminal()
+                        return AgentResult.Error("Модель зациклилась, попробуй переформулировать")
+                    }
+                    continue
+                }
+                callCounts[key] = seen + 1
+                val res = tools.execute(call, allowAutomationTools)
+                // ok = the tool JSON has no "error" key; unparseable output counts as ok
+                // (free-form success payloads like web_search results are not errors).
+                val ok = runCatching { !JSONObject(res).has("error") }.getOrDefault(true)
+                outcomes += AgentToolOutcome(call.name, ok)
+                messages += AgentMessage.Tool(call.id, res)
+            }
+        }
+        onTerminal()
+        return AgentResult.Error("Слишком длинная цепочка инструментов")
     }
 
     /** Shared by [ask] and [noteAction] (both run under [mutex]) so they can't drift: a history

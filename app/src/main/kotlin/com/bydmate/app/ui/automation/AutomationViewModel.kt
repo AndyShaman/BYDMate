@@ -19,7 +19,9 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.vehicle.VehicleApi
+import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -98,6 +100,14 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("ACTemp", "主驾驶空调温度", R.string.auto_param_actemp, R.string.auto_cat_climate, R.string.auto_unit_celsius),
         TriggerParamOption("FanLevel", "风量档位", R.string.auto_param_fanlevel, R.string.auto_cat_climate),
         TriggerParamOption("SeatbeltFL", "主驾驶安全带状态", R.string.auto_param_seatbeltfl, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        TriggerParamOption("SeatbeltFR", "副驾安全带状态", R.string.auto_param_seatbeltfr, R.string.auto_cat_safety, enumValues = listOf("0" to R.string.auto_enum_unfastened, "1" to R.string.auto_enum_fastened)),
+        // Occupancy codes: 1=free, 2=occupied (validated on-car; NOT 0/1 as the BYD manual claims)
+        TriggerParamOption("OccupancyFL", "主驾座椅占用状态", R.string.auto_param_occupancyfl, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
+        TriggerParamOption("OccupancyFR", "副驾座椅占用状态", R.string.auto_param_occupancyfr, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
+        TriggerParamOption("OccupancyRL", "左后座椅占用状态", R.string.auto_param_occupancyrl, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
+        TriggerParamOption("OccupancyRM", "后中座椅占用状态", R.string.auto_param_occupancyrm, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
+        TriggerParamOption("OccupancyRR", "右后座椅占用状态", R.string.auto_param_occupancyrr, R.string.auto_cat_safety, enumValues = listOf("1" to R.string.auto_enum_seat_free, "2" to R.string.auto_enum_seat_occupied)),
+        TriggerParamOption("KeyBattery", "钥匙电池状态", R.string.auto_param_keybattery, R.string.auto_cat_safety, R.string.auto_unit_key_ok_hint),
         TriggerParamOption("TirePressFL", "左前轮气压", R.string.auto_param_tirepressfl, R.string.auto_cat_safety, R.string.auto_unit_kpa),
         TriggerParamOption("TirePressFR", "右前轮气压", R.string.auto_param_tirepressfr, R.string.auto_cat_safety, R.string.auto_unit_kpa),
         TriggerParamOption("TirePressRL", "左后轮气压", R.string.auto_param_tirepressrl, R.string.auto_cat_safety, R.string.auto_unit_kpa),
@@ -105,6 +115,7 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Rain", "雨量", R.string.auto_param_rain, R.string.auto_cat_safety, R.string.auto_unit_dry_hint),
         TriggerParamOption("LightLow", "近光灯", R.string.auto_param_lightlow, R.string.auto_cat_light, enumValues = listOf("0" to R.string.auto_enum_off, "1" to R.string.auto_enum_on)),
         TriggerParamOption("DRL", "日行灯", R.string.auto_param_drl, R.string.auto_cat_light, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_on, "2" to R.string.auto_enum_off)),
+        TriggerParamOption("LightLevel", "光照等级", R.string.auto_param_lightlevel, R.string.auto_cat_light, R.string.auto_unit_light_hint),
 )
 
 val ACTION_COMMANDS = listOf(
@@ -120,6 +131,14 @@ val ACTION_COMMANDS = listOf(
         ActionOption("主驾打开0", R.string.auto_act_close_driver_window, R.string.auto_cat_windows),
         ActionOption("副驾打开100", R.string.auto_act_open_passenger_window, R.string.auto_cat_windows),
         ActionOption("副驾打开0", R.string.auto_act_close_passenger_window, R.string.auto_cat_windows),
+        ActionOption("后左打开100", R.string.auto_act_open_rear_left_window, R.string.auto_cat_windows),
+        ActionOption("后左打开0", R.string.auto_act_close_rear_left_window, R.string.auto_cat_windows),
+        ActionOption("后右打开100", R.string.auto_act_open_rear_right_window, R.string.auto_cat_windows),
+        ActionOption("后右打开0", R.string.auto_act_close_rear_right_window, R.string.auto_cat_windows),
+        ActionOption("主驾通风", R.string.auto_act_vent_driver_window, R.string.auto_cat_windows),
+        ActionOption("副驾通风", R.string.auto_act_vent_passenger_window, R.string.auto_cat_windows),
+        ActionOption("后左通风", R.string.auto_act_vent_rear_left_window, R.string.auto_cat_windows),
+        ActionOption("后右通风", R.string.auto_act_vent_rear_right_window, R.string.auto_cat_windows),
         ActionOption("自动空调", R.string.auto_act_auto_ac, R.string.auto_cat_climate),
         ActionOption("打开空调通风", R.string.auto_act_ventilation_no_ac, R.string.auto_cat_climate),
         ActionOption("设置温度18", R.string.auto_act_temp_18c, R.string.auto_cat_climate),
@@ -130,6 +149,9 @@ val ACTION_COMMANDS = listOf(
         ActionOption("外循环", R.string.auto_act_fresh_air, R.string.auto_cat_climate),
         ActionOption("吹前挡", R.string.auto_act_windshield_defog_on, R.string.auto_cat_climate),
         ActionOption("关闭吹前挡", R.string.auto_act_windshield_defog_off, R.string.auto_cat_climate),
+        ActionOption("关闭空调", R.string.auto_act_ac_off, R.string.auto_cat_climate),
+        ActionOption("空调自动", R.string.auto_act_ac_auto_on, R.string.auto_cat_climate),
+        ActionOption("空调手动", R.string.auto_act_ac_auto_off, R.string.auto_cat_climate),
         ActionOption("主驾座椅加热1档", R.string.auto_act_driver_heat_1, R.string.auto_cat_seats),
         ActionOption("主驾座椅加热2档", R.string.auto_act_driver_heat_2, R.string.auto_cat_seats),
         ActionOption("主驾座椅加热3档", R.string.auto_act_driver_heat_3, R.string.auto_cat_seats),
@@ -169,6 +191,9 @@ val ACTION_COMMANDS = listOf(
         ActionOption("天窗打开0", R.string.auto_act_sunroof_close, R.string.auto_cat_sunroof),
         ActionOption("遮阳帘打开", R.string.auto_act_sunshade_open, R.string.auto_cat_sunroof),
         ActionOption("遮阳帘关闭", R.string.auto_act_sunshade_close, R.string.auto_cat_sunroof),
+        ActionOption("天窗停止", R.string.auto_act_sunroof_stop, R.string.auto_cat_sunroof),
+        ActionOption("天窗通风", R.string.auto_act_sunroof_updip, R.string.auto_cat_sunroof),
+        ActionOption("天窗舒适打开", R.string.auto_act_sunroof_comfort, R.string.auto_cat_sunroof),
         ActionOption("开后备箱", R.string.auto_act_open_trunk, R.string.auto_cat_body),
         ActionOption("关后备箱", R.string.auto_act_close_trunk, R.string.auto_cat_body),
         ActionOption("前备箱打开", R.string.auto_act_open_front_trunk, R.string.auto_cat_body),
@@ -203,6 +228,7 @@ data class EditingRule(
     val requirePark: Boolean = false,
     val confirmBeforeExecute: Boolean = false,
     val fireOncePerTrip: Boolean = false,
+    val playSound: Boolean = false,
     val isNew: Boolean = true
 )
 
@@ -266,6 +292,13 @@ class AutomationViewModel @Inject constructor(
      */
     fun executeNow(command: String) {
         viewModelScope.launch {
+            // Manual test button bypasses ActionDispatcher.dispatch, so apply the
+            // same safety gates explicitly (frunk/unlock fail closed on unknown speed).
+            val block = ActionDispatcher.safetyBlockReason(command, TrackingService.lastData.value)
+            if (block != null) {
+                Toast.makeText(context, block, Toast.LENGTH_SHORT).show()
+                return@launch
+            }
             val result = vehicleApi.dispatch(command)
             val lc = context.appLocalizedContext()
             val msg = if (result.isSuccess) lc.getString(R.string.auto_msg_dispatch_sent)
@@ -306,6 +339,7 @@ class AutomationViewModel @Inject constructor(
                     requirePark = rule.requirePark,
                     confirmBeforeExecute = rule.confirmBeforeExecute,
                     fireOncePerTrip = rule.fireOncePerTrip,
+                    playSound = rule.playSound,
                     isNew = false
                 )
             )
@@ -333,6 +367,8 @@ class AutomationViewModel @Inject constructor(
             is ActionValidationError.YandexMusicModeMissing -> ctx.getString(R.string.auto_msg_ymusic_mode_missing, err.index)
             is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
+            is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
+            is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
             null -> null
         }
     }
@@ -378,6 +414,7 @@ class AutomationViewModel @Inject constructor(
             requirePark = e.requirePark,
             confirmBeforeExecute = e.confirmBeforeExecute,
             fireOncePerTrip = e.fireOncePerTrip,
+            playSound = e.playSound,
         )
 
         viewModelScope.launch {
@@ -538,18 +575,12 @@ class AutomationViewModel @Inject constructor(
 
 // --- Action kind helpers (v2.3.0) ---
 
-fun newNotificationAction(silent: Boolean, context: Context): ActionDef {
-    val name = if (silent)
-        context.getString(R.string.auto_act_notification_silent)
-    else
-        context.getString(R.string.auto_act_notification_sound)
-    return ActionDef(
-        command = "",
-        displayName = name,
-        kind = if (silent) "notification_silent" else "notification_sound",
-        payload = """{"title":"","text":""}"""
-    )
-}
+fun newNotificationAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_notification),
+    kind = "notification",
+    payload = """{"title":"","text":""}"""
+)
 
 fun ActionDef.notificationTitle(): String = try {
     org.json.JSONObject(payload ?: "{}").optString("title")
@@ -710,6 +741,40 @@ fun newSentryAction(context: Context): ActionDef = ActionDef(
     displayName = context.getString(R.string.automation_action_sentry),
     kind = "sentry",
     payload = "1"
+)
+
+// --- Speak helpers (v3.6) ---
+
+fun newSpeakAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_speak),
+    kind = "speak",
+    payload = """{"text":""}"""
+)
+
+fun ActionDef.speakText(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("text")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withSpeakText(text: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply { put("text", text) }.toString()
+)
+
+// --- Agent query helpers (v3.6) ---
+
+fun newAgentQueryAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_agent_query),
+    kind = "agent_query",
+    payload = """{"prompt":""}"""
+)
+
+fun ActionDef.agentPrompt(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("prompt")
+} catch (e: Exception) { "" }
+
+fun ActionDef.withAgentPrompt(prompt: String): ActionDef = copy(
+    payload = org.json.JSONObject().apply { put("prompt", prompt) }.toString()
 )
 
 /**

@@ -10,6 +10,7 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.data.automation.hhmmToMinute
@@ -79,8 +80,11 @@ class AgentTools @Inject constructor(
     /** Test seam — deterministic time for period queries. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
-    /** Test seam — delay before re-reading the cluster IPC mode to confirm the toggle took. */
-    internal var clusterVerifyDelayMs = 2_000L
+    /** Test seam — poll interval for re-reading the cluster IPC mode after apply(). */
+    internal var clusterPollIntervalMs = 500L
+
+    /** Test seam — poll attempts before giving up (30 x 500ms = 15s worst case). */
+    internal var clusterPollAttempts = 30
 
     /** Test seam — live GPS position, default reads TrackingService's last known fix. */
     internal var locationProvider: () -> Pair<Double, Double>? =
@@ -97,7 +101,7 @@ class AgentTools @Inject constructor(
         }
     }
 
-    suspend fun schemas(): JSONArray = JSONArray().apply {
+    suspend fun schemas(includeAutomationTools: Boolean = true): JSONArray = JSONArray().apply {
         put(tool(
             "get_vehicle_state",
             "Текущее состояние машины: заряд, запас хода, скорость, температуры, климат, окна, двери, шины, свет, подогрев сидений, GPS-позиция и название сохранённого Места, если машина в нём.",
@@ -201,30 +205,34 @@ class AgentTools @Inject constructor(
                 .put("description", "Поисковый запрос")),
             listOf("query"),
         ))
-        val ruleNames = runCatchingCancellable { ruleDao.getEnabled() }.getOrDefault(emptyList()).map { it.name }
-        put(tool(
-            "run_automation",
-            if (ruleNames.isEmpty()) "Запустить сохранённую автоматизацию по имени. Сейчас включённых автоматизаций нет."
-            else "Запустить сохранённую автоматизацию пользователя по имени.",
-            JSONObject().put("name", JSONObject().apply {
-                put("type", "string")
-                if (ruleNames.isNotEmpty()) put("enum", JSONArray(ruleNames))
-            }),
-            listOf("name"),
-        ))
+        if (includeAutomationTools) {
+            val ruleNames = runCatchingCancellable { ruleDao.getEnabled() }.getOrDefault(emptyList()).map { it.name }
+            put(tool(
+                "run_automation",
+                if (ruleNames.isEmpty()) "Запустить сохранённую автоматизацию по имени. Сейчас включённых автоматизаций нет."
+                else "Запустить сохранённую автоматизацию пользователя по имени.",
+                JSONObject().put("name", JSONObject().apply {
+                    put("type", "string")
+                    if (ruleNames.isNotEmpty()) put("enum", JSONArray(ruleNames))
+                }),
+                listOf("name"),
+            ))
+        }
         put(tool(
             "list_automations",
             "Список всех сохранённых автоматизаций пользователя (включая выключенные) с их триггерами и действиями.",
             JSONObject(), emptyList(),
         ))
-        put(tool(
-            "set_automation_enabled",
-            "Включить или выключить сохранённую автоматизацию по имени.",
-            JSONObject()
-                .put("name", JSONObject().put("type", "string").put("description", "Имя автоматизации"))
-                .put("enabled", JSONObject().put("type", "boolean").put("description", "true = включить, false = выключить")),
-            listOf("name", "enabled"),
-        ))
+        if (includeAutomationTools) {
+            put(tool(
+                "set_automation_enabled",
+                "Включить или выключить сохранённую автоматизацию по имени.",
+                JSONObject()
+                    .put("name", JSONObject().put("type", "string").put("description", "Имя автоматизации"))
+                    .put("enabled", JSONObject().put("type", "boolean").put("description", "true = включить, false = выключить")),
+                listOf("name", "enabled"),
+            ))
+        }
         put(tool(
             "list_places",
             "Список сохранённых Мест (дом, работа и т.п.): имя, координаты, радиус в метрах. " +
@@ -352,94 +360,113 @@ class AgentTools @Inject constructor(
                 .put("description", "true = показать карту на приборке, false = убрать")),
             listOf("on"),
         ))
-        put(tool(
-            "create_automation",
-            "Создать новую автоматизацию: \"если <триггер>, то <действия>\". Один триггер, одно или " +
-                "несколько действий. Голосовую фразу и кнопку виджета этим инструментом не настроить.",
-            JSONObject()
-                .put("name", JSONObject().put("type", "string")
-                    .put("description", "Имя автоматизации, должно быть уникальным"))
-                .put("trigger", JSONObject()
-                    .put("type", "object")
-                    .put("description", "Условие срабатывания, ровно один триггер")
-                    .put("properties", JSONObject()
-                        .put("kind", JSONObject()
-                            .put("type", "string")
-                            .put("enum", JSONArray(listOf(
-                                "param", "place_enter", "place_exit", "time_of_day",
-                                "time_range", "service_start", "network_available")))
-                            .put("description", "Тип триггера"))
-                        .put("param", JSONObject()
-                            .put("type", "string")
-                            .put("enum", JSONArray(TRIGGER_PARAMS.map { it.param }))
-                            .put("description", "Только для kind=param: параметр машины"))
-                        .put("operator", JSONObject()
-                            .put("type", "string")
-                            .put("enum", JSONArray(OPERATORS))
-                            .put("description", "Только для kind=param: оператор сравнения"))
-                        .put("value", JSONObject()
-                            .put("description", "Только для kind=param: пороговое значение. Числовые параметры " +
-                                "(скорость, SOC, температуры, давление, проценты) — число строкой. " +
-                                "Параметры-переключатели принимают код ИЛИ название, лучше код: ${enumValueGuide()}. " +
-                                "ACStatus/FanLevel — числом (ACStatus 1=вкл, 0=выкл). " +
-                                "Для kind=time_of_day: dawn/day/dusk/night; для kind=time_range: \"HH:MM-HH:MM\" " +
-                                "(одинаковые начало и конец = сработать ровно в это время)")
-                            .put("anyOf", JSONArray(listOf(
-                                JSONObject().put("type", "string"),
-                                JSONObject()
-                                    .put("type", "string")
-                                    .put("enum", JSONArray(listOf("dawn", "day", "dusk", "night")))
-                                    .put("description", "Для kind=time_of_day: время суток"),
-                            ))))
-                        .put("place_name", JSONObject()
-                            .put("type", "string")
-                            .put("description", "Только для kind=place_enter/place_exit: имя сохранённого места")))
-                    .put("required", JSONArray(listOf("kind"))))
-                .put("actions", JSONObject()
-                    .put("type", "array")
-                    .put("description", "Список действий, минимум одно")
-                    .put("items", JSONObject()
+        if (includeAutomationTools) {
+            put(tool(
+                "create_automation",
+                "Создать новую автоматизацию: \"если <триггер>, то <действия>\". Один триггер, одно или " +
+                    "несколько действий. Триггеры: точное время и расписание (kind=time_range, value=\"HH:MM-HH:MM\", " +
+                    "одинаковые начало и конец = сработать ровно в это время, weekdays = дни недели; пример: " +
+                    "\"каждый будний день в 8:00\" -> value=\"08:00-08:00\", weekdays=[1,2,3,4,5]), " +
+                    "голосовая фраза (kind=voice, поле phrase), кнопка виджета (kind=button_press, поле button), " +
+                    "параметр машины (kind=param), въезд/выезд из места, время суток (kind=time_of_day).",
+                JSONObject()
+                    .put("name", JSONObject().put("type", "string")
+                        .put("description", "Имя автоматизации, должно быть уникальным"))
+                    .put("trigger", JSONObject()
                         .put("type", "object")
+                        .put("description", "Условие срабатывания, ровно один триггер")
                         .put("properties", JSONObject()
                             .put("kind", JSONObject()
                                 .put("type", "string")
                                 .put("enum", JSONArray(listOf(
-                                    "param", "delay", "media_volume", "notification_sound",
-                                    "notification_silent", "call", "navigate", "url",
-                                    "yandex_music", "sentry")))
-                                .put("description", "Тип действия"))
-                            .put("command_id", JSONObject()
+                                    "param", "place_enter", "place_exit", "time_of_day",
+                                    "time_range", "service_start", "network_available",
+                                    "voice", "button_press")))
+                                .put("description", "Тип триггера"))
+                            .put("param", JSONObject()
                                 .put("type", "string")
-                                .put("enum", JSONArray(AgentCommandCatalog.ALL.map { it.id }))
-                                .put("description", "Только для kind=param: идентификатор команды"))
-                            .put("value", JSONObject().put("type", "integer")
-                                .put("description", "Только для kind=param: значение, если команда его требует"))
-                            .put("ms", JSONObject().put("type", "integer")
-                                .put("description", "Только для kind=delay: пауза в мс, 0..30000"))
-                            .put("op", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=media_volume: число / \"+N\" / \"-N\" / mute / unmute"))
-                            .put("title", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=notification_sound/notification_silent: заголовок"))
-                            .put("text", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=notification_sound/notification_silent: текст"))
-                            .put("phone", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=call: номер телефона"))
-                            .put("lat", JSONObject().put("type", "number")
-                                .put("description", "Только для kind=navigate: широта"))
-                            .put("lon", JSONObject().put("type", "number")
-                                .put("description", "Только для kind=navigate: долгота"))
-                            .put("url", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=url: ссылка со схемой, например https://"))
-                            .put("mode", JSONObject().put("type", "string")
-                                .put("description", "Только для kind=yandex_music: режим, например mybeat"))
-                            .put("on", JSONObject().put("type", "boolean")
-                                .put("description", "Только для kind=sentry: включить или выключить охранный режим")))
-                        .put("required", JSONArray(listOf("kind")))))
-                .put("cooldown_seconds", JSONObject()
-                    .put("type", "integer")
-                    .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 30, по умолчанию 60")),
-            listOf("name", "trigger", "actions"),
-        ))
+                                .put("enum", JSONArray(TRIGGER_PARAMS.map { it.param }))
+                                .put("description", "Только для kind=param: параметр машины"))
+                            .put("operator", JSONObject()
+                                .put("type", "string")
+                                .put("enum", JSONArray(OPERATORS))
+                                .put("description", "Только для kind=param: оператор сравнения"))
+                            .put("value", JSONObject()
+                                .put("description", "Только для kind=param: пороговое значение. Числовые параметры " +
+                                    "(скорость, SOC, температуры, давление, проценты) — число строкой. " +
+                                    "Параметры-переключатели принимают код ИЛИ название, лучше код: ${enumValueGuide()}. " +
+                                    "ACStatus/FanLevel — числом (ACStatus 1=вкл, 0=выкл). " +
+                                    "Для kind=time_of_day: dawn/day/dusk/night; для kind=time_range: \"HH:MM-HH:MM\" " +
+                                    "(одинаковые начало и конец = сработать ровно в это время)")
+                                .put("anyOf", JSONArray(listOf(
+                                    JSONObject().put("type", "string"),
+                                    JSONObject()
+                                        .put("type", "string")
+                                        .put("enum", JSONArray(listOf("dawn", "day", "dusk", "night")))
+                                        .put("description", "Для kind=time_of_day: время суток"),
+                                ))))
+                            .put("place_name", JSONObject()
+                                .put("type", "string")
+                                .put("description", "Только для kind=place_enter/place_exit: имя сохранённого места"))
+                            .put("phrase", JSONObject().put("type", "string")
+                                .put("description", "Только для kind=voice: фраза, после которой сработает правило"))
+                            .put("button", JSONObject().put("type", "integer")
+                                .put("description", "Только для kind=button_press: номер кнопки виджета, 1-4"))
+                            .put("weekdays", JSONObject().put("type", "array")
+                                .put("items", JSONObject().put("type", "integer"))
+                                .put("description", "Только для kind=time_range: дни недели, 1=понедельник .. 7=воскресенье. Не указано = каждый день")))
+                        .put("required", JSONArray(listOf("kind"))))
+                    .put("actions", JSONObject()
+                        .put("type", "array")
+                        .put("description", "Список действий, минимум одно")
+                        .put("items", JSONObject()
+                            .put("type", "object")
+                            .put("properties", JSONObject()
+                                .put("kind", JSONObject()
+                                    .put("type", "string")
+                                    .put("enum", JSONArray(listOf(
+                                        "param", "delay", "media_volume", "notification",
+                                        "call", "navigate", "url",
+                                        "yandex_music", "sentry", "app_launch")))
+                                    .put("description", "Тип действия"))
+                                .put("command_id", JSONObject()
+                                    .put("type", "string")
+                                    .put("enum", JSONArray(AgentCommandCatalog.ALL.map { it.id }))
+                                    .put("description", "Только для kind=param: идентификатор команды"))
+                                .put("value", JSONObject().put("type", "integer")
+                                    .put("description", "Только для kind=param: значение, если команда его требует"))
+                                .put("ms", JSONObject().put("type", "integer")
+                                    .put("description", "Только для kind=delay: пауза в мс, 0..30000"))
+                                .put("op", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=media_volume: число / \"+N\" / \"-N\" / mute / unmute"))
+                                .put("title", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=notification: заголовок"))
+                                .put("text", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=notification: текст"))
+                                .put("phone", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=call: номер телефона"))
+                                .put("lat", JSONObject().put("type", "number")
+                                    .put("description", "Только для kind=navigate: широта"))
+                                .put("lon", JSONObject().put("type", "number")
+                                    .put("description", "Только для kind=navigate: долгота"))
+                                .put("url", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=url: ссылка со схемой, например https://"))
+                                .put("mode", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=yandex_music: режим, например mybeat"))
+                                .put("on", JSONObject().put("type", "boolean")
+                                    .put("description", "Только для kind=sentry: включить или выключить охранный режим"))
+                                .put("app", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране")))
+                            .put("required", JSONArray(listOf("kind")))))
+                    .put("cooldown_seconds", JSONObject()
+                        .put("type", "integer")
+                        .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 30, по умолчанию 60"))
+                    .put("play_sound", JSONObject()
+                        .put("type", "boolean")
+                        .put("description", "Проиграть звуковой сигнал при срабатывании правила, по умолчанию false")),
+                listOf("name", "trigger", "actions"),
+            ))
+        }
     }
 
     // runCatching swallows CancellationException (it is an Exception subtype), which would turn
@@ -458,7 +485,7 @@ class AgentTools @Inject constructor(
             Result.failure(e)
         }
 
-    suspend fun execute(call: AgentToolCall): String {
+    suspend fun execute(call: AgentToolCall, allowAutomationTools: Boolean = true): String {
         val args = runCatchingCancellable { JSONObject(call.arguments.ifBlank { "{}" }) }
             .getOrElse { return BAD_ARGS_ERROR }
         // Last-resort net: every branch already has its own runCatching guards for specific
@@ -466,6 +493,9 @@ class AgentTools @Inject constructor(
         // exception. CancellationException must be rethrown, not swallowed here, or a PTT-stop
         // mid-tool-call would silently turn into an error JSON instead of cancelling the session.
         return try {
+            if (!allowAutomationTools && call.name in AUTOMATION_TOOLS) {
+                return """{"error":"инструмент ${call.name} недоступен в сессии, запущенной автоматизацией"}"""
+            }
             when (call.name) {
                 "get_vehicle_state" -> vehicleState()
                 "get_weather" -> getWeather(args)
@@ -551,11 +581,45 @@ class AgentTools @Inject constructor(
         }
         putIf("voltage_12v", d.voltage12v)
         putIf("battery_temp_avg_c", d.avgBatTemp)
-        putIf("charging_gun_connected", d.chargeGunState?.let { it != 0 })
+        putIf("battery_temp_max_c", d.maxBatTemp)
+        putIf("battery_temp_min_c", d.minBatTemp)
+        putIf("cell_voltage_min_v", d.minCellVoltage)
+        putIf("cell_voltage_max_v", d.maxCellVoltage)
+        // Cell delta in millivolts -- the unit battery diagnostics are discussed in.
+        if (d.minCellVoltage != null && d.maxCellVoltage != null) {
+            o.put("cell_voltage_delta_mv", ((d.maxCellVoltage - d.minCellVoltage) * 1000).roundToInt())
+        }
+        // Gun fid: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL -- NONE is 1, not 0.
+        putIf("charging_gun_connected", d.chargeGunState?.let { it >= 2 })
         putIf("drive_mode", when (d.driveMode) { 1 -> "ECO"; 2 -> "SPORT"; else -> null })
+        putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
+        putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })
         putIf("light_high_beam_on", d.lightHigh?.let { it == 1 })
         putIf("light_side_on", d.lightSide?.let { it == 1 })
+        // DRL fid: 1=ON, 2=OFF, 0=invalid -- not a plain boolean.
+        putIf("light_drl_on", when (d.drl) { 1 -> true; 2 -> false; else -> null })
+        // Cabin sensors (sensors wave). Absent sensor -> omit the key: null must
+        // read as "unknown", not as a fabricated false.
+        putIf("seatbelt_driver_fastened", d.seatbeltFL?.let { it == 1 })
+        putIf("seatbelt_front_passenger_fastened", d.seatbeltFR?.let { it == 1 })
+        // Occupancy raw codes: 1=free, 2=occupied.
+        putIf("seat_occupied_driver", d.occupancyFL?.let { it == 2 })
+        putIf("seat_occupied_front_passenger", d.occupancyFR?.let { it == 2 })
+        putIf("seat_occupied_rear_left", d.occupancyRL?.let { it == 2 })
+        putIf("seat_occupied_rear_middle", d.occupancyRM?.let { it == 2 })
+        putIf("seat_occupied_rear_right", d.occupancyRR?.let { it == 2 })
+        putIf("ambient_light_level_1dark_5bright", d.lightLevel)
+        putIf("key_fob_battery_ok", d.keyBatteryStatus?.let { it == 0 })
+        putIf("rain_detected", d.rain?.let { it == 1 })
+        // Deterministic belt flag (same pattern as tire_pressure_warning): moving with
+        // the driver unbuckled, or an occupied front passenger seat unbuckled.
+        val moving = (d.speed ?: 0) > 0
+        val driverUnbuckled = d.seatbeltFL == 0
+        val passengerUnbuckled = d.occupancyFR == 2 && d.seatbeltFR == 0
+        if (moving && (driverUnbuckled || passengerUnbuckled)) {
+            o.put("seatbelt_warning", "кто-то не пристёгнут при движении, предупреди водителя")
+        }
         locationProvider()?.let { (lat, lon) ->
             o.put("gps_lat", lat)
             o.put("gps_lon", lon)
@@ -566,6 +630,8 @@ class AgentTools @Inject constructor(
         runCatchingCancellable { batteryStateRepository.refresh() }.getOrNull()?.let { b ->
             // Float -> Double: Android org.json has no put(String, float) overload.
             putIf("soh_percent", b.sohPercent?.toDouble())
+            putIf("lifetime_km", b.lifetimeKm?.toDouble())
+            putIf("lifetime_kwh", b.lifetimeKwh?.toDouble())
         }
         runCatchingCancellable { rangeCalculator.estimate(d.soc, d.totalElecConsumption) }.getOrNull()?.let {
             o.put("range_km", it.roundToInt())
@@ -1153,40 +1219,39 @@ class AgentTools @Inject constructor(
         else JSONObject().put("error", result.reason ?: "не получилось открыть YouTube").toString()
     }
 
-    private suspend fun launchAppTool(args: JSONObject): String {
-        val name = args.optString("name").trim()
-        if (name.isEmpty()) return """{"error":"не указано название приложения"}"""
+    /** Resolve a human app name to (label, packageName) via aliases + launcher labels. */
+    private suspend fun resolveLauncherApp(name: String): Built<Pair<String, String>> {
         val apps = runCatchingCancellable { launcherAppsProvider() }.getOrNull()
-            ?: return """{"error":"список приложений недоступен"}"""
+            ?: return Built.Error("список приложений недоступен")
         val needle = name.lowercase()
         // Alias hit: resolve to the first candidate package present in the launcher list, so an
         // alias never launches an app this car does not have; miss falls through to label match.
         val aliasMatch = APP_ALIASES[needle]?.firstNotNullOfOrNull { pkg ->
             apps.firstOrNull { it.second == pkg }
         }
-        if (aliasMatch != null) {
-            val (label, pkg) = aliasMatch
-            val result = actionDispatcher.dispatch(
-                ActionDef(command = "", displayName = "Запуск $label", kind = "app_launch",
-                    payload = JSONObject().put("packageName", pkg).toString()), data = null)
-            return if (result.success) JSONObject().put("ok", true).put("app", label).toString()
-            else JSONObject().put("error", result.reason ?: "не получилось запустить $label").toString()
-        }
+        if (aliasMatch != null) return Built.Value(aliasMatch)
         val exact = apps.filter { it.first.lowercase() == needle }
         val matches = exact.ifEmpty { apps.filter { it.first.lowercase().contains(needle) } }
         return when {
-            matches.isEmpty() -> JSONObject().put("error", "приложение не найдено: $name").toString()
-            matches.size > 1 -> JSONObject().put("error",
-                "несколько совпадений: ${matches.take(5).joinToString(", ") { it.first }}. Уточни название").toString()
-            else -> {
-                val (label, pkg) = matches.single()
-                val result = actionDispatcher.dispatch(
-                    ActionDef(command = "", displayName = "Запуск $label", kind = "app_launch",
-                        payload = JSONObject().put("packageName", pkg).toString()), data = null)
-                if (result.success) JSONObject().put("ok", true).put("app", label).toString()
-                else JSONObject().put("error", result.reason ?: "не получилось запустить $label").toString()
-            }
+            matches.isEmpty() -> Built.Error("приложение не найдено: $name")
+            matches.size > 1 -> Built.Error(
+                "несколько совпадений: ${matches.take(5).joinToString(", ") { it.first }}. Уточни название")
+            else -> Built.Value(matches.single())
         }
+    }
+
+    private suspend fun launchAppTool(args: JSONObject): String {
+        val name = args.optString("name").trim()
+        if (name.isEmpty()) return """{"error":"не указано название приложения"}"""
+        val (label, pkg) = when (val r = resolveLauncherApp(name)) {
+            is Built.Error -> return JSONObject().put("error", r.message).toString()
+            is Built.Value -> r.value
+        }
+        val result = actionDispatcher.dispatch(
+            ActionDef(command = "", displayName = "Запуск $label", kind = "app_launch",
+                payload = JSONObject().put("packageName", pkg).toString()), data = null)
+        return if (result.success) JSONObject().put("ok", true).put("app", label).toString()
+        else JSONObject().put("error", result.reason ?: "не получилось запустить $label").toString()
     }
 
     // --- cluster projection ---
@@ -1208,8 +1273,16 @@ class AgentTools @Inject constructor(
             .put("note", if (on) "$label уже на приборке" else "проекции уже нет на приборке")
             .toString()
         clusterVoiceControl.apply(on)
-        delay(clusterVerifyDelayMs)  // setMode is async (scope.launch + mutex)
-        val after = runCatchingCancellable { clusterVoiceControl.projectionMode() }.getOrNull()
+        // setMode is async (scope.launch + mutex) and the full on-sequence (daemon start,
+        // compositor power-up, virtual display, app launch) can take well over 2s on a cold
+        // start. Poll until the mode lands instead of a single fixed-delay check — the old
+        // 2s check reported a false "не включилась" while the projection was still coming up.
+        var after: ClusterMode? = null
+        for (attempt in 1..clusterPollAttempts) {
+            delay(clusterPollIntervalMs)
+            after = runCatchingCancellable { clusterVoiceControl.projectionMode() }.getOrNull()
+            if (after == want) break
+        }
         val failure = runCatchingCancellable { clusterVoiceControl.lastFailure() }.getOrNull()
         return when {
             after == want -> JSONObject().put("ok", true).put("app", label).toString()
@@ -1299,6 +1372,18 @@ class AgentTools @Inject constructor(
             is Built.Value -> r.value
         }
 
+        // Validate voice-phrase collisions (builtin commands, duplicates across rules).
+        // editingId=0L because this is a new rule with no persisted id yet.
+        RuleDraftValidator.validateTriggers(listOf(trigger), editingId = 0L, existingRules = existing)?.let {
+            val msg = when (it) {
+                TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
+                TriggerValidationError.VoicePhraseBuiltin ->
+                    "эта фраза совпадает со встроенной голосовой командой, выбери другую"
+                TriggerValidationError.VoicePhraseTaken -> "эта фраза уже используется другой автоматизацией"
+            }
+            return JSONObject().put("error", msg).toString()
+        }
+
         val actions = mutableListOf<ActionDef>()
         for (i in 0 until actionsArg.length()) {
             val obj = actionsArg.optJSONObject(i)
@@ -1311,12 +1396,14 @@ class AgentTools @Inject constructor(
         RuleDraftValidator.validateActions(actions)?.let { return actionErrorJson(it) }
 
         val cooldown = args.optInt("cooldown_seconds", 60).coerceAtLeast(30)
+        val playSound = args.optBoolean("play_sound", false)
         val rule = RuleEntity(
             name = name,
             enabled = true,
             triggers = TriggerDef.listToJson(listOf(trigger)),
             actions = ActionDef.listToJson(actions),
             cooldownSeconds = cooldown,
+            playSound = playSound,
         )
         runCatchingCancellable { ruleDao.insert(rule) }
             .getOrElse { return """{"error":"не удалось создать автоматизацию"}""" }
@@ -1422,7 +1509,15 @@ class AgentTools @Inject constructor(
                 if (parts.size != 2 || from == null || to == null) {
                     return Built.Error("неверный формат времени, ожидается HH:MM-HH:MM")
                 }
-                val spec = ScheduleSpec(from, to, emptySet())
+                val days = mutableSetOf<Int>()
+                t.optJSONArray("weekdays")?.let { arr ->
+                    for (i in 0 until arr.length()) {
+                        val day = arr.optInt(i, -1)
+                        if (day !in 1..7) return Built.Error("день недели должен быть числом 1-7 (1=понедельник, 7=воскресенье)")
+                        days += day
+                    }
+                }
+                val spec = ScheduleSpec(from, to, days)
                 Built.Value(TriggerDef(
                     param = "Schedule", chineseName = "时间表", operator = "==",
                     value = spec.toJson(), displayName = raw, kind = "time_range",
@@ -1436,11 +1531,31 @@ class AgentTools @Inject constructor(
                 param = "NetworkAvailable", chineseName = "网络可用", operator = "==", value = "true",
                 displayName = "Есть сеть", kind = "network_available",
             ))
+            // Mirrors newVoiceTrigger in AutomationScreen.kt: phrase is stored as both value
+            // and displayName; collision validation (builtin / taken) runs in createAutomation.
+            "voice" -> {
+                val phrase = t.optString("phrase").trim()
+                if (phrase.isEmpty()) return Built.Error("не указана голосовая фраза (поле phrase)")
+                Built.Value(TriggerDef(
+                    param = "Voice", chineseName = "语音", operator = "==",
+                    value = phrase, displayName = phrase, kind = "voice",
+                ))
+            }
+            // Mirrors newButtonPressTrigger in AutomationViewModel.kt: value is button number
+            // as string; displayName is "Кнопка N".
+            "button_press" -> {
+                val button = t.optInt("button", -1)
+                if (button !in 1..4) return Built.Error("номер кнопки виджета должен быть от 1 до 4 (поле button)")
+                Built.Value(TriggerDef(
+                    param = "button", chineseName = "", operator = "==",
+                    value = button.toString(), displayName = "Кнопка $button", kind = "button_press",
+                ))
+            }
             else -> Built.Error("недопустимый тип триггера: $kind")
         }
     }
 
-    private fun buildAction(a: JSONObject): Built<ActionDef> {
+    private suspend fun buildAction(a: JSONObject): Built<ActionDef> {
         val kind = a.optString("kind")
         return when (kind) {
             "param" -> {
@@ -1466,12 +1581,13 @@ class AgentTools @Inject constructor(
                 Built.Value(ActionDef(command = "media_volume", displayName = "Громкость $op",
                     kind = "media_volume", payload = op))
             }
-            "notification_sound", "notification_silent" -> {
+            // Accept legacy kind names and normalize all three to the canonical "notification".
+            "notification", "notification_sound", "notification_silent" -> {
                 val title = a.optString("title").trim()
                 val text = a.optString("text").trim()
                 val payload = JSONObject().put("title", title).put("text", text).toString()
-                Built.Value(ActionDef(command = kind, displayName = title.ifBlank { "Уведомление" },
-                    kind = kind, payload = payload))
+                Built.Value(ActionDef(command = "notification", displayName = title.ifBlank { "Уведомление" },
+                    kind = "notification", payload = payload))
             }
             "call" -> {
                 val phone = a.optString("phone").trim()
@@ -1508,6 +1624,19 @@ class AgentTools @Inject constructor(
                     displayName = if (on) "Включить охрану" else "Выключить охрану",
                     kind = "sentry", payload = if (on) "1" else "0"))
             }
+            "app_launch" -> {
+                val name = a.optString("app").trim()
+                if (name.isEmpty()) return Built.Error("не указано приложение (поле app)")
+                val (label, pkg) = when (val r = resolveLauncherApp(name)) {
+                    is Built.Error -> return r
+                    is Built.Value -> r.value
+                }
+                Built.Value(ActionDef(
+                    command = "", displayName = "Запуск $label", kind = "app_launch",
+                    payload = JSONObject().put("packageName", pkg).put("appLabel", label)
+                        .put("minimize", false).toString(),
+                ))
+            }
             else -> Built.Error("недопустимый тип действия: $kind")
         }
     }
@@ -1526,6 +1655,10 @@ class AgentTools @Inject constructor(
             is ActionValidationError.MediaVolumeMissing -> "не указан уровень громкости (действие ${err.index})"
             is ActionValidationError.SentryInvalid ->
                 "некорректное состояние охранного режима (действие ${err.index})"
+            is ActionValidationError.SpeakTextEmpty ->
+                "не задан текст для озвучки (действие ${err.index})"
+            is ActionValidationError.AgentQueryPromptEmpty ->
+                "не задан запрос агенту (действие ${err.index})"
         }
         return JSONObject().put("error", msg).toString()
     }
@@ -1569,6 +1702,11 @@ class AgentTools @Inject constructor(
     private fun round1(v: Double): Double = Math.round(v * 10.0) / 10.0
 
     companion object {
+        /** Tools that manage automations. Excluded for automation-origin sessions: run_automation
+         *  reaches fireVoiceRule (which bypasses cooldown by design), so a rule whose agent_query
+         *  action calls it could recurse into itself with no engine-level brake. */
+        internal val AUTOMATION_TOOLS = setOf("run_automation", "create_automation", "set_automation_enabled")
+
         private const val DAY_MS = 24L * 3600_000
         private const val PERIOD_ERROR =
             """{"error":"укажи period (day/week/month) или даты from и to в формате ГГГГ-ММ-ДД"}"""

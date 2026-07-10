@@ -45,4 +45,7 @@ interface TripPointDao {
 
     @Insert
     suspend fun insert(point: TripPointEntity): Long
+
+    @Query("DELETE FROM trip_points WHERE trip_id = :tripId")
+    suspend fun deleteByTripId(tripId: Long): Int
 }

@@ -83,6 +83,12 @@ object ClusterProjectionManager {
     private const val KEY_LAST_VD_ID = "last_vd_id"
     /** Wave P: power the cluster compositor automatically around projection (default ON). */
     const val KEY_AUTO_CONTAINER = "auto_container_enabled"
+    // Set while the daemon has powered the cluster compositor up for our projection; cleared only
+    // after a CONFIRMED power-down. Survives process death: when the car shuts off mid-projection
+    // the off sequence (18 -> pause -> 0) never runs, the compositor reboots in projection mode
+    // with nobody drawing, and the cluster stays black — recoverStaleCompositor() reads this at
+    // service start to send the missing power-down.
+    private const val KEY_COMPOSITOR_POWERED = "compositor_powered_on"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
@@ -319,11 +325,7 @@ object ClusterProjectionManager {
                 projectedPackage = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
-                if (autoContainerEnabled(context)) {
-                    // Wave P: 18 -> pause -> 0 powers the compositor back down. The daemon runs the whole
-                    // sequence in one transaction, so the 1s pause never blocks this coroutine's caller.
-                    runCatching { helper.setClusterContainerMode(false) }
-                }
+                if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
             }
             ClusterMode.FULLSCREEN -> {
                 val failure = project(context, mode, helper, bootstrap)
@@ -338,12 +340,48 @@ object ClusterProjectionManager {
                     projectedPackage = null
                     currentMode = ClusterMode.OFF
                     lastFailure = failure
-                    if (autoContainerEnabled(context)) {
-                        // Wave P: 18 -> pause -> 0 powers the compositor back down. The daemon runs the whole
-                        // sequence in one transaction, so the 1s pause never blocks this coroutine's caller.
-                        runCatching { helper.setClusterContainerMode(false) }
-                    }
+                    if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
                 }
+            }
+        }
+    }
+
+    /**
+     * Wave P: 18 -> pause -> 0 powers the compositor back down. The daemon runs the whole
+     * sequence in one transaction, so the 1s pause never blocks this coroutine's caller.
+     * The marker is cleared only on a CONFIRMED power-down — a failed call keeps it so the
+     * next service start retries via [recoverStaleCompositor].
+     */
+    private suspend fun powerDownCompositor(context: Context, helper: HelperClient) {
+        val off = runCatching { helper.setClusterContainerMode(false) }.getOrDefault(false)
+        if (off) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_COMPOSITOR_POWERED, false).apply()
+        } else {
+            Log.w(TAG, "compositor power-down not confirmed; keeping marker for recovery")
+        }
+    }
+
+    /**
+     * One-shot recovery at service start: if a prior process (or the whole head unit) died while
+     * the compositor was powered up for projection, the off sequence never ran and the cluster
+     * boots BLACK — the compositor sits in projection mode with nobody drawing. Sends the missing
+     * power-down and clears the marker. No-op when a projection is live in THIS process (it owns
+     * the compositor), when no marker is set, or when auto-container is off.
+     */
+    fun recoverStaleCompositor(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+        val appContext = context.applicationContext
+        scope.launch {
+            mutex.withLock {
+                val marker = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .getBoolean(KEY_COMPOSITOR_POWERED, false)
+                if (!shouldRecoverCompositor(marker, currentMode, autoContainerEnabled(appContext))) return@withLock
+                if (!bootstrap.ensureRunning()) {
+                    Log.w(TAG, "recoverStaleCompositor: daemon unreachable; keeping marker for next start")
+                    return@withLock
+                }
+                Log.i(TAG, "recoverStaleCompositor: powering down compositor left on by a prior session")
+                powerDownCompositor(appContext, helper)
             }
         }
     }
@@ -360,7 +398,11 @@ object ClusterProjectionManager {
         if (autoContainerEnabled(context)) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
-            // fails (the compositor may already be on).
+            // fails (the compositor may already be on). The marker is persisted even on failure —
+            // compositor state is then unknown, and an extra recovery power-down against an
+            // already-off compositor is harmless.
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).apply()
             runCatching { helper.setClusterContainerMode(true) }
         }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays

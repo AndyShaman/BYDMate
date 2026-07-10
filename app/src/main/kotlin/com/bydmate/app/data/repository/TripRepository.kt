@@ -1,10 +1,14 @@
 package com.bydmate.app.data.repository
 
+import androidx.room.withTransaction
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripSummary
+import com.bydmate.app.data.local.dao.TripTombstoneDao
+import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
+import com.bydmate.app.data.local.entity.TripTombstoneEntity
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -14,7 +18,9 @@ import javax.inject.Singleton
 @Singleton
 class TripRepository @Inject constructor(
     private val tripDao: TripDao,
-    private val tripPointDao: TripPointDao
+    private val tripPointDao: TripPointDao,
+    private val tripTombstoneDao: TripTombstoneDao,
+    private val db: AppDatabase,
 ) {
     // Cached EMA consumption (kWh/100km). Null = needs recompute.
     // Shared between DashboardViewModel and TrackingService via @Singleton.
@@ -29,6 +35,22 @@ class TripRepository @Inject constructor(
 
     suspend fun updateTrip(trip: TripEntity) {
         tripDao.update(trip)
+        invalidateEmaCache()
+    }
+
+    /**
+     * Manual trip delete (issue #81): remove the trip and its GPS points; for
+     * energydata-backed trips also drop a tombstone so import paths never resurrect it.
+     * All three DAO calls run in a single Room transaction — a crash between deleteByTripId
+     * and deleteById cannot leave the trip record pointing to non-existent GPS points.
+     * invalidateEmaCache() runs outside the transaction (no DB write, just a volatile null).
+     */
+    suspend fun deleteTrip(trip: TripEntity) {
+        db.withTransaction {
+            trip.bydId?.let { tripTombstoneDao.insert(TripTombstoneEntity(it)) }
+            tripPointDao.deleteByTripId(trip.id)
+            tripDao.deleteById(trip.id)
+        }
         invalidateEmaCache()
     }
 

@@ -27,7 +27,8 @@ class ActionDispatcherFrunkGateTest {
 
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        dispatcher = ActionDispatcher(vehicleApi, helper, context)
+        dispatcher = ActionDispatcher(vehicleApi, helper, context,
+            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) })
     }
 
     private fun param(command: String) =

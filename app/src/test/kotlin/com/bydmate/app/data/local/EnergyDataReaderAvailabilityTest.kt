@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import io.mockk.every
 import io.mockk.spyk
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -47,5 +50,34 @@ class EnergyDataReaderAvailabilityTest {
             "SQLite format 3 ".toByteArray(Charsets.ISO_8859_1) + ByteArray(100)
         )
         assertTrue(readerWithDir(dir).isAvailable())
+    }
+
+    @Test
+    fun `sourceFingerprint returns mtime and size of the db`() {
+        val dir = tmp.newFolder("energydata")
+        val db = File(dir, "EC_database.db")
+        db.writeBytes("SQLite format 3 ".toByteArray(Charsets.ISO_8859_1) + ByteArray(100))
+        db.setLastModified(1_700_000_000_000L)
+        assertEquals(1_700_000_000_000L to db.length(), readerWithDir(dir).sourceFingerprint())
+    }
+
+    @Test
+    fun `sourceFingerprint is null when no db present`() {
+        val dir = tmp.newFolder("energydata_empty")
+        assertNull(readerWithDir(dir).sourceFingerprint())
+    }
+
+    @Test
+    fun `sourceFingerprint changes when only the wal sidecar grows`() {
+        val dir = tmp.newFolder("energydata")
+        val db = File(dir, "EC_database.db")
+        db.writeBytes("SQLite format 3 ".toByteArray(Charsets.ISO_8859_1) + ByteArray(100))
+        db.setLastModified(1_700_000_000_000L)
+        val before = readerWithDir(dir).sourceFingerprint()
+        val wal = File(dir, "EC_database.db-wal")
+        wal.writeBytes(ByteArray(64))
+        wal.setLastModified(1_700_000_002_000L)
+        db.setLastModified(1_700_000_000_000L)  // main file untouched by the checkpoint-less write
+        assertNotEquals(before, readerWithDir(dir).sourceFingerprint())
     }
 }

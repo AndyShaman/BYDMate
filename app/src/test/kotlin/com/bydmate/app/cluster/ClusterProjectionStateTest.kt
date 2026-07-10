@@ -112,4 +112,22 @@ class ClusterProjectionStateTest {
             renderPlanFor(window960, 320, scalePct = 10),
         )
     }
+
+    // --- shouldRecoverCompositor (black cluster after car reboot mid-projection) ---
+
+    @Test fun `stale marker with no live projection is recovered`() {
+        assertEquals(true, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = true))
+    }
+
+    @Test fun `live projection in this process owns the compositor - no recovery`() {
+        assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.FULLSCREEN, autoContainer = true))
+    }
+
+    @Test fun `no marker means nothing to recover`() {
+        assertEquals(false, shouldRecoverCompositor(markerSet = false, mode = ClusterMode.OFF, autoContainer = true))
+    }
+
+    @Test fun `auto-container off means the user manages compositor power manually`() {
+        assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
+    }
 }

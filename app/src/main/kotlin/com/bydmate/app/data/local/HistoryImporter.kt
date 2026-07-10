@@ -5,6 +5,7 @@ import android.util.Log
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.LastSessionRepository
@@ -27,6 +28,7 @@ class HistoryImporter @Inject constructor(
     private val idleDrainDao: IdleDrainDao,
     private val settingsRepository: SettingsRepository,
     private val lastSessionRepository: LastSessionRepository,
+    private val tripTombstoneDao: TripTombstoneDao,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -121,6 +123,12 @@ class HistoryImporter @Inject constructor(
             // Check duplicate by byd_id
             val existingById = tripDao.getByBydId(byd.id)
             if (existingById != null) {
+                skippedDuplicate++
+                continue
+            }
+
+            // Manually deleted by the user — never re-import (issue #81)
+            if (tripTombstoneDao.exists(byd.id)) {
                 skippedDuplicate++
                 continue
             }
@@ -258,6 +266,9 @@ class HistoryImporter @Inject constructor(
 
                 // Already imported?
                 if (tripDao.getByBydId(byd.id) != null) continue
+
+                // Manually deleted by the user — never re-import (issue #81)
+                if (tripTombstoneDao.exists(byd.id)) continue
 
                 // Find matching live trip (startTs within ±5 min)
                 val match = liveTrips.firstOrNull { live ->

@@ -31,7 +31,8 @@ class ActionDispatcherYoutubeTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val dispatcher = ActionDispatcher(vehicleApi, helper, app)
+    private val dispatcher = ActionDispatcher(vehicleApi, helper, app,
+        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) })
 
     private fun installPackage(pkg: String) {
         val info = ActivityInfo().apply {

@@ -161,6 +161,9 @@ object ListeningOverlay {
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
 
+    /** True while the pill overlay is attached (a live voice session or another announcement owns it). */
+    fun isShowing(): Boolean = active != null
+
     /** No-op if already shown -- a continuous session must never stack a second window. */
     suspend fun show(context: Context, initial: String) {
         if (active != null) return // cheap fast path; not authoritative, see recheck below

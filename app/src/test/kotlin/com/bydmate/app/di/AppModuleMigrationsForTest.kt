@@ -78,4 +78,20 @@ object AppModuleMigrationsForTest {
             db.execSQL("ALTER TABLE last_state ADD COLUMN trip_start_total_elec REAL")
         }
     }
+
+    val MIGRATION_16_17 = object : Migration(16, 17) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE automation_rules ADD COLUMN play_sound INTEGER NOT NULL DEFAULT 0")
+            // Rules that used the audible notification action keep sounding via the new
+            // per-rule flag. Must run BEFORE the kind rewrite below.
+            db.execSQL("""UPDATE automation_rules SET play_sound = 1 WHERE actions LIKE '%"kind":"notification_sound"%'""")
+            db.execSQL("""UPDATE automation_rules SET actions = replace(replace(actions, '"kind":"notification_sound"', '"kind":"notification"'), '"kind":"notification_silent"', '"kind":"notification"')""")
+        }
+    }
+
+    val MIGRATION_17_18 = object : Migration(17, 18) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("CREATE TABLE IF NOT EXISTS trip_tombstones (byd_id INTEGER NOT NULL PRIMARY KEY)")
+        }
+    }
 }

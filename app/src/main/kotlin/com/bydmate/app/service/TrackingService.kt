@@ -91,6 +91,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
+    @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -336,6 +337,10 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
+        // Recover media volume left stuck at the duck level by a process death mid
+        // voice session (restore state used to live only in process memory).
+        runCatching { audioCapture.restoreStuckDuck() }
+
         // Refresh cached last-trip-avg so the widget's parking-mode big-number is
         // ready before the first DiPars tick lands.
         serviceScope.launch {
@@ -379,6 +384,12 @@ class TrackingService : Service(), LocationListener {
                     // search-intent path in ActionDispatcher when no session is available.
                     com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
                 }
+                // Power down a cluster compositor left "on" by a car shutdown mid-projection —
+                // otherwise the cluster boots black (projection mode, nobody drawing). Runs even
+                // when the bootstrap above failed: it retries ensureRunning itself, and on failure
+                // keeps the marker so the next service start tries again.
+                com.bydmate.app.cluster.ClusterProjectionManager.recoverStaleCompositor(
+                    this@TrackingService, helperClient, helperBootstrap)
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")

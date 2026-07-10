@@ -39,6 +39,16 @@ class FidMapTest {
         assertTrue("Duplicate (device, fid) pairs found", pairs.size == pairs.toSet().size)
     }
 
+    @Test fun `sensor wave fields are mapped`() {
+        val mapped = FidMap.entries.map { it.field }.toSet()
+        val required = setOf(
+            "seatbeltFR", "occupancyFL", "occupancyFR", "occupancyRL",
+            "occupancyRM", "occupancyRR", "lightLevel", "keyBatteryStatus",
+            "wiperRelay", "autoWipers",
+        )
+        assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
+    }
+
     @Test fun `every entry has decoder and transact in set 5 7`() {
         FidMap.entries.forEach { e ->
             assertNotNull("Decoder null for ${e.field}", e.decoder)

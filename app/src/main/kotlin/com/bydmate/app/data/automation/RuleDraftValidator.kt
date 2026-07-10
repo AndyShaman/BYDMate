@@ -19,6 +19,8 @@ sealed class ActionValidationError {
     data class YandexMusicModeMissing(val index: Int) : ActionValidationError()
     data class MediaVolumeMissing(val index: Int) : ActionValidationError()
     data class SentryInvalid(val index: Int) : ActionValidationError()
+    data class SpeakTextEmpty(val index: Int) : ActionValidationError()
+    data class AgentQueryPromptEmpty(val index: Int) : ActionValidationError()
 }
 
 /** Reason a trigger draft failed validation (currently: voice-phrase collisions only). */
@@ -49,7 +51,7 @@ object RuleDraftValidator {
                 "param" -> {
                     if (a.command.isBlank()) return ActionValidationError.CommandMissing(n)
                 }
-                "notification_silent", "notification_sound" -> {
+                "notification", "notification_silent", "notification_sound" -> {
                     val title = payloadJson(a.payload).optString("title")
                     if (title.isBlank()) return ActionValidationError.NotifTitleEmpty(n)
                 }
@@ -90,6 +92,16 @@ object RuleDraftValidator {
                 }
                 "sentry" -> {
                     if (a.payload !in listOf("0", "1")) return ActionValidationError.SentryInvalid(n)
+                }
+                "speak" -> {
+                    if (payloadJson(a.payload).optString("text").isBlank()) {
+                        return ActionValidationError.SpeakTextEmpty(n)
+                    }
+                }
+                "agent_query" -> {
+                    if (payloadJson(a.payload).optString("prompt").isBlank()) {
+                        return ActionValidationError.AgentQueryPromptEmpty(n)
+                    }
                 }
             }
         }

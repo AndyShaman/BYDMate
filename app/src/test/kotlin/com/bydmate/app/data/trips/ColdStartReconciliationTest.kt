@@ -1,5 +1,6 @@
 package com.bydmate.app.data.trips
 
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -32,6 +33,7 @@ class ColdStartReconciliationTest {
         }
         val rec = TripRecorder(
             tripDao, lastState, energyAvailable(false),
+            mockk<EnergyDataDeadDetector>(relaxed = true),
             batteryCapacityKwh = { 72.9 },
             now = { 1_000_000L + 4 * 60_000L }   // 4 min later
         )
@@ -50,6 +52,7 @@ class ColdStartReconciliationTest {
         }
         val rec = TripRecorder(
             tripDao, lastState, energyAvailable(false),
+            mockk<EnergyDataDeadDetector>(relaxed = true),
             batteryCapacityKwh = { 72.9 },
             now = { 1_000_000L + 10 * 60_000L }
         )
@@ -78,6 +81,7 @@ class ColdStartReconciliationTest {
         }
         val rec = TripRecorder(
             tripDao, lastState, energyAvailable(false),
+            mockk<EnergyDataDeadDetector>(relaxed = true),
             batteryCapacityKwh = { 72.9 },
             now = { 1_000_000L + 10 * 60_000L }
         )
@@ -91,7 +95,7 @@ class ColdStartReconciliationTest {
     @Test fun `no last_state row starts fresh`() = runTest {
         val tripDao = mockk<TripDao>(relaxed = true)
         val lastState = mockk<LastStateDao>(relaxed = true) { coEvery { getCurrent() } returns null }
-        val rec = TripRecorder(tripDao, lastState, energyAvailable(false), batteryCapacityKwh = { 72.9 })
+        val rec = TripRecorder(tripDao, lastState, energyAvailable(false), mockk<EnergyDataDeadDetector>(relaxed = true), batteryCapacityKwh = { 72.9 })
         rec.reconcileColdStart()
         coVerify(exactly = 0) { tripDao.insert(any()) }
     }
@@ -106,6 +110,7 @@ class ColdStartReconciliationTest {
         }
         val rec = TripRecorder(
             tripDao, lastState, energyAvailable(true),
+            mockk<EnergyDataDeadDetector>(relaxed = true),
             batteryCapacityKwh = { 72.9 },
             now = { 1_000_000L + 10 * 60_000L }
         )

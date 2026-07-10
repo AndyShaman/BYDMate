@@ -33,7 +33,8 @@ data class DispatchResult(val success: Boolean, val reason: String? = null)
 class ActionDispatcher @Inject constructor(
     private val vehicleApi: VehicleApi,
     private val helper: HelperClient,
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val voiceActions: dagger.Lazy<com.bydmate.app.voice.VoiceAutomationActions>,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -128,6 +129,25 @@ class ActionDispatcher @Inject constructor(
         }
 
         /**
+         * True if [command] unlocks the doors. "车门解锁" is the single canonical
+         * unlock string across all catalogs (agent, voice, automation, Alice).
+         */
+        internal fun isDoorUnlockCommand(command: String): Boolean =
+            command.contains("车门解锁")
+
+        /**
+         * Returns a block reason if [command] unlocks the doors while moving
+         * faster than 30 km/h, or when speed is unknown (fail-closed, same
+         * policy as the frunk gate). Locking is never gated. Pure function.
+         */
+        internal fun unlockGateBlockReason(command: String, speed: Int?): String? {
+            if (!isDoorUnlockCommand(command)) return null
+            val s = speed ?: return "Скорость неизвестна, двери не отпираю"
+            if (s > 30) return "Отпирание дверей заблокировано на скорости ${s} км/ч (>30)"
+            return null
+        }
+
+        /**
          * True if [command] would OPEN the front trunk — a powered external panel
          * gated to standstill (speed 0). Close is not gated. Pure predicate, kept in
          * the companion so it is unit-testable without Android deps.
@@ -136,6 +156,30 @@ class ActionDispatcher @Inject constructor(
             command.contains("前备箱") && command.contains("打开") && !command.contains("关")
 
         private val POSITION_OPEN = Regex("打开(\\d+)")
+
+        /**
+         * Full safety gate for a raw vehicle command: blocked patterns, frunk
+         * parked-only, door unlock above 30 km/h, window/sunroof speed limits.
+         * Frunk and unlock fail closed on missing telemetry; window/sunroof
+         * checks are skipped when [data] is null (existing semantics -- callers
+         * that need fail-closed window behavior check the snapshot themselves).
+         * Pure function -- unit-testable and reusable by manual dispatch paths.
+         */
+        internal fun safetyBlockReason(command: String, data: DiParsData?): String? {
+            if (BLOCKED_PATTERNS.any { command.contains(it) }) return "Запрещённая команда"
+            // Frunk is a powered external panel — fail SAFE. Checked BEFORE the data==null
+            // guard so missing telemetry (or unknown speed) blocks the open rather than
+            // allowing it. Unlike windows, this aperture must never open above standstill.
+            if (isFrontTrunkOpenCommand(command)) {
+                val speed = data?.speed ?: return "Скорость неизвестна, передний багажник не открыть"
+                if (speed > 0) return "Передний багажник открывается только на стоянке (скорость $speed км/ч)"
+            }
+            // Door unlock is a safety gate like the frunk: checked BEFORE the
+            // data==null guard so unknown speed blocks the unlock.
+            unlockGateBlockReason(command, data?.speed)?.let { return it }
+            if (data == null) return null
+            return speedGateBlockReason(command, data.speed)
+        }
 
         /** Clamp a requested media volume level to the device's valid [0, max] range. Pure — unit-testable. */
         internal fun clampVolume(level: Int, max: Int): Int = level.coerceIn(0, max.coerceAtLeast(0))
@@ -177,8 +221,7 @@ class ActionDispatcher @Inject constructor(
     suspend fun dispatch(action: ActionDef, data: DiParsData?): DispatchResult = try {
         when (action.kind) {
             "param" -> dispatchParam(action, data)
-            "notification_silent" -> showNotification(action, silent = true)
-            "notification_sound" -> showNotification(action, silent = false)
+            "notification", "notification_silent", "notification_sound" -> showNotification(action)
             "app_launch" -> launchApp(action)
             "call" -> dial(action)
             "navigate" -> navigate(action)
@@ -189,6 +232,8 @@ class ActionDispatcher @Inject constructor(
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "sentry" -> dispatchSentry(action)
+            "speak" -> dispatchSpeak(action)
+            "agent_query" -> dispatchAgentQuery(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -210,6 +255,20 @@ class ActionDispatcher @Inject constructor(
         val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, "Не удалось переключить охранный режим")
+    }
+
+    /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */
+    private suspend fun dispatchSpeak(action: ActionDef): DispatchResult {
+        val text = parsePayload(action.payload)?.optString("text")?.trim().orEmpty()
+        if (text.isEmpty()) return DispatchResult(false, "не задан текст")
+        return voiceActions.get().speak(text)
+    }
+
+    /** "agent_query": run the payload prompt through an isolated agent turn, speak the answer. */
+    private suspend fun dispatchAgentQuery(action: ActionDef): DispatchResult {
+        val prompt = parsePayload(action.payload)?.optString("prompt")?.trim().orEmpty()
+        if (prompt.isEmpty()) return DispatchResult(false, "не задан запрос")
+        return voiceActions.get().agentQuery(prompt)
     }
 
     private suspend fun dispatchDelay(action: ActionDef): DispatchResult {
@@ -263,39 +322,32 @@ class ActionDispatcher @Inject constructor(
         return DispatchResult(success, reason)
     }
 
-    private fun getBlockReason(command: String, data: DiParsData?): String? {
-        if (BLOCKED_PATTERNS.any { command.contains(it) }) return "Запрещённая команда"
-        // Frunk is a powered external panel — fail SAFE. Checked BEFORE the data==null
-        // guard so missing telemetry (or unknown speed) blocks the open rather than
-        // allowing it. Unlike windows, this aperture must never open above standstill.
-        if (isFrontTrunkOpenCommand(command)) {
-            val speed = data?.speed ?: return "Скорость неизвестна, передний багажник не открыть"
-            if (speed > 0) return "Передний багажник открывается только на стоянке (скорость $speed км/ч)"
-        }
-        if (data == null) return null
-        return speedGateBlockReason(command, data.speed)
-    }
+    // Delegate to the companion pure function so all callers (dispatch + manual test button)
+    // share identical gate logic.
+    private fun getBlockReason(command: String, data: DiParsData?): String? =
+        safetyBlockReason(command, data)
 
     // --- notifications (user-visible) ---
 
-    private suspend fun showNotification(action: ActionDef, silent: Boolean): DispatchResult {
+    private suspend fun showNotification(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload)
         val title = payload?.optString("title")?.takeIf(String::isNotBlank) ?: action.displayName
         val text = payload?.optString("text") ?: ""
 
-        if (!silent && com.bydmate.app.ui.overlay.OverlayNotificationManager.canShow(context)) {
+        if (com.bydmate.app.ui.overlay.OverlayNotificationManager.canShow(context)) {
             val shown = com.bydmate.app.ui.overlay.OverlayNotificationManager.show(context, title, text)
             if (shown) return DispatchResult(true)
         }
 
-        val channelId = if (silent) CHANNEL_SILENT_ID else CHANNEL_SOUND_ID
-        val notif = NotificationCompat.Builder(context, channelId)
+        // Fallback: status-bar notification on the silent channel — the audible chime is a
+        // per-rule setting played once at rule fire by AutomationEngine, not per notification.
+        val notif = NotificationCompat.Builder(context, CHANNEL_SILENT_ID)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(text)
             .setStyle(NotificationCompat.BigTextStyle().bigText(text))
             .setAutoCancel(true)
-            .setPriority(if (silent) NotificationCompat.PRIORITY_LOW else NotificationCompat.PRIORITY_HIGH)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
         val id = notifCounter.incrementAndGet()
         nm().notify(id, notif)

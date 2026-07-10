@@ -7,13 +7,20 @@ import org.junit.Test
 // Per DiParsData.kt:21 — powerState: 0=OFF, 1=ON (ignition active, parked), 2=DRIVE.
 // Per DiParsData.kt:20 — gear: 1=P, 2=R, 3=N, 4=D.
 // Per DiParsData.kt:5  — speed: Int? in km/h.
-// chargeGunState != 0 == connected.
+// chargeGunState (fid 876609586): 1=NONE, 2..5=gun connected (AC/DC/AC_DC/VTOL).
 
 class LoopFsmTest {
 
     @Test fun `charge gun connected always wins`() {
-        assertEquals(LoopState.CHARGE, LoopFsm.classify(diParsData(chargeGunState = 1, powerState = 2)))
-        assertEquals(LoopState.CHARGE, LoopFsm.classify(diParsData(chargeGunState = 1, powerState = 0)))
+        assertEquals(LoopState.CHARGE, LoopFsm.classify(diParsData(chargeGunState = 2, powerState = 2)))
+        assertEquals(LoopState.CHARGE, LoopFsm.classify(diParsData(chargeGunState = 3, powerState = 0)))
+    }
+
+    @Test fun `gun value 1 is NONE and does not force charge cadence`() {
+        // Regression: comparing to 0 made every state look like CHARGE (5s cadence),
+        // so DRIVE never got its 1s cadence and OFF never dropped to IDLE 30s.
+        assertEquals(LoopState.DRIVE, LoopFsm.classify(diParsData(chargeGunState = 1, powerState = 2, speed = 25)))
+        assertEquals(LoopState.IDLE, LoopFsm.classify(diParsData(chargeGunState = 1, powerState = 0)))
     }
 
     @Test fun `powerState DRIVE with speed = drive cadence`() {

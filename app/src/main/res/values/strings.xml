@@ -113,6 +113,8 @@
     <string name="settings_widget_reset_position_button">Сбросить позицию</string>
     <string name="settings_reset_seat_channel">Сбросить канал сидений</string>
     <string name="settings_reset_seat_channel_hint">Если подогрев или вентиляция сидений не срабатывают после смены машины</string>
+    <string name="settings_reset_trip_source">Сбросить определение источника поездок</string>
+    <string name="settings_reset_trip_source_hint">Если поездки не записываются: приложение заново проверит, ведёт ли машина свою базу поездок, и при необходимости включит собственную запись</string>
     <string name="orb_you">Ты:</string>
     <string name="orb_agent">Агент:</string>
     <string name="settings_voice_native_assistant_header">Штатный голосовой помощник BYD</string>
@@ -221,6 +223,8 @@
     <string name="charges_action_delete">Удалить</string>
     <string name="charges_delete_dialog_title">Удалить зарядку?</string>
     <string name="charges_delete_dialog_text">%1$s кВт·ч - восстановить будет нельзя.</string>
+    <string name="trips_delete_dialog_title">Удалить поездку?</string>
+    <string name="trips_delete_dialog_text">%1$s км - поездка и её маршрут будут удалены, восстановить будет нельзя.</string>
     <string name="charges_onboarding_empty_text">Статистика зарядок недоступна. Чтобы видеть кВт·ч и стоимость каждой зарядки - включи «Системные данные» в Настройках.</string>
     <string name="charges_go_to_settings_button">Перейти в Настройки</string>
     <string name="charges_sentinel_empty_text">На вашей модели машины статистика зарядок недоступна - диагностические данные не читаются. SoH тоже не показывается.</string>
@@ -362,8 +366,7 @@
     <!-- Add action button -->
     <string name="automation_add_action_button">+ Добавить действие</string>
     <string name="automation_action_dplus_command">Команда автомобилю</string>
-    <string name="automation_action_notification_silent">Уведомление (без звука)</string>
-    <string name="automation_action_notification_sound">Уведомление (звук)</string>
+    <string name="automation_action_notification">Уведомление</string>
     <string name="automation_action_app_launch">Запуск приложения</string>
     <string name="automation_action_yandex_music">Яндекс.Музыка</string>
     <string name="automation_action_call">Звонок</string>
@@ -375,6 +378,12 @@
     <string name="automation_action_sentry">Охранный режим</string>
     <string name="automation_action_sentry_on">Включить</string>
     <string name="automation_action_sentry_off">Отключить</string>
+    <string name="automation_action_speak">Озвучить текст</string>
+    <string name="automation_action_agent_query">Запрос агенту</string>
+    <string name="auto_act_speak">Озвучить текст</string>
+    <string name="auto_act_agent_query">Запрос агенту</string>
+    <string name="automation_speak_text_label">Текст для озвучки</string>
+    <string name="automation_agent_prompt_label">Запрос голосовому агенту</string>
 
     <!-- Overlay permission dialog -->
     <string name="automation_overlay_permission_title">Нужно разрешение</string>
@@ -790,6 +799,8 @@
     <!-- units -->
     <string name="auto_unit_celsius">°C</string>
     <string name="auto_unit_dry_hint">(0=сухо)</string>
+    <string name="auto_unit_light_hint">(1=темно, 5=ярко)</string>
+    <string name="auto_unit_key_ok_hint">(0=в норме)</string>
     <string name="auto_unit_kmh">км/ч</string>
     <string name="auto_unit_kpa">кПа</string>
     <string name="auto_unit_percent">%</string>
@@ -812,6 +823,8 @@
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Подключён</string>
     <string name="auto_enum_fastened">Пристёгнут</string>
+    <string name="auto_enum_seat_free">Свободно</string>
+    <string name="auto_enum_seat_occupied">Занято</string>
     <string name="auto_enum_fresh_air">Внешний воздух</string>
     <string name="auto_enum_locked">Заблокирован</string>
     <string name="auto_enum_none">Нет</string>
@@ -852,6 +865,14 @@
     <string name="auto_param_actemp">Темп. AC</string>
     <string name="auto_param_fanlevel">Вентилятор</string>
     <string name="auto_param_seatbeltfl">Ремень водителя</string>
+    <string name="auto_param_seatbeltfr">Ремень пассажира</string>
+    <string name="auto_param_occupancyfl">Место водителя</string>
+    <string name="auto_param_occupancyfr">Место переднего пассажира</string>
+    <string name="auto_param_occupancyrl">Место сзади слева</string>
+    <string name="auto_param_occupancyrm">Место сзади в центре</string>
+    <string name="auto_param_occupancyrr">Место сзади справа</string>
+    <string name="auto_param_lightlevel">Освещённость</string>
+    <string name="auto_param_keybattery">Батарейка ключа</string>
     <string name="auto_param_tirepressfl">Давление ЛП шины</string>
     <string name="auto_param_tirepressfr">Давление ПП шины</string>
     <string name="auto_param_tirepressrl">Давление ЛЗ шины</string>
@@ -872,6 +893,14 @@
     <string name="auto_act_close_driver_window">Закрыть окно водителя</string>
     <string name="auto_act_open_passenger_window">Открыть окно пассажира</string>
     <string name="auto_act_close_passenger_window">Закрыть окно пассажира</string>
+    <string name="auto_act_open_rear_left_window">Открыть заднее левое окно</string>
+    <string name="auto_act_close_rear_left_window">Закрыть заднее левое окно</string>
+    <string name="auto_act_open_rear_right_window">Открыть заднее правое окно</string>
+    <string name="auto_act_close_rear_right_window">Закрыть заднее правое окно</string>
+    <string name="auto_act_vent_driver_window">Проветрить окно водителя</string>
+    <string name="auto_act_vent_passenger_window">Проветрить окно пассажира</string>
+    <string name="auto_act_vent_rear_left_window">Проветрить заднее левое окно</string>
+    <string name="auto_act_vent_rear_right_window">Проветрить заднее правое окно</string>
     <string name="auto_act_auto_ac">Авто AC</string>
     <string name="auto_act_ventilation_no_ac">Обдув без AC</string>
     <string name="auto_act_temp_18c">Темп. 18°C</string>
@@ -882,6 +911,9 @@
     <string name="auto_act_fresh_air">Циркуляция внешн.</string>
     <string name="auto_act_windshield_defog_on">Обдув лобового вкл</string>
     <string name="auto_act_windshield_defog_off">Обдув лобового выкл</string>
+    <string name="auto_act_ac_off">Выключить климат</string>
+    <string name="auto_act_ac_auto_on">Климат: авторежим</string>
+    <string name="auto_act_ac_auto_off">Климат: ручной режим</string>
     <string name="auto_act_driver_heat_1">Подогрев водителя 1</string>
     <string name="auto_act_driver_heat_2">Подогрев водителя 2</string>
     <string name="auto_act_driver_heat_3">Подогрев водителя 3</string>
@@ -921,6 +953,9 @@
     <string name="auto_act_sunroof_close">Люк закрыть</string>
     <string name="auto_act_sunshade_open">Шторка открыть</string>
     <string name="auto_act_sunshade_close">Шторка закрыть</string>
+    <string name="auto_act_sunroof_stop">Люк остановить</string>
+    <string name="auto_act_sunroof_updip">Люк наклон</string>
+    <string name="auto_act_sunroof_comfort">Люк комфорт</string>
     <string name="auto_act_open_trunk">Открыть багажник</string>
     <string name="auto_act_close_trunk">Закрыть багажник</string>
     <string name="auto_act_open_front_trunk">Открыть передний багажник</string>
@@ -947,10 +982,12 @@
     <string name="auto_msg_url_no_scheme">Действие #%1$d: URL должен содержать схему (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Действие #%1$d: режим Я.Музыки не выбран</string>
     <string name="auto_msg_sentry_invalid">Действие #%1$d: некорректное состояние охранного режима</string>
+    <string name="auto_msg_speak_text_empty">Действие #%1$d: не задан текст для озвучки</string>
+    <string name="auto_msg_agent_query_prompt_empty">Действие #%1$d: не задан запрос агенту</string>
     <string name="auto_msg_name_cond_action_required">Название и хотя бы одно условие и действие обязательны</string>
     <string name="auto_rule_copy_suffix">копия</string>
-    <string name="auto_act_notification_silent">Уведомление (без звука)</string>
-    <string name="auto_act_notification_sound">Уведомление (звук)</string>
+    <string name="auto_act_notification">Уведомление</string>
+    <string name="automation_setting_play_sound">Выполнять со звуком</string>
     <string name="auto_act_launch_app">Запуск приложения</string>
     <string name="auto_act_call">Звонок</string>
     <string name="auto_act_navigate">Маршрут в Я.Навигаторе</string>

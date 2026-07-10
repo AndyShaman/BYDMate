@@ -510,9 +510,18 @@ private fun shExec(script: String, vararg args: String): CmdResult {
 
 /** The single gateway for auto_container: hard whitelist {16, 18, 0}, device id fixed
  *  at 1000. Anything else is a programming error, not a runtime input. */
-private fun autoContainerCall(cmd: Int): Boolean {
+private fun autoContainerCall(cmd: Int): Boolean =
+    autoContainerCall(cmd) { script, arg -> shExec(script, arg).code }
+
+/** Testable core: [exec] runs a shell script with one positional arg and returns its exit code. */
+internal fun autoContainerCall(cmd: Int, exec: (String, String) -> Int): Boolean {
     require(cmd == 16 || cmd == 18 || cmd == 0) { "auto_container cmd $cmd not whitelisted" }
-    return shExec("service call auto_container 2 i32 1000 i32 \"$1\" s16 \"\"", cmd.toString()).code == 0
+    if (exec("service call auto_container 2 i32 1000 i32 \"$1\" s16 \"\"", cmd.toString()) == 0) return true
+    // DiLink 3 registers the cluster compositor under a CamelCase service name
+    // (hint from @klimuts, PR #77). Leopard 3 / DiLink 5 answers on snake_case above,
+    // and `service call` exits non-zero on a missing service, so this second attempt
+    // never runs on platforms where the snake_case name works.
+    return exec("service call AutoContainer 2 i32 1000 i32 \"$1\" s16 \"\"", cmd.toString()) == 0
 }
 
 /**

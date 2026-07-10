@@ -57,6 +57,8 @@ data class TripsUiState(
     val expandedDays: Set<String> = emptySet(),
     val selectedTrip: TripEntity? = null,
     val selectedTripPoints: List<TripPointEntity> = emptyList(),
+    val selectedTripForAction: TripEntity? = null,
+    val deleteConfirmTrip: TripEntity? = null,
     val currencySymbol: String = "BYN",
     val chartMetric: ChartMetric = ChartMetric.PER_100,
     val chartBars: List<ChartBar> = emptyList(),
@@ -145,6 +147,30 @@ class TripsViewModel @Inject constructor(
 
     fun clearSelectedTrip() {
         _uiState.update { it.copy(selectedTrip = null, selectedTripPoints = emptyList()) }
+    }
+
+    fun onLongPressTrip(trip: TripEntity) {
+        _uiState.update { it.copy(selectedTripForAction = trip) }
+    }
+
+    fun onDismissActionSheet() {
+        _uiState.update { it.copy(selectedTripForAction = null) }
+    }
+
+    fun onConfirmDeletePrompt() {
+        _uiState.update { it.copy(deleteConfirmTrip = it.selectedTripForAction, selectedTripForAction = null) }
+    }
+
+    fun onDismissDeleteConfirm() {
+        _uiState.update { it.copy(deleteConfirmTrip = null) }
+    }
+
+    fun onConfirmDelete() {
+        viewModelScope.launch {
+            val trip = _uiState.value.deleteConfirmTrip ?: return@launch
+            tripRepository.deleteTrip(trip)
+            _uiState.update { it.copy(deleteConfirmTrip = null) }
+        }
     }
 
     fun setChartMetric(metric: ChartMetric) {

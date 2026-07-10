@@ -91,3 +91,13 @@ fun renderPlanFor(
 /** The other projection state — drives the steering-wheel toggle (приборка ↔ центр). */
 fun nextMode(current: ClusterMode): ClusterMode =
     if (current == ClusterMode.FULLSCREEN) ClusterMode.OFF else ClusterMode.FULLSCREEN
+
+/**
+ * True when a compositor-on marker persisted by a PRIOR process should be recovered at service
+ * start: the car shut down mid-projection, the off sequence (18 -> pause -> 0) never ran, and the
+ * compositor woke up in projection mode with nobody drawing — a black cluster. A live projection
+ * in THIS process ([mode] != OFF) owns the compositor and must not be powered down under it; with
+ * auto-container off the user manages compositor power manually.
+ */
+fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer: Boolean): Boolean =
+    markerSet && mode == ClusterMode.OFF && autoContainer
