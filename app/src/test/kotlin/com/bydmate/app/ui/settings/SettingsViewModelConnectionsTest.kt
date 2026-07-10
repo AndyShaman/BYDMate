@@ -212,6 +212,7 @@ class SettingsViewModelConnectionsTest {
         val energyReader = EnergyDataReader(ctx)
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
+            com.bydmate.app.data.remote.DiPlusDbReader(),
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx)
         )
 

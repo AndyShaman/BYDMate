@@ -72,25 +72,29 @@ class BYDMateApp : Application(), Configuration.Provider {
         bootstrapLocale()
         initOsmdroid()
         appScope.launch {
-            // Upstream compatibility flag; DM builds keep DIPLUS for Song profiles.
-            settingsRepository.migrateDataSourceIfNeeded()
+            try {
+                // Upstream compatibility flag; DM builds keep DIPLUS for Song profiles.
+                settingsRepository.migrateDataSourceIfNeeded()
 
-            if (!settingsRepository.isInsightCacheV2MigrationDone()) {
-                insightsManager.migrateLegacyCache()
-                settingsRepository.setInsightCacheV2MigrationDone()
-            }
-            // One-shot migration: remove phantom autoservice rows created by the
-            // lifetime_kwh driving-counter bug in v2.4.15/v2.4.16.
-            if (!settingsRepository.isMigrationV2_4_17Done()) {
-                val removed = chargeDao.deletePhantomAutoserviceRows()
-                settingsRepository.setMigrationV2_4_17Done()
-                android.util.Log.i("BYDMateApp", "v2.4.17 migration: removed $removed phantom autoservice rows")
-            }
-            // One-time cleanup of existing duplicates from v2.0.0
-            historyImporter.cleanupDuplicates()
-            // Only sync if setup is completed (prevents duplicates during first wizard run)
-            if (settingsRepository.isSetupCompleted()) {
-                historyImporter.runSync()
+                if (!settingsRepository.isInsightCacheV2MigrationDone()) {
+                    insightsManager.migrateLegacyCache()
+                    settingsRepository.setInsightCacheV2MigrationDone()
+                }
+                // One-shot migration: remove phantom autoservice rows created by the
+                // lifetime_kwh driving-counter bug in v2.4.15/v2.4.16.
+                if (!settingsRepository.isMigrationV2_4_17Done()) {
+                    val removed = chargeDao.deletePhantomAutoserviceRows()
+                    settingsRepository.setMigrationV2_4_17Done()
+                    android.util.Log.i("BYDMateApp", "v2.4.17 migration: removed $removed phantom autoservice rows")
+                }
+                // One-time cleanup of existing duplicates from v2.0.0
+                historyImporter.cleanupDuplicates()
+                // Only sync if setup is completed (prevents duplicates during first wizard run)
+                if (settingsRepository.isSetupCompleted()) {
+                    historyImporter.runSync()
+                }
+            } catch (t: Throwable) {
+                android.util.Log.w("BYDMateApp", "startup maintenance failed", t)
             }
         }
         scheduleDataThinning()

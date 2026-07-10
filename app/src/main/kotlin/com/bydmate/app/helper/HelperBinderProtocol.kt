@@ -35,6 +35,11 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
+ *   TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY : writeString(name), writeInt(width), writeInt(height),
+ *                                            writeInt(density), writeInt(flags), writeInt(clusterDisplayId)
+ *       -> reply: writeInt(status), writeInt(displayId)
+ *   TX_LAUNCH_CLUSTER_ANCHOR : writeInt(displayId)         -> reply: writeInt(status), writeInt(0)
+ *   TX_SET_STOCK_PROJECTION : writeInt(enabled 0/1)        -> reply: writeInt(status), writeInt(0)
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -66,7 +71,11 @@ object HelperBinderProtocol {
     const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
     const val TX_ENABLE_NOTIFICATION_LISTENER = IBinder.FIRST_CALL_TRANSACTION + 18  // 19
     /** Cluster compositor power via the auto_container service (Wave P). [int on] -> [int status]. */
-    val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19
+    const val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19         // 20
+    const val TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY =
+        IBinder.FIRST_CALL_TRANSACTION + 20                                    // 21
+    const val TX_LAUNCH_CLUSTER_ANCHOR = IBinder.FIRST_CALL_TRANSACTION + 21    // 22
+    const val TX_SET_STOCK_PROJECTION = IBinder.FIRST_CALL_TRANSACTION + 22     // 23
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"
@@ -87,4 +96,9 @@ object HelperBinderProtocol {
      */
     const val NOTIFICATION_LISTENER_COMPONENT =
         "com.bydmate.app/com.bydmate.app.media.MediaSessionListenerService"
+    const val CLUSTER_ANCHOR_COMPONENT =
+        "com.bydmate.app/com.bydmate.app.cluster.ClusterAnchorActivity"
+    const val STOCK_MAP_PACKAGE = "com.byd.launchermap"
+    const val STOCK_VIRTUAL_BIND_COMPONENT =
+        "com.byd.launchermap/com.byd.automap.service.VirtualBindService"
 }

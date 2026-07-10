@@ -4,6 +4,7 @@ import android.app.NotificationManager
 import android.content.Context
 import android.media.session.MediaController
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.every
@@ -20,6 +21,7 @@ import org.junit.Test
 // real Intent construction instead.
 class ActionDispatcherMusicPlayTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
+    private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val notificationManager = mockk<NotificationManager>(relaxed = true)
@@ -27,7 +29,7 @@ class ActionDispatcherMusicPlayTest {
 
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        dispatcher = ActionDispatcher(vehicleApi, helper, context)
+        dispatcher = ActionDispatcher(vehicleApi, settingsRepository, helper, context)
     }
 
     @Test fun music_play_uses_media_session_when_available() = runBlocking {

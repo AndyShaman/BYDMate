@@ -1,6 +1,7 @@
 package com.bydmate.app.cluster
 
 import android.content.Context
+import android.app.Activity
 import android.graphics.Point
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -27,6 +28,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
+import java.lang.ref.WeakReference
 
 /**
  * Owns the cluster projection lifecycle. An overlay SurfaceView is placed on the
@@ -111,6 +113,55 @@ object ClusterProjectionManager {
     private var clusterWidth: Int = 1280
     private var clusterHeight: Int = 480
     private var clusterDensityDpi: Int = 320
+    private var stockProjectionSuspended = false
+    @Volatile private var anchorDisplay: Display? = null
+    @Volatile private var anchorSurface: Surface? = null
+    private var anchorActivity = WeakReference<Activity>(null)
+
+    /** Called by the activity Android has already admitted onto the private display. */
+    fun registerClusterAnchor(activity: Activity) {
+        anchorActivity = WeakReference(activity)
+        @Suppress("DEPRECATION")
+        val candidates = listOfNotNull(
+            activity.window.decorView.display,
+            activity.windowManager.defaultDisplay,
+            activity.display,
+        ).distinctBy { it.displayId }
+        val display = candidates.firstOrNull { it.displayId == DEFAULT_CLUSTER_DISPLAY_ID }
+        if (display == null) {
+            // DiLink can report display 0 briefly while attaching a newly launched activity to
+            // display 2. Keep the pending activity and retry after the window is attached.
+            Log.w(
+                TAG,
+                "cluster anchor not attached yet; candidates=" +
+                    candidates.joinToString { it.displayId.toString() },
+            )
+            return
+        }
+        anchorDisplay = display
+        Log.i(TAG, "cluster anchor registered on display ${display.displayId}")
+    }
+
+    fun unregisterClusterAnchor(activity: Activity) {
+        if (anchorActivity.get() === activity) {
+            anchorActivity.clear()
+            anchorDisplay = null
+            anchorSurface = null
+        }
+    }
+
+    fun registerClusterSurface(activity: Activity, surface: Surface) {
+        anchorActivity = WeakReference(activity)
+        anchorSurface = surface
+        clusterWidth = DIRECT_CLUSTER_WIDTH
+        clusterHeight = DIRECT_CLUSTER_HEIGHT
+        clusterDensityDpi = 320
+        Log.i(TAG, "cluster anchor Surface registered ${clusterWidth}x$clusterHeight")
+    }
+
+    fun unregisterClusterSurface(surface: Surface) {
+        if (anchorSurface === surface) anchorSurface = null
+    }
 
     /**
      * Drive the projection to [mode], serialized under [mutex]. Idempotent — a no-op when already
@@ -319,6 +370,8 @@ object ClusterProjectionManager {
                 pullBackToMain(context, helper, focus = true)
                 hideOverlay(helper)
                 projectedPackage = null
+                closeClusterAnchor()
+                restoreStockProjection(helper)
                 currentMode = ClusterMode.OFF
                 lastFailure = null
                 if (autoContainerEnabled(context)) {
@@ -338,6 +391,8 @@ object ClusterProjectionManager {
                     Log.e(TAG, "projection failed; falling back to OFF")
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
+                    closeClusterAnchor()
+                    restoreStockProjection(helper)
                     currentMode = ClusterMode.OFF
                     lastFailure = failure
                     if (autoContainerEnabled(context)) {
@@ -371,11 +426,23 @@ object ClusterProjectionManager {
         }
         val display = resolveClusterDisplay(context)
         if (display == null) {
-            // Some DiLink 5 builds expose the fission display to ActivityTaskManager and shell uid,
-            // but deliberately hide it from third-party DisplayManager even with PROJECT_MEDIA.
-            // In that configuration an overlay cannot be created in the app process, while the
-            // helper can still move the selected task directly onto display 2.
-            return projectDirectlyToCluster(context, helper)
+            // Launch an Activity directly onto the private display and use its own SurfaceView.
+            // BYD hides the real Display object, but the Activity window is still routed correctly.
+            if (!helper.setStockProjectionEnabled(false)) {
+                Log.e(TAG, "cannot suspend stock cluster Presentation")
+                return "projection"
+            }
+            stockProjectionSuspended = true
+            if (helper.launchClusterAnchor(DEFAULT_CLUSTER_DISPLAY_ID)) {
+                repeat(30) {
+                    delay(100)
+                    anchorSurface?.takeIf { it.isValid }?.let { surface ->
+                        return if (projectOnAnchorSurface(context, helper, surface)) null else "projection"
+                    }
+                }
+            }
+            // Retain the daemon Presentation experiment as a last-resort fallback.
+            return if (projectThroughDaemonPresentation(context, helper)) null else "projection"
         }
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)
@@ -433,22 +500,70 @@ object ClusterProjectionManager {
         }
     }
 
+    /** Uses the SurfaceView already hosted by ClusterAnchorActivity on the private display. */
+    private suspend fun projectOnAnchorSurface(
+        context: Context,
+        helper: HelperClient,
+        surface: Surface,
+    ): Boolean {
+        releaseOrphanedDisplay(context, helper)
+        val id = helper.createVirtualDisplay(
+            VD_NAME,
+            DIRECT_CLUSTER_WIDTH,
+            DIRECT_CLUSTER_HEIGHT,
+            clusterDensityDpi,
+            VIRTUAL_DISPLAY_FLAGS,
+            surface,
+        ) ?: run {
+            Log.e(TAG, "anchor Surface VirtualDisplay creation failed")
+            return false
+        }
+        remoteDisplayId = id
+        saveLastVdId(context, id)
+        val pkg = targetPackage(context)
+        Log.i(TAG, "anchor VD=$id; launchAndForce $pkg")
+        val ok = helper.launchAndForce(pkg, id, DIRECT_CLUSTER_WIDTH, DIRECT_CLUSTER_HEIGHT)
+        if (ok) {
+            projectedPackage = pkg
+        } else {
+            helper.releaseVirtualDisplay(id)
+            remoteDisplayId = -1
+        }
+        return ok
+    }
+
     /**
      * DiLink 5 fallback for vehicles where display 2 is hidden from app-side DisplayManager.
-     * The shell helper owns the task move, so no app-side Display or overlay Surface is needed.
-     * Window size/position sliders do not apply in this mode; the target uses the full 1920x720
-     * fission display. OFF still returns the same task to display 0 via [pullBackToMain].
+     * The daemon creates a real Presentation on the private IPC display, then a nested VD backed by
+     * its Surface. Yandex is moved to that nested display, never directly to the IPC display.
      */
-    private suspend fun projectDirectlyToCluster(context: Context, helper: HelperClient): Boolean {
+    private suspend fun projectThroughDaemonPresentation(
+        context: Context,
+        helper: HelperClient,
+    ): Boolean {
         val pkg = targetPackage(context)
         Log.w(
             TAG,
-            "cluster display hidden from app; direct launchAndForce $pkg " +
-                "to display $DEFAULT_CLUSTER_DISPLAY_ID ${DIRECT_CLUSTER_WIDTH}x$DIRECT_CLUSTER_HEIGHT",
+            "cluster display hidden from app; creating daemon Presentation on " +
+                "display $DEFAULT_CLUSTER_DISPLAY_ID",
         )
+        releaseOrphanedDisplay(context, helper)
+        val id = helper.createPresentationVirtualDisplay(
+            VD_NAME,
+            DIRECT_CLUSTER_WIDTH,
+            DIRECT_CLUSTER_HEIGHT,
+            clusterDensityDpi,
+            VIRTUAL_DISPLAY_FLAGS,
+            DEFAULT_CLUSTER_DISPLAY_ID,
+        ) ?: run {
+            Log.e(TAG, "daemon Presentation VirtualDisplay creation failed")
+            return false
+        }
+        remoteDisplayId = id
+        saveLastVdId(context, id)
         val ok = helper.launchAndForce(
             pkg,
-            DEFAULT_CLUSTER_DISPLAY_ID,
+            id,
             DIRECT_CLUSTER_WIDTH,
             DIRECT_CLUSTER_HEIGHT,
         )
@@ -456,9 +571,11 @@ object ClusterProjectionManager {
             projectedPackage = pkg
             clusterWidth = DIRECT_CLUSTER_WIDTH
             clusterHeight = DIRECT_CLUSTER_HEIGHT
-            Log.i(TAG, "direct cluster projection active on display $DEFAULT_CLUSTER_DISPLAY_ID")
+            Log.i(TAG, "daemon Presentation projection active: IPC=$DEFAULT_CLUSTER_DISPLAY_ID VD=$id")
         } else {
-            Log.e(TAG, "direct cluster projection failed for $pkg")
+            Log.e(TAG, "launchAndForce failed for daemon Presentation VD=$id")
+            helper.releaseVirtualDisplay(id)
+            remoteDisplayId = -1
         }
         return ok
     }
@@ -471,6 +588,7 @@ object ClusterProjectionManager {
      * selection survives containerservice reassigning display ids at boot. Updates cluster W/H/dpi.
      */
     private fun resolveClusterDisplay(context: Context): Display? {
+        anchorDisplay?.let { return updateClusterMetrics(it) }
         val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val displays = dm.displays
         val projectionDisplays = displays.filter {
@@ -480,14 +598,7 @@ object ClusterProjectionManager {
             ?: projectionDisplays.firstOrNull()
             ?: dm.getDisplay(DEFAULT_CLUSTER_DISPLAY_ID)
         if (match != null) {
-            val point = Point()
-            @Suppress("DEPRECATION") match.getRealSize(point)
-            clusterWidth = point.x
-            clusterHeight = point.y
-            val metrics = DisplayMetrics()
-            @Suppress("DEPRECATION") match.getMetrics(metrics)
-            if (metrics.densityDpi > 0) clusterDensityDpi = metrics.densityDpi
-            Log.i(TAG, "cluster display id=${match.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+            updateClusterMetrics(match)
         } else {
             Log.w(
                 TAG,
@@ -496,6 +607,35 @@ object ClusterProjectionManager {
             )
         }
         return match
+    }
+
+    private fun updateClusterMetrics(display: Display): Display {
+        val point = Point()
+        @Suppress("DEPRECATION") display.getRealSize(point)
+        clusterWidth = point.x
+        clusterHeight = point.y
+        val metrics = DisplayMetrics()
+        @Suppress("DEPRECATION") display.getMetrics(metrics)
+        if (metrics.densityDpi > 0) clusterDensityDpi = metrics.densityDpi
+        Log.i(TAG, "cluster display id=${display.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+        return display
+    }
+
+    private suspend fun closeClusterAnchor() = withContext(Dispatchers.Main) {
+        anchorActivity.get()?.finishAndRemoveTask()
+        anchorActivity.clear()
+        anchorDisplay = null
+        anchorSurface = null
+    }
+
+    private suspend fun restoreStockProjection(helper: HelperClient) {
+        if (!stockProjectionSuspended) return
+        if (helper.setStockProjectionEnabled(true)) {
+            stockProjectionSuspended = false
+            Log.i(TAG, "stock cluster Presentation restored")
+        } else {
+            Log.e(TAG, "failed to restore stock cluster Presentation")
+        }
     }
 
     /**

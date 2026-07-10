@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.coEvery
@@ -31,6 +32,7 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class ActionDispatcherLaunchTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
+    private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val packageManager = mockk<PackageManager>(relaxed = true)
@@ -40,7 +42,7 @@ class ActionDispatcherLaunchTest {
     init {
         every { context.packageManager } returns packageManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        dispatcher = ActionDispatcher(vehicleApi, helper, context)
+        dispatcher = ActionDispatcher(vehicleApi, settingsRepository, helper, context)
     }
 
     private fun launchAction(pkg: String) = ActionDef(

@@ -75,6 +75,14 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".cluster.ClusterAnchorActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:configChanges="density|orientation|screenSize|smallestScreenSize"
+            android:screenOrientation="landscape"
+            android:theme="@style/Theme.BYDMate" />
+
         <service
             android:name=".service.TrackingService"
             android:foregroundServiceType="location"

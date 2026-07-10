@@ -9,6 +9,7 @@ import android.content.pm.ResolveInfo
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.mockk
@@ -29,9 +30,10 @@ import org.robolectric.annotation.Config
 @Config(sdk = [29])
 class ActionDispatcherYoutubeTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
+    private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
     private val app: Application = ApplicationProvider.getApplicationContext()
-    private val dispatcher = ActionDispatcher(vehicleApi, helper, app)
+    private val dispatcher = ActionDispatcher(vehicleApi, settingsRepository, helper, app)
 
     private fun installPackage(pkg: String) {
         val info = ActivityInfo().apply {

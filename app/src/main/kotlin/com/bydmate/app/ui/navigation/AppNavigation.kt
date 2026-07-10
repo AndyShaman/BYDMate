@@ -134,7 +134,7 @@ fun AppNavigation(
             if (info != null) {
                 availableUpdateVersion = info.version
                 autoUpdateInfo = info
-                autoUpdateState = UpdateState.Available(info.version, info.notes)
+                autoUpdateState = UpdateState.Available(info.version, info.releaseNotes)
             }
         } catch (_: Exception) {
             // тихо игнорируем — оффлайн, rate-limit и т.п.

@@ -3,6 +3,7 @@ package com.bydmate.app.data.automation
 import android.app.NotificationManager
 import android.content.Context
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.coEvery
@@ -21,6 +22,7 @@ import org.junit.Test
  */
 class ActionDispatcherCancellationTest {
     private val vehicleApi = mockk<VehicleApi>(relaxed = true)
+    private val settingsRepository = mockk<SettingsRepository>(relaxed = true)
     private val helper = mockk<HelperClient>(relaxed = true)
     private val context = mockk<Context>(relaxed = true)
     private val notificationManager = mockk<NotificationManager>(relaxed = true)
@@ -28,7 +30,7 @@ class ActionDispatcherCancellationTest {
 
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-        dispatcher = ActionDispatcher(vehicleApi, helper, context)
+        dispatcher = ActionDispatcher(vehicleApi, settingsRepository, helper, context)
     }
 
     private fun param(command: String) =
