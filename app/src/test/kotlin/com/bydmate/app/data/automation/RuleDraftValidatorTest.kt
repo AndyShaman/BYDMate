@@ -6,6 +6,7 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RuleDraftValidatorTest {
@@ -32,6 +33,14 @@ class RuleDraftValidatorTest {
             ActionDef(command = "", displayName = "x", kind = "notification_silent",
                 payload = """{"title":"","text":""}""")))
         assertEquals(ActionValidationError.NotifTitleEmpty(1), err)
+    }
+
+    @Test fun `merged notification kind with blank title is rejected`() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "notification",
+                payload = """{"title":"","text":"body"}""")
+        ))
+        assertTrue(err is ActionValidationError.NotifTitleEmpty)
     }
 
     @Test fun app_launch_action_blank_package_is_invalid() {
@@ -123,6 +132,32 @@ class RuleDraftValidatorTest {
     @Test fun sentry_action_valid_payload_is_valid() {
         assertNull(RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "sentry", displayName = "x", kind = "sentry", payload = "1"))))
+    }
+
+    @Test fun speak_action_blank_text_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "speak",
+                payload = """{"text":""}""")))
+        assertEquals(ActionValidationError.SpeakTextEmpty(1), err)
+    }
+
+    @Test fun speak_action_with_text_is_valid() {
+        assertNull(RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "speak",
+                payload = """{"text":"Добро пожаловать"}"""))))
+    }
+
+    @Test fun agent_query_action_blank_prompt_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "agent_query",
+                payload = """{"prompt":""}""")))
+        assertEquals(ActionValidationError.AgentQueryPromptEmpty(1), err)
+    }
+
+    @Test fun agent_query_action_with_prompt_is_valid() {
+        assertNull(RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "", displayName = "x", kind = "agent_query",
+                payload = """{"prompt":"Какой заряд?"}"""))))
     }
 
     @Test fun second_action_failing_reports_index_2() {

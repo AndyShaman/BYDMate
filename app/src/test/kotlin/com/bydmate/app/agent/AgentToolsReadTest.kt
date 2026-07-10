@@ -218,6 +218,23 @@ class AgentToolsReadTest {
         assertFalse(out.has("tire_pressure_warning"))
     }
 
+    @Test fun vehicle_state_gun_value_1_means_not_connected() = runTest {
+        // fid 876609586 returns 1 (=NONE) when no gun is plugged in, not 0.
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 80, chargeGunState = 1)
+        coEvery { battery.refresh() } throws RuntimeException("n/a")
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertFalse(out.getBoolean("charging_gun_connected"))
+    }
+
+    @Test fun vehicle_state_gun_value_2_means_connected() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 80, chargeGunState = 2)
+        coEvery { battery.refresh() } throws RuntimeException("n/a")
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertTrue(out.getBoolean("charging_gun_connected"))
+    }
+
     // (д) get_weather without GPS and without city -> error-JSON, no HTTP call.
     @Test fun get_weather_without_gps_and_city_reports_error() = runTest {
         val t = tools()
@@ -334,6 +351,115 @@ class AgentToolsReadTest {
         assertEquals("некорректные аргументы", out.getString("error"))
     }
 
+    @Test fun vehicle_state_maps_cabin_sensors() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot().copy(
+            seatbeltFL = 1, seatbeltFR = 0,
+            occupancyFL = 2, occupancyFR = 1,
+            occupancyRL = 1, occupancyRM = 1, occupancyRR = 2,
+            lightLevel = 2, keyBatteryStatus = 0, rain = 1,
+        )
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertTrue(out.getBoolean("seatbelt_driver_fastened"))
+        assertFalse(out.getBoolean("seatbelt_front_passenger_fastened"))
+        assertTrue(out.getBoolean("seat_occupied_driver"))
+        assertFalse(out.getBoolean("seat_occupied_front_passenger"))
+        assertTrue(out.getBoolean("seat_occupied_rear_right"))
+        assertEquals(2, out.getInt("ambient_light_level_1dark_5bright"))
+        assertTrue(out.getBoolean("key_fob_battery_ok"))
+        assertTrue(out.getBoolean("rain_detected"))
+        // Passenger seat is free -> its unbuckled belt must NOT raise the warning.
+        assertFalse(out.has("seatbelt_warning"))
+    }
+
+    @Test fun vehicle_state_absent_sensors_omit_keys() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertFalse(out.has("seatbelt_front_passenger_fastened"))
+        assertFalse(out.has("seat_occupied_front_passenger"))
+        assertFalse(out.has("ambient_light_level_1dark_5bright"))
+        assertFalse(out.has("key_fob_battery_ok"))
+        assertFalse(out.has("rain_detected"))
+        assertFalse(out.has("seatbelt_warning"))
+    }
+
+    @Test fun vehicle_state_warns_on_unbuckled_passenger_while_moving() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(speed = 40).copy(
+            seatbeltFL = 1, seatbeltFR = 0, occupancyFR = 2,
+        )
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertTrue(out.has("seatbelt_warning"))
+    }
+
+    @Test fun vehicle_state_warns_on_unbuckled_driver_while_moving() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(speed = 40).copy(seatbeltFL = 0)
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertTrue(out.has("seatbelt_warning"))
+    }
+
+    @Test fun vehicle_state_no_seatbelt_warning_when_parked() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(speed = 0).copy(
+            seatbeltFL = 0, seatbeltFR = 0, occupancyFR = 2,
+        )
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimate(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertFalse(out.has("seatbelt_warning"))
+    }
+
+    @Test fun `cell voltages projected with delta in millivolts`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(minCellVoltage = 3.212, maxCellVoltage = 3.245)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(3.212, out.getDouble("cell_voltage_min_v"), 0.0001)
+        assertEquals(3.245, out.getDouble("cell_voltage_max_v"), 0.0001)
+        assertEquals(33, out.getInt("cell_voltage_delta_mv"))
+    }
+
+    @Test fun `cell delta omitted when one side missing`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(maxCellVoltage = 3.245)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertFalse(out.has("cell_voltage_delta_mv"))
+        assertFalse(out.has("cell_voltage_min_v"))
+    }
+
+    @Test fun `power state and work mode mapped to labels`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(powerState = 2, workMode = 1)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals("DRIVE", out.getString("power_state"))
+        assertEquals("EV", out.getString("work_mode"))
+    }
+
+    @Test fun `drl 1 is on 2 is off 0 omitted`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(drl = 1)
+        assertTrue(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getBoolean("light_drl_on"))
+        every { gate.vehicleSnapshot() } returns snapshot(drl = 2)
+        assertFalse(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).getBoolean("light_drl_on"))
+        every { gate.vehicleSnapshot() } returns snapshot(drl = 0)
+        assertFalse(JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}"))).has("light_drl_on"))
+    }
+
+    @Test fun `battery temp min max projected`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(maxBatTemp = 31, minBatTemp = 27)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(31, out.getInt("battery_temp_max_c"))
+        assertEquals(27, out.getInt("battery_temp_min_c"))
+    }
+
+    @Test fun `lifetime km and kwh from battery state`() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 80)
+        coEvery { battery.refresh() } returns BatteryState(80f, 12.5f, 100f, 24513.5f, 4321.25f, autoserviceAvailable = true)
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(24513.5, out.getDouble("lifetime_km"), 0.01)
+        assertEquals(4321.25, out.getDouble("lifetime_kwh"), 0.01)
+    }
+
     companion object {
         /** Minimal DiParsData with every field null except the named overrides. */
         internal fun snapshot(
@@ -342,19 +468,24 @@ class AgentToolsReadTest {
             doorFL: Int? = null, doorFR: Int? = null,
             tirePressFL: Int? = null, tirePressFR: Int? = null,
             tirePressRL: Int? = null, tirePressRR: Int? = null,
+            chargeGunState: Int? = null,
+            minCellVoltage: Double? = null, maxCellVoltage: Double? = null,
+            powerState: Int? = null, drl: Int? = null,
+            maxBatTemp: Int? = null, minBatTemp: Int? = null,
+            workMode: Int? = null,
         ) = com.bydmate.app.data.remote.DiParsData(
-            soc = soc, speed = speed, mileage = null, power = null, chargeGunState = null,
-            maxBatTemp = null, avgBatTemp = null, minBatTemp = null, chargingStatus = null,
+            soc = soc, speed = speed, mileage = null, power = null, chargeGunState = chargeGunState,
+            maxBatTemp = maxBatTemp, avgBatTemp = null, minBatTemp = minBatTemp, chargingStatus = null,
             batteryCapacityKwh = null, totalElecConsumption = totalElec, voltage12v = null,
-            maxCellVoltage = null, minCellVoltage = null, exteriorTemp = null,
-            gear = gear, powerState = null, insideTemp = null, acStatus = null, acTemp = null,
+            maxCellVoltage = maxCellVoltage, minCellVoltage = minCellVoltage, exteriorTemp = null,
+            gear = gear, powerState = powerState, insideTemp = null, acStatus = null, acTemp = null,
             fanLevel = null, acCirc = null, doorFL = doorFL, doorFR = doorFR, doorRL = null,
             doorRR = null, windowFL = null, windowFR = null, windowRL = null, windowRR = null,
             sunroof = null, trunk = null, hood = null, seatbeltFL = null, lockFL = null,
             tirePressFL = tirePressFL, tirePressFR = tirePressFR,
             tirePressRL = tirePressRL, tirePressRR = tirePressRR,
-            driveMode = null, workMode = null, autoPark = null, rain = null,
-            lightLow = null, drl = null, seatHeatDriver = seatHeatDriver,
+            driveMode = null, workMode = workMode, autoPark = null, rain = null,
+            lightLow = null, drl = drl, seatHeatDriver = seatHeatDriver,
         )
     }
 }

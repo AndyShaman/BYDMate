@@ -97,6 +97,8 @@
     <string name="settings_widget_reset_position_button">Redefinir posição</string>
     <string name="settings_reset_seat_channel">Redefinir canal dos bancos</string>
     <string name="settings_reset_seat_channel_hint">Se o aquecimento ou a ventilação dos bancos parar após trocar de carro</string>
+    <string name="settings_reset_trip_source">Redefinir detecção da fonte de viagens</string>
+    <string name="settings_reset_trip_source_hint">Se as viagens não estão sendo registradas: o app verificará novamente se o carro mantém seu próprio banco de viagens e ativará o registro interno quando necessário</string>
     <string name="orb_you">Você:</string>
     <string name="orb_agent">Agente:</string>
     <string name="settings_voice_native_assistant_header">Assistente de voz nativo da BYD</string>
@@ -189,6 +191,8 @@
     <string name="charges_action_delete">Excluir</string>
     <string name="charges_delete_dialog_title">Excluir sessão de carregamento\?</string>
     <string name="charges_delete_dialog_text">%1$s kWh - não pode ser restaurado.</string>
+    <string name="trips_delete_dialog_title">Excluir viagem\?</string>
+    <string name="trips_delete_dialog_text">%1$s km - a viagem e o seu trajeto serão excluídos e não poderão ser restaurados.</string>
     <string name="charges_onboarding_empty_text">Estatísticas de carregamento estão indisponíveis. Para ver os kWh e o custo de cada sessão de carregamento, ative \"Dados do sistema\" nas Configurações.</string>
     <string name="charges_go_to_settings_button">Ir para Configurações</string>
     <string name="charges_sentinel_empty_text">Estatísticas de carregamento estão indisponíveis para o modelo do seu carro - dados de diagnóstico não podem ser lidos. O SoH também não é exibido.</string>
@@ -297,8 +301,7 @@
     <string name="automation_delay_display_name">Atraso %1$s</string>
     <string name="automation_add_action_button">+ Adicionar ação</string>
     <string name="automation_action_dplus_command">Comando do veículo</string>
-    <string name="automation_action_notification_silent">Notificação (silenciosa)</string>
-    <string name="automation_action_notification_sound">Notificação (com som)</string>
+    <string name="automation_action_notification">Notificação</string>
     <string name="automation_action_app_launch">Abrir aplicativo</string>
     <string name="automation_action_yandex_music">Yandex Music</string>
     <string name="automation_action_call">Ligar</string>
@@ -310,6 +313,12 @@
     <string name="automation_action_sentry">Modo sentinela</string>
     <string name="automation_action_sentry_on">Ativar</string>
     <string name="automation_action_sentry_off">Desativar</string>
+    <string name="automation_action_speak">Falar texto</string>
+    <string name="automation_action_agent_query">Perguntar ao agente</string>
+    <string name="auto_act_speak">Falar texto</string>
+    <string name="auto_act_agent_query">Perguntar ao agente</string>
+    <string name="automation_speak_text_label">Texto a falar</string>
+    <string name="automation_agent_prompt_label">Pedido ao agente de voz</string>
     <string name="automation_overlay_permission_title">Permissão necessária</string>
     <string name="automation_overlay_permission_text">Notificações com som são exibidas como um popup sobre outros aplicativos. Abra as configurações do sistema e ative \"Exibir sobre outros aplicativos\" para o BYDMate.</string>
     <string name="automation_overlay_open_settings">Abrir configurações</string>
@@ -628,6 +637,8 @@
     <!-- units -->
     <string name="auto_unit_celsius">°C</string>
     <string name="auto_unit_dry_hint">(0=seco)</string>
+    <string name="auto_unit_light_hint">(1=escuro, 5=claro)</string>
+    <string name="auto_unit_key_ok_hint">(0=normal)</string>
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
@@ -650,6 +661,8 @@
     <string name="auto_enum_code_sport">SPORT</string>
     <string name="auto_enum_connected">Conectado</string>
     <string name="auto_enum_fastened">Afivelado</string>
+    <string name="auto_enum_seat_free">Livre</string>
+    <string name="auto_enum_seat_occupied">Ocupado</string>
     <string name="auto_enum_fresh_air">Ar externo</string>
     <string name="auto_enum_locked">Travado</string>
     <string name="auto_enum_none">Nenhum</string>
@@ -690,6 +703,14 @@
     <string name="auto_param_actemp">Temp. do AC</string>
     <string name="auto_param_fanlevel">Ventilador</string>
     <string name="auto_param_seatbeltfl">Cinto do motorista</string>
+    <string name="auto_param_seatbeltfr">Cinto do passageiro</string>
+    <string name="auto_param_occupancyfl">Assento do motorista</string>
+    <string name="auto_param_occupancyfr">Assento do passageiro dianteiro</string>
+    <string name="auto_param_occupancyrl">Assento traseiro esquerdo</string>
+    <string name="auto_param_occupancyrm">Assento traseiro central</string>
+    <string name="auto_param_occupancyrr">Assento traseiro direito</string>
+    <string name="auto_param_lightlevel">Luminosidade</string>
+    <string name="auto_param_keybattery">Bateria da chave</string>
     <string name="auto_param_tirepressfl">Pressão do pneu DE</string>
     <string name="auto_param_tirepressfr">Pressão do pneu DD</string>
     <string name="auto_param_tirepressrl">Pressão do pneu TE</string>
@@ -710,6 +731,14 @@
     <string name="auto_act_close_driver_window">Fechar vidro do motorista</string>
     <string name="auto_act_open_passenger_window">Abrir vidro do passageiro</string>
     <string name="auto_act_close_passenger_window">Fechar vidro do passageiro</string>
+    <string name="auto_act_open_rear_left_window">Abrir vidro traseiro esquerdo</string>
+    <string name="auto_act_close_rear_left_window">Fechar vidro traseiro esquerdo</string>
+    <string name="auto_act_open_rear_right_window">Abrir vidro traseiro direito</string>
+    <string name="auto_act_close_rear_right_window">Fechar vidro traseiro direito</string>
+    <string name="auto_act_vent_driver_window">Ventilar vidro do motorista</string>
+    <string name="auto_act_vent_passenger_window">Ventilar vidro do passageiro</string>
+    <string name="auto_act_vent_rear_left_window">Ventilar vidro traseiro esquerdo</string>
+    <string name="auto_act_vent_rear_right_window">Ventilar vidro traseiro direito</string>
     <string name="auto_act_auto_ac">AC automático</string>
     <string name="auto_act_ventilation_no_ac">Ventilação (sem AC)</string>
     <string name="auto_act_temp_18c">Temp. 18°C</string>
@@ -720,6 +749,9 @@
     <string name="auto_act_fresh_air">Circulação externa</string>
     <string name="auto_act_windshield_defog_on">Desemb. para-brisa lig.</string>
     <string name="auto_act_windshield_defog_off">Desemb. para-brisa desl.</string>
+    <string name="auto_act_ac_off">Desligar AC</string>
+    <string name="auto_act_ac_auto_on">AC modo automático</string>
+    <string name="auto_act_ac_auto_off">AC modo manual</string>
     <string name="auto_act_driver_heat_1">Aquec. motorista 1</string>
     <string name="auto_act_driver_heat_2">Aquec. motorista 2</string>
     <string name="auto_act_driver_heat_3">Aquec. motorista 3</string>
@@ -759,6 +791,9 @@
     <string name="auto_act_sunroof_close">Fechar teto solar</string>
     <string name="auto_act_sunshade_open">Abrir cortina</string>
     <string name="auto_act_sunshade_close">Fechar cortina</string>
+    <string name="auto_act_sunroof_stop">Parar teto solar</string>
+    <string name="auto_act_sunroof_updip">Inclinar teto solar</string>
+    <string name="auto_act_sunroof_comfort">Teto solar conforto</string>
     <string name="auto_act_open_trunk">Abrir porta-malas</string>
     <string name="auto_act_close_trunk">Fechar porta-malas</string>
     <string name="auto_act_open_front_trunk">Abrir porta-malas diant.</string>
@@ -785,10 +820,12 @@
     <string name="auto_msg_url_no_scheme">Ação nº %1$d: a URL deve conter um esquema (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Ação nº %1$d: modo do Yandex Music não selecionado</string>
     <string name="auto_msg_sentry_invalid">Ação nº %1$d: estado do modo sentinela inválido</string>
+    <string name="auto_msg_speak_text_empty">Ação nº %1$d: texto para fala não definido</string>
+    <string name="auto_msg_agent_query_prompt_empty">Ação nº %1$d: consulta ao agente não definida</string>
     <string name="auto_msg_name_cond_action_required">Nome, ao menos uma condição e ao menos uma ação são obrigatórios</string>
     <string name="auto_rule_copy_suffix">cópia</string>
-    <string name="auto_act_notification_silent">Notificação (silenciosa)</string>
-    <string name="auto_act_notification_sound">Notificação (som)</string>
+    <string name="auto_act_notification">Notificação</string>
+    <string name="automation_setting_play_sound">Executar com som</string>
     <string name="auto_act_launch_app">Abrir aplicativo</string>
     <string name="auto_act_call">Ligação</string>
     <string name="auto_act_navigate">Rota no Y.Navigator</string>

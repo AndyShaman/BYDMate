@@ -9,10 +9,16 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.PlaceRepository
+import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
+import io.mockk.just
 import io.mockk.mockk
+import io.mockk.mockkObject
+import io.mockk.Runs
+import io.mockk.unmockkObject
+import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -50,7 +56,7 @@ class AutomationEngineEdgeTest {
         id = id, name = "r$id",
         triggerLogic = logic,
         triggers = TriggerDef.listToJson(triggers),
-        actions = ActionDef.listToJson(listOf(ActionDef("notify", "n", "notification_silent"))),
+        actions = ActionDef.listToJson(listOf(ActionDef("notify", "n", "notification"))),
         cooldownSeconds = cooldown,
         requirePark = requirePark,
         lastTriggeredAt = lastTriggeredAt,
@@ -135,5 +141,50 @@ class AutomationEngineEdgeTest {
         engine.evaluate(diParsData(soc = 50), null)
 
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `rule with playSound plays chime once on fire`() = runBlocking {
+        mockkObject(OverlayNotificationManager)
+        try {
+            every { OverlayNotificationManager.playNotificationSound(any()) } just Runs
+            val r = rule(1, listOf(paramTrigger("ExtTemp", ">", "23"))).copy(playSound = true)
+            val (engine, _) = setup { listOf(r) }
+            engine.evaluate(diParsData(exteriorTemp = 10), null)  // seed false
+            engine.evaluate(diParsData(exteriorTemp = 25), null)  // front -> fire
+            verify(timeout = 2000, exactly = 1) { OverlayNotificationManager.playNotificationSound(any()) }
+        } finally {
+            unmockkObject(OverlayNotificationManager)
+        }
+    }
+
+    @Test fun `rule without playSound does not play chime`() = runBlocking {
+        mockkObject(OverlayNotificationManager)
+        try {
+            every { OverlayNotificationManager.playNotificationSound(any()) } just Runs
+            val r = rule(1, listOf(paramTrigger("ExtTemp", ">", "23")))
+            val ruleLogDao = mockk<RuleLogDao>(relaxed = true)
+            val ruleDao = mockk<RuleDao>(relaxed = true) {
+                coEvery { getEnabled() } answers { listOf(r) }
+            }
+            val engine = AutomationEngine(
+                ruleDao = ruleDao,
+                ruleLogDao = ruleLogDao,
+                actionDispatcher = mockk(relaxed = true),
+                placeRepository = mockk<PlaceRepository> { coEvery { getAllSnapshot() } returns emptyList() },
+                networkAvailableMonitor = mockk<NetworkAvailableMonitor> {
+                    every { lastAvailableAt } returns 0L
+                    every { probePending } returns false
+                },
+                context = ApplicationProvider.getApplicationContext<Context>(),
+            )
+            engine.evaluate(diParsData(exteriorTemp = 10), null)
+            engine.evaluate(diParsData(exteriorTemp = 25), null)
+            // Wait for the async executeAndLog to complete (its last step is the log insert),
+            // then assert the chime never played.
+            coVerify(timeout = 2000, exactly = 1) { ruleLogDao.insert(any()) }
+            verify(exactly = 0) { OverlayNotificationManager.playNotificationSound(any()) }
+        } finally {
+            unmockkObject(OverlayNotificationManager)
+        }
     }
 }

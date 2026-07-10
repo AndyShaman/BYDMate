@@ -124,7 +124,10 @@ object VoiceModule {
 
     @Provides @Singleton
     fun provideAudioCapture(@ApplicationContext ctx: Context) =
-        AudioCapture(ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager)
+        AudioCapture(
+            ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager,
+            ctx.getSharedPreferences("voice", Context.MODE_PRIVATE),
+        )
 
     @Provides @Singleton
     fun provideVoiceEarcon() = VoiceEarcon()

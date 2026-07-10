@@ -298,6 +298,22 @@ open class EnergyDataReader @Inject constructor(
         return db.canRead() && db.length() >= 16
     }
 
+    /**
+     * Fingerprint (lastModified, length) of the energydata DB currently on disk, or null
+     * when no DB is present. Consumed by the dead-leftover detector (issue #63).
+     *
+     * The SQLite WAL sidecar is folded in (summed) so a live DB whose checkpoint is
+     * deferred — main file frozen, all writes landing in -wal — still reads as changing.
+     * An absent -wal contributes zeros, keeping the plain-file fingerprint intact.
+     */
+    fun sourceFingerprint(): Pair<Long, Long>? {
+        val dir = energyDataDir()
+        if (!dir.exists() || !dir.isDirectory) return null
+        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
+        val wal = File(dir, db.name + "-wal")
+        return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
+    }
+
     private fun findDbViaListFiles(dir: File): File? {
         val allFiles = dir.listFiles() ?: return null
         return allFiles

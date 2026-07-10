@@ -7,6 +7,7 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.TripDao
+import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
@@ -249,10 +250,12 @@ class AgentToolsAutomationTest {
     @Test fun create_automation_invalid_trigger_kind_reports_error() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
 
+        // "button_press" became a real kind, so pin the else-branch with a
+        // genuinely unknown kind.
         val out = JSONObject(tools().execute(call("create_automation", createArgs(
-            trigger = """{"kind":"button_press"}"""))))
+            trigger = """{"kind":"foo"}"""))))
 
-        assertTrue(out.has("error"))
+        assertTrue(out.getString("error").contains("недопустимый тип триггера"))
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
@@ -386,6 +389,146 @@ class AgentToolsAutomationTest {
 
         assertEquals("не указано состояние охранного режима", out.getString("error"))
         coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    // --- create_automation: voice and button_press triggers ---
+
+    @Test fun `create with voice trigger saves phrase`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"voice","phrase":"тёплый приём"}"""))))
+        assertTrue(out.getBoolean("ok"))
+        val t = TriggerDef.listFromJson(saved.captured.triggers).single()
+        assertEquals("voice", t.kind)
+        assertEquals("Voice", t.param)
+        assertEquals("тёплый приём", t.value)
+        assertEquals("тёплый приём", t.displayName)
+    }
+
+    @Test fun `voice trigger with empty phrase is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"voice","phrase":"  "}"""))))
+        assertTrue(out.has("error"))
+    }
+
+    @Test fun `voice trigger colliding with builtin command is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"voice","phrase":"открой окна"}"""))))
+        assertTrue(out.getString("error").contains("встроенн"))
+    }
+
+    @Test fun `voice trigger taken by another rule is rejected`() = runTest {
+        val voiceTrigger = TriggerDef(param = "Voice", chineseName = "语音", operator = "==",
+            value = "тёплый приём", displayName = "тёплый приём", kind = "voice")
+        coEvery { ruleDao.getAllList() } returns listOf(rule(id = 7L, name = "Voice rule", enabled = true).copy(
+            triggers = TriggerDef.listToJson(listOf(voiceTrigger))))
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"voice","phrase":"Тёплый приём!"}"""))))
+        assertTrue(out.getString("error").contains("уже использ"))
+    }
+
+    @Test fun `create with button press trigger saves button number`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"button_press","button":2}"""))))
+        assertTrue(out.getBoolean("ok"))
+        val t = TriggerDef.listFromJson(saved.captured.triggers).single()
+        assertEquals("button_press", t.kind)
+        assertEquals("button", t.param)
+        assertEquals("2", t.value)
+    }
+
+    @Test fun `button press trigger with invalid number is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        for (arg in listOf("""{"kind":"button_press","button":0}""",
+                           """{"kind":"button_press","button":5}""",
+                           """{"kind":"button_press"}""")) {
+            val out = JSONObject(tools().execute(call("create_automation", createArgs(trigger = arg))))
+            assertTrue(out.has("error"))
+        }
+    }
+
+    // --- create_automation: app_launch action and time_range weekdays ---
+
+    @Test fun `create with app_launch action resolves app by label`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val t = tools()
+        t.launcherAppsProvider = { listOf("Шахматы" to "com.example.chess", "Радио" to "com.example.radio") }
+        val out = JSONObject(t.execute(call("create_automation",
+            createArgs(actions = """[{"kind":"app_launch","app":"шахматы"}]"""))))
+        assertTrue(out.getBoolean("ok"))
+        val a = ActionDef.listFromJson(saved.captured.actions).single()
+        assertEquals("app_launch", a.kind)
+        val payload = JSONObject(a.payload!!)
+        assertEquals("com.example.chess", payload.getString("packageName"))
+        assertEquals("Шахматы", payload.getString("appLabel"))
+    }
+
+    @Test fun `app_launch action with unknown app is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val t = tools()
+        t.launcherAppsProvider = { listOf("Шахматы" to "com.example.chess") }
+        val out = JSONObject(t.execute(call("create_automation",
+            createArgs(actions = """[{"kind":"app_launch","app":"тетрис"}]"""))))
+        assertTrue(out.getString("error").contains("не найдено"))
+    }
+
+    @Test fun `app_launch action without app field is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"app_launch"}]"""))))
+        assertTrue(out.has("error"))
+    }
+
+    @Test fun `time_range trigger saves weekdays`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"time_range","value":"08:00-10:00","weekdays":[1,2,3,4,5]}"""))))
+        assertTrue(out.getBoolean("ok"))
+        val t = TriggerDef.listFromJson(saved.captured.triggers).single()
+        val spec = ScheduleSpec.fromJson(t.value)!!
+        assertEquals(setOf(1, 2, 3, 4, 5), spec.days)
+    }
+
+    @Test fun `time_range trigger without weekdays keeps every-day default`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"time_range","value":"08:00-10:00"}"""))))
+        assertTrue(out.getBoolean("ok"))
+        val spec = ScheduleSpec.fromJson(TriggerDef.listFromJson(saved.captured.triggers).single().value)!!
+        assertTrue(spec.days.isEmpty())
+    }
+
+    @Test fun `time_range trigger with invalid weekday is rejected`() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(trigger = """{"kind":"time_range","value":"08:00-10:00","weekdays":[0,8]}"""))))
+        assertTrue(out.has("error"))
+    }
+
+    @Test fun create_automation_notification_action_normalizes_legacy_kind_and_play_sound() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val saved = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(saved)) } returns 1L
+        val out = JSONObject(tools().execute(AgentToolCall("1", "create_automation",
+            """{"name":"тестзвук","trigger":{"kind":"voice","phrase":"тест"},"actions":[{"kind":"notification_sound","title":"Привет","text":"мир"}],"play_sound":true}""")))
+        assertTrue(out.optBoolean("ok"))
+        val actions = ActionDef.listFromJson(saved.captured.actions)
+        assertEquals("notification", actions[0].kind)
+        assertEquals("notification", actions[0].command)
+        assertTrue(saved.captured.playSound)
     }
 
     @Test fun create_automation_schema_time_of_day_value_has_enum() = runTest {

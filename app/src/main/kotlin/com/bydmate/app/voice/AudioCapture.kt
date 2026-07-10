@@ -1,15 +1,17 @@
 package com.bydmate.app.voice
 
+import android.content.SharedPreferences
 import android.media.AudioFormat
 import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
+import android.util.Log
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlin.concurrent.thread
 
-class AudioCapture(private val audioManager: AudioManager) {
+class AudioCapture(private val audioManager: AudioManager, private val prefs: SharedPreferences) {
 
     companion object {
         private const val SAMPLE_RATE = 16000
@@ -25,7 +27,16 @@ class AudioCapture(private val audioManager: AudioManager) {
             MediaRecorder.AudioSource.DEFAULT,              // 0
         )
         internal const val DUCK_VOLUME_INDEX = 1
+        private const val TAG = "AudioCapture"
+        // Pre-duck media volume survives process death here; restoreStuckDuck() reads it
+        // at service start (stuck-quiet media after a crash / APK update mid session).
+        internal const val KEY_PRE_DUCK_VOLUME = "pre_duck_volume"
     }
+
+    // True while a duck belongs to a live session in THIS process (set by duckMusic, cleared
+    // by restoreMusic). Resets to false on process death — which is exactly the only case
+    // where the persisted marker should be acted on by restoreStuckDuck().
+    @Volatile private var duckOwnedByLiveSession = false
 
     // No caller-side endpointing: end-of-speech is decided by the recognizer's VAD (AsrEngine), not
     // an energy/silence heuristic here. The old RMS gate closed the window ~800 ms in if the user
@@ -107,14 +118,49 @@ class AudioCapture(private val audioManager: AudioManager) {
         val applied = runCatching {
             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
         }.isSuccess
-        return if (applied) saved else null
+        if (!applied) return null
+        duckOwnedByLiveSession = true
+        prefs.edit().putInt(KEY_PRE_DUCK_VOLUME, saved).apply()
+        Log.i(TAG, "duckMusic: $saved -> $target")
+        return saved
     }
 
     /** Restore the media volume captured by duckMusic(). No-op if nothing was ducked. */
     // internal for direct unit tests
     internal fun restoreMusic(saved: Int?) {
         saved ?: return
+        duckOwnedByLiveSession = false
         runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0) }
+        prefs.edit().remove(KEY_PRE_DUCK_VOLUME).apply()
+        Log.i(TAG, "restoreMusic: -> $saved")
+    }
+
+    /**
+     * One-shot recovery at service start: if the process died between duckMusic() and
+     * restoreMusic(), media volume is stuck near zero and no later session can raise it
+     * back (duckMusic() no-ops at or below the duck level). Restores the persisted
+     * pre-duck volume, but only while the current volume is still at/below the duck
+     * level — a volume the user already raised by hand always wins.
+     */
+    fun restoreStuckDuck() {
+        // The persisted marker is only trustworthy after a real process death. When the
+        // service is recreated inside a living process (task swiped from recents ->
+        // WorkManager restart) an active voice session may still own the duck — restoring
+        // here would blast music mid-reply; the session's own restoreMusic() handles it.
+        if (duckOwnedByLiveSession) {
+            Log.i(TAG, "restoreStuckDuck: skipped, duck owned by a live session in this process")
+            return
+        }
+        val saved = prefs.getInt(KEY_PRE_DUCK_VOLUME, -1)
+        if (saved < 0) return
+        val cur = runCatching { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) }.getOrNull()
+        if (cur != null && cur <= DUCK_VOLUME_INDEX) {
+            runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0) }
+            Log.i(TAG, "restoreStuckDuck: volume stuck at $cur, restored to $saved")
+        } else {
+            Log.i(TAG, "restoreStuckDuck: pending $saved dropped (current volume $cur)")
+        }
+        prefs.edit().remove(KEY_PRE_DUCK_VOLUME).apply()
     }
 
     private fun openRecord(minBuf: Int): AudioRecord? {

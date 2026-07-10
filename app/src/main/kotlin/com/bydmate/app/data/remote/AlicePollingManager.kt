@@ -1,6 +1,7 @@
 package com.bydmate.app.data.remote
 
 import android.util.Log
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.VehicleApi
 import kotlinx.coroutines.CoroutineScope
@@ -118,6 +119,14 @@ class AlicePollingManager @Inject constructor(
             val id = cmd.getString("id")
             val command = cmd.getString("command")
             Log.i(TAG, "Executing: '$command' (id=$id)")
+            // Alice bypasses ActionDispatcher (raw vehicleApi), so the door-unlock
+            // speed gate is applied here explicitly. Ack anyway so VPS won't retry.
+            val unlockBlock = ActionDispatcher.unlockGateBlockReason(command, latestData?.speed)
+            if (unlockBlock != null) {
+                Log.w(TAG, "Blocked: '$command' → $unlockBlock")
+                ackIds.add(id)
+                continue
+            }
             val result = vehicleApi.dispatch(command)
             val success = result.isSuccess
             Log.i(TAG, "Result: $command → ${if (success) "OK" else "FAIL: ${result.exceptionOrNull()?.message}"}")

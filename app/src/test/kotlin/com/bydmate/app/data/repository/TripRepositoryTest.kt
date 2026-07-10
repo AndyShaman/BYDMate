@@ -27,7 +27,7 @@ class TripRepositoryTest {
         db = Room.inMemoryDatabaseBuilder(context, AppDatabase::class.java)
             .allowMainThreadQueries()
             .build()
-        repo = TripRepository(db.tripDao(), db.tripPointDao())
+        repo = TripRepository(db.tripDao(), db.tripPointDao(), db.tripTombstoneDao(), db)
     }
 
     @After fun teardown() { db.close() }

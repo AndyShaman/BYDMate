@@ -1,5 +1,6 @@
 package com.bydmate.app.data.trips
 
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -17,7 +18,7 @@ class TripRecorderPassiveTest {
         val tripDao = mockk<TripDao>(relaxed = true)
         val lastState = mockk<LastStateDao>(relaxed = true)
         val energy = mockk<EnergyDataReader> { every { isAvailable() } returns true }
-        val recorder = TripRecorder(tripDao, lastState, energy, batteryCapacityKwh = { 72.9 })
+        val recorder = TripRecorder(tripDao, lastState, energy, mockk<EnergyDataDeadDetector>(relaxed = true), batteryCapacityKwh = { 72.9 })
 
         recorder.consume(diParsData(powerState = 1, soc = 80, mileage = 100.0))   // ON-idle
         recorder.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0))   // DRIVE

@@ -84,6 +84,17 @@ class NativeParsReader @Inject constructor(
             else -> maxBatTemp ?: minBatTemp
         }
 
+        // Indirect rain detection: with rain-sensing auto-wipers enabled the wiper
+        // relay only fires when the sensor sees water. In manual wiper mode rain is
+        // unknowable from this signal, so keep null rather than a false "dry".
+        val wiperRelay = field<Int>("wiperRelay")
+        val autoWipers = field<Int>("autoWipers")
+        val rain = when {
+            autoWipers != 1 || wiperRelay == null -> null
+            wiperRelay != 0 -> 1
+            else -> 0
+        }
+
         return DiParsData(
             soc                 = soc,
             speed               = field<Double>("speed")?.toInt(),
@@ -127,7 +138,7 @@ class NativeParsReader @Inject constructor(
             driveMode           = field<Int>("driveMode"),
             workMode            = field<Int>("workMode"),
             autoPark            = null,  // not in FidMap (unknown source)
-            rain                = null,  // not in FidMap (user setting, no live sensor fid)
+            rain                = rain,  // derived from wiperRelay + autoWipers (see above)
             lightLow            = field<Int>("lightLow"),
             drl                 = field<Int>("drl"),
             acDefrostFront      = field<Int>("acDefrostFront"),
@@ -139,6 +150,16 @@ class NativeParsReader @Inject constructor(
             seatVentPassenger   = field<Int>("seatVentPassenger"),
             lightSide           = field<Int>("lightSide"),
             lightHigh           = field<Int>("lightHigh"),
+            seatbeltFR          = field<Int>("seatbeltFR"),
+            occupancyFL         = field<Int>("occupancyFL"),
+            occupancyFR         = field<Int>("occupancyFR"),
+            occupancyRL         = field<Int>("occupancyRL"),
+            occupancyRM         = field<Int>("occupancyRM"),
+            occupancyRR         = field<Int>("occupancyRR"),
+            lightLevel          = field<Int>("lightLevel"),
+            keyBatteryStatus    = field<Int>("keyBatteryStatus"),
+            wiperRelay          = wiperRelay,
+            autoWipers          = autoWipers,
         )
     }
 }

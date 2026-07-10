@@ -231,6 +231,64 @@ class NativeParsReaderTest {
         assertNull("fetch() must return null when soc + mileage + voltage12v are all null", result)
     }
 
+    // ── Sensors wave ─────────────────────────────────────────────────────────
+
+    private fun fid(field: String) = FidMap.entries.first { it.field == field }
+
+    /** Reader whose autoservice returns null everywhere except the given int fids
+     *  (+ a live soc float so the liveness gate passes). */
+    private fun sensorReader(vararg ints: Pair<String, Int>): NativeParsReader {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+        coEvery { auto.getFloat(fid("soc").device, fid("soc").fid) } returns 87.0f
+        for ((field, raw) in ints) {
+            coEvery { auto.getInt(fid(field).device, fid(field).fid) } returns raw
+        }
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+        return NativeParsReader(auto, settings)
+    }
+
+    @Test
+    fun `sensor fields decode raw ints`() = runTest {
+        val data = sensorReader(
+            "seatbeltFR" to 1, "occupancyFR" to 2, "occupancyRM" to 1,
+            "lightLevel" to 3, "keyBatteryStatus" to 0,
+        ).fetch()
+        assertNotNull(data)
+        assertEquals(1, data!!.seatbeltFR)
+        assertEquals(2, data.occupancyFR)
+        assertEquals(1, data.occupancyRM)
+        assertEquals(3, data.lightLevel)
+        assertEquals(0, data.keyBatteryStatus)
+    }
+
+    @Test
+    fun `rain derived 1 when auto wipers on and relay firing`() = runTest {
+        val data = sensorReader("autoWipers" to 1, "wiperRelay" to 5).fetch()
+        assertEquals(1, data!!.rain)
+    }
+
+    @Test
+    fun `rain derived 0 when auto wipers on and relay idle`() = runTest {
+        val data = sensorReader("autoWipers" to 1, "wiperRelay" to 0).fetch()
+        assertEquals(0, data!!.rain)
+    }
+
+    @Test
+    fun `rain null when auto wipers off - manual mode cannot see rain`() = runTest {
+        val data = sensorReader("autoWipers" to 0, "wiperRelay" to 0).fetch()
+        assertNull(data!!.rain)
+    }
+
+    @Test
+    fun `rain null when wiper signals unavailable`() = runTest {
+        val data = sensorReader().fetch()
+        assertNull(data!!.rain)
+    }
+
     /**
      * Phase 0 voice-agent enrichment: the 9 validated climate/seat/light fids
      * (fid-candidates.yaml status=validated, previously unwired) must decode

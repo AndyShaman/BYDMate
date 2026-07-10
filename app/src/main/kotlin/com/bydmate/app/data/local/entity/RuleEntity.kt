@@ -19,6 +19,7 @@ data class RuleEntity(
     @ColumnInfo(name = "require_park") val requirePark: Boolean = false,
     @ColumnInfo(name = "confirm_before_execute") val confirmBeforeExecute: Boolean = false,
     @ColumnInfo(name = "fire_once_per_trip", defaultValue = "0") val fireOncePerTrip: Boolean = false,
+    @ColumnInfo(name = "play_sound", defaultValue = "0") val playSound: Boolean = false,
     @ColumnInfo(name = "last_triggered_at") val lastTriggeredAt: Long? = null,
     @ColumnInfo(name = "trigger_count") val triggerCount: Int = 0,
     @ColumnInfo(name = "created_at") val createdAt: Long = System.currentTimeMillis()
@@ -76,7 +77,7 @@ data class TriggerDef(
 data class ActionDef(
     val command: String,
     val displayName: String,
-    val kind: String = "param",    // "param" | "notification_silent" | "notification_sound" | "app_launch" | "call" | "navigate" | "url" | "sentry"
+    val kind: String = "param",    // "param" | "notification" (legacy aliases "notification_silent"/"notification_sound" still dispatch) | "app_launch" | "call" | "navigate" | "url" | "yandex_music" | "youtube" | "go_home" | "delay" | "media_volume" | "sentry" | "speak" | "agent_query"
     val payload: String? = null    // JSON string with kind-specific params (null for kind="param")
 ) {
     fun toJson(): JSONObject = JSONObject().apply {

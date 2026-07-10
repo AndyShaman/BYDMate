@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
@@ -16,6 +17,8 @@ import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripSummary
+import com.bydmate.app.data.local.dao.TripTombstoneDao
+import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.data.local.entity.BatterySnapshotEntity
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
@@ -75,6 +78,7 @@ class SettingsViewModelTest {
     // relaxed → ensureRunning() defaults to false; tests that need the daemon "up" stub it true.
     private val helperBootstrap: HelperBootstrap = mockk(relaxed = true)
     private val agentOrchestrator: AgentOrchestrator = mockk(relaxed = true)
+    private val energyDataDeadDetector: EnergyDataDeadDetector = mockk(relaxed = true)
 
     @Before
     fun setUp() {
@@ -133,6 +137,7 @@ class SettingsViewModelTest {
         override suspend fun getByTimeRange(from: Long, to: Long): List<TripPointEntity> = emptyList()
         override suspend fun attachToTrip(tripId: Long, from: Long, to: Long): Int = 0
         override suspend fun insert(point: TripPointEntity): Long = 0L
+        override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
     private class StubChargeDao : ChargeDao {
@@ -217,7 +222,7 @@ class SettingsViewModelTest {
 
         val tripDao = StubTripDao()
         val tripPointDao = StubTripPointDao()
-        val tripRepo = TripRepository(tripDao, tripPointDao)
+        val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
         val chargeDao = StubChargeDao()
         val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
@@ -230,7 +235,8 @@ class SettingsViewModelTest {
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
             DiPlusDbReader(),
-            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx)
+            settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
+            mockk<TripTombstoneDao>(relaxed = true)
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
@@ -277,6 +283,7 @@ class SettingsViewModelTest {
             llmConnectionResolver = llmConnectionResolver ?: mockk(relaxed = true),
             openRouterClient = openRouterClient,
             placeRepository = mockk(relaxed = true),
+            energyDataDeadDetector = energyDataDeadDetector,
         )
     }
 
@@ -1105,5 +1112,12 @@ class SettingsViewModelTest {
             "offline",
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("tts_source", null)
         )
+    }
+
+    @Test
+    fun `resetTripSourceDetection delegates to detector`() {
+        val vm = buildViewModel()
+        vm.resetTripSourceDetection()
+        verify(exactly = 1) { energyDataDeadDetector.reset() }
     }
 }

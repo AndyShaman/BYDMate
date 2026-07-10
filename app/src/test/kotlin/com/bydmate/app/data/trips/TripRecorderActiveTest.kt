@@ -1,5 +1,6 @@
 package com.bydmate.app.data.trips
 
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -25,6 +26,7 @@ class TripRecorderActiveTest {
         val clock = mutableListOf(1_000L, 2_000L, 3_000L, 4_000L)
         val recorder = TripRecorder(
             tripDao, lastState, energy,
+            mockk<EnergyDataDeadDetector>(relaxed = true),
             batteryCapacityKwh = { 72.9 },
             now = { clock.removeAt(0) },
         )

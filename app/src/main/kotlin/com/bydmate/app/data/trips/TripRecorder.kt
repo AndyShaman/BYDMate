@@ -1,5 +1,6 @@
 package com.bydmate.app.data.trips
 
+import com.bydmate.app.data.local.EnergyDataDeadDetector
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.dao.TripDao
@@ -14,6 +15,7 @@ class TripRecorder @Inject constructor(
     private val tripDao: TripDao,
     private val lastStateDao: LastStateDao,
     private val energyDataReader: EnergyDataReader,
+    private val deadDetector: EnergyDataDeadDetector,
     private val batteryCapacityKwh: suspend () -> Double,
     private val now: () -> Long = { System.currentTimeMillis() },
 ) {
@@ -35,10 +37,13 @@ class TripRecorder @Inject constructor(
     }
 
     suspend fun consume(data: DiParsData) {
-        val active = !energyDataReader.isAvailable()
-        if (!active) return  // passive on Leopard 3 — never write trips or open-trip state
-
         val ignitionOn = ignitionOn(data)
+        // Issue #63: feed the dead-leftover detector on every tick, even while passive —
+        // it is the only component that can flip this device to native recording.
+        deadDetector.onTick(ignitionOn, data.mileage)
+        val active = !energyDataReader.isAvailable() || deadDetector.isDead()
+        if (!active) return  // passive on live energydata — never write trips or open-trip state
+
         val cur = open
         when {
             cur == null && ignitionOn -> openTrip(data)
@@ -119,7 +124,7 @@ class TripRecorder @Inject constructor(
         val state = lastStateDao.getCurrent() ?: return
         if (state.openTripId == null || state.tripStartTs == null) return
         val gap = now() - state.ts
-        val active = !energyDataReader.isAvailable()
+        val active = !energyDataReader.isAvailable() || deadDetector.isDead()
         val staleGap = 5 * 60 * 1_000L
         if (gap < staleGap) {
             if (active) {
