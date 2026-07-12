@@ -169,6 +169,12 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_REMOVE_TASK -> runCatching {
+                    val removed = removeTaskReflect(data.readInt())
+                    reply?.writeInt(if (removed) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_SET_TASK_BOUNDS -> runCatching {
                     val taskId = data.readInt()
                     val l = data.readInt(); val t = data.readInt(); val r = data.readInt(); val b = data.readInt()
@@ -457,6 +463,17 @@ private fun moveTaskToDisplayReflect(taskId: Int, displayId: Int) {
         ?: iAtm.javaClass.methods.firstOrNull { it.name == "moveTaskToDisplay" && it.parameterTypes.size == 2 }
         ?: throw NoSuchMethodException("moveTaskToDisplay")
     m.invoke(iAtm, taskId, displayId)
+}
+
+/** Remove one task without force-stopping its package or accepting a shell command. */
+private fun removeTaskReflect(taskId: Int): Boolean {
+    if (taskId <= 0) return false
+    val iAtm = activityTaskManager()
+    val method = iAtm.javaClass.methods.firstOrNull {
+        it.name == "removeTask" && it.parameterTypes.size == 1 &&
+            it.parameterTypes[0] == Int::class.javaPrimitiveType
+    } ?: throw NoSuchMethodException("removeTask")
+    return (method.invoke(iAtm, taskId) as? Boolean) ?: true
 }
 
 private fun setTaskWindowingModeReflect(taskId: Int, windowingMode: Int) {

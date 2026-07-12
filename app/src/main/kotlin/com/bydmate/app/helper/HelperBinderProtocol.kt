@@ -35,6 +35,7 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
+ *   TX_REMOVE_TASK: writeInt(taskId)                         -> reply: writeInt(status), writeInt(0)
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -78,6 +79,9 @@ object HelperBinderProtocol {
      * "batch unsupported" and falls back to per-fid reads.
      */
     val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 20
+
+    /** Removes one specific recent/root task. Used to close an app BYDMate launched for projection. */
+    val TX_REMOVE_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 21
 
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128

@@ -93,6 +93,15 @@ class HelperClientProjectionTest {
     }
 
     @Test
+    fun `removeTask sends only taskId and maps status`() = runBlocking {
+        var taskId = 0
+        assertTrue(clientWith(capturingFake(status = 0, value = 0) { taskId = it.readInt() })
+            .removeTask(57))
+        assertEquals(57, taskId)
+        assertFalse(clientWith(capturingFake(status = -1, value = 0)).removeTask(57))
+    }
+
+    @Test
     fun `setTaskBounds sends taskId then four edges in order`() = runBlocking {
         val got = IntArray(5)
         val ok = clientWith(capturingFake(status = 0, value = 0) {

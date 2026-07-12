@@ -54,6 +54,8 @@ interface HelperClient {
     /** Task id of [packageName]'s running task, or null if not running / channel unavailable. */
     suspend fun getTaskId(packageName: String): Int?
     suspend fun moveTaskToDisplay(taskId: Int, displayId: Int): Boolean
+    /** Removes exactly [taskId] from recents/running tasks; does not force-stop the package. */
+    suspend fun removeTask(taskId: Int): Boolean
     suspend fun setTaskBounds(taskId: Int, left: Int, top: Int, right: Int, bottom: Int): Boolean
     suspend fun setFocusedTask(taskId: Int): Boolean
     suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int): Boolean
@@ -160,6 +162,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun moveTaskToDisplay(taskId: Int, displayId: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_MOVE_TASK_TO_DISPLAY) { it.writeInt(taskId); it.writeInt(displayId) }
+
+    override suspend fun removeTask(taskId: Int): Boolean =
+        statusOk(HelperBinderProtocol.TX_REMOVE_TASK) { it.writeInt(taskId) }
 
     override suspend fun setTaskBounds(taskId: Int, left: Int, top: Int, right: Int, bottom: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_TASK_BOUNDS) {

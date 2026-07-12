@@ -6,6 +6,13 @@ const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
 /** Cluster projection state (OFF / FULLSCREEN). */
 enum class ClusterMode { OFF, FULLSCREEN }
 
+/** How the target task entered a projection session. */
+enum class ProjectionTaskOrigin { ALREADY_RUNNING, LAUNCHED_FOR_PROJECTION }
+
+/** A task launched solely for projection is closed on exit; an existing task is restored. */
+fun shouldCloseOnProjectionExit(origin: ProjectionTaskOrigin?): Boolean =
+    origin == ProjectionTaskOrigin.LAUNCHED_FOR_PROJECTION
+
 /** Where Navi renders on the cluster overlay. VirtualDisplay size == SurfaceView size (1:1). */
 data class ClusterGeometry(val width: Int, val height: Int, val xOffset: Int, val yOffset: Int)
 

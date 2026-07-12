@@ -1,10 +1,24 @@
 package com.bydmate.app.cluster
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClusterProjectionStateTest {
+
+    @Test fun `existing task is restored when projection exits`() {
+        assertFalse(shouldCloseOnProjectionExit(ProjectionTaskOrigin.ALREADY_RUNNING))
+    }
+
+    @Test fun `task launched for projection is closed when projection exits`() {
+        assertTrue(shouldCloseOnProjectionExit(ProjectionTaskOrigin.LAUNCHED_FOR_PROJECTION))
+    }
+
+    @Test fun `unknown origin defaults to restore not close`() {
+        assertFalse(shouldCloseOnProjectionExit(null))
+    }
 
     @Test fun `fullscreen geometry fills the whole cluster`() {
         assertEquals(

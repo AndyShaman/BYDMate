@@ -109,6 +109,8 @@ object ClusterProjectionManager {
     // back, not the live settings target — the two differ when the user switches the projection app
     // mid-projection, and tugging the new target would strand the old app on the cluster.
     private var projectedPackage: String? = null
+    // Existing tasks return to display 0; a task launched only for projection is removed on exit.
+    private var projectedTaskOrigin: ProjectionTaskOrigin? = null
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
     // so we grant both via the daemon once per process the first time we project.
     private var projectionPermissionsGranted = false
@@ -320,9 +322,10 @@ object ClusterProjectionManager {
     ) {
         when (mode) {
             ClusterMode.OFF -> {
-                pullBackToMain(context, helper, focus = true)
+                exitProjection(context, helper)
                 hideOverlay(helper)
                 projectedPackage = null
+                projectedTaskOrigin = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
                 if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
@@ -338,6 +341,7 @@ object ClusterProjectionManager {
                     Log.e(TAG, "projection failed; falling back to OFF")
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
+                    projectedTaskOrigin = null
                     currentMode = ClusterMode.OFF
                     lastFailure = failure
                     if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
@@ -452,12 +456,20 @@ object ClusterProjectionManager {
             remoteDisplayId = id
             saveLastVdId(context, id)
             val pkg = targetPackage(context)
+            // Capture the task's origin before launchAndForce potentially creates it. Preserve the
+            // original value during a live resize/rebuild so a BYDMate-launched task still closes.
+            val origin = projectedTaskOrigin ?: if (helper.getTaskId(pkg) != null) {
+                ProjectionTaskOrigin.ALREADY_RUNNING
+            } else {
+                ProjectionTaskOrigin.LAUNCHED_FOR_PROJECTION
+            }
             Log.i(TAG, "VirtualDisplay id=$id ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}; launchAndForce $pkg")
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return "projection"
             }
             projectedPackage = pkg
+            projectedTaskOrigin = origin
             null
         } catch (e: Exception) {
             // wm.addView (BadTokenException) or any reflective daemon call can throw — tear the
@@ -562,6 +574,29 @@ object ClusterProjectionManager {
         helper.moveTaskToDisplay(taskId, 0)
         helper.setTaskBounds(taskId, 0, 0, 0, 0)
         if (focus) helper.setFocusedTask(taskId)
+    }
+
+    /** Restore a pre-existing task, or remove a task launched solely for this projection session. */
+    private suspend fun exitProjection(context: Context, helper: HelperClient) {
+        if (!shouldCloseOnProjectionExit(projectedTaskOrigin)) {
+            pullBackToMain(context, helper, focus = true)
+            return
+        }
+
+        val pkg = projectedPackage ?: targetPackage(context)
+        val taskId = helper.getTaskId(pkg)
+        if (taskId == null) {
+            Log.d(TAG, "exitProjection: launched task ($pkg) already gone")
+            return
+        }
+        if (helper.removeTask(taskId)) {
+            Log.i(TAG, "exitProjection: removed task $taskId ($pkg) launched for projection")
+        } else {
+            // Never release a display with a live task stranded on it. Restore it when this DiLink
+            // build lacks or blocks ActivityTaskManager.removeTask().
+            Log.w(TAG, "exitProjection: removeTask($taskId) failed; restoring to main display")
+            pullBackToMain(context, helper, focus = true)
+        }
     }
 
     /**
