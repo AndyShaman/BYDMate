@@ -223,7 +223,6 @@ class SettingsViewModelConnectionsTest {
         val insightsManager = InsightsManager(ctx, insightsClient, tripDao, idleDrainDao, chargeDao, settingsRepo)
 
         val backupManager = mockk<BackupManager>(relaxed = true)
-        val voiceModelManager = mockk<com.bydmate.app.voice.VoiceModelManager>(relaxed = true)
         val ttsModelManager = mockk<com.bydmate.app.voice.TtsModelManager>(relaxed = true)
         val ttsEngine = mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
         val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
@@ -246,7 +245,6 @@ class SettingsViewModelConnectionsTest {
             backupManager = backupManager,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
-            voiceModelManager = voiceModelManager,
             ttsModelManager = ttsModelManager,
             ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
             gigaAmModelManager = gigaAmModelManager,

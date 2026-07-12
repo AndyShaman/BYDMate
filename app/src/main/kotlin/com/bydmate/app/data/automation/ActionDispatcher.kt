@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
@@ -35,6 +36,7 @@ class ActionDispatcher @Inject constructor(
     private val helper: HelperClient,
     @ApplicationContext private val context: Context,
     private val voiceActions: dagger.Lazy<com.bydmate.app.voice.VoiceAutomationActions>,
+    private val clusterVoiceControl: ClusterVoiceControl,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -155,6 +157,29 @@ class ActionDispatcher @Inject constructor(
         internal fun isFrontTrunkOpenCommand(command: String): Boolean =
             command.contains("前备箱") && command.contains("打开") && !command.contains("关")
 
+        /**
+         * True if [command] would OPEN the rear trunk / tailgate — "开后备箱".
+         * Distinct from the front trunk (前备箱, isFrontTrunkOpenCommand). The
+         * open string itself carries 开 (open), so a plain contains-check never
+         * matches the close command 关后备箱. Pure predicate.
+         */
+        internal fun isRearTrunkOpenCommand(command: String): Boolean =
+            command.contains("开后备箱")
+
+        /**
+         * П7 origin-based defense: true if this agent-initiated [action] is in
+         * the dangerous tier and must be confirmed on-screen before it fires.
+         * Dangerous = door unlock, rear-trunk open, disabling sentry, or placing
+         * a call. NOT windows/climate/sunroof/door-lock/front-trunk (low harm or
+         * already speed-gated). Pure function — unit-testable without Android.
+         */
+        internal fun isDangerousAction(action: ActionDef): Boolean = when (action.kind) {
+            "param" -> isDoorUnlockCommand(action.command) || isRearTrunkOpenCommand(action.command)
+            "sentry" -> action.payload == "0"
+            "call" -> true
+            else -> false
+        }
+
         private val POSITION_OPEN = Regex("打开(\\d+)")
 
         /**
@@ -232,6 +257,7 @@ class ActionDispatcher @Inject constructor(
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "sentry" -> dispatchSentry(action)
+            "cluster_projection" -> dispatchClusterProjection(action)
             "speak" -> dispatchSpeak(action)
             "agent_query" -> dispatchAgentQuery(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
@@ -255,6 +281,21 @@ class ActionDispatcher @Inject constructor(
         val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, "Не удалось переключить охранный режим")
+    }
+
+    // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---
+
+    /** ClusterVoiceControl.apply() is fire-and-forget (async setMode under the manager's mutex,
+     *  like the star key) and never throws, so there is no synchronous success/failure to report
+     *  here beyond payload validation -- this stays fail-soft the same way dispatchSentry does. */
+    private fun dispatchClusterProjection(action: ActionDef): DispatchResult {
+        val on = when (action.payload) {
+            "1" -> true
+            "0" -> false
+            else -> return DispatchResult(false, "Некорректное состояние проекции на приборку")
+        }
+        clusterVoiceControl.apply(on)
+        return DispatchResult(true)
     }
 
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */

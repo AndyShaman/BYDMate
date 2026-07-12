@@ -27,7 +27,7 @@ class Migration12to13Test {
         helper.createDatabase(dbName, 12).close()
         val migrated = helper.runMigrationsAndValidate(
             dbName, 13, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_12_13
+            com.bydmate.app.di.AppModule.MIGRATION_12_13
         )
 
         val indices = mutableListOf<String>()
@@ -44,7 +44,7 @@ class Migration12to13Test {
         helper.createDatabase(dbName, 12).close()
         val migrated = helper.runMigrationsAndValidate(
             dbName, 13, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_12_13
+            com.bydmate.app.di.AppModule.MIGRATION_12_13
         )
 
         val indices = mutableListOf<String>()
@@ -71,7 +71,7 @@ class Migration12to13Test {
         }
         val migrated = helper.runMigrationsAndValidate(
             dbName, 13, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_12_13
+            com.bydmate.app.di.AppModule.MIGRATION_12_13
         )
 
         migrated.query("SELECT byd_id FROM trips").use { c ->

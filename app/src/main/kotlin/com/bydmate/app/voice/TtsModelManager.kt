@@ -19,7 +19,7 @@ import java.io.File
  *  (several voices can share one archive/dir -- see [TtsVoiceEngine.VITS_MULTI]).
  *  Archive layout: one top-level dir with model .onnx + tokens.txt, plus either
  *  espeak-ng-data/ (PIPER) or stress.tsv (VITS_MULTI), under
- *  filesDir/tts/<modelDirId>. Same shape as VoiceModelManager for the Vosk ASR
+ *  filesDir/tts/<modelDirId>. Same shape as GigaAmModelManager for the ASR
  *  models. */
 class TtsModelManager(
     private val context: Context,

@@ -7,6 +7,7 @@ import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
+import com.bydmate.app.data.automation.ConfirmOverlayManager
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.PlaceGeometry
 import com.bydmate.app.data.automation.RuleDraftValidator
@@ -39,7 +40,11 @@ import com.bydmate.app.ui.automation.localizedEnumLabel
 import com.bydmate.app.voice.VoiceGate
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -79,6 +84,15 @@ class AgentTools @Inject constructor(
 ) {
     /** Test seam — deterministic time for period queries. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /** Test seam — overlay confirm gate for dangerous agent actions (П7). */
+    internal var confirmGate: (Context, String, String, () -> Unit, () -> Unit) -> Boolean =
+        { ctx, ruleName, summary, onConfirm, onCancel ->
+            ConfirmOverlayManager.show(ctx, ruleName, summary, onConfirm, onCancel)
+        }
+
+    /** Test seam — scope that runs a confirmed dangerous dispatch off the UI thread. */
+    internal var confirmScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Test seam — poll interval for re-reading the cluster IPC mode after apply(). */
     internal var clusterPollIntervalMs = 500L
@@ -360,6 +374,15 @@ class AgentTools @Inject constructor(
                 .put("description", "true = показать карту на приборке, false = убрать")),
             listOf("on"),
         ))
+        put(tool(
+            "set_sentry",
+            "Включить или выключить охранный режим (Sentry, караульный режим) — камеры следят за " +
+                "обстановкой вокруг припаркованной машины. \"поставь на охрану\", \"включи охрану\" = on; " +
+                "\"сними с охраны\", \"выключи охрану\" = off.",
+            JSONObject().put("on", JSONObject().put("type", "boolean")
+                .put("description", "true = включить охранный режим, false = выключить")),
+            listOf("on"),
+        ))
         if (includeAutomationTools) {
             put(tool(
                 "create_automation",
@@ -427,7 +450,8 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "app_launch")))
+                                        "yandex_music", "sentry", "app_launch",
+                                        "cluster_projection", "speak", "agent_query")))
                                     .put("description", "Тип действия"))
                                 .put("command_id", JSONObject()
                                     .put("type", "string")
@@ -442,7 +466,7 @@ class AgentTools @Inject constructor(
                                 .put("title", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=notification: заголовок"))
                                 .put("text", JSONObject().put("type", "string")
-                                    .put("description", "Только для kind=notification: текст"))
+                                    .put("description", "Для kind=notification: текст уведомления. Для kind=speak: текст, который машина озвучит"))
                                 .put("phone", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=call: номер телефона"))
                                 .put("lat", JSONObject().put("type", "number")
@@ -454,9 +478,11 @@ class AgentTools @Inject constructor(
                                 .put("mode", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=yandex_music: режим, например mybeat"))
                                 .put("on", JSONObject().put("type", "boolean")
-                                    .put("description", "Только для kind=sentry: включить или выключить охранный режим"))
+                                    .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать"))
                                 .put("app", JSONObject().put("type", "string")
-                                    .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране")))
+                                    .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране"))
+                                .put("prompt", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=agent_query: запрос агенту, ответ будет озвучен")))
                             .put("required", JSONArray(listOf("kind")))))
                     .put("cooldown_seconds", JSONObject()
                         .put("type", "integer")
@@ -521,6 +547,7 @@ class AgentTools @Inject constructor(
                 "youtube" -> youtubeTool(args)
                 "launch_app" -> launchAppTool(args)
                 "set_cluster_projection" -> setClusterProjection(args)
+                "set_sentry" -> setSentry(args)
                 "set_automation_enabled" -> setAutomationEnabled(args)
                 "create_automation" -> createAutomation(args)
                 else -> """{"error":"неизвестный инструмент ${call.name}"}"""
@@ -695,21 +722,11 @@ class AgentTools @Inject constructor(
             matches.isEmpty() -> """{"error":"контакт не найден"}"""
             matches.size == 1 -> {
                 val m = matches.first()
-                // Any dispatch failure (including an exception) collapses to a fixed Russian
-                // string: ActionDispatcher's DispatchResult.reason can embed the raw phone
-                // number (e.g. its "dial:<phone>"/"tel:<phone>" activity-not-found label) and
-                // is English, neither of which may reach the LLM.
-                val success = runCatchingCancellable {
-                    actionDispatcher.dispatch(
-                        ActionDef(
-                            command = "", displayName = m.name, kind = "call",
-                            payload = JSONObject().put("phone", m.phone).put("autoDial", true).toString(),
-                        ),
-                        data = gate.vehicleSnapshot(),
-                    )
-                }.getOrNull()?.success == true
-                if (success) JSONObject().put("ok", true).put("calling", m.name).toString()
-                else CALL_CONTACT_FAILED
+                val action = ActionDef(
+                    command = "", displayName = m.name, kind = "call",
+                    payload = JSONObject().put("phone", m.phone).put("autoDial", true).toString(),
+                )
+                return confirmDangerous(action, "Звонок: ${m.name}")
             }
             else -> JSONObject().put("matches", JSONArray(matches.map { it.name })).toString()
         }
@@ -775,7 +792,10 @@ class AgentTools @Inject constructor(
             val toStr = args.optString("to").trim()
             val toDay = if (toStr.isEmpty()) from else (parseDay(toStr) ?: return null)
             if (toDay < from) return null
-            return from to toDay + DAY_MS
+            // Half-open day boundary (AC-14): DAO compares start_ts <= :to, so stop
+            // 1 ms short of next-day midnight — an exactly-00:00 record belongs to
+            // the NEXT day, not this period.
+            return from to toDay + DAY_MS - 1
         }
         val now = nowMs()
         val from = when (args.optString("period")) {
@@ -920,6 +940,31 @@ class AgentTools @Inject constructor(
 
     // --- control tools ---
 
+    // П7 origin-based defense: a dangerous agent-initiated action never fires
+    // directly. It shows a confirmation overlay and dispatches ONLY from the
+    // user's "confirm" tap (via confirmScope, off the UI thread). Fail-closed:
+    // if the overlay cannot be shown (SYSTEM_ALERT_WINDOW not granted), the
+    // action is refused, never executed silently.
+    private fun confirmDangerous(action: ActionDef, summary: String): String {
+        val shown = confirmGate(
+            context,
+            "Голосовой агент",
+            summary,
+            // Re-read live vehicle data at confirm time (mirrors AutomationEngine ~line 573):
+            // the overlay can sit open while the car accelerates, so the >30 km/h unlock
+            // gate must see current speed, not the stale snapshot captured at tool-call time.
+            { confirmScope.launch { actionDispatcher.dispatch(action, TrackingService.lastData.value) } },
+            { },
+        )
+        return if (shown) {
+            JSONObject().put("ok", true).put("status", "ожидает подтверждения на экране").toString()
+        } else {
+            JSONObject().put("ok", false)
+                .put("error", "нужно подтверждение на экране, но нет разрешения на оверлей")
+                .toString()
+        }
+    }
+
     private suspend fun vehicleControl(args: JSONObject): String {
         val input = args.optString("command").trim()
         if (input.isEmpty()) return """{"error":"не указана команда"}"""
@@ -935,10 +980,11 @@ class AgentTools @Inject constructor(
         if (snapshot == null && (ActionDispatcher.isWindowOpenCommand(command) || ActionDispatcher.isSunroofOpenCommand(command))) {
             return """{"error":"скорость неизвестна, окна и люк не открываю"}"""
         }
-        val result = actionDispatcher.dispatch(
-            ActionDef(command = command, displayName = command, kind = "param"),
-            data = snapshot,
-        )
+        val actionDef = ActionDef(command = command, displayName = command, kind = "param")
+        if (ActionDispatcher.isDangerousAction(actionDef)) {
+            return confirmDangerous(actionDef, command)
+        }
+        val result = actionDispatcher.dispatch(actionDef, data = snapshot)
         return dispatchJson(result)
     }
 
@@ -1294,6 +1340,22 @@ class AgentTools @Inject constructor(
         }
     }
 
+    // Immediate sentry toggle: routes through the SAME ActionDispatcher path as a "sentry"
+    // automation action (dispatchSentry -> helper.putGlobalSetting), so the write is honest —
+    // DispatchResult carries the real success/failure, unlike a fire-and-forget projection.
+    private suspend fun setSentry(args: JSONObject): String {
+        val on = requireBoolArg(args, "on")
+            ?: return """{"error":"не указано, включить или выключить охрану"}"""
+        val action = ActionDef(command = "sentry",
+            displayName = if (on) "Включить охрану" else "Выключить охрану",
+            kind = "sentry", payload = if (on) "1" else "0")
+        if (ActionDispatcher.isDangerousAction(action)) {
+            return confirmDangerous(action, action.displayName)
+        }
+        val result = actionDispatcher.dispatch(action, data = null)
+        return dispatchJson(result)
+    }
+
     // Accepts a JSON boolean or the strings "true"/"false" (some LLMs emit stringified
     // booleans); anything else (missing key, null, number) is treated as unspecified so a
     // malformed call can never silently disable a rule.
@@ -1404,6 +1466,7 @@ class AgentTools @Inject constructor(
             actions = ActionDef.listToJson(actions),
             cooldownSeconds = cooldown,
             playSound = playSound,
+            confirmBeforeExecute = actions.any { ActionDispatcher.isDangerousAction(it) },
         )
         runCatchingCancellable { ruleDao.insert(rule) }
             .getOrElse { return """{"error":"не удалось создать автоматизацию"}""" }
@@ -1636,6 +1699,24 @@ class AgentTools @Inject constructor(
                     payload = JSONObject().put("packageName", pkg).put("appLabel", label)
                         .put("minimize", false).toString(),
                 ))
+            }
+            "cluster_projection" -> {
+                val on = requireBoolArg(a, "on")
+                    ?: return Built.Error("не указано состояние проекции на приборку")
+                Built.Value(ActionDef(command = "cluster_projection", displayName = "Вывод на приборку",
+                    kind = "cluster_projection", payload = if (on) "1" else "0"))
+            }
+            "speak" -> {
+                val text = a.optString("text").trim()
+                if (text.isEmpty()) return Built.Error("не задан текст для озвучки")
+                Built.Value(ActionDef(command = "", displayName = "Озвучить текст", kind = "speak",
+                    payload = JSONObject().put("text", text).toString()))
+            }
+            "agent_query" -> {
+                val prompt = a.optString("prompt").trim()
+                if (prompt.isEmpty()) return Built.Error("не задан запрос агенту")
+                Built.Value(ActionDef(command = "", displayName = "Запрос агенту", kind = "agent_query",
+                    payload = JSONObject().put("prompt", prompt).toString()))
             }
             else -> Built.Error("недопустимый тип действия: $kind")
         }

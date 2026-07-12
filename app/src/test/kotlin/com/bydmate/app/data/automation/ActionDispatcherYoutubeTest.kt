@@ -8,6 +8,7 @@ import android.content.pm.ApplicationInfo
 import android.content.pm.ResolveInfo
 import android.provider.MediaStore
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
@@ -32,7 +33,8 @@ class ActionDispatcherYoutubeTest {
     private val helper = mockk<HelperClient>(relaxed = true)
     private val app: Application = ApplicationProvider.getApplicationContext()
     private val dispatcher = ActionDispatcher(vehicleApi, helper, app,
-        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) })
+        dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
+        mockk<ClusterVoiceControl>(relaxed = true))
 
     private fun installPackage(pkg: String) {
         val info = ActivityInfo().apply {

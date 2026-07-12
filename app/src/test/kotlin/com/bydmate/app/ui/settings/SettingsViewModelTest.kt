@@ -244,7 +244,6 @@ class SettingsViewModelTest {
         val backupManager = mockk<BackupManager>(relaxed = true)
 
         // Voice deps are not exercised by most settings tests; relaxed mocks keep them inert.
-        val voiceModelManager = mockk<com.bydmate.app.voice.VoiceModelManager>(relaxed = true)
         val resolvedTtsModelManager = ttsModelManager ?: mockk(relaxed = true)
         val resolvedTtsEngine = ttsEngine ?: mockk<com.bydmate.app.voice.TtsEngine>(relaxed = true)
         val resolvedGigaAmModelManager = gigaAmModelManager ?: mockk(relaxed = true)
@@ -267,7 +266,6 @@ class SettingsViewModelTest {
             backupManager = backupManager,
             chargingStateStore = com.bydmate.app.data.charging.ChargingStateStore(settingsRepo),
             catchUpJournal = com.bydmate.app.data.charging.CatchUpJournal(settingsRepo),
-            voiceModelManager = voiceModelManager,
             ttsModelManager = resolvedTtsModelManager,
             ruStressMarker = com.bydmate.app.voice.RuStressMarker { null },
             gigaAmModelManager = resolvedGigaAmModelManager,

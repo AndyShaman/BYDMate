@@ -24,6 +24,7 @@ import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
+import com.bydmate.app.util.CrashLog
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -69,6 +70,7 @@ class BYDMateApp : Application(), Configuration.Provider {
                 android.util.Log.w("BYDMateApp", "hidden-api exemption unavailable", it)
             }
         }
+        installCrashHandler()
         bootstrapLocale()
         initOsmdroid()
         appScope.launch {
@@ -96,6 +98,30 @@ class BYDMateApp : Application(), Configuration.Provider {
         }
         scheduleDataThinning()
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this))
+    }
+
+    /**
+     * Persist uncaught crashes to SharedPreferences (CrashLog) before the
+     * platform's default handler terminates the process — DiLink's logcat
+     * ring buffer rotates out within minutes, so by the time a crash is
+     * reported the logcat evidence is already gone. Must delegate to the
+     * previous default handler afterwards: skipping it would leave the
+     * process in a state the system doesn't expect and it won't be
+     * restarted the normal way.
+     */
+    private fun installCrashHandler() {
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            // finally, not a bare sequence: record() allocates (stackTraceToString +
+            // split/join) and can itself throw an Error (OOM/StackOverflow) that its
+            // internal catch(Exception) won't hold. The previous handler MUST still run
+            // so the platform kills/restarts the process the normal way.
+            try {
+                CrashLog.record(this, throwable)
+            } finally {
+                previousHandler?.uncaughtException(thread, throwable)
+            }
+        }
     }
 
     private fun bootstrapLocale() {

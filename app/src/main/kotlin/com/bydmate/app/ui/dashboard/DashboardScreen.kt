@@ -35,6 +35,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -721,7 +722,7 @@ private fun CardDetailDialog(
                 .fillMaxSize()
                 .clickable(
                     indication = null,
-                    interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 ) { onDismiss() },
             contentAlignment = Alignment.CenterStart
         ) {

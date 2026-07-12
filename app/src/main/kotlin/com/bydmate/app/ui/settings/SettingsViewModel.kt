@@ -33,6 +33,7 @@ import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.UpdateChecker
+import com.bydmate.app.util.CrashLog
 import com.bydmate.app.R
 import org.json.JSONArray
 import org.json.JSONObject
@@ -59,8 +60,6 @@ import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.VoiceController
-import com.bydmate.app.voice.VoiceLang
-import com.bydmate.app.voice.VoiceModelManager
 import com.bydmate.app.voice.RuStressMarker
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsModelManager
@@ -131,11 +130,6 @@ data class SettingsUiState(
     /** "RU", "EN", or "" (follow app language) */
     val voiceLang: String = "",
     val voiceKeycode: Int = 0,
-    val voiceModelReadyRu: Boolean = false,
-    val voiceModelReadyEn: Boolean = false,
-    val voiceDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
-    val voiceDownloadLang: VoiceLang? = null,   // which lang is currently downloading
-    val voiceDownloadErrorLang: VoiceLang? = null,  // which lang's last download failed; null = no error
     // TTS settings (offline synthesis of agent replies)
     val ttsEnabled: Boolean = false,
     val ttsVoice: String = TtsModelManager.DEFAULT_VOICE_ID,
@@ -211,7 +205,6 @@ class SettingsViewModel @Inject constructor(
     private val backupManager: BackupManager,
     private val chargingStateStore: com.bydmate.app.data.charging.ChargingStateStore,
     private val catchUpJournal: com.bydmate.app.data.charging.CatchUpJournal,
-    private val voiceModelManager: VoiceModelManager,
     private val ttsModelManager: TtsModelManager,
     private val ruStressMarker: RuStressMarker,
     private val gigaAmModelManager: GigaAmModelManager,
@@ -338,8 +331,6 @@ class SettingsViewModel @Inject constructor(
             val voiceKeycode = settingsRepository.getVoiceKeycode().let {
                 if (it == 0) DEFAULT_VOICE_KEYCODE else it
             }
-            val voiceReadyRu = voiceModelManager.isReady(VoiceLang.RU)
-            val voiceReadyEn = voiceModelManager.isReady(VoiceLang.EN)
 
             val ttsEnabled = settingsRepository.isTtsEnabled()
             // Resolve through the catalog so a legacy id (retired "denis"/"dmitri") shows its
@@ -414,8 +405,6 @@ class SettingsViewModel @Inject constructor(
                     voiceEnabled = voiceEnabled,
                     voiceLang = voiceLang,
                     voiceKeycode = voiceKeycode,
-                    voiceModelReadyRu = voiceReadyRu,
-                    voiceModelReadyEn = voiceReadyEn,
                     ttsEnabled = ttsEnabled,
                     ttsVoice = ttsVoice,
                     ttsReadyVoices = ttsReadyVoices,
@@ -1059,44 +1048,6 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private var voiceDownloadJob: Job? = null
-
-    fun downloadVoiceModel(lang: VoiceLang) {
-        if (_uiState.value.voiceDownloadProgress >= 0) return   // already downloading
-        voiceDownloadJob = viewModelScope.launch {
-            _uiState.update { it.copy(voiceDownloadProgress = 0, voiceDownloadLang = lang, voiceDownloadErrorLang = null) }
-            val result = voiceModelManager.download(lang) { progress ->
-                _uiState.update { it.copy(voiceDownloadProgress = progress) }
-            }
-            val ready = voiceModelManager.isReady(lang)
-            _uiState.update {
-                it.copy(
-                    voiceDownloadProgress = -1,
-                    voiceDownloadLang = null,
-                    voiceDownloadErrorLang = if (result.isFailure) lang else null,
-                    voiceModelReadyRu = if (lang == VoiceLang.RU) ready else it.voiceModelReadyRu,
-                    voiceModelReadyEn = if (lang == VoiceLang.EN) ready else it.voiceModelReadyEn,
-                )
-            }
-        }
-    }
-
-    fun cancelVoiceDownload() {
-        voiceDownloadJob?.cancel()
-        voiceDownloadJob = null
-        _uiState.update { it.copy(voiceDownloadProgress = -1, voiceDownloadLang = null) }
-    }
-
-    fun deleteVoiceModel(lang: VoiceLang) {
-        voiceModelManager.delete(lang)
-        _uiState.update {
-            it.copy(
-                voiceModelReadyRu = if (lang == VoiceLang.RU) false else it.voiceModelReadyRu,
-                voiceModelReadyEn = if (lang == VoiceLang.EN) false else it.voiceModelReadyEn,
-            )
-        }
-    }
-
     /**
      * Persists the keycode learned from [LearnButtonDialog] into Room and into
      * SharedPreferences("voice") so SteeringWheelKeyService reads the new value immediately.
@@ -1507,6 +1458,19 @@ class SettingsViewModel @Inject constructor(
                     appendLine("$pkg: $state")
                 }
             } catch (e: Exception) { appendLine("(failed to gather assistant package state: ${e.message})") }
+
+            appendLine("--- last crash ---")
+            try {
+                val crashes = CrashLog.read(appContext)
+                if (crashes.isEmpty()) {
+                    appendLine("(none)")
+                } else {
+                    crashes.forEachIndexed { index, entry ->
+                        if (index > 0) appendLine()
+                        appendLine(entry)
+                    }
+                }
+            } catch (e: Exception) { appendLine("(failed to gather crash log: ${e.message})") }
 
             appendLine("===============================")
             appendLine()

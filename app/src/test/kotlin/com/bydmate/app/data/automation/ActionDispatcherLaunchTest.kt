@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
@@ -41,7 +42,8 @@ class ActionDispatcherLaunchTest {
         every { context.packageManager } returns packageManager
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         dispatcher = ActionDispatcher(vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) })
+            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
+            mockk<ClusterVoiceControl>(relaxed = true))
     }
 
     private fun launchAction(pkg: String) = ActionDef(

@@ -72,22 +72,17 @@ class VoiceControllerEchoFilterTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>(relaxed = true)
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
 
         val agentOrchestrator = mockk<AgentOrchestrator>(relaxed = true)
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
         return VoiceController(
-            audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+            audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator,
             mockk<Context>(relaxed = true), ttsEngine, journal,
             continuousAsr,

@@ -2,7 +2,7 @@ package com.bydmate.app.data.local.database
 
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
-import com.bydmate.app.di.AppModuleMigrationsForTest
+import com.bydmate.app.di.AppModule
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -59,8 +59,8 @@ class Migration13to15Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 15, true,
-            AppModuleMigrationsForTest.MIGRATION_13_14,
-            AppModuleMigrationsForTest.MIGRATION_14_15,
+            AppModule.MIGRATION_13_14,
+            AppModule.MIGRATION_14_15,
         )
 
         migrated.query("SELECT byd_id FROM trips").use { c ->
@@ -106,9 +106,9 @@ class Migration13to15Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 15, true,
-            AppModuleMigrationsForTest.MIGRATION_12_13,
-            AppModuleMigrationsForTest.MIGRATION_13_14,
-            AppModuleMigrationsForTest.MIGRATION_14_15,
+            AppModule.MIGRATION_12_13,
+            AppModule.MIGRATION_13_14,
+            AppModule.MIGRATION_14_15,
         )
 
         migrated.query("SELECT byd_id FROM trips").use { c ->

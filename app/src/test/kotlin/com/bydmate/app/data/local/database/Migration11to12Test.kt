@@ -34,7 +34,7 @@ class Migration11to12Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 12, /*validateDroppedTables=*/true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_11_12
+            com.bydmate.app.di.AppModule.MIGRATION_11_12
         )
 
         migrated.query(
@@ -67,7 +67,7 @@ class Migration11to12Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 12, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_11_12
+            com.bydmate.app.di.AppModule.MIGRATION_11_12
         )
 
         migrated.query("SELECT status FROM charges ORDER BY start_ts").use { c ->
@@ -83,7 +83,7 @@ class Migration11to12Test {
         helper.createDatabase(dbName, 11).close()
         val migrated = helper.runMigrationsAndValidate(
             dbName, 12, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_11_12
+            com.bydmate.app.di.AppModule.MIGRATION_11_12
         )
 
         val cv = ContentValues().apply {

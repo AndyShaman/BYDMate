@@ -27,12 +27,12 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 353
-        versionName = "3.5.1"
+        versionCode = 355
+        versionName = "3.5.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        ndk { abiFilters += listOf("arm64-v8a") }  // DiLink is arm64-only; single ABI keeps the Vosk native libs small
+        ndk { abiFilters += listOf("arm64-v8a") }  // DiLink is arm64-only; single ABI keeps sherpa-onnx native libs small
     }
 
     signingConfigs {
@@ -49,7 +49,7 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.findByName("release")
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -69,6 +69,8 @@ android {
     lint {
         // Not targeting Google Play -- DiLink sideload only
         disable += "ExpiredTargetSdkVersion"
+        // Pre-existing issues frozen at CI introduction; new issues still fail.
+        baseline = file("lint-baseline.xml")
     }
 
     sourceSets {
@@ -106,6 +108,19 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+}
+
+// AC-12: a publishable release APK must be signed. Debug and CI builds are
+// unaffected; explicit escape hatch for exotic cases.
+gradle.taskGraph.whenReady {
+    val wantsRelease = allTasks.any { it.name == "assembleRelease" || it.name == "bundleRelease" }
+    if (wantsRelease && !keystorePropsFile.exists() && !project.hasProperty("allowUnsignedRelease")) {
+        throw GradleException(
+            "keystore.properties not found - release build would be UNSIGNED. " +
+            "Add keystore.properties or pass -PallowUnsignedRelease."
+        )
     }
 }
 
@@ -186,9 +201,6 @@ dependencies {
     // com.cgutman:adblib does not exist on MavenCentral (only com.tananaev:adblib does).
     // Task 4 will use a hand-rolled ADB client fallback.
     // implementation("com.cgutman:adblib:1.0.0")
-
-    // Offline ASR (arm64 only — DiLink is arm64)
-    implementation("com.alphacephei:vosk-android:0.3.47")
 
     // Offline TTS: sherpa-onnx piper VITS. No Maven artifact exists — prebuilt AAR from
     // GitHub releases, onnxruntime statically linked (single libsherpa-onnx-jni.so, arm64).

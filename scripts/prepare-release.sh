@@ -65,3 +65,13 @@ awk -v ver="$VER" '
     print
   }
 ' "$CL"
+
+# --- APK SHA-256 for the release notes (AC-12) ---
+APK="$ROOT/app/build/outputs/apk/release/BYDMate-v$VER.apk"
+if [ -f "$APK" ]; then
+  echo ""
+  echo "SHA-256: $(shasum -a 256 "$APK" | cut -d' ' -f1)"
+else
+  echo "" >&2
+  echo "note: $APK not found - build the APK, then append its SHA-256 to the notes manually" >&2
+fi

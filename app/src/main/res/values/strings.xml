@@ -23,9 +23,9 @@
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
-    <string name="settings_display_size_width_desc">Ширина окна в % от ширины приборки</string>
+    <string name="settings_display_size_width_desc" formatted="false">Ширина окна в % от ширины приборки</string>
     <string name="settings_display_size_height">Высота</string>
-    <string name="settings_display_size_height_desc">Высота окна в % от высоты приборки</string>
+    <string name="settings_display_size_height_desc" formatted="false">Высота окна в % от высоты приборки</string>
     <string name="settings_display_offset_x">Сдвиг по горизонтали</string>
     <string name="settings_display_offset_x_desc">Положение окна: 0 - левый край, 50 - центр, 100 - правый край</string>
     <string name="settings_display_offset_y">Сдвиг по вертикали</string>
@@ -378,6 +378,9 @@
     <string name="automation_action_sentry">Охранный режим</string>
     <string name="automation_action_sentry_on">Включить</string>
     <string name="automation_action_sentry_off">Отключить</string>
+    <string name="automation_action_cluster_projection">Вывод на приборку</string>
+    <string name="automation_action_cluster_projection_on">Включить</string>
+    <string name="automation_action_cluster_projection_off">Отключить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -781,6 +784,9 @@
     <string name="settings_config_restore_confirm_body">Текущие данные и настройки будут полностью заменены содержимым бэкапа. Отменить это действие невозможно.</string>
     <string name="settings_config_restore_confirm_ok">Восстановить</string>
     <string name="settings_config_restore_confirm_cancel">Отмена</string>
+    <string name="settings_config_export_confirm_title">Экспортировать конфигурацию?</string>
+    <string name="settings_config_export_confirm_body">Бэкап содержит историю поездок с GPS-маршрутами и введённые API-ключи в незашифрованном виде. Файл будет сохранён в общедоступную папку Download. Храните его в надёжном месте и не пересылайте посторонним.</string>
+    <string name="settings_config_export_confirm_ok">Экспортировать</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Кузов</string>
@@ -804,7 +810,7 @@
     <string name="auto_unit_kmh">км/ч</string>
     <string name="auto_unit_kpa">кПа</string>
     <string name="auto_unit_percent">%</string>
-    <string name="auto_unit_percent_open">% откр.</string>
+    <string name="auto_unit_percent_open" formatted="false">% откр.</string>
     <string name="auto_unit_volt">В</string>
     <!-- enum labels -->
     <string name="auto_enum_charging">Заряжается</string>
@@ -1133,7 +1139,7 @@
     <string name="settings_preset_hint_vercel">Кредит 5$ в месяц без карты. Часть моделей на бесплатном тарифе может отдавать ошибку 403.</string>
     <string name="settings_preset_hint_kimi">1000 запросов в день бесплатно.</string>
     <string name="settings_preset_hint_nanogpt">Подписка 8$ в месяц, оплата криптой.</string>
-    <string name="settings_preset_hint_deepseek">Оплата по факту, скидка 50% ночью по Москве.</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Оплата по факту, скидка 50% ночью по Москве.</string>
     <string name="settings_preset_hint_mistral">Бесплатно с верификацией телефона.</string>
     <string name="settings_models_header">Выбор моделей</string>
     <string name="settings_model_primary">Основная модель</string>

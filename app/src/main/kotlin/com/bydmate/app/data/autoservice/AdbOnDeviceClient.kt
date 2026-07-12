@@ -167,8 +167,10 @@ class AdbOnDeviceClientImpl @Inject constructor(
                 "--nice-name=$HELPER_PROCESS_NAME com.bydmate.app.helper.HelperDaemon " +
                 "${android.os.Process.myUid()} </dev/null >$HELPER_LOG_PATH 2>&1 & " +
                 "for i in 1 2 3; do service list 2>/dev/null | grep -q $HELPER_PROCESS_NAME && break; sleep 1; done"
-            p.exec(spawnCmd)
-            true
+            // exec() returns null only on a dead/disconnected socket (AdbProtocolClient.exec) — an
+            // honest false here matters: HelperBootstrap.ensureRunningLocked() persists the spawned
+            // versionCode ONLY after a dispatch that actually succeeded, and bails otherwise.
+            p.exec(spawnCmd) != null
         } catch (e: Exception) {
             Log.w(TAG, "spawnHelper failed: ${e.message}")
             false
@@ -191,8 +193,8 @@ class AdbOnDeviceClientImpl @Inject constructor(
             // the daemon (pid-order dependent), leaving the stale daemon alive. The ps/awk/sh
             // shells here have comm != "bydmate_helper" and cannot self-match. Empty match →
             // `kill -9` runs for no pids → harmless.
-            p.exec("for p in \$(ps -A -o PID,NAME | awk '\$2==\"$HELPER_PROCESS_NAME\"{print \$1}'); do kill -9 \$p; done")
-            true
+            // Honest false on a dead socket, same reasoning as spawnHelper above.
+            p.exec("for p in \$(ps -A -o PID,NAME | awk '\$2==\"$HELPER_PROCESS_NAME\"{print \$1}'); do kill -9 \$p; done") != null
         } catch (e: Exception) {
             Log.w(TAG, "killHelper failed: ${e.message}")
             false

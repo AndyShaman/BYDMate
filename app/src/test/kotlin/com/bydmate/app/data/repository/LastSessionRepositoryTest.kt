@@ -1,9 +1,13 @@
 package com.bydmate.app.data.repository
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
+import io.mockk.every
+import io.mockk.mockk
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -215,5 +219,88 @@ class LastSessionRepositoryTest {
         repo.updateLiveSoc(soc = 77, ts = 2_000L)
         repo.onSessionEnd(soc = 60, ts = 3_000L)
         assertEquals(77, repo.takeMatch(3_000L)?.startSoc)
+    }
+
+    /**
+     * Fake SharedPreferences (MockK) with a write counter, so the updateLiveSoc
+     * prefs-write gate below can be asserted directly instead of poking at
+     * private fields. Mirrors LocalePreferencesTest's mockSetup.
+     */
+    private fun mockCountingPrefs(): Pair<Context, IntArray> {
+        val store = mutableMapOf<String, Any?>()
+        val writeCount = IntArray(1)
+        val editor = mockk<SharedPreferences.Editor>()
+        every { editor.putString(any(), any()) } answers {
+            store[firstArg<String>()] = secondArg<String?>(); editor
+        }
+        every { editor.remove(any()) } answers {
+            store.remove(firstArg<String>()); editor
+        }
+        every { editor.apply() } answers { writeCount[0]++ }
+        val prefs = mockk<SharedPreferences>()
+        every { prefs.getString(any(), any()) } answers {
+            store[firstArg<String>()] as String? ?: secondArg<String?>()
+        }
+        every { prefs.edit() } returns editor
+        val ctx = mockk<Context>()
+        every { ctx.getSharedPreferences(any(), any()) } returns prefs
+        return ctx to writeCount
+    }
+
+    @Test
+    fun `updateLiveSoc skips the prefs write when soc is unchanged within the heartbeat window`() {
+        val (ctx, writeCount) = mockCountingPrefs()
+        val repo = LastSessionRepository(ctx)
+        repo.onSessionStart(soc = 80, ts = 1_000L)
+        val afterStart = writeCount[0]
+
+        repo.updateLiveSoc(soc = 75, ts = 2_000L)   // first live tick -- no prior persisted soc, always writes
+        repo.updateLiveSoc(soc = 75, ts = 2_500L)   // same soc, 500ms later -- well inside the 15s heartbeat, skipped
+
+        assertEquals(afterStart + 1, writeCount[0])
+    }
+
+    /**
+     * The heartbeat backstop must persist an unchanged-soc tick BEFORE END_TOLERANCE_MS
+     * (30s) elapses. On a hard power-cut the persisted endTs is what
+     * reconcileStaleOpenSession finalizes the trip with, and HistoryImporter only matches
+     * the energydata trip end within endTs + 30s. A heartbeat >= 30s (e.g. the old 60s)
+     * would let endTs lag past that window and silently drop the trip's SOC enrichment.
+     * This guard advances exactly END_TOLERANCE_MS, so it fails for any heartbeat that
+     * exceeds the tolerance (the old 60s) — it pins HEARTBEAT_MS <= END_TOLERANCE_MS.
+     * The actual 15s / 2x-margin design choice is documented at the constant itself.
+     */
+    @Test
+    fun `updateLiveSoc forces a write within END_TOLERANCE_MS even with an unchanged soc`() {
+        val (ctx, writeCount) = mockCountingPrefs()
+        val repo = LastSessionRepository(ctx)
+        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.updateLiveSoc(soc = 75, ts = 2_000L)
+        val afterFirstTick = writeCount[0]
+
+        // Unchanged soc for the whole parked tail; by the 30s tolerance the heartbeat
+        // must already have flushed a fresh endTs to disk (would FAIL at the old 60s).
+        repo.updateLiveSoc(soc = 75, ts = 2_000L + 30_000L)
+
+        assertTrue(
+            "heartbeat must persist an unchanged-soc tick within END_TOLERANCE_MS (30s) " +
+                "to keep the power-cut endTs inside HistoryImporter's match window",
+            writeCount[0] > afterFirstTick,
+        )
+    }
+
+    @Test
+    fun `session end always persists regardless of the updateLiveSoc gate`() {
+        val (ctx, writeCount) = mockCountingPrefs()
+        val repo = LastSessionRepository(ctx)
+        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.updateLiveSoc(soc = 75, ts = 2_000L)
+        repo.updateLiveSoc(soc = 75, ts = 2_500L)   // gate-skipped, but pending stays accurate in memory
+        val beforeEnd = writeCount[0]
+
+        repo.onSessionEnd(soc = 75, ts = 3_000L)
+
+        assertTrue("onSessionEnd must always persist", writeCount[0] > beforeEnd)
+        assertEquals(75, repo.takeMatch(3_000L)?.endSoc)
     }
 }

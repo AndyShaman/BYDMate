@@ -38,13 +38,6 @@ internal fun migrateLegacyTtsSource(stored: String, persist: (String) -> Unit): 
 @InstallIn(SingletonComponent::class)
 object VoiceModule {
     @Provides @Singleton
-    fun provideVoiceModelManager(@ApplicationContext ctx: Context, http: OkHttpClient) =
-        VoiceModelManager(ctx, http)
-
-    @Provides @Singleton
-    fun provideAsrEngine(mm: VoiceModelManager): AsrEngine = VoskAsrEngine(mm)
-
-    @Provides @Singleton
     fun provideTtsModelManager(@ApplicationContext ctx: Context, http: OkHttpClient) =
         TtsModelManager(ctx, http)
 

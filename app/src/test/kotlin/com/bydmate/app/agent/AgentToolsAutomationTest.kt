@@ -26,6 +26,7 @@ import io.mockk.slot
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -529,6 +530,124 @@ class AgentToolsAutomationTest {
         assertEquals("notification", actions[0].kind)
         assertEquals("notification", actions[0].command)
         assertTrue(saved.captured.playSound)
+    }
+
+    // --- create_automation: cluster_projection, speak, agent_query ---
+
+    @Test fun create_automation_cluster_projection_on_persists_payload_1() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"cluster_projection","on":true}]""")))
+
+        val action = ActionDef.listFromJson(slot.captured.actions).first()
+        assertEquals("cluster_projection", action.kind)
+        assertEquals("1", action.payload)
+    }
+
+    @Test fun create_automation_cluster_projection_off_persists_payload_0() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"cluster_projection","on":false}]""")))
+
+        val action = ActionDef.listFromJson(slot.captured.actions).first()
+        assertEquals("cluster_projection", action.kind)
+        assertEquals("0", action.payload)
+    }
+
+    @Test fun create_automation_cluster_projection_missing_on_reports_error_no_insert() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"cluster_projection"}]"""))))
+
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    @Test fun create_automation_speak_persists_text_in_payload() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"speak","text":"привет"}]""")))
+
+        val action = ActionDef.listFromJson(slot.captured.actions).first()
+        assertEquals("speak", action.kind)
+        assertEquals("привет", JSONObject(action.payload!!).getString("text"))
+    }
+
+    @Test fun create_automation_speak_empty_text_reports_error_no_insert() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"speak","text":""}]"""))))
+
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    @Test fun create_automation_agent_query_persists_prompt_in_payload() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"agent_query","prompt":"какой заряд"}]""")))
+
+        val action = ActionDef.listFromJson(slot.captured.actions).first()
+        assertEquals("agent_query", action.kind)
+        assertEquals("какой заряд", JSONObject(action.payload!!).getString("prompt"))
+    }
+
+    @Test fun create_automation_agent_query_empty_prompt_reports_error_no_insert() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"agent_query","prompt":""}]"""))))
+
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    // --- create_automation: П7 confirm-gate dangerous actions ---
+
+    @Test fun create_automation_call_action_sets_confirm_before_execute_true() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"call","phone":"+79161234567"}]""")))
+
+        assertTrue(slot.captured.confirmBeforeExecute)
+    }
+
+    @Test fun create_automation_sentry_off_action_sets_confirm_before_execute_true() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"sentry","on":false}]""")))
+
+        assertTrue(slot.captured.confirmBeforeExecute)
+    }
+
+    @Test fun create_automation_non_dangerous_actions_leave_confirm_before_execute_false() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation", createArgs()))
+
+        assertFalse(slot.captured.confirmBeforeExecute)
     }
 
     @Test fun create_automation_schema_time_of_day_value_has_enum() = runTest {

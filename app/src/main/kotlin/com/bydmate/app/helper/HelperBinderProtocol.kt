@@ -68,6 +68,20 @@ object HelperBinderProtocol {
     /** Cluster compositor power via the auto_container service (Wave P). [int on] -> [int status]. */
     val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19
 
+    /**
+     * Batched autoservice read. Request: int count, then count × (int tx, int dev, int fid).
+     * Reply: int count, then count × (int status, int value) — same (status, value)
+     * convention as TX_READ, one pair per requested triple, in request order.
+     * count outside [1, MAX_BATCH_ITEMS] → reply is a single int 0 (no pairs).
+     * Added in wave L; an older daemon returns false for this code (unknown
+     * transaction → Binder.onTransact default), which the client treats as
+     * "batch unsupported" and falls back to per-fid reads.
+     */
+    val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 20
+
+    /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
+    const val MAX_BATCH_ITEMS: Int = 128
+
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"
 

@@ -20,9 +20,9 @@
     <string name="settings_display_app_title">Aplicativo no painel</string>
     <string name="settings_display_size_header">Tamanho da janela no painel</string>
     <string name="settings_display_size_width">Largura</string>
-    <string name="settings_display_size_width_desc">Largura da janela como % da largura do painel</string>
+    <string name="settings_display_size_width_desc" formatted="false">Largura da janela como % da largura do painel</string>
     <string name="settings_display_size_height">Altura</string>
-    <string name="settings_display_size_height_desc">Altura da janela como % da altura do painel</string>
+    <string name="settings_display_size_height_desc" formatted="false">Altura da janela como % da altura do painel</string>
     <string name="settings_display_offset_x">Deslocamento horizontal</string>
     <string name="settings_display_offset_x_desc">Posição da janela: 0 - borda esquerda, 50 - centro, 100 - borda direita</string>
     <string name="settings_display_offset_y">Deslocamento vertical</string>
@@ -313,6 +313,9 @@
     <string name="automation_action_sentry">Modo sentinela</string>
     <string name="automation_action_sentry_on">Ativar</string>
     <string name="automation_action_sentry_off">Desativar</string>
+    <string name="automation_action_cluster_projection">Projeção no painel de instrumentos</string>
+    <string name="automation_action_cluster_projection_on">Ativar</string>
+    <string name="automation_action_cluster_projection_off">Desativar</string>
     <string name="automation_action_speak">Falar texto</string>
     <string name="automation_action_agent_query">Perguntar ao agente</string>
     <string name="auto_act_speak">Falar texto</string>
@@ -619,6 +622,9 @@
     <string name="settings_config_restore_confirm_body">Todos os dados e configurações atuais serão substituídos pelo conteúdo do backup. Isto não pode ser desfeito.</string>
     <string name="settings_config_restore_confirm_ok">Restaurar</string>
     <string name="settings_config_restore_confirm_cancel">Cancelar</string>
+    <string name="settings_config_export_confirm_title">Exportar configuração?</string>
+    <string name="settings_config_export_confirm_body">O backup contém o histórico de viagens com rotas GPS e as suas chaves de API em texto simples. O ficheiro será guardado na pasta pública Download. Guarde-o num local seguro e não o partilhe.</string>
+    <string name="settings_config_export_confirm_ok">Exportar</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Carroceria</string>
@@ -642,7 +648,7 @@
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
-    <string name="auto_unit_percent_open">% aberto</string>
+    <string name="auto_unit_percent_open" formatted="false">% aberto</string>
     <string name="auto_unit_volt">V</string>
     <!-- enum labels -->
     <string name="auto_enum_charging">Carregando</string>
@@ -870,7 +876,7 @@
     <string name="settings_preset_hint_vercel">Crédito de 5$ por mês sem cartão. Alguns modelos no plano gratuito podem retornar erro 403.</string>
     <string name="settings_preset_hint_kimi">1000 solicitações gratuitas por dia.</string>
     <string name="settings_preset_hint_nanogpt">Assinatura de 8$ por mês, pagamento em cripto.</string>
-    <string name="settings_preset_hint_deepseek">Pagamento por uso, 50% de desconto à noite (horário de Moscou).</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Pagamento por uso, 50% de desconto à noite (horário de Moscou).</string>
     <string name="settings_preset_hint_mistral">Gratuito com verificação de telefone.</string>
     <string name="settings_models_header">Seleção de modelos</string>
     <string name="settings_model_primary">Modelo principal</string>
@@ -954,4 +960,55 @@
     <string name="settings_donate_header">Apoio</string>
     <string name="settings_donate_card_body">O BYDMate é gratuito e sem fins lucrativos. Se ele é útil para você, você pode apoiar o desenvolvimento.</string>
     <string name="settings_donate_button">Apoiar o projeto</string>
+
+    <!-- Integrations: OpenRouter / Exa / weather attribution -->
+    <string name="settings_openrouter_section_header">OpenRouter</string>
+    <string name="settings_exa_section_header">Exa</string>
+    <string name="settings_exa_search_hint">Para busca na internet pelo agente de voz. Sem a chave, a busca é feita pelo OpenRouter</string>
+    <string name="settings_weather_attribution">Dados meteorológicos por Open-Meteo.com</string>
+
+    <!-- Voice trigger in automations -->
+    <string name="automation_trigger_type_voice">Voz</string>
+    <string name="automation_trigger_voice_phrase_label">Frase de ativação</string>
+    <string name="automation_voice_phrase_empty">A frase de voz está vazia</string>
+    <string name="automation_voice_phrase_builtin">A frase já é um comando integrado</string>
+    <string name="automation_voice_phrase_taken">A frase já é usada por outra automação</string>
+
+    <!-- Voice agent settings -->
+    <string name="settings_voice_enable_label">Comandos de voz</string>
+    <string name="settings_voice_enable_description">Comandos pelo botão do volante, totalmente offline</string>
+    <string name="settings_voice_model_downloading">Baixando… %1$d%%</string>
+    <string name="voice_listening">Ouvindo</string>
+    <string name="voice_thinking">Pensando</string>
+    <string name="settings_asr_gigaam_title">Reconhecimento de fala</string>
+    <string name="settings_asr_gigaam_ready">Modelo pronto</string>
+    <string name="settings_asr_gigaam_download">Baixar (%1$s)</string>
+    <string name="settings_asr_gigaam_delete">Excluir modelo</string>
+    <string name="settings_asr_gigaam_download_failed">Falha ao baixar o modelo</string>
+    <string name="settings_voice_button_label">Atribuir botão</string>
+    <string name="settings_voice_button_current">Atual: %1$s</string>
+    <string name="settings_voice_a11y_hint">O acionamento pelo botão do volante requer o serviço de acessibilidade (ativado automaticamente na seção Tela).</string>
+    <string name="settings_voice_contacts_label">Acesso aos contatos</string>
+    <string name="settings_voice_contacts_description">Necessário para ligar para um contato pelo nome por voz</string>
+    <string name="settings_voice_contacts_granted">Concedido</string>
+    <string name="settings_voice_contacts_grant">Conceder</string>
+    <string name="settings_voice_journal_entry_title">Registro de voz</string>
+    <string name="settings_voice_journal_entry_description">Últimas 50 sessões de voz</string>
+    <string name="settings_tts_header">Respostas do agente</string>
+    <string name="settings_tts_toggle">Falar as respostas do agente em voz alta</string>
+    <string name="settings_tts_subtitle">Síntese de fala offline, voz russa</string>
+    <string name="settings_tts_model_delete">Excluir</string>
+    <string name="settings_tts_download_failed">Falha ao baixar a voz</string>
+    <string name="settings_voice_volume_hint">O volume das respostas é controlado pelo canal Voice do sistema: botões de volume no volante ou configurações de som do carro</string>
+
+    <!-- Voice AI agent -->
+    <string name="agent_enable_title">Agente de IA por voz</string>
+    <string name="agent_enable_desc">Perguntas e comandos livres via LLM (OpenRouter). Usa a chave de API da seção Integrações.</string>
+    <string name="agent_model_shared_caption">A chave OpenRouter e o modelo do agente são configurados na seção Integrações</string>
+    <string name="agent_chat_open">Chat com o agente (depuração)</string>
+    <string name="agent_test_model_button">Testar modelo</string>
+    <string name="agent_test_model_running">Testando o modelo…</string>
+    <string name="agent_test_model_result">%1$s: respondeu em %2$.1f s - \"%3$s\"</string>
+    <string name="agent_test_model_disabled">Erro: agente desativado ou não configurado</string>
+    <string name="agent_exa_api_key_label">Exa API Key (busca na web)</string>
 </resources>

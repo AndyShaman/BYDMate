@@ -14,6 +14,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
+/** One autoservice read request for HelperClient.readBatch: transact code (5=getInt, 7=getFloat bits), device, fid. */
+data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
+
 /**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
@@ -28,6 +31,15 @@ import javax.inject.Singleton
  */
 interface HelperClient {
     suspend fun read(dev: Int, fid: Int, tx: Int = 5): Long?
+
+    /**
+     * Reads all [items] through the daemon in ONE binder round-trip (TX_READ_BATCH).
+     * Returns (status, value) per item in request order — raw, no sentinel filtering
+     * (callers apply SentinelDecoder exactly as they would to a single read).
+     * Null on any failure: daemon unreachable, timeout, old daemon without batch
+     * support, count mismatch, or items outside [1, MAX_BATCH_ITEMS]. Never partial.
+     */
+    suspend fun readBatch(items: List<BatchReadItem>): List<Pair<Int, Int>>?
     suspend fun write(dev: Int, fid: Int, value: Int): Boolean
     /** Raw autoservice setInt status (1 real, 0 no-op, <0 error, null daemon unreachable). */
     suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int?
@@ -88,6 +100,23 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     override suspend fun read(dev: Int, fid: Int, tx: Int): Long? =
         transact(HelperBinderProtocol.TX_READ) { it.writeInt(tx); it.writeInt(dev); it.writeInt(fid) }
             ?.let { (status, value) -> if (readAccepted(status)) value.toLong() else null }
+
+    override suspend fun readBatch(items: List<BatchReadItem>): List<Pair<Int, Int>>? {
+        if (items.isEmpty() || items.size > HelperBinderProtocol.MAX_BATCH_ITEMS) return null
+        return transactParsed(
+            HelperBinderProtocol.TX_READ_BATCH,
+            writeArgs = { p ->
+                p.writeInt(items.size)
+                items.forEach { p.writeInt(it.tx); p.writeInt(it.dev); p.writeInt(it.fid) }
+            },
+            timeoutMs = BATCH_TIMEOUT_MS,
+        ) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            val n = reply.readInt()
+            if (n != items.size || reply.dataAvail() < n * 8) return@transactParsed null
+            List(n) { reply.readInt() to reply.readInt() }
+        }
+    }
 
     override suspend fun writeStatus(dev: Int, fid: Int, value: Int): Int? {
         val status = transact(HelperBinderProtocol.TX_WRITE) {
@@ -262,5 +291,7 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
         private const val FORCE_TIMEOUT_MS = 15000L
+        /** TX_READ_BATCH budget: 58 in-process transacts typically take ~100 ms; 5 s is a 50× margin. */
+        const val BATCH_TIMEOUT_MS = 5_000L
     }
 }

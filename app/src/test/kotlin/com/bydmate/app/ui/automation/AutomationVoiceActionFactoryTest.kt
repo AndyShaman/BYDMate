@@ -30,4 +30,10 @@ class AutomationVoiceActionFactoryTest {
         val a = newAgentQueryAction(context).withAgentPrompt("расскажи сводку погоды")
         assertEquals("расскажи сводку погоды", a.agentPrompt())
     }
+
+    @Test fun `cluster factory produces kind cluster_projection with default payload on`() {
+        val a = newClusterAction(context)
+        assertEquals("cluster_projection", a.kind)
+        assertEquals("1", a.payload)
+    }
 }

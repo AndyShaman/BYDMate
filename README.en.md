@@ -9,11 +9,11 @@
 [![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?style=flat-square&logo=android&logoColor=white)](https://developer.android.com)
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.1-7F52FF?style=flat-square&logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Jetpack Compose](https://img.shields.io/badge/Jetpack_Compose-Material3-4285F4?style=flat-square&logo=jetpackcompose&logoColor=white)](https://developer.android.com/jetpack/compose)
-[![License](https://img.shields.io/badge/License-GPLv3-blue?style=flat-square)](LICENSE)
+[![License](https://img.shields.io/badge/License-PolyForm_Noncommercial-blue?style=flat-square)](LICENSE)
 [![GitHub release](https://img.shields.io/github/v/release/AndyShaman/BYDMate?style=flat-square)](https://github.com/AndyShaman/BYDMate/releases)
 [![Sponsor](https://img.shields.io/badge/Sponsor-FF69B4?style=flat-square&logo=githubsponsors&logoColor=white)](SUPPORT.md)
 
-**Real consumption, GPS routes, automation, AI analytics. Local-only, no cloud.**
+**Real consumption, GPS routes, automation, AI analytics. Local-first; cloud features are optional.**
 
 **English** | [中文](README.zh.md) | [Русский](README.md)
 
@@ -25,11 +25,11 @@
 
 ## About
 
-BYDMate is an Android app for the BYD DiLink 5.0 head unit (Leopard 3 / Fangchengbao Tai 3). It logs trips, GPS routes, real energy consumption from the BMS, charging sessions, and provides AI-driven driving analytics. Everything runs locally on the head unit. No cloud, no Google Play Services required.
+BYDMate is an Android app for the BYD DiLink 5.0 head unit (Leopard 3 / Fangchengbao Tai 3). It logs trips, GPS routes, real energy consumption from the BMS, charging sessions, and provides AI-driven driving analytics. No Google Play Services required.
 
 The stock onboard computer **underestimates consumption by 10-30%**. BYDMate reads data directly from the BMS (energydata SQLite) and shows the real figure. Plus data the stock system does not surface: idle drain, cell balance, trip cost, AI insights.
 
-Two optional features can leave the car: **cloud insights** via OpenRouter and live telemetry to A Better Route Planner. Both are off by default and enabled manually. **Local insights** on the dashboard run fully on-device with no network.
+Core features (trips, charges, automations, local insights, offline voice agent) run entirely on-device and require no internet. Cloud features are off by default and enabled only by entering a key. What leaves the device and when is described in [Data & Network](#data--network).
 
 ---
 
@@ -141,7 +141,7 @@ Examples:
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
 | **Cooldown** | Configurable delay between firings |
 | **Overlay confirmation** | "Cancel / Run" popup before action. 15-second timeout → auto-cancel |
-| **Safety** | Windows do not open above 80 km/h, CAN/SHELL commands are blocked |
+| **Safety** | Windows do not open above 120 km/h, sunroof above 80 km/h, door unlock blocked above 30 km/h; CAN/SHELL commands are blocked |
 | **Log** | Full trigger history with outcomes |
 | **Templates** | 6 ready-made rules for a quick start |
 | **Run now** | Manually run a rule from the editor, bypassing triggers and cooldown |
@@ -349,6 +349,24 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | Vehicle control | Car system service (command writes) |
 
 **No OBD adapter** and **no third-party D+**. BYDMate reads data and controls the car directly through the `autoservice` system service (the same one the stock BYD system uses) under shell access over wireless ADB.
+
+---
+
+## Data & Network
+
+| Feature | Destination | What is sent | When active |
+|---|---|---|---|
+| Cloud AI Insights | OpenRouter | Aggregated trip and charge statistics for 7/30 days | Only after entering an API key |
+| Voice agent (LLM) | OpenRouter / z.ai / your server | Command text, vehicle state (SOC, climate, etc.), GPS coordinates for navigation requests | Only after configuring a provider |
+| Agent web search | Exa / z.ai / OpenRouter | Search query text | Key entered and agent invoked the tool |
+| Weather (agent) | Open-Meteo | GPS coordinates or place name (geocoding) | Agent invoked the tool |
+| Charging stations (agent) | Overpass (overpass-api.de / maps.mail.ru) | GPS coordinates | Agent invoked the tool |
+| Online TTS voices | MiniMax / fal.ai / Replicate / OpenRouter | Text of the spoken response | Only if an online voice is selected |
+| Trip detail map | OpenStreetMap tile servers (or Amap, if selected in settings) | Coordinates of the visible map area | When the trip map or place editor is opened |
+| Update check | GitHub API | Nothing (fetches release list; version comparison is local) | Automatically |
+| ABRP live telemetry | abetterrouteplanner.com | SOC, power, speed, temperatures, odometer, tire pressures, charging status, battery capacity, SoH, kWh charged in current session, car model (GPS is intentionally not sent) | Only after entering a token |
+
+Without any keys configured, only the update check (GitHub) and map tiles when viewing a trip route leave the device, as well as voice model downloads on explicit user request (github.com). API keys are stored locally in the app's database and are never sent anywhere other than the provider itself.
 
 ---
 
@@ -580,7 +598,7 @@ The project is non-commercial, built as a hobby. If you want to say thanks, the 
 
 ## License
 
-**GPLv3** with attribution clauses.
+**PolyForm Noncommercial 1.0.0** — source-available, noncommercial use only.
 See [LICENSE](LICENSE) for details.
 
 Copyright (C) 2026 [AndyShaman](https://github.com/AndyShaman)

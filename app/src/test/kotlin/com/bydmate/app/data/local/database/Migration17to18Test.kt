@@ -2,7 +2,7 @@ package com.bydmate.app.data.local.database
 
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
-import com.bydmate.app.di.AppModuleMigrationsForTest
+import com.bydmate.app.di.AppModule
 import org.junit.Assert.assertEquals
 import org.junit.Rule
 import org.junit.Test
@@ -28,7 +28,7 @@ class Migration17to18Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 18, true,
-            AppModuleMigrationsForTest.MIGRATION_17_18,
+            AppModule.MIGRATION_17_18,
         )
 
         migrated.execSQL("INSERT INTO trip_tombstones (byd_id) VALUES (42)")

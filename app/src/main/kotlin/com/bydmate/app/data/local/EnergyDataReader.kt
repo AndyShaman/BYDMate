@@ -106,8 +106,9 @@ open class EnergyDataReader @Inject constructor(
             val localDb = copyToLocal(sourceDb)
             sb.appendLine("Копия: ${localDb.absolutePath} (${localDb.length()} bytes)")
 
+            // READWRITE on our private copy: read-only open cannot replay the -wal sidecar.
             val db = SQLiteDatabase.openDatabase(
-                localDb.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+                localDb.absolutePath, null, SQLiteDatabase.OPEN_READWRITE
             )
             db.use { database ->
                 // Tables
@@ -183,28 +184,32 @@ open class EnergyDataReader @Inject constructor(
      */
     fun peekSourceChanged(context: Context): Boolean {
         val prefs = context.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE)
-        val energyDir = File(ENERGY_DIR_PATH)
-        if (!energyDir.exists()) return false
+        val dir = energyDataDir()
+        if (!dir.exists()) return false
 
-        val sourceDb = findDbViaListFiles(energyDir) ?: findDbViaKnownNames(energyDir) ?: return false
+        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return false
+        // WAL-aware (AC-04): a live DB may keep new trips wal-only for a long time —
+        // the main file alone can read as "unchanged". Same formula as sourceFingerprint().
+        val wal = File(dir, sourceDb.name + "-wal")
 
         val storedModified = prefs.getLong("lastModified", 0L)
         val storedSize = prefs.getLong("fileSize", 0L)
         val storedPath = prefs.getString("filePath", "") ?: ""
 
-        return sourceDb.lastModified() != storedModified ||
-            sourceDb.length() != storedSize ||
+        return (sourceDb.lastModified() + wal.lastModified()) != storedModified ||
+            (sourceDb.length() + wal.length()) != storedSize ||
             sourceDb.absolutePath != storedPath
     }
 
     /** Persist current source-file fingerprint. Call only after successful import. */
     fun markSourceProcessed(context: Context) {
-        val energyDir = File(ENERGY_DIR_PATH)
-        if (!energyDir.exists()) return
-        val sourceDb = findDbViaListFiles(energyDir) ?: findDbViaKnownNames(energyDir) ?: return
+        val dir = energyDataDir()
+        if (!dir.exists()) return
+        val sourceDb = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return
+        val wal = File(dir, sourceDb.name + "-wal")
         context.getSharedPreferences("energydata_sync", Context.MODE_PRIVATE).edit()
-            .putLong("lastModified", sourceDb.lastModified())
-            .putLong("fileSize", sourceDb.length())
+            .putLong("lastModified", sourceDb.lastModified() + wal.lastModified())
+            .putLong("fileSize", sourceDb.length() + wal.length())
             .putString("filePath", sourceDb.absolutePath)
             .apply()
     }
@@ -219,22 +224,23 @@ open class EnergyDataReader @Inject constructor(
     }
 
     suspend fun readTripsSince(sinceTimestampSec: Long): List<BydTripRecord> = withContext(Dispatchers.IO) {
-        val energyDir = File(ENERGY_DIR_PATH)
+        val energyDir = energyDataDir()
         if (!energyDir.exists()) {
-            Log.i(TAG, "readTripsSince($sinceTimestampSec): directory $ENERGY_DIR_PATH missing — empty")
+            Log.i(TAG, "readTripsSince($sinceTimestampSec): directory ${energyDir.path} missing — empty")
             return@withContext emptyList()
         }
 
         val sourceDb = findDbViaListFiles(energyDir)
             ?: findDbViaKnownNames(energyDir)
             ?: run {
-                Log.i(TAG, "readTripsSince: no .db files in $ENERGY_DIR_PATH (Song / non-Leopard?) — empty")
+                Log.i(TAG, "readTripsSince: no .db files in ${energyDir.path} (Song / non-Leopard?) — empty")
                 return@withContext emptyList()
             }
         Log.i(TAG, "readTripsSince($sinceTimestampSec): source=${sourceDb.name} size=${sourceDb.length()}B")
 
         val localDb = copyToLocal(sourceDb)
-        val db = SQLiteDatabase.openDatabase(localDb.absolutePath, null, SQLiteDatabase.OPEN_READONLY)
+        // READWRITE on our private copy: read-only open cannot replay the -wal sidecar.
+        val db = SQLiteDatabase.openDatabase(localDb.absolutePath, null, SQLiteDatabase.OPEN_READWRITE)
         db.use { database ->
             val cursor = database.rawQuery(
                 """SELECT _id, start_timestamp, end_timestamp, duration, trip, electricity
@@ -263,17 +269,17 @@ open class EnergyDataReader @Inject constructor(
     }
 
     suspend fun readTrips(): List<BydTripRecord> = withContext(Dispatchers.IO) {
-        val energyDir = File(ENERGY_DIR_PATH)
+        val energyDir = energyDataDir()
         if (!energyDir.exists()) {
-            Log.w(TAG, "readTrips: directory $ENERGY_DIR_PATH missing — throwing")
-            throw EnergyDataException("Директория energydata не найдена: $ENERGY_DIR_PATH")
+            Log.w(TAG, "readTrips: directory ${energyDir.path} missing — throwing")
+            throw EnergyDataException("Директория energydata не найдена: ${energyDir.path}")
         }
 
         val sourceDb = findDbViaListFiles(energyDir)
             ?: findDbViaKnownNames(energyDir)
             ?: run {
-                Log.w(TAG, "readTrips: no .db files in $ENERGY_DIR_PATH — throwing")
-                throw EnergyDataException("Не найдены файлы БД в $ENERGY_DIR_PATH")
+                Log.w(TAG, "readTrips: no .db files in ${energyDir.path} — throwing")
+                throw EnergyDataException("Не найдены файлы БД в ${energyDir.path}")
             }
         Log.i(TAG, "readTrips: source=${sourceDb.name} size=${sourceDb.length()}B")
 
@@ -327,21 +333,32 @@ open class EnergyDataReader @Inject constructor(
             .firstOrNull { it.exists() && it.length() > 0 }
     }
 
-    private fun copyToLocal(source: File): File {
+    internal fun copyToLocal(source: File): File {
         val extDir = context.getExternalFilesDir(null)
             ?: throw EnergyDataException("ExternalFilesDir не доступен")
         val localFile = File(extDir, LOCAL_DB_NAME)
-        FileInputStream(source).use { input ->
-            FileOutputStream(localFile).use { output ->
-                input.copyTo(output)
-            }
+        copyFile(source, localFile)
+        // WAL may hold committed trips the main file does not have yet (AC-04):
+        // copy the sidecars (or drop stale local ones) so SQLite replays them.
+        // A torn -wal copy is safe: replay stops at the first bad frame checksum.
+        for (suffix in listOf("-wal", "-shm")) {
+            val sidecar = File(source.parentFile, source.name + suffix)
+            val localSidecar = File(extDir, LOCAL_DB_NAME + suffix)
+            if (sidecar.exists()) copyFile(sidecar, localSidecar) else localSidecar.delete()
         }
         return localFile
     }
 
+    private fun copyFile(from: File, to: File) {
+        FileInputStream(from).use { input ->
+            FileOutputStream(to).use { output -> input.copyTo(output) }
+        }
+    }
+
     private fun readTripsFromDb(dbFile: File): List<BydTripRecord> {
+        // READWRITE on our private copy: read-only open cannot replay the -wal sidecar.
         val db = SQLiteDatabase.openDatabase(
-            dbFile.absolutePath, null, SQLiteDatabase.OPEN_READONLY
+            dbFile.absolutePath, null, SQLiteDatabase.OPEN_READWRITE
         )
         return db.use { database ->
             val cursor = database.rawQuery(

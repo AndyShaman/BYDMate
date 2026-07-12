@@ -134,6 +134,15 @@ fun main(args: Array<String>) {
                     reply?.writeInt(-1); reply?.writeInt(0); true
                 }
 
+                HelperBinderProtocol.TX_READ_BATCH -> runCatching {
+                    readBatchIntoReply(data, reply) { tx, dev, fid ->
+                        autoserviceTransact(svc, autoIface, tx, dev, fid, 0, writeValue = false)
+                    }
+                    true
+                }.getOrElse {
+                    reply?.writeInt(0); true
+                }
+
                 HelperBinderProtocol.TX_WRITE -> runCatching {
                     val dev = data.readInt()
                     val fid = data.readInt()
@@ -367,6 +376,34 @@ private fun autoserviceTransact(
     } finally {
         data2.recycle()
         reply2.recycle()
+    }
+}
+
+/**
+ * TX_READ_BATCH body. Reads `count` then count × (tx, dev, fid) triples from [data],
+ * invokes [doTransact] per triple, writes `count` then count × (status, value) pairs
+ * to [reply]. A throwing [doTransact] yields (-998, 0) for that item and the batch
+ * continues — one bad fid must not poison the other 57. Invalid count → single 0.
+ */
+internal fun readBatchIntoReply(
+    data: Parcel,
+    reply: Parcel?,
+    doTransact: (tx: Int, dev: Int, fid: Int) -> Pair<Int, Int>
+) {
+    val n = data.readInt()
+    if (n < 1 || n > HelperBinderProtocol.MAX_BATCH_ITEMS) {
+        reply?.writeInt(0)
+        return
+    }
+    val triples = IntArray(n * 3)
+    for (i in 0 until n * 3) triples[i] = data.readInt()
+    reply?.writeInt(n)
+    for (i in 0 until n) {
+        val (status, retInt) = runCatching {
+            doTransact(triples[i * 3], triples[i * 3 + 1], triples[i * 3 + 2])
+        }.getOrElse { -998 to 0 }
+        reply?.writeInt(status)
+        reply?.writeInt(retInt)
     }
 }
 

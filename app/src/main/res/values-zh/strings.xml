@@ -725,6 +725,9 @@
     <string name="settings_config_restore_confirm_cancel">取消</string>
     <string name="settings_config_restore_confirm_ok">恢复</string>
     <string name="settings_config_restore_confirm_title">恢复配置？</string>
+    <string name="settings_config_export_confirm_title">导出配置？</string>
+    <string name="settings_config_export_confirm_body">备份包含带 GPS 路线的行程历史以及未加密的 API 密钥。文件将保存到公共 Download 文件夹。请妥善保管，不要转发给他人。</string>
+    <string name="settings_config_export_confirm_ok">导出</string>
     <string name="settings_display_button_change">更改</string>
     <string name="settings_display_button_title">触发按键</string>
     <string name="steering_button_aux_left">左侧辅助键</string>
@@ -951,6 +954,9 @@
     <string name="automation_action_sentry">哨兵模式</string>
     <string name="automation_action_sentry_on">开启</string>
     <string name="automation_action_sentry_off">关闭</string>
+    <string name="automation_action_cluster_projection">投射到仪表盘</string>
+    <string name="automation_action_cluster_projection_on">开启</string>
+    <string name="automation_action_cluster_projection_off">关闭</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>

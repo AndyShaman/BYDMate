@@ -743,6 +743,15 @@ fun newSentryAction(context: Context): ActionDef = ActionDef(
     payload = "1"
 )
 
+// --- Cluster projection helpers ---
+
+fun newClusterAction(context: Context): ActionDef = ActionDef(
+    command = "cluster_projection",
+    displayName = context.getString(R.string.automation_action_cluster_projection),
+    kind = "cluster_projection",
+    payload = "1"
+)
+
 // --- Speak helpers (v3.6) ---
 
 fun newSpeakAction(context: Context): ActionDef = ActionDef(

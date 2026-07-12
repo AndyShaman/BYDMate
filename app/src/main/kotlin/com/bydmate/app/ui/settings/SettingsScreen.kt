@@ -1435,6 +1435,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
         if (uri != null) viewModel.restoreConfig(uri)
     }
     var showRestoreConfirm by remember { mutableStateOf(false) }
+    var showExportConfirm by remember { mutableStateOf(false) }
     var showDonate by remember { mutableStateOf(false) }
     if (showDonate) {
         DonateDialog(entry = DonateEntry.SETTINGS, onDismiss = { showDonate = false })
@@ -1469,6 +1470,45 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
             },
             dismissButton = {
                 TextButton(onClick = { showRestoreConfirm = false }) {
+                    Text(
+                        stringResource(R.string.settings_config_restore_confirm_cancel),
+                        color = TextSecondary,
+                    )
+                }
+            },
+            containerColor = CardSurfaceElevated,
+        )
+    }
+
+    // Confirm dialog before exporting plaintext backup
+    if (showExportConfirm) {
+        AlertDialog(
+            onDismissRequest = { showExportConfirm = false },
+            title = {
+                Text(
+                    stringResource(R.string.settings_config_export_confirm_title),
+                    color = TextPrimary,
+                )
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_config_export_confirm_body),
+                    color = TextSecondary,
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showExportConfirm = false
+                    viewModel.exportConfig()
+                }) {
+                    Text(
+                        stringResource(R.string.settings_config_export_confirm_ok),
+                        color = PrimaryColor,
+                    )
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showExportConfirm = false }) {
                     Text(
                         stringResource(R.string.settings_config_restore_confirm_cancel),
                         color = TextSecondary,
@@ -1574,7 +1614,7 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
 
             // Export full config backup (DB + prefs) as a zip to Downloads
             Button(
-                onClick = { viewModel.exportConfig() },
+                onClick = { showExportConfirm = true },
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor, contentColor = NavyDark)

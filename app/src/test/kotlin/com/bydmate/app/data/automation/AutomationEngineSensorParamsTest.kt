@@ -120,4 +120,10 @@ class AutomationEngineSensorParamsTest {
         seed = diParsData(rain = 0),
         firing = diParsData(rain = 1),
     )
+
+    @Test fun `ChargingStatus fires on derived value`() = assertParamFires(
+        "ChargingStatus", "==", "2",
+        seed = diParsData(chargingStatus = 1),
+        firing = diParsData(chargingStatus = 2),
+    )
 }

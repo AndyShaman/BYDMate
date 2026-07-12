@@ -3,6 +3,7 @@ package com.bydmate.app.data.automation
 import android.app.NotificationManager
 import android.content.Context
 import android.media.session.MediaController
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
@@ -28,7 +29,8 @@ class ActionDispatcherMusicPlayTest {
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         dispatcher = ActionDispatcher(vehicleApi, helper, context,
-            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) })
+            dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
+            mockk<ClusterVoiceControl>(relaxed = true))
     }
 
     @Test fun music_play_uses_media_session_when_available() = runBlocking {

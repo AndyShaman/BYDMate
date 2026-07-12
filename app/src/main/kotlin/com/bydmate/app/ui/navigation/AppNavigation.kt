@@ -288,7 +288,7 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                 .fillMaxSize()
                 .clickable(
                     indication = null,
-                    interactionSource = MutableInteractionSource()
+                    interactionSource = remember { MutableInteractionSource() }
                 ) { onDismiss() },
             contentAlignment = Alignment.Center
         ) {

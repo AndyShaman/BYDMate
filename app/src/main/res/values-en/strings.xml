@@ -19,9 +19,9 @@
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
-    <string name="settings_display_size_width_desc">Window width as % of the cluster width</string>
+    <string name="settings_display_size_width_desc" formatted="false">Window width as % of the cluster width</string>
     <string name="settings_display_size_height">Height</string>
-    <string name="settings_display_size_height_desc">Window height as % of the cluster height</string>
+    <string name="settings_display_size_height_desc" formatted="false">Window height as % of the cluster height</string>
     <string name="settings_display_offset_x">Horizontal shift</string>
     <string name="settings_display_offset_x_desc">Window position: 0 - left edge, 50 - center, 100 - right edge</string>
     <string name="settings_display_offset_y">Vertical shift</string>
@@ -321,6 +321,9 @@
     <string name="automation_action_sentry">Sentry mode</string>
     <string name="automation_action_sentry_on">Enable</string>
     <string name="automation_action_sentry_off">Disable</string>
+    <string name="automation_action_cluster_projection">Projection to cluster</string>
+    <string name="automation_action_cluster_projection_on">Enable</string>
+    <string name="automation_action_cluster_projection_off">Disable</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>
@@ -627,6 +630,9 @@
     <string name="settings_config_restore_confirm_body">All current data and settings will be replaced with the backup contents. This cannot be undone.</string>
     <string name="settings_config_restore_confirm_ok">Restore</string>
     <string name="settings_config_restore_confirm_cancel">Cancel</string>
+    <string name="settings_config_export_confirm_title">Export configuration?</string>
+    <string name="settings_config_export_confirm_body">The backup contains your trip history with GPS routes and your API keys in plain text. The file is saved to the public Download folder. Keep it somewhere safe and do not share it.</string>
+    <string name="settings_config_export_confirm_ok">Export</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Body</string>
@@ -650,7 +656,7 @@
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
-    <string name="auto_unit_percent_open">% open</string>
+    <string name="auto_unit_percent_open" formatted="false">% open</string>
     <string name="auto_unit_volt">V</string>
     <!-- enum labels -->
     <string name="auto_enum_charging">Charging</string>
@@ -978,7 +984,7 @@
     <string name="settings_preset_hint_vercel">5$ monthly credit, no card required. Some models on the free tier may return a 403 error.</string>
     <string name="settings_preset_hint_kimi">1000 free requests per day.</string>
     <string name="settings_preset_hint_nanogpt">8$ monthly subscription, paid in crypto.</string>
-    <string name="settings_preset_hint_deepseek">Pay as you go, 50% off at night (Moscow time).</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Pay as you go, 50% off at night (Moscow time).</string>
     <string name="settings_preset_hint_mistral">Free with phone verification.</string>
     <string name="settings_models_header">Model selection</string>
     <string name="settings_model_primary">Primary model</string>

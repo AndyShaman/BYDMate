@@ -2,7 +2,7 @@ package com.bydmate.app.data.local.database
 
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
-import com.bydmate.app.di.AppModuleMigrationsForTest
+import com.bydmate.app.di.AppModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -49,7 +49,7 @@ class Migration16to17Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 17, true,
-            AppModuleMigrationsForTest.MIGRATION_16_17,
+            AppModule.MIGRATION_16_17,
         )
 
         migrated.query("SELECT name, play_sound, actions FROM automation_rules ORDER BY id").use { c ->

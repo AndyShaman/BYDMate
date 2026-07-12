@@ -29,6 +29,13 @@ data class BackupManifest(
     val createdAt: Long,
 )
 
+/** Parsed + size-validated contents of a backup zip. */
+internal class BackupEntries(
+    val dbBytes: ByteArray,
+    val prefsJson: String,
+    val manifestJson: String,
+)
+
 /**
  * Handles full-app config backup (export to zip) and restore (import from zip).
  *
@@ -157,6 +164,86 @@ class BackupManager(
          */
         fun isRestorable(backupSchemaVersion: Int, currentSchemaVersion: Int): Boolean =
             backupSchemaVersion <= currentSchemaVersion
+
+        // Restore ZIP hard limits (AC-13): a crafted "backup" must not OOM/ANR the app.
+        // A heavy multi-year Room DB is tens of MB; these leave large headroom.
+        internal const val MAX_ENTRY_BYTES = 512L * 1024 * 1024
+        internal const val MAX_TOTAL_BYTES = 768L * 1024 * 1024
+        internal const val MAX_ENTRIES = 16
+
+        /**
+         * Reads and validates the three expected zip entries with hard size limits.
+         * Duplicate expected entries, oversized data or a missing entry fail fast,
+         * BEFORE any destructive restore step.
+         */
+        internal fun readBackupEntries(
+            stream: InputStream,
+            maxEntryBytes: Long = MAX_ENTRY_BYTES,
+            maxTotalBytes: Long = MAX_TOTAL_BYTES,
+        ): BackupEntries {
+            var dbBytes: ByteArray? = null
+            var prefsJson: String? = null
+            var manifestJson: String? = null
+            var total = 0L
+            var entryCount = 0
+            ZipInputStream(stream).use { zip ->
+                var entry = zip.nextEntry
+                while (entry != null) {
+                    if (++entryCount > MAX_ENTRIES) {
+                        throw IllegalStateException("Файл бэкапа повреждён: слишком много записей в архиве")
+                    }
+                    val known = entry.name == ENTRY_DB || entry.name == ENTRY_PREFS || entry.name == ENTRY_MANIFEST
+                    if (known) {
+                        val alreadySeen = when (entry.name) {
+                            ENTRY_DB -> dbBytes != null
+                            ENTRY_PREFS -> prefsJson != null
+                            else -> manifestJson != null
+                        }
+                        if (alreadySeen) {
+                            throw IllegalStateException("Файл бэкапа повреждён: дублирующаяся запись ${entry.name}")
+                        }
+                        val bytes = readEntryBounded(zip, maxEntryBytes)
+                        total += bytes.size
+                        if (total > maxTotalBytes) {
+                            throw IllegalStateException("Файл бэкапа слишком большой")
+                        }
+                        when (entry.name) {
+                            ENTRY_DB -> dbBytes = bytes
+                            ENTRY_PREFS -> prefsJson = bytes.toString(Charsets.UTF_8)
+                            ENTRY_MANIFEST -> manifestJson = bytes.toString(Charsets.UTF_8)
+                        }
+                    }
+                    zip.closeEntry()
+                    entry = zip.nextEntry
+                }
+            }
+            return BackupEntries(
+                dbBytes = dbBytes ?: throw incompleteBackup(),
+                prefsJson = prefsJson ?: throw incompleteBackup(),
+                manifestJson = manifestJson ?: throw incompleteBackup(),
+            )
+        }
+
+        private fun incompleteBackup() = IllegalStateException(
+            "Файл бэкапа повреждён или неполный. Ожидались записи: $ENTRY_DB, $ENTRY_PREFS, $ENTRY_MANIFEST"
+        )
+
+        /** Read the current zip entry, failing fast once [limit] bytes are exceeded. */
+        private fun readEntryBounded(zip: ZipInputStream, limit: Long): ByteArray {
+            val out = java.io.ByteArrayOutputStream()
+            val buf = ByteArray(64 * 1024)
+            var total = 0L
+            while (true) {
+                val n = zip.read(buf)
+                if (n < 0) break
+                total += n
+                if (total > limit) {
+                    throw IllegalStateException("Файл бэкапа повреждён: запись превышает допустимый размер")
+                }
+                out.write(buf, 0, n)
+            }
+            return out.toByteArray()
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -168,24 +255,41 @@ class BackupManager(
      * Returns the created File.
      *
      * Steps:
-     *   1. Fold WAL into the main DB file (PRAGMA wal_checkpoint(TRUNCATE)).
-     *   2. Read the DB bytes.
+     *   1. Fold WAL and verify the checkpoint completed; abort export otherwise.
+     *   2. Read the DB bytes under the write lock.
      *   3. Collect whitelisted SharedPreferences.
      *   4. Build manifest JSON.
      *   5. Write zip to Downloads.
      */
     fun export(): File {
-        // 1. Fold WAL so the DB file is self-contained
-        try {
-            val cursor = appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null)
-            cursor.close()
-        } catch (_: Exception) {
-            // Non-fatal: proceed anyway; worst case WAL entries are missing from the snapshot
-        }
-
-        // 2. Read DB bytes
+        // 1. Fold WAL so the DB file is self-contained, and PROVE it happened (AC-02).
+        //    PRAGMA wal_checkpoint(TRUNCATE) returns one row (busy, log, checkpointed);
+        //    busy=1 means a concurrent reader/writer blocked the checkpoint and the WAL
+        //    still holds frames absent from the main file — exporting would snapshot
+        //    stale data while telling the user "success".
+        // 2. Read the DB bytes under the write lock: beginTransaction() blocks writers,
+        //    so nothing lands in the WAL between the checkpoint and the file read. A
+        //    writer may still slip in between step 1 and the lock — detected via the
+        //    WAL file size (TRUNCATE leaves it at 0 bytes) and retried.
         val dbFile = context.getDatabasePath("bydmate.db")
-        val dbBytes = dbFile.readBytes()
+        val walFile = File(dbFile.parentFile, "bydmate.db-wal")
+        var dbBytes: ByteArray? = null
+        val supportDb = appDatabase.openHelper.writableDatabase
+        for (attempt in 1..3) {
+            if (!checkpointTruncate()) continue
+            supportDb.beginTransaction()
+            try {
+                if (walFile.length() == 0L) {
+                    dbBytes = dbFile.readBytes()
+                    break
+                }
+            } finally {
+                supportDb.endTransaction()
+            }
+        }
+        val dbSnapshot = dbBytes ?: throw IllegalStateException(
+            "База данных занята, экспорт прерван. Повторите попытку позже."
+        )
 
         // 3. Collect SharedPreferences (only files with at least one entry)
         val prefsData = mutableMapOf<String, Map<String, Any?>>()
@@ -220,7 +324,7 @@ class BackupManager(
 
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
             zip.putNextEntry(ZipEntry(ENTRY_DB))
-            zip.write(dbBytes)
+            zip.write(dbSnapshot)
             zip.closeEntry()
 
             zip.putNextEntry(ZipEntry(ENTRY_PREFS))
@@ -234,6 +338,17 @@ class BackupManager(
 
         return zipFile
     }
+
+    /** Runs PRAGMA wal_checkpoint(TRUNCATE); true only when fully checkpointed (busy=0). */
+    private fun checkpointTruncate(): Boolean =
+        try {
+            appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { c ->
+                c.moveToFirst() && c.getInt(0) == 0
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "wal_checkpoint failed: ${e.message}")
+            false
+        }
 
     // -------------------------------------------------------------------------
     // Restore
@@ -249,36 +364,10 @@ class BackupManager(
      * Room opens the replaced DB file fresh.
      */
     fun restore(uri: Uri) {
-        // 1. Read the zip into memory (extract all three required entries)
-        var dbBytes: ByteArray? = null
-        var prefsJson: String? = null
-        var manifestJson: String? = null
-
+        // 1-2. Read + validate the zip entries under hard size limits (AC-13).
         val inputStream: InputStream = context.contentResolver.openInputStream(uri)
             ?: throw IllegalStateException("Не удалось открыть файл бэкапа")
-
-        inputStream.use { stream ->
-            ZipInputStream(stream).use { zip ->
-                var entry = zip.nextEntry
-                while (entry != null) {
-                    when (entry.name) {
-                        ENTRY_DB -> dbBytes = zip.readBytes()
-                        ENTRY_PREFS -> prefsJson = zip.readBytes().toString(Charsets.UTF_8)
-                        ENTRY_MANIFEST -> manifestJson = zip.readBytes().toString(Charsets.UTF_8)
-                    }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
-                }
-            }
-        }
-
-        // 2. Validate completeness
-        if (dbBytes == null || prefsJson == null || manifestJson == null) {
-            throw IllegalStateException(
-                "Файл бэкапа повреждён или неполный. " +
-                "Ожидались записи: $ENTRY_DB, $ENTRY_PREFS, $ENTRY_MANIFEST"
-            )
-        }
+        val entries = inputStream.use { readBackupEntries(it) }
 
         // ---------------------------------------------------------------------
         // PRE-VALIDATION — everything that can fail MUST be checked here, before
@@ -288,7 +377,7 @@ class BackupManager(
         // ---------------------------------------------------------------------
 
         // 2a. Manifest schema compatibility
-        val manifestObj = JSONObject(manifestJson!!)
+        val manifestObj = JSONObject(entries.manifestJson)
         val backupSchema = manifestObj.getInt("dbSchemaVersion")
         if (!isRestorable(backupSchema, AppDatabase.SCHEMA_VERSION)) {
             throw IllegalStateException(
@@ -299,7 +388,7 @@ class BackupManager(
         }
 
         // 2b. Deserialize prefs now — malformed JSON throws here, before any destructive step.
-        val prefsMap = deserializePrefs(prefsJson!!)
+        val prefsMap = deserializePrefs(entries.prefsJson)
 
         // 2c. Write the DB bytes to a temp file and verify it is a real, intact SQLite
         //     database. openDatabase rejects a non-SQLite file; quick_check catches
@@ -309,7 +398,7 @@ class BackupManager(
         dbDir?.mkdirs()
         val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
         tmpDbFile.delete()
-        tmpDbFile.writeBytes(dbBytes!!)
+        tmpDbFile.writeBytes(entries.dbBytes)
         validateSqliteFile(tmpDbFile)
 
         // ---------------------------------------------------------------------
