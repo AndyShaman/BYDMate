@@ -6,6 +6,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 
@@ -74,11 +75,15 @@ class WriteAllowlistTest {
     // ── Test 3: production has at least 100 entries ───────────────────────────
     @Test fun `production has at least 100 entries`() {
         // Read the real competitor JSON from the project research directory.
-        // The test runs on the Mac where .research/ is available at project root.
+        // .research/ is gitignored, so the fixture only exists on the dev Mac —
+        // on CI the test is skipped via assumeTrue instead of failing.
         val projectRoot = generateSequence(File(".").canonicalFile) { it.parentFile }
             .firstOrNull { File(it, ".research/competitor-v2/pushFidConfig.json").exists() }
-            ?: error("Cannot find .research/competitor-v2/pushFidConfig.json from ${File(".").canonicalPath}")
-        val src = File(projectRoot, ".research/competitor-v2/pushFidConfig.json")
+        assumeTrue(
+            ".research/competitor-v2/pushFidConfig.json not found — skipping (CI environment)",
+            projectRoot != null,
+        )
+        val src = File(projectRoot!!, ".research/competitor-v2/pushFidConfig.json")
         val raw = src.readText()
         // Extract defaults.actions slice (same logic as extract-competitor-actions.py)
         val fullJson = org.json.JSONObject(raw)
