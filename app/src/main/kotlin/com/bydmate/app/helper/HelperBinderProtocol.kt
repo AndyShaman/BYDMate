@@ -40,6 +40,7 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(displayId)
  *   TX_LAUNCH_CLUSTER_ANCHOR : writeInt(displayId)         -> reply: writeInt(status), writeInt(0)
  *   TX_SET_STOCK_PROJECTION : writeInt(enabled 0/1)        -> reply: writeInt(status), writeInt(0)
+ *       enabled=0 starts a short best-effort suppression burst; the car may restart stock Navi.
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.

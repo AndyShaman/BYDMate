@@ -249,16 +249,20 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_SET_STOCK_PROJECTION -> runCatching {
                     val enabled = data.readInt() != 0
                     if (enabled) {
-                        val result =
-                        shExec(
+                        val result = shExec(
                             "am startservice -n \"\$1\"",
                             HelperBinderProtocol.STOCK_VIRTUAL_BIND_COMPONENT,
                         )
                         reply?.writeInt(if (result.code == 0) 0 else -1)
                     } else {
-                        // Deliberately disabled: force-stopping the stock map causes focus churn,
-                        // cluster error screens, and can wedge adbd through service teardown.
-                        reply?.writeInt(-1)
+                        // The car restarts the stock map almost immediately, so this is only a
+                        // narrow projection window: keep killing its visible cluster Activity while
+                        // BYDMate starts the anchor and moves the target app onto our VD.
+                        val result = shExec(
+                            "i=0; while [ \$i -lt 8 ]; do am force-stop \"\$1\" >/dev/null 2>&1; i=\$((i+1)); sleep 0.25; done",
+                            HelperBinderProtocol.STOCK_MAP_PACKAGE,
+                        )
+                        reply?.writeInt(if (result.code == 0) 0 else -1)
                     }
                     reply?.writeInt(0)
                     true

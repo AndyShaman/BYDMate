@@ -479,6 +479,9 @@ object ClusterProjectionManager {
                 repeat(30) {
                     delay(100)
                     anchorSurface?.takeIf { it.isValid }?.let { surface ->
+                        if (stockProjectionSuspended) {
+                            runCatching { helper.setStockProjectionEnabled(false) }
+                        }
                         return if (projectOnAnchorSurface(context, helper, surface)) null else "projection"
                     }
                 }

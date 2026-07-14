@@ -48,7 +48,7 @@ interface HelperClient {
     ): Int?
     /** Starts BYDMate's display anchor directly on the private cluster display. */
     suspend fun launchClusterAnchor(displayId: Int): Boolean
-    /** Hides/restores the stock map Presentation that otherwise covers our display-2 Activity. */
+    /** Briefly suppresses/restores the stock map Presentation that otherwise covers display 2. */
     suspend fun setStockProjectionEnabled(enabled: Boolean): Boolean
     suspend fun releaseVirtualDisplay(displayId: Int): Boolean
     suspend fun launchApp(packageName: String): Boolean
