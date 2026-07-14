@@ -54,7 +54,12 @@ class AgentToolsPlacesTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    ).also { it.nowMs = { 1_000_000_000_000L } }
+    ).also {
+        it.nowMs = { 1_000_000_000_000L }
+        it.naviForegroundCheck = { true }
+        it.naviVerifyAttempts = 1
+        it.naviVerifyIntervalMs = 1L
+    }
 
     @Test fun list_places_returns_names_coords_radius() = runTest {
         coEvery { places.getAllSnapshot() } returns listOf(

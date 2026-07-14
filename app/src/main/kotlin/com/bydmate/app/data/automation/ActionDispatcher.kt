@@ -50,6 +50,7 @@ class ActionDispatcher @Inject constructor(
         private const val BT_CALL_KEYCODE_DIAL = 313
         private const val YANDEX_MUSIC_PACKAGE = "ru.yandex.music"
         private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
+        private const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
         // Hard cap on user-set delay action; protects against typos like "60000000".
         private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
@@ -466,6 +467,22 @@ class ActionDispatcher @Inject constructor(
 
     private fun navigate(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
+        // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
+        // resolve the address internally, so no coordinates are needed. Undocumented
+        // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
+        // a Navigator update drops them.
+        val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
+        if (shortcut != null) {
+            val intentAction = when (shortcut) {
+                "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
+                "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
+                else -> return DispatchResult(false, "неизвестный shortcut: $shortcut")
+            }
+            val intent = Intent(intentAction)
+                .setPackage(NAVI_PACKAGE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return tryStartActivity(intent, "navigate_shortcut:$shortcut")
+        }
         // Free-text destination: open Navigator's map search (route needs coordinates,
         // which the agent does not have for arbitrary addresses).
         val query = payload.optString("query").takeIf(String::isNotBlank)
@@ -478,6 +495,17 @@ class ActionDispatcher @Inject constructor(
         val lat = payload.optDouble("lat", Double.NaN)
         val lon = payload.optDouble("lon", Double.NaN)
         if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
+        // Show-only mode: drop a pin instead of building a route ("где находится X").
+        if (payload.optBoolean("show", false)) {
+            val desc = payload.optString("label").takeIf(String::isNotBlank)
+            val showUri = buildString {
+                append("yandexnavi://show_point_on_map?lat=$lat&lon=$lon&zoom=14")
+                if (desc != null) append("&desc=${Uri.encode(desc)}")
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(showUri))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return tryStartActivity(intent, "navigate_show:$lat,$lon")
+        }
         val uri = "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

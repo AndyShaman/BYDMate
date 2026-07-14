@@ -53,7 +53,11 @@ class AgentToolsChargersTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    )
+    ).also {
+        it.naviForegroundCheck = { true }
+        it.naviVerifyAttempts = 1
+        it.naviVerifyIntervalMs = 1L
+    }
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
 

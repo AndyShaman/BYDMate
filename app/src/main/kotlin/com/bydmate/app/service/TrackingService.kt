@@ -184,6 +184,31 @@ class TrackingService : Service(), LocationListener {
     @Volatile private var iternioCooldownUntilMs: Long = 0L
     @Volatile private var iternioConsecutive5xx: Int = 0
 
+    // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
+    // after onCreate, and are never instantiated for callers that short-circuit before use.
+    private val starGrant by lazy {
+        GrantSelfHeal(
+            name = "star a11y",
+            isGranted = ::starServiceRunning,
+            reassert = { helperBootstrap.ensureRunning() && helperClient.enableAccessibilityService() },
+        )
+    }
+
+    private val notificationListenerGrant by lazy {
+        GrantSelfHeal(
+            name = "notification listener",
+            isGranted = {
+                val component = ComponentName(this, com.bydmate.app.media.MediaSessionListenerService::class.java)
+                getSystemService(NotificationManager::class.java)
+                    ?.isNotificationListenerAccessGranted(component) == true
+            },
+            reassert = {
+                helperBootstrap.ensureRunning() &&
+                    com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
+            },
+        )
+    }
+
     companion object {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
@@ -211,13 +236,6 @@ class TrackingService : Service(), LocationListener {
         // 3-s base interval — each retry costs ~8 Binder/ADB reads, so keep it
         // an order of magnitude rarer than the shared loop itself.
         private const val CATCHUP_RETRY_EVERY_N_TICKS = 10
-        // Steering-wheel star a11y re-assert. The framework binds a11y services very early at boot —
-        // before our process is ready — so our bind can lose the race and get parked with no retry.
-        // A single re-assert (the old behaviour) often fired before the race settled, so we verify-
-        // and-retry until the service is actually RUNNING (~30 s of grace) and re-run it on every
-        // wake. Copies OpenBYD, which re-checks on every reconnect instead of once at startup.
-        private const val STAR_REASSERT_ATTEMPTS = 6
-        private const val STAR_REASSERT_RETRY_MS = 5_000L
         // Helper-daemon watchdog: how often (in poll ticks) to call helperBootstrap.isHealthy().
         // isHealthy() is a cheap binder ping, so this can run far more often than a respawn would
         // ever be attempted; at the ~1-2s adaptive tick this is roughly 30-60s.
@@ -290,6 +308,9 @@ class TrackingService : Service(), LocationListener {
          */
         private val _cameraActive = MutableStateFlow(false)
         val cameraActive: StateFlow<Boolean> = _cameraActive
+
+        private val _youtubeForeground = MutableStateFlow(false)
+        val youtubeForeground: StateFlow<Boolean> = _youtubeForeground
 
         // Live reference to the running service so the floating widget can reach
         // the singleton AutomationEngine without binding. Mirrors how widget data
@@ -427,10 +448,6 @@ class TrackingService : Service(), LocationListener {
                     if (pref.isNotEmpty()) {
                         helperClient.setAppHidden("com.byd.autovoice", pref == "true")
                     }
-                    // Self-grant notification-listener access so real Yandex Music playback
-                    // (MediaController.playFromSearch) works. Fail-soft: falls back to the
-                    // search-intent path in ActionDispatcher when no session is available.
-                    com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
                 }
                 // Power down a cluster compositor left "on" by a car shutdown mid-projection —
                 // otherwise the cluster boots black (projection mode, nobody drawing). Runs even
@@ -456,6 +473,7 @@ class TrackingService : Service(), LocationListener {
         // boot-time race, so we verify-and-retry here (in its own coroutine, independent of the
         // helper bootstrap above) and re-run on every SCREEN_ON / USER_PRESENT.
         serviceScope.launch { ensureStarServiceRunning("startup") }
+        serviceScope.launch { notificationListenerGrant.ensure("startup") }
         registerScreenWakeReceiver()
 
         // Start the network monitor BEFORE polling so the first evaluate() tick
@@ -782,6 +800,7 @@ class TrackingService : Service(), LocationListener {
         alicePollingManager.stop()
         cameraStateMonitor.stop()
         _cameraActive.value = false
+        _youtubeForeground.value = false
         networkAvailableMonitor.stop()
         try {
             unregisterReceiver(screenWakeReceiver)
@@ -1121,6 +1140,9 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             cameraStateMonitor.active.collect { _cameraActive.value = it }
         }
+        serviceScope.launch {
+            cameraStateMonitor.youtubeForeground.collect { _youtubeForeground.value = it }
+        }
     }
 
     private fun startLocationUpdates() {
@@ -1192,6 +1214,7 @@ class TrackingService : Service(), LocationListener {
     private val screenWakeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             serviceScope.launch { ensureStarServiceRunning("wake:${intent?.action}") }
+            serviceScope.launch { notificationListenerGrant.ensure("wake:${intent?.action}") }
         }
     }
 
@@ -1224,22 +1247,7 @@ class TrackingService : Service(), LocationListener {
         val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
             .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
         if (!mirrorEnabled && !voiceEnabled) return
-        repeat(STAR_REASSERT_ATTEMPTS) { attempt ->
-            if (starServiceRunning()) {
-                if (attempt > 0) Log.i(TAG, "star a11y confirmed running ($reason, try ${attempt + 1})")
-                return
-            }
-            if (!helperBootstrap.ensureRunning()) {
-                Log.w(TAG, "star a11y re-assert skipped: helper daemon unreachable ($reason)")
-            } else {
-                val rebound = helperClient.enableAccessibilityService()
-                Log.i(TAG, "star a11y not running; re-asserted ($reason, try ${attempt + 1}) → setting=$rebound")
-            }
-            delay(STAR_REASSERT_RETRY_MS)
-        }
-        if (!starServiceRunning()) {
-            Log.w(TAG, "star a11y still not running after $STAR_REASSERT_ATTEMPTS tries ($reason)")
-        }
+        starGrant.ensure(reason)
     }
 
     /**

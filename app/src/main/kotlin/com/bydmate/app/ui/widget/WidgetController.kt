@@ -80,6 +80,7 @@ object WidgetController {
     private var dataJob: Job? = null
     private lateinit var prefsAlphaFlow: kotlinx.coroutines.flow.Flow<Float>
     private lateinit var prefsScaleFlow: kotlinx.coroutines.flow.Flow<Float>
+    private lateinit var prefsHideOnYoutubeFlow: kotlinx.coroutines.flow.Flow<Boolean>
 
     // Compose state for the widget data
     private var socState = mutableStateOf<Int?>(null)
@@ -129,6 +130,7 @@ object WidgetController {
 
         prefsAlphaFlow = prefs.alphaFlow()
         prefsScaleFlow = prefs.scaleFlow()
+        prefsHideOnYoutubeFlow = prefs.hideOnYoutubeFlow()
         val metrics = viewCtx.resources.displayMetrics
 
         val initialScale = prefs.getScale()
@@ -305,14 +307,21 @@ object WidgetController {
     private fun startDataSubscription(appCtx: Context) {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
+        // Camera surface always hides the widget; YouTube hides it only when the user
+        // opted in through the Settings toggle.
+        val hideFlow = combine(
+            TrackingService.cameraActive,
+            TrackingService.youtubeForeground,
+            prefsHideOnYoutubeFlow,
+        ) { cam, yt, hideYt -> shouldHideOverlay(cam, yt, hideYt) }
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
-        // alpha + scale + cameraActive into one UiBundle so we stay under the limit.
+        // alpha + scale + hideOverlay into one UiBundle so we stay under the limit.
         val uiFlow = combine(
             ConsumptionAggregator.state,
             prefsAlphaFlow,
             prefsScaleFlow,
-            TrackingService.cameraActive,
-        ) { c, a, s, cam -> UiBundle(c, a, s, cam) }
+            hideFlow,
+        ) { c, a, s, hide -> UiBundle(c, a, s, hide) }
         dataJob = scope.launch {
             combine(
                 TrackingService.lastData,
@@ -329,7 +338,7 @@ object WidgetController {
                     consumption = bundled.consumption,
                     alpha = bundled.alpha,
                     scale = bundled.scale,
-                    cameraActive = bundled.cameraActive,
+                    hideOverlay = bundled.hideOverlay,
                 )
             }.collect { snap ->
                 socState.value = snap.data?.soc
@@ -348,14 +357,14 @@ object WidgetController {
                     applyScaleChange(snap.scale)
                 }
 
-                // Hide widget while the BYD camera surface is up (rear, front
-                // auto-pop, 360°, parking app — all map to com.byd.avc).
-                val hideForCamera = snap.cameraActive
+                // Hide widget while the BYD camera surface is up (com.byd.avc) or, when the
+                // toggle is on, while a YouTube client is foreground.
+                val hide = snap.hideOverlay
                 // Hide the entire root (panel + button layer) so the buttons
                 // don't stay drawn over the camera view when the panel is expanded.
                 // Re-show is symmetric: same view, VISIBLE.
-                rootContainer?.visibility = if (hideForCamera) View.GONE else View.VISIBLE
-                if (hideForCamera) hideTrashZone()
+                rootContainer?.visibility = if (hide) View.GONE else View.VISIBLE
+                if (hide) hideTrashZone()
             }
         }
 
@@ -421,14 +430,14 @@ object WidgetController {
         val consumption: ConsumptionState,
         val alpha: Float,
         val scale: Float,
-        val cameraActive: Boolean,
+        val hideOverlay: Boolean,
     )
 
     private data class UiBundle(
         val consumption: ConsumptionState,
         val alpha: Float,
         val scale: Float,
-        val cameraActive: Boolean,
+        val hideOverlay: Boolean,
     )
 
     // --- Button panel expand/collapse ---
@@ -627,6 +636,10 @@ object WidgetController {
 
     private fun dpFromMetrics(metrics: DisplayMetrics, dp: Int): Int =
         (dp * metrics.density).toInt()
+
+    /** Pure visibility decision, unit-tested: camera always hides, YouTube only by opt-in. */
+    fun shouldHideOverlay(cameraActive: Boolean, youtubeForeground: Boolean, hideOnYoutube: Boolean): Boolean =
+        cameraActive || (youtubeForeground && hideOnYoutube)
 
     // --- Touch handling ---
 

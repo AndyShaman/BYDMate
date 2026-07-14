@@ -160,6 +160,21 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    fun isHideOnYoutube(): Boolean = prefs.getBoolean(KEY_HIDE_ON_YOUTUBE, false)
+
+    fun setHideOnYoutube(hide: Boolean) {
+        prefs.edit().putBoolean(KEY_HIDE_ON_YOUTUBE, hide).apply()
+    }
+
+    fun hideOnYoutubeFlow(): Flow<Boolean> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == KEY_HIDE_ON_YOUTUBE) trySend(isHideOnYoutube())
+        }
+        trySend(isHideOnYoutube())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     private fun migrateLegacyLeftTapKey() {
         if (!prefs.contains(LEGACY_KEY_LEFT_TAP_NAVIGATOR)) return
         val editor = prefs.edit().remove(LEGACY_KEY_LEFT_TAP_NAVIGATOR)
@@ -186,6 +201,7 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_LEFT_TAP_APP_PKG = "widget_left_tap_app_pkg"
         const val KEY_LEFT_TAP_APP_LABEL = "widget_left_tap_app_label"
         const val KEY_BUTTONS_ENABLED = "widget_buttons_enabled"
+        const val KEY_HIDE_ON_YOUTUBE = "widget_hide_on_youtube"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
         const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
         const val SCALE_MIN = 0.7f

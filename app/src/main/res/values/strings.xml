@@ -110,6 +110,8 @@
     <string name="settings_widget_section_header">Плавающий виджет</string>
     <string name="settings_widget_show_soc_label">Показывать виджет SOC</string>
     <string name="settings_widget_hints">• Долгий тап на виджете - скрыть до следующего открытия BYDMate.\n• Перетащить в корзину внизу - выключить совсем.\n• Обычный тап - открыть BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Скрывать при YouTube</string>
+    <string name="settings_widget_hide_youtube_description">Панель кнопок прячется, пока YouTube на экране</string>
     <string name="settings_widget_reset_position_button">Сбросить позицию</string>
     <string name="settings_reset_seat_channel">Сбросить канал сидений</string>
     <string name="settings_reset_seat_channel_hint">Если подогрев или вентиляция сидений не срабатывают после смены машины</string>
@@ -150,6 +152,7 @@
     <string name="settings_weather_attribution">Данные о погоде: Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
     <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
+    <string name="settings_autostart_open_button">Настройка автозапуска</string>
     <string name="settings_update_check_toggle_label">Проверять обновления</string>
     <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и предлагать обновиться</string>
     <string name="settings_update_check_button">Проверить обновления сейчас</string>

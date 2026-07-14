@@ -58,7 +58,10 @@ class AgentToolsLaunchTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    ).apply { clusterPollIntervalMs = 0L; clusterPollAttempts = 5 }
+    ).apply {
+        clusterPollIntervalMs = 0L; clusterPollAttempts = 5
+        naviForegroundCheck = { true }; naviVerifyAttempts = 1; naviVerifyIntervalMs = 1L
+    }
 
     // (a) destination matches a saved place (case-insensitively) -> route by lat/lon.
     @Test fun navigate_to_saved_place_routes_by_coords() = runTest {
@@ -90,7 +93,8 @@ class AgentToolsLaunchTest {
         assertEquals("улица Ленина 5", payload.getString("query"))
     }
 
-    // (c) placeRepository throwing must not surface as an exception; falls through to query path.
+    // (c) placeRepository throwing must not surface as an exception; "Дом" resolves as a
+    // home/work shortcut and falls through to Navigator's own saved Home -> mode=route.
     @Test fun navigate_to_survives_place_lookup_failure() = runTest {
         val captured = slot<ActionDef>()
         coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
@@ -98,9 +102,10 @@ class AgentToolsLaunchTest {
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "navigate_to", """{"destination":"Дом"}""")))
         assertTrue(out.getBoolean("ok"))
-        assertEquals("search", out.getString("mode"))
+        assertEquals("route", out.getString("mode"))
+        assertEquals("Дом", out.getString("target"))
         val payload = JSONObject(captured.captured.payload!!)
-        assertEquals("Дом", payload.getString("query"))
+        assertEquals("home", payload.getString("shortcut"))
     }
 
     // (d) empty destination -> error, dispatcher never called.

@@ -96,6 +96,8 @@
     <string name="settings_widget_section_header">Floating widget</string>
     <string name="settings_widget_show_soc_label">Show SOC widget</string>
     <string name="settings_widget_hints">- Long tap the widget - hide until BYDMate is opened next time.\n- Drag to the bin at the bottom - turn off completely.\n- Regular tap - open BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Hide over YouTube</string>
+    <string name="settings_widget_hide_youtube_description">The button panel hides while YouTube is on screen</string>
     <string name="settings_widget_reset_position_button">Reset position</string>
     <string name="settings_reset_seat_channel">Reset seat channel</string>
     <string name="settings_reset_seat_channel_hint">If seat heating or ventilation stops working after switching cars</string>
@@ -132,6 +134,7 @@
     <string name="settings_weather_attribution">Weather data by Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Autostart: %1$s</string>
     <string name="settings_autostart_not_recorded">Autostart: not recorded</string>
+    <string name="settings_autostart_open_button">Autostart setting</string>
     <string name="settings_update_check_toggle_label">Check for updates</string>
     <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and suggest updating</string>
     <string name="settings_update_check_button">Check for updates now</string>

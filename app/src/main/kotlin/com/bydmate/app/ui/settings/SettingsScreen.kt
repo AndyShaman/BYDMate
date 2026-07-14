@@ -724,6 +724,8 @@ private fun WidgetSection() {
     val buttonsEnabled by prefs.buttonsEnabledFlow().collectAsStateWithLifecycle(
         initialValue = prefs.isButtonsEnabled(),
     )
+    val hideOnYoutube by prefs.hideOnYoutubeFlow()
+        .collectAsStateWithLifecycle(initialValue = prefs.isHideOnYoutube())
     var showLeftTapPicker by remember { mutableStateOf(false) }
 
     SectionHeader(text = stringResource(R.string.settings_widget_section_header))
@@ -774,6 +776,28 @@ private fun WidgetSection() {
                 fontSize = 11.sp,
                 modifier = Modifier.padding(top = 2.dp, bottom = 4.dp),
             )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                    Text(
+                        text = stringResource(R.string.settings_widget_hide_youtube_label),
+                        color = TextPrimary,
+                        fontSize = 13.sp,
+                    )
+                    Text(
+                        text = stringResource(R.string.settings_widget_hide_youtube_description),
+                        color = TextSecondary,
+                        fontSize = 11.sp,
+                    )
+                }
+                Switch(
+                    checked = hideOnYoutube,
+                    onCheckedChange = { prefs.setHideOnYoutube(it) },
+                    colors = bydSwitchColors(),
+                )
+            }
             Button(
                 onClick = {
                     prefs.resetPosition()
@@ -1680,6 +1704,13 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                     color = SocRed,
                     fontSize = 12.sp
                 )
+            }
+            Button(
+                onClick = { com.bydmate.app.util.AutostartScreen.open(context) },
+                shape = RoundedCornerShape(8.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CardSurface),
+            ) {
+                Text(stringResource(R.string.settings_autostart_open_button), fontSize = 13.sp, color = TextPrimary)
             }
             Text(
                 text = "github.com/AndyShaman/BYDMate",

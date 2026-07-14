@@ -94,6 +94,8 @@
     <string name="settings_widget_section_header">Widget flutuante</string>
     <string name="settings_widget_show_soc_label">Mostrar widget de SoC</string>
     <string name="settings_widget_hints">- Toque longo no widget - oculta até o BYDMate ser aberto na próxima vez.\n- Arraste para a lixeira na parte inferior - desliga completamente.\n- Toque normal - abre o BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Ocultar sobre o YouTube</string>
+    <string name="settings_widget_hide_youtube_description">O painel de botões fica oculto enquanto o YouTube está na tela</string>
     <string name="settings_widget_reset_position_button">Redefinir posição</string>
     <string name="settings_reset_seat_channel">Redefinir canal dos bancos</string>
     <string name="settings_reset_seat_channel_hint">Se o aquecimento ou a ventilação dos bancos parar após trocar de carro</string>
@@ -129,6 +131,7 @@
     <string name="settings_copyright">© 2026 AndyShaman</string>
     <string name="settings_autostart_recorded">Inicialização automática: %1$s</string>
     <string name="settings_autostart_not_recorded">Inicialização automática: não registrada</string>
+    <string name="settings_autostart_open_button">Configuração de inicialização automática</string>
     <string name="settings_update_check_toggle_label">Verificar atualizações</string>
     <string name="settings_update_check_toggle_description">Verificar no GitHub 30 segundos após a inicialização e sugerir atualização</string>
     <string name="settings_update_check_button">Verificar atualizações agora</string>

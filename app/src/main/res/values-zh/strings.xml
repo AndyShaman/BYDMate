@@ -87,6 +87,8 @@
     <string name="settings_widget_section_header">悬浮小组件</string>
     <string name="settings_widget_show_soc_label">显示 SOC 小组件</string>
     <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
+    <string name="settings_widget_hide_youtube_label">YouTube 时隐藏</string>
+    <string name="settings_widget_hide_youtube_description">YouTube 在屏幕上时按钮面板自动隐藏</string>
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
@@ -127,6 +129,7 @@
     <string name="settings_weather_attribution">天气数据来自 Open-Meteo.com</string>
     <string name="settings_autostart_recorded">自启动：%1$s</string>
     <string name="settings_autostart_not_recorded">自启动：未记录</string>
+    <string name="settings_autostart_open_button">自启动设置</string>
     <string name="settings_update_check_toggle_label">检查更新</string>
     <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并提示更新</string>
     <string name="settings_update_check_button">立即检查更新</string>
