@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.5.3] - 2026-07-14
+
 ### Новое
 - Голосовой агент: «поехали домой» и «на работу» строят маршрут по Месту BYDMate или по адресу, сохранённому в самом Навигаторе
 - Голосовой агент: «покажи на карте» показывает точку без построения маршрута
@@ -707,7 +709,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.5.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.5.3...HEAD
+[3.5.3]: https://github.com/AndyShaman/BYDMate/compare/v3.5.2...v3.5.3
 [3.5.2]: https://github.com/AndyShaman/BYDMate/compare/v3.5.1...v3.5.2
 [3.5.1]: https://github.com/AndyShaman/BYDMate/compare/v3.5...v3.5.1
 [3.5]: https://github.com/AndyShaman/BYDMate/compare/v3.2.2...v3.5
