@@ -38,7 +38,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
     // where the persisted marker should be acted on by restoreStuckDuck().
     @Volatile private var duckOwnedByLiveSession = false
 
-    // No caller-side endpointing: end-of-speech is decided by the recognizer's VAD (AsrEngine), not
+    // No caller-side endpointing: end-of-speech is decided by the recognizer's VAD (GigaAmAsrEngine), not
     // an energy/silence heuristic here. The old RMS gate closed the window ~800 ms in if the user
     // hadn't started talking loudly yet, cutting them off mid-phrase. [maxMs] is only a safety
     // backstop so the mic can't stay open forever (e.g. continuous noise with no VAD endpoint).

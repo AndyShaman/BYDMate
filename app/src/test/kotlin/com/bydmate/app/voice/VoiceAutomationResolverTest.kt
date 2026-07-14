@@ -21,9 +21,6 @@ class VoiceAutomationResolverTest {
         return VoiceAutomationResolver(dao)
     }
 
-    @Test fun `phrases lists enabled voice phrases`() = runBlocking {
-        assertEquals(listOf("навигатор"), resolver(listOf(voiceRule(1, "навигатор"))).phrases())
-    }
     @Test fun `match returns rule id on normalized equality`() = runBlocking {
         assertEquals(1L, resolver(listOf(voiceRule(1, "навигатор"))).match("Навигатор"))
     }

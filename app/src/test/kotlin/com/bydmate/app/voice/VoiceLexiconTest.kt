@@ -20,12 +20,6 @@ class VoiceLexiconTest {
         assertTrue(VoiceLexicon.numberWords(VoiceLang.RU)["двадцать"] == 20)
     }
 
-    @Test fun vocabulary_is_nonempty_and_flat() {
-        val vocab = VoiceLexicon.vocabulary(VoiceLang.RU)
-        assertTrue(vocab.size > 30)
-        assertTrue("vocabulary words are single tokens", vocab.all { !it.contains(' ') })
-    }
-
     @Test fun low_number_words_ru() {
         val n = VoiceLexicon.numberWords(VoiceLang.RU)
         assertTrue(n["ноль"] == 0)

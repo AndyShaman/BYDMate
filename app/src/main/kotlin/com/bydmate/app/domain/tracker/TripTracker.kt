@@ -114,8 +114,9 @@ class TripTracker @Inject constructor(
                 )
             )
             if (pendingPoints.size % 10 == 1) {
-                Log.d(TAG, "GPS point #${pendingPoints.size}: lat=${"%.5f".format(location.latitude)} " +
-                    "lon=${"%.5f".format(location.longitude)} speed=${speed}km/h")
+                // AC-06: point counter + speed diagnose GPS collection health without
+                // leaking the location itself into release logcat.
+                Log.d(TAG, "GPS point #${pendingPoints.size}: speed=${speed}km/h")
             }
         } else {
             Log.w(TAG, "No GPS fix available (location=null), speed=${speed}km/h")

@@ -13,19 +13,21 @@ import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
+import org.junit.Assert.fail
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 
 /**
- * Coverage for the LLM-agent fallback wired into VoiceController's FINAL-transcript path
- * (Task 6): a transcript the local NLU/automation resolvers cannot match is handed to
- * AgentOrchestrator.ask(). The early-fire (partial) path never reaches this fallback —
- * it only fires from the Vosk final, mirrored here by a single AsrEvent.Final.
+ * Coverage for the LLM-agent fallback wired into VoiceController's continuous-session
+ * transcript path (Task 6): an utterance the local NLU/automation resolvers cannot match is
+ * handed to AgentOrchestrator.ask(). Each test drives the continuous session with a single
+ * scripted ContinuousAsrEvent.Utterance.
  */
 class VoiceControllerAgentFallbackTest {
 
@@ -38,14 +40,40 @@ class VoiceControllerAgentFallbackTest {
         every { speaking } returns MutableStateFlow(false)
     }
 
+    private class FakeContinuousAsr : ContinuousAsr {
+        val events = MutableSharedFlow<ContinuousAsrEvent>(extraBufferCapacity = 16)
+        override fun isReady(): Boolean = true
+        override fun transcribe(pcm: Flow<ShortArray>): Flow<ContinuousAsrEvent> = events
+    }
+
+    /** Polls [condition] instead of a blind Thread.sleep -- deterministic-ish and fails fast in
+     *  the common case. VoiceController's coroutine scope is a real, non-injected
+     *  CoroutineScope(SupervisorJob()) with no test-dispatcher seam, so true virtual-time control
+     *  (runTest) is not available without changing the production constructor; this is the closest
+     *  practical alternative. */
+    private fun awaitTrue(timeoutMs: Long = 2_000L, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        if (!condition()) fail("condition not met within ${timeoutMs}ms")
+    }
+
+    /** `listening` flips true synchronously inside onPttPressed(), before the session coroutine
+     *  has actually started running on its dispatcher -- so waiting on `listening` alone races
+     *  with FakeContinuousAsr's collector subscribing. subscriptionCount is the real barrier: a
+     *  tryEmit before any collector attaches (replay = 0) is simply lost. */
+    private fun awaitSubscribed(events: MutableSharedFlow<*>) = awaitTrue { events.subscriptionCount.value >= 1 }
+
     private fun makeController(
-        recognizedPhrase: String,
         agentOrchestrator: AgentOrchestrator,
         dispatcher: ActionDispatcher = mockk(relaxed = true),
         ttsEnabled: Boolean = false,
         ttsEngine: TtsEngine = quietTtsEngine(),
         journal: VoiceJournal = VoiceJournal(),
         agentIdentity: () -> AgentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
+        continuousAsr: ContinuousAsr = FakeContinuousAsr(),
     ): VoiceController {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true
@@ -56,12 +84,6 @@ class VoiceControllerAgentFallbackTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(recognizedPhrase))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
-
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
 
@@ -69,14 +91,13 @@ class VoiceControllerAgentFallbackTest {
 
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
 
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        return VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true), ttsEngine, journal, mockk<ContinuousAsr>(relaxed = true),
+        return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
+            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true), ttsEngine, journal, continuousAsr,
             agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
@@ -87,12 +108,16 @@ class VoiceControllerAgentFallbackTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Заряд 80%")
 
-        val controller = makeController(recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator)
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr)
         val presentedCount = AtomicInteger(0)
         val presentedText = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> presentedCount.incrementAndGet(); presentedText.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(VoiceUiState.AgentAnswer("Заряд 80%"), controller.state.value)
@@ -105,8 +130,12 @@ class VoiceControllerAgentFallbackTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
 
-        val controller = makeController(recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator)
-        controller.startSession()
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(VoiceUiState.NotUnderstood("навигатор"), controller.state.value)
@@ -116,9 +145,13 @@ class VoiceControllerAgentFallbackTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Error("нет сети")
 
-        val controller = makeController(recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator)
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr)
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(VoiceUiState.Blocked("нет сети"), controller.state.value)
@@ -132,40 +165,45 @@ class VoiceControllerAgentFallbackTest {
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
 
         // "закрой окна" resolves to a built-in command ("车窗关闭"), so the fast-path handles it.
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "закрой окна", agentOrchestrator = agentOrchestrator, dispatcher = dispatcher,
+            agentOrchestrator = agentOrchestrator, dispatcher = dispatcher, continuousAsr = fakeAsr,
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         Thread.sleep(500)
 
         coVerify(exactly = 0) { agentOrchestrator.ask(any(), any()) }
     }
 
-    @Test fun `blank final transcript skips the agent, stays NotUnderstood`() {
-        val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("не должно вызваться")
-
-        val controller = makeController(recognizedPhrase = "", agentOrchestrator = agentOrchestrator)
-        controller.startSession()
-        Thread.sleep(500)
-
-        coVerify(exactly = 0) { agentOrchestrator.ask(any(), any()) }
-        assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
-    }
+    // NOTE: a "blank final transcript reaches agentFallback and gets a spoken/orb Не понял"
+    // test previously lived here. On the continuous path SelfEchoFilter.isEcho() unconditionally
+    // treats an empty-after-normalization transcript as garbage echo (see SelfEchoFilter.kt) and
+    // routeUtterance() returns before agentFallback() is ever reached, and AgentNameMatcher.
+    // stripLeadingName() deliberately leaves a name-only utterance unchanged (never reduces it to
+    // blank) -- so agentFallback's own isBlank() branch (VoiceController.kt:624) is structurally
+    // unreachable from the continuous session. No continuous equivalent exists; removed rather
+    // than re-plumbed. See vosk-task-2-report.md for the full trace.
 
     @Test fun `agent answer is spoken when tts enabled`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("ответ")
         val ttsEngine = quietTtsEngine()
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = true, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
         val presentedCount = AtomicInteger(0)
         controller.showAnswerHook = { presentedCount.incrementAndGet() }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         verify { ttsEngine.speak("ответ") }
@@ -177,14 +215,18 @@ class VoiceControllerAgentFallbackTest {
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("ответ")
         val ttsEngine = quietTtsEngine()
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = false, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = false, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
         val presentedCount = AtomicInteger(0)
         controller.showAnswerHook = { presentedCount.incrementAndGet() }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         verify(exactly = 0) { ttsEngine.speak(any()) }
@@ -198,13 +240,17 @@ class VoiceControllerAgentFallbackTest {
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Заряд 80%")
         val journal = VoiceJournal()
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator, journal = journal,
+            agentOrchestrator = agentOrchestrator, journal = journal, continuousAsr = fakeAsr,
         )
         val answerCount = AtomicInteger(0)
         controller.showAnswerHook = { answerCount.incrementAndGet() }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         val entry = journal.entries.value.first()
@@ -219,10 +265,14 @@ class VoiceControllerAgentFallbackTest {
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Error("нет сети")
         val journal = VoiceJournal()
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator, journal = journal,
+            agentOrchestrator = agentOrchestrator, journal = journal, continuousAsr = fakeAsr,
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         val entry = journal.entries.value.first()
@@ -235,12 +285,16 @@ class VoiceControllerAgentFallbackTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
 
-        val controller = makeController(recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator)
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr)
         val answerCount = AtomicInteger(0)
         val answerText = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> answerCount.incrementAndGet(); answerText.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(1, answerCount.get())
@@ -251,62 +305,37 @@ class VoiceControllerAgentFallbackTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Error("нет сети")
 
-        val controller = makeController(recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator)
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr)
         val answerCount = AtomicInteger(0)
         val answerText = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> answerCount.incrementAndGet(); answerText.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(1, answerCount.get())
         assertEquals("Услышал: «навигатор». Отказ: нет сети", answerText.get())
     }
 
-    @Test fun `blank final transcript shows the not-understood orb dialog exactly once`() {
-        val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("не должно вызваться")
+    // NOTE: "blank final transcript shows the not-understood orb dialog exactly once" and
+    // "blank final transcript speaks Не понял when tts enabled" previously lived here (Task 4:
+    // every terminal outcome is also spoken, not only shown as an overlay). Removed for the same
+    // reason as the third blank-transcript test above -- agentFallback's isBlank() branch is
+    // unreachable from the continuous session, so there is nothing left for these to exercise.
 
-        val controller = makeController(recognizedPhrase = "", agentOrchestrator = agentOrchestrator)
-        val answerCount = AtomicInteger(0)
-        val answerText = AtomicReference<String?>(null)
-        controller.showAnswerHook = { text -> answerCount.incrementAndGet(); answerText.set(text) }
-
-        controller.startSession()
-        Thread.sleep(500)
-
-        coVerify(exactly = 0) { agentOrchestrator.ask(any(), any()) }
-        assertEquals(1, answerCount.get())
-        assertEquals("Не понял", answerText.get())
-    }
-
-    // --- Task 4: every terminal outcome is also spoken, not only shown as an overlay ---
-
-    @Test fun `blank final transcript speaks Не понял when tts enabled`() {
-        val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("не должно вызваться")
-        val ttsEngine = quietTtsEngine()
-
-        val controller = makeController(
-            recognizedPhrase = "", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = true, ttsEngine = ttsEngine,
-        )
-        controller.startSession()
-        Thread.sleep(500)
-
-        val navigatorNotUnderstoodPool = listOf("Не расслышал. Повтори, пожалуйста.", "Не понял, скажи иначе.")
-        verify { ttsEngine.speak(match { it in navigatorNotUnderstoodPool }) }
-    }
-
-    @Test fun `startSession stops ongoing tts`() {
+    @Test fun `starting a session stops ongoing tts`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
         val ttsEngine = quietTtsEngine()
 
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator, ttsEngine = ttsEngine,
         )
-        controller.startSession()
+        controller.onPttPressed()
         Thread.sleep(200)
 
         verify { ttsEngine.stop() }
@@ -317,13 +346,17 @@ class VoiceControllerAgentFallbackTest {
     @Test fun `follow-up answer bypasses NLU and reaches the agent verbatim`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val fakeAsr = FakeContinuousAsr()
         // "закрой все окна" is NLU-resolvable — with a pending agent question it must
         // NOT dispatch; it is the answer to the question.
-        val controller = makeController("закрой все окна", agentOrchestrator, dispatcher)
+        val controller = makeController(agentOrchestrator = agentOrchestrator, dispatcher = dispatcher, continuousAsr = fakeAsr)
         coEvery { agentOrchestrator.expectsFollowUp() } returns true
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Готово")
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой все окна"))
         Thread.sleep(500)
 
         coVerify(exactly = 1) { agentOrchestrator.ask("закрой все окна", any()) }
@@ -345,11 +378,15 @@ class VoiceControllerAgentFallbackTest {
             AgentResult.Answer("Первое. Второе.", emptyList())
         }
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = true, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         verify { queue.enqueue("Первое.") }
@@ -364,11 +401,15 @@ class VoiceControllerAgentFallbackTest {
         every { ttsEngine.startQueue() } returns null
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer("Ответ.")
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = true, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         verify { ttsEngine.speak("Ответ.") }
@@ -385,11 +426,15 @@ class VoiceControllerAgentFallbackTest {
             AgentResult.Answer("Первое. Второе.", emptyList())
         }
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = true, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         // The queue never started, so the turn must not go silent: legacy speak() takes over.
@@ -406,14 +451,18 @@ class VoiceControllerAgentFallbackTest {
             AgentResult.Answer("Первое. Второе.", emptyList())
         }
 
+        val fakeAsr = FakeContinuousAsr()
         val controller = makeController(
-            recognizedPhrase = "навигатор", agentOrchestrator = agentOrchestrator,
-            ttsEnabled = false, ttsEngine = ttsEngine,
+            agentOrchestrator = agentOrchestrator,
+            ttsEnabled = false, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
         val answerHookCalls = mutableListOf<String>()
         controller.showAnswerHook = { text -> answerHookCalls.add(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         assertEquals(listOf("Первое.", "Первое. Второе."), answerHookCalls)

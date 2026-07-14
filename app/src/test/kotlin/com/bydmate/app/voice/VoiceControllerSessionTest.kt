@@ -28,7 +28,6 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
@@ -123,11 +122,6 @@ class VoiceControllerSessionTest {
         lastError?.let { throw it }
     }
 
-    private fun defaultAsrEngine(recognizedPhrase: String): AsrEngine = mockk<AsrEngine>(relaxed = true).also {
-        every { it.isModelReady(any()) } returns true
-        every { it.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(recognizedPhrase))
-    }
-
     /** A relaxed TtsEngine mock's `speaking` StateFlow<Boolean> property, being a mocked
      *  interface itself, has no real backing state and its collect() never suspends the way a
      *  real StateFlow does -- every test that runs a continuous session needs a stable, real
@@ -146,12 +140,10 @@ class VoiceControllerSessionTest {
             // Default: no pending agent question (individual tests override AFTER construction).
             coEvery { it.expectsFollowUp() } returns false
         },
-        recognizedPhrase: String = "закрой окна",
         ttsEngine: TtsEngine = quietTtsEngine(),
         audioCapture: AudioCapture = mockk<AudioCapture>(relaxed = true).also {
             every { it.captureSession(any()) } returns flow { /* fake ignores pcm content */ }
         },
-        asrEngine: AsrEngine = defaultAsrEngine(recognizedPhrase),
         journal: VoiceJournal = VoiceJournal(),
         earcon: VoiceEarcon = mockk(relaxed = true),
         context: Context = mockk<Context>(relaxed = true),
@@ -163,15 +155,13 @@ class VoiceControllerSessionTest {
         every { gate.preferredLang() } returns null
         every { gate.ttsEnabled() } returns false
 
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
 
-        return VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, context,
             ttsEngine, journal, continuousAsr, agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
@@ -529,22 +519,6 @@ class VoiceControllerSessionTest {
         awaitTrue { !controller.listening.value }
     }
 
-    // (d) When the continuous engine is not ready, PTT falls back to the legacy one-shot path
-    // (old asrEngine.recognize()) unchanged — the continuous session never starts.
-    @Test fun `not-ready continuous engine falls back to the legacy one-shot session`() {
-        val fakeAsr = FakeContinuousAsr(ready = false)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
-        val asrEngine = defaultAsrEngine("закрой окна")
-        val controller = makeController(fakeAsr, dispatcher, asrEngine = asrEngine)
-
-        controller.onPttPressed()
-
-        awaitVerify { coVerify(exactly = 1) { asrEngine.recognize(any(), any(), any()) } }
-        awaitVerify { coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
-        assertFalse(controller.listening.value)
-    }
-
     // (e) A follow-up question from the agent (AgentAnswer) does not end the session — the loop
     // keeps listening for the driver's reply without a second PTT press.
     @Test fun `agent answer to an utterance leaves the session listening`() {
@@ -583,23 +557,18 @@ class VoiceControllerSessionTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns 42L
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
             quietTtsEngine(), VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
@@ -811,17 +780,14 @@ class VoiceControllerSessionTest {
         every { gate.preferredLang() } returns null
         every { gate.ttsEnabled() } returns true // must be true so agentFallback() actually speaks
 
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
-        val asrEngine = defaultAsrEngine("навигатор")
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
             ttsEngine, VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
@@ -873,17 +839,14 @@ class VoiceControllerSessionTest {
         every { gate.preferredLang() } returns null
         every { gate.ttsEnabled() } returns true
 
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
-        val asrEngine = defaultAsrEngine("навигатор")
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
             ttsEngine, VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
@@ -1100,25 +1063,25 @@ class VoiceControllerSessionTest {
         awaitTrue { controller.listening.value }
     }
 
-    // (b) GigaAM model deleted while no session is active (isReady() flips to false) -- PTT falls
-    // back to the legacy Vosk one-shot path without a crash. Mechanically identical to the
-    // not-ready coverage above; pinned again here framed as the model-deletion scenario from the
-    // Wave B degradation matrix, including a second PTT press proving no stuck state either.
-    @Test fun `gigaam model removed while inactive falls back to legacy vosk without crashing`() {
-        val fakeAsr = FakeContinuousAsr(ready = false) // simulates the model directory having been deleted
+    // (b) GigaAM model not ready (not downloaded, or deleted) while no session is active -- PTT
+    // reports the degraded "model not ready" outcome without starting a session: state goes to
+    // NotUnderstood, the journal records an ERROR entry, and the overlay/spoken announce is the
+    // same "Голосовая модель не загружена" phrase the old legacy path used to produce.
+    @Test fun `ptt with continuous engine not ready reports model-not-ready without starting a session`() {
+        val fakeAsr = FakeContinuousAsr(ready = false) // simulates the model not being downloaded/deleted
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
-        val asrEngine = defaultAsrEngine("закрой окна")
-        val controller = makeController(fakeAsr, dispatcher, asrEngine = asrEngine)
+        val journal = VoiceJournal()
+        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val answers = Collections.synchronizedList(mutableListOf<String>())
+        controller.showAnswerHook = { text -> answers.add(text) }
 
         controller.onPttPressed()
-        awaitVerify { coVerify(exactly = 1) { asrEngine.recognize(any(), any(), any()) } }
-        awaitVerify { coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) } }
-        assertFalse(controller.listening.value)
 
-        controller.onPttPressed()
-        awaitVerify { coVerify(exactly = 2) { asrEngine.recognize(any(), any(), any()) } }
+        assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
+        assertEquals(1, journal.entries.value.size)
+        assertEquals(VoiceJournalEntry.Outcome.ERROR, journal.entries.value.first().outcome)
         assertFalse(controller.listening.value)
+        awaitTrue { answers.contains("Голосовая модель не загружена") }
     }
 
     // (в) TTS voice not downloaded (gate.ttsEnabled() == false, the makeController default) --
@@ -1493,18 +1456,16 @@ class VoiceControllerSessionTest {
     }
 
     /** Hard stop (e): stopRequested must not bleed into the NEXT session. A continuous hard
-     *  stop leaves the flag set; only startContinuousSession() used to clear it. A later
-     *  legacy one-shot session (continuous engine unavailable)
-     *  would then have every announce() silently suppressed by the entry gate. */
-    @Test fun `legacy session after a hard stop is not muted by the stale stop flag`() {
+     *  stop leaves the flag set; only startContinuousSession() clears it -- a later session that
+     *  forgot to reset it would have every announce() silently suppressed by the entry gate. */
+    @Test fun `session after a hard stop is not muted by the stale stop flag`() {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns rawFrames
-        val asrEngine = defaultAsrEngine("закрой окна")
-        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture, asrEngine = asrEngine)
+        val controller = makeController(fakeAsr, dispatcher, audioCapture = audioCapture)
         val answers = mutableListOf<String>()
         controller.showAnswerHook = { text -> answers.add(text) }
 
@@ -1514,11 +1475,13 @@ class VoiceControllerSessionTest {
         controller.onPttPressed() // hard stop: sets stopRequested and tears the session down
         awaitTrue { !controller.listening.value }
 
-        // Continuous engine becomes unavailable: the next press takes the legacy one-shot path.
-        fakeAsr.ready = false
+        // A fresh continuous session starts: startContinuousSession() must clear the stale flag.
         controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
 
-        // The legacy round's outcome announcement must reach the orb dialog.
+        // The new session's outcome announcement must reach the orb dialog.
         awaitTrue { answers.any { "Выполнено" in it } }
     }
 
@@ -1548,13 +1511,11 @@ class VoiceControllerSessionTest {
         val rawFrames = MutableSharedFlow<ShortArray>()
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns rawFrames
-        val asrEngine = defaultAsrEngine("закрой окна")
         val controller = makeController(
             fakeAsr, dispatcher,
             agentOrchestrator = agentOrchestrator,
             audioCapture = audioCapture,
             ttsEngine = quietTtsEngine(),
-            asrEngine = asrEngine,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
         )
         val answers = mutableListOf<String>()
@@ -1569,9 +1530,11 @@ class VoiceControllerSessionTest {
         controller.onPttPressed() // hard stop while the ask is suspended
         awaitTrue { !controller.listening.value }
 
-        // A NEW legacy session starts and resets the global stopRequested flag.
-        fakeAsr.ready = false
+        // A NEW continuous session starts and resets the global stopRequested flag.
         controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
         awaitTrue { answers.any { "Выполнено" in it } } // the new session's round completed
 
         releaseAsk.complete(Unit) // the OLD ask's tail sentence lands only now
@@ -1696,5 +1659,36 @@ class VoiceControllerSessionTest {
 
         Thread.sleep(700)
         assertTrue(controller.listening.value)  // the new session must survive the stale close
+    }
+
+    // --- I-1 fix: the else-branch (model not ready / non-RU) must also reset stopRequested ---
+
+    /** A continuous-session hard stop leaves stopRequested set; only startContinuousSession()
+     *  used to clear it. If the model then becomes not ready (or the language switches to
+     *  non-RU) before the next PTT press, onPttPressed() falls into the else-branch instead --
+     *  which, before the fix, never reset the flag, so announce()'s stopRequested gate silently
+     *  swallowed the "model not loaded" overlay+speech forever (this user can never start a
+     *  continuous session again to reset it). */
+    @Test fun `ptt reports model-not-ready after a hard stop, not muted by the stale stop flag`() {
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val journal = VoiceJournal()
+        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val answers = Collections.synchronizedList(mutableListOf<String>())
+        controller.showAnswerHook = { text -> answers.add(text) }
+
+        controller.onPttPressed() // starts a continuous session
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        controller.onPttPressed() // hard stop: sets stopRequested, session tears down
+        awaitTrue { !controller.listening.value }
+
+        fakeAsr.ready = false // model becomes not ready (or user switched to a non-RU language)
+        controller.onPttPressed() // else-branch: model-not-ready path
+
+        assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
+        assertEquals(1, journal.entries.value.size)
+        assertEquals(VoiceJournalEntry.Outcome.ERROR, journal.entries.value.first().outcome)
+        awaitTrue { answers.contains("Голосовая модель не загружена") }
     }
 }

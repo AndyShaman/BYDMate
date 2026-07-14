@@ -72,7 +72,7 @@ fun TripDetailDialog(
                 .fillMaxSize()
                 .clickable(
                     indication = null,
-                    interactionSource = androidx.compose.foundation.interaction.MutableInteractionSource()
+                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
                 ) { onDismiss() },
             contentAlignment = Alignment.Center
         ) {

@@ -19,6 +19,8 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -79,17 +81,22 @@ class AgentToolsCallContactTest {
         assertEquals("контакт не найден", out.getString("error"))
     }
 
-    // Single match: dispatches via ActionDispatcher with kind="call" + autoDial=true,
-    // and the phone number must never surface in the tool's own response.
-    @Test fun single_match_dispatches_call_and_hides_phone_number() = runTest {
+    // П7 origin-based defense: kind="call" is always dangerous, so the single match now
+    // goes through confirmDangerous (overlay confirm) instead of dispatching immediately.
+    // The phone number must never surface in the tool's own response.
+    @Test fun single_match_confirms_before_dispatching_and_hides_phone_number() = runTest {
         every { contactLookup.hasPermission() } returns true
         coEvery { contactLookup.findByName("Мама") } returns listOf(ContactLookup.Match("Мама", phone))
         every { gate.vehicleSnapshot() } returns null
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
-        val raw = tools().execute(call("call_contact", """{"name":"Мама"}"""))
+        val t = tools()
+        t.confirmScope = CoroutineScope(Dispatchers.Unconfined)
+        var gateInvoked = false
+        t.confirmGate = { _, _, _, onConfirm, _ -> gateInvoked = true; onConfirm(); true }
+        val raw = t.execute(call("call_contact", """{"name":"Мама"}"""))
         val out = JSONObject(raw)
-        assertTrue(out.getBoolean("ok"))
-        assertEquals("Мама", out.getString("calling"))
+        assertTrue(gateInvoked)
+        assertEquals("ожидает подтверждения на экране", out.getString("status"))
         assertFalse(raw.contains(phone))
         coVerify {
             dispatcher.dispatch(match {
@@ -100,40 +107,18 @@ class AgentToolsCallContactTest {
         }
     }
 
-    @Test fun single_match_dispatch_failure_reports_fixed_error() = runTest {
+    // Fail-closed: when the overlay cannot be shown (no SYSTEM_ALERT_WINDOW), the call
+    // is refused, never dialed silently, and the phone number still never leaks.
+    @Test fun single_match_fail_closed_when_overlay_cannot_show() = runTest {
         every { contactLookup.hasPermission() } returns true
         coEvery { contactLookup.findByName("Мама") } returns listOf(ContactLookup.Match("Мама", phone))
         every { gate.vehicleSnapshot() } returns null
-        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(false, "Нет приложения для обработки")
-        val raw = tools().execute(call("call_contact", """{"name":"Мама"}"""))
-        assertEquals("не удалось позвонить", JSONObject(raw).getString("error"))
+        val t = tools()
+        t.confirmGate = { _, _, _, _, _ -> false }
+        val raw = t.execute(call("call_contact", """{"name":"Мама"}"""))
+        assertFalse(JSONObject(raw).getBoolean("ok"))
         assertFalse(raw.contains(phone))
-    }
-
-    // Pin: ActionDispatcher's DispatchResult.reason can embed the raw phone number (its
-    // "dial:<phone>"/"tel:<phone>" activity-not-found label) — that reason must never be
-    // forwarded verbatim, only the fixed Russian string.
-    @Test fun single_match_dispatch_failure_reason_with_phone_number_never_leaks() = runTest {
-        every { contactLookup.hasPermission() } returns true
-        coEvery { contactLookup.findByName("Мама") } returns listOf(ContactLookup.Match("Мама", phone))
-        every { gate.vehicleSnapshot() } returns null
-        coEvery { dispatcher.dispatch(any(), any()) } returns
-            DispatchResult(false, "Нет приложения для обработки: dial:$phone failed")
-        val raw = tools().execute(call("call_contact", """{"name":"Мама"}"""))
-        assertEquals("""{"error":"не удалось позвонить"}""", raw)
-        assertFalse(raw.contains(phone))
-    }
-
-    // Pin: an exception thrown by dispatch() (not just a DispatchResult(false, ...)) must
-    // also collapse to the fixed Russian string, never propagate.
-    @Test fun single_match_dispatch_throwing_reports_fixed_error() = runTest {
-        every { contactLookup.hasPermission() } returns true
-        coEvery { contactLookup.findByName("Мама") } returns listOf(ContactLookup.Match("Мама", phone))
-        every { gate.vehicleSnapshot() } returns null
-        coEvery { dispatcher.dispatch(any(), any()) } throws RuntimeException("dial:$phone crashed")
-        val raw = tools().execute(call("call_contact", """{"name":"Мама"}"""))
-        assertEquals("""{"error":"не удалось позвонить"}""", raw)
-        assertFalse(raw.contains(phone))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
     // Ambiguous match: only names go back to the LLM, никогда номера.

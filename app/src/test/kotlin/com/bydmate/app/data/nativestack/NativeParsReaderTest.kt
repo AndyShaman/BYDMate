@@ -2,6 +2,7 @@ package com.bydmate.app.data.nativestack
 
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.vehicle.HelperClient
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
@@ -24,6 +25,14 @@ import org.junit.Test
  *   volts (voltage12v, cell voltages):        ± 0.01
  */
 class NativeParsReaderTest {
+
+    /** Builds a reader pinned to BatchMode.OFF, so fetch() always dispatches straight to
+     *  fetchViaAdb() — keeps this file's pre-batch-wave (wave L) semantics unchanged. */
+    private fun nativeReader(auto: AutoserviceClient, settings: SettingsRepository): NativeParsReader {
+        val gate = mockk<BatchReadGate>()
+        coEvery { gate.mode() } returns BatchMode.OFF
+        return NativeParsReader(auto, settings, mockk<HelperClient>(), gate)
+    }
 
     private fun loadFixture(): JSONObject {
         val stream = checkNotNull(
@@ -82,7 +91,7 @@ class NativeParsReaderTest {
         coEvery { settings.getBatteryCapacity() } returns 72.9
 
         // ── Run ───────────────────────────────────────────────────────────────
-        val reader = NativeParsReader(auto, settings)
+        val reader = nativeReader(auto, settings)
         val data = reader.fetch()
         assertNotNull("fetch() returned null", data)
         checkNotNull(data)
@@ -201,7 +210,7 @@ class NativeParsReaderTest {
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 72.9
 
-        val data = NativeParsReader(auto, settings).fetch()
+        val data = nativeReader(auto, settings).fetch()
         assertNotNull("fetch() returned null", data)
         checkNotNull(data)
 
@@ -226,7 +235,7 @@ class NativeParsReaderTest {
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 72.9
 
-        val reader = NativeParsReader(auto, settings)
+        val reader = nativeReader(auto, settings)
         val result = reader.fetch()
         assertNull("fetch() must return null when soc + mileage + voltage12v are all null", result)
     }
@@ -248,7 +257,7 @@ class NativeParsReaderTest {
         }
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 72.9
-        return NativeParsReader(auto, settings)
+        return nativeReader(auto, settings)
     }
 
     @Test
@@ -289,6 +298,43 @@ class NativeParsReaderTest {
         assertNull(data!!.rain)
     }
 
+    // ── Charging status (task 6 / audit finding: trigger never fired) ──────────
+
+    @Test
+    fun `chargingStatus derived none when gun disconnected`() = runTest {
+        val data = sensorReader("chargeGunState" to 1, "bmsState" to 2).fetch()
+        assertEquals(0, data!!.chargingStatus)
+    }
+
+    @Test
+    fun `chargingStatus none when gun is cold-start sentinel 0`() = runTest {
+        // gun=0 is the cold-start window value (SentinelDecoder passes 0 through,
+        // it is NOT a filtered sentinel), which must read as "not connected" (0),
+        // not "connected"/"charging". bms=1 is the worst case: a bare ==1 gun guard
+        // would let 0 fall through to `bmsState == 1 -> 2` and falsely fire the
+        // production ChargingStatus==2 template on a disconnected cold-start tick.
+        val data = sensorReader("chargeGunState" to 0, "bmsState" to 1).fetch()
+        assertEquals(0, data!!.chargingStatus)
+    }
+
+    @Test
+    fun `chargingStatus derived connected when gun in and bms not charging`() = runTest {
+        val data = sensorReader("chargeGunState" to 3, "bmsState" to 2).fetch()
+        assertEquals(1, data!!.chargingStatus)
+    }
+
+    @Test
+    fun `chargingStatus derived charging when bms confirms charging`() = runTest {
+        val data = sensorReader("chargeGunState" to 3, "bmsState" to 1).fetch()
+        assertEquals(2, data!!.chargingStatus)
+    }
+
+    @Test
+    fun `chargingStatus null when gun state unavailable`() = runTest {
+        val data = sensorReader("bmsState" to 1).fetch()
+        assertNull(data!!.chargingStatus)
+    }
+
     /**
      * Phase 0 voice-agent enrichment: the 9 validated climate/seat/light fids
      * (fid-candidates.yaml status=validated, previously unwired) must decode
@@ -315,7 +361,7 @@ class NativeParsReaderTest {
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 72.9
 
-        val data = NativeParsReader(auto, settings).fetch()
+        val data = nativeReader(auto, settings).fetch()
         assertNotNull("fetch() returned null", data)
         checkNotNull(data)
 

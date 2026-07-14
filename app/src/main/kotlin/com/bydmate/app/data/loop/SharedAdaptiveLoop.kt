@@ -1,5 +1,6 @@
 package com.bydmate.app.data.loop
 
+import android.util.Log
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.dao.LastStateDao
 import com.bydmate.app.data.local.entity.LastStateEntity
@@ -45,6 +46,12 @@ class SharedAdaptiveLoop constructor(
 
     private var job: Job? = null
 
+    companion object {
+        /** Max staleness of last_state.ts between writes; 5× inside TripRecorder's 5-min cold-start gap. */
+        const val HEARTBEAT_MS = 60_000L
+        private const val TAG = "SharedAdaptiveLoop"
+    }
+
     @Synchronized
     fun start(scope: CoroutineScope): Job {
         job?.takeIf { it.isActive }?.let { return it }
@@ -69,7 +76,8 @@ class SharedAdaptiveLoop constructor(
             consecutiveNull = 0
             _connected.value = true
             _flow.emit(data)
-            persistSnapshot(data)
+            runCatching { persistSnapshot(data) }
+                .onFailure { Log.w(TAG, "persistSnapshot failed, loop continues", it) }
             delay(cadence.intervalFor(LoopFsm.classify(data)))
         }
     }
@@ -78,6 +86,15 @@ class SharedAdaptiveLoop constructor(
         val now = System.currentTimeMillis()
         val prev = lastStateDao.getCurrent()
         val ignition = data.powerState
+        // Skip the fsync write when nothing changed and the heartbeat is fresh.
+        // (Spelled as one positive condition so the compiler smart-casts prev.)
+        if (prev != null &&
+            prev.soc == data.soc &&
+            prev.mileage == data.mileage &&
+            prev.totalElec == data.totalElecConsumption &&
+            prev.ignition == ignition &&
+            now - prev.ts < HEARTBEAT_MS
+        ) return
         lastStateDao.upsert(
             LastStateEntity(
                 id = 1,

@@ -34,7 +34,9 @@ class SteeringWheelKeyService : AccessibilityService() {
         super.onServiceConnected()
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS  // 32
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
         serviceInfo = info
+        instance = this
         isConnected = true
         Log.d(TAG, "connected; filtering steering-wheel keys")
     }
@@ -92,12 +94,14 @@ class SteeringWheelKeyService : AccessibilityService() {
     override fun onInterrupt() { /* no-op */ }
 
     override fun onUnbind(intent: Intent?): Boolean {
+        instance = null
         isConnected = false
         Log.d(TAG, "unbound; star key filter inactive")
         return super.onUnbind(intent)
     }
 
     override fun onDestroy() {
+        instance = null
         isConnected = false
         super.onDestroy()
     }
@@ -113,6 +117,12 @@ class SteeringWheelKeyService : AccessibilityService() {
          */
         @Volatile
         var isConnected: Boolean = false
+            private set
+
+        /** Live service instance for on-demand window reads (NaviScreenReader). Set on
+         *  connect, cleared on unbind/destroy - callers must handle null. */
+        @Volatile
+        var instance: SteeringWheelKeyService? = null
             private set
 
         /**

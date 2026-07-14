@@ -15,6 +15,7 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.parking.ParkingCameraConfig
 import com.bydmate.app.data.remote.DiParsData
@@ -39,6 +40,7 @@ class ActionDispatcher @Inject constructor(
     private val helper: HelperClient,
     @ApplicationContext private val context: Context,
     private val voiceActions: dagger.Lazy<com.bydmate.app.voice.VoiceAutomationActions>,
+    private val clusterVoiceControl: ClusterVoiceControl,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -52,6 +54,7 @@ class ActionDispatcher @Inject constructor(
         private const val BT_CALL_KEYCODE_DIAL = 313
         private const val YANDEX_MUSIC_PACKAGE = "ru.yandex.music"
         private val YOUTUBE_PACKAGES = listOf("anddea.youtube", "com.google.android.youtube")
+        private const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
         // Hard cap on user-set delay action; protects against typos like "60000000".
         private const val MAX_DELAY_MS = 30_000L
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
@@ -159,6 +162,29 @@ class ActionDispatcher @Inject constructor(
         internal fun isFrontTrunkOpenCommand(command: String): Boolean =
             command.contains("前备箱") && command.contains("打开") && !command.contains("关")
 
+        /**
+         * True if [command] would OPEN the rear trunk / tailgate — "开后备箱".
+         * Distinct from the front trunk (前备箱, isFrontTrunkOpenCommand). The
+         * open string itself carries 开 (open), so a plain contains-check never
+         * matches the close command 关后备箱. Pure predicate.
+         */
+        internal fun isRearTrunkOpenCommand(command: String): Boolean =
+            command.contains("开后备箱")
+
+        /**
+         * П7 origin-based defense: true if this agent-initiated [action] is in
+         * the dangerous tier and must be confirmed on-screen before it fires.
+         * Dangerous = door unlock, rear-trunk open, disabling sentry, or placing
+         * a call. NOT windows/climate/sunroof/door-lock/front-trunk (low harm or
+         * already speed-gated). Pure function — unit-testable without Android.
+         */
+        internal fun isDangerousAction(action: ActionDef): Boolean = when (action.kind) {
+            "param" -> isDoorUnlockCommand(action.command) || isRearTrunkOpenCommand(action.command)
+            "sentry" -> action.payload == "0"
+            "call" -> true
+            else -> false
+        }
+
         private val POSITION_OPEN = Regex("打开(\\d+)")
 
         /**
@@ -237,6 +263,7 @@ class ActionDispatcher @Inject constructor(
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "sentry" -> dispatchSentry(action)
+            "cluster_projection" -> dispatchClusterProjection(action)
             "speak" -> dispatchSpeak(action)
             "agent_query" -> dispatchAgentQuery(action)
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
@@ -260,6 +287,21 @@ class ActionDispatcher @Inject constructor(
         val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, "Не удалось переключить охранный режим")
+    }
+
+    // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---
+
+    /** ClusterVoiceControl.apply() is fire-and-forget (async setMode under the manager's mutex,
+     *  like the star key) and never throws, so there is no synchronous success/failure to report
+     *  here beyond payload validation -- this stays fail-soft the same way dispatchSentry does. */
+    private fun dispatchClusterProjection(action: ActionDef): DispatchResult {
+        val on = when (action.payload) {
+            "1" -> true
+            "0" -> false
+            else -> return DispatchResult(false, "Некорректное состояние проекции на приборку")
+        }
+        clusterVoiceControl.apply(on)
+        return DispatchResult(true)
     }
 
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */
@@ -430,6 +472,22 @@ class ActionDispatcher @Inject constructor(
 
     private fun navigate(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
+        // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
+        // resolve the address internally, so no coordinates are needed. Undocumented
+        // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
+        // a Navigator update drops them.
+        val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
+        if (shortcut != null) {
+            val intentAction = when (shortcut) {
+                "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
+                "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
+                else -> return DispatchResult(false, "неизвестный shortcut: $shortcut")
+            }
+            val intent = Intent(intentAction)
+                .setPackage(NAVI_PACKAGE)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return tryStartActivity(intent, "navigate_shortcut:$shortcut")
+        }
         // Free-text destination: open Navigator's map search (route needs coordinates,
         // which the agent does not have for arbitrary addresses).
         val query = payload.optString("query").takeIf(String::isNotBlank)
@@ -442,6 +500,17 @@ class ActionDispatcher @Inject constructor(
         val lat = payload.optDouble("lat", Double.NaN)
         val lon = payload.optDouble("lon", Double.NaN)
         if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
+        // Show-only mode: drop a pin instead of building a route ("где находится X").
+        if (payload.optBoolean("show", false)) {
+            val desc = payload.optString("label").takeIf(String::isNotBlank)
+            val showUri = buildString {
+                append("yandexnavi://show_point_on_map?lat=$lat&lon=$lon&zoom=14")
+                if (desc != null) append("&desc=${Uri.encode(desc)}")
+            }
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(showUri))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            return tryStartActivity(intent, "navigate_show:$lat,$lon")
+        }
         val uri = "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)

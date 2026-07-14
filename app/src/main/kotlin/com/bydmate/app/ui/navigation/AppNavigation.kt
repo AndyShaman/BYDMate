@@ -1,8 +1,6 @@
 package com.bydmate.app.ui.navigation
 
 import android.content.Intent
-import android.provider.Settings
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -58,7 +56,6 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
-import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.DonateDialog
 import com.bydmate.app.ui.settings.DonateEntry
@@ -263,12 +260,10 @@ fun AppNavigation(
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {
                 SettingsScreen(
-                    onNavigateToPlaces = { navController.navigate("places") },
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },
                     onNavigateToVoiceJournal = { navController.navigate("voice_journal") },
                 )
             }
-            composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
             composable("agent_chat") {
                 com.bydmate.app.ui.debug.AgentChatScreen(onBack = { navController.popBackStack() })
             }
@@ -291,7 +286,7 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                 .fillMaxSize()
                 .clickable(
                     indication = null,
-                    interactionSource = MutableInteractionSource()
+                    interactionSource = remember { MutableInteractionSource() }
                 ) { onDismiss() },
             contentAlignment = Alignment.Center
         ) {
@@ -313,30 +308,7 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
                     )
                     Button(
                         onClick = {
-                            val opened = runCatching {
-                                val intent = Intent(Intent.ACTION_MAIN).apply {
-                                    setClassName(
-                                        "com.byd.appstartmanagement",
-                                        "com.byd.appstartmanagement.frame.AppStartManagement"
-                                    )
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                context.startActivity(intent)
-                            }.isSuccess
-                            if (!opened) {
-                                runCatching {
-                                    val fallback = Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                        data = android.net.Uri.parse("package:${context.packageName}")
-                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    }
-                                    context.startActivity(fallback)
-                                }
-                                Toast.makeText(
-                                    context,
-                                    context.getString(R.string.nav_autostart_open_settings_error),
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
+                            com.bydmate.app.util.AutostartScreen.open(context)
                             onDismiss()
                         },
                         modifier = Modifier.fillMaxWidth(),

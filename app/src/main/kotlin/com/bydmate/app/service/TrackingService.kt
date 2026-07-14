@@ -49,6 +49,7 @@ import com.bydmate.app.ui.overlay.CameraOverlayManager
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.bydmate.app.BuildConfig
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,6 +61,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
+import java.io.File
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -97,6 +99,7 @@ class TrackingService : Service(), LocationListener {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
+    private var wakeLockRenewer: WakeLockRenewer? = null
     private var locationManager: LocationManager? = null
     private var firstDataReceived = false
 
@@ -140,6 +143,15 @@ class TrackingService : Service(), LocationListener {
     private val powerLock = Any()
     private var observedChargingPowerKwAbs: Double = 0.0
     private var pollTickCount: Long = 0
+    // Gates the settingsRepository.saveLastKnownSoc() write below to actual SOC
+    // changes instead of firing on every poll tick.
+    private var lastSavedSoc: Int? = null
+    // Gates buildNotification()/nm.notify() below to actual rendered-text
+    // changes instead of firing on every poll tick (buildNotification()
+    // allocates a fresh PendingIntent + Builder each call).
+    private var lastNotificationText: String? = null
+    // Cooldown bookkeeping for the helper-daemon watchdog respawn — see shouldAttemptRespawn().
+    private var lastHelperRespawnAtMs: Long = 0L
     // Prevents two pollGunStateForEdge coroutines from running concurrently.
     // Without this guard a slow autoservice read could overlap with the next
     // tick's launch, and both copies might observe the same connected→NONE
@@ -173,6 +185,31 @@ class TrackingService : Service(), LocationListener {
     @Volatile private var iternioCooldownUntilMs: Long = 0L
     @Volatile private var iternioConsecutive5xx: Int = 0
 
+    // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
+    // after onCreate, and are never instantiated for callers that short-circuit before use.
+    private val starGrant by lazy {
+        GrantSelfHeal(
+            name = "star a11y",
+            isGranted = ::starServiceRunning,
+            reassert = { helperBootstrap.ensureRunning() && helperClient.enableAccessibilityService() },
+        )
+    }
+
+    private val notificationListenerGrant by lazy {
+        GrantSelfHeal(
+            name = "notification listener",
+            isGranted = {
+                val component = ComponentName(this, com.bydmate.app.media.MediaSessionListenerService::class.java)
+                getSystemService(NotificationManager::class.java)
+                    ?.isNotificationListenerAccessGranted(component) == true
+            },
+            reassert = {
+                helperBootstrap.ensureRunning() &&
+                    com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
+            },
+        )
+    }
+
     companion object {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
@@ -200,13 +237,42 @@ class TrackingService : Service(), LocationListener {
         // 3-s base interval — each retry costs ~8 Binder/ADB reads, so keep it
         // an order of magnitude rarer than the shared loop itself.
         private const val CATCHUP_RETRY_EVERY_N_TICKS = 10
-        // Steering-wheel star a11y re-assert. The framework binds a11y services very early at boot —
-        // before our process is ready — so our bind can lose the race and get parked with no retry.
-        // A single re-assert (the old behaviour) often fired before the race settled, so we verify-
-        // and-retry until the service is actually RUNNING (~30 s of grace) and re-run it on every
-        // wake. Copies OpenBYD, which re-checks on every reconnect instead of once at startup.
-        private const val STAR_REASSERT_ATTEMPTS = 6
-        private const val STAR_REASSERT_RETRY_MS = 5_000L
+        // Helper-daemon watchdog: how often (in poll ticks) to call helperBootstrap.isHealthy().
+        // isHealthy() is a cheap binder ping, so this can run far more often than a respawn would
+        // ever be attempted; at the ~1-2s adaptive tick this is roughly 30-60s.
+        private const val HELPER_HEALTH_CHECK_EVERY_N_TICKS = 30L
+        // Minimum gap between two ensureRunning() respawn attempts from the watchdog.
+        // ensureRunning() is expensive (Mutex-serialized kill rounds + a 15x200ms poll against a
+        // dead socket) — field incident 2026-07-05 saw 26 respawn bails in 2 minutes hammering a
+        // stale ADB socket.
+        private const val HELPER_RESPAWN_COOLDOWN_MS = 60_000L
+
+        /** Pure cooldown gate for the watchdog respawn below — internal (not private) so
+         *  WatchdogGateTest can exercise it directly without touching Android. */
+        internal fun shouldAttemptRespawn(nowMs: Long, lastAttemptMs: Long): Boolean =
+            nowMs - lastAttemptMs >= HELPER_RESPAWN_COOLDOWN_MS
+
+        /**
+         * П4a: gun-connect-state sample for the edge detector, reused from this tick's
+         * already-fetched snapshot instead of a second dedicated getInt(DEV_CHARGING,
+         * FID_GUN_CONNECT_STATE) round-trip — same fid either way (FidMap "chargeGunState"
+         * = dev 1009 / fid 876609586, decoded through the same AutoserviceClientImpl.getInt
+         * / SentinelDecoder pipeline). Null passes straight through unchanged:
+         * GunStateEdgeDetector.onSample already no-ops on null (transient sentinel/decode
+         * glitch) rather than firing a phantom edge. internal (not private) so
+         * TrackingServiceSnapshotReuseTest can pin this without touching Android.
+         */
+        internal fun gunStateFromSnapshot(data: DiParsData): Int? = data.chargeGunState
+
+        /**
+         * П4b: ABRP engine power sample reused from this tick's snapshot instead of a
+         * dedicated getEnginePowerKw() ADB read per Iternio send — same fid either way
+         * (FidMap "power" = dev 1012 / fid 339738656, same as FID_ENGINE_POWER). May be
+         * up to one poll tick stale, acceptable at the 1 Hz drive cadence. Null passes
+         * straight through so IternioTelemetryClient falls back to DiPars power, same
+         * as a failed/timed-out dedicated read used to.
+         */
+        internal fun enginePowerKwFromSnapshot(data: DiParsData): Int? = data.power?.toInt()
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -243,6 +309,9 @@ class TrackingService : Service(), LocationListener {
          */
         private val _cameraActive = MutableStateFlow(false)
         val cameraActive: StateFlow<Boolean> = _cameraActive
+
+        private val _youtubeForeground = MutableStateFlow(false)
+        val youtubeForeground: StateFlow<Boolean> = _youtubeForeground
 
         // Live reference to the running service so the floating widget can reach
         // the singleton AutomationEngine without binding. Mirrors how widget data
@@ -380,10 +449,6 @@ class TrackingService : Service(), LocationListener {
                     if (pref.isNotEmpty()) {
                         helperClient.setAppHidden("com.byd.autovoice", pref == "true")
                     }
-                    // Self-grant notification-listener access so real Yandex Music playback
-                    // (MediaController.playFromSearch) works. Fail-soft: falls back to the
-                    // search-intent path in ActionDispatcher when no session is available.
-                    com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
                 }
                 // Power down a cluster compositor left "on" by a car shutdown mid-projection —
                 // otherwise the cluster boots black (projection mode, nobody drawing). Runs even
@@ -409,6 +474,7 @@ class TrackingService : Service(), LocationListener {
         // boot-time race, so we verify-and-retry here (in its own coroutine, independent of the
         // helper bootstrap above) and re-run on every SCREEN_ON / USER_PRESENT.
         serviceScope.launch { ensureStarServiceRunning("startup") }
+        serviceScope.launch { notificationListenerGrant.ensure("startup") }
         registerScreenWakeReceiver()
 
         // Start the network monitor BEFORE polling so the first evaluate() tick
@@ -475,6 +541,12 @@ class TrackingService : Service(), LocationListener {
             } catch (e: Exception) {
                 Log.w(TAG, "Autoservice catch-up failed: ${e.message}")
             }
+        }
+
+        // Vosk ASR was removed (AC-05): silently reclaim the orphaned model dir
+        // (up to ~85 MB on early-adopter installs). No-op once deleted.
+        serviceScope.launch(Dispatchers.IO) {
+            runCatching { File(filesDir, "vosk").deleteRecursively() }
         }
     }
 
@@ -590,9 +662,10 @@ class TrackingService : Service(), LocationListener {
      * нам нужен 1 Гц — это движение.
      *
      * Single-flight на [iternioInFlight] не даёт двум tick'ам пересекаться:
-     * ADB-чтение ENG_POW может занять несколько сотен мс, а очередь параллельных
-     * отправок забила бы канал и спутала throttle. На 429/5xx взводим
-     * [iternioCooldownUntilMs] и тихо пропускаем тики пока не остынет.
+     * сетевая отправка (и, в CHARGING-окне, autoservice-снапшоты battery/charging)
+     * может занять несколько сотен мс, а очередь параллельных отправок забила бы
+     * канал и спутала throttle. На 429/5xx взводим [iternioCooldownUntilMs] и тихо
+     * пропускаем тики пока не остынет.
      */
     private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long) {
         if (!iternioInFlight.compareAndSet(false, true)) return
@@ -645,16 +718,11 @@ class TrackingService : Service(), LocationListener {
                 val charging = if (readSnapshots) {
                     runCatching { autoserviceClient.readChargingSnapshot() }.getOrNull()
                 } else null
-                // ENG_POW: tight timeout — at 1 Hz drive cadence a 900 ms budget
-                // covers a healthy ADB read but won't pile up if autoservice
-                // stalls. Null on timeout/error → client falls back to DiPars.
-                val enginePowerKw: Int? = run {
-                    runCatching {
-                        kotlinx.coroutines.withTimeoutOrNull(900L) {
-                            autoserviceClient.getEnginePowerKw()
-                        }
-                    }.getOrNull()
-                }
+                // ENG_POW: reused from this tick's already-fetched snapshot instead of
+                // a dedicated ADB read per send (same fid as getEnginePowerKw — see
+                // enginePowerKwFromSnapshot). May be up to one poll tick stale, fine at
+                // 1 Hz. Null → client falls back to DiPars power.
+                val enginePowerKw: Int? = enginePowerKwFromSnapshot(data)
 
                 iternioTelemetryClient.send(
                     apiKey = apiKey,
@@ -733,6 +801,7 @@ class TrackingService : Service(), LocationListener {
         alicePollingManager.stop()
         cameraStateMonitor.stop()
         _cameraActive.value = false
+        _youtubeForeground.value = false
         networkAvailableMonitor.stop()
         try {
             unregisterReceiver(screenWakeReceiver)
@@ -753,6 +822,7 @@ class TrackingService : Service(), LocationListener {
             Log.w(TAG, "Failed to remove location updates: ${e.message}")
         }
 
+        wakeLockRenewer?.stop()
         wakeLock?.let { if (it.isHeld) it.release() }
         instance = null
         _isRunning.value = false
@@ -793,9 +863,13 @@ class TrackingService : Service(), LocationListener {
 
     override fun onLocationChanged(location: Location) {
         _lastLocation.value = location
-        Log.d(TAG, "GPS fix: lat=${location.latitude} lon=${location.longitude} " +
-            "acc=${"%.1f".format(location.accuracy)}m speed=${"%.1f".format(location.speed * 3.6f)}km/h " +
-            "provider=${location.provider}")
+        // AC-06: never log raw coordinates in release — logcat is readable on DiLink
+        // and ends up in user-shared diagnostic dumps.
+        if (BuildConfig.DEBUG) {
+            Log.d(TAG, "GPS fix: lat=${location.latitude} lon=${location.longitude} " +
+                "acc=${"%.1f".format(location.accuracy)}m speed=${"%.1f".format(location.speed * 3.6f)}km/h " +
+                "provider=${location.provider}")
+        }
     }
 
     private fun startPolling() {
@@ -837,7 +911,10 @@ class TrackingService : Service(), LocationListener {
                     }
 
                     data.soc?.let { soc ->
-                        settingsRepository.saveLastKnownSoc(soc)
+                        if (soc != lastSavedSoc) {
+                            lastSavedSoc = soc
+                            settingsRepository.saveLastKnownSoc(soc)
+                        }
                     }
 
                     // Power accumulator for AC/DC classification. Power is
@@ -861,7 +938,7 @@ class TrackingService : Service(), LocationListener {
                     pollTickCount++
                     if (pollTickCount % GUN_STATE_POLL_EVERY_N_TICKS == 0L) {
                         serviceScope.launch {
-                            pollGunStateForEdge()
+                            pollGunStateForEdge(data)
                         }
                     }
 
@@ -871,6 +948,25 @@ class TrackingService : Service(), LocationListener {
                     if (!catchUpResolved && pollTickCount % CATCHUP_RETRY_EVERY_N_TICKS == 0L) {
                         serviceScope.launch {
                             retryUnresolvedCatchUp()
+                        }
+                    }
+
+                    // Helper daemon watchdog: detects a mid-session daemon death (OOM-killed,
+                    // crashed, or manually killed) that would otherwise leave the write channel
+                    // dead for the rest of the trip. isHealthy() is a cheap binder ping, safe to
+                    // call inline on the tick — it only detects the failure, it does not reconnect.
+                    // ensureRunning() does the actual respawn and is expensive, so it always runs
+                    // off-tick via launch (wrapped in runCatching — serviceScope has no
+                    // CoroutineExceptionHandler), cooldown-gated against HELPER_RESPAWN_COOLDOWN_MS.
+                    if (pollTickCount % HELPER_HEALTH_CHECK_EVERY_N_TICKS == 0L && !helperBootstrap.isHealthy()) {
+                        val now = System.currentTimeMillis()
+                        if (shouldAttemptRespawn(now, lastHelperRespawnAtMs)) {
+                            lastHelperRespawnAtMs = now
+                            Log.w(TAG, "Helper daemon unhealthy, attempting respawn")
+                            serviceScope.launch {
+                                runCatching { helperBootstrap.ensureRunning() }
+                                    .onFailure { Log.w(TAG, "Helper respawn failed: ${it.message}") }
+                            }
                         }
                     }
 
@@ -964,26 +1060,19 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
-     * Read the autoservice gun-connect-state and, when it crosses
-     * connected→disconnected, fire a runCatchUp so the just-finished session
-     * is written as a row. Runs on Dispatchers.IO via serviceScope.
+     * Feed the autoservice gun-connect-state from this tick's already-fetched
+     * snapshot ([gunStateFromSnapshot]) into the edge detector and, when it
+     * crosses connected→disconnected, fire a runCatchUp so the just-finished
+     * session is written as a row. Runs on Dispatchers.IO via serviceScope.
      *
      * autoservice availability is checked by the detector itself; we still
      * gate on the user setting so that turning autoservice off in Settings
      * also stops the live polling.
      */
-    private suspend fun pollGunStateForEdge() {
+    private suspend fun pollGunStateForEdge(data: DiParsData) {
         if (!pollGunInFlight.compareAndSet(false, true)) return
         try {
-            val gun = try {
-                autoserviceClient.getInt(
-                    com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING,
-                    com.bydmate.app.data.autoservice.FidRegistry.FID_GUN_CONNECT_STATE
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "pollGunStateForEdge: read failed: ${e.message}")
-                return
-            }
+            val gun = gunStateFromSnapshot(data)
             val edge = gunEdgeDetector.onSample(gun)
             if (!edge) return
             val powerForClassify = synchronized(powerLock) {
@@ -1055,6 +1144,9 @@ class TrackingService : Service(), LocationListener {
                 if (active) CameraOverlayManager.close(this@TrackingService)
             }
         }
+        serviceScope.launch {
+            cameraStateMonitor.youtubeForeground.collect { _youtubeForeground.value = it }
+        }
     }
 
     private fun startLocationUpdates() {
@@ -1094,8 +1186,8 @@ class TrackingService : Service(), LocationListener {
             val lastKnown = if (gpsEnabled) lm.getLastKnownLocation(LocationManager.GPS_PROVIDER) else null
             if (lastKnown != null) {
                 _lastLocation.value = lastKnown
-                Log.i(TAG, "lastKnownLocation: lat=${lastKnown.latitude} lon=${lastKnown.longitude} " +
-                    "provider=${lastKnown.provider} age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")
+                Log.i(TAG, "lastKnownLocation: provider=${lastKnown.provider} " +
+                    "age=${(System.currentTimeMillis() - lastKnown.time) / 1000}s")
             } else {
                 Log.w(TAG, "lastKnownLocation is null")
             }
@@ -1110,8 +1202,14 @@ class TrackingService : Service(), LocationListener {
 
     private fun acquireWakeLock() {
         val pm = getSystemService(POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bydmate:tracking")
-        wakeLock?.acquire(30 * 60 * 1000L) // 30 min max, auto-released
+        wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bydmate:tracking").apply {
+            // Non-reference-counted: each acquire() below just resets the timeout.
+            setReferenceCounted(false)
+        }
+        wakeLockRenewer = WakeLockRenewer(
+            scope = serviceScope,
+            acquire = { wakeLock?.acquire(WakeLockRenewer.TIMEOUT_MS) },
+        ).also { it.start() }
     }
 
     // Re-assert star control on every wake. OpenBYD re-checks on each proxy reconnect; SCREEN_ON /
@@ -1120,6 +1218,7 @@ class TrackingService : Service(), LocationListener {
     private val screenWakeReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             serviceScope.launch { ensureStarServiceRunning("wake:${intent?.action}") }
+            serviceScope.launch { notificationListenerGrant.ensure("wake:${intent?.action}") }
         }
     }
 
@@ -1152,22 +1251,7 @@ class TrackingService : Service(), LocationListener {
         val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
             .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
         if (!mirrorEnabled && !voiceEnabled) return
-        repeat(STAR_REASSERT_ATTEMPTS) { attempt ->
-            if (starServiceRunning()) {
-                if (attempt > 0) Log.i(TAG, "star a11y confirmed running ($reason, try ${attempt + 1})")
-                return
-            }
-            if (!helperBootstrap.ensureRunning()) {
-                Log.w(TAG, "star a11y re-assert skipped: helper daemon unreachable ($reason)")
-            } else {
-                val rebound = helperClient.enableAccessibilityService()
-                Log.i(TAG, "star a11y not running; re-asserted ($reason, try ${attempt + 1}) → setting=$rebound")
-            }
-            delay(STAR_REASSERT_RETRY_MS)
-        }
-        if (!starServiceRunning()) {
-            Log.w(TAG, "star a11y still not running after $STAR_REASSERT_ATTEMPTS tries ($reason)")
-        }
+        starGrant.ensure(reason)
     }
 
     /**
@@ -1231,6 +1315,8 @@ class TrackingService : Service(), LocationListener {
         }
 
         val text = parts.joinToString(" | ")
+        if (text == lastNotificationText) return
+        lastNotificationText = text
         val nm = getSystemService(NotificationManager::class.java)
         nm.notify(NOTIFICATION_ID, buildNotification(text))
     }

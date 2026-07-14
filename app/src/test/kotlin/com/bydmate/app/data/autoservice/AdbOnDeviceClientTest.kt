@@ -29,7 +29,12 @@ class AdbOnDeviceClientTest {
     private class FakeProtocol(
         var connectResult: Boolean = true,
         var connectThrows: Throwable? = null,
-        var execResponses: Map<String, String?> = emptyMap()
+        var execResponses: Map<String, String?> = emptyMap(),
+        // Fallback for any command not explicitly listed in execResponses. Defaults to a blank
+        // success (what a real redirected shell command returns) so dispatch-only tests don't
+        // need to enumerate the exact dynamic command string. Set to null to simulate a
+        // dead-socket exec failure (AdbProtocolClient.exec returns null on any transport error).
+        var execResult: String? = ""
     ) : AdbProtocol {
         var connectCalls = 0
         var disconnectCalls = 0
@@ -44,7 +49,7 @@ class AdbOnDeviceClientTest {
         }
         override fun exec(cmd: String): String? {
             execCalls += cmd
-            return execResponses[cmd]
+            return if (execResponses.containsKey(cmd)) execResponses[cmd] else execResult
         }
         override fun isConnected(): Boolean = connected
         override fun disconnect() {
@@ -187,5 +192,27 @@ class AdbOnDeviceClientTest {
             cmd.contains("\$2==\"bydmate_helper\"")
         )
         assertTrue("must kill -9 the selected pids", cmd.contains("kill -9"))
+    }
+
+    @Test
+    fun `spawnHelper reports failure when exec fails on a dead socket`() = runTest {
+        val fake = FakeProtocol(connectResult = true, execResult = null)
+        val client = newClient(fake)
+
+        client.connect()
+        val result = client.spawnHelper()
+
+        assertFalse("spawnHelper must not claim success when exec returns null", result)
+    }
+
+    @Test
+    fun `killHelper reports failure when exec fails on a dead socket`() = runTest {
+        val fake = FakeProtocol(connectResult = true, execResult = null)
+        val client = newClient(fake)
+
+        client.connect()
+        val result = client.killHelper()
+
+        assertFalse("killHelper must not claim success when exec returns null", result)
     }
 }

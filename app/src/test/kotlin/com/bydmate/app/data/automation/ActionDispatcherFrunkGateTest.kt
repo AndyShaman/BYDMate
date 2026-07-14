@@ -2,9 +2,10 @@ package com.bydmate.app.data.automation
 
 import android.app.NotificationManager
 import android.content.Context
+import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
-import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import io.mockk.coEvery
@@ -29,10 +30,9 @@ class ActionDispatcherFrunkGateTest {
 
     init {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
-dispatcher = ActionDispatcher(
-            vehicleApi, settingsRepository, helper, context,
+        dispatcher = ActionDispatcher(vehicleApi, settingsRepository, helper, context,
             dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-        )
+            mockk<ClusterVoiceControl>(relaxed = true))
     }
 
     private fun param(command: String) =

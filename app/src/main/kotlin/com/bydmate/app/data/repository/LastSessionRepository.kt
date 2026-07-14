@@ -55,6 +55,12 @@ class LastSessionRepository @Inject constructor(
     // Completed sessions, oldest first. Loaded from disk so they survive restart.
     private val completed: MutableList<Snapshot> = loadCompleted().toMutableList()
 
+    // Bookkeeping for the updateLiveSoc write-gate below -- last soc/ts that
+    // actually reached disk (not just the in-memory pending, which updates every
+    // tick regardless of the gate).
+    private var lastPersistedSoc: Int? = null
+    private var lastPersistedTs: Long = 0L
+
     fun onSessionStart(soc: Int?, ts: Long) = synchronized(lock) {
         // Seed end = start so a session that ends before any further tick still
         // carries a sane endSoc.
@@ -82,10 +88,22 @@ class LastSessionRepository @Inject constructor(
      * what makes the end SOC survive a power-cut: the last value written here is
      * the SOC at the last live moment of the drive — effectively the trip-end SOC.
      * No-op when no session is in progress.
+     *
+     * The disk write is gated to actual soc changes or a [HEARTBEAT_MS] backstop.
+     * `pending` is updated in memory unconditionally, and onSessionEnd (never gated)
+     * always persists an exact endTs on the clean-shutdown path. The hard power-cut
+     * path is the one that constrains the gate: the process dies, in-memory `pending`
+     * is lost, and on the next start reconcileStaleOpenSession finalizes the trip from
+     * the *persisted* endTs — only as fresh as the last gated write. [HEARTBEAT_MS] is
+     * therefore held below END_TOLERANCE_MS so the persisted endTs stays inside
+     * HistoryImporter's trip-end match window even across a power-cut.
      */
     fun updateLiveSoc(soc: Int, ts: Long) = synchronized(lock) {
         val p = pending ?: return
         pending = p.copy(startSoc = p.startSoc ?: soc, endSoc = soc, endTs = ts)
+        if (soc == lastPersistedSoc && ts - lastPersistedTs < HEARTBEAT_MS) return
+        lastPersistedSoc = soc
+        lastPersistedTs = ts
         persistPendingLocked()
     }
 
@@ -221,6 +239,15 @@ class LastSessionRepository @Inject constructor(
         private const val KEY_SESSIONS = "completed_sessions"
         private const val KEY_PENDING = "pending_session"
         private const val END_TOLERANCE_MS = 30_000L
+        // Max staleness of the on-disk pending endTs before updateLiveSoc forces a
+        // write even without a soc change. MUST stay below END_TOLERANCE_MS: on a hard
+        // power-cut (ignition-off, onSessionEnd never fires) reconcileStaleOpenSession
+        // finalizes the trip from this *persisted* endTs, and HistoryImporter only
+        // matches the energydata trip end within endTs + END_TOLERANCE_MS. A heartbeat
+        // >= the tolerance lets endTs lag past the match window and silently drops the
+        // trip's SOC enrichment. (Not SharedAdaptiveLoop's 60s: that heartbeat feeds
+        // TripRecorder's 5-min cold-start gap, a far looser consumer than this one.)
+        private const val HEARTBEAT_MS = 15_000L
         private const val MAX_COUNT = 20
         private const val MAX_AGE_MS = 7L * 24 * 3600 * 1000
     }

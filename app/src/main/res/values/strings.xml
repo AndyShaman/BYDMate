@@ -24,9 +24,9 @@
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
-    <string name="settings_display_size_width_desc">Ширина окна в % от ширины приборки</string>
+    <string name="settings_display_size_width_desc" formatted="false">Ширина окна в % от ширины приборки</string>
     <string name="settings_display_size_height">Высота</string>
-    <string name="settings_display_size_height_desc">Высота окна в % от высоты приборки</string>
+    <string name="settings_display_size_height_desc" formatted="false">Высота окна в % от высоты приборки</string>
     <string name="settings_display_offset_x">Сдвиг по горизонтали</string>
     <string name="settings_display_offset_x_desc">Положение окна: 0 - левый край, 50 - центр, 100 - правый край</string>
     <string name="settings_display_offset_y">Сдвиг по вертикали</string>
@@ -128,6 +128,8 @@
     <string name="settings_widget_section_header">Плавающий виджет</string>
     <string name="settings_widget_show_soc_label">Показывать виджет SOC</string>
     <string name="settings_widget_hints">• Долгий тап на виджете - скрыть до следующего открытия BYDMate.\n• Перетащить в корзину внизу - выключить совсем.\n• Обычный тап - открыть BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Скрывать при YouTube</string>
+    <string name="settings_widget_hide_youtube_description">Панель кнопок прячется, пока YouTube на экране</string>
     <string name="settings_widget_reset_position_button">Сбросить позицию</string>
     <string name="settings_reset_seat_channel">Сбросить канал сидений</string>
     <string name="settings_reset_seat_channel_hint">Если подогрев или вентиляция сидений не срабатывают после смены машины</string>
@@ -173,6 +175,7 @@
     <string name="settings_weather_attribution">Данные о погоде: Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Автозапуск: %1$s</string>
     <string name="settings_autostart_not_recorded">Автозапуск: не зафиксирован</string>
+    <string name="settings_autostart_open_button">Настройка автозапуска</string>
     <string name="settings_update_check_toggle_label">Проверять обновления</string>
     <string name="settings_update_check_toggle_description">Через 30 секунд после запуска проверять GitHub и показывать индикатор новой версии</string>
     <string name="settings_update_check_button">Проверить обновления сейчас</string>
@@ -403,6 +406,9 @@
     <string name="automation_action_sentry">Охранный режим</string>
     <string name="automation_action_sentry_on">Включить</string>
     <string name="automation_action_sentry_off">Отключить</string>
+    <string name="automation_action_cluster_projection">Вывод на приборку</string>
+    <string name="automation_action_cluster_projection_on">Включить</string>
+    <string name="automation_action_cluster_projection_off">Отключить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -814,6 +820,9 @@
     <string name="settings_config_restore_confirm_body">Текущие данные и настройки будут полностью заменены содержимым бэкапа. Отменить это действие невозможно.</string>
     <string name="settings_config_restore_confirm_ok">Восстановить</string>
     <string name="settings_config_restore_confirm_cancel">Отмена</string>
+    <string name="settings_config_export_confirm_title">Экспортировать конфигурацию?</string>
+    <string name="settings_config_export_confirm_body">Бэкап содержит историю поездок с GPS-маршрутами и введённые API-ключи в незашифрованном виде. Файл будет сохранён в общедоступную папку Download. Храните его в надёжном месте и не пересылайте посторонним.</string>
+    <string name="settings_config_export_confirm_ok">Экспортировать</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Кузов</string>
@@ -837,7 +846,7 @@
     <string name="auto_unit_kmh">км/ч</string>
     <string name="auto_unit_kpa">кПа</string>
     <string name="auto_unit_percent">%</string>
-    <string name="auto_unit_percent_open">% откр.</string>
+    <string name="auto_unit_percent_open" formatted="false">% откр.</string>
     <string name="auto_unit_volt">В</string>
     <!-- enum labels -->
     <string name="auto_enum_charging">Заряжается</string>
@@ -1166,7 +1175,7 @@
     <string name="settings_preset_hint_vercel">Кредит 5$ в месяц без карты. Часть моделей на бесплатном тарифе может отдавать ошибку 403.</string>
     <string name="settings_preset_hint_kimi">1000 запросов в день бесплатно.</string>
     <string name="settings_preset_hint_nanogpt">Подписка 8$ в месяц, оплата криптой.</string>
-    <string name="settings_preset_hint_deepseek">Оплата по факту, скидка 50% ночью по Москве.</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Оплата по факту, скидка 50% ночью по Москве.</string>
     <string name="settings_preset_hint_mistral">Бесплатно с верификацией телефона.</string>
     <string name="settings_models_header">Выбор моделей</string>
     <string name="settings_model_primary">Основная модель</string>
@@ -1178,6 +1187,24 @@
     <string name="settings_search_source_native">встроенный поиск подключения</string>
     <string name="settings_search_source_none">недоступен</string>
     <string name="settings_search_status_hint">Без ключа Exa агент использует встроенный поиск текущего подключения. Если и он недоступен, агент честно скажет, что поиск не работает.</string>
+    <string name="settings_section_service_title">Сервис и данные</string>
+    <string name="settings_battery_capacity_desc">Используется для оценки запаса хода и стоимости</string>
+    <string name="settings_tariff_home_desc">Стоимость 1 кВт·ч при зарядке дома (AC)</string>
+    <string name="settings_tariff_dc_desc">Стоимость 1 кВт·ч на быстрых зарядках</string>
+    <string name="settings_tariff_trip_desc">Каким тарифом считать стоимость поездок</string>
+    <string name="settings_consumption_good_desc">Поездки с меньшим расходом подсвечиваются зелёным</string>
+    <string name="settings_consumption_bad_desc">Поездки с большим расходом подсвечиваются красным</string>
+    <string name="settings_widget_show_desc">Заряд батареи поверх любого приложения</string>
+    <string name="settings_widget_reset_position_desc">Вернуть виджет на место по умолчанию</string>
+    <string name="settings_export_csv_desc">Вся история поездок одним файлом в папку Download</string>
+    <string name="settings_log_recording_desc">Подробный журнал работы для разбора проблем. Включайте по запросу разработчика</string>
+    <string name="settings_config_export_desc">Бэкап: история поездок с GPS и API-ключи открытым текстом, файл в папке Download</string>
+    <string name="settings_config_restore_desc">Текущие данные и настройки будут полностью заменены содержимым бэкапа</string>
+    <string name="settings_autostart_header">Автозапуск</string>
+    <string name="settings_autostart_desc">BYDMate стартует вместе с машиной. Если после обновления прошивки автозапуск слетел, включите его в системной настройке</string>
+    <string name="settings_places_inline_hint">Точка добавляется по карте или по текущему положению машины</string>
+    <string name="settings_agent_debug_row_title">Проверка и отладка</string>
+    <string name="settings_agent_debug_row_desc">Тест модели проверяет подключение, чат показывает диалог с агентом текстом</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Спасибо, что вы с BYDMate</string>

@@ -28,7 +28,6 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import org.json.JSONArray
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -37,8 +36,6 @@ import javax.inject.Singleton
 @Singleton
 class VoiceController @Inject constructor(
     private val audioCapture: AudioCapture,
-    private val asrEngine: AsrEngine,
-    private val modelManager: VoiceModelManager,
     private val actionDispatcher: ActionDispatcher,
     private val localePreferences: LocalePreferences,
     private val earcon: VoiceEarcon,
@@ -76,8 +73,9 @@ class VoiceController @Inject constructor(
     @Volatile private var droppedWhileBusy = 0
 
     /**
-     * Returns true when any voice session is active: either the continuous GigaAM session
-     * (sets _listening) or the legacy one-shot path (sets busy but not _listening).
+     * Returns true when any voice session is active: the continuous GigaAM session (sets both
+     * _listening and busy for its whole duration), or the brief window the "model not ready"
+     * branch of onPttPressed() holds busy while it journals and announces the failure.
      * Used by VoiceAutomationActions to gate speak/agent_query actions.
      */
     fun sessionActive(): Boolean = listening.value || busy.get()
@@ -198,99 +196,6 @@ class VoiceController @Inject constructor(
         gate.preferredLang()
             ?: if ((localePreferences.getLanguage() ?: "ru") == "en") VoiceLang.EN else VoiceLang.RU
 
-    fun startSession() {
-        if (!gate.isEnabled()) return
-        if (!busy.compareAndSet(false, true)) return
-        ensureSupertonicStressDict()
-        // A previous continuous-session hard stop leaves stopRequested set; a fresh legacy
-        // one-shot session must not inherit it, or every announce() would be suppressed.
-        stopRequested.set(false)
-        // Barge-in: kill any ongoing TTS so it neither talks over the user
-        // nor bleeds into the mic capture.
-        runCatching { ttsEngine.stop() }
-        val lang = currentLang()
-        // Return early if the model for this language is not yet downloaded/ready.
-        if (!asrEngine.isModelReady(lang)) {
-            // Set the terminal state BEFORE releasing busy — otherwise a concurrent startSession()
-            // could win the busy CAS and set Listening, which this stale write would then clobber.
-            _state.value = VoiceUiState.NotUnderstood("")
-            // Outcome.ERROR (not NOT_UNDERSTOOD): a missing model is a system fault, not the driver
-            // going unrecognized — the UI still degrades to NotUnderstood (no dedicated crash state).
-            record(VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR,
-                "Модель распознавания не готова", "Voice model not ready for lang=$lang")
-            busy.set(false)
-            scheduleIdleReset()
-            // No suspend context here (this is the synchronous early-return path) — hop onto the
-            // controller's own scope so the driver still gets an overlay, not just silence.
-            scope.launch { announce("Голос", "Голосовая модель не загружена", "Голосовая модель не загружена") }
-            return
-        }
-        scope.launch {
-            try {
-                _state.value = VoiceUiState.Listening
-                // Vocabulary source seam: built-in lexicon + user automation phrases.
-                val vocab = VoiceLexicon.vocabulary(lang) + automationResolver.phrases()
-                val vocabJson = JSONArray(vocab).toString()
-                val pcm = audioCapture.captureSession()
-
-                // Stream recognition. Early-fire the instant a confident command stabilises across a
-                // few partials; otherwise route the Vosk VAD final (end of phrase). lastPartial/stable
-                // count IDENTICAL hypotheses, so a phrase that is a prefix of a longer one
-                // ("открой окно" before "...водителя") does NOT fire while the user is still talking —
-                // the partial keeps changing and resets the counter, and the correct longer command
-                // resolves at the final instead.
-                // See routeUtterance: an unanswered agent question routes this whole
-                // utterance to the agent — skip NLU resolution AND early-fire.
-                val followUp = runCatching { agentOrchestrator.expectsFollowUp() }.getOrDefault(false)
-                var lastPartial = ""
-                var stable = 0
-                var chosen: Resolution? = null
-                var transcript = ""
-                try {
-                    asrEngine.recognize(pcm, lang, vocabJson).collect { ev ->
-                        when (ev) {
-                            is AsrEvent.Partial -> {
-                                if (ev.text == lastPartial) stable++ else { lastPartial = ev.text; stable = 1 }
-                                // Resolve once per stable plateau (== guard) to avoid re-querying the DB.
-                                // Aperture OPENs are excluded from early-fire (see isEarlyFireable):
-                                // they wait for the final so a mid-phrase pause can't open the wrong one.
-                                if (!followUp && stable == EARLY_FIRE_STABLE_READS) {
-                                    resolve(ev.text, lang)?.takeIf { isEarlyFireable(it) }
-                                        ?.let { chosen = it; transcript = ev.text; throw StopCollect }
-                                }
-                            }
-                            is AsrEvent.Final -> {
-                                chosen = if (followUp) null else resolve(ev.text, lang)
-                                transcript = ev.text
-                                throw StopCollect
-                            }
-                        }
-                    }
-                } catch (e: StopCollect) {
-                    // Expected: stop capture on the first actionable event (early-fire or final).
-                }
-
-                _state.value = VoiceUiState.Thinking
-                val res = chosen
-                if (res != null) apply(res, transcript)
-                else agentFallback(transcript)
-            } catch (t: Throwable) {
-                // A real coroutine cancellation must propagate; only genuine failures fall through.
-                if (t is CancellationException) throw t
-                earcon.fail()
-                _state.value = VoiceUiState.NotUnderstood("")
-                // Outcome.ERROR (not NOT_UNDERSTOOD): a genuine pipeline crash, not the driver going
-                // unrecognized — the UI still degrades to NotUnderstood (no dedicated crash state).
-                record(VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR, null,
-                    "Voice session failed: ${t.message}")
-                announce("Голос", "Отказ: ${t.message ?: "внутренняя ошибка"}", "Ошибка")
-            } finally {
-                busy.set(false)
-                scheduleIdleReset()
-            }
-        }
-    }
-
     /** Supertonic voices need a side-loaded dictionary for uppercase stress marking. This runs
      *  out-of-band so a missing network/dict never blocks recognition; [TtsModelManager] itself
      *  no-ops when the file is already present and fails soft when it cannot be fetched. */
@@ -303,8 +208,10 @@ class VoiceController @Inject constructor(
     }
 
     /** PTT toggle (Wave B): no session running -> start one (continuous GigaAM session when the
-     *  model is ready and the language is RU, else the legacy one-shot path, unchanged); a
-     *  continuous session already listening -> stop it immediately (barge-in stops TTS too). */
+     *  model is ready and the language is RU, else the GigaAM model is missing or the language is
+     *  non-RU (GigaAM does not support it) -> report "model not ready" without starting a
+     *  session); a continuous session already listening -> stop it immediately (barge-in stops
+     *  TTS too). */
     fun onPttPressed() {
         if (!gate.isEnabled()) return
         if (_listening.value) {
@@ -314,16 +221,30 @@ class VoiceController @Inject constructor(
         if (continuousAsr.isReady() && currentLang() == VoiceLang.RU) {
             startContinuousSession()
         } else {
-            startSession()
+            // GigaAM model missing (or non-RU language, which GigaAM does not support):
+            // preserve the degraded UX the legacy path produced — overlay + journal ERROR.
+            if (!busy.compareAndSet(false, true)) return
+            // A prior continuous-session hard stop (stopContinuousSession()) leaves stopRequested
+            // set; only startContinuousSession() used to clear it. Without this reset, announce()
+            // below would silently suppress this branch's overlay+speech forever for a user who
+            // can never start a continuous session again to reset the flag (I-1).
+            stopRequested.set(false)
+            _state.value = VoiceUiState.NotUnderstood("")
+            record(VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR,
+                "Модель распознавания не готова", "GigaAM model not ready for lang=${currentLang()}")
+            busy.set(false)
+            scheduleIdleReset()
+            scope.launch { announce("Голос", "Голосовая модель не загружена", "Голосовая модель не загружена") }
         }
     }
 
     /** Continuous PTT-toggled session (Wave B): one long-lived mic capture feeds VAD-segmented
-     *  utterances into the same NLU/agent router the legacy one-shot path uses (routeUtterance),
-     *  so a follow-up question from the agent keeps listening for free — the loop just collects
-     *  again. Auto-stops after SILENCE_AUTOSTOP_MS of continuous silence (Wave P: no session cap). */
+     *  utterances into the shared NLU/agent router (routeUtterance), so a follow-up question from
+     *  the agent keeps listening for free — the loop just collects again. Auto-stops after
+     *  SILENCE_AUTOSTOP_MS of continuous silence (Wave P: no session cap). */
     private fun startContinuousSession() {
         if (!busy.compareAndSet(false, true)) return
+        ensureSupertonicStressDict()
         // Barge-in: kill any ongoing TTS so it neither talks over the user nor bleeds into capture.
         runCatching { ttsEngine.stop() }
         lastSpeakingSeenMs = 0L
@@ -526,19 +447,6 @@ class VoiceController @Inject constructor(
             is ParseResult.Volume -> Resolution.Vol(r.payload)
             ParseResult.Unrecognized -> automationResolver.match(text)?.let { Resolution.Auto(it) }
         }
-
-    /** Whether a resolved command may fire from a stable PARTIAL (early-fire). Aperture OPEN
-     *  commands (window/sunroof/sunshade open / vent / half) are NOT: a bare noun like "открой окно"
-     *  resolves to the all-windows command, yet the user may still add a qualifier ("...водителя")
-     *  that yields a DIFFERENT command. For those we wait for the Vosk final so a mid-phrase pause
-     *  can't open the wrong aperture. Everything else (close, climate, volume, lights, locks, seats,
-     *  automations) early-fires as before. The final path is never gated — by then the phrase is
-     *  complete. */
-    private fun isEarlyFireable(res: Resolution): Boolean =
-        !(res is Resolution.Cmd && (
-            ActionDispatcher.isWindowOpenCommand(res.command) ||
-                ActionDispatcher.isSunroofOpenCommand(res.command) ||
-                ActionDispatcher.isSunshadeOpenCommand(res.command)))
 
     /** Execute a resolved command and set the terminal voice UI state. decodeMs is null for the
      *  legacy one-shot path (no per-utterance decode timing there). */
@@ -858,11 +766,6 @@ class VoiceController @Inject constructor(
         // when the spoken answer finishes (or from when it is shown, if TTS is off).
         private const val DIALOG_CLEAR_MS = 6_000L
 
-        // Consecutive identical partials (~100 ms each) a resolved command must hold before early-fire.
-        // 3 ≈ 300 ms of "no new words", short enough to feel instant, long enough that a phrase still
-        // being spoken (whose partial keeps changing) never fires prematurely.
-        private const val EARLY_FIRE_STABLE_READS = 3
-
         // Continuous session (Wave B): silence auto-stop. Wave P removed the hard session cap --
         // long conversations must never be cut off; silence is the only automatic exit.
         private const val SILENCE_AUTOSTOP_MS = 30_000L
@@ -885,11 +788,5 @@ class VoiceController @Inject constructor(
 }
 
 /** Control-flow signal to auto-stop the continuous session on prolonged silence. A
- *  CancellationException so it tears down the collect chain (mic, VAD, recognizer) cleanly,
- *  mirroring StopCollect below. */
+ *  CancellationException so it tears down the collect chain (mic, VAD, recognizer) cleanly. */
 private object StopSession : CancellationException("voice-session-silence-timeout")
-
-/** Control-flow signal to stop collecting the recognition flow on the first actionable event. A
- *  CancellationException so it tears down the upstream capture (releases the mic) cleanly; caught
- *  right around the collect, never reaching the session's failure handler. */
-private object StopCollect : CancellationException("voice-asr-stop")

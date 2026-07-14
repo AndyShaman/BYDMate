@@ -578,6 +578,9 @@ private fun EditorDialog(
                             },
                             onAddAgentQuery = {
                                 onUpdate { copy(actions = actions + newAgentQueryAction(context)) }
+                            },
+                            onAddCluster = {
+                                onUpdate { copy(actions = actions + newClusterAction(context)) }
                             }
                         )
                     }
@@ -1266,6 +1269,8 @@ private fun ActionRow(
                 MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "sentry" ->
                 SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "cluster_projection" ->
+                ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "speak" ->
                 SpeakActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "agent_query" ->
@@ -1472,6 +1477,43 @@ private fun SentryActionControls(
     val onLabel = stringResource(R.string.automation_action_sentry_on)
     val offLabel = stringResource(R.string.automation_action_sentry_off)
     val displayLabel = stringResource(R.string.automation_action_sentry)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.weight(1f))
+        Text(
+            if (isEnabled) onLabel else offLabel,
+            fontSize = 13.sp,
+            color = if (isEnabled) AccentGreen else TextSecondary
+        )
+        Spacer(Modifier.width(6.dp))
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { checked ->
+                val payload = if (checked) "1" else "0"
+                val name = if (checked) onLabel else offLabel
+                onUpdate(action.copy(payload = payload, displayName = "$displayLabel: $name"))
+            },
+            colors = bydSwitchColors()
+        )
+    }
+}
+
+// --- Cluster Projection Action Controls ---
+
+@Composable
+private fun ClusterActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled = action.payload == "1"
+    val onLabel = stringResource(R.string.automation_action_cluster_projection_on)
+    val offLabel = stringResource(R.string.automation_action_cluster_projection_off)
+    val displayLabel = stringResource(R.string.automation_action_cluster_projection)
 
     Row(
         modifier = modifier,
@@ -1736,7 +1778,8 @@ private fun AddActionButton(
     onAddMediaVolume: () -> Unit,
     onAddSentry: () -> Unit,
     onAddSpeak: () -> Unit,
-    onAddAgentQuery: () -> Unit
+    onAddAgentQuery: () -> Unit,
+    onAddCluster: () -> Unit
 ) {
     val context = LocalContext.current
     var menuExpanded by remember { mutableStateOf(false) }
@@ -1817,6 +1860,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_agent_query), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddAgentQuery() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddCluster() }
             )
         }
     }

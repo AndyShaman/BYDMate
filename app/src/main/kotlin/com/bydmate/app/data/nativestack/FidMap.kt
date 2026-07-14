@@ -29,6 +29,7 @@ object FidMap {
         // Gear + state
         FidEntry("gear",                 1011, 555745336,    5, Decoder.INT_ENUM),
         FidEntry("chargeGunState",       1009, 876609586,    5, Decoder.INT_ENUM),
+        FidEntry("bmsState",             1009, 876609560,    5, Decoder.INT_ENUM),  // 1=CHARGING, 2=FINISH, 13=PAUSE
         // Climate
         FidEntry("acStatus",             1000, 1077936144,   5, Decoder.INT_ENUM),
         FidEntry("acTemp",               1000, 1077936168,   5, Decoder.INT_TEMP_C),

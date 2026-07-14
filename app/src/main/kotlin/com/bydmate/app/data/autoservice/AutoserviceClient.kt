@@ -28,10 +28,23 @@ interface AutoserviceClient {
     suspend fun getEnginePowerKw(): Int?
 }
 
+/** Per-key log throttle: allows one line per key per window; pure function of (key, now) state. */
+internal class LogThrottle(private val windowMs: Long = 60_000L) {
+    private val lastTs = java.util.concurrent.ConcurrentHashMap<String, Long>()
+    fun shouldLog(key: String, nowMs: Long = System.currentTimeMillis()): Boolean {
+        val prev = lastTs[key]
+        if (prev != null && nowMs - prev < windowMs) return false
+        lastTs[key] = nowMs
+        return true
+    }
+}
+
 @Singleton
 class AutoserviceClientImpl @Inject constructor(
     private val adb: AdbOnDeviceClient
 ) : AutoserviceClient {
+
+    private val logThrottle = LogThrottle()
 
     override suspend fun isAvailable(): Boolean {
         // Lazy reconnect: protocol singleton lives in process memory only.
@@ -56,12 +69,20 @@ class AutoserviceClientImpl @Inject constructor(
     override suspend fun getInt(dev: Int, fid: Int): Int? {
         val cmd = "service call autoservice ${FidRegistry.TX_GET_INT} i32 $dev i32 $fid"
         val raw = adb.exec(cmd)
-        if (raw == null) { Log.w(TAG, "getInt($dev,$fid): exec null"); return null }
+        if (raw == null) {
+            if (logThrottle.shouldLog("getInt:$dev:$fid")) Log.w(TAG, "getInt($dev,$fid): exec null")
+            return null
+        }
         val value = parseParcelInt(raw)
-        if (value == null) { Log.w(TAG, "getInt($dev,$fid): parse failed: ${raw.take(160)}"); return null }
+        if (value == null) {
+            if (logThrottle.shouldLog("getInt:$dev:$fid")) Log.w(TAG, "getInt($dev,$fid): parse failed: ${raw.take(160)}")
+            return null
+        }
         val decoded = SentinelDecoder.decodeInt(value)
         if (decoded == null) {
-            Log.w(TAG, "getInt($dev,$fid): sentinel raw=0x${"%08x".format(value)} (${value})")
+            if (logThrottle.shouldLog("getInt:$dev:$fid")) {
+                Log.w(TAG, "getInt($dev,$fid): sentinel raw=0x${"%08x".format(value)} (${value})")
+            }
         }
         return decoded
     }
@@ -69,12 +90,20 @@ class AutoserviceClientImpl @Inject constructor(
     override suspend fun getFloat(dev: Int, fid: Int): Float? {
         val cmd = "service call autoservice ${FidRegistry.TX_GET_FLOAT} i32 $dev i32 $fid"
         val raw = adb.exec(cmd)
-        if (raw == null) { Log.w(TAG, "getFloat($dev,$fid): exec null"); return null }
+        if (raw == null) {
+            if (logThrottle.shouldLog("getFloat:$dev:$fid")) Log.w(TAG, "getFloat($dev,$fid): exec null")
+            return null
+        }
         val bits = parseParcelInt(raw)
-        if (bits == null) { Log.w(TAG, "getFloat($dev,$fid): parse failed: ${raw.take(160)}"); return null }
+        if (bits == null) {
+            if (logThrottle.shouldLog("getFloat:$dev:$fid")) Log.w(TAG, "getFloat($dev,$fid): parse failed: ${raw.take(160)}")
+            return null
+        }
         val decoded = SentinelDecoder.parseFloatFromShellInt(bits)
         if (decoded == null) {
-            Log.w(TAG, "getFloat($dev,$fid): sentinel bits=0x${"%08x".format(bits)} (raw float=${java.lang.Float.intBitsToFloat(bits)})")
+            if (logThrottle.shouldLog("getFloat:$dev:$fid")) {
+                Log.w(TAG, "getFloat($dev,$fid): sentinel bits=0x${"%08x".format(bits)} (raw float=${java.lang.Float.intBitsToFloat(bits)})")
+            }
         }
         return decoded
     }

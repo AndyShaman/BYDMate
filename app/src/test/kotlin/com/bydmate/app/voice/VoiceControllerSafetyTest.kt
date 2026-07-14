@@ -16,11 +16,12 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOf
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.fail
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
@@ -47,16 +48,53 @@ class VoiceControllerSafetyTest {
         every { speaking } returns MutableStateFlow(false)
     }
 
+    /** Drivable double for the continuous session: `ready` gates onPttPressed()'s branch, and
+     *  tests push one scripted utterance at a time onto [events] once the controller has
+     *  subscribed. pcm is intentionally ignored -- no test in this file exercises frame muting. */
+    private class FakeContinuousAsr(var ready: Boolean = true) : ContinuousAsr {
+        val events = MutableSharedFlow<ContinuousAsrEvent>(extraBufferCapacity = 16)
+        override fun isReady(): Boolean = ready
+        override fun transcribe(pcm: Flow<ShortArray>): Flow<ContinuousAsrEvent> = events
+    }
+
+    /** transcribe() throws the instant it is collected -- reproduces the top-level
+     *  catch(t: Throwable) path in startContinuousSession() (a broken recognizer stream). */
+    private class FailingContinuousAsr : ContinuousAsr {
+        override fun isReady(): Boolean = true
+        override fun transcribe(pcm: Flow<ShortArray>): Flow<ContinuousAsrEvent> = flow {
+            throw RuntimeException("boom")
+        }
+    }
+
+    /** Polls [condition] instead of a blind Thread.sleep -- deterministic-ish and fails fast in
+     *  the common case. VoiceController's coroutine scope is a real, non-injected
+     *  CoroutineScope(SupervisorJob()) with no test-dispatcher seam, so true virtual-time control
+     *  (runTest) is not available without changing the production constructor; this is the closest
+     *  practical alternative. */
+    private fun awaitTrue(timeoutMs: Long = 2_000L, condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            if (condition()) return
+            Thread.sleep(20)
+        }
+        if (!condition()) fail("condition not met within ${timeoutMs}ms")
+    }
+
+    /** `listening` flips true synchronously inside onPttPressed(), before the session coroutine
+     *  has actually started running on its dispatcher -- so waiting on `listening` alone races
+     *  with FakeContinuousAsr's collector subscribing. subscriptionCount is the real barrier: a
+     *  tryEmit before any collector attaches (replay = 0) is simply lost. */
+    private fun awaitSubscribed(events: MutableSharedFlow<*>) = awaitTrue { events.subscriptionCount.value >= 1 }
+
     private fun makeController(
         gateEnabled: Boolean,
         snapshot: DiParsData?,
         dispatcher: ActionDispatcher,
-        // Parameterized so callers can inject any transcript for NLU tests.
-        recognizedPhrase: String = windowClosePhrase,
         journal: VoiceJournal = VoiceJournal(),
         ttsEnabled: Boolean = false,
         ttsEngine: TtsEngine = quietTtsEngine(),
         agentIdentity: () -> AgentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
+        continuousAsr: ContinuousAsr = FakeContinuousAsr(ready = true),
     ): VoiceController {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns gateEnabled
@@ -68,13 +106,6 @@ class VoiceControllerSafetyTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        // Single Final event reproduces the old "recognize the whole phrase, then route" behaviour.
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(recognizedPhrase))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
-
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
 
@@ -82,7 +113,6 @@ class VoiceControllerSafetyTest {
 
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
@@ -90,9 +120,9 @@ class VoiceControllerSafetyTest {
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        return VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            ttsEngine, journal, mockk<ContinuousAsr>(relaxed = true), agentIdentity = agentIdentity,
+            ttsEngine, journal, continuousAsr, agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
@@ -100,9 +130,9 @@ class VoiceControllerSafetyTest {
 
     private fun makeControllerWithAutomation(
         dispatcher: ActionDispatcher,
-        recognizedPhrase: String,
         matchedRuleId: Long,
         journal: VoiceJournal = VoiceJournal(),
+        continuousAsr: ContinuousAsr = FakeContinuousAsr(ready = true),
     ): VoiceController {
         val gate = mockk<VoiceGate>()
         every { gate.isEnabled() } returns true
@@ -113,13 +143,6 @@ class VoiceControllerSafetyTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        // Single Final event reproduces the old "recognize the whole phrase, then route" behaviour.
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(recognizedPhrase))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
-
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
 
@@ -129,7 +152,6 @@ class VoiceControllerSafetyTest {
         coEvery { automationEngine.fireVoiceRule(any(), any()) } returns VoiceFireResult.Fired(true)
 
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns matchedRuleId
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
@@ -137,9 +159,9 @@ class VoiceControllerSafetyTest {
         // Default: no pending agent question (individual tests override AFTER construction).
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        return VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), journal, mockk<ContinuousAsr>(relaxed = true),
+            quietTtsEngine(), journal, continuousAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
@@ -148,8 +170,8 @@ class VoiceControllerSafetyTest {
 
     /**
      * Assertion 1: execute() passes the live snapshot (not null) to dispatch.
-     * Mocks gate.vehicleSnapshot() = DiParsData(speed=120), calls startSession(),
-     * waits for the internal coroutine (VoiceController uses Dispatchers.Default),
+     * Mocks gate.vehicleSnapshot() = DiParsData(speed=120), starts a continuous session and feeds
+     * it one utterance, waits for the internal coroutine (VoiceController uses Dispatchers.Default),
      * then asserts the captured 'data' arg has speed=120.
      * Uses a CLOSE command so the null-snapshot fail-closed guard (Fix A) does not fire.
      */
@@ -180,8 +202,12 @@ class VoiceControllerSafetyTest {
 
         // windowClosePhrase ("закрой окна") → "车窗关闭" → isWindowOpenCommand = false,
         // so the fail-closed guard is not activated and dispatch is reached.
-        val controller = makeController(gateEnabled = true, snapshot = snapshot, dispatcher = dispatcher)
-        controller.startSession()
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(gateEnabled = true, snapshot = snapshot, dispatcher = dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
 
         // Give the internal SupervisorJob coroutine time to execute.
         Thread.sleep(500)
@@ -193,16 +219,16 @@ class VoiceControllerSafetyTest {
 
     /**
      * Assertion 2: Disabled VoiceGate prevents dispatch from being called at all.
-     * gate.isEnabled() = false → startSession() returns immediately before the coroutine launches.
+     * gate.isEnabled() = false → onPttPressed() returns immediately, no session is ever started.
      */
     @Test
     fun `disabled gate blocks session — dispatch is never called`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val controller = makeController(gateEnabled = false, snapshot = null, dispatcher = dispatcher)
 
-        controller.startSession()
+        controller.onPttPressed()
 
-        // No coroutine was launched; nothing to wait for.
+        // No session was started; nothing to wait for.
         Thread.sleep(200)
 
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
@@ -213,15 +239,18 @@ class VoiceControllerSafetyTest {
      * CLOSED — ActionDispatcher.getBlockReason() returns null (no block) when data == null, which
      * would otherwise let a voice "открой окна" through unchecked at unknown speed. VoiceController
      * must intercept this itself, before ever calling dispatch.
-     * "открой окна" resolves to "车窗全开" (isWindowOpenCommand == true) per the comment on the
-     * aperture-open early-fire test below.
+     * "открой окна" resolves to "车窗全开" (isWindowOpenCommand == true).
      */
     @Test fun `null snapshot fail-closed blocks window-open command, no dispatch`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
-            gateEnabled = true, snapshot = null, dispatcher = dispatcher, recognizedPhrase = "открой окна"
+            gateEnabled = true, snapshot = null, dispatcher = dispatcher, continuousAsr = fakeAsr
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("открой окна"))
         Thread.sleep(500)
 
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
@@ -235,10 +264,14 @@ class VoiceControllerSafetyTest {
      */
     @Test fun `null snapshot fail-closed blocks sunroof-open command, no dispatch`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
-            gateEnabled = true, snapshot = null, dispatcher = dispatcher, recognizedPhrase = "открой люк"
+            gateEnabled = true, snapshot = null, dispatcher = dispatcher, continuousAsr = fakeAsr
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("открой люк"))
         Thread.sleep(500)
 
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
@@ -253,10 +286,14 @@ class VoiceControllerSafetyTest {
     @Test fun `null snapshot still dispatches non-window command`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
-            gateEnabled = true, snapshot = null, dispatcher = dispatcher, recognizedPhrase = "включи кондиционер"
+            gateEnabled = true, snapshot = null, dispatcher = dispatcher, continuousAsr = fakeAsr
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("включи кондиционер"))
         Thread.sleep(500)
 
         coVerify(exactly = 1) { dispatcher.dispatch(match { it.command == "自动空调" }, any()) }
@@ -272,10 +309,14 @@ class VoiceControllerSafetyTest {
     @Test
     fun `unrecognized builtin but matched automation fires the rule`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeControllerWithAutomation(
-            dispatcher = dispatcher, recognizedPhrase = "навигатор", matchedRuleId = 42L
+            dispatcher = dispatcher, matchedRuleId = 42L, continuousAsr = fakeAsr
         )
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(300)
         // Built-in param-path must NOT be called when automation resolver handles it.
         coVerify(exactly = 0) { dispatcher.dispatch(match { it.kind == "param" }, any()) }
@@ -305,29 +346,42 @@ class VoiceControllerSafetyTest {
             captured.set(firstArg<ActionDef>().command); DispatchResult(true)
         }
         val snap = snapshotWithAcTemp(22)
-        val controller = makeController(true, snap, dispatcher, recognizedPhrase = "теплее")
-        controller.startSession()
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(true, snap, dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("теплее"))
         Thread.sleep(500)
         assertEquals("设置温度23", captured.get())
     }
 
     @Test fun `relative warmer with null acTemp is blocked, no dispatch`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val controller = makeController(true, snapshotWithAcTemp(null), dispatcher, recognizedPhrase = "теплее")
-        controller.startSession()
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(true, snapshotWithAcTemp(null), dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("теплее"))
         Thread.sleep(500)
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
     @Test fun `voice state auto-returns to Idle after a terminal state`() {
-        // "навигатор" is unrecognized by NluParser and automationResolver.match() returns null
-        // (makeController default) → terminal NotUnderstood. The state must then fall back to Idle
-        // on its own instead of sticking red. Short reset delay via the test seam.
+        // scheduleIdleReset() now only fires from onPttPressed()'s "model not ready" branch: the
+        // continuous per-utterance path never sticks on a terminal state on its own -- it goes
+        // back to Listening on the next utterance, and to Idle immediately when the session itself
+        // ends. continuousAsr.isReady() == false drives that branch without starting a session.
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val controller = makeController(true, null, dispatcher, recognizedPhrase = "навигатор")
+        val fakeAsr = FakeContinuousAsr(ready = false)
+        val controller = makeController(true, null, dispatcher, continuousAsr = fakeAsr)
         controller.idleResetDelayMs = 50L
-        controller.startSession()
-        // Session completes immediately (empty capture flow) → NotUnderstood, then ~50ms → Idle.
+
+        controller.onPttPressed()
+        assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
+
+        // ~50ms later the scheduled reset fires.
         Thread.sleep(400)
         assertEquals(VoiceUiState.Idle, controller.state.value)
     }
@@ -338,177 +392,15 @@ class VoiceControllerSafetyTest {
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
             captured.set(firstArg<ActionDef>()); DispatchResult(true)
         }
-        val controller = makeController(true, null, dispatcher, recognizedPhrase = "сделай громче")
-        controller.startSession()
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(true, null, dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("сделай громче"))
         Thread.sleep(500)
         assertEquals("media_volume", captured.get()?.kind)
         assertEquals("+1", captured.get()?.payload)
-    }
-
-    // Streaming helper: drives the controller with a scripted AsrEvent flow so partial/final routing
-    // and early-fire can be exercised directly (the regular helpers emit a single Final).
-    private fun makeControllerStreaming(
-        dispatcher: ActionDispatcher,
-        events: Flow<AsrEvent>,
-        snapshot: DiParsData? = null,
-        journal: VoiceJournal = VoiceJournal(),
-    ): VoiceController {
-        val gate = mockk<VoiceGate>()
-        every { gate.isEnabled() } returns true
-        every { gate.vehicleSnapshot() } returns snapshot
-        every { gate.preferredLang() } returns null
-        every { gate.ttsEnabled() } returns false
-
-        val audioCapture = mockk<AudioCapture>(relaxed = true)
-        every { audioCapture.captureSession(any()) } returns flow { /* empty */ }
-
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        every { asrEngine.recognize(any(), any(), any()) } returns events
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
-        val localePrefs = mockk<LocalePreferences>(relaxed = true)
-        every { localePrefs.getLanguage() } returns "ru"
-        val earcon = mockk<VoiceEarcon>(relaxed = true)
-        val automationEngine = mockk<AutomationEngine>(relaxed = true)
-        val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
-        coEvery { automationResolver.match(any()) } returns null
-
-        val agentOrchestrator = mockk<AgentOrchestrator>()
-        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
-        // Default: no pending agent question (individual tests override AFTER construction).
-        coEvery { agentOrchestrator.expectsFollowUp() } returns false
-
-        return VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), journal, mockk<ContinuousAsr>(relaxed = true),
-            agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
-            ttsModelManager = mockk(relaxed = true),
-            ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
-    }
-
-    /**
-     * Early-fire: a confident command that stabilises across EARLY_FIRE_STABLE_READS (3) identical
-     * partials is executed immediately — before the Vosk VAD final arrives. The bare verb "закрой"
-     * does not resolve (no device) so it never fires; the full "закрой окна" held for 3 reads does.
-     * The Final carries a different phrase that must NEVER be routed (proves early-fire won).
-     */
-    @Test fun `early-fires on a stable resolved partial before the final`() {
-        val captured = AtomicReference<String?>(null)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            captured.set(firstArg<ActionDef>().command); DispatchResult(true)
-        }
-        val events = flow {
-            emit(AsrEvent.Partial("закрой"))
-            emit(AsrEvent.Partial("закрой окна"))
-            emit(AsrEvent.Partial("закрой окна"))
-            emit(AsrEvent.Partial("закрой окна"))   // 3rd identical → early-fire
-            emit(AsrEvent.Final("совершенно другое"))
-        }
-        val controller = makeControllerStreaming(dispatcher, events)
-        controller.startSession()
-        Thread.sleep(500)
-        assertEquals("车窗关闭", captured.get())
-    }
-
-    /**
-     * Prefix-misfire guard: an aperture OPEN must NOT early-fire, because a bare noun resolves to a
-     * DIFFERENT command than the qualified phrase. "открой окна" → 车窗全开 (all windows) holds stable
-     * for 3 reads while the user pauses mid-phrase, but it must wait for the Vosk final
-     * "открой окно водителя" → 主驾打开100 (driver). Without the guard, early-fire would open all
-     * windows instead of the driver's.
-     * Uses a known-speed snapshot (not the default null) — the final resolves to a window-OPEN
-     * command, and a null snapshot would now correctly fail-closed (Finding 1) before dispatch,
-     * which is not what this test is exercising.
-     */
-    @Test fun `aperture-open partial does not early-fire — waits for the qualified final`() {
-        val captured = AtomicReference<String?>(null)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            captured.set(firstArg<ActionDef>().command); DispatchResult(true)
-        }
-        val events = flow {
-            emit(AsrEvent.Partial("открой окна"))
-            emit(AsrEvent.Partial("открой окна"))
-            emit(AsrEvent.Partial("открой окна"))   // 3rd identical → would early-fire 车窗全开 if ungated
-            emit(AsrEvent.Final("открой окно водителя"))
-        }
-        val controller = makeControllerStreaming(dispatcher, events, snapshot = snapshotWithAcTemp(null))
-        controller.startSession()
-        Thread.sleep(500)
-        assertEquals("主驾打开100", captured.get())
-    }
-
-    /**
-     * Sunroof mirror of the aperture-open early-fire guard: after the T12 predicate split 天窗
-     * left isWindowOpenCommand, so "открой люк" partials would early-fire unless the guard also
-     * checks isSunroofOpenCommand. Known-speed snapshot so a dispatch, if any, is not stopped by
-     * the fail-closed guard — exactly one dispatch (the final) must happen.
-     */
-    @Test fun `sunroof-open partial does not early-fire — waits for the final`() {
-        val captured = AtomicReference<String?>(null)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            captured.set(firstArg<ActionDef>().command); DispatchResult(true)
-        }
-        val events = flow {
-            emit(AsrEvent.Partial("открой люк"))
-            emit(AsrEvent.Partial("открой люк"))
-            emit(AsrEvent.Partial("открой люк"))   // 3rd identical → would early-fire 天窗打开100 if ungated
-            emit(AsrEvent.Final("закрой люк"))
-        }
-        val controller = makeControllerStreaming(dispatcher, events, snapshot = snapshotWithAcTemp(null))
-        controller.startSession()
-        Thread.sleep(500)
-        coVerify(exactly = 1) { dispatcher.dispatch(any(), any()) }
-        assertEquals("天窗打开0", captured.get())
-    }
-
-    /**
-     * Sunshade mirror: 遮阳帘 is in NEITHER speed predicate after the split (it is never
-     * speed-gated), but it is still an aperture whose bare-noun partial can be qualified —
-     * the early-fire guard uses isSunshadeOpenCommand to keep waiting for the final.
-     */
-    @Test fun `sunshade-open partial does not early-fire — waits for the final`() {
-        val captured = AtomicReference<String?>(null)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            captured.set(firstArg<ActionDef>().command); DispatchResult(true)
-        }
-        val events = flow {
-            emit(AsrEvent.Partial("открой шторку"))
-            emit(AsrEvent.Partial("открой шторку"))
-            emit(AsrEvent.Partial("открой шторку"))   // 3rd identical → would early-fire 遮阳帘打开 if ungated
-            emit(AsrEvent.Final("закрой шторку"))
-        }
-        val controller = makeControllerStreaming(dispatcher, events, snapshot = snapshotWithAcTemp(null))
-        controller.startSession()
-        Thread.sleep(500)
-        coVerify(exactly = 1) { dispatcher.dispatch(any(), any()) }
-        assertEquals("遮阳帘关闭", captured.get())
-    }
-
-    /**
-     * No partial stabilises into a command (the lone "ммм" never resolves), so routing falls through
-     * to the Vosk VAD final, which resolves and dispatches normally.
-     */
-    @Test fun `routes the final when no partial stabilises into a command`() {
-        val captured = AtomicReference<String?>(null)
-        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
-            captured.set(firstArg<ActionDef>().command); DispatchResult(true)
-        }
-        val events = flow {
-            emit(AsrEvent.Partial("ммм"))
-            emit(AsrEvent.Final("закрой окна"))
-        }
-        val controller = makeControllerStreaming(dispatcher, events)
-        controller.startSession()
-        Thread.sleep(500)
-        assertEquals("车窗关闭", captured.get())
     }
 
     // --- Task 4: every terminal outcome is also spoken, not only shown as an overlay ---
@@ -517,12 +409,16 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val ttsEngine = quietTtsEngine()
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
             gateEnabled = true, snapshot = null, dispatcher = dispatcher,
-            ttsEnabled = true, ttsEngine = ttsEngine,
+            ttsEnabled = true, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
         Thread.sleep(500)
 
         val navigatorDonePool = listOf("Готово. Что-нибудь ещё?", "Сделано, командир.",
@@ -534,13 +430,18 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val ttsEngine = quietTtsEngine()
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
             gateEnabled = true, snapshot = null, dispatcher = dispatcher,
             ttsEnabled = true, ttsEngine = ttsEngine,
             agentIdentity = { AgentIdentity("", AgentPersona.ENGINEER) },
+            continuousAsr = fakeAsr,
         )
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
         Thread.sleep(500)
 
         val engineerDonePool = listOf("Есть.", "Выполнено.", "Принято. Сделано.", "Готово.")
@@ -555,29 +456,26 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns true
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns false
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val ttsEngine = quietTtsEngine()
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        // "Голосовая модель не загружена" is a literal fixed string, not drawn from a persona
+        // done-pool — this is what "non-canonical" means here (see the two pool-based tests above).
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            ttsEngine, VoiceJournal(), mockk<ContinuousAsr>(relaxed = true),
+            ttsEngine, VoiceJournal(), FakeContinuousAsr(ready = false),
             agentIdentity = { AgentIdentity("", AgentPersona.ENGINEER) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
 
-        controller.startSession()
+        controller.onPttPressed()
         Thread.sleep(300)
 
         verify { ttsEngine.speak("Голосовая модель не загружена") }
@@ -587,12 +485,16 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val ttsEngine = quietTtsEngine()
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
             gateEnabled = true, snapshot = null, dispatcher = dispatcher,
-            ttsEnabled = false, ttsEngine = ttsEngine,
+            ttsEnabled = false, ttsEngine = ttsEngine, continuousAsr = fakeAsr,
         )
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
         Thread.sleep(500)
 
         verify(exactly = 0) { ttsEngine.speak(any()) }
@@ -604,11 +506,15 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } returns DispatchResult(true)
         val journal = VoiceJournal()
-        val controller = makeController(gateEnabled = true, snapshot = null, dispatcher = dispatcher, journal = journal)
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(gateEnabled = true, snapshot = null, dispatcher = dispatcher, journal = journal, continuousAsr = fakeAsr)
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
         Thread.sleep(500)
 
         val entry = journal.entries.value.first()
@@ -628,14 +534,13 @@ class VoiceControllerSafetyTest {
      *
      * Fix (Finding 3) coverage: noteAction is stubbed to hang for 60s (simulating a busy
      * AgentOrchestrator mutex) to prove the call is fire-and-forget (`scope.launch { ... }`), not
-     * awaited. `announce()`'s orb-dialog feed already runs before the noteAction call site in source
-     * order regardless of sync/async, so that assertion alone would not catch a regression here —
-     * the real differentiator is that the session's own terminal bookkeeping (busy flag release +
-     * the scheduled Idle auto-reset, both in startSession()'s `finally`) still completes within the
-     * test's normal wait. Under the old (reverted) synchronous
+     * awaited. The real differentiator on the continuous path is that a SECOND utterance is still
+     * processed (dispatched) well within this test's normal wait -- only possible if routeUtterance()
+     * returned (and processingUtterance flipped back to false) without ever awaiting the hung
+     * noteAction call. Under the old (reverted) synchronous
      * `runCatching { agentOrchestrator.noteAction(transcript) }`, the enclosing coroutine would be
-     * suspended inside execute() for the full 60s, `finally` would never run in time, and the state
-     * would still be stuck on Done — never reaching Idle — within this test's window.
+     * suspended inside execute() for the full 60s, so the second utterance would still be dropped
+     * ("busy") at the point this test checks.
      */
     @Test fun `NLU success calls agent noteAction with the transcript`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
@@ -650,17 +555,11 @@ class VoiceControllerSafetyTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty — completes immediately */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(windowClosePhrase))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns null
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
@@ -670,28 +569,31 @@ class VoiceControllerSafetyTest {
         // if VoiceController awaited this call, the whole voice session would stall behind it.
         coEvery { agentOrchestrator.noteAction(any()) } coAnswers { kotlinx.coroutines.delay(60_000) }
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), VoiceJournal(), mockk<ContinuousAsr>(relaxed = true),
+            quietTtsEngine(), VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
-        controller.idleResetDelayMs = 50L
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
         Thread.sleep(500)
 
         coVerify(exactly = 1) { agentOrchestrator.noteAction(windowClosePhrase) }
-        // announce()'s orb-dialog feed already ran before the noteAction call site regardless of
-        // sync/async — kept as the existing overlay-completion sanity check.
         assertEquals("Услышал: «$windowClosePhrase». Выполнено", presented.get())
-        // The real fire-and-forget proof: the session's own finally-block bookkeeping (busy
-        // release + scheduled Idle auto-reset) still completed and fired within this normal wait,
-        // which is only possible if noteAction's 60s hang was never awaited.
-        assertEquals(VoiceUiState.Idle, controller.state.value)
+
+        // Fire-and-forget proof: a second utterance is still accepted and dispatched, which
+        // requires processingUtterance to have already flipped back to false.
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(windowClosePhrase))
+        Thread.sleep(500)
+        coVerify(exactly = 2) { dispatcher.dispatch(any(), any()) }
     }
 
     /**
@@ -714,17 +616,11 @@ class VoiceControllerSafetyTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final(recognizedPhrase))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns 42L
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
@@ -732,15 +628,19 @@ class VoiceControllerSafetyTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
         coEvery { agentOrchestrator.noteAction(any()) } returns Unit
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), VoiceJournal(), mockk<ContinuousAsr>(relaxed = true),
+            quietTtsEngine(), VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance(recognizedPhrase))
         Thread.sleep(500)
 
         coVerify(exactly = 1) { agentOrchestrator.noteAction(recognizedPhrase) }
@@ -750,14 +650,18 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val journal = VoiceJournal()
         // "открой окна" + null snapshot -> fail-closed guard, blocked before dispatch.
+        val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = makeController(
             gateEnabled = true, snapshot = null, dispatcher = dispatcher,
-            recognizedPhrase = "открой окна", journal = journal,
+            journal = journal, continuousAsr = fakeAsr,
         )
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("открой окна"))
         Thread.sleep(500)
 
         val entry = journal.entries.value.first()
@@ -785,32 +689,30 @@ class VoiceControllerSafetyTest {
         val audioCapture = mockk<AudioCapture>(relaxed = true)
         every { audioCapture.captureSession(any()) } returns flow { /* empty */ }
 
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns true
-        every { asrEngine.recognize(any(), any(), any()) } returns flowOf(AsrEvent.Final("навигатор"))
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
 
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         coEvery { automationResolver.match(any()) } returns 7L
 
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Disabled
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), journal, mockk<ContinuousAsr>(relaxed = true),
+            quietTtsEngine(), journal, fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
         Thread.sleep(500)
 
         val entry = journal.entries.value.first()
@@ -821,12 +723,16 @@ class VoiceControllerSafetyTest {
 
     @Test fun `relative warmer with null acTemp shows the block orb dialog exactly once`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        val controller = makeController(true, snapshotWithAcTemp(null), dispatcher, recognizedPhrase = "теплее")
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(true, snapshotWithAcTemp(null), dispatcher, continuousAsr = fakeAsr)
         val feedbackCount = AtomicInteger(0)
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> feedbackCount.incrementAndGet(); presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("теплее"))
         Thread.sleep(500)
 
         assertEquals(1, feedbackCount.get())
@@ -841,22 +747,17 @@ class VoiceControllerSafetyTest {
         every { gate.ttsEnabled() } returns false
 
         val audioCapture = mockk<AudioCapture>(relaxed = true)
-        val asrEngine = mockk<AsrEngine>(relaxed = true)
-        every { asrEngine.isModelReady(any()) } returns false
-
-        val modelManager = mockk<VoiceModelManager>(relaxed = true)
         val localePrefs = mockk<LocalePreferences>(relaxed = true)
         every { localePrefs.getLanguage() } returns "ru"
         val earcon = mockk<VoiceEarcon>(relaxed = true)
         val automationEngine = mockk<AutomationEngine>(relaxed = true)
         val automationResolver = mockk<VoiceAutomationResolver>()
-        coEvery { automationResolver.phrases() } returns emptyList()
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
 
-        val controller = VoiceController(audioCapture, asrEngine, modelManager, dispatcher, localePrefs, earcon, gate,
+        val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
             automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
-            quietTtsEngine(), VoiceJournal(), mockk<ContinuousAsr>(relaxed = true),
+            quietTtsEngine(), VoiceJournal(), FakeContinuousAsr(ready = false),
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
@@ -865,7 +766,7 @@ class VoiceControllerSafetyTest {
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> feedbackCount.incrementAndGet(); presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
         Thread.sleep(300)
 
         assertEquals(1, feedbackCount.get())
@@ -874,15 +775,16 @@ class VoiceControllerSafetyTest {
 
     @Test fun `a pipeline crash shows the failure orb dialog exactly once`() {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
-        // A broken recognize() stream reproduces the top-level catch(t: Throwable) path.
-        val controller = makeControllerStreaming(
-            dispatcher, flow { throw RuntimeException("boom") },
+        // A broken transcribe() stream reproduces the top-level catch(t: Throwable) path.
+        val controller = makeController(
+            gateEnabled = true, snapshot = null, dispatcher = dispatcher,
+            continuousAsr = FailingContinuousAsr(),
         )
         val feedbackCount = AtomicInteger(0)
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> feedbackCount.incrementAndGet(); presented.set(text) }
 
-        controller.startSession()
+        controller.onPttPressed()
         Thread.sleep(500)
 
         assertEquals(1, feedbackCount.get())

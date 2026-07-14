@@ -20,9 +20,9 @@
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
-    <string name="settings_display_size_width_desc">Window width as % of the cluster width</string>
+    <string name="settings_display_size_width_desc" formatted="false">Window width as % of the cluster width</string>
     <string name="settings_display_size_height">Height</string>
-    <string name="settings_display_size_height_desc">Window height as % of the cluster height</string>
+    <string name="settings_display_size_height_desc" formatted="false">Window height as % of the cluster height</string>
     <string name="settings_display_offset_x">Horizontal shift</string>
     <string name="settings_display_offset_x_desc">Window position: 0 - left edge, 50 - center, 100 - right edge</string>
     <string name="settings_display_offset_y">Vertical shift</string>
@@ -114,6 +114,8 @@
     <string name="settings_widget_section_header">Floating widget</string>
     <string name="settings_widget_show_soc_label">Show SOC widget</string>
     <string name="settings_widget_hints">- Long tap the widget - hide until BYDMate is opened next time.\n- Drag to the bin at the bottom - turn off completely.\n- Regular tap - open BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Hide over YouTube</string>
+    <string name="settings_widget_hide_youtube_description">The button panel hides while YouTube is on screen</string>
     <string name="settings_widget_reset_position_button">Reset position</string>
     <string name="settings_reset_seat_channel">Reset seat channel</string>
     <string name="settings_reset_seat_channel_hint">If seat heating or ventilation stops working after switching cars</string>
@@ -155,6 +157,7 @@
     <string name="settings_weather_attribution">Weather data by Open-Meteo.com</string>
     <string name="settings_autostart_recorded">Autostart: %1$s</string>
     <string name="settings_autostart_not_recorded">Autostart: not recorded</string>
+    <string name="settings_autostart_open_button">Autostart setting</string>
     <string name="settings_update_check_toggle_label">Check for updates</string>
     <string name="settings_update_check_toggle_description">Check GitHub 30 seconds after startup and show a new-version indicator</string>
     <string name="settings_update_check_button">Check for updates now</string>
@@ -346,6 +349,9 @@
     <string name="automation_action_sentry">Sentry mode</string>
     <string name="automation_action_sentry_on">Enable</string>
     <string name="automation_action_sentry_off">Disable</string>
+    <string name="automation_action_cluster_projection">Projection to cluster</string>
+    <string name="automation_action_cluster_projection_on">Enable</string>
+    <string name="automation_action_cluster_projection_off">Disable</string>
     <string name="automation_action_speak">Speak text</string>
     <string name="automation_action_agent_query">Ask the agent</string>
     <string name="auto_act_speak">Speak text</string>
@@ -658,6 +664,9 @@
     <string name="settings_config_restore_confirm_body">All current data and settings will be replaced with the backup contents. This cannot be undone.</string>
     <string name="settings_config_restore_confirm_ok">Restore</string>
     <string name="settings_config_restore_confirm_cancel">Cancel</string>
+    <string name="settings_config_export_confirm_title">Export configuration?</string>
+    <string name="settings_config_export_confirm_body">The backup contains your trip history with GPS routes and your API keys in plain text. The file is saved to the public Download folder. Keep it somewhere safe and do not share it.</string>
+    <string name="settings_config_export_confirm_ok">Export</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Body</string>
@@ -681,7 +690,7 @@
     <string name="auto_unit_kmh">km/h</string>
     <string name="auto_unit_kpa">kPa</string>
     <string name="auto_unit_percent">%</string>
-    <string name="auto_unit_percent_open">% open</string>
+    <string name="auto_unit_percent_open" formatted="false">% open</string>
     <string name="auto_unit_volt">V</string>
     <!-- enum labels -->
     <string name="auto_enum_charging">Charging</string>
@@ -1009,7 +1018,7 @@
     <string name="settings_preset_hint_vercel">5$ monthly credit, no card required. Some models on the free tier may return a 403 error.</string>
     <string name="settings_preset_hint_kimi">1000 free requests per day.</string>
     <string name="settings_preset_hint_nanogpt">8$ monthly subscription, paid in crypto.</string>
-    <string name="settings_preset_hint_deepseek">Pay as you go, 50% off at night (Moscow time).</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Pay as you go, 50% off at night (Moscow time).</string>
     <string name="settings_preset_hint_mistral">Free with phone verification.</string>
     <string name="settings_models_header">Model selection</string>
     <string name="settings_model_primary">Primary model</string>
@@ -1021,6 +1030,24 @@
     <string name="settings_search_source_native">connection built-in search</string>
     <string name="settings_search_source_none">unavailable</string>
     <string name="settings_search_status_hint">Without an Exa key the agent uses the current connection\'s built-in search. If that is unavailable too, the agent will honestly say search is not working.</string>
+    <string name="settings_section_service_title">Service &amp; Data</string>
+    <string name="settings_battery_capacity_desc">Used to estimate range and cost</string>
+    <string name="settings_tariff_home_desc">Cost of 1 kWh when charging at home (AC)</string>
+    <string name="settings_tariff_dc_desc">Cost of 1 kWh at DC fast chargers</string>
+    <string name="settings_tariff_trip_desc">Which tariff to use for trip costs</string>
+    <string name="settings_consumption_good_desc">Trips with lower consumption are highlighted green</string>
+    <string name="settings_consumption_bad_desc">Trips with higher consumption are highlighted red</string>
+    <string name="settings_widget_show_desc">Battery charge on top of any app</string>
+    <string name="settings_widget_reset_position_desc">Return the widget to its default position</string>
+    <string name="settings_export_csv_desc">Full trip history as one file in the Download folder</string>
+    <string name="settings_log_recording_desc">Detailed activity log for troubleshooting. Enable when the developer asks for it</string>
+    <string name="settings_config_export_desc">Backup: trip history with GPS and API keys in plain text, file in the Download folder</string>
+    <string name="settings_config_restore_desc">Current data and settings will be fully replaced with the backup contents</string>
+    <string name="settings_autostart_header">Autostart</string>
+    <string name="settings_autostart_desc">BYDMate starts together with the car. If a firmware update broke autostart, re-enable it in the system setting</string>
+    <string name="settings_places_inline_hint">A point is added from the map or from the car\'s current position</string>
+    <string name="settings_agent_debug_row_title">Testing &amp; debugging</string>
+    <string name="settings_agent_debug_row_desc">Model test checks the connection, chat shows a text dialog with the agent</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Thanks for using BYDMate</string>

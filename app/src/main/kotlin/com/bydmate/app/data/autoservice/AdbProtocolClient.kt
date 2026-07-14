@@ -105,7 +105,11 @@ internal class AdbProtocolClient(
 
     @Synchronized
     override fun exec(cmd: String): String? {
-        if (!isConnectedInternal()) return null
+        // Lazy reconnect: the socket can die silently between calls (idle timeout, DiLink Wi-Fi
+        // hiccup) without any caller checking isConnected() first — retry once inline before
+        // giving up. connect() is @Synchronized on this same monitor (reentrant, no deadlock) and
+        // is not invoked recursively from within itself.
+        if (!isConnectedInternal() && !connect()) return null
         return try {
             val localId = localStreamId
             localStreamId += 1

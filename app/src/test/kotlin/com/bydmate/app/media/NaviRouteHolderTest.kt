@@ -45,4 +45,44 @@ class NaviRouteHolderTest {
         assertEquals("new text", snap?.text)
         assertEquals(2_000L, snap?.postedAtMs)
     }
+
+    @Test
+    fun `update with parsed fields exposes maneuver data`() {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null, 1L,
+            NaviNotificationParser.Parsed(
+                maneuver = "направо", maneuverResource = "notification_right_sdl",
+                distance = "350 м", street = "улица Ленина", bigTexts = listOf("18:40", "42 км"),
+            ),
+        )
+        val snap = NaviRouteHolder.latest!!
+        assertEquals("направо", snap.maneuver)
+        assertEquals("350 м", snap.maneuverDistance)
+        assertEquals("улица Ленина", snap.street)
+        assertEquals(listOf("18:40", "42 км"), snap.bigTexts)
+    }
+
+    @Test
+    fun `maneuverIcon is set from parsed maneuverResource`() {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null, 1L,
+            NaviNotificationParser.Parsed(
+                maneuver = null, maneuverResource = "notification_right_sdl",
+                distance = "350 м", street = null, bigTexts = emptyList(),
+            ),
+        )
+        assertEquals("notification_right_sdl", NaviRouteHolder.latest?.maneuverIcon)
+    }
+
+    @Test
+    fun `parsed-only notification without extras is still stored`() {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, null, null, null, 1L,
+            NaviNotificationParser.Parsed(
+                maneuver = "направо", maneuverResource = null,
+                distance = "350 м", street = null, bigTexts = emptyList(),
+            ),
+        )
+        assertEquals("350 м", NaviRouteHolder.latest?.maneuverDistance)
+    }
 }

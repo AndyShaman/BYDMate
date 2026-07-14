@@ -64,4 +64,25 @@ class SeatChannelStorePrefsTest {
             store.winner(),
         )
     }
+
+    // ── Guard T7-1: firmware fingerprint mismatch resets winner to UNKNOWN ────
+    // Fixes #70: after an OTA the seat channel must not stay cemented on a
+    // choice made under the previous firmware — force a fresh probe.
+    @Test fun `fingerprint mismatch resets winner to UNKNOWN`() {
+        val sharedPrefs = prefs()
+        sharedPrefs.edit().clear().commit()
+
+        val store = SeatChannelStorePrefs(sharedPrefs)
+        store.setWinner(SeatChannel.PRIMARY)
+        assertEquals("winner must persist under the fingerprint recorded at write time", SeatChannel.PRIMARY, store.winner())
+
+        // Simulate an OTA: the fingerprint on disk no longer matches the running build.
+        sharedPrefs.edit().putString("seat_channel_fp", "stale-pre-ota-fingerprint").commit()
+
+        assertEquals(
+            "fingerprint change after an OTA must force re-probe",
+            SeatChannel.UNKNOWN,
+            store.winner(),
+        )
+    }
 }

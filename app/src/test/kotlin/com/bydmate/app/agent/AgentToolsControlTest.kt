@@ -21,9 +21,12 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -188,5 +191,94 @@ class AgentToolsControlTest {
             call("vehicle_control", """{"command":"车窗关闭"}""")))
         assertTrue(out.getBoolean("ok"))
         coVerify { dispatcher.dispatch(match { it.command == "车窗关闭" }, any()) }
+    }
+
+    // --- П7 origin-based defense: confirm gate for dangerous agent actions ---
+
+    @Test fun vehicle_control_unlock_is_dangerous_and_confirms() = runTest {
+        every { gate.vehicleSnapshot() } returns null
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools()
+        t.confirmScope = CoroutineScope(Dispatchers.Unconfined)
+        var gateInvoked = false
+        t.confirmGate = { _, _, _, onConfirm, _ -> gateInvoked = true; onConfirm(); true }
+        val out = JSONObject(t.execute(call("vehicle_control", """{"command":"车门解锁"}""")))
+        assertTrue(gateInvoked)
+        assertEquals("ожидает подтверждения на экране", out.getString("status"))
+        coVerify { dispatcher.dispatch(match { it.command.contains("车门解锁") }, any()) }
+    }
+
+    @Test fun vehicle_control_close_window_is_not_dangerous_dispatches_directly() = runTest {
+        every { gate.vehicleSnapshot() } returns null
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools()
+        var gateInvoked = false
+        t.confirmGate = { _, _, _, _, _ -> gateInvoked = true; true }
+        val out = JSONObject(t.execute(call("vehicle_control", """{"command":"车窗关闭"}""")))
+        assertTrue(out.getBoolean("ok"))
+        assertFalse(gateInvoked)
+        coVerify(exactly = 1) { dispatcher.dispatch(any(), any()) }
+    }
+
+    @Test fun vehicle_control_unlock_fail_closed_when_overlay_cannot_show() = runTest {
+        every { gate.vehicleSnapshot() } returns null
+        val t = tools()
+        t.confirmGate = { _, _, _, _, _ -> false }
+        val out = JSONObject(t.execute(call("vehicle_control", """{"command":"车门解锁"}""")))
+        assertFalse(out.getBoolean("ok"))
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
+    // T9 IMPORTANT-1: confirm-gate must dispatch against LIVE data, not the stale snapshot
+    // captured at tool-call time. gate.vehicleSnapshot() returns a non-null standstill snapshot
+    // (stale); TrackingService.lastData.value is null in unit tests (no public setter —
+    // see AutomationEngineButtonPressTest.kt:110). After the fix, onConfirm dispatches via
+    // TrackingService.lastData.value (null), NOT the non-null stale snapshot.
+    @Test fun vehicle_control_unlock_dispatches_live_data_not_stale_snapshot_at_confirm_time() = runTest {
+        val staleSnapshot = AgentToolsReadTest.snapshot(speed = 0)
+        every { gate.vehicleSnapshot() } returns staleSnapshot
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools()
+        t.confirmScope = CoroutineScope(Dispatchers.Unconfined)
+        t.confirmGate = { _, _, _, onConfirm, _ -> onConfirm(); true }
+        t.execute(call("vehicle_control", """{"command":"车门解锁"}"""))
+        // Live data (null) must reach the dispatcher, not the non-null staleSnapshot.
+        coVerify { dispatcher.dispatch(any(), null) }
+    }
+
+    // --- set_sentry ---
+
+    @Test fun set_sentry_on_true_dispatches_sentry_payload_1() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(call("set_sentry", """{"on":true}""")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify { dispatcher.dispatch(match { it.kind == "sentry" && it.payload == "1" }, null) }
+    }
+
+    @Test fun set_sentry_on_false_is_dangerous_and_confirms() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val t = tools()
+        t.confirmScope = CoroutineScope(Dispatchers.Unconfined)
+        var gateInvoked = false
+        t.confirmGate = { _, _, _, onConfirm, _ -> gateInvoked = true; onConfirm(); true }
+        val out = JSONObject(t.execute(call("set_sentry", """{"on":false}""")))
+        assertTrue(gateInvoked)
+        assertEquals("ожидает подтверждения на экране", out.getString("status"))
+        coVerify { dispatcher.dispatch(match { it.kind == "sentry" && it.payload == "0" }, null) }
+    }
+
+    @Test fun set_sentry_on_false_fail_closed_when_overlay_cannot_show() = runTest {
+        val t = tools()
+        t.confirmGate = { _, _, _, _, _ -> false }
+        val out = JSONObject(t.execute(call("set_sentry", """{"on":false}""")))
+        assertFalse(out.getBoolean("ok"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
+
+    @Test fun set_sentry_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
+        val out = JSONObject(tools().execute(call("set_sentry", """{}""")))
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 }

@@ -2,7 +2,7 @@ package com.bydmate.app.data.local.database
 
 import androidx.room.testing.MigrationTestHelper
 import androidx.test.platform.app.InstrumentationRegistry
-import com.bydmate.app.di.AppModuleMigrationsForTest
+import com.bydmate.app.di.AppModule
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -37,7 +37,7 @@ class Migration15to16Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 16, true,
-            AppModuleMigrationsForTest.MIGRATION_15_16,
+            AppModule.MIGRATION_15_16,
         )
 
         migrated.query("SELECT soc, total_elec, trip_start_total_elec FROM last_state").use { c ->

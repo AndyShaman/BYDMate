@@ -53,7 +53,12 @@ class AgentToolsNavigateRangeTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    ).also { it.nowMs = { 1_000_000_000_000L } }
+    ).also {
+        it.nowMs = { 1_000_000_000_000L }
+        it.naviForegroundCheck = { true }
+        it.naviVerifyAttempts = 1
+        it.naviVerifyIntervalMs = 1L
+    }
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
 
@@ -73,6 +78,10 @@ class AgentToolsNavigateRangeTest {
         assertEquals(320, out.getInt("range_km"))
         assertTrue(out.has("enough"))
         assertTrue(out.has("reserve_km"))
+        // distance_km is straight-line × road factor, not the Navigator's routed distance —
+        // the note keeps the LLM from voicing it as an exact figure (field report 2026-07-14)
+        assertTrue(out.getString("note").contains("примерн"))
+        assertTrue(out.getString("note").contains("get_route_info"))
     }
 
     @Test fun navigate_to_adds_charge_note_when_not_enough() = runTest {
@@ -117,7 +126,7 @@ class AgentToolsNavigateRangeTest {
         assertTrue(out.has("error"))
     }
 
-    @Test fun `tool catalog routes home commands to search_on_map`() = runTest {
+    @Test fun `tool catalog routes home commands to navigate_to`() = runTest {
         val catalog = tools.schemas()
         val navigateDesc = (0 until catalog.length()).mapNotNull {
             val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
@@ -127,10 +136,10 @@ class AgentToolsNavigateRangeTest {
             val fn = catalog.getJSONObject(it).optJSONObject("function") ?: return@mapNotNull null
             if (fn.getString("name") == "search_on_map") fn.getString("description") else null
         }.first()
-        // navigate_to must redirect home commands to search_on_map
-        assertTrue(navigateDesc.contains("search_on_map"))
+        // home/work commands belong to navigate_to now; search_on_map must not claim them
         assertTrue(navigateDesc.contains("домой"))
-        // search_on_map must describe how home commands are handled
-        assertTrue(searchDesc.contains("Дом"))
+        assertTrue(navigateDesc.contains("на работу"))
+        assertFalse(searchDesc.contains("Дом\""))
+        assertTrue(searchDesc.contains("navigate_to"))
     }
 }

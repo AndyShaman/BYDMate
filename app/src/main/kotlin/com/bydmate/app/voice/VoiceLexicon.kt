@@ -3,11 +3,11 @@ package com.bydmate.app.voice
 enum class VoiceLang { RU, EN }
 
 /** Surface words per slot, per language. This is the single place where
- *  phrasing flexibility lives: add a synonym here and both the Vosk grammar
- *  vocabulary and the parser pick it up. Words are lowercase; matching is
- *  stem-based (see NluParser), so listing one form per inflection family is
- *  usually enough. Qualifier words (driver/passenger/front/rear/all) are
- *  separate device-distinguishers, combined by the parser. */
+ *  phrasing flexibility lives: add a synonym here and the parser picks it
+ *  up. Words are lowercase; matching is stem-based (see NluParser), so
+ *  listing one form per inflection family is usually enough. Qualifier
+ *  words (driver/passenger/front/rear/all) are separate device-distinguishers,
+ *  combined by the parser. */
 object VoiceLexicon {
 
     private val ACTION_RU: Map<ActionSlot, List<String>> = mapOf(
@@ -115,31 +115,6 @@ object VoiceLexicon {
     fun actionWords(lang: VoiceLang) = if (lang == VoiceLang.RU) ACTION_RU else ACTION_EN
     fun deviceWords(lang: VoiceLang) = if (lang == VoiceLang.RU) DEVICE_RU else DEVICE_EN
     fun numberWords(lang: VoiceLang) = if (lang == VoiceLang.RU) NUM_RU else NUM_EN
-
-    /** Flat, single-token vocabulary for the Vosk grammar: every action word,
-     *  device word, qualifier, single-token number word, and the digits 0..100.
-     *  Multi-word number keys (e.g. "двадцать один") are excluded here — they
-     *  are detected via the numbers detect path, not the grammar token list. */
-    fun vocabulary(lang: VoiceLang): List<String> {
-        val words = LinkedHashSet<String>()
-        actionWords(lang).values.flatten().forEach { words.add(it) }
-        deviceWords(lang).values.flatten().forEach { words.add(it) }
-        qualifierWords(lang).forEach { words.add(it) }
-        // Only single-token number keys go into the Vosk grammar vocabulary
-        numberWords(lang).keys.filter { !it.contains(' ') }.forEach { words.add(it) }
-        (0..100).forEach { words.add(it.toString()) }
-        return words.toList()
-    }
-
-    fun qualifierWords(lang: VoiceLang): List<String> = if (lang == VoiceLang.RU)
-        // Bare roots "водитель"/"пассажир" are easier acoustic targets for Vosk than
-        // the long inflected forms (the long "пассажирское" was mis-heard in-car and
-        // dropped the side qualifier); both stem identically to the inflected forms.
-        listOf("водитель", "водителя", "водительское", "пассажир", "пассажира", "пассажирское",
-               "передние", "задние", "переднее", "заднее", "передний", "задний",
-               "левое", "правое", "левый", "правый", "все", "первый", "второй")
-    else
-        listOf("driver", "passenger", "front", "rear", "left", "right", "all", "one", "two")
 
     private fun buildNumberWordsRu(): Map<String, Int> = mapOf(
         "ноль" to 0, "один" to 1, "два" to 2, "три" to 3, "четыре" to 4,

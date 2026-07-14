@@ -29,7 +29,7 @@ class Migration13to14Test {
         helper.createDatabase(dbName, 13).close()
         val migrated = helper.runMigrationsAndValidate(
             dbName, 14, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_13_14
+            com.bydmate.app.di.AppModule.MIGRATION_13_14
         )
 
         migrated.query("SELECT count(*) FROM last_state").use { c ->
@@ -58,7 +58,7 @@ class Migration13to14Test {
         }
         val migrated = helper.runMigrationsAndValidate(
             dbName, 14, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_13_14
+            com.bydmate.app.di.AppModule.MIGRATION_13_14
         )
 
         migrated.query("SELECT byd_id FROM trips").use { c ->
@@ -90,8 +90,8 @@ class Migration13to14Test {
         }
         val migrated = helper.runMigrationsAndValidate(
             dbName, 14, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_12_13,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_13_14
+            com.bydmate.app.di.AppModule.MIGRATION_12_13,
+            com.bydmate.app.di.AppModule.MIGRATION_13_14
         )
 
         migrated.query("SELECT byd_id FROM trips").use { c ->
@@ -111,7 +111,7 @@ class Migration13to14Test {
         helper.createDatabase(dbName, 13).close()
         val migrated = helper.runMigrationsAndValidate(
             dbName, 14, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_13_14
+            com.bydmate.app.di.AppModule.MIGRATION_13_14
         )
 
         val cols = mutableSetOf<String>()
@@ -142,7 +142,7 @@ class Migration13to14Test {
 
         val migrated = helper.runMigrationsAndValidate(
             dbName, 14, true,
-            com.bydmate.app.di.AppModuleMigrationsForTest.MIGRATION_13_14
+            com.bydmate.app.di.AppModule.MIGRATION_13_14
         )
 
         migrated.query(

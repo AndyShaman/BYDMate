@@ -13,13 +13,18 @@ import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.media.NaviNotificationParser
 import com.bydmate.app.media.NaviRouteHolder
+import com.bydmate.app.media.NaviScreenReader
 import com.bydmate.app.voice.VoiceGate
+import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -52,6 +57,16 @@ class AgentToolsRouteInfoTest {
         mockk<LlmConnectionResolver>(relaxed = true),
     ).also { it.nowMs = { 1_000_000_000_000L } }
 
+    private fun fullScreen() = NaviScreenReader.ScreenInfo(
+        speedLimit = "60",
+        exitNumber = null,
+        maneuverDistance = "250 м",
+        remainingDistance = "28 км",
+        remainingTime = "27 мин",
+        arrivalTime = "10:10",
+        street = "ул. Качаны",
+    )
+
     @After
     fun resetHolder() {
         NaviRouteHolder.clear(NaviRouteHolder.NAVI_PACKAGE)
@@ -62,15 +77,109 @@ class AgentToolsRouteInfoTest {
         assertTrue(out.has("error"))
     }
 
-    @Test fun get_route_info_returns_snapshot_fields() = runTest {
+    @Test fun get_route_info_returns_parsed_and_raw_fields() = runTest {
         NaviRouteHolder.update(
             NaviRouteHolder.NAVI_PACKAGE, "5 км", "Через 300 м направо", null,
             1_000_000_000_000L - 3 * 60_000L,
+            NaviNotificationParser.Parsed(
+                maneuver = "направо", maneuverResource = "notification_right_sdl",
+                distance = "300 м", street = "улица Ленина", bigTexts = listOf("18:40", "42 км"),
+            ),
         )
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_route_info", "{}")))
-        assertEquals("5 км", out.getString("title"))
-        assertEquals("Через 300 м направо", out.getString("text"))
+        assertEquals("направо", out.getString("maneuver"))
+        assertEquals("300 м", out.getString("maneuver_distance"))
+        assertEquals("улица Ленина", out.getString("street"))
+        assertEquals("18:40", out.getJSONArray("route_lines").getString(0))
+        assertEquals("5 км", out.getString("raw_title"))
         assertEquals(3, out.getLong("age_min"))
         assertTrue(out.has("note"))
+        assertFalse(out.has("maneuver_icon"))
+    }
+
+    @Test fun `get_route_info exposes maneuver_icon when icon is unknown`() = runTest {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null,
+            1_000_000_000_000L,
+            NaviNotificationParser.Parsed(
+                maneuver = null, maneuverResource = "notification_right_sdl",
+                distance = "350 м", street = null, bigTexts = emptyList(),
+            ),
+        )
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("notification_right_sdl", out.getString("maneuver_icon"))
+        assertFalse(out.has("maneuver"))
+    }
+
+    @Test fun get_route_info_extras_only_fallback_keeps_raw_fields() = runTest {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", "Через 300 м направо", null,
+            1_000_000_000_000L,
+        )
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("5 км", out.getString("raw_title"))
+        assertFalse(out.has("maneuver"))
+    }
+
+    @Test fun get_route_info_appends_soc_and_range() = runTest {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null, 1_000_000_000_000L,
+        )
+        val t = tools()
+        every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(soc = 80, totalElec = 1234.5)
+        coEvery { range.estimate(80, 1234.5) } returns 320.0
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals(80, out.getInt("soc"))
+        assertEquals(320, out.getInt("range_km"))
+    }
+
+    @Test fun `get_route_info from screen when holder is empty`() = runTest {
+        val t = tools()
+        t.naviScreenProvider = { fullScreen() }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertFalse(out.has("error"))
+        assertFalse(out.has("maneuver"))
+        assertFalse(out.has("raw_title"))
+        assertEquals("250 м", out.getString("maneuver_distance"))
+        assertEquals("28 км", out.getString("remaining_distance"))
+        assertEquals("27 мин", out.getString("remaining_time"))
+        assertEquals("10:10", out.getString("arrival_time"))
+        assertEquals("ул. Качаны", out.getString("street"))
+        assertEquals("60", out.getString("speed_limit"))
+        assertEquals(0L, out.getLong("age_min"))
+    }
+
+    @Test fun `notification street wins over screen street`() = runTest {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null,
+            1_000_000_000_000L,
+            NaviNotificationParser.Parsed(
+                maneuver = null, maneuverResource = null,
+                distance = null, street = "улица Ленина", bigTexts = emptyList(),
+            ),
+        )
+        val t = tools()
+        t.naviScreenProvider = { fullScreen() }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("улица Ленина", out.getString("street"))
+        assertEquals("28 км", out.getString("remaining_distance"))
+    }
+
+    @Test fun `screen provider throws - notification fields still returned`() = runTest {
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null,
+            1_000_000_000_000L,
+            NaviNotificationParser.Parsed(
+                maneuver = "прямо", maneuverResource = null,
+                distance = "500 м", street = "пр. Мира", bigTexts = emptyList(),
+            ),
+        )
+        val t = tools()
+        t.naviScreenProvider = { throw RuntimeException("a11y tree unavailable") }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertFalse(out.has("error"))
+        assertEquals("прямо", out.getString("maneuver"))
+        assertEquals("500 м", out.getString("maneuver_distance"))
+        assertEquals("пр. Мира", out.getString("street"))
     }
 }

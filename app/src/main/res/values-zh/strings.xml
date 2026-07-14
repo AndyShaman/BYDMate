@@ -87,6 +87,8 @@
     <string name="settings_widget_section_header">悬浮小组件</string>
     <string name="settings_widget_show_soc_label">显示 SOC 小组件</string>
     <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
+    <string name="settings_widget_hide_youtube_label">YouTube 时隐藏</string>
+    <string name="settings_widget_hide_youtube_description">YouTube 在屏幕上时按钮面板自动隐藏</string>
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>
@@ -127,6 +129,7 @@
     <string name="settings_weather_attribution">天气数据来自 Open-Meteo.com</string>
     <string name="settings_autostart_recorded">自启动：%1$s</string>
     <string name="settings_autostart_not_recorded">自启动：未记录</string>
+    <string name="settings_autostart_open_button">自启动设置</string>
     <string name="settings_update_check_toggle_label">检查更新</string>
     <string name="settings_update_check_toggle_description">启动 30 秒后检查 GitHub 并显示新版本提示</string>
     <string name="settings_update_check_button">立即检查更新</string>
@@ -726,6 +729,9 @@
     <string name="settings_config_restore_confirm_cancel">取消</string>
     <string name="settings_config_restore_confirm_ok">恢复</string>
     <string name="settings_config_restore_confirm_title">恢复配置？</string>
+    <string name="settings_config_export_confirm_title">导出配置？</string>
+    <string name="settings_config_export_confirm_body">备份包含带 GPS 路线的行程历史以及未加密的 API 密钥。文件将保存到公共 Download 文件夹。请妥善保管，不要转发给他人。</string>
+    <string name="settings_config_export_confirm_ok">导出</string>
     <string name="settings_display_button_change">更改</string>
     <string name="settings_display_button_title">触发按键</string>
     <string name="steering_button_aux_left">左侧辅助键</string>
@@ -952,6 +958,9 @@
     <string name="automation_action_sentry">哨兵模式</string>
     <string name="automation_action_sentry_on">开启</string>
     <string name="automation_action_sentry_off">关闭</string>
+    <string name="automation_action_cluster_projection">投射到仪表盘</string>
+    <string name="automation_action_cluster_projection_on">开启</string>
+    <string name="automation_action_cluster_projection_off">关闭</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>
@@ -1109,6 +1118,24 @@
     <string name="settings_search_source_native">连接自带搜索</string>
     <string name="settings_search_source_none">不可用</string>
     <string name="settings_search_status_hint">未配置 Exa 密钥时，代理使用当前连接的自带搜索。如果它也不可用，代理会如实告知搜索无法使用。</string>
+    <string name="settings_section_service_title">服务与数据</string>
+    <string name="settings_battery_capacity_desc">用于估算续航里程和费用</string>
+    <string name="settings_tariff_home_desc">家用充电 (AC) 每 1 kWh 的费用</string>
+    <string name="settings_tariff_dc_desc">快充 (DC) 每 1 kWh 的费用</string>
+    <string name="settings_tariff_trip_desc">行程费用使用哪种电价计算</string>
+    <string name="settings_consumption_good_desc">低于此能耗的行程显示为绿色</string>
+    <string name="settings_consumption_bad_desc">高于此能耗的行程显示为红色</string>
+    <string name="settings_widget_show_desc">在任意应用上方显示电量</string>
+    <string name="settings_widget_reset_position_desc">将小部件恢复到默认位置</string>
+    <string name="settings_export_csv_desc">全部行程历史导出为一个文件，保存到 Download 文件夹</string>
+    <string name="settings_log_recording_desc">用于排查问题的详细日志，请在开发者要求时开启</string>
+    <string name="settings_config_export_desc">备份：包含 GPS 的行程历史和明文 API 密钥，文件保存在 Download 文件夹</string>
+    <string name="settings_config_restore_desc">当前数据和设置将被备份内容完全替换</string>
+    <string name="settings_autostart_header">自启动</string>
+    <string name="settings_autostart_desc">BYDMate 随车机一起启动。如果固件更新后自启动失效，请在系统设置中重新开启</string>
+    <string name="settings_places_inline_hint">可通过地图或车辆当前位置添加地点</string>
+    <string name="settings_agent_debug_row_title">测试与调试</string>
+    <string name="settings_agent_debug_row_desc">模型测试检查连接，聊天以文字形式显示与助手的对话</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">感谢您使用 BYDMate</string>

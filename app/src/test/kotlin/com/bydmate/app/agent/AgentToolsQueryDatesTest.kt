@@ -61,14 +61,14 @@ class AgentToolsQueryDatesTest {
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
 
     @Test fun query_trips_with_from_to_passes_bounds_to_dao() = runTest {
-        // 2026-06-01 00:00 local .. 2026-07-01 00:00 local (to inclusive => +DAY_MS)
+        // 2026-06-01 00:00 local .. 2026-06-30 last ms local (to day included by extending to end-of-day: + DAY_MS - 1)
         val slotFrom = slot<Long>(); val slotTo = slot<Long>()
         coEvery { tripDao.getPeriodSummary(capture(slotFrom), capture(slotTo)) } returns emptySummary()
         tools().execute(call("query_trips", """{"from":"2026-06-01","to":"2026-06-30"}"""))
         val cal = Calendar.getInstance().apply { clear(); set(2026, Calendar.JUNE, 1) }
         assertEquals(cal.timeInMillis, slotFrom.captured)
         val calEnd = Calendar.getInstance().apply { clear(); set(2026, Calendar.JUNE, 30) }
-        assertEquals(calEnd.timeInMillis + 24L * 3600_000, slotTo.captured)
+        assertEquals(calEnd.timeInMillis + 24L * 3600_000 - 1, slotTo.captured)
     }
 
     @Test fun query_trips_single_date_covers_that_day() = runTest {
@@ -77,7 +77,7 @@ class AgentToolsQueryDatesTest {
         tools().execute(call("query_trips", """{"from":"2026-06-01"}"""))
         val cal = Calendar.getInstance().apply { clear(); set(2026, Calendar.JUNE, 1) }
         assertEquals(cal.timeInMillis, slotFrom.captured)
-        assertEquals(cal.timeInMillis + 24L * 3600_000, slotTo.captured)
+        assertEquals(cal.timeInMillis + 24L * 3600_000 - 1, slotTo.captured)
     }
 
     @Test fun query_trips_bad_date_returns_russian_error() = runTest {
@@ -99,6 +99,15 @@ class AgentToolsQueryDatesTest {
         t.execute(call("query_trips", """{"period":"week"}"""))
         assertEquals(1_000_000_000_000L - 7 * 24L * 3600_000, slotFrom.captured)
         assertEquals(1_000_000_000_000L, slotTo.captured)
+    }
+
+    @Test fun query_trips_upper_bound_excludes_next_day_midnight() = runTest {
+        val slotFrom = slot<Long>(); val slotTo = slot<Long>()
+        coEvery { tripDao.getPeriodSummary(capture(slotFrom), capture(slotTo)) } returns emptySummary()
+        tools().execute(call("query_trips", """{"from":"2026-06-01","to":"2026-06-30"}"""))
+        val nextMidnight = Calendar.getInstance().apply { clear(); set(2026, Calendar.JULY, 1) }.timeInMillis
+        // DAO compares start_ts <= :to, so :to must stop 1 ms before next-day midnight.
+        assertEquals(nextMidnight - 1, slotTo.captured)
     }
 
     @Test fun query_charges_split_is_bounded_by_to() = runTest {
