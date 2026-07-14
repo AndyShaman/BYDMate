@@ -999,6 +999,24 @@
     <string name="settings_search_source_native">connection built-in search</string>
     <string name="settings_search_source_none">unavailable</string>
     <string name="settings_search_status_hint">Without an Exa key the agent uses the current connection\'s built-in search. If that is unavailable too, the agent will honestly say search is not working.</string>
+    <string name="settings_section_service_title">Service &amp; Data</string>
+    <string name="settings_battery_capacity_desc">Used to estimate range and cost</string>
+    <string name="settings_tariff_home_desc">Cost of 1 kWh when charging at home (AC)</string>
+    <string name="settings_tariff_dc_desc">Cost of 1 kWh at DC fast chargers</string>
+    <string name="settings_tariff_trip_desc">Which tariff to use for trip costs</string>
+    <string name="settings_consumption_good_desc">Trips with lower consumption are highlighted green</string>
+    <string name="settings_consumption_bad_desc">Trips with higher consumption are highlighted red</string>
+    <string name="settings_widget_show_desc">Battery charge on top of any app</string>
+    <string name="settings_widget_reset_position_desc">Return the widget to its default position</string>
+    <string name="settings_export_csv_desc">Full trip history as one file in the Download folder</string>
+    <string name="settings_log_recording_desc">Detailed activity log for troubleshooting. Enable when the developer asks for it</string>
+    <string name="settings_config_export_desc">Backup: trip history with GPS and API keys in plain text, file in the Download folder</string>
+    <string name="settings_config_restore_desc">Current data and settings will be fully replaced with the backup contents</string>
+    <string name="settings_autostart_header">Autostart</string>
+    <string name="settings_autostart_desc">BYDMate starts together with the car. If a firmware update broke autostart, re-enable it in the system setting</string>
+    <string name="settings_places_inline_hint">A point is added from the map or from the car\'s current position</string>
+    <string name="settings_agent_debug_row_title">Testing &amp; debugging</string>
+    <string name="settings_agent_debug_row_desc">Model test checks the connection, chat shows a text dialog with the agent</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Thanks for using BYDMate</string>

@@ -60,7 +60,6 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.charges.ChargesScreen
 import com.bydmate.app.ui.automation.AutomationScreen
-import com.bydmate.app.ui.places.PlacesScreen
 import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.DonateDialog
 import com.bydmate.app.ui.settings.DonateEntry
@@ -258,12 +257,10 @@ fun AppNavigation(
             composable(Screen.Automation.route) { AutomationScreen() }
             composable(Screen.Settings.route) {
                 SettingsScreen(
-                    onNavigateToPlaces = { navController.navigate("places") },
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },
                     onNavigateToVoiceJournal = { navController.navigate("voice_journal") },
                 )
             }
-            composable("places") { PlacesScreen(onBack = { navController.popBackStack() }) }
             composable("agent_chat") {
                 com.bydmate.app.ui.debug.AgentChatScreen(onBack = { navController.popBackStack() })
             }

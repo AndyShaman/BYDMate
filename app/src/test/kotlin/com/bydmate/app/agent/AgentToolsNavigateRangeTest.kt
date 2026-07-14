@@ -78,6 +78,10 @@ class AgentToolsNavigateRangeTest {
         assertEquals(320, out.getInt("range_km"))
         assertTrue(out.has("enough"))
         assertTrue(out.has("reserve_km"))
+        // distance_km is straight-line × road factor, not the Navigator's routed distance —
+        // the note keeps the LLM from voicing it as an exact figure (field report 2026-07-14)
+        assertTrue(out.getString("note").contains("примерн"))
+        assertTrue(out.getString("note").contains("get_route_info"))
     }
 
     @Test fun navigate_to_adds_charge_note_when_not_enough() = runTest {

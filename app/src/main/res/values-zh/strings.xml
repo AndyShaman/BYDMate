@@ -1117,6 +1117,24 @@
     <string name="settings_search_source_native">连接自带搜索</string>
     <string name="settings_search_source_none">不可用</string>
     <string name="settings_search_status_hint">未配置 Exa 密钥时，代理使用当前连接的自带搜索。如果它也不可用，代理会如实告知搜索无法使用。</string>
+    <string name="settings_section_service_title">服务与数据</string>
+    <string name="settings_battery_capacity_desc">用于估算续航里程和费用</string>
+    <string name="settings_tariff_home_desc">家用充电 (AC) 每 1 kWh 的费用</string>
+    <string name="settings_tariff_dc_desc">快充 (DC) 每 1 kWh 的费用</string>
+    <string name="settings_tariff_trip_desc">行程费用使用哪种电价计算</string>
+    <string name="settings_consumption_good_desc">低于此能耗的行程显示为绿色</string>
+    <string name="settings_consumption_bad_desc">高于此能耗的行程显示为红色</string>
+    <string name="settings_widget_show_desc">在任意应用上方显示电量</string>
+    <string name="settings_widget_reset_position_desc">将小部件恢复到默认位置</string>
+    <string name="settings_export_csv_desc">全部行程历史导出为一个文件，保存到 Download 文件夹</string>
+    <string name="settings_log_recording_desc">用于排查问题的详细日志，请在开发者要求时开启</string>
+    <string name="settings_config_export_desc">备份：包含 GPS 的行程历史和明文 API 密钥，文件保存在 Download 文件夹</string>
+    <string name="settings_config_restore_desc">当前数据和设置将被备份内容完全替换</string>
+    <string name="settings_autostart_header">自启动</string>
+    <string name="settings_autostart_desc">BYDMate 随车机一起启动。如果固件更新后自启动失效，请在系统设置中重新开启</string>
+    <string name="settings_places_inline_hint">可通过地图或车辆当前位置添加地点</string>
+    <string name="settings_agent_debug_row_title">测试与调试</string>
+    <string name="settings_agent_debug_row_desc">模型测试检查连接，聊天以文字形式显示与助手的对话</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">感谢您使用 BYDMate</string>

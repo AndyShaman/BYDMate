@@ -1258,6 +1258,8 @@ class AgentTools @Inject constructor(
             .put("range_km", range)
             .put("enough", range >= distanceKm)
             .put("reserve_km", reserve)
+            .put("note", "distance_km примерное (по прямой с коэффициентом 1.25), не называй его " +
+                "точным остатком пути; точный километраж и время даёт get_route_info во время ведения")
         if (range < distanceKm || reserve < distanceKm * 0.2) {
             json.put("charge_note",
                 "заряда впритык или не хватит, предупреди и предложи найти зарядки по пути")

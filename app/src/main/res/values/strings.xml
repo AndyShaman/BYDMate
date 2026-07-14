@@ -1154,6 +1154,24 @@
     <string name="settings_search_source_native">встроенный поиск подключения</string>
     <string name="settings_search_source_none">недоступен</string>
     <string name="settings_search_status_hint">Без ключа Exa агент использует встроенный поиск текущего подключения. Если и он недоступен, агент честно скажет, что поиск не работает.</string>
+    <string name="settings_section_service_title">Сервис и данные</string>
+    <string name="settings_battery_capacity_desc">Используется для оценки запаса хода и стоимости</string>
+    <string name="settings_tariff_home_desc">Стоимость 1 кВт·ч при зарядке дома (AC)</string>
+    <string name="settings_tariff_dc_desc">Стоимость 1 кВт·ч на быстрых зарядках</string>
+    <string name="settings_tariff_trip_desc">Каким тарифом считать стоимость поездок</string>
+    <string name="settings_consumption_good_desc">Поездки с меньшим расходом подсвечиваются зелёным</string>
+    <string name="settings_consumption_bad_desc">Поездки с большим расходом подсвечиваются красным</string>
+    <string name="settings_widget_show_desc">Заряд батареи поверх любого приложения</string>
+    <string name="settings_widget_reset_position_desc">Вернуть виджет на место по умолчанию</string>
+    <string name="settings_export_csv_desc">Вся история поездок одним файлом в папку Download</string>
+    <string name="settings_log_recording_desc">Подробный журнал работы для разбора проблем. Включайте по запросу разработчика</string>
+    <string name="settings_config_export_desc">Бэкап: история поездок с GPS и API-ключи открытым текстом, файл в папке Download</string>
+    <string name="settings_config_restore_desc">Текущие данные и настройки будут полностью заменены содержимым бэкапа</string>
+    <string name="settings_autostart_header">Автозапуск</string>
+    <string name="settings_autostart_desc">BYDMate стартует вместе с машиной. Если после обновления прошивки автозапуск слетел, включите его в системной настройке</string>
+    <string name="settings_places_inline_hint">Точка добавляется по карте или по текущему положению машины</string>
+    <string name="settings_agent_debug_row_title">Проверка и отладка</string>
+    <string name="settings_agent_debug_row_desc">Тест модели проверяет подключение, чат показывает диалог с агентом текстом</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Спасибо, что вы с BYDMate</string>

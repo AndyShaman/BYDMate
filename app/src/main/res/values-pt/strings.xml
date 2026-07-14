@@ -945,6 +945,24 @@
     <string name="settings_agent_gender_female">Feminino</string>
     <string name="settings_agent_gender_hint">Aplica-se a todas as vozes: cada fonte tem uma opção masculina e feminina</string>
     <string name="settings_voice_button_mic_header">Botão e microfone</string>
+    <string name="settings_section_service_title">Serviço e dados</string>
+    <string name="settings_battery_capacity_desc">Usado para estimar autonomia e custo</string>
+    <string name="settings_tariff_home_desc">Custo de 1 kWh ao carregar em casa (AC)</string>
+    <string name="settings_tariff_dc_desc">Custo de 1 kWh em carregadores rápidos</string>
+    <string name="settings_tariff_trip_desc">Qual tarifa usar para o custo das viagens</string>
+    <string name="settings_consumption_good_desc">Viagens com consumo menor ficam destacadas em verde</string>
+    <string name="settings_consumption_bad_desc">Viagens com consumo maior ficam destacadas em vermelho</string>
+    <string name="settings_widget_show_desc">Carga da bateria sobre qualquer aplicativo</string>
+    <string name="settings_widget_reset_position_desc">Retornar o widget à posição padrão</string>
+    <string name="settings_export_csv_desc">Todo o histórico de viagens em um arquivo na pasta Download</string>
+    <string name="settings_log_recording_desc">Registro detalhado para diagnóstico. Ative quando o desenvolvedor solicitar</string>
+    <string name="settings_config_export_desc">Backup: histórico de viagens com GPS e chaves de API em texto simples, arquivo na pasta Download</string>
+    <string name="settings_config_restore_desc">Os dados e configurações atuais serão totalmente substituídos pelo conteúdo do backup</string>
+    <string name="settings_autostart_header">Início automático</string>
+    <string name="settings_autostart_desc">O BYDMate inicia junto com o carro. Se uma atualização de firmware desativou o início automático, reative-o na configuração do sistema</string>
+    <string name="settings_places_inline_hint">O ponto é adicionado pelo mapa ou pela posição atual do carro</string>
+    <string name="settings_agent_debug_row_title">Teste e depuração</string>
+    <string name="settings_agent_debug_row_desc">O teste do modelo verifica a conexão, o chat mostra o diálogo com o agente em texto</string>
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Obrigado por usar o BYDMate</string>
