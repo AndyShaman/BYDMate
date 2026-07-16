@@ -32,9 +32,9 @@ class EnergyDataDeadDetectorTest {
     private var nowMs = 0L
     private val store = FakeStore()
 
-    private fun detector(): EnergyDataDeadDetector {
+    private fun detector(clock: () -> Long = { nowMs }): EnergyDataDeadDetector {
         val reader = mockk<EnergyDataReader> { every { sourceFingerprint() } answers { fileFp } }
-        return EnergyDataDeadDetector(reader, store) { nowMs }
+        return EnergyDataDeadDetector(reader, store, clock)
     }
 
     /** One full driving session: ignition on at [startKm], off at [endKm]. */
@@ -171,5 +171,54 @@ class EnergyDataDeadDetectorTest {
         val s = d.debugState()
         assertTrue(s.contains("dead=false"))
         assertTrue(s.contains("streak=0"))
+    }
+
+    @Test
+    fun `process death without off edge still marks dead after three spaced sessions`() {
+        // Field pattern (#63 regression): the head unit cuts power with the car, so the
+        // detector instance dies mid-session and no ignition=false tick is ever seen.
+        var now = 0L
+        repeat(3) { cycle ->
+            val det = detector { now }          // fresh instance = process restart
+            det.onTick(true, 100.0 + cycle * 10)          // ignition on
+            det.onTick(true, 100.0 + cycle * 10 + 2.0)    // still driving, crossed 1 km
+            now += 31 * 60_000L                 // next start well past the spacing window
+        }
+        // One more process start to evaluate (and consume) the 3rd session's marker --
+        // mirrors the pre-existing off-edge test's explicit 4th ignition-on tick.
+        detector { now }.onTick(true, 130.0)
+        assertTrue(store.isDead())
+    }
+
+    @Test
+    fun `mileage appearing only mid-session still counts as driving`() {
+        // Cold-start sentinel: odometer reads null right at ignition-on, appears later.
+        val det = detector { 0L }
+        det.onTick(true, null)
+        det.onTick(true, 50.0)
+        det.onTick(true, 52.0)
+        assertTrue(store.pendingDriving())
+    }
+
+    @Test
+    fun `bogus zero mileage backfill does not mark driving`() {
+        // SentinelDecoder can pass a garbage raw 0.0 as a valid odometer read; if that
+        // backfills sessionStartMileage, any later real mileage looks like a huge one-tick
+        // jump and falsely marks a parked car as "drove this session".
+        val det = detector { 0L }
+        det.onTick(true, null)
+        det.onTick(true, 0.0)
+        det.onTick(true, 53000.0)
+        assertFalse(store.pendingDriving())
+    }
+
+    @Test
+    fun `pending is persisted at most once per session`() {
+        val det = detector { 0L }
+        det.onTick(true, 10.0)
+        det.onTick(true, 12.0)
+        store.setPendingDriving(false)   // simulate evaluate() consuming it elsewhere
+        det.onTick(true, 15.0)           // same session: must NOT re-mark
+        assertFalse(store.pendingDriving())
     }
 }

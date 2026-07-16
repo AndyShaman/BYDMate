@@ -19,8 +19,9 @@
     <string name="settings_display_mirror_header">Вывод на приборку</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
-    <string name="settings_cluster_auto_container_title">Автовключение приборки</string>
-    <string name="settings_cluster_auto_container_desc">Перед проекцией включать экран приборки автоматически</string>
+    <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
+    <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
+    <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
@@ -668,6 +669,10 @@
     <string name="battery_health_pumped_value">%1$.0f кВт·ч</string>
     <string name="battery_health_disabled_title">Системные данные выключены</string>
     <string name="battery_health_disabled_hint">Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.</string>
+    <string name="battery_health_avg_soc_header">Средний SOC (история BYDMate)</string>
+    <string name="battery_health_avg_since_charge_label">с последней зарядки</string>
+    <string name="battery_health_avg_all_time_label">за всё время</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Средневзвешенный уровень заряда: чем дольше батарея стоит заряженной, тем выше значение. Для LFP-батареи BYD полезно держать его пониже: хранение на высоком заряде ускоряет старение. Ориентир: до 65% отлично, 65-85% нормально, выше 85% лучше заряжать позже или реже. Заряд до 100% раз в 1-2 недели всё равно нужен для балансировки ячеек. Считается по истории поездок и зарядок BYDMate.</string>
 
     <!-- Shared summary row (Components.kt SummaryRow) -->
     <string name="summary_unit_km">км</string>
@@ -1059,8 +1064,10 @@
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
     <string name="voice_listening">Слушаю</string>
     <string name="voice_thinking">Думаю</string>
+    <string name="voice_error_model_missing">Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент.</string>
+    <string name="voice_error_lang_not_ru">Голосовые команды понимают только русскую речь. В Настройках выберите Язык голоса: Русский.</string>
 
-    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Распознавание речи</string>
     <string name="settings_asr_gigaam_ready">Модель готова</string>
     <string name="settings_asr_gigaam_download">Скачать (%1$s)</string>
@@ -1223,4 +1230,16 @@
     <string name="settings_donate_header">Поддержка</string>
     <string name="settings_donate_card_body">BYDMate бесплатный и некоммерческий. Если он вам полезен, вы можете поддержать разработку.</string>
     <string name="settings_donate_button">Поддержать проект</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (проекционный дисплей)</string>
+    <string name="settings_hud_title">Навигация на HUD</string>
+    <string name="settings_hud_desc">Подсказки Яндекс Навигатора на проекционном дисплее: манёвр, дистанция, улица, прибытие</string>
+    <string name="settings_hud_speed_sign_title">Знак скорости под стрелкой</string>
+    <string name="settings_hud_speed_sign_desc">Красный знак ограничения скорости в нижнем слоте HUD</string>
+    <string name="settings_hud_status_unsupported">Шина SOME/IP не найдена: на этой машине вывод на HUD недоступен</string>
+    <string name="settings_hud_status_connecting">Подключение к шине…</string>
+    <string name="settings_hud_status_on">Передача на HUD активна</string>
+    <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
+    <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
 </resources>

@@ -179,4 +179,111 @@ class AudioCaptureDuckTest {
         verify(exactly = 2) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 12, 0) }
         verify(exactly = 2) { editor.remove(AudioCapture.KEY_PRE_DUCK_VOLUME) }
     }
+
+    @Test fun `explicit volume set during duck survives session restore`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 10
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        val saved = capture.duckMusic()          // 10 -> 1
+        capture.applyExplicitVolume(5)           // agent executed an explicit "volume 5"
+        capture.restoreMusic(saved)              // session teardown
+        // apply sets 5 once, the teardown restore returns to 5 once = 2 calls with index 5
+        verify(exactly = 2) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 5, 0) }
+        verify(exactly = 0) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 10, 0) }
+    }
+
+    @Test fun `apply without an active duck sets volume but does not register a restore target`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 10
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        capture.applyExplicitVolume(5)
+        val saved = capture.duckMusic()
+        capture.restoreMusic(saved)
+        verify(exactly = 1) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 5, 0) }   // the apply itself
+        verify(exactly = 1) { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 10, 0) }  // restore = pre-duck 10, not 5
+    }
+
+    @Test fun `pendingRestoreVolume visible only while a duck is active`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 10
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        assertNull(capture.pendingRestoreVolume())
+        val saved = capture.duckMusic()
+        assertEquals(10, capture.pendingRestoreVolume())
+        capture.applyExplicitVolume(5)
+        assertEquals(5, capture.pendingRestoreVolume())
+        capture.restoreMusic(saved)
+        assertNull(capture.pendingRestoreVolume())
+    }
+
+    @Test fun `apply refreshes the persisted stuck-duck marker`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 10
+        val (prefs, editor) = prefsMock()
+        val capture = AudioCapture(audioManager, prefs)
+        capture.duckMusic()
+        capture.applyExplicitVolume(5)
+        verify(exactly = 1) { editor.putInt(AudioCapture.KEY_PRE_DUCK_VOLUME, 5) }
+    }
+
+    @Test fun `mid-session set survives a nested listen-window duck and the outer restore`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        var vol = 10
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } answers { vol }
+        every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, any(), 0) } answers { vol = secondArg<Int>() }
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        val session = capture.duckMusic()      // session-level early duck: 10 -> 1
+        capture.applyExplicitVolume(13)        // agent command mid-session
+        val window = capture.duckMusic()       // next listen window ducks again: 13 -> 1
+        capture.restoreMusic(window)           // window closes -> back to 13
+        capture.restoreMusic(session)          // session teardown must keep the user's 13
+        assertEquals(13, vol)
+    }
+
+    @Test fun `set landing after the teardown restore still wins`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        var vol = 10
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } answers { vol }
+        every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, any(), 0) } answers { vol = secondArg<Int>() }
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        val saved = capture.duckMusic()
+        capture.restoreMusic(saved)            // teardown won the race and restored 10 first
+        capture.applyExplicitVolume(5)         // the command's set lands after -> must stick
+        assertEquals(5, vol)
+    }
+
+    @Test fun `marker survives when the physical restore fails`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } returns 10
+        val (prefs, editor) = prefsMock()
+        val capture = AudioCapture(audioManager, prefs)
+        val saved = capture.duckMusic()
+        every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, 10, 0) } throws SecurityException("boom")
+        capture.restoreMusic(saved)   // physical restore fails -> the marker must stay for restoreStuckDuck()
+        verify(exactly = 0) { editor.remove(AudioCapture.KEY_PRE_DUCK_VOLUME) }
+    }
+
+    @Test fun `set between a window restore and the session teardown still wins`() {
+        val audioManager = mockk<AudioManager>(relaxed = true)
+        var vol = 10
+        every { audioManager.isMusicActive } returns true
+        every { audioManager.getStreamVolume(AudioManager.STREAM_MUSIC) } answers { vol }
+        every { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, any(), 0) } answers { vol = secondArg<Int>() }
+        val capture = AudioCapture(audioManager, prefsMock().first)
+        val session = capture.duckMusic()      // session-level duck: 10 -> 1
+        capture.applyExplicitVolume(13)        // turn 1 command
+        val window = capture.duckMusic()       // turn 2 listen window: 13 -> 1
+        capture.restoreMusic(window)           // window closes -> 13; the SESSION duck still owns
+        assertEquals(13, capture.pendingRestoreVolume())  // ownership must survive the inner restore
+        capture.applyExplicitVolume(5)         // turn 2 command, after the window restore
+        capture.restoreMusic(session)          // session teardown must keep the user's 5
+        assertEquals(5, vol)
+    }
 }

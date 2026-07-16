@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.bydmate.app.navdata.NavA11yFeed
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -35,6 +36,12 @@ class SteeringWheelKeyService : AccessibilityService() {
         val info = serviceInfo ?: AccessibilityServiceInfo()
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS  // 32
         info.flags = info.flags or AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        // Windows-aware reads: the Navigator projected to the instrument cluster lives on
+        // display 2 and is invisible to rootInActiveWindow; these flags open getWindows()/
+        // getWindowsOnAllDisplays(). Not-important views: some guidance widgets are marked
+        // not-important-for-accessibility on the 2026 Navigator build (Codex fix 5).
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+        info.flags = info.flags or AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS
         serviceInfo = info
         instance = this
         isConnected = true
@@ -90,7 +97,33 @@ class SteeringWheelKeyService : AccessibilityService() {
             .fromApplication(applicationContext, ClusterEntryPoint::class.java)
             .also { cachedEntryPoint = it }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) { /* unused */ }
+    /** Root of the Navigator window wherever it lives: the active window, a minimized
+     *  mini-window, or the instrument cluster (display 2, projection mode). Caller must
+     *  recycle the returned node. Null when the Navigator has no window anywhere. */
+    fun findNavigatorRoot(): android.view.accessibility.AccessibilityNodeInfo? {
+        val active = runCatching { rootInActiveWindow }.getOrNull()
+        if (active != null) {
+            if (active.packageName?.toString() in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return active
+            @Suppress("DEPRECATION") runCatching { active.recycle() }
+        }
+        val windowList = runCatching {
+            if (android.os.Build.VERSION.SDK_INT >= 30) {
+                val byDisplay = windowsOnAllDisplays
+                (0 until byDisplay.size()).flatMap { byDisplay.valueAt(it) }
+            } else windows
+        }.getOrNull() ?: return null
+        for (window in windowList) {
+            val root = runCatching { window.root }.getOrNull() ?: continue
+            if (root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return root
+            @Suppress("DEPRECATION") runCatching { root.recycle() }
+        }
+        return null
+    }
+
+    // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        NavA11yFeed.onEvent(this, event)
+    }
     override fun onInterrupt() { /* no-op */ }
 
     override fun onUnbind(intent: Intent?): Boolean {

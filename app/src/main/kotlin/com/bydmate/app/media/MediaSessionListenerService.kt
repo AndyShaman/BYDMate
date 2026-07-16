@@ -18,11 +18,11 @@ class MediaSessionListenerService : NotificationListenerService() {
     // parsing failures must degrade to "no route info", never to a crash.
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         runCatching {
-            if (sbn.packageName != NaviRouteHolder.NAVI_PACKAGE) return
+            if (sbn.packageName !in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return
             val extras = sbn.notification.extras
             // RemoteViews reflection may break on any Navigator/Android update;
             // extras keep working as the raw fallback.
-            val resolver = naviResourceResolver()
+            val resolver = naviResourceResolver(sbn.packageName)
             val parsed = runCatching {
                 NaviNotificationParser.parse(sbn.notification, resolver)
             }.getOrNull()
@@ -42,21 +42,34 @@ class MediaSessionListenerService : NotificationListenerService() {
                 System.currentTimeMillis(),
                 parsed,
             )
+            // Same parse also feeds the unified guidance hub (numerics for HUD + agent).
+            // No-op on the 2026 Navigator build whose notification is a static stub.
+            parsed?.let {
+                com.bydmate.app.navdata.NavGuidanceHub.updateFromNotification(
+                    it.maneuverResource, it.distance, it.street, System.currentTimeMillis())
+            }
         }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
-        runCatching { NaviRouteHolder.clear(sbn.packageName) }
+        runCatching {
+            NaviRouteHolder.clear(sbn.packageName)
+            // Route ended on the legacy notification channel: deactivate the hub too,
+            // unless the a11y feed still delivers fresh guidance (Codex audit fix 3).
+            if (sbn.packageName in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) {
+                com.bydmate.app.navdata.NavGuidanceHub.markNotificationEnded()
+            }
+        }
     }
 
-    private var naviResources: android.content.res.Resources? = null
+    private val naviResources = HashMap<String, android.content.res.Resources>()
 
     // Resource names (view ids, maneuver drawables) belong to the NAVIGATOR's package,
-    // so resolution needs its Resources; cached after the first successful lookup.
-    private fun naviResourceResolver(): (Int) -> String? {
-        val res = naviResources ?: runCatching {
-            createPackageContext(NaviRouteHolder.NAVI_PACKAGE, 0).resources
-        }.getOrNull()?.also { naviResources = it }
+    // so resolution needs its Resources; cached per package after the first lookup.
+    private fun naviResourceResolver(pkg: String): (Int) -> String? {
+        val res = naviResources[pkg] ?: runCatching {
+            createPackageContext(pkg, 0).resources
+        }.getOrNull()?.also { naviResources[pkg] = it }
         return { id -> runCatching { res?.getResourceEntryName(id) }.getOrNull() }
     }
 }

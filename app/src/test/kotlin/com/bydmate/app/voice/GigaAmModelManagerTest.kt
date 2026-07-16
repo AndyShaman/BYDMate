@@ -80,7 +80,7 @@ class GigaAmModelManagerTest {
         val m = manager(filesDir)
         assertFalse(m.isReady())
 
-        val dir = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
         File(dir, "model.int8.onnx").writeText("x")
         assertFalse(m.isReady())                       // no tokens yet
 
@@ -98,8 +98,8 @@ class GigaAmModelManagerTest {
         val filesDir = tmp.newFolder("files2")
         val m = manager(filesDir)
 
-        assertTrue(m.modelPath().endsWith("asr/gigaam-v2-ru/model.int8.onnx"))
-        assertTrue(m.tokensPath().endsWith("asr/gigaam-v2-ru/tokens.txt"))
+        assertTrue(m.modelPath().endsWith("asr/gigaam-v3-ru/model.int8.onnx"))
+        assertTrue(m.tokensPath().endsWith("asr/gigaam-v3-ru/tokens.txt"))
         assertTrue(m.vadPath().endsWith("asr/silero_vad.onnx"))
         // Stable across repeated calls.
         assertEquals(m.modelPath(), m.modelPath())
@@ -113,7 +113,7 @@ class GigaAmModelManagerTest {
     fun `partial staging dir is never ready`() {
         val filesDir = tmp.newFolder("files3")
         val m = manager(filesDir)
-        val staging = File(filesDir, "asr/.staging-gigaam-v2-ru").apply { mkdirs() }
+        val staging = File(filesDir, "asr/.staging-gigaam-v3-ru").apply { mkdirs() }
         File(staging, "model.int8.onnx").writeText("x")
         File(staging, "tokens.txt").writeText("t")
         File(filesDir, "asr/silero_vad.onnx").writeText("v")   // vad present, model dir is not
@@ -124,8 +124,8 @@ class GigaAmModelManagerTest {
     fun `untarFlatten drops top-level dir and preserves nested layout`() = runBlocking {
         val target = tmp.newFolder("target")
         val archive = makeArchive(mapOf(
-            "sherpa-onnx-nemo-ctc-giga-am-v2-russian-2025-04-19/model.int8.onnx" to "onnx-bytes",
-            "sherpa-onnx-nemo-ctc-giga-am-v2-russian-2025-04-19/tokens.txt" to "tokens",
+            "sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16/model.int8.onnx" to "onnx-bytes",
+            "sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16/tokens.txt" to "tokens",
         ))
         manager(tmp.newFolder("files4")).untarFlatten(archive, target)
         assertEquals("onnx-bytes", File(target, "model.int8.onnx").readText())
@@ -150,7 +150,7 @@ class GigaAmModelManagerTest {
     fun `delete removes the model dir and the vad file`() = runBlocking {
         val filesDir = tmp.newFolder("files6")
         val m = manager(filesDir)
-        val dir = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
         File(dir, "model.int8.onnx").writeText("x")
         val vad = File(filesDir, "asr/silero_vad.onnx").apply { writeText("v") }
         m.delete()
@@ -162,7 +162,7 @@ class GigaAmModelManagerTest {
     fun `delete waits for the disk mutex held by a commit section`() = runBlocking {
         val filesDir = tmp.newFolder("files7")
         val m = manager(filesDir)
-        val dir = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
         File(dir, "model.int8.onnx").writeText("x")
         m.diskMutex.lock()   // simulate download's commit section holding the lock
         val job = launch { m.delete() }
@@ -190,7 +190,7 @@ class GigaAmModelManagerTest {
         assertEquals("onnx-bytes", File(m.modelPath()).readText())
         assertEquals("tokens", File(m.tokensPath()).readText())
         assertEquals("vad-bytes", File(m.vadPath()).readText())
-        assertFalse(File(filesDir, "asr/.staging-gigaam-v2-ru").exists())
+        assertFalse(File(filesDir, "asr/.staging-gigaam-v3-ru").exists())
     }
 
     @Test
@@ -205,15 +205,15 @@ class GigaAmModelManagerTest {
 
         assertTrue(result.isFailure)
         assertFalse(m.isReady())
-        assertFalse(File(filesDir, "asr/gigaam-v2-ru").exists())
-        assertFalse(File(filesDir, "asr/.staging-gigaam-v2-ru").exists())
+        assertFalse(File(filesDir, "asr/gigaam-v3-ru").exists())
+        assertFalse(File(filesDir, "asr/.staging-gigaam-v3-ru").exists())
     }
 
     @Test
     fun `failed download keeps the previous model`() = runBlocking {
         val filesDir = tmp.newFolder("files10")
         // Seed a complete, previously installed model + vad.
-        val dir = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
         File(dir, "model.int8.onnx").writeText("existing-onnx")
         File(dir, "tokens.txt").writeText("existing-tokens")
         File(filesDir, "asr/silero_vad.onnx").writeText("existing-vad")
@@ -264,7 +264,89 @@ class GigaAmModelManagerTest {
         job.join()
 
         assertTrue(job.isCancelled)
-        assertFalse(File(filesDir, "asr/gigaam-v2-ru").exists())   // unpack never ran
+        assertFalse(File(filesDir, "asr/gigaam-v3-ru").exists())   // unpack never ran
         assertFalse(File(filesDir, "asr/silero_vad.onnx").exists())   // vad phase never ran
+    }
+
+    // --- v2 -> v3 migration: legacy dir is swept, never resurrected ---
+
+    @Test
+    fun `successful download publishes v3 dir and removes legacy v2 dir`() = runBlocking {
+        val filesDir = tmp.newFolder("files12")
+        val legacy = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        File(legacy, "model.int8.onnx").writeText("old model")
+        File(legacy, "tokens.txt").writeText("old tokens")
+        val legacyStaging = File(filesDir, "asr/.staging-gigaam-v2-ru").apply { mkdirs() }
+        val archive = makeArchive(mapOf(
+            "top/model.int8.onnx" to "model-bytes",
+            "top/tokens.txt" to "tokens-bytes",
+        ))
+        val m = managerWith(filesDir, clientFor(archive, byteArrayOf(1, 2, 3)))
+
+        val result = m.download { }
+
+        assertTrue(result.isSuccess)
+        assertTrue(File(filesDir, "asr/gigaam-v3-ru/model.int8.onnx").isFile)
+        assertTrue(File(filesDir, "asr/gigaam-v3-ru/tokens.txt").isFile)
+        assertFalse("legacy v2 dir must be cleaned up", legacy.exists())
+        assertFalse("orphaned legacy v2 staging dir must be cleaned up", legacyStaging.exists())
+        assertTrue(m.isReady())
+    }
+
+    @Test
+    fun `failed download leaves legacy v2 dir untouched`() = runBlocking {
+        val filesDir = tmp.newFolder("files13")
+        val legacy = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        File(legacy, "model.int8.onnx").writeText("old model")
+        File(legacy, "tokens.txt").writeText("old tokens")
+        val failing = OkHttpClient.Builder()
+            .addInterceptor { chain ->
+                okhttp3.Response.Builder()
+                    .request(chain.request())
+                    .protocol(okhttp3.Protocol.HTTP_1_1)
+                    .code(500).message("boom")
+                    .body("".toResponseBody("text/plain".toMediaType()))
+                    .build()
+            }
+            .build()
+        val m = managerWith(filesDir, failing)
+
+        val result = m.download { }
+
+        assertTrue(result.isFailure)
+        assertTrue("legacy v2 dir must survive a failed download", legacy.exists())
+        assertFalse(File(filesDir, "asr/gigaam-v3-ru").exists())
+    }
+
+    @Test
+    fun `delete removes v3 staging and legacy v2`() = runBlocking {
+        val filesDir = tmp.newFolder("files14")
+        val v3 = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
+        File(v3, "model.int8.onnx").writeText("m")
+        File(v3, "tokens.txt").writeText("t")
+        val legacy = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        File(legacy, "model.int8.onnx").writeText("old")
+        val staging = File(filesDir, "asr/.staging-gigaam-v3-ru").apply { mkdirs() }
+        val legacyStaging = File(filesDir, "asr/.staging-gigaam-v2-ru").apply { mkdirs() }
+        val m = manager(filesDir)
+
+        m.delete()
+
+        assertFalse(v3.exists())
+        assertFalse(legacy.exists())
+        assertFalse(staging.exists())
+        assertFalse(legacyStaging.exists())
+    }
+
+    @Test
+    fun `isReady is false when only legacy v2 model is present`() {
+        val filesDir = tmp.newFolder("files15")
+        val legacy = File(filesDir, "asr/gigaam-v2-ru").apply { mkdirs() }
+        File(legacy, "model.int8.onnx").writeText("old model")
+        File(legacy, "tokens.txt").writeText("old tokens")
+        File(filesDir, "asr").mkdirs()
+        File(filesDir, "asr/silero_vad.onnx").writeText("vad")
+
+        assertFalse("after the APK update the model must read as not downloaded", manager(filesDir).isReady())
     }
 }

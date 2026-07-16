@@ -154,6 +154,19 @@ class DashboardViewModelTest {
         override suspend fun delete(charge: com.bydmate.app.data.local.entity.ChargeEntity) {}
     }
 
+    // Delegates to the fixed StubTripDao/StubChargeDao for everything except
+    // getAll(), which returns the trips/charges the test wants #93's average-SOC
+    // computation to see.
+    private class StubTripDaoWithTrips(private val trips: List<TripEntity>) : TripDao by StubTripDao() {
+        override fun getAll(): Flow<List<TripEntity>> = flowOf(trips)
+    }
+
+    private class StubChargeDaoWithCharges(
+        private val charges: List<com.bydmate.app.data.local.entity.ChargeEntity>
+    ) : com.bydmate.app.data.local.dao.ChargeDao by StubChargeDao() {
+        override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.ChargeEntity>> = flowOf(charges)
+    }
+
     private class StubBatterySnapshotDao : BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
@@ -202,19 +215,21 @@ class DashboardViewModelTest {
 
     private fun buildViewModel(
         fakeAutoservice: VehicleApi,
-        insightsManager: InsightsManager? = null
+        insightsManager: InsightsManager? = null,
+        trips: List<TripEntity> = emptyList(),
+        charges: List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
         val settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
-        val tripDao = StubTripDao()
+        val tripDao = StubTripDaoWithTrips(trips)
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
         val idleDrainDao = StubIdleDrainDao()
-        val chargeDao = StubChargeDao()
+        val chargeDao = StubChargeDaoWithCharges(charges)
 
         val httpClient = OkHttpClient()
         val resolvedInsightsManager = insightsManager
@@ -228,6 +243,7 @@ class DashboardViewModelTest {
             tripRepository = tripRepo,
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,
+            chargeDao = chargeDao,
             insightsManager = resolvedInsightsManager,
             batteryStateRepository = batteryStateRepo
         )
@@ -351,5 +367,32 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(7, vm.uiState.value.insightPeriodDays)
+    }
+
+    @Test
+    fun `expanding battery health computes average soc from trips and charges`() = runTest {
+        // charge 40->80 ends at t=200, trip 80->60 spans 300..400
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(sampleReading, available = true),
+            trips = listOf(TripEntity(startTs = 300L, endTs = 400L, socStart = 80, socEnd = 60)),
+            charges = listOf(
+                com.bydmate.app.data.local.entity.ChargeEntity(
+                    startTs = 100L, endTs = 200L, socStart = 40, socEnd = 80, status = "COMPLETED"
+                )
+            )
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.toggleBatteryHealthExpanded()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertTrue(state.batteryHealthExpanded)
+        // allTime = 60 + 2000/(now-100), sinceCharge = 60 + 4000/(now-200) -- for any real
+        // wall-clock `now` both terms round to 0, so both windows round to 60. Since-charge
+        // starts at the charge end (soc 80), so it can never average below the all-time
+        // window that also contains the pre-charge soc 40.
+        assertEquals(60, state.avgSocAllTime)
+        assertEquals(60, state.avgSocSinceCharge)
     }
 }

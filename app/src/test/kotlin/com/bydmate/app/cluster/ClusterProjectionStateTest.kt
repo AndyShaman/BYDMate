@@ -1,5 +1,6 @@
 package com.bydmate.app.cluster
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -129,5 +130,72 @@ class ClusterProjectionStateTest {
 
     @Test fun `auto-container off means the user manages compositor power manually`() {
         assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
+    }
+
+    // --- shouldRecoverDirectTask (freeform task stranded on cluster display after crash) ---
+
+    @Test fun `no marker means nothing to recover for direct task`() {
+        assertEquals(false, shouldRecoverDirectTask(markerDisplayId = -1, mode = ClusterMode.OFF))
+    }
+
+    @Test fun `live direct projection owns the display - no task recovery`() {
+        assertEquals(false, shouldRecoverDirectTask(markerDisplayId = 4, mode = ClusterMode.FULLSCREEN))
+    }
+
+    @Test fun `stale display marker with no live projection triggers direct task recovery`() {
+        assertEquals(true, shouldRecoverDirectTask(markerDisplayId = 4, mode = ClusterMode.OFF))
+    }
+
+    // --- shouldAbsorbDisplayDensity (guard against compounding density overrides) ---
+
+    @Test fun `live direct member blocks density absorption`() {
+        assertEquals(false, shouldAbsorbDisplayDensity(liveDirectDisplayId = 4, markerDisplayId = -1, metricsDpi = 230))
+    }
+
+    @Test fun `surviving crash marker blocks density absorption`() {
+        assertEquals(false, shouldAbsorbDisplayDensity(liveDirectDisplayId = -1, markerDisplayId = 4, metricsDpi = 230))
+    }
+
+    @Test fun `no member and no marker allows absorption when dpi is positive`() {
+        assertEquals(true, shouldAbsorbDisplayDensity(liveDirectDisplayId = -1, markerDisplayId = -1, metricsDpi = 320))
+    }
+
+    @Test fun `zero dpi from metrics is never absorbed`() {
+        assertEquals(false, shouldAbsorbDisplayDensity(liveDirectDisplayId = -1, markerDisplayId = -1, metricsDpi = 0))
+    }
+
+    // --- shouldClearDirectMarker (gate marker clear on confirmed recovery) ---
+
+    @Test fun `failed density reset keeps the marker even when task reclaim succeeds`() {
+        assertEquals(false, shouldClearDirectMarker(resetOk = false, taskFound = true, modeOk = true, moveOk = true))
+    }
+
+    @Test fun `task not found counts as gone - marker may be cleared if reset succeeded`() {
+        assertEquals(true, shouldClearDirectMarker(resetOk = true, taskFound = false, modeOk = false, moveOk = false))
+    }
+
+    @Test fun `full confirmed recovery clears the marker`() {
+        assertEquals(true, shouldClearDirectMarker(resetOk = true, taskFound = true, modeOk = true, moveOk = true))
+    }
+
+    @Test fun `successful reset but failed move keeps the marker`() {
+        assertEquals(false, shouldClearDirectMarker(resetOk = true, taskFound = true, modeOk = true, moveOk = false))
+    }
+
+    @Test fun `successful reset but failed mode keeps the marker`() {
+        assertEquals(false, shouldClearDirectMarker(resetOk = true, taskFound = true, modeOk = false, moveOk = true))
+    }
+
+    @Test
+    fun `freeformBounds maps geometry to left top right bottom`() {
+        // Andy's on-car preset (2026-07-15): 1280x403 window, y offset 38 -> mFrame [0,38][1280,441].
+        val geo = ClusterGeometry(width = 1280, height = 403, xOffset = 0, yOffset = 38)
+        assertArrayEquals(intArrayOf(0, 38, 1280, 441), freeformBounds(geo))
+    }
+
+    @Test
+    fun `freeformBounds carries offsets into all four edges`() {
+        val geo = ClusterGeometry(width = 640, height = 240, xOffset = 320, yOffset = 120)
+        assertArrayEquals(intArrayOf(320, 120, 960, 360), freeformBounds(geo))
     }
 }

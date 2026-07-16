@@ -83,7 +83,7 @@ private class RealVadHandle(modelManager: GigaAmModelManager) : VadHandle {
     override fun close() = vad.release()
 }
 
-/** GigaAM v2 Russian nemo-CTC recognizer segmented by a silero VAD, for the continuous voice
+/** GigaAM v3 Russian nemo-CTC recognizer segmented by a silero VAD, for the continuous voice
  *  session. The recognizer is cached across sessions (see cachedRecognizer below) since
  *  constructing it loads the model from disk; the VAD stays per-collection, created and
  *  released in transcribe()'s finally block, so neither cancellation nor a second collect can

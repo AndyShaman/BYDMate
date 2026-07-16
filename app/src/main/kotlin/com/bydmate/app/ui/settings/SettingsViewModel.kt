@@ -159,7 +159,7 @@ data class SettingsUiState(
     val minimaxProvider: String = "official",
     /** Never expose the raw MiniMax key in state -- only whether one is saved. */
     val minimaxKeySet: Boolean = false,
-    // GigaAM v2 ASR settings (free-form Russian speech recognition, offline)
+    // GigaAM v3 ASR settings (free-form Russian speech recognition, offline)
     val gigaAmModelReady: Boolean = false,
     val gigaAmDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
     val gigaAmDownloadFailed: Boolean = false,
@@ -1383,7 +1383,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- GigaAM v2 ASR (free-form Russian speech recognition, offline) ---
+    // --- GigaAM v3 ASR (free-form Russian speech recognition, offline) ---
 
     private var gigaAmDownloadJob: Job? = null
 
@@ -1692,7 +1692,15 @@ class SettingsViewModel @Inject constructor(
                     "AutomationEngine:*", "AutoserviceDetector:*",
                     "SteeringWheelKeySvc:*",
                     // v3.6: voice/audio diagnostics (issue #78 + Song volume reports)
-                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*"
+                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*",
+                    // HUD wave: SOME/IP output + cluster projection diagnostics
+                    "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
+                    "ClusterProjection:*",
+                    // Direct projection wave: helper daemon (freeform switch diagnostics; visible
+                    // only once READ_LOGS is granted AND the app process restarted - the daemon
+                    // runs under the shell uid), guidance feed transitions, grant self-heal.
+                    "bydmate_helper:*", "HudIconLoader:*",
+                    "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*"
                 ))
 
                 // Background thread to pipe logcat to file with size limit.

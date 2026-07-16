@@ -209,9 +209,10 @@ class VoiceController @Inject constructor(
 
     /** PTT toggle (Wave B): no session running -> start one (continuous GigaAM session when the
      *  model is ready and the language is RU, else the GigaAM model is missing or the language is
-     *  non-RU (GigaAM does not support it) -> report "model not ready" without starting a
-     *  session); a continuous session already listening -> stop it immediately (barge-in stops
-     *  TTS too). */
+     *  non-RU (GigaAM does not support it) -> report the specific cause without starting a
+     *  session (#87): "model missing" when GigaAM isn't downloaded, "language not RU" when it
+     *  is; a continuous session already listening -> stop it immediately (barge-in stops TTS
+     *  too). */
     fun onPttPressed() {
         if (!gate.isEnabled()) return
         if (_listening.value) {
@@ -229,12 +230,24 @@ class VoiceController @Inject constructor(
             // below would silently suppress this branch's overlay+speech forever for a user who
             // can never start a continuous session again to reset the flag (I-1).
             stopRequested.set(false)
+            // Two distinct causes share this branch (#87): the GigaAM model genuinely
+            // missing vs. a non-RU voice language (GigaAM is Russian-only) — the old
+            // single "model not loaded" text sent EN-locale users chasing a phantom
+            // download problem.
+            val langBlocked = continuousAsr.isReady() && currentLang() != VoiceLang.RU
+            val msg = context.getString(
+                if (langBlocked) R.string.voice_error_lang_not_ru
+                else R.string.voice_error_model_missing
+            )
             _state.value = VoiceUiState.NotUnderstood("")
-            record(VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR,
-                "Модель распознавания не готова", "GigaAM model not ready for lang=${currentLang()}")
+            record(
+                VoiceJournalEntry.Route.NONE, "", "", VoiceJournalEntry.Outcome.ERROR,
+                msg,
+                "GigaAM ${if (langBlocked) "lang not supported" else "model not ready"} lang=${currentLang()}"
+            )
             busy.set(false)
             scheduleIdleReset()
-            scope.launch { announce("Голос", "Голосовая модель не загружена", "Голосовая модель не загружена") }
+            scope.launch { announce("Голос", msg, msg) }
         }
     }
 

@@ -190,7 +190,7 @@ In **Settings → Display → "Cluster window size"** two sliders (width and hei
 
 ### How it works
 
-The projection goes through the car's system service: BYDMate raises a virtual display on the instrument panel and moves the chosen app there. To intercept the steering-wheel buttons, the app enables its own accessibility service. It works only while the toggle is on and is used solely for the star. It does not change the firmware or the car itself, and it is fully reversible.
+The projection goes through the car's system service: BYDMate launches the chosen app as a window directly on the instrument-cluster display, so the voice agent and the HUD can see the route during projection. This mode needs a one-time head-unit reboot after installation (long-press the volume knob); until then the old virtual-display path is used automatically. To intercept the steering-wheel buttons, the app enables its own accessibility service. It works only while the toggle is on and is used solely for the star. It does not change the firmware or the car itself, and it is fully reversible.
 
 ---
 
@@ -587,6 +587,7 @@ cd BYDMate
 
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** (`org.jayb.bydapp`) by jayb — the original DiLink trip app, inspiration for BYDMate
 - **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — the bridge app for car data, used in early BYDMate versions (no longer required since 3.0.0)
+- **@RBGboost** — reverse engineering of the factory HUD SOME/IP protocol and the original YandexHUD implementation. Yandex Navigator guidance on the HUD in BYDMate is his code and his achievement. You can thank him on Telegram: [@RBGboost](https://t.me/RBGboost)
 
 ---
 

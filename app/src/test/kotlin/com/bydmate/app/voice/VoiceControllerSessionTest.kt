@@ -977,9 +977,15 @@ class VoiceControllerSessionTest {
 
     // --- Task 4: listening-overlay wiring (show/update/hide test seams) ---
 
+    // #87: the two resource strings the else-branch of onPttPressed picks between.
+    private val modelMissingMsg = "Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент."
+    private val langNotRuMsg = "Голосовые команды понимают только русскую речь. В Настройках выберите Язык голоса: Русский."
+
     private fun stubbedContext(): Context = mockk<Context>(relaxed = true).also {
         every { it.getString(R.string.voice_listening) } returns "Слушаю"
         every { it.getString(R.string.voice_thinking) } returns "Думаю"
+        every { it.getString(R.string.voice_error_model_missing) } returns modelMissingMsg
+        every { it.getString(R.string.voice_error_lang_not_ru) } returns langNotRuMsg
     }
 
     @Test fun `starting a continuous session shows the listening overlay`() {
@@ -1066,12 +1072,13 @@ class VoiceControllerSessionTest {
     // (b) GigaAM model not ready (not downloaded, or deleted) while no session is active -- PTT
     // reports the degraded "model not ready" outcome without starting a session: state goes to
     // NotUnderstood, the journal records an ERROR entry, and the overlay/spoken announce is the
-    // same "Голосовая модель не загружена" phrase the old legacy path used to produce.
+    // voice_error_model_missing resource string (#87: distinct from voice_error_lang_not_ru,
+    // which fires instead when the model is ready but the voice language is not RU).
     @Test fun `ptt with continuous engine not ready reports model-not-ready without starting a session`() {
         val fakeAsr = FakeContinuousAsr(ready = false) // simulates the model not being downloaded/deleted
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val controller = makeController(fakeAsr, dispatcher, journal = journal, context = stubbedContext())
         val answers = Collections.synchronizedList(mutableListOf<String>())
         controller.showAnswerHook = { text -> answers.add(text) }
 
@@ -1081,7 +1088,61 @@ class VoiceControllerSessionTest {
         assertEquals(1, journal.entries.value.size)
         assertEquals(VoiceJournalEntry.Outcome.ERROR, journal.entries.value.first().outcome)
         assertFalse(controller.listening.value)
-        awaitTrue { answers.contains("Голосовая модель не загружена") }
+        awaitTrue { answers.contains(modelMissingMsg) }
+    }
+
+    // (b2) #87's other cause sharing the same else-branch: GigaAM IS ready, but the voice
+    // language (via LocalePreferences, gate.preferredLang() unset) is not RU -- GigaAM only
+    // understands Russian. Must announce voice_error_lang_not_ru, NOT voice_error_model_missing
+    // (the old bug reported "model not loaded" here, sending EN-locale users chasing a phantom
+    // download problem). makeController() hardcodes localePrefs.getLanguage() = "ru" and has no
+    // seam to override it, so this test builds VoiceController directly, like the automation-
+    // resolver and mute-window tests above.
+    @Test fun `ptt with continuous engine ready but voice language non-RU reports lang-not-ru without starting a session`() {
+        val fakeAsr = FakeContinuousAsr(ready = true) // model IS downloaded/ready
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val journal = VoiceJournal()
+
+        val gate = mockk<VoiceGate>()
+        every { gate.isEnabled() } returns true
+        every { gate.vehicleSnapshot() } returns null
+        every { gate.preferredLang() } returns null // no override -> currentLang() falls back to locale
+        every { gate.ttsEnabled() } returns false
+
+        val localePrefs = mockk<LocalePreferences>(relaxed = true)
+        every { localePrefs.getLanguage() } returns "en" // non-RU voice language
+        val automationEngine = mockk<AutomationEngine>(relaxed = true)
+        val automationResolver = mockk<VoiceAutomationResolver>()
+        coEvery { automationResolver.match(any()) } returns null
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        coEvery { agentOrchestrator.noteAction(any()) } returns Unit
+        coEvery { agentOrchestrator.expectsFollowUp() } returns false
+        val earcon = mockk<VoiceEarcon>(relaxed = true)
+
+        val controller = VoiceController(mockk<AudioCapture>(relaxed = true), dispatcher, localePrefs, earcon, gate,
+            automationEngine, automationResolver, agentOrchestrator, stubbedContext(),
+            quietTtsEngine(), journal, fakeAsr,
+            agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
+            ttsModelManager = mockk(relaxed = true),
+            ruStressMarker = RuStressMarker { null },
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+        val answers = Collections.synchronizedList(mutableListOf<String>())
+        controller.showAnswerHook = { text -> answers.add(text) }
+
+        controller.onPttPressed()
+
+        assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
+        assertEquals(1, journal.entries.value.size)
+        val entry = journal.entries.value.first()
+        assertEquals(VoiceJournalEntry.Outcome.ERROR, entry.outcome)
+        assertFalse(controller.listening.value)
+        awaitTrue { answers.contains(langNotRuMsg) }
+        assertFalse(answers.contains(modelMissingMsg)) // proves the branch didn't pick the other cause
+        // The journal entry's `detail` argument is hardcoded "" in this branch (see
+        // onPttPressed()) and the literal "lang not supported" tag lives only in the Log.i-only
+        // logMsg argument, never persisted onto VoiceJournalEntry -- `reason` (== msg) is the
+        // actual persisted field that discriminates the two #87 causes.
+        assertEquals(langNotRuMsg, entry.reason)
     }
 
     // (в) TTS voice not downloaded (gate.ttsEnabled() == false, the makeController default) --
@@ -1673,7 +1734,7 @@ class VoiceControllerSessionTest {
         val fakeAsr = FakeContinuousAsr(ready = true)
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val journal = VoiceJournal()
-        val controller = makeController(fakeAsr, dispatcher, journal = journal)
+        val controller = makeController(fakeAsr, dispatcher, journal = journal, context = stubbedContext())
         val answers = Collections.synchronizedList(mutableListOf<String>())
         controller.showAnswerHook = { text -> answers.add(text) }
 
@@ -1689,6 +1750,6 @@ class VoiceControllerSessionTest {
         assertEquals(VoiceUiState.NotUnderstood(""), controller.state.value)
         assertEquals(1, journal.entries.value.size)
         assertEquals(VoiceJournalEntry.Outcome.ERROR, journal.entries.value.first().outcome)
-        awaitTrue { answers.contains("Голосовая модель не загружена") }
+        awaitTrue { answers.contains(modelMissingMsg) }
     }
 }

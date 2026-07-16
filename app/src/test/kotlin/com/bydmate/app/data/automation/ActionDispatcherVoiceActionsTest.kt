@@ -32,7 +32,8 @@ class ActionDispatcherVoiceActionsTest {
         val notificationManager = mockk<NotificationManager>(relaxed = true)
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         return ActionDispatcher(vehicleApi, settingsRepository, helper, context, dagger.Lazy { voiceActions },
-            mockk<ClusterVoiceControl>(relaxed = true))
+            mockk<ClusterVoiceControl>(relaxed = true),
+            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true))
     }
 
     // Factory for the cluster_projection tests below: same shape, but takes the
@@ -45,7 +46,8 @@ class ActionDispatcherVoiceActionsTest {
         val notificationManager = mockk<NotificationManager>(relaxed = true)
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         val voiceActions = mockk<VoiceAutomationActions>(relaxed = true)
-        return ActionDispatcher(vehicleApi, settingsRepository, helper, context, dagger.Lazy { voiceActions }, clusterVoiceControl)
+        return ActionDispatcher(vehicleApi, settingsRepository, helper, context, dagger.Lazy { voiceActions }, clusterVoiceControl,
+            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true))
     }
 
     @Test fun `speak action routes payload text to the coordinator`() = runTest {

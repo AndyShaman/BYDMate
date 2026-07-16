@@ -23,6 +23,12 @@
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Development permission, self-granted via the helper daemon (pm grant) so the in-app
+         log recorder sees the daemon's logcat lines (different uid; an app only sees its own).
+         Takes effect for the recorder on the next app process start (gid is set at fork). -->
+    <uses-permission
+        android:name="android.permission.READ_LOGS"
+        tools:ignore="ProtectedPermissions" />
 
     <queries>
         <!-- ACTION_DIAL (call action — user taps green button to actually dial) -->
@@ -49,6 +55,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- SOME/IP gateway capability probe (HudSomeIpBridge.isServicePresent) -->
+        <package android:name="com.ts.car.someip.service" />
     </queries>
 
     <application

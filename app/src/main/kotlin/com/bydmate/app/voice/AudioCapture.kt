@@ -33,10 +33,28 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         internal const val KEY_PRE_DUCK_VOLUME = "pre_duck_volume"
     }
 
-    // True while a duck belongs to a live session in THIS process (set by duckMusic, cleared
-    // by restoreMusic). Resets to false on process death — which is exactly the only case
-    // where the persisted marker should be acted on by restoreStuckDuck().
-    @Volatile private var duckOwnedByLiveSession = false
+    // Depth of nested active ducks (session-level duck, per-listen-window ducks, speak
+    // ducks - strictly LIFO in practice). Non-zero = a live duck in THIS process owns the
+    // volume and a restore is still coming. A single boolean cannot model this: the inner
+    // window restore would drop ownership while the outer session duck still awaits its
+    // restore, so an explicit set landing between them would never register and the
+    // teardown would revert it. Resets to 0 on process death - which is exactly the only
+    // case where the persisted marker should be acted on by restoreStuckDuck().
+    // Guarded by duckLock.
+    private var duckDepth = 0
+
+    // The volume the active duck stack will ultimately restore. Seeded by every acting
+    // duckMusic(), replaced by applyExplicitVolume() when the user explicitly sets a
+    // volume mid-session, read by every restore but cleared only by the OUTERMOST one
+    // (depth back to 0) - inner window restores must not rob the session teardown of the
+    // user's latest level. Guarded by duckLock.
+    private var pendingRestore: Int? = null
+
+    // Serializes duckMusic / restoreMusic / applyExplicitVolume / pendingRestoreVolume.
+    // Without it, a session teardown racing an explicit volume command can interleave
+    // between the command's setStreamVolume and its restore-target registration and
+    // silently revert the user's choice.
+    private val duckLock = Any()
 
     // No caller-side endpointing: end-of-speech is decided by the recognizer's VAD (GigaAmAsrEngine), not
     // an energy/silence heuristic here. The old RMS gate closed the window ~800 ms in if the user
@@ -107,7 +125,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
      *  duck target. Returns the pre-duck volume to restore later, or null if nothing
      *  was changed (so restoreMusic is a no-op and never bumps volume up unexpectedly). */
     // internal for direct unit tests
-    internal fun duckMusic(): Int? {
+    internal fun duckMusic(): Int? = synchronized(duckLock) {
         if (!audioManager.isMusicActive) return null
         val saved = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
         // Near-zero, not 15%: DiLink's MUSIC scale is 0..39, so 15% (~index 5) is still clearly
@@ -119,20 +137,54 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
             audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
         }.isSuccess
         if (!applied) return null
-        duckOwnedByLiveSession = true
+        duckDepth++
+        pendingRestore = saved
         prefs.edit().putInt(KEY_PRE_DUCK_VOLUME, saved).apply()
         Log.i(TAG, "duckMusic: $saved -> $target")
         return saved
     }
 
-    /** Restore the media volume captured by duckMusic(). No-op if nothing was ducked. */
+    /** Restore the media volume captured by duckMusic(), or the explicit mid-session override. No-op if nothing was ducked. */
     // internal for direct unit tests
-    internal fun restoreMusic(saved: Int?) {
+    internal fun restoreMusic(saved: Int?): Unit = synchronized(duckLock) {
         saved ?: return
-        duckOwnedByLiveSession = false
-        runCatching { audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, saved, 0) }
-        prefs.edit().remove(KEY_PRE_DUCK_VOLUME).apply()
-        Log.i(TAG, "restoreMusic: -> $saved")
+        duckDepth = (duckDepth - 1).coerceAtLeast(0)
+        val target = pendingRestore ?: saved
+        val restored = runCatching {
+            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, target, 0)
+        }.isSuccess
+        if (duckDepth == 0) {
+            pendingRestore = null
+            // Volume first, marker second: if the process dies in between, the marker is
+            // still there for restoreStuckDuck(). And if the physical restore failed, the
+            // kept marker is the only remaining chance to unstick the volume at next start.
+            if (restored) prefs.edit().remove(KEY_PRE_DUCK_VOLUME).apply()
+        }
+        Log.i(TAG, "restoreMusic: -> $target (depth $duckDepth, restored=$restored)")
+    }
+
+    /** The volume the live duck will restore, or null when no duck is active. Lets
+     *  media_volume commands resolve "+N"/"-N" against the volume the USER perceives
+     *  (the pre-duck one), not the near-zero duck level. */
+    fun pendingRestoreVolume(): Int? = synchronized(duckLock) {
+        if (duckDepth > 0) pendingRestore else null
+    }
+
+    /** Explicitly set the media volume on behalf of the user (agent/automation
+     *  media_volume). Atomic with the duck lifecycle: when a live duck owns the volume,
+     *  the level also becomes the value every later restore returns to (and the
+     *  persisted stuck-duck marker, so a crash mid-session restores the user's choice
+     *  too). Setting the stream and registering the restore target under one lock closes
+     *  the race where a session teardown lands between the two and reverts the set. */
+    fun applyExplicitVolume(level: Int): Unit = synchronized(duckLock) {
+        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, level, 0)
+        if (duckDepth > 0) {
+            pendingRestore = level
+            prefs.edit().putInt(KEY_PRE_DUCK_VOLUME, level).apply()
+            Log.i(TAG, "applyExplicitVolume: -> $level (registered as duck restore target)")
+        } else {
+            Log.i(TAG, "applyExplicitVolume: -> $level")
+        }
     }
 
     /**
@@ -147,7 +199,7 @@ class AudioCapture(private val audioManager: AudioManager, private val prefs: Sh
         // service is recreated inside a living process (task swiped from recents ->
         // WorkManager restart) an active voice session may still own the duck — restoring
         // here would blast music mid-reply; the session's own restoreMusic() handles it.
-        if (duckOwnedByLiveSession) {
+        if (synchronized(duckLock) { duckDepth > 0 }) {
             Log.i(TAG, "restoreStuckDuck: skipped, duck owned by a live session in this process")
             return
         }

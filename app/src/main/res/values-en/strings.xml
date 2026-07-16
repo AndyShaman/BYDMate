@@ -15,8 +15,9 @@
     <string name="settings_display_mirror_header">Projection to cluster</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
     <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
-    <string name="settings_cluster_auto_container_title">Cluster auto power-on</string>
-    <string name="settings_cluster_auto_container_desc">Power the cluster screen automatically before projecting</string>
+    <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
+    <string name="settings_cluster_auto_container_desc">Switch the cluster into projection mode automatically</string>
+    <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>
@@ -533,6 +534,10 @@
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
     <string name="battery_health_disabled_title">System data disabled</string>
     <string name="battery_health_disabled_hint">Enable \"System data\" in Settings to see SoH, BMS mileage, and total pumped from the car.</string>
+    <string name="battery_health_avg_soc_header">Average SOC (BYDMate history)</string>
+    <string name="battery_health_avg_since_charge_label">since last charge</string>
+    <string name="battery_health_avg_all_time_label">all time</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Time-weighted state of charge: the longer the battery sits charged, the higher the value. BYD LFP packs age slower when kept lower: storing at a high charge speeds up calendar aging. Guideline: below 65% is great, 65-85% is fine, above 85% consider charging later or less often. A 100% charge once every 1-2 weeks is still needed for cell balancing. Computed from BYDMate trip and charge history.</string>
     <string name="summary_unit_km">km</string>
     <string name="summary_label_mileage">Mileage</string>
     <string name="summary_unit_kwh">kWh</string>
@@ -903,8 +908,10 @@
     <string name="settings_voice_model_downloading">Downloading… %1$d%%</string>
     <string name="voice_listening">Listening</string>
     <string name="voice_thinking">Thinking</string>
+    <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
+    <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. Set Voice language to Russian in Settings.</string>
 
-    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Speech recognition</string>
     <string name="settings_asr_gigaam_ready">Model ready</string>
     <string name="settings_asr_gigaam_download">Download (%1$s)</string>
@@ -1066,4 +1073,16 @@
     <string name="settings_donate_header">Support</string>
     <string name="settings_donate_card_body">BYDMate is free and non-commercial. If it\'s useful to you, you can support development.</string>
     <string name="settings_donate_button">Support the project</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (head-up display)</string>
+    <string name="settings_hud_title">Navigation on HUD</string>
+    <string name="settings_hud_desc">Yandex Navigator guidance on the head-up display: maneuver, distance, street, arrival</string>
+    <string name="settings_hud_speed_sign_title">Speed sign under the arrow</string>
+    <string name="settings_hud_speed_sign_desc">Red speed-limit sign in the lower HUD slot</string>
+    <string name="settings_hud_status_unsupported">SOME/IP bus not found: HUD output is unavailable on this car</string>
+    <string name="settings_hud_status_connecting">Connecting to the bus…</string>
+    <string name="settings_hud_status_on">Streaming to the HUD</string>
+    <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
+    <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
 </resources>

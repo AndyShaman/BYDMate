@@ -15,8 +15,9 @@
     <string name="settings_display_mirror_header">Projeção no painel de instrumentos</string>
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
     <string name="settings_display_mirror_desc">Um toque curto no botão escolhido do volante move o aplicativo selecionado para o painel de instrumentos e vice-versa.</string>
-    <string name="settings_cluster_auto_container_title">Ativação automática do painel</string>
-    <string name="settings_cluster_auto_container_desc">Ligar a tela do painel automaticamente antes da projeção</string>
+    <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
+    <string name="settings_cluster_auto_container_desc">Ativar o modo de projeção do painel automaticamente</string>
+    <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
     <string name="settings_display_app_title">Aplicativo no painel</string>
     <string name="settings_display_size_header">Tamanho da janela no painel</string>
     <string name="settings_display_size_width">Largura</string>
@@ -493,7 +494,11 @@
     <string name="battery_health_pumped_label">carregado</string>
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
     <string name="battery_health_disabled_title">Dados do sistema desativados</string>
-    <string name="battery_health_disabled_hint">Ative \\\"Dados do sistema\\\" nas Configurações para ver o SoH, a quilometragem do BMS e o total carregado do carro.|battery_health_disabled_hint|</string>
+    <string name="battery_health_disabled_hint">Ative \"Dados do sistema\" nas Configurações para ver o SoH, a quilometragem do BMS e o total carregado do carro.</string>
+    <string name="battery_health_avg_soc_header">SOC médio (histórico do BYDMate)</string>
+    <string name="battery_health_avg_since_charge_label">desde a última carga</string>
+    <string name="battery_health_avg_all_time_label">todo o período</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Nível de carga médio ponderado pelo tempo: quanto mais a bateria fica carregada, maior o valor. Baterias LFP da BYD envelhecem menos quando mantidas mais baixas: armazenar com carga alta acelera o envelhecimento. Referência: até 65% ótimo, 65-85% normal, acima de 85% considere carregar mais tarde ou com menos frequência. Uma carga a 100% a cada 1-2 semanas ainda é necessária para balancear as células. Calculado pelo histórico de viagens e cargas do BYDMate.</string>
     <string name="summary_unit_km">km</string>
     <string name="summary_label_mileage">Quilometragem</string>
     <string name="summary_unit_kwh">kWh</string>
@@ -1001,6 +1006,8 @@
     <string name="settings_voice_model_downloading">Baixando… %1$d%%</string>
     <string name="voice_listening">Ouvindo</string>
     <string name="voice_thinking">Pensando</string>
+    <string name="voice_error_model_missing">O modelo de voz não está baixado. Baixe-o em Configurações, seção Agente de voz.</string>
+    <string name="voice_error_lang_not_ru">Os comandos de voz entendem apenas fala em russo. Em Configurações, defina Idioma de voz: Russo.</string>
     <string name="settings_asr_gigaam_title">Reconhecimento de fala</string>
     <string name="settings_asr_gigaam_ready">Modelo pronto</string>
     <string name="settings_asr_gigaam_download">Baixar (%1$s)</string>
@@ -1032,4 +1039,16 @@
     <string name="agent_test_model_result">%1$s: respondeu em %2$.1f s - \"%3$s\"</string>
     <string name="agent_test_model_disabled">Erro: agente desativado ou não configurado</string>
     <string name="agent_exa_api_key_label">Exa API Key (busca na web)</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (head-up display)</string>
+    <string name="settings_hud_title">Navegação no HUD</string>
+    <string name="settings_hud_desc">Dicas do Yandex Navigator no head-up display: manobra, distância, rua, chegada</string>
+    <string name="settings_hud_speed_sign_title">Placa de velocidade sob a seta</string>
+    <string name="settings_hud_speed_sign_desc">Placa vermelha de limite de velocidade no slot inferior do HUD</string>
+    <string name="settings_hud_status_unsupported">Barramento SOME/IP não encontrado: saída HUD indisponível neste carro</string>
+    <string name="settings_hud_status_connecting">Conectando ao barramento…</string>
+    <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
+    <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
+    <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
 </resources>

@@ -88,6 +88,14 @@ fun renderPlanFor(
     return RenderPlan(geo.width, geo.height, dpi)
 }
 
+/**
+ * Freeform window bounds on the cluster display for [geo]: [left, top, right, bottom].
+ * Direct projection reuses the exact overlay-window geometry, so the user's per-car
+ * width/height/offset presets carry over unchanged from the VirtualDisplay pipeline.
+ */
+fun freeformBounds(geo: ClusterGeometry): IntArray =
+    intArrayOf(geo.xOffset, geo.yOffset, geo.xOffset + geo.width, geo.yOffset + geo.height)
+
 /** The other projection state — drives the steering-wheel toggle (приборка ↔ центр). */
 fun nextMode(current: ClusterMode): ClusterMode =
     if (current == ClusterMode.FULLSCREEN) ClusterMode.OFF else ClusterMode.FULLSCREEN
@@ -101,3 +109,24 @@ fun nextMode(current: ClusterMode): ClusterMode =
  */
 fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer: Boolean): Boolean =
     markerSet && mode == ClusterMode.OFF && autoContainer
+
+/** Direct-task crash recovery fires only when a marker survives AND no projection is live. */
+fun shouldRecoverDirectTask(markerDisplayId: Int, mode: ClusterMode): Boolean =
+    markerDisplayId != -1 && mode == ClusterMode.OFF
+
+/**
+ * The display's logical density is trustworthy as the native base only when no direct-mode
+ * density override of ours can be active: no live member AND no surviving crash marker.
+ * A surviving marker means a prior override may still be applied to the display —
+ * absorbing it would compound the scale (320 -> 230 -> 161 -> ...).
+ */
+fun shouldAbsorbDisplayDensity(liveDirectDisplayId: Int, markerDisplayId: Int, metricsDpi: Int): Boolean =
+    liveDirectDisplayId == -1 && markerDisplayId == -1 && metricsDpi > 0
+
+/**
+ * The direct-mode crash marker may be cleared only when the density reset was CONFIRMED and
+ * the stranded task was verifiably reclaimed — or is gone (nothing to reclaim). A false from
+ * mode/move keeps the marker so the next service start retries.
+ */
+fun shouldClearDirectMarker(resetOk: Boolean, taskFound: Boolean, modeOk: Boolean, moveOk: Boolean): Boolean =
+    resetOk && (!taskFound || (modeOk && moveOk))
