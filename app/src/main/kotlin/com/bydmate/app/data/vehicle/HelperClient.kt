@@ -17,6 +17,9 @@ import javax.inject.Singleton
 /** One autoservice read request for HelperClient.readBatch: transact code (5=getInt, 7=getFloat bits), device, fid. */
 data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
 
+/** Result of the daemon's direct freeform launch (TX_LAUNCH_FREEFORM). */
+enum class FreeformLaunchResult { OK, UNAVAILABLE, FAILED }
+
 /**
  * Client for the in-vehicle helper daemon registered as the `bydmate_helper`
  * binder service (ServiceManager.getService + IBinder.transact).
@@ -63,6 +66,10 @@ interface HelperClient {
      * getDisplay(clusterId) returns null). Returns true only if both grants succeed.
      */
     suspend fun grantOverlayPermission(): Boolean
+
+    /** Self-grant android.permission.READ_LOGS via the daemon (development permission) so the
+     *  in-app log recorder sees the daemon's logcat lines. Effective on the next process start. */
+    suspend fun grantReadLogs(): Boolean
     /** Launches [packageName] on [displayId] and pins it (move+bounds+focus loop). Long-running. */
     suspend fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean
     /**
@@ -73,7 +80,7 @@ interface HelperClient {
     suspend fun enableAccessibilityService(): Boolean
 
     /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
-     *  Daemon-whitelisted to sentrymode_enabled_switch. */
+     *  Daemon-whitelisted to sentrymode_enabled_switch and enable_freeform_support. */
     suspend fun putGlobalSetting(key: String, value: Int): Boolean
 
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
@@ -90,6 +97,20 @@ interface HelperClient {
 
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
+
+    /**
+     * Direct cluster projection: find-or-launch [packageName], switch its task to freeform,
+     * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the
+     * freeform switch was rejected (enable_freeform_support not active yet; takes effect after
+     * a head-unit reboot) — callers fall back to the VirtualDisplay pipeline. Long-running.
+     */
+    suspend fun launchFreeform(
+        packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int,
+    ): FreeformLaunchResult
+
+    /** `wm density` override on a NON-default display via the daemon; [density] 0 = reset.
+     *  Maps the projection scale regulator onto the real cluster display in direct mode. */
+    suspend fun setDisplayDensity(displayId: Int, density: Int): Boolean
 }
 
 @Singleton
@@ -169,11 +190,22 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     override suspend fun setFocusedTask(taskId: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_FOCUSED_TASK) { it.writeInt(taskId) }
 
+    // FORCE_TIMEOUT_MS, not the default 2s: on ROMs without the binder API (DiLink 5 removed
+    // setTaskWindowingMode with AOSP S) the daemon restores fullscreen by removing the stack and
+    // relaunching via `am start` with a settle pause — well over the 2s default.
     override suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int): Boolean =
-        statusOk(HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE) { it.writeInt(taskId); it.writeInt(windowingMode) }
+        transactParsed(HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE, {
+            it.writeInt(taskId); it.writeInt(windowingMode)
+        }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
+            readAccepted(status)
+        } ?: false
 
     override suspend fun grantOverlayPermission(): Boolean =
         statusOk(HelperBinderProtocol.TX_GRANT_OVERLAY_PERMISSION) { }
+
+    override suspend fun grantReadLogs(): Boolean =
+        statusOk(HelperBinderProtocol.TX_GRANT_READ_LOGS) { }
 
     override suspend fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean =
         transactParsed(HelperBinderProtocol.TX_LAUNCH_AND_FORCE, { d ->
@@ -198,6 +230,28 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun setClusterContainerMode(on: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }
+
+    // FORCE_TIMEOUT_MS, not the default 2s: mirrors launchAndForce (launch retry loop in the
+    // daemon can take up to ~9.5s on a cold start before the pin loop even begins).
+    override suspend fun launchFreeform(
+        packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int,
+    ): FreeformLaunchResult =
+        transactParsed(HelperBinderProtocol.TX_LAUNCH_FREEFORM, { d ->
+            d.writeString(packageName); d.writeInt(displayId)
+            d.writeInt(left); d.writeInt(top); d.writeInt(right); d.writeInt(bottom)
+        }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed FreeformLaunchResult.FAILED
+            when (reply.readInt()) {
+                0 -> FreeformLaunchResult.OK
+                -2 -> FreeformLaunchResult.UNAVAILABLE
+                else -> FreeformLaunchResult.FAILED
+            }
+        } ?: FreeformLaunchResult.FAILED
+
+    override suspend fun setDisplayDensity(displayId: Int, density: Int): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_DISPLAY_DENSITY) {
+            it.writeInt(displayId); it.writeInt(density)
+        }
 
     override suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_APP_HIDDEN) {

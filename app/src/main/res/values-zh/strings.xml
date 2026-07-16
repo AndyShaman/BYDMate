@@ -18,8 +18,9 @@
     <string name="settings_display_mirror_header">投射到仪表盘</string>
     <string name="settings_display_mirror_title">方向盘按键投射到仪表盘</string>
     <string name="settings_display_mirror_desc">短按所选方向盘按键，将所选应用投射到仪表盘或返回屏幕。</string>
-    <string name="settings_cluster_auto_container_title">仪表自动开启</string>
-    <string name="settings_cluster_auto_container_desc">投屏前自动开启仪表屏幕</string>
+    <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
+    <string name="settings_cluster_auto_container_desc">自动将仪表盘切换到投屏模式</string>
+    <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
     <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>
@@ -1153,4 +1154,16 @@
     <string name="settings_donate_header">支持</string>
     <string name="settings_donate_card_body">BYDMate 免费且非商业化。如果它对您有帮助，您可以支持开发。</string>
     <string name="settings_donate_button">支持项目</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD 抬头显示</string>
+    <string name="settings_hud_title">导航投射到 HUD</string>
+    <string name="settings_hud_desc">将 Yandex 导航提示投射到抬头显示：转向、距离、街道、到达时间</string>
+    <string name="settings_hud_speed_sign_title">箭头下方的限速标志</string>
+    <string name="settings_hud_speed_sign_desc">在 HUD 下方槽位显示红色限速标志</string>
+    <string name="settings_hud_status_unsupported">未找到 SOME/IP 总线：此车辆不支持 HUD 输出</string>
+    <string name="settings_hud_status_connecting">正在连接总线…</string>
+    <string name="settings_hud_status_on">正在向 HUD 传输</string>
+    <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
+    <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
 </resources>

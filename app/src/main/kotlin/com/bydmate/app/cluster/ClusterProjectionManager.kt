@@ -15,8 +15,11 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.bydmate.app.R
+import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,6 +57,7 @@ object ClusterProjectionManager {
     private const val TAG = "ClusterProjection"
     private const val DEFAULT_CLUSTER_DISPLAY_ID = 2          // Phase 0: fission display id
     private const val VIRTUAL_DISPLAY_FLAGS = 322             // TRUSTED | OWN_CONTENT_ONLY | PRESENTATION (OpenBYD)
+    private const val VD_FLAG_PUBLIC = 1                      // DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
     private const val VD_NAME = "BYDMate_Cluster_VD"
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
     private const val OVERLAY_FLAGS = 264                     // FLAG_NOT_FOCUSABLE(8) | FLAG_LAYOUT_IN_SCREEN(256)
@@ -90,6 +94,17 @@ object ClusterProjectionManager {
     // service start to send the missing power-down.
     private const val KEY_COMPOSITOR_POWERED = "compositor_powered_on"
 
+    // Set when the freeform switch was rejected: enable_freeform_support is read once at boot,
+    // so the settings screen shows a "reboot the car" hint until a direct attempt succeeds.
+    const val KEY_FREEFORM_REBOOT_PENDING = "freeform_reboot_pending"
+    // Cluster display id while direct projection is active; persisted (like KEY_LAST_VD_ID) so
+    // a fresh process after a crash can still restore windowing mode and drop the density
+    // override on the next pull-back.
+    const val KEY_DIRECT_DISPLAY_ID = "direct_display_id"
+
+    // WindowConfiguration windowing mode (android.app; hidden constant, stable since API 28).
+    private const val WINDOWING_MODE_FULLSCREEN = 1
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
     private val mutex = Mutex()
 
@@ -109,6 +124,8 @@ object ClusterProjectionManager {
     // back, not the live settings target — the two differ when the user switches the projection app
     // mid-projection, and tugging the new target would strand the old app on the cluster.
     private var projectedPackage: String? = null
+    /** Cluster display id while direct (freeform) projection is active; -1 otherwise. */
+    private var directDisplayId = -1
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
     // so we grant both via the daemon once per process the first time we project.
     private var projectionPermissionsGranted = false
@@ -193,6 +210,23 @@ object ClusterProjectionManager {
         context: Context, helper: HelperClient, bootstrap: HelperBootstrap,
     ): Boolean {
         if (!bootstrap.ensureRunning()) return true        // daemon gone; keep what's on screen
+        if (directDisplayId != -1) {
+            // Direct mode: no overlay/VD to rebuild — retarget the freeform window in place.
+            val display = resolveClusterDisplay(context) ?: return true
+            val (widthPct, heightPct) = readSizePct(context)
+            val (offsetXPct, offsetYPct) = readOffsetPct(context)
+            val geo = geometryFor(
+                ClusterMode.FULLSCREEN, clusterWidth, clusterHeight,
+                widthPct, heightPct, offsetXPct, offsetYPct,
+            ) ?: return true
+            val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
+            val taskId = helper.getTaskId(projectedPackage ?: targetPackage(context)) ?: return true
+            val b = freeformBounds(geo)
+            helper.setTaskBounds(taskId, b[0], b[1], b[2], b[3])
+            applyDirectDensity(helper, directDisplayId, plan)
+            Log.i(TAG, "resize (direct): bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] dpi=${plan.densityDpi}")
+            return true
+        }
         val oldOverlay = overlayView ?: return true
         val oldVdId = remoteDisplayId
         val display = resolveClusterDisplay(context) ?: return true
@@ -216,9 +250,7 @@ object ClusterProjectionManager {
             Log.e(TAG, "resize: new overlay Surface not ready; keeping current size")
             discardNewOverlayKeepOld(oldOverlay); return true
         }
-        val newVdId = helper.createVirtualDisplay(
-            VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
-        )
+        val newVdId = createClusterVd(helper, plan, surface)
         if (newVdId == null) {
             Log.e(TAG, "resize: createVirtualDisplay failed; keeping current size")
             discardNewOverlayKeepOld(oldOverlay); return true
@@ -386,6 +418,75 @@ object ClusterProjectionManager {
         }
     }
 
+    /**
+     * Crash recovery inside project(): a persisted marker with no live member means a prior
+     * process died mid-direct-mode and its density override may still be active on the cluster
+     * display. Drop the override BEFORE resolveClusterDisplay() reads metrics, or it would be
+     * absorbed as the native base density and compound on every crash -> re-project cycle
+     * (320 -> 230 -> 165 -> ...). The marker is intentionally NOT cleared here — the stranded
+     * task is not reclaimed on this path (tryDirectProjection is about to re-adopt it), so the
+     * marker must survive until a confirmed reclaim (pullBackToMain / recoverStaleDirectTask).
+     * A set marker also keeps density absorption suppressed, so the base safely falls back to
+     * last-known / 320 default.
+     */
+    private suspend fun recoverStaleDirectDensity(context: Context, helper: HelperClient) {
+        if (directDisplayId != -1) return  // live session owns the override
+        val staleId = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getInt(KEY_DIRECT_DISPLAY_ID, -1)
+        if (staleId == -1) return
+        if (!runCatching { helper.setDisplayDensity(staleId, 0) }.getOrDefault(false)) {
+            Log.w(TAG, "recoverStaleDirectDensity: reset failed on display $staleId")
+        }
+    }
+
+    /**
+     * One-shot recovery at service start (sibling of [recoverStaleCompositor]): if a prior
+     * process died while direct projection was active, the navigator task survives as a
+     * freeform window on the (now unwatched) cluster display — invisible everywhere, and an
+     * explicit setMode(OFF) is dropped as idempotent because currentMode is already OFF.
+     * Resets the density override and pulls the task back to the main display fullscreen,
+     * without focusing it (this runs at boot). Marker cleared only when BOTH the density
+     * reset and the task reclaim are confirmed (or the task is gone). No-op when a
+     * projection is live in THIS process or no marker is set.
+     */
+    fun recoverStaleDirectTask(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+        val appContext = context.applicationContext
+        scope.launch {
+            mutex.withLock {
+                val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                val staleId = prefs.getInt(KEY_DIRECT_DISPLAY_ID, -1)
+                if (!shouldRecoverDirectTask(staleId, currentMode)) return@withLock
+                if (!bootstrap.ensureRunning()) {
+                    Log.w(TAG, "recoverStaleDirectTask: daemon unreachable; keeping marker for next start")
+                    return@withLock
+                }
+                Log.i(TAG, "recoverStaleDirectTask: pulling back task left in direct mode by a prior session")
+                val resetOk = runCatching { helper.setDisplayDensity(staleId, 0) }.getOrDefault(false)
+                val taskId = helper.getTaskId(targetPackage(appContext))
+                var modeOk = false
+                var moveOk = false
+                if (taskId != null) {
+                    modeOk = helper.setTaskWindowingMode(taskId, WINDOWING_MODE_FULLSCREEN)
+                    // Same compat-path handling as pullBackToMain: a changed task id means the
+                    // daemon relaunched the task fullscreen on the main display already.
+                    val relaunchedId = if (modeOk) helper.getTaskId(targetPackage(appContext)) else null
+                    if (relaunchedId != null && relaunchedId != taskId) {
+                        moveOk = true
+                    } else {
+                        moveOk = helper.moveTaskToDisplay(taskId, 0)
+                        helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
+                    }
+                }
+                if (shouldClearDirectMarker(resetOk, taskId != null, modeOk, moveOk)) {
+                    prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, -1).apply()
+                } else {
+                    Log.w(TAG, "recoverStaleDirectTask: recovery incomplete " +
+                        "(reset=$resetOk task=${taskId != null} mode=$modeOk move=$moveOk); keeping marker for next start")
+                }
+            }
+        }
+    }
+
     /** Returns null only when the overlay is up, the VirtualDisplay exists, and Navi is pinned;
      *  otherwise a failure reason ("daemon" = helper daemon unreachable, "projection" = anything
      *  else) so [applyModeLocked] can report an honest [lastFailure]. */
@@ -395,6 +496,7 @@ object ClusterProjectionManager {
         if (!bootstrap.ensureRunning()) {
             Log.e(TAG, "helper daemon not running; aborting projection"); return "daemon"
         }
+        recoverStaleDirectDensity(context, helper)
         if (autoContainerEnabled(context)) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
@@ -418,6 +520,16 @@ object ClusterProjectionManager {
             mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
         ) ?: return "projection"
         val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
+
+        // Direct mode first (2026-07-15, validated on-car): Navi runs ON the cluster display
+        // itself, so the a11y feed (voice agent / HUD) can read it — a private VirtualDisplay
+        // is invisible to accessibility and this firmware rejects PUBLIC VDs. Release any VD a
+        // prior process orphaned first — the direct path never reaches the VD-path cleanup
+        // below. Falls through to the VD pipeline when freeform is not active yet (flag needs
+        // one reboot) or anything fails. Skip orphan release when a live member handle is
+        // present — it is our own VD retry handle, not an orphan.
+        if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
+        if (tryDirectProjection(context, helper, display, geo, plan)) return null
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
@@ -443,9 +555,7 @@ object ClusterProjectionManager {
                 // daemon only releases ids in its own map, so a reused/stale id is a safe no-op.
                 releaseOrphanedDisplay(context, helper)
             }
-            val id = helper.createVirtualDisplay(
-                VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
-            )
+            val id = createClusterVd(helper, plan, surface)
             if (id == null) {
                 Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return "projection"
             }
@@ -466,6 +576,105 @@ object ClusterProjectionManager {
             Log.e(TAG, "projection threw: ${e.message}", e)
             hideOverlay(helper); "projection"
         }
+    }
+
+    /**
+     * Attempts the direct freeform launch on [display]. True = Navi is on the cluster display
+     * (direct mode active, no overlay/VD needed); false = fall back to the VD pipeline.
+     */
+    private suspend fun tryDirectProjection(
+        context: Context, helper: HelperClient, display: Display, geo: ClusterGeometry, plan: RenderPlan,
+    ): Boolean {
+        // Persist the freeform flag on every attempt: the framework reads it once at boot, so
+        // writing it now arms the NEXT ignition cycle even when this attempt still falls back.
+        runCatching { helper.putGlobalSetting("enable_freeform_support", 1) }
+        val pkg = targetPackage(context)
+        val bounds = freeformBounds(geo)
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // Write-ahead marker (mirrors KEY_COMPOSITOR_POWERED): persisted BEFORE the daemon call,
+        // so a death between the daemon-side move and our handling of the reply still leaves a
+        // marker for boot recovery to find. commit() on Dispatchers.IO, not apply(): the
+        // write-ahead guarantee needs the marker ON DISK before the daemon moves the task —
+        // apply() is async and a process death during the (up to 15s) binder call could lose
+        // it (manager coroutines live on Main, so the blocking write moves to IO). A failed
+        // write voids the crash-safety guarantee — fall back to the VD pipeline. Cleared below
+        // only on UNAVAILABLE (the daemon's setMode threw before any move — nothing to clean
+        // up); on FAILED it stays: the daemon may have half-applied the launch, and a stale
+        // marker is healed by the next recoverStaleDirectTask / recoverStaleDirectDensity pass.
+        @Suppress("ApplySharedPref")
+        val markerWritten = withContext(Dispatchers.IO) {
+            prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, display.displayId).commit()
+        }
+        if (!markerWritten) {
+            Log.w(TAG, "direct projection: write-ahead marker not persisted; VD fallback")
+            return false
+        }
+        return when (helper.launchFreeform(pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3])) {
+            FreeformLaunchResult.OK -> {
+                directDisplayId = display.displayId
+                prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
+                applyDirectDensity(helper, display.displayId, plan)
+                projectedPackage = pkg
+                Log.i(TAG, "direct projection: $pkg on display ${display.displayId} " +
+                    "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
+                true
+            }
+            FreeformLaunchResult.UNAVAILABLE -> {
+                val firstTime = !prefs.getBoolean(KEY_FREEFORM_REBOOT_PENDING, false)
+                prefs.edit()
+                    .putBoolean(KEY_FREEFORM_REBOOT_PENDING, true)
+                    .putInt(KEY_DIRECT_DISPLAY_ID, -1)
+                    .apply()
+                Log.i(TAG, "direct projection: freeform unavailable (reboot pending); VD fallback")
+                // One-time overlay on the FIRST fallback after install/update: the settings hint
+                // alone is only seen if the user opens Settings. Silent (no ringtone) — this is
+                // informational, not an alarm. Cleared-then-failed-again cycles show it again,
+                // which is correct: the reboot requirement is back.
+                if (firstTime) {
+                    runCatching {
+                        OverlayNotificationManager.show(
+                            context,
+                            context.getString(R.string.settings_display_mirror_title),
+                            context.getString(R.string.settings_cluster_direct_reboot_hint),
+                        )
+                    }
+                }
+                false
+            }
+            FreeformLaunchResult.FAILED -> {
+                Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
+                false
+            }
+        }
+    }
+
+    /** Density override for direct mode: native dpi -> reset (no override), else the plan's dpi. */
+    private suspend fun applyDirectDensity(helper: HelperClient, displayId: Int, plan: RenderPlan) {
+        val density = if (plan.densityDpi == clusterDensityDpi) 0 else plan.densityDpi
+        runCatching { helper.setDisplayDensity(displayId, density) }
+    }
+
+    /**
+     * Creates the projection VirtualDisplay, preferring PUBLIC flags: accessibility ignores
+     * private virtual displays (confirmed on-car 2026-07-15: display 9 missing from
+     * mWindowsForAccessibilityObserver), which blinds findNavigatorRoot()/NavA11yFeed —
+     * get_route_info and the HUD feed — whenever the Navigator is projected. A PUBLIC display
+     * is a11y-tracked. The firmware may reject PUBLIC for the shell uid (AOSP wants
+     * CAPTURE_VIDEO_OUTPUT, which shell lacks); fall back to the field-tested private
+     * flags (OpenBYD) so projection itself works either way.
+     */
+    private suspend fun createClusterVd(helper: HelperClient, plan: RenderPlan, surface: Surface): Int? {
+        helper.createVirtualDisplay(
+            VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi,
+            VIRTUAL_DISPLAY_FLAGS or VD_FLAG_PUBLIC, surface,
+        )?.let {
+            Log.i(TAG, "VirtualDisplay $it created PUBLIC (a11y-visible)")
+            return it
+        }
+        Log.w(TAG, "PUBLIC VirtualDisplay rejected; falling back to private flags")
+        return helper.createVirtualDisplay(
+            VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
+        )
     }
 
     /**
@@ -490,7 +699,15 @@ object ClusterProjectionManager {
             clusterHeight = point.y
             val metrics = DisplayMetrics()
             @Suppress("DEPRECATION") match.getMetrics(metrics)
-            if (metrics.densityDpi > 0) clusterDensityDpi = metrics.densityDpi
+            // While direct projection is active — or a crash marker survives (density reset
+            // unconfirmed) — the display's logical density may be our own wm-density override;
+            // absorbing it would compound the scale on every cycle. Keep the last-known base
+            // (320 default = native Leopard 3) instead.
+            val markerId = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .getInt(KEY_DIRECT_DISPLAY_ID, -1)
+            if (shouldAbsorbDisplayDensity(directDisplayId, markerId, metrics.densityDpi)) {
+                clusterDensityDpi = metrics.densityDpi
+            }
             Log.i(TAG, "cluster display id=${match.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
         }
         return match
@@ -553,15 +770,56 @@ object ClusterProjectionManager {
         return ready.await()
     }
 
-    /** Move the projected app's task back to the main display and (optionally) refocus it. */
+    /**
+     * Moves the projected app's task back to the main display and (optionally) refocuses it.
+     * In direct mode also restores fullscreen windowing and drops the cluster density override.
+     * The persisted KEY_DIRECT_DISPLAY_ID marker lets a fresh process after a crash still clean
+     * up; marker cleared only when BOTH the density reset and the task reclaim are confirmed
+     * (or the task is gone).
+     */
     private suspend fun pullBackToMain(context: Context, helper: HelperClient, focus: Boolean) {
         val pkg = projectedPackage ?: targetPackage(context)
-        val taskId = helper.getTaskId(pkg) ?: run {
-            Log.d(TAG, "pullBackToMain: projected task ($pkg) not found"); return
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // Member first, persisted marker second: the marker survives an app-process restart, so
+        // a fresh process can still restore windowing mode / drop the density override after a
+        // crash mid-direct-mode.
+        val directId = if (directDisplayId != -1) directDisplayId
+                       else prefs.getInt(KEY_DIRECT_DISPLAY_ID, -1)
+        // Always clear the member: keeps the VD path out of the direct-resize branch even when
+        // the density reset fails (daemon dead).
+        directDisplayId = -1
+        val resetOk = directId != -1 &&
+            runCatching { helper.setDisplayDensity(directId, 0) }.getOrDefault(false)
+        val taskId = helper.getTaskId(pkg)
+        var modeOk = false
+        var moveOk = false
+        if (taskId != null) {
+            // Restore fullscreen windowing before moving back to the main display; a freeform
+            // task otherwise keeps its tiny bounds. For a VD-mode task this is a no-op in ATMS;
+            // sending it unconditionally also covers the daemon-switched-but-client-FAILED window.
+            modeOk = helper.setTaskWindowingMode(taskId, WINDOWING_MODE_FULLSCREEN)
+            // The daemon's compat path (DiLink 5 has no setTaskWindowingMode binder API) restores
+            // fullscreen by removing the stack and relaunching on the main display — a changed
+            // task id means the relaunch already placed the task there, and ops on the old id
+            // would fail and falsely keep the marker.
+            val relaunchedId = if (modeOk) helper.getTaskId(pkg) else null
+            if (relaunchedId != null && relaunchedId != taskId) {
+                moveOk = true
+                if (focus) helper.setFocusedTask(relaunchedId)
+            } else {
+                moveOk = helper.moveTaskToDisplay(taskId, 0)
+                helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
+                if (focus) helper.setFocusedTask(taskId)
+            }
+        } else {
+            Log.d(TAG, "pullBackToMain: projected task ($pkg) not found")
         }
-        helper.moveTaskToDisplay(taskId, 0)
-        helper.setTaskBounds(taskId, 0, 0, 0, 0)
-        if (focus) helper.setFocusedTask(taskId)
+        // Same confirmed-only invariant as recoverStaleDirectTask: the marker survives until
+        // BOTH the density reset and the task reclaim are confirmed (or the task is gone), so
+        // the next service start can retry.
+        if (directId != -1 && shouldClearDirectMarker(resetOk, taskId != null, modeOk, moveOk)) {
+            prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, -1).apply()
+        }
     }
 
     /**

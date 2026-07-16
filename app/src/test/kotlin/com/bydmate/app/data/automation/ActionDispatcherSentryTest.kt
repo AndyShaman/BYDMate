@@ -28,7 +28,8 @@ class ActionDispatcherSentryTest {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         dispatcher = ActionDispatcher(vehicleApi, helper, context,
             dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true))
+            mockk<ClusterVoiceControl>(relaxed = true),
+            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true))
     }
 
     private fun sentry(payload: String) =

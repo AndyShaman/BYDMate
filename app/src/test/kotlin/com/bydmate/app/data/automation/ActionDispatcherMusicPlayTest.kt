@@ -30,7 +30,8 @@ class ActionDispatcherMusicPlayTest {
         every { context.getSystemService(Context.NOTIFICATION_SERVICE) } returns notificationManager
         dispatcher = ActionDispatcher(vehicleApi, helper, context,
             dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
-            mockk<ClusterVoiceControl>(relaxed = true))
+            mockk<ClusterVoiceControl>(relaxed = true),
+            mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true))
     }
 
     @Test fun music_play_uses_media_session_when_available() = runBlocking {

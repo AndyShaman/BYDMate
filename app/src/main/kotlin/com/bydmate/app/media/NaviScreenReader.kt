@@ -26,17 +26,18 @@ object NaviScreenReader {
 
     fun read(root: AccessibilityNodeInfo?): ScreenInfo? {
         if (root == null) return null
-        if (root.packageName?.toString() != NaviRouteHolder.NAVI_PACKAGE) return null
-        val maneuverDist = textOf(root, "ru.yandex.yandexnavi:id/text_maneuverballoon_distance")
-        val maneuverMetrics = textOf(root, "ru.yandex.yandexnavi:id/text_maneuverballoon_metrics")
+        val pkg = root.packageName?.toString() ?: return null
+        if (pkg !in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return null
+        val maneuverDist = textOf(root, "$pkg:id/text_maneuverballoon_distance")
+        val maneuverMetrics = textOf(root, "$pkg:id/text_maneuverballoon_metrics")
         return ScreenInfo(
-            speedLimit = textOf(root, "ru.yandex.yandexnavi:id/text_speedlimit"),
-            exitNumber = textOf(root, "ru.yandex.yandexnavi:id/exit_number_text"),
+            speedLimit = textOf(root, "$pkg:id/text_speedlimit"),
+            exitNumber = textOf(root, "$pkg:id/exit_number_text"),
             maneuverDistance = maneuverDist?.let { (it + (maneuverMetrics ?: "")).trim() },
-            remainingDistance = textOf(root, "ru.yandex.yandexnavi:id/textview_eta_distance"),
-            remainingTime = textOf(root, "ru.yandex.yandexnavi:id/textview_eta_time"),
-            arrivalTime = textOf(root, "ru.yandex.yandexnavi:id/textview_eta_arrival"),
-            street = textOf(root, "ru.yandex.yandexnavi:id/status_panel_text"),
+            remainingDistance = textOf(root, "$pkg:id/textview_eta_distance"),
+            remainingTime = textOf(root, "$pkg:id/textview_eta_time"),
+            arrivalTime = textOf(root, "$pkg:id/textview_eta_arrival"),
+            street = textOf(root, "$pkg:id/status_panel_text"),
         )
     }
 

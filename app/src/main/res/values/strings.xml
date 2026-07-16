@@ -18,8 +18,9 @@
     <string name="settings_display_mirror_header">Вывод на приборку</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
-    <string name="settings_cluster_auto_container_title">Автовключение приборки</string>
-    <string name="settings_cluster_auto_container_desc">Перед проекцией включать экран приборки автоматически</string>
+    <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
+    <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
+    <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
@@ -1190,4 +1191,16 @@
     <string name="settings_donate_header">Поддержка</string>
     <string name="settings_donate_card_body">BYDMate бесплатный и некоммерческий. Если он вам полезен, вы можете поддержать разработку.</string>
     <string name="settings_donate_button">Поддержать проект</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (проекционный дисплей)</string>
+    <string name="settings_hud_title">Навигация на HUD</string>
+    <string name="settings_hud_desc">Подсказки Яндекс Навигатора на проекционном дисплее: манёвр, дистанция, улица, прибытие</string>
+    <string name="settings_hud_speed_sign_title">Знак скорости под стрелкой</string>
+    <string name="settings_hud_speed_sign_desc">Красный знак ограничения скорости в нижнем слоте HUD</string>
+    <string name="settings_hud_status_unsupported">Шина SOME/IP не найдена: на этой машине вывод на HUD недоступен</string>
+    <string name="settings_hud_status_connecting">Подключение к шине…</string>
+    <string name="settings_hud_status_on">Передача на HUD активна</string>
+    <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
+    <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
 </resources>

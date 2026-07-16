@@ -94,6 +94,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
+    @Inject lateinit var hudController: com.bydmate.app.hud.HudController
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -206,6 +207,17 @@ class TrackingService : Service(), LocationListener {
                 helperBootstrap.ensureRunning() &&
                     com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
             },
+        )
+    }
+
+    private val readLogsGrant by lazy {
+        GrantSelfHeal(
+            name = "read logs",
+            isGranted = {
+                checkSelfPermission(android.Manifest.permission.READ_LOGS) ==
+                    android.content.pm.PackageManager.PERMISSION_GRANTED
+            },
+            reassert = { helperBootstrap.ensureRunning() && helperClient.grantReadLogs() },
         )
     }
 
@@ -359,6 +371,8 @@ class TrackingService : Service(), LocationListener {
         ChainLog.append(this, "startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
+        // HUD output resumes with the service on cars where the user enabled it.
+        hudController.startIfEnabled()
 
         // Reset the live trip-distance companion flow — stale value from a prior
         // service instance in the same process must not leak to the widget before
@@ -455,6 +469,8 @@ class TrackingService : Service(), LocationListener {
                 // keeps the marker so the next service start tries again.
                 com.bydmate.app.cluster.ClusterProjectionManager.recoverStaleCompositor(
                     this@TrackingService, helperClient, helperBootstrap)
+                com.bydmate.app.cluster.ClusterProjectionManager.recoverStaleDirectTask(
+                    this@TrackingService, helperClient, helperBootstrap)
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
@@ -474,6 +490,10 @@ class TrackingService : Service(), LocationListener {
         // helper bootstrap above) and re-run on every SCREEN_ON / USER_PRESENT.
         serviceScope.launch { ensureStarServiceRunning("startup") }
         serviceScope.launch { notificationListenerGrant.ensure("startup") }
+        // READ_LOGS lands in this process' gids only on the NEXT app start, so granting early
+        // (service start, not first recorder use) minimizes the window where the log recorder
+        // still cannot see the helper daemon's lines.
+        serviceScope.launch { readLogsGrant.ensure("startup") }
         registerScreenWakeReceiver()
 
         // Start the network monitor BEFORE polling so the first evaluate() tick
@@ -776,6 +796,7 @@ class TrackingService : Service(), LocationListener {
         com.bydmate.app.ui.widget.WidgetController.detach()
         ChainLog.append(this, "TrackingService onDestroy")
         pollingJob?.cancel()
+        hudController.stop()
         ConsumptionAggregator.reset()
         // NOTE: do NOT null out _sessionStartedAt or clear SessionPersistence here.
         // onDestroy can fire on sys-kill mid-trip; persistence must survive so the
@@ -1246,7 +1267,9 @@ class TrackingService : Service(), LocationListener {
         // itself); without this, enabling Voice alone never re-binds the service (Finding 3).
         val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
             .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
-        if (!mirrorEnabled && !voiceEnabled) return
+        // HUD guidance also reads Navigator via this a11y service; gate on CONFIRMED
+        // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
+        if (!mirrorEnabled && !voiceEnabled && !hudController.requiresA11y()) return
         starGrant.ensure(reason)
     }
 

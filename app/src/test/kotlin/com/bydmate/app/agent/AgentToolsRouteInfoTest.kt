@@ -16,6 +16,8 @@ import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.media.NaviNotificationParser
 import com.bydmate.app.media.NaviRouteHolder
 import com.bydmate.app.media.NaviScreenReader
+import com.bydmate.app.navdata.NavGuidance
+import com.bydmate.app.navdata.NavGuidanceHub
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.every
@@ -26,6 +28,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 class AgentToolsRouteInfoTest {
@@ -67,9 +70,11 @@ class AgentToolsRouteInfoTest {
         street = "ул. Качаны",
     )
 
+    @Before
     @After
     fun resetHolder() {
         NaviRouteHolder.clear(NaviRouteHolder.NAVI_PACKAGE)
+        NavGuidanceHub.reset()
     }
 
     @Test fun get_route_info_errors_when_holder_empty() = runTest {
@@ -181,5 +186,56 @@ class AgentToolsRouteInfoTest {
         assertEquals("прямо", out.getString("maneuver"))
         assertEquals("500 м", out.getString("maneuver_distance"))
         assertEquals("пр. Мира", out.getString("street"))
+    }
+
+    @Test fun `hub numerics fill gaps when notification and screen are gone`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300, road = "пр. Мира", speedLimit = 60),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L - 30_000L,
+        )
+        val t = tools()
+        t.naviScreenProvider = { null }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertFalse(out.has("error"))
+        assertEquals("направо", out.getString("maneuver"))
+        assertEquals("300 м", out.getString("maneuver_distance"))
+        assertEquals("пр. Мира", out.getString("street"))
+        assertEquals("60", out.getString("speed_limit"))
+        assertEquals(30L, out.getLong("hub_age_sec"))
+    }
+
+    @Test fun `stale hub does not rescue empty sources`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L - NavGuidanceHub.ACTIVE_TIMEOUT_MS - 1,
+        )
+        val t = tools()
+        t.naviScreenProvider = { null }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertTrue(out.has("error"))
+    }
+
+    @Test fun `notification fields win over hub`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 1, distanceMeters = 999, road = "хаб-улица"),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L - 5_000L,
+        )
+        NaviRouteHolder.update(
+            NaviRouteHolder.NAVI_PACKAGE, "5 км", null, null,
+            1_000_000_000_000L,
+            NaviNotificationParser.Parsed(
+                maneuver = "направо", maneuverResource = null,
+                distance = "300 м", street = "улица Ленина", bigTexts = emptyList(),
+            ),
+        )
+        val t = tools()
+        t.naviScreenProvider = { null }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("направо", out.getString("maneuver"))
+        assertEquals("300 м", out.getString("maneuver_distance"))
+        assertEquals("улица Ленина", out.getString("street"))
     }
 }

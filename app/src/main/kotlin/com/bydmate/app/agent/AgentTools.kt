@@ -110,9 +110,17 @@ class AgentTools @Inject constructor(
     /** Test seam - launchable apps as label to package pairs. */
     internal var launcherAppsProvider: () -> List<Pair<String, String>> = { queryLauncherApps() }
 
-    /** Test seam - a11y read of the Navigator window; null when it is not on screen. */
+    /** Test seam - a11y read of the Navigator window. findNavigatorRoot() also sees the
+     *  Navigator when it is minimized or projected to the instrument cluster (display 2),
+     *  where rootInActiveWindow is blind. Caller-side recycle happens here. */
     internal var naviScreenProvider: () -> NaviScreenReader.ScreenInfo? = {
-        NaviScreenReader.read(SteeringWheelKeyService.instance?.rootInActiveWindow)
+        val root = SteeringWheelKeyService.instance?.findNavigatorRoot()
+        try {
+            NaviScreenReader.read(root)
+        } finally {
+            @Suppress("DEPRECATION")
+            root?.let { r -> runCatching { r.recycle() } }
+        }
     }
 
     /** Test seam - did the Navigator reach the foreground since [sinceMs]? Combines UsageStats
@@ -1330,11 +1338,13 @@ class AgentTools @Inject constructor(
 
     private suspend fun routeInfo(): String {
         val snap = NaviRouteHolder.latest
-        // Screen is the fallback source: the 2026 Navigator build posts a static stub
-        // notification, all guidance data lives only in the on-screen a11y tree.
+        // Screen is windows-aware: findNavigatorRoot() sees the Navigator minimized or
+        // projected to the cluster. The hub keeps the last 90 s of guidance from the
+        // a11y feed / notification channel for moments when no window read succeeds.
         val screen = runCatching { naviScreenProvider() }.getOrNull()
-        if (snap == null && screen == null)
-            return """{"error":"Навигатор не ведёт маршрут, или данных нет: нет уведомления и Навигатор не на экране"}"""
+        val hub = com.bydmate.app.navdata.NavGuidanceHub.snapshot(nowMs())
+        if (snap == null && screen == null && !hub.active)
+            return """{"error":"Навигатор не ведёт маршрут, или данных нет: нет уведомления, окно Навигатора не найдено и свежих данных ведения нет"}"""
         return JSONObject().apply {
             snap?.maneuver?.let { put("maneuver", it) }
             if (snap?.maneuver == null) snap?.maneuverIcon?.let { put("maneuver_icon", it) }
@@ -1349,6 +1359,20 @@ class AgentTools @Inject constructor(
             screen?.arrivalTime?.let { put("arrival_time", it) }
             screen?.speedLimit?.let { put("speed_limit", it) }
             screen?.exitNumber?.let { put("exit_number", it) }
+            // Unified hub fallback: numerics captured by the HUD a11y feed or the
+            // notification channel fill gaps left by both direct sources.
+            if (hub.active) {
+                if (!has("maneuver")) {
+                    com.bydmate.app.navdata.NavManeuverCodes.gaodePhrase(hub.maneuverGaode)
+                        ?.let { put("maneuver", it) }
+                }
+                if (!has("maneuver_distance") && hub.distanceMeters > 0)
+                    put("maneuver_distance", formatMeters(hub.distanceMeters))
+                if (!has("street") && hub.road.isNotEmpty()) put("street", hub.road)
+                if (!has("speed_limit") && hub.speedLimit > 0)
+                    put("speed_limit", hub.speedLimit.toString())
+                put("hub_age_sec", (nowMs() - hub.lastUpdateMs) / 1000L)
+            }
             gate.vehicleSnapshot()?.let { d ->
                 put("soc", d.soc)
                 runCatchingCancellable { rangeCalculator.estimate(d.soc, d.totalElecConsumption) }
@@ -1356,10 +1380,14 @@ class AgentTools @Inject constructor(
             }
             // Screen values are live; notification age matters only when it is the source.
             put("age_min", if (snap != null) ((nowMs() - snap.postedAtMs) / 60_000L) else 0L)
-            put("note", "данные из уведомления Навигатора и его экрана; remaining_* и arrival_time " +
-                "видны, только когда Навигатор открыт на экране")
+            put("note", "данные из уведомления Навигатора, его окна (включая приборку и " +
+                "свёрнутый режим) и накопленных данных ведения (hub_age_sec = их возраст)")
         }.toString()
     }
+
+    private fun formatMeters(meters: Int): String =
+        if (meters >= 1000) String.format(java.util.Locale.US, "%.1f км", meters / 1000.0)
+        else "$meters м"
 
     private suspend fun goHomeScreen(): String {
         val result = actionDispatcher.dispatch(

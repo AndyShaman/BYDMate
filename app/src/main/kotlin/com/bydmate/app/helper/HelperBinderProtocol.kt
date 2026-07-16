@@ -79,6 +79,21 @@ object HelperBinderProtocol {
      */
     val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 20
 
+    /** Direct freeform launch for cluster projection: [String pkg, int displayId,
+     *  int left, int top, int right, int bottom] -> [int status (0 ok, -2 freeform
+     *  unavailable, -1 failed), int 0]. */
+    val TX_LAUNCH_FREEFORM: Int = IBinder.FIRST_CALL_TRANSACTION + 21          // 22
+
+    /** `wm density` override on a NON-default display: [int displayId, int density
+     *  (0 = reset)] -> [int status, int 0]. Maps the projection scale regulator onto the
+     *  real cluster display in direct mode. */
+    val TX_SET_DISPLAY_DENSITY: Int = IBinder.FIRST_CALL_TRANSACTION + 22      // 23
+
+    /** `pm grant` of android.permission.READ_LOGS to our own package (development permission,
+     *  hardcoded target) so the in-app log recorder sees the daemon's logcat lines.
+     *  (no args) -> [int status, int 0]. */
+    val TX_GRANT_READ_LOGS: Int = IBinder.FIRST_CALL_TRANSACTION + 23          // 24
+
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128
 

@@ -15,8 +15,9 @@
     <string name="settings_display_mirror_header">Projeção no painel de instrumentos</string>
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
     <string name="settings_display_mirror_desc">Um toque curto no botão escolhido do volante move o aplicativo selecionado para o painel de instrumentos e vice-versa.</string>
-    <string name="settings_cluster_auto_container_title">Ativação automática do painel</string>
-    <string name="settings_cluster_auto_container_desc">Ligar a tela do painel automaticamente antes da projeção</string>
+    <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
+    <string name="settings_cluster_auto_container_desc">Ativar o modo de projeção do painel automaticamente</string>
+    <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
     <string name="settings_display_app_title">Aplicativo no painel</string>
     <string name="settings_display_size_header">Tamanho da janela no painel</string>
     <string name="settings_display_size_width">Largura</string>
@@ -1032,4 +1033,16 @@
     <string name="agent_test_model_result">%1$s: respondeu em %2$.1f s - \"%3$s\"</string>
     <string name="agent_test_model_disabled">Erro: agente desativado ou não configurado</string>
     <string name="agent_exa_api_key_label">Exa API Key (busca na web)</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (head-up display)</string>
+    <string name="settings_hud_title">Navegação no HUD</string>
+    <string name="settings_hud_desc">Dicas do Yandex Navigator no head-up display: manobra, distância, rua, chegada</string>
+    <string name="settings_hud_speed_sign_title">Placa de velocidade sob a seta</string>
+    <string name="settings_hud_speed_sign_desc">Placa vermelha de limite de velocidade no slot inferior do HUD</string>
+    <string name="settings_hud_status_unsupported">Barramento SOME/IP não encontrado: saída HUD indisponível neste carro</string>
+    <string name="settings_hud_status_connecting">Conectando ao barramento…</string>
+    <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
+    <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
+    <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
 </resources>

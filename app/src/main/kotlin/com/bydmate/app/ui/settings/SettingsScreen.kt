@@ -122,6 +122,7 @@ import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.TtsVoiceCatalog
 import com.bydmate.app.voice.online.TtsRouter
+import com.bydmate.app.hud.HudController
 import java.util.Locale
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
@@ -861,6 +862,9 @@ private fun DisplaySection() {
     var autoContainer by remember {
         mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, true))
     }
+    val rebootPending = remember {
+        prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false)
+    }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -896,6 +900,9 @@ private fun DisplaySection() {
                     prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
                 },
             )
+            if (rebootPending) {
+                SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
+            }
             // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
             if (enabled) {
                 SettingDivider()
@@ -912,6 +919,55 @@ private fun DisplaySection() {
                 value = targetLabel,
                 onClick = { pickingApp = true },
             )
+        }
+    }
+
+    // HUD navigation output (factory head-up display via the SOME/IP bus). Uses the same
+    // ClusterEntryPoint as projection - HudController is a @Singleton behind it.
+    val hudController = remember { entryPoint.hudController() }
+    var hudEnabled by remember { mutableStateOf(hudController.isEnabled()) }
+    var hudSpeedSign by remember { mutableStateOf(hudController.isSpeedSignEnabled()) }
+    val hudStatus by hudController.status.collectAsState()
+
+    SectionHeader(text = stringResource(R.string.settings_hud_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_hud_title),
+                description = stringResource(R.string.settings_hud_desc),
+                checked = hudEnabled,
+                onCheckedChange = {
+                    hudEnabled = it
+                    hudController.setEnabled(it)
+                },
+            )
+            if (hudEnabled) {
+                SettingDivider()
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_hud_speed_sign_title),
+                    description = stringResource(R.string.settings_hud_speed_sign_desc),
+                    checked = hudSpeedSign,
+                    onCheckedChange = {
+                        hudSpeedSign = it
+                        hudController.setSpeedSignEnabled(it)
+                    },
+                )
+                SettingDivider()
+                SettingStatusRow(
+                    title = when (hudStatus) {
+                        HudController.Status.ON -> stringResource(R.string.settings_hud_status_on)
+                        HudController.Status.UNSUPPORTED -> stringResource(R.string.settings_hud_status_unsupported)
+                        HudController.Status.BIND_FAILED -> stringResource(R.string.settings_hud_status_bind_failed)
+                        else -> stringResource(R.string.settings_hud_status_connecting)
+                    },
+                    ok = hudStatus == HudController.Status.ON,
+                )
+            }
+            SettingHint(text = stringResource(R.string.settings_hud_hint))
         }
     }
 

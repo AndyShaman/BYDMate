@@ -37,6 +37,7 @@ class ActionDispatcher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val voiceActions: dagger.Lazy<com.bydmate.app.voice.VoiceAutomationActions>,
     private val clusterVoiceControl: ClusterVoiceControl,
+    private val audioCapture: com.bydmate.app.voice.AudioCapture,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -330,10 +331,16 @@ class ActionDispatcher @Inject constructor(
         val am = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
             ?: return DispatchResult(false, "AudioManager недоступен")
         val max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-        val current = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+        // During a voice-session duck the stream sits at the near-zero duck level: "+N"/"-N"
+        // must step from the volume the user actually perceives (the pending restore value),
+        // and the result must survive the session's teardown restore (volume revert bug).
+        val current = audioCapture.pendingRestoreVolume()
+            ?: am.getStreamVolume(AudioManager.STREAM_MUSIC)
         return when (val op = resolveVolumeOp(payload, current, max)) {
             is VolumeOp.SetTo -> {
-                am.setStreamVolume(AudioManager.STREAM_MUSIC, op.level, 0)
+                // Set + restore-target registration must be one atomic step against the
+                // session teardown - AudioCapture.applyExplicitVolume holds the duck lock.
+                audioCapture.applyExplicitVolume(op.level)
                 DispatchResult(true)
             }
             VolumeOp.Mute -> {

@@ -1524,7 +1524,15 @@ class SettingsViewModel @Inject constructor(
                     "AutomationEngine:*", "AutoserviceDetector:*",
                     "SteeringWheelKeySvc:*",
                     // v3.6: voice/audio diagnostics (issue #78 + Song volume reports)
-                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*"
+                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*",
+                    // HUD wave: SOME/IP output + cluster projection diagnostics
+                    "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
+                    "ClusterProjection:*",
+                    // Direct projection wave: helper daemon (freeform switch diagnostics; visible
+                    // only once READ_LOGS is granted AND the app process restarted - the daemon
+                    // runs under the shell uid), guidance feed transitions, grant self-heal.
+                    "bydmate_helper:*", "HudIconLoader:*",
+                    "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*"
                 ))
 
                 // Background thread to pipe logcat to file with size limit.
