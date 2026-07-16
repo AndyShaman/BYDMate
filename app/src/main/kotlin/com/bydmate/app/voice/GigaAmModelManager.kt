@@ -15,16 +15,22 @@ import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
 
-/** Downloads and unpacks the GigaAM v2 Russian ASR model (sherpa-onnx nemo-ctc archive:
+/** Downloads and unpacks the GigaAM v3 Russian ASR model (sherpa-onnx nemo-ctc archive:
  *  model.int8.onnx + tokens.txt under one top-level dir) plus the standalone silero VAD
  *  .onnx file, into filesDir/asr/. Same staging + atomic-rename shape as TtsModelManager. */
 class GigaAmModelManager(
     private val context: Context,
     private val http: OkHttpClient,
 ) {
-    private fun baseDir() = File(context.filesDir, "asr/gigaam-v2-ru")
+    private fun baseDir() = File(context.filesDir, "asr/gigaam-v3-ru")
 
-    private fun stagingDir() = File(context.filesDir, "asr/.staging-gigaam-v2-ru")
+    private fun stagingDir() = File(context.filesDir, "asr/.staging-gigaam-v3-ru")
+
+    /** v2 model dir left behind by pre-v3.7 installs; swept on the next download/delete. */
+    private fun legacyDir() = File(context.filesDir, "asr/gigaam-v2-ru")
+
+    /** v2-era staging dir orphaned by a download killed mid-unpack; swept alongside legacyDir(). */
+    private fun legacyStagingDir() = File(context.filesDir, "asr/.staging-gigaam-v2-ru")
 
     private fun vadFile() = File(context.filesDir, "asr/silero_vad.onnx")
 
@@ -51,6 +57,8 @@ class GigaAmModelManager(
         diskMutex.withLock {
             baseDir().deleteRecursively()
             stagingDir().deleteRecursively()
+            legacyDir().deleteRecursively()
+            legacyStagingDir().deleteRecursively()
             vadFile().delete()
         }
     }
@@ -58,7 +66,7 @@ class GigaAmModelManager(
     suspend fun download(onProgress: (Int) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val tmpArchive = File(context.cacheDir, "gigaam-v2-ru.tar.bz2")
+                val tmpArchive = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
                 val tmpVad = File(context.cacheDir, "silero_vad.onnx.tmp")
                 try {
                     // Model archive: 0..MODEL_WEIGHT of the combined progress.
@@ -81,6 +89,10 @@ class GigaAmModelManager(
                             // never leave a dir that isModelComplete() accepts.
                             target.deleteRecursively()
                             check(staging.renameTo(target)) { "failed to publish staged model" }
+                            // v2 -> v3 migration: the old model can never be read again
+                            // (baseDir points at v3), so sweep it with the same lock held.
+                            legacyDir().deleteRecursively()
+                            legacyStagingDir().deleteRecursively()
                         } catch (t: Throwable) {
                             staging.deleteRecursively()
                             throw t
@@ -170,7 +182,7 @@ class GigaAmModelManager(
     companion object {
         const val MODEL_URL =
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/" +
-                "sherpa-onnx-nemo-ctc-giga-am-v2-russian-2025-04-19.tar.bz2"
+                "sherpa-onnx-nemo-ctc-giga-am-v3-russian-2025-12-16.tar.bz2"
         const val VAD_URL =
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
         const val MODEL_SIZE_LABEL = "226 МБ"

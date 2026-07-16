@@ -494,7 +494,11 @@
     <string name="battery_health_pumped_label">carregado</string>
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
     <string name="battery_health_disabled_title">Dados do sistema desativados</string>
-    <string name="battery_health_disabled_hint">Ative \\\"Dados do sistema\\\" nas Configurações para ver o SoH, a quilometragem do BMS e o total carregado do carro.|battery_health_disabled_hint|</string>
+    <string name="battery_health_disabled_hint">Ative \"Dados do sistema\" nas Configurações para ver o SoH, a quilometragem do BMS e o total carregado do carro.</string>
+    <string name="battery_health_avg_soc_header">SOC médio (histórico do BYDMate)</string>
+    <string name="battery_health_avg_since_charge_label">desde a última carga</string>
+    <string name="battery_health_avg_all_time_label">todo o período</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Nível de carga médio ponderado pelo tempo: quanto mais a bateria fica carregada, maior o valor. Baterias LFP da BYD envelhecem menos quando mantidas mais baixas: armazenar com carga alta acelera o envelhecimento. Referência: até 65% ótimo, 65-85% normal, acima de 85% considere carregar mais tarde ou com menos frequência. Uma carga a 100% a cada 1-2 semanas ainda é necessária para balancear as células. Calculado pelo histórico de viagens e cargas do BYDMate.</string>
     <string name="summary_unit_km">km</string>
     <string name="summary_label_mileage">Quilometragem</string>
     <string name="summary_unit_kwh">kWh</string>
@@ -1002,6 +1006,8 @@
     <string name="settings_voice_model_downloading">Baixando… %1$d%%</string>
     <string name="voice_listening">Ouvindo</string>
     <string name="voice_thinking">Pensando</string>
+    <string name="voice_error_model_missing">O modelo de voz não está baixado. Baixe-o em Configurações, seção Agente de voz.</string>
+    <string name="voice_error_lang_not_ru">Os comandos de voz entendem apenas fala em russo. Em Configurações, defina Idioma de voz: Russo.</string>
     <string name="settings_asr_gigaam_title">Reconhecimento de fala</string>
     <string name="settings_asr_gigaam_ready">Modelo pronto</string>
     <string name="settings_asr_gigaam_download">Baixar (%1$s)</string>

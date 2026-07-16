@@ -146,7 +146,7 @@ data class SettingsUiState(
     val minimaxProvider: String = "official",
     /** Never expose the raw MiniMax key in state -- only whether one is saved. */
     val minimaxKeySet: Boolean = false,
-    // GigaAM v2 ASR settings (free-form Russian speech recognition, offline)
+    // GigaAM v3 ASR settings (free-form Russian speech recognition, offline)
     val gigaAmModelReady: Boolean = false,
     val gigaAmDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
     val gigaAmDownloadFailed: Boolean = false,
@@ -1215,7 +1215,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // --- GigaAM v2 ASR (free-form Russian speech recognition, offline) ---
+    // --- GigaAM v3 ASR (free-form Russian speech recognition, offline) ---
 
     private var gigaAmDownloadJob: Job? = null
 

@@ -871,7 +871,7 @@ class SettingsViewModelTest {
         )
     }
 
-    // --- GigaAM v2 ASR (free-form Russian speech recognition, offline) ---
+    // --- GigaAM v3 ASR (free-form Russian speech recognition, offline) ---
 
     @Test fun `initial state reflects gigaAmModelManager isReady`() = runTest {
         val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)

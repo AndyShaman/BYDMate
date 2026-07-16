@@ -4,11 +4,13 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.TripEntity
+import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.domain.battery.AvgSocCalculator
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
@@ -20,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -71,6 +74,8 @@ data class DashboardUiState(
     val insightPeriodDays: Int = 7,
     val insightExpanded: Boolean = false,
     val batteryHealthExpanded: Boolean = false,
+    val avgSocSinceCharge: Int? = null,
+    val avgSocAllTime: Int? = null,
     val idleDrainExpanded: Boolean = false,
     val idleDrainKwhWeek: Double = 0.0,
     val idleDrainHoursWeek: Double = 0.0,
@@ -96,6 +101,7 @@ class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao,
+    private val chargeDao: ChargeDao,
     private val insightsManager: InsightsManager,
     private val batteryStateRepository: BatteryStateRepository
 ) : ViewModel() {
@@ -419,6 +425,26 @@ class DashboardViewModel @Inject constructor(
             insightExpanded = false,
             idleDrainExpanded = false
         ) }
+        if (_uiState.value.batteryHealthExpanded) {
+            viewModelScope.launch { computeAvgSoc() }
+        }
+    }
+
+    /** #93: cheap on-open aggregation — a few hundred Room rows, no polling. */
+    private suspend fun computeAvgSoc() {
+        val trips = tripRepository.getAllTrips().first()
+        val charges = chargeDao.getAll().first()
+        val now = System.currentTimeMillis()
+        val points = AvgSocCalculator.buildPoints(trips, charges)
+        val allTime = points.firstOrNull()
+            ?.let { AvgSocCalculator.averageSince(points, it.ts, now) }
+        val lastChargeEnd = charges
+            .filter { it.status == "COMPLETED" && it.endTs != null && it.socEnd != null }
+            .maxByOrNull { it.endTs!! }
+            ?.endTs
+        val sinceCharge = lastChargeEnd
+            ?.let { AvgSocCalculator.averageSince(points, it, now) }
+        _uiState.update { it.copy(avgSocAllTime = allTime, avgSocSinceCharge = sinceCharge) }
     }
 
     fun toggleInsightExpanded() {

@@ -7,6 +7,7 @@ import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.automation.VoiceFireResult
+import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
@@ -38,6 +39,10 @@ class VoiceControllerSafetyTest {
     // Russian phrase recognized by NluParser as a window CLOSE command.
     // NluParser maps this to the DiPlus command "车窗关闭".
     private val windowClosePhrase = "закрой окна"
+
+    // #87: voice_error_model_missing resource string (the "model not ready" cause of
+    // onPttPressed's else-branch; voice_error_lang_not_ru is the other, untested in this file).
+    private val modelMissingMsg = "Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент."
 
     /** A relaxed TtsEngine mock's `speaking` StateFlow<Boolean> property, being a mocked
      *  interface itself, has no real backing state -- its collect() completes without ever
@@ -465,10 +470,12 @@ class VoiceControllerSafetyTest {
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
         val ttsEngine = quietTtsEngine()
 
-        // "Голосовая модель не загружена" is a literal fixed string, not drawn from a persona
+        // voice_error_model_missing is a literal fixed string, not drawn from a persona
         // done-pool — this is what "non-canonical" means here (see the two pool-based tests above).
+        val context = mockk<Context>(relaxed = true)
+        every { context.getString(R.string.voice_error_model_missing) } returns modelMissingMsg
         val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, context,
             ttsEngine, VoiceJournal(), FakeContinuousAsr(ready = false),
             agentIdentity = { AgentIdentity("", AgentPersona.ENGINEER) },
             ttsModelManager = mockk(relaxed = true),
@@ -478,7 +485,7 @@ class VoiceControllerSafetyTest {
         controller.onPttPressed()
         Thread.sleep(300)
 
-        verify { ttsEngine.speak("Голосовая модель не загружена") }
+        verify { ttsEngine.speak(modelMissingMsg) }
     }
 
     @Test fun `dispatched command does not speak when tts disabled`() {
@@ -755,8 +762,10 @@ class VoiceControllerSafetyTest {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         val dispatcher = mockk<ActionDispatcher>(relaxed = true)
 
+        val context = mockk<Context>(relaxed = true)
+        every { context.getString(R.string.voice_error_model_missing) } returns modelMissingMsg
         val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, context,
             quietTtsEngine(), VoiceJournal(), FakeContinuousAsr(ready = false),
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
@@ -770,7 +779,7 @@ class VoiceControllerSafetyTest {
         Thread.sleep(300)
 
         assertEquals(1, feedbackCount.get())
-        assertEquals("Голосовая модель не загружена", presented.get())
+        assertEquals(modelMissingMsg, presented.get())
     }
 
     @Test fun `a pipeline crash shows the failure orb dialog exactly once`() {

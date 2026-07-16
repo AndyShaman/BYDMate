@@ -636,6 +636,10 @@
     <string name="battery_health_pumped_value">%1$.0f кВт·ч</string>
     <string name="battery_health_disabled_title">Системные данные выключены</string>
     <string name="battery_health_disabled_hint">Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.</string>
+    <string name="battery_health_avg_soc_header">Средний SOC (история BYDMate)</string>
+    <string name="battery_health_avg_since_charge_label">с последней зарядки</string>
+    <string name="battery_health_avg_all_time_label">за всё время</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Средневзвешенный уровень заряда: чем дольше батарея стоит заряженной, тем выше значение. Для LFP-батареи BYD полезно держать его пониже: хранение на высоком заряде ускоряет старение. Ориентир: до 65% отлично, 65-85% нормально, выше 85% лучше заряжать позже или реже. Заряд до 100% раз в 1-2 недели всё равно нужен для балансировки ячеек. Считается по истории поездок и зарядок BYDMate.</string>
 
     <!-- Shared summary row (Components.kt SummaryRow) -->
     <string name="summary_unit_km">км</string>
@@ -1027,8 +1031,10 @@
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
     <string name="voice_listening">Слушаю</string>
     <string name="voice_thinking">Думаю</string>
+    <string name="voice_error_model_missing">Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент.</string>
+    <string name="voice_error_lang_not_ru">Голосовые команды понимают только русскую речь. В Настройках выберите Язык голоса: Русский.</string>
 
-    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Распознавание речи</string>
     <string name="settings_asr_gigaam_ready">Модель готова</string>
     <string name="settings_asr_gigaam_download">Скачать (%1$s)</string>

@@ -503,6 +503,10 @@
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
     <string name="battery_health_disabled_title">System data disabled</string>
     <string name="battery_health_disabled_hint">Enable \"System data\" in Settings to see SoH, BMS mileage, and total pumped from the car.</string>
+    <string name="battery_health_avg_soc_header">Average SOC (BYDMate history)</string>
+    <string name="battery_health_avg_since_charge_label">since last charge</string>
+    <string name="battery_health_avg_all_time_label">all time</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Time-weighted state of charge: the longer the battery sits charged, the higher the value. BYD LFP packs age slower when kept lower: storing at a high charge speeds up calendar aging. Guideline: below 65% is great, 65-85% is fine, above 85% consider charging later or less often. A 100% charge once every 1-2 weeks is still needed for cell balancing. Computed from BYDMate trip and charge history.</string>
     <string name="summary_unit_km">km</string>
     <string name="summary_label_mileage">Mileage</string>
     <string name="summary_unit_kwh">kWh</string>
@@ -873,8 +877,10 @@
     <string name="settings_voice_model_downloading">Downloading… %1$d%%</string>
     <string name="voice_listening">Listening</string>
     <string name="voice_thinking">Thinking</string>
+    <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
+    <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. Set Voice language to Russian in Settings.</string>
 
-    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Speech recognition</string>
     <string name="settings_asr_gigaam_ready">Model ready</string>
     <string name="settings_asr_gigaam_download">Download (%1$s)</string>

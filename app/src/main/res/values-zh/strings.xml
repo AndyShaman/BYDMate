@@ -576,6 +576,10 @@
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
     <string name="battery_health_disabled_title">系统数据已禁用</string>
     <string name="battery_health_disabled_hint">在设置中启用"系统数据"，以查看 SoH、BMS 里程和车辆累计充入量。</string>
+    <string name="battery_health_avg_soc_header">平均SOC（BYDMate历史）</string>
+    <string name="battery_health_avg_since_charge_label">自上次充电</string>
+    <string name="battery_health_avg_all_time_label">全部时间</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">按时间加权的平均电量：电池保持高电量的时间越长，该值越高。比亚迪LFP电池长期高电量存放会加速日历老化，建议保持较低水平。参考：65%以下很好，65-85%正常，高于85%建议推迟或减少充电。每1-2周仍需充满一次以平衡电芯。根据BYDMate行程和充电历史计算。</string>
 
     <!-- Shared summary row (Components.kt SummaryRow) -->
     <string name="summary_unit_km">公里</string>
@@ -991,8 +995,10 @@
     <string name="settings_voice_model_downloading">下载中… %1$d%%</string>
     <string name="voice_listening">聆听中</string>
     <string name="voice_thinking">思考中</string>
+    <string name="voice_error_model_missing">语音模型尚未下载。请在设置的语音助手部分下载。</string>
+    <string name="voice_error_lang_not_ru">语音命令目前仅支持俄语。请在设置中将语音语言设为俄语。</string>
 
-    <!-- GigaAM v2: free-form Russian speech recognition (offline) -->
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">语音识别</string>
     <string name="settings_asr_gigaam_ready">模型已就绪</string>
     <string name="settings_asr_gigaam_download">下载（%1$s）</string>

@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.battery
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -10,14 +11,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -63,6 +69,8 @@ fun BatteryHealthDialog(
     liveSoh: Float?,
     liveLifetimeKm: Float?,
     liveLifetimeKwh: Float?,
+    avgSocSinceCharge: Int?,
+    avgSocAllTime: Int?,
     borderColor: Color,
     onDismiss: () -> Unit,
 ) {
@@ -121,6 +129,16 @@ fun BatteryHealthDialog(
                         lifetimeKm = liveLifetimeKm,
                         lifetimeKwh = liveLifetimeKwh
                     )
+
+                    var avgSocHintOpen by remember { mutableStateOf(false) }
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SectionHeader(stringResource(R.string.battery_health_avg_soc_header))
+                        HelpIcon { avgSocHintOpen = !avgSocHintOpen }
+                    }
+                    AvgSocBlock(sinceCharge = avgSocSinceCharge, allTime = avgSocAllTime)
+                    if (avgSocHintOpen) {
+                        HintBlock(stringResource(R.string.battery_health_avg_soc_hint))
+                    }
                 }
             }
         }
@@ -264,5 +282,66 @@ private fun cellMinVoltageColor(min: Double?): Color = when {
     min == null -> TextPrimary
     min >= 3.0 -> AccentGreen
     min >= 2.8 -> SocYellow
+    else -> SocRed
+}
+
+@Composable
+private fun AvgSocBlock(sinceCharge: Int?, allTime: Int?) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurfaceElevated, RoundedCornerShape(10.dp))
+            .padding(horizontal = 12.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceAround
+    ) {
+        StatCell(
+            stringResource(R.string.battery_health_avg_since_charge_label),
+            sinceCharge?.let { "$it%" } ?: "—",
+            avgSocColor(sinceCharge)
+        )
+        StatCell(
+            stringResource(R.string.battery_health_avg_all_time_label),
+            allTime?.let { "$it%" } ?: "—",
+            avgSocColor(allTime)
+        )
+    }
+}
+
+/** «?» toggle for the inline hint. Its own clickable consumes the tap, so it does
+ *  not bubble to the card-body clickable that dismisses the dialog. */
+@Composable
+private fun HelpIcon(onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .size(18.dp)
+            .border(1.5.dp, TextMuted, CircleShape)
+            .clickable(indication = null, interactionSource = source, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("?", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
+
+@Composable
+private fun HintBlock(text: String) {
+    Text(
+        text,
+        color = TextSecondary,
+        fontSize = 11.sp,
+        lineHeight = 15.sp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(CardSurfaceElevated, RoundedCornerShape(10.dp))
+            .padding(horizontal = 14.dp, vertical = 12.dp)
+    )
+}
+
+/** LFP calendar-aging cue (approved mock): <65 green, 65-85 yellow, >85 red. */
+private fun avgSocColor(v: Int?): Color = when {
+    v == null -> TextPrimary
+    v < 65 -> AccentGreen
+    v <= 85 -> SocYellow
     else -> SocRed
 }

@@ -13,8 +13,9 @@ import android.util.Log
  * to native trip recording until reset (Settings button) or auto-heal (file changes).
  *
  * All calls come from TripRecorder on the polling collector — no internal locking needed.
- * Everything except the in-flight session start mileage is persisted: the process dies
- * with the car between sessions.
+ * The "drove this session" marker is persisted mid-session, the moment the distance
+ * threshold is crossed, rather than on the ignition-off edge: in the field the head unit
+ * powers down with the car, killing the process before an off tick is ever delivered.
  */
 class EnergyDataDeadDetector(
     private val reader: EnergyDataReader,
@@ -24,6 +25,7 @@ class EnergyDataDeadDetector(
 
     private var sessionRunning = false
     private var sessionStartMileage: Double? = null
+    private var sessionPendingMarked = false
 
     /** Cached verdict so the polling hot path never hits SharedPreferences per tick. */
     @Volatile
@@ -39,14 +41,37 @@ class EnergyDataDeadDetector(
         if (ignition && !sessionRunning) {
             evaluate()
             sessionRunning = true
-            sessionStartMileage = mileage
+            // SentinelDecoder can pass a garbage raw 0.0 as a valid odometer read; a real
+            // Leopard 3 fleet never has a genuinely 0.0 km odometer, so treat it the same
+            // as "not known yet" and let the mid-session backfill below try again.
+            sessionStartMileage = mileage?.takeIf { it > 0.0 }
+            sessionPendingMarked = false
+        } else if (ignition && sessionRunning) {
+            // #63 regression: in the field the process dies WITH the car, so the
+            // ignition-off edge below is almost never observed and pendingDriving was
+            // never persisted (streak stayed 0 forever). Persist the "drove this
+            // session" marker the moment the distance threshold is crossed instead —
+            // one prefs write per session, guarded by sessionPendingMarked. The off
+            // edge below still marks too (kept as a fallback for when it IS observed),
+            // guarded by the same flag so it never double-writes.
+            if (sessionStartMileage == null) sessionStartMileage = mileage?.takeIf { it > 0.0 }
+            val start = sessionStartMileage
+            if (!sessionPendingMarked && start != null && mileage != null &&
+                mileage - start >= MIN_SESSION_KM
+            ) {
+                sessionPendingMarked = true
+                store.setPendingDriving(true)
+            }
         } else if (!ignition && sessionRunning) {
             sessionRunning = false
             val start = sessionStartMileage
             sessionStartMileage = null
-            if (start != null && mileage != null && mileage - start >= MIN_SESSION_KM) {
+            if (!sessionPendingMarked && start != null && mileage != null &&
+                mileage - start >= MIN_SESSION_KM
+            ) {
                 store.setPendingDriving(true)
             }
+            sessionPendingMarked = false
         }
     }
 
@@ -56,6 +81,7 @@ class EnergyDataDeadDetector(
         cachedDead = null
         sessionRunning = false
         sessionStartMileage = null
+        sessionPendingMarked = false
     }
 
     /** One line for the diagnostic dump. */
