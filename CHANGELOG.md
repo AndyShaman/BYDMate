@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.6.1] - 2026-07-16
+
 ВАЖНО: после обновления обязательно заново скачайте модель распознавания голоса: Настройки, раздел Голос-агент, кнопка «Скачать (226 МБ)». Старая модель этой версией больше не используется, и до перекачки голосовой агент не распознаёт речь.
 
 ### Новое
@@ -733,7 +735,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.6...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.6.1...HEAD
+[3.6.1]: https://github.com/AndyShaman/BYDMate/compare/v3.6...v3.6.1
 [3.6]: https://github.com/AndyShaman/BYDMate/compare/v3.5.3...v3.6
 [3.5.3]: https://github.com/AndyShaman/BYDMate/compare/v3.5.2...v3.5.3
 [3.5.2]: https://github.com/AndyShaman/BYDMate/compare/v3.5.1...v3.5.2
