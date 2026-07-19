@@ -947,6 +947,7 @@
     <string name="auto_msg_url_no_scheme">动作 #%1$d：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）</string>
     <string name="auto_msg_ymusic_mode_missing">动作 #%1$d：未选择 Yandex 音乐模式</string>
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
+    <string name="auto_msg_hotspot_invalid">动作 #%1$d：热点状态无效</string>
     <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
     <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
     <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
@@ -965,6 +966,9 @@
     <string name="automation_action_cluster_projection">投射到仪表盘</string>
     <string name="automation_action_cluster_projection_on">开启</string>
     <string name="automation_action_cluster_projection_off">关闭</string>
+    <string name="automation_action_hotspot">Wi-Fi热点</string>
+    <string name="automation_action_hotspot_on">开启</string>
+    <string name="automation_action_hotspot_off">关闭</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>

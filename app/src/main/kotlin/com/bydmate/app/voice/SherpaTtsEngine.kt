@@ -45,6 +45,7 @@ class SherpaTtsEngine(
     private val rate: () -> Float = { 1.0f },
     private val liveliness: () -> Int = { 33 },
     private val marker: RuStressMarker = RuStressMarker { null },
+    private val loadGuard: AsrLoadGuard? = null,
 ) : TtsEngine {
 
     private val worker = Executors.newSingleThreadExecutor { r -> Thread(r, "tts-worker") }
@@ -91,7 +92,7 @@ class SherpaTtsEngine(
     private val _speaking = MutableStateFlow(false)
     override val speaking: StateFlow<Boolean> = _speaking.asStateFlow()
 
-    override fun isReady(): Boolean = modelManager.isReady(selectedVoice())
+    override fun isReady(): Boolean = modelManager.isReady(selectedVoice()) && loadGuard?.isTripped() != true
 
     /** Drops the cached engine/track so the next speak() re-initializes createTts()
      *  against the currently selected voice. Runs on the worker thread since tts/track
@@ -561,7 +562,10 @@ class SherpaTtsEngine(
                 provider = "cpu",
             )
         }
-        OfflineTts(config = OfflineTtsConfig(model = modelConfig))
+        loadGuard?.noteLoadBegin(AsrLoadGuard.ARTIFACT_TTS)
+        val ttsInstance = OfflineTts(config = OfflineTtsConfig(model = modelConfig))
+        loadGuard?.noteLoadSuccess(AsrLoadGuard.ARTIFACT_TTS)
+        ttsInstance
     }.onFailure { Log.w(TAG, "tts init failed", it) }.getOrNull()
 
     private fun createTrack(sampleRate: Int): AudioTrack {

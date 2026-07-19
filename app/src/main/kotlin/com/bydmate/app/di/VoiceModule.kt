@@ -18,6 +18,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import java.io.File
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -46,7 +47,15 @@ object VoiceModule {
         GigaAmModelManager(ctx, http)
 
     @Provides @Singleton
-    fun provideContinuousAsr(mm: GigaAmModelManager): ContinuousAsr = GigaAmAsrEngine(mm)
+    fun provideAsrLoadGuard(@ApplicationContext ctx: Context) = AsrLoadGuard(ctx)
+
+    @Named("ttsLoadGuard") @Provides @Singleton
+    fun provideTtsLoadGuard(@ApplicationContext ctx: Context): AsrLoadGuard =
+        AsrLoadGuard(ctx.getSharedPreferences("tts_load_guard", Context.MODE_PRIVATE))
+
+    @Provides @Singleton
+    fun provideContinuousAsr(mm: GigaAmModelManager, guard: AsrLoadGuard): ContinuousAsr =
+        GigaAmAsrEngine(mm, loadGuard = guard)
 
     @Provides @Singleton
     fun provideRuStressMarker(mm: TtsModelManager): RuStressMarker =
@@ -72,6 +81,7 @@ object VoiceModule {
         connections: LlmConnectionResolver,
         settings: SettingsRepository,
         selectedTtsVoice: () -> TtsVoice,
+        @Named("ttsLoadGuard") ttsGuard: AsrLoadGuard,
     ): TtsEngine {
         val prefs = { ctx.getSharedPreferences("voice", Context.MODE_PRIVATE) }
         val offline = SherpaTtsEngine(
@@ -80,6 +90,7 @@ object VoiceModule {
             rate = { prefs().getFloat("tts_rate", 1.0f) },
             liveliness = { prefs().getInt("tts_liveliness", 33) },
             marker = marker,
+            loadGuard = ttsGuard,
         )
         return TtsRouter(
             delegate = offline,

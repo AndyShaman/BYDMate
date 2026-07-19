@@ -692,6 +692,12 @@ object ClusterProjectionManager {
         val match = projectionDisplays.firstOrNull { it.name.endsWith("_1") }
             ?: projectionDisplays.firstOrNull()
             ?: dm.getDisplay(DEFAULT_CLUSTER_DISPLAY_ID)
+        if (match == null) {
+            // Song family / DiLink 3-4 report no projection surface at all; the full list
+            // is the only clue whether a cluster display exists under another name.
+            Log.e(TAG, "no projection display; available: " +
+                dm.displays.joinToString { "${it.displayId}:\"${it.name}\"" })
+        }
         if (match != null) {
             val point = Point()
             @Suppress("DEPRECATION") match.getRealSize(point)

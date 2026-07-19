@@ -92,9 +92,13 @@ internal class GigaAmAsrEngine(
     private val modelManager: GigaAmModelManager,
     private val recognizerFactory: () -> RecognizerHandle = { RealRecognizerHandle(modelManager) },
     private val vadFactory: () -> VadHandle = { RealVadHandle(modelManager) },
+    private val loadGuard: AsrLoadGuard? = null,
 ) : ContinuousAsr {
 
-    override fun isReady(): Boolean = modelManager.isReady()
+    // A tripped guard means the last loads aborted the whole process from native code
+    // (corrupt .onnx): reporting not-ready blocks every load path (warmUp and transcribe
+    // both gate on isReady) until TrackingService quarantines the files and resets it.
+    override fun isReady(): Boolean = modelManager.isReady() && loadGuard?.isTripped() != true
 
     // Cached across sessions: creating the recognizer loads the 226 MiB GigaAM model from disk
     // (~1.3 s on the 780G) — paying that on every PTT press delayed both the music duck and the
@@ -127,7 +131,15 @@ internal class GigaAmAsrEngine(
      *  load the 226 MiB model and orphan the loser's handle. */
     @Synchronized
     private fun obtainRecognizer(): RecognizerHandle =
-        cachedRecognizer ?: recognizerFactory().also { cachedRecognizer = it }
+        cachedRecognizer ?: run {
+            // Bracket the native load with the crash-loop guard: a corrupt model aborts
+            // the process inside recognizerFactory() (SIGABRT from JNI), so only the
+            // begin mark survives — that asymmetry is how the next start detects it.
+            loadGuard?.noteLoadBegin(AsrLoadGuard.ARTIFACT_RECOGNIZER)
+            val handle = recognizerFactory()
+            loadGuard?.noteLoadSuccess(AsrLoadGuard.ARTIFACT_RECOGNIZER)
+            handle.also { cachedRecognizer = it }
+        }
 
     // VAD is a local of the flow builder, so each collection owns its own instance: a second
     // (even concurrent) collect can never clobber or double-release another collection's VAD.
@@ -140,7 +152,12 @@ internal class GigaAmAsrEngine(
         // call site into this engine, so the old unsynchronized check-then-act could have
         // double-loaded the model and orphaned one handle.
         val recognizer = obtainRecognizer()
+        // Same crash-loop bracket as the recognizer: the silero VAD is a native .onnx load
+        // too, and a corrupt file aborts the process the same way. Separate artifact key so
+        // a successful recognizer load can't wipe the VAD's crash evidence.
+        loadGuard?.noteLoadBegin(AsrLoadGuard.ARTIFACT_VAD)
         val vad = vadFactory()   // recognizer is cached -- no paired close needed on this throw path
+        loadGuard?.noteLoadSuccess(AsrLoadGuard.ARTIFACT_VAD)
         try {
             var speaking = false
             var silentMs = 0L

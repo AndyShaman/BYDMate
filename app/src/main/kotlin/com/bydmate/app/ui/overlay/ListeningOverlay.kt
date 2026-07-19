@@ -309,13 +309,17 @@ object ListeningOverlay {
         }
 
         pillView.apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            // Dispose tied to view detach, not the external OverlayLifecycleOwner.
+            // Prevents attach-vs-onDestroy race: DisposeOnViewTreeLifecycleDestroyed registers
+            // on the owner asynchronously (next traversal), so a rapid show→hide could destroy
+            // the lifecycle before attach observes it → IllegalStateException at DESTROYED.
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(pillOwner)
             setViewTreeSavedStateRegistryOwner(pillOwner)
             setContent { PillContent(onDrag, onDragEnd) }
         }
         dialogView.apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(dialogOwner)
             setViewTreeSavedStateRegistryOwner(dialogOwner)
             setContent { DialogContent(youLabel, agentLabel) }

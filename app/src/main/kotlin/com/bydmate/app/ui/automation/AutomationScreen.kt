@@ -570,6 +570,9 @@ private fun EditorDialog(
                             onAddSentry = {
                                 onUpdate { copy(actions = actions + newSentryAction(context)) }
                             },
+                            onAddHotspot = {
+                                onUpdate { copy(actions = actions + newHotspotAction(context)) }
+                            },
                             onAddSpeak = {
                                 onUpdate { copy(actions = actions + newSpeakAction(context)) }
                             },
@@ -1264,6 +1267,8 @@ private fun ActionRow(
                 MediaVolumeActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "sentry" ->
                 SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "hotspot" ->
+                HotspotActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "cluster_projection" ->
                 ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "speak" ->
@@ -1445,6 +1450,43 @@ private fun SentryActionControls(
     val onLabel = stringResource(R.string.automation_action_sentry_on)
     val offLabel = stringResource(R.string.automation_action_sentry_off)
     val displayLabel = stringResource(R.string.automation_action_sentry)
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.weight(1f))
+        Text(
+            if (isEnabled) onLabel else offLabel,
+            fontSize = 13.sp,
+            color = if (isEnabled) AccentGreen else TextSecondary
+        )
+        Spacer(Modifier.width(6.dp))
+        Switch(
+            checked = isEnabled,
+            onCheckedChange = { checked ->
+                val payload = if (checked) "1" else "0"
+                val name = if (checked) onLabel else offLabel
+                onUpdate(action.copy(payload = payload, displayName = "$displayLabel: $name"))
+            },
+            colors = bydSwitchColors()
+        )
+    }
+}
+
+// --- Hotspot Action Controls ---
+
+@Composable
+private fun HotspotActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val isEnabled = action.payload == "1"
+    val onLabel = stringResource(R.string.automation_action_hotspot_on)
+    val offLabel = stringResource(R.string.automation_action_hotspot_off)
+    val displayLabel = stringResource(R.string.automation_action_hotspot)
 
     Row(
         modifier = modifier,
@@ -1744,6 +1786,7 @@ private fun AddActionButton(
     onAddDelay: () -> Unit,
     onAddMediaVolume: () -> Unit,
     onAddSentry: () -> Unit,
+    onAddHotspot: () -> Unit,
     onAddSpeak: () -> Unit,
     onAddAgentQuery: () -> Unit,
     onAddCluster: () -> Unit
@@ -1809,6 +1852,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddSentry() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_hotspot), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddHotspot() }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_speak), fontSize = 13.sp) },

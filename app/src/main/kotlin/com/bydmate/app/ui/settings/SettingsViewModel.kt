@@ -1446,6 +1446,20 @@ class SettingsViewModel @Inject constructor(
                 appendLine("pre_duck_volume: " + if (preDuck >= 0) "$preDuck" else "(none)")
             } catch (e: Exception) { appendLine("(failed to gather audio state: ${e.message})") }
 
+            appendLine("--- displays ---")
+            try {
+                // Cluster projection needs an Android-managed cluster display; on several
+                // platforms (Song family, DiLink 3/4) resolveClusterDisplay finds nothing.
+                // The full list shows whether a cluster surface exists under another name.
+                val dm = appContext.getSystemService(Context.DISPLAY_SERVICE)
+                    as android.hardware.display.DisplayManager
+                dm.displays.forEach { d ->
+                    val p = android.graphics.Point()
+                    @Suppress("DEPRECATION") d.getRealSize(p)
+                    appendLine("id=${d.displayId} name=\"${d.name}\" ${p.x}x${p.y} state=${d.state}")
+                }
+            } catch (e: Exception) { appendLine("(failed to gather displays: ${e.message})") }
+
             appendLine("--- native assistant packages ---")
             try {
                 val pref = settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "")

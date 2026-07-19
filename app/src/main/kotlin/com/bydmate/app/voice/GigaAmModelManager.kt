@@ -136,6 +136,11 @@ class GigaAmModelManager(
                         out.write(buf, 0, n); read += n
                         if (total > 0) onProgress(((read * 100) / total).toInt())
                     }
+                    // fsync before the caller's rename-publish: the head unit powers off
+                    // with the car (no clean shutdown), and a rename whose data blocks
+                    // never hit flash survives as a full-size file of garbage (field
+                    // defect: Sea Lion 07 crash loop on a corrupt model, 2026-07-16).
+                    out.fd.sync()
                 }
             }
         }
@@ -170,6 +175,10 @@ class GigaAmModelManager(
                                     val n = tar.read(buf); if (n < 0) break
                                     out.write(buf, 0, n)
                                 }
+                                // fsync before the staging dir is rename-published: an
+                                // abrupt power-off after the rename must not leave a
+                                // "complete" model dir whose data blocks are garbage.
+                                out.fd.sync()
                             }
                         }
                     }

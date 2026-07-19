@@ -98,6 +98,10 @@ interface HelperClient {
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
 
+    /** Enable or disable the Wi-Fi hotspot (TETHERING_WIFI) via the daemon (shell uid holds
+     *  TETHER_PRIVILEGED). True on daemon status 0. Needs on-car validation. */
+    suspend fun setHotspot(enable: Boolean): Boolean
+
     /**
      * Direct cluster projection: find-or-launch [packageName], switch its task to freeform,
      * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the
@@ -230,6 +234,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun setClusterContainerMode(on: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }
+
+    override suspend fun setHotspot(enable: Boolean): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_HOTSPOT) { it.writeInt(if (enable) 1 else 0) }
 
     // FORCE_TIMEOUT_MS, not the default 2s: mirrors launchAndForce (launch retry loop in the
     // daemon can take up to ~9.5s on a cold start before the pin loop even begins).

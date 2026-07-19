@@ -42,10 +42,14 @@ object VoiceLexicon {
         DeviceSlot.AC_RECIRC_INNER to listOf("рециркуляция", "внутренний"),
         DeviceSlot.AC_RECIRC_OUTER to listOf("забор", "внешний"),
         DeviceSlot.DEFROST_FRONT to listOf("лобовое", "обдув"),
-        DeviceSlot.SEAT_DRIVER_HEAT to listOf("сиденье", "кресло"),
-        DeviceSlot.SEAT_PASSENGER_HEAT to listOf("сиденье", "кресло"),
-        DeviceSlot.SEAT_DRIVER_VENT to listOf("сиденье", "кресло"),
-        DeviceSlot.SEAT_PASSENGER_VENT to listOf("сиденье", "кресло"),
+        // "сидения" covers the plural family ("сидений"/"сидения"): it stems to
+        // "сидени" while "сиденье"/"сиденья" stem to "сидень" — two distinct stems,
+        // both must be listed or plural phrases miss the seat slot entirely and
+        // "вентиляция сидений" falls through to cabin airflow (issue #98).
+        DeviceSlot.SEAT_DRIVER_HEAT to listOf("сиденье", "сидения", "кресло"),
+        DeviceSlot.SEAT_PASSENGER_HEAT to listOf("сиденье", "сидения", "кресло"),
+        DeviceSlot.SEAT_DRIVER_VENT to listOf("сиденье", "сидения", "кресло"),
+        DeviceSlot.SEAT_PASSENGER_VENT to listOf("сиденье", "сидения", "кресло"),
         DeviceSlot.MIRROR_HEAT to listOf("зеркало", "зеркала"),
         DeviceSlot.LIGHT_AMBIENT to listOf("амбиент", "подсветка"),
         DeviceSlot.LIGHT_DRL to listOf("дхо", "ходовые"),

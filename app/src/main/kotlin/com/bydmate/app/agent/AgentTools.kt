@@ -1892,6 +1892,8 @@ class AgentTools @Inject constructor(
             is ActionValidationError.MediaVolumeMissing -> "не указан уровень громкости (действие ${err.index})"
             is ActionValidationError.SentryInvalid ->
                 "некорректное состояние охранного режима (действие ${err.index})"
+            is ActionValidationError.HotspotInvalid ->
+                "некорректное состояние точки доступа (действие ${err.index})"
             is ActionValidationError.SpeakTextEmpty ->
                 "не задан текст для озвучки (действие ${err.index})"
             is ActionValidationError.AgentQueryPromptEmpty ->

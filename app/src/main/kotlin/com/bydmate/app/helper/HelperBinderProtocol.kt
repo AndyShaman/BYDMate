@@ -94,6 +94,11 @@ object HelperBinderProtocol {
      *  (no args) -> [int status, int 0]. */
     val TX_GRANT_READ_LOGS: Int = IBinder.FIRST_CALL_TRANSACTION + 23          // 24
 
+    /** Enable (1) or disable (0) the Wi-Fi hotspot via BydTetheringInterface / ConnectivityManager
+     *  reflection (TETHERING_WIFI = 0). Requires TETHER_PRIVILEGED held by shell uid.
+     *  Request: [int enable: 1=on, 0=off] -> [int status (0=ok, -1=fail), int 0]. */
+    val TX_SET_HOTSPOT: Int = IBinder.FIRST_CALL_TRANSACTION + 24              // 25
+
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128
 

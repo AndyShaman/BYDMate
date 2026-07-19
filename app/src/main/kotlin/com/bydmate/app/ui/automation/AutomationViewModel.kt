@@ -367,6 +367,7 @@ class AutomationViewModel @Inject constructor(
             is ActionValidationError.YandexMusicModeMissing -> ctx.getString(R.string.auto_msg_ymusic_mode_missing, err.index)
             is ActionValidationError.MediaVolumeMissing -> ctx.getString(R.string.auto_msg_media_volume_missing, err.index)
             is ActionValidationError.SentryInvalid -> ctx.getString(R.string.auto_msg_sentry_invalid, err.index)
+            is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
             null -> null
@@ -740,6 +741,15 @@ fun newSentryAction(context: Context): ActionDef = ActionDef(
     command = "sentry",
     displayName = context.getString(R.string.automation_action_sentry),
     kind = "sentry",
+    payload = "1"
+)
+
+// --- Hotspot helpers ---
+
+fun newHotspotAction(context: Context): ActionDef = ActionDef(
+    command = "hotspot",
+    displayName = context.getString(R.string.automation_action_hotspot),
+    kind = "hotspot",
     payload = "1"
 )
 

@@ -385,6 +385,9 @@
     <string name="automation_action_cluster_projection">Вывод на приборку</string>
     <string name="automation_action_cluster_projection_on">Включить</string>
     <string name="automation_action_cluster_projection_off">Отключить</string>
+    <string name="automation_action_hotspot">Точка доступа Wi-Fi</string>
+    <string name="automation_action_hotspot_on">Включить</string>
+    <string name="automation_action_hotspot_off">Отключить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -996,6 +999,7 @@
     <string name="auto_msg_url_no_scheme">Действие #%1$d: URL должен содержать схему (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Действие #%1$d: режим Я.Музыки не выбран</string>
     <string name="auto_msg_sentry_invalid">Действие #%1$d: некорректное состояние охранного режима</string>
+    <string name="auto_msg_hotspot_invalid">Действие #%1$d: некорректное состояние точки доступа</string>
     <string name="auto_msg_speak_text_empty">Действие #%1$d: не задан текст для озвучки</string>
     <string name="auto_msg_agent_query_prompt_empty">Действие #%1$d: не задан запрос агенту</string>
     <string name="auto_msg_name_cond_action_required">Название и хотя бы одно условие и действие обязательны</string>

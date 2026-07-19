@@ -320,6 +320,9 @@
     <string name="automation_action_cluster_projection">Projeção no painel de instrumentos</string>
     <string name="automation_action_cluster_projection_on">Ativar</string>
     <string name="automation_action_cluster_projection_off">Desativar</string>
+    <string name="automation_action_hotspot">Ponto de acesso Wi-Fi</string>
+    <string name="automation_action_hotspot_on">Ativar</string>
+    <string name="automation_action_hotspot_off">Desativar</string>
     <string name="automation_action_speak">Falar texto</string>
     <string name="automation_action_agent_query">Perguntar ao agente</string>
     <string name="auto_act_speak">Falar texto</string>
@@ -834,6 +837,7 @@
     <string name="auto_msg_url_no_scheme">Ação nº %1$d: a URL deve conter um esquema (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Ação nº %1$d: modo do Yandex Music não selecionado</string>
     <string name="auto_msg_sentry_invalid">Ação nº %1$d: estado do modo sentinela inválido</string>
+    <string name="auto_msg_hotspot_invalid">Ação nº %1$d: estado do ponto de acesso inválido</string>
     <string name="auto_msg_speak_text_empty">Ação nº %1$d: texto para fala não definido</string>
     <string name="auto_msg_agent_query_prompt_empty">Ação nº %1$d: consulta ao agente não definida</string>
     <string name="auto_msg_name_cond_action_required">Nome, ao menos uma condição e ao menos uma ação são obrigatórios</string>
