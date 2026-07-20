@@ -555,7 +555,7 @@ class AgentTools @Inject constructor(
                             .put("required", JSONArray(listOf("kind")))))
                     .put("cooldown_seconds", JSONObject()
                         .put("type", "integer")
-                        .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 30, по умолчанию 60"))
+                        .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 1, по умолчанию 60"))
                     .put("play_sound", JSONObject()
                         .put("type", "boolean")
                         .put("description", "Проиграть звуковой сигнал при срабатывании правила, по умолчанию false")),
@@ -1613,7 +1613,7 @@ class AgentTools @Inject constructor(
         }
         RuleDraftValidator.validateActions(actions)?.let { return actionErrorJson(it) }
 
-        val cooldown = args.optInt("cooldown_seconds", 60).coerceAtLeast(30)
+        val cooldown = args.optInt("cooldown_seconds", 60).coerceAtLeast(1)
         val playSound = args.optBoolean("play_sound", false)
         val rule = RuleEntity(
             name = name,

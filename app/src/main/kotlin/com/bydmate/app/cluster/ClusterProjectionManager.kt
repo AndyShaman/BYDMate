@@ -385,6 +385,11 @@ object ClusterProjectionManager {
      * next service start retries via [recoverStaleCompositor].
      */
     private suspend fun powerDownCompositor(context: Context, helper: HelperClient) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // #85/#62: no marker = we never powered the compositor up (e.g. projection aborted
+        // on a car with no cluster display) - sending the down sequence would be a fresh
+        // ИПЦ write to a cluster we never touched.
+        if (!shouldPowerDownCompositor(prefs.getBoolean(KEY_COMPOSITOR_POWERED, false))) return
         val off = runCatching { helper.setClusterContainerMode(false) }.getOrDefault(false)
         if (off) {
             context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -497,22 +502,38 @@ object ClusterProjectionManager {
             Log.e(TAG, "helper daemon not running; aborting projection"); return "daemon"
         }
         recoverStaleDirectDensity(context, helper)
+        // #85/#62: resolve the display BEFORE any compositor ИПЦ write. Song family /
+        // DiLink 3-4 expose no projection display; powering the compositor up there painted
+        // a black rectangle on the cluster that survived until reboot. Local read-only
+        // DisplayManager query - hoisting it does not reorder any daemon call on cars
+        // that do have the display.
+        val display = resolveClusterDisplay(context) ?: run {
+            // Failure-path parity with the pre-hoist order: a live overlay (reproject on a
+            // display that vanished mid-session) must not survive a failed attempt. No-op on
+            // cars without a cluster display - overlayView is always null there.
+            if (overlayView != null) hideOverlay(helper)
+            Log.e(TAG, "cluster display not found"); return "projection"
+        }
         if (autoContainerEnabled(context)) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
             // fails (the compositor may already be on). The marker is persisted even on failure —
             // compositor state is then unknown, and an extra recovery power-down against an
-            // already-off compositor is harmless.
-            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).apply()
-            runCatching { helper.setClusterContainerMode(true) }
+            // already-off compositor is harmless. Write-ahead mirrors KEY_DIRECT_DISPLAY_ID:
+            // commit() on Dispatchers.IO, not apply() — a hard power-cut between the power-up
+            // call and an async flush would lose the marker, and the marker-gated boot recovery
+            // would never send the healing power-down. A failed commit voids that guarantee —
+            // skip the power-up (the compositor may already be on, same fail-soft contract).
+            @Suppress("ApplySharedPref")
+            val markerWritten = withContext(Dispatchers.IO) {
+                context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                    .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
+            }
+            if (markerWritten) runCatching { helper.setClusterContainerMode(true) }
         }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
         if (!ensureOverlayPermission(context, helper)) {
             Log.e(TAG, "overlay permission unavailable; aborting projection"); return "projection"
-        }
-        val display = resolveClusterDisplay(context) ?: run {
-            Log.e(TAG, "cluster display not found"); return "projection"
         }
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)

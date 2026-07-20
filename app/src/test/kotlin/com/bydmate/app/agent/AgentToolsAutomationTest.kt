@@ -298,14 +298,24 @@ class AgentToolsAutomationTest {
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
-    @Test fun create_automation_cooldown_is_coerced_to_minimum_30() = runTest {
+    @Test fun create_automation_cooldown_is_coerced_to_minimum_1() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation", createArgs(cooldown = ""","cooldown_seconds":0""")))
+
+        assertEquals(1, slot.captured.cooldownSeconds)
+    }
+
+    @Test fun create_automation_cooldown_below_old_minimum_is_kept() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         val slot = slot<RuleEntity>()
         coEvery { ruleDao.insert(capture(slot)) } returns 1L
 
         tools().execute(call("create_automation", createArgs(cooldown = ""","cooldown_seconds":10""")))
 
-        assertEquals(30, slot.captured.cooldownSeconds)
+        assertEquals(10, slot.captured.cooldownSeconds)
     }
 
     // --- create_automation: payload contract fix wave ---

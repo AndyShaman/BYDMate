@@ -411,7 +411,7 @@ class AutomationViewModel @Inject constructor(
             triggerLogic = e.triggerLogic,
             triggers = TriggerDef.listToJson(e.triggers),
             actions = ActionDef.listToJson(e.actions),
-            cooldownSeconds = e.cooldownSeconds.coerceAtLeast(30),
+            cooldownSeconds = e.cooldownSeconds.coerceAtLeast(1),
             requirePark = e.requirePark,
             confirmBeforeExecute = e.confirmBeforeExecute,
             fireOncePerTrip = e.fireOncePerTrip,
