@@ -238,4 +238,44 @@ class AgentToolsRouteInfoTest {
         assertEquals("300 м", out.getString("maneuver_distance"))
         assertEquals("улица Ленина", out.getString("street"))
     }
+
+    @Test fun `hub fills remaining distance and time when screen is gone`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300, road = "пр. Мира",
+                etaSeconds = 3900, totalDistMeters = 12_000),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L - 30_000L,
+        )
+        val t = tools()
+        t.naviScreenProvider = { null }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("12.0 км", out.getString("remaining_distance"))
+        assertEquals("1 ч 05 мин", out.getString("remaining_time"))
+    }
+
+    @Test fun `screen remaining fields win over hub`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300, etaSeconds = 3900, totalDistMeters = 12_000),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L - 5_000L,
+        )
+        val t = tools()
+        t.naviScreenProvider = { fullScreen() }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("28 км", out.getString("remaining_distance"))
+        assertEquals("27 мин", out.getString("remaining_time"))
+    }
+
+    @Test fun `short remaining time formatted in minutes`() = runTest {
+        NavGuidanceHub.update(
+            NavGuidance(maneuverGaode = 2, distanceMeters = 300, etaSeconds = 600, totalDistMeters = 500),
+            NavGuidanceHub.Source.A11Y,
+            nowMs = 1_000_000_000_000L,
+        )
+        val t = tools()
+        t.naviScreenProvider = { null }
+        val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
+        assertEquals("10 мин", out.getString("remaining_time"))
+        assertEquals("500 м", out.getString("remaining_distance"))
+    }
 }

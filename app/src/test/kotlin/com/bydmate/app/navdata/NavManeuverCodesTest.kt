@@ -13,6 +13,12 @@ class NavManeuverCodesTest {
         assertTrue("ru.yandex.yandexnavi" in NavPackages.YANDEX_NAVI)
         assertTrue("ru.yandex.yandexnavi.inhouse" in NavPackages.YANDEX_NAVI)
         assertTrue("ru.yandex.yandexnavi.rustore" in NavPackages.YANDEX_NAVI)
+        assertTrue("ru.yandex.yandexmaps" in NavPackages.YANDEX_MAPS)
+        assertTrue("ru.yandex.yandexmaps.beta" in NavPackages.YANDEX_MAPS)
+        assertTrue("ru.yandex.yandexmaps.inhouse" in NavPackages.YANDEX_MAPS)
+        assertTrue("ru.yandex.yandexmaps.rustore" in NavPackages.YANDEX_MAPS)
+        assertTrue(NavPackages.GUIDANCE_SOURCES.containsAll(NavPackages.YANDEX_NAVI))
+        assertTrue(NavPackages.GUIDANCE_SOURCES.containsAll(NavPackages.YANDEX_MAPS))
     }
 
     @Test fun `null and blank map to unknown`() {
@@ -82,5 +88,51 @@ class NavManeuverCodesTest {
         assertEquals(7, gaode("Резкий\u00A0поворот\u00A0налево"))
         assertEquals(24, gaode("Съезд\u00A0с\u00A0кольца"))
         assertEquals(45, gaode("Промежуточная\u00A0точка"))
+    }
+
+    @Test fun `road alert res maps to alert kinds`() {
+        assertEquals("camera", NavManeuverCodes.roadAlertFromRes("road_alerts_camera_32"))
+        assertEquals("accident", NavManeuverCodes.roadAlertFromRes("road_alerts_accident_32"))
+        assertEquals("roadworks", NavManeuverCodes.roadAlertFromRes("road_alerts_road_works_32"))
+        assertEquals("other", NavManeuverCodes.roadAlertFromRes("road_alerts_other_32"))
+        assertEquals("", NavManeuverCodes.roadAlertFromRes("primary_icon_whatever"))
+    }
+
+    @Test fun `service phrases detected`() {
+        assertTrue(NavManeuverCodes.isServicePhrase("Камера контроля скорости"))
+        assertTrue(NavManeuverCodes.isServicePhrase("почти на месте"))
+        assertTrue(NavManeuverCodes.isServicePhrase("Кольцевое движение"))
+        assertEquals(false, NavManeuverCodes.isServicePhrase("улица Ленина"))
+    }
+
+    @Test fun `rich phrase gaode maps maneuvers and skips streets`() {
+        assertEquals(2, NavManeuverCodes.richPhraseGaode("Поверните направо"))
+        assertEquals(1, NavManeuverCodes.richPhraseGaode("налево"))
+        assertEquals(9, NavManeuverCodes.richPhraseGaode("Развернитесь"))
+        assertEquals(0, NavManeuverCodes.richPhraseGaode("улица Ленина"))
+        assertEquals(0, NavManeuverCodes.richPhraseGaode(null))
+        assertEquals(0, NavManeuverCodes.richPhraseGaode(""))
+    }
+
+    @Test fun `rich phrase gaode donor word-boundary semantics`() {
+        // Donor maps a bare word-boundary "съезд" to UNKNOWN deliberately - it must stop
+        // the scan before "паром"/"кольцо" can match.
+        assertEquals(0, NavManeuverCodes.richPhraseGaode("съезд на паром"))
+        assertEquals(NavManeuverCodes.GAODE_TOLL, NavManeuverCodes.richPhraseGaode("платный участок"))
+        assertEquals(NavManeuverCodes.GAODE_FERRY, NavManeuverCodes.richPhraseGaode("паром через час"))
+    }
+
+    @Test fun `rich phrase with nbsp is normalized`() {
+        assertEquals(NavManeuverCodes.GAODE_TOLL, NavManeuverCodes.richPhraseGaode("платный\u00A0участок"))
+    }
+
+    @Test fun `rich icon name gaode maps donor icon dictionaries`() {
+        assertEquals(2, NavManeuverCodes.richIconNameGaode("notification_right_sdl"))
+        assertEquals(9, NavManeuverCodes.richIconNameGaode("direction_uturn"))
+        assertEquals(13, NavManeuverCodes.richIconNameGaode("navigation_roundabout"))
+        assertEquals(48, NavManeuverCodes.richIconNameGaode("some_arrive_icon"))   // contains-heuristic
+        assertEquals(11, NavManeuverCodes.richIconNameGaode("icon_go_ahead.xml")) // suffix stripped
+        assertEquals(0, NavManeuverCodes.richIconNameGaode(""))
+        assertEquals(0, NavManeuverCodes.richIconNameGaode("notifications_app_logo"))
     }
 }

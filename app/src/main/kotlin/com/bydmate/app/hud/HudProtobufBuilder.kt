@@ -29,6 +29,7 @@ object HudProtobufBuilder {
         speedLimit: Int,
         maneuverIconPng: ByteArray?,
         speedSignPng: ByteArray?,
+        suppressArrow: Boolean = false,
     ): ByteArray {
         val inner = ByteArrayOutputStream()
         // f2 is the constant 2 in every reference guidance frame (donor stage 6,
@@ -42,7 +43,8 @@ object HudProtobufBuilder {
         if (speedLimit > 0) writeVarintField(inner, 11, speedLimit.toLong())
         writeVarintField(inner, 16, 2L)
         if (etaString != null) writeBytesField(inner, 26, etaString.toByteArray(Charsets.UTF_8))
-        writeVarintField(inner, 28, gaodeToF28(maneuverGaode).toLong())
+        // Camera takeover (donor): f28=0 keeps the HUD from drawing a stale arrow.
+        writeVarintField(inner, 28, if (suppressArrow) 0L else gaodeToF28(maneuverGaode).toLong())
         writeFixed64Field(inner, 33, progress(distanceMeters, totalDistMeters).toRawBits())
         return wrap(inner.toByteArray())
     }
@@ -58,15 +60,17 @@ object HudProtobufBuilder {
         speedLimit: Int,
         maneuverIconPng: ByteArray?,
         speedSignPng: ByteArray?,
+        suppressArrow: Boolean = false,
     ): ByteArray {
         // The road string is the only unbounded input (a11y screen text); cap it so a
         // corrupted read can never push the frame past MAX_PAYLOAD_BYTES (Codex audit fix 4).
         val safeRoad = if (road.length > MAX_ROAD_CHARS) road.take(MAX_ROAD_CHARS) else road
         val full = buildFrame(maneuverGaode, distanceMeters, safeRoad, etaString,
-            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng)
+            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng, suppressArrow)
         if (full.size <= MAX_PAYLOAD_BYTES || speedSignPng == null) return full
         return buildFrame(maneuverGaode, distanceMeters, safeRoad, etaString,
-            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng = null)
+            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng = null,
+            suppressArrow = suppressArrow)
     }
 
     /** Clear frame: render class 255 + f16=1 wipes the HUD navigation area. */

@@ -1,7 +1,9 @@
 package com.bydmate.app.navdata
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -81,20 +83,6 @@ class NavGuidanceHubTest {
         assertTrue(NavGuidanceHub.snapshot(nowMs = 4000 + 5000).active)
     }
 
-    @Test fun `notification update maps res and distance text`() {
-        NavGuidanceHub.updateFromNotification("notification_right_sdl", "300 м", "улица Ленина", nowMs = 1000)
-        val s = NavGuidanceHub.snapshot(nowMs = 1000)
-        assertTrue(s.active)
-        assertEquals(2, s.maneuverGaode)
-        assertEquals(300, s.distanceMeters)
-        assertEquals("улица Ленина", s.road)
-    }
-
-    @Test fun `blank notification update is ignored`() {
-        NavGuidanceHub.updateFromNotification(null, null, null, nowMs = 1000)
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 1000).active)
-    }
-
     @Test fun `reset clears everything`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
         NavGuidanceHub.reset()
@@ -117,16 +105,124 @@ class NavGuidanceHubTest {
         assertTrue(NavGuidanceHub.snapshot(nowMs = 20_000).active)
     }
 
-    @Test fun `notification end deactivates notification-only guidance immediately`() {
-        NavGuidanceHub.updateFromNotification("turn_left", "500 м", "ул. Ленина", nowMs = 1_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 1_500).active)
-        NavGuidanceHub.markNotificationEnded(nowMs = 2_000)
-        assertFalse(NavGuidanceHub.snapshot(nowMs = 2_100).active)
+    @Test
+    fun `rich notification update fills guidance fields`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, distanceMeters = 300, road = "улица Ленина",
+            etaSeconds = 600, totalDistMeters = 5000, maneuverPng = byteArrayOf(5)), nowMs = 1000)
+        val s = NavGuidanceHub.snapshot(nowMs = 1000)
+        assertTrue(s.active)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals(300, s.distanceMeters)
+        assertEquals("улица Ленина", s.road)
+        assertEquals(600, s.etaSeconds)
+        assertEquals(5000, s.totalDistMeters)
+        assertArrayEquals(byteArrayOf(5), s.maneuverPng)
+        assertEquals(1000L, s.lastUpdateMs)
     }
 
-    @Test fun `notification end ignored while a11y guidance is fresh`() {
-        NavGuidanceHub.update(data(gaode = 2, dist = 300), NavGuidanceHub.Source.A11Y, nowMs = 1_000)
-        NavGuidanceHub.markNotificationEnded(nowMs = 2_000)
-        assertTrue(NavGuidanceHub.snapshot(nowMs = 2_100).active)
+    @Test
+    fun `fresh a11y blocks rich guidance fields but camera and activity apply`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = "ул. А"),
+            NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 1, distanceMeters = 900, road = "ул. Б", maneuverPng = byteArrayOf(3),
+            cameraAlert = "camera", cameraDistanceMeters = 400, cameraIconPng = byteArrayOf(1)), nowMs = 5000)
+        val s = NavGuidanceHub.snapshot(nowMs = 5000)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals(250, s.distanceMeters)
+        assertEquals("ул. А", s.road)
+        assertNull(s.maneuverPng)
+        assertEquals("camera", s.cameraAlert)
+        assertEquals(400, s.cameraDistanceMeters)
+        assertArrayEquals(byteArrayOf(1), s.cameraIconPng)
+        assertEquals(5000L, s.lastUpdateMs)
+    }
+
+    @Test
+    fun `stale a11y allows full rich merge`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = "ул. А"),
+            NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 1, distanceMeters = 900, road = "ул. Б"), nowMs = 11_500)
+        val s = NavGuidanceHub.snapshot(nowMs = 11_500)
+        assertEquals(1, s.maneuverGaode)
+        assertEquals(900, s.distanceMeters)
+        assertEquals("ул. Б", s.road)
+    }
+
+    @Test
+    fun `rich update within a11y priority still cancels no-guidance streak`() {
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        NavGuidanceHub.markNoGuidance(nowMs = 2000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(road = "ул. Б"), nowMs = 3000)
+        // Without the streak reset the 10s no-guidance deadline (2000+10000) would deactivate.
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 12_500).active)
+    }
+
+    @Test
+    fun `camera two-stage merge keeps prev distance and icon, empty alert clears`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            cameraAlert = "camera", cameraDistanceMeters = 400, cameraIconPng = byteArrayOf(1)), nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(cameraAlert = "camera"), nowMs = 2000)
+        var s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals(400, s.cameraDistanceMeters)
+        assertArrayEquals(byteArrayOf(1), s.cameraIconPng)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(road = "x"), nowMs = 3000)
+        s = NavGuidanceHub.snapshot(nowMs = 3000)
+        assertEquals("", s.cameraAlert)
+        assertEquals(0, s.cameraDistanceMeters)
+        assertNull(s.cameraIconPng)
+    }
+
+    @Test
+    fun `extras update with applyCamera false preserves camera`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            cameraAlert = "camera", cameraDistanceMeters = 400, cameraIconPng = byteArrayOf(1)), nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            road = "ул. В", applyCamera = false), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals("camera", s.cameraAlert)
+        assertEquals(400, s.cameraDistanceMeters)
+        assertArrayEquals(byteArrayOf(1), s.cameraIconPng)
+        assertEquals("ул. В", s.road)
+    }
+
+    @Test
+    fun `a11y update does not touch camera`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            cameraAlert = "camera", cameraDistanceMeters = 400), nowMs = 1000)
+        NavGuidanceHub.update(NavGuidance(maneuverGaode = 2, distanceMeters = 100),
+            NavGuidanceHub.Source.A11Y, nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertEquals("camera", s.cameraAlert)
+        assertEquals(400, s.cameraDistanceMeters)
+        assertEquals(2, s.maneuverGaode)
+    }
+
+    @Test
+    fun `active timeout expiry clears camera and maneuver png`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, road = "x", maneuverPng = byteArrayOf(2),
+            cameraAlert = "camera", cameraDistanceMeters = 100, cameraIconPng = byteArrayOf(1)), nowMs = 1000)
+        // Snapshot expiry check is strict (> ACTIVE_TIMEOUT_MS), so cross the boundary
+        val s = NavGuidanceHub.snapshot(nowMs = 1000 + 90_001)
+        assertFalse(s.active)
+        assertEquals("", s.cameraAlert)
+        assertEquals(0, s.cameraDistanceMeters)
+        assertNull(s.cameraIconPng)
+        assertNull(s.maneuverPng)
+    }
+
+    @Test
+    fun `notification grace deactivates only when stale`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, road = "x", cameraAlert = "camera"), nowMs = 1000)
+        NavGuidanceHub.deactivateFromNotificationGrace(nowMs = 5000) // fresh - no-op
+        assertTrue(NavGuidanceHub.snapshot(nowMs = 5000).active)
+        NavGuidanceHub.deactivateFromNotificationGrace(nowMs = 1000 + 90_000)
+        val s = NavGuidanceHub.snapshot(nowMs = 1000 + 90_000)
+        assertFalse(s.active)
+        assertEquals("", s.cameraAlert)
     }
 }

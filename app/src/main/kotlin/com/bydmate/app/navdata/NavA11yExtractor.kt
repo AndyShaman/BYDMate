@@ -20,7 +20,7 @@ object NavA11yExtractor {
     fun read(root: AccessibilityNodeInfo?): ReadResult {
         if (root == null) return ReadResult.NotNavigator
         val pkg = root.packageName?.toString() ?: return ReadResult.NotNavigator
-        if (pkg !in NavPackages.YANDEX_NAVI) return ReadResult.NotNavigator
+        if (pkg !in NavPackages.GUIDANCE_SOURCES) return ReadResult.NotNavigator
         val raw = NavGuidanceParser.RawFields(
             maneuverDesc = descOf(root, "$pkg:id/image_maneuverballoon_maneuver"),
             exitNumber = textOf(root, "$pkg:id/exit_number_text"),

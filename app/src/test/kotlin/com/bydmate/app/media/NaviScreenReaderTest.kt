@@ -79,4 +79,13 @@ class NaviScreenReaderTest {
         assertNull(info.arrivalTime)
         assertNull(info.street)
     }
+
+    @Test fun `maps package accepted by screen reader`() {
+        val root = mockk<AccessibilityNodeInfo>(relaxed = true)
+        every { root.packageName } returns "ru.yandex.yandexmaps"
+        every { root.findAccessibilityNodeInfosByViewId("ru.yandex.yandexmaps:id/text_speedlimit") } returns
+            listOf(node("60"))
+        val info = NaviScreenReader.read(root)
+        assertEquals("60", info?.speedLimit)
+    }
 }

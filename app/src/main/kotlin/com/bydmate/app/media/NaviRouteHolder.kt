@@ -30,7 +30,7 @@ object NaviRouteHolder {
         nowMs: Long,
         parsed: NaviNotificationParser.Parsed? = null,
     ) {
-        if (pkg !in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return
+        if (pkg !in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return
         val hasParsed = parsed != null &&
             (parsed.maneuver != null || parsed.distance != null || parsed.bigTexts.isNotEmpty())
         if (title.isNullOrBlank() && text.isNullOrBlank() && subText.isNullOrBlank() && !hasParsed) return
@@ -45,6 +45,6 @@ object NaviRouteHolder {
     }
 
     fun clear(pkg: String) {
-        if (pkg in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) latest = null
+        if (pkg in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) latest = null
     }
 }

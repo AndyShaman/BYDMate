@@ -1371,6 +1371,10 @@ class AgentTools @Inject constructor(
                 if (!has("street") && hub.road.isNotEmpty()) put("street", hub.road)
                 if (!has("speed_limit") && hub.speedLimit > 0)
                     put("speed_limit", hub.speedLimit.toString())
+                if (!has("remaining_distance") && hub.totalDistMeters > 0)
+                    put("remaining_distance", formatMeters(hub.totalDistMeters))
+                if (!has("remaining_time") && hub.etaSeconds > 0)
+                    put("remaining_time", formatEtaSeconds(hub.etaSeconds))
                 put("hub_age_sec", (nowMs() - hub.lastUpdateMs) / 1000L)
             }
             gate.vehicleSnapshot()?.let { d ->
@@ -1388,6 +1392,13 @@ class AgentTools @Inject constructor(
     private fun formatMeters(meters: Int): String =
         if (meters >= 1000) String.format(java.util.Locale.US, "%.1f км", meters / 1000.0)
         else "$meters м"
+
+    private fun formatEtaSeconds(seconds: Int): String {
+        val min = seconds / 60
+        return if (min >= 60)
+            String.format(java.util.Locale.US, "%d ч %02d мин", min / 60, min % 60)
+        else "$min мин"
+    }
 
     private suspend fun goHomeScreen(): String {
         val result = actionDispatcher.dispatch(

@@ -24,4 +24,10 @@ class NavA11yExtractorTest {
         node.packageName = "ru.yandex.yandexnavi"
         assertEquals(NavA11yExtractor.ReadResult.NoGuidance, NavA11yExtractor.read(node))
     }
+
+    @Test fun `maps package without guidance widgets is no-guidance`() {
+        val node = AccessibilityNodeInfo.obtain()
+        node.packageName = "ru.yandex.yandexmaps"
+        assertEquals(NavA11yExtractor.ReadResult.NoGuidance, NavA11yExtractor.read(node))
+    }
 }
