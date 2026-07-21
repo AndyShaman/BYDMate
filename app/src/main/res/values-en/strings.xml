@@ -90,8 +90,10 @@
     <string name="settings_cancel_button">Cancel</string>
     <string name="settings_abrp_section_header">ABRP - telemetry</string>
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent - ABRP reads coordinates itself.</string>
+    <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent by default.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
+    <string name="settings_abrp_location_label">Send coordinates to ABRP</string>
+    <string name="settings_abrp_location_description">Adds the car GPS position and heading to telemetry. Off by default: ABRP on DiLink reads location itself. Turn on if the ABRP car marker lags behind the real position.</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
     <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
@@ -1066,4 +1068,6 @@
     <string name="settings_hud_status_on">Streaming to the HUD</string>
     <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
+    <string name="settings_secret_show">Show key</string>
+    <string name="settings_secret_hide">Hide key</string>
 </resources>

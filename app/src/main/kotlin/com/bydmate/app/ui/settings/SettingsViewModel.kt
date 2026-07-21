@@ -121,6 +121,7 @@ data class SettingsUiState(
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
+    val abrpSendLocation: Boolean = false,
     val abrpSaveStatus: String? = null,
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
@@ -322,6 +323,7 @@ class SettingsViewModel @Inject constructor(
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
             val mapTileSource = settingsRepository.getMapTileSource()
             val disableNativeAssistant =
                 settingsRepository.getString(SettingsRepository.KEY_DISABLE_NATIVE_ASSISTANT, "false") == "true"
@@ -401,6 +403,7 @@ class SettingsViewModel @Inject constructor(
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
+                    abrpSendLocation = abrpSendLocation,
                     mapTileSource = mapTileSource,
                     disableNativeAssistant = disableNativeAssistant,
                     voiceEnabled = voiceEnabled,
@@ -949,6 +952,13 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(abrpTelemetryEnabled = effective) }
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ABRP_ENABLED, effective.toString())
+        }
+    }
+
+    fun toggleAbrpSendLocation(enabled: Boolean) {
+        _uiState.update { it.copy(abrpSendLocation = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_SEND_LOCATION, enabled.toString())
         }
     }
 

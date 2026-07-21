@@ -100,8 +100,10 @@
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - телеметрия</string>
     <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся - ABRP читает координаты сам.</string>
+    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS по умолчанию не передаётся.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
+    <string name="settings_abrp_location_label">Отправлять координаты в ABRP</string>
+    <string name="settings_abrp_location_description">Добавляет GPS-позицию и курс машины в телеметрию. По умолчанию выключено: ABRP на ДиЛинке читает координаты сам. Включите, если стрелка машины в ABRP отстаёт от реального положения.</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
     <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
@@ -1221,4 +1223,6 @@
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
+    <string name="settings_secret_show">Показать ключ</string>
+    <string name="settings_secret_hide">Скрыть ключ</string>
 </resources>

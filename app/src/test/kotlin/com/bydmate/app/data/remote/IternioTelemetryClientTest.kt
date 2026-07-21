@@ -517,4 +517,49 @@ class IternioTelemetryClientTest {
         assertTrue("power must always be present in payload", tlm.has("power"))
         assertEquals(0.0, tlm.getDouble("power"), 0.001)
     }
+
+    @Test
+    fun `lat lon heading sent when coordinates provided`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+        val result = client.send(
+            apiKey = "k", userToken = "t", data = drivingData(),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            latitude = 55.751244, longitude = 37.618423, headingDeg = 132.5,
+        )
+        assertTrue(result.isSuccess)
+        val tlm = cap.lastTlmJson!!
+        assertEquals(55.751244, tlm.getDouble("lat"), 1e-9)
+        assertEquals(37.618423, tlm.getDouble("lon"), 1e-9)
+        assertEquals(132.5, tlm.getDouble("heading"), 1e-9)
+    }
+
+    @Test
+    fun `heading alone is not sent without coordinates`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+        val result = client.send(
+            apiKey = "k", userToken = "t", data = drivingData(),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            headingDeg = 90.0,
+        )
+        assertTrue(result.isSuccess)
+        val tlm = cap.lastTlmJson!!
+        assertFalse(tlm.has("lat"))
+        assertFalse(tlm.has("lon"))
+        assertFalse(tlm.has("heading"))
+    }
+
+    @Test
+    fun `latitude without longitude sends no GPS fields`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+        val result = client.send(
+            apiKey = "k", userToken = "t", data = drivingData(),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            latitude = 55.0,
+        )
+        assertTrue(result.isSuccess)
+        assertFalse(cap.lastTlmJson!!.has("lat"))
+    }
 }

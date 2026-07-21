@@ -87,7 +87,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -503,7 +507,14 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 label = stringResource(R.string.settings_abrp_token_label),
                 value = state.abrpUserToken,
                 onValueChange = { viewModel.updateAbrpUserToken(it) },
-                keyboardType = KeyboardType.Password
+                keyboardType = KeyboardType.Password,
+                secret = true
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_abrp_location_label),
+                description = stringResource(R.string.settings_abrp_location_description),
+                checked = state.abrpSendLocation,
+                onCheckedChange = { viewModel.toggleAbrpSendLocation(it) },
             )
             SettingActionRow(
                 title = stringResource(R.string.settings_abrp_save_button),
@@ -530,7 +541,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.openRouterApiKey,
             onValueChange = { viewModel.saveOpenRouterApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingActionRow(
             title = stringResource(R.string.settings_openrouter_model_pick),
@@ -553,7 +565,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.zaiApiKey,
             onValueChange = { viewModel.saveZaiApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingHint(stringResource(R.string.settings_zai_hint))
     }
@@ -598,7 +611,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.customApiKey,
             onValueChange = { viewModel.saveCustomApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingsTextField(
             label = stringResource(R.string.settings_conn_model_label),
@@ -649,6 +663,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 value = state.exaApiKey,
                 onValueChange = { viewModel.saveExaApiKey(it) },
                 keyboardType = KeyboardType.Password,
+                secret = true
             )
             SettingHint(stringResource(R.string.settings_exa_search_hint))
         }
@@ -2178,7 +2193,8 @@ private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewMode
                 label = "API Key",
                 value = state.aliceApiKey,
                 onValueChange = { viewModel.updateAliceApiKey(it) },
-                keyboardType = KeyboardType.Password
+                keyboardType = KeyboardType.Password,
+                secret = true
             )
             SettingActionRow(
                 title = "Сохранить",
@@ -2408,14 +2424,32 @@ private fun SettingsTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    keyboardType: KeyboardType
+    keyboardType: KeyboardType,
+    secret: Boolean = false
 ) {
+    // Secret fields (API keys, tokens) are masked so screenshots and over-the-shoulder
+    // looks do not leak them; the eye icon reveals the value while editing.
+    var revealed by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
+        visualTransformation = if (secret && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        trailingIcon = if (secret) {
+            {
+                IconButton(onClick = { revealed = !revealed }) {
+                    Icon(
+                        imageVector = if (revealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = stringResource(
+                            if (revealed) R.string.settings_secret_hide else R.string.settings_secret_show
+                        ),
+                        tint = TextSecondary,
+                    )
+                }
+            }
+        } else null,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(

@@ -77,8 +77,10 @@
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - 遥测</string>
     <string name="settings_abrp_telemetry_label">实时数据 -> A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。不发送 GPS 坐标，ABRP 自行读取。</string>
+    <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。默认不发送 GPS 坐标。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
+    <string name="settings_abrp_location_label">向 ABRP 发送坐标</string>
+    <string name="settings_abrp_location_description">将车辆的 GPS 位置和航向加入遥测。默认关闭：DiLink 上的 ABRP 会自行读取位置。若 ABRP 中的车辆箭头落后于实际位置，可开启此项。</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
     <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API 密钥</string>
@@ -1184,4 +1186,6 @@
     <string name="settings_hud_status_on">正在向 HUD 传输</string>
     <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
+    <string name="settings_secret_show">显示密钥</string>
+    <string name="settings_secret_hide">隐藏密钥</string>
 </resources>

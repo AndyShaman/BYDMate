@@ -91,8 +91,10 @@
     <string name="settings_cancel_button">Cancelar</string>
     <string name="settings_abrp_section_header">ABRP - telemetria</string>
     <string name="settings_abrp_telemetry_label">Dados ao vivo -&gt; A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado - o ABRP lê as coordenadas por conta própria.</string>
+    <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado por padrão.</string>
     <string name="settings_abrp_token_label">Token de dados ao vivo do ABRP</string>
+    <string name="settings_abrp_location_label">Enviar coordenadas ao ABRP</string>
+    <string name="settings_abrp_location_description">Adiciona a posição GPS e o rumo do carro à telemetria. Desligado por padrão: o ABRP no DiLink lê a localização por conta própria. Ative se a seta do carro no ABRP ficar atrás da posição real.</string>
     <string name="settings_abrp_save_button">Salvar ABRP</string>
     <string name="settings_openrouter_api_key_label">Chave de API do OpenRouter</string>
     <string name="settings_openrouter_model_selected">Modelo: %1$s</string>
@@ -1063,4 +1065,6 @@
     <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
     <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
+    <string name="settings_secret_show">Mostrar chave</string>
+    <string name="settings_secret_hide">Ocultar chave</string>
 </resources>

@@ -303,6 +303,16 @@ class TrackingService : Service(), LocationListener {
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
+        // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
+        // pin the car marker to an old position, which is worse than sending none.
+        private const val TELEMETRY_LOCATION_FRESH_MS = 60_000L
+
+        /** ABRP GPS opt-in gate: toggle ON + fix no older than [TELEMETRY_LOCATION_FRESH_MS]. */
+        internal fun locationForTelemetry(enabled: Boolean, location: Location?, nowMs: Long): Location? {
+            if (!enabled) return null
+            return location?.takeIf { it.time in (nowMs - TELEMETRY_LOCATION_FRESH_MS)..nowMs }
+        }
+
         /**
          * Current widget-session anchor (epoch millis of ignition-on), or null when
          * the vehicle is idle. Consumers: widget duration, ConsumptionAggregator,
@@ -760,6 +770,12 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
+                val sendLocation = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_SEND_LOCATION,
+                    "false"
+                ) == "true"
+                val location = locationForTelemetry(sendLocation, _lastLocation.value, snapshotMs)
+
                 // Best-effort autoservice enrichment. Snapshots are heavier
                 // (multiple fids) — only read them in CHARGING window where
                 // is_dcfc / kwh_charged actually matter. In DRIVING we still
@@ -787,6 +803,9 @@ class TrackingService : Service(), LocationListener {
                     carModel = carModel,
                     enginePowerKw = enginePowerKw,
                     sampleTimeMs = snapshotMs,
+                    latitude = location?.latitude,
+                    longitude = location?.longitude,
+                    headingDeg = location?.takeIf { it.hasBearing() }?.bearing?.toDouble(),
                 ).onSuccess {
                     synchronized(iternioTelemetryLock) {
                         lastIternioTelemetryMs = snapshotMs

@@ -26,9 +26,11 @@ import javax.inject.Singleton
  * Positive = consumption (battery → motor/HVAC), negative = regen/charging
  * (motor/grid → battery). Pass through without inverting.
  *
- * GPS (lat/lon/elevation) is intentionally NOT sent — ABRP runs as a native
- * Android app on DiLink and reads location from the OS itself; sending GPS
- * would duplicate the signal and leak position to a third-party server.
+ * GPS is OFF by default — ABRP runs as a native Android app on DiLink and
+ * reads location from the OS itself; sending it unconditionally would leak
+ * position to a third-party server. Some ABRP setups, however, anchor the
+ * car marker to telemetry/cloud state instead of device GPS, so a Settings
+ * toggle lets the user opt into sending lat/lon (+heading).
  */
 @Singleton
 class IternioTelemetryClient @Inject constructor(
@@ -82,6 +84,12 @@ class IternioTelemetryClient @Inject constructor(
      *                    plots samples at the moment of measurement, not at
      *                    the moment our HTTP call lands. Defaults to now when
      *                    null (call-time fallback).
+     * @param latitude Optional GPS latitude. Sent only together with [longitude];
+     *                 the caller passes coordinates only when the user enabled the
+     *                 opt-in Settings toggle (default OFF).
+     * @param longitude Optional GPS longitude, see [latitude].
+     * @param headingDeg Optional course over ground in degrees; sent only when
+     *                   both coordinates are present.
      */
     suspend fun send(
         apiKey: String,
@@ -93,6 +101,9 @@ class IternioTelemetryClient @Inject constructor(
         carModel: String?,
         enginePowerKw: Int? = null,
         sampleTimeMs: Long? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        headingDeg: Double? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = userToken.trim()
         if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
@@ -133,6 +144,13 @@ class IternioTelemetryClient @Inject constructor(
             data.tirePressFR?.let { telemetry.put("tire_pressure_fr", it) }
             data.tirePressRL?.let { telemetry.put("tire_pressure_rl", it) }
             data.tirePressRR?.let { telemetry.put("tire_pressure_rr", it) }
+
+            // GPS opt-in: both coordinates or nothing; a lone heading is useless to ABRP.
+            if (latitude != null && longitude != null) {
+                telemetry.put("lat", latitude)
+                telemetry.put("lon", longitude)
+                headingDeg?.let { telemetry.put("heading", it) }
+            }
 
             telemetry.put("is_charging", if (isCharging(data, charging)) 1 else 0)
             data.gear?.let { telemetry.put("is_parked", if (it == 1) 1 else 0) }
@@ -185,11 +203,9 @@ class IternioTelemetryClient @Inject constructor(
                     val status = json.optString("status")
                     if (status.isNotBlank() && !status.equals("ok", ignoreCase = true)) {
                         // Iternio response may echo back token/api_key in error
-                        // body — never propagate the raw body. Only surface the
-                        // sanitized status code; full body stays in private logs.
-                        val reason = json.optString("reason").ifBlank { status }
-                        Log.w(TAG, "API status=$status reason=$reason")
-                        return@withContext Result.failure(IllegalStateException("Iternio status=$status"))
+                        // body — never log or propagate any server-provided string.
+                        Log.w(TAG, "API returned non-ok status")
+                        return@withContext Result.failure(IllegalStateException("Iternio API returned non-ok status"))
                     }
                 } catch (_: Exception) { /* пустой или не-JSON ответ считаем успехом при HTTP 2xx */ }
             }
