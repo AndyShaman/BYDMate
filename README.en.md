@@ -180,6 +180,18 @@ Before the first use, set up the stock navigation output to the cluster once, ot
 
 After that, a short press of the chosen steering-wheel button (right star by default) moves the selected app to the cluster and back.
 
+### Projection modes: Factory and Extended
+
+In **Settings → Display**, next to the projection toggle, you choose the projection mode. There are two, and they differ in whether the app touches the car's system settings.
+
+**Factory (default).** The app does not change a single system setting: the projection works through a virtual display (the picture is mirrored onto the cluster), and the window adjustment sliders work more precisely. Installs and uninstalls without a trace. Limitation: the voice agent and the HUD cannot see the navigator screen during projection; the agent takes maneuver guidance from the Navigator notification only.
+
+**Extended.** The navigator is launched as a window directly on the instrument-cluster display, so the voice agent and the HUD see the route during projection. For this the app enables the system freeform-window setting (enable_freeform_support). The mode is enabled only through a confirmation dialog, and a one-time head-unit reboot is required afterwards (long-press the volume knob). The new mode applies on the next projection start.
+
+**How to restore factory settings.** Switch the mode back to Factory: the app immediately writes the system setting back to its factory value, and a DiLink reboot completes the rollback. After that the system is in the same state as before BYDMate was installed.
+
+If you used the projection in versions before 3.7, your previous behavior is kept automatically on update: the mode stays Extended. For those who never enabled the projection, the app never touches system settings at all.
+
 ### Which app to project
 
 Yandex Navigator is projected by default. Below the enable toggle there is an app picker: choose any installed app (another navigator, a media player, etc.). The new choice applies on the next star press.
@@ -190,7 +202,7 @@ In **Settings → Display → "Cluster window size"** two sliders (width and hei
 
 ### How it works
 
-The projection goes through the car's system service: BYDMate launches the chosen app as a window directly on the instrument-cluster display, so the voice agent and the HUD can see the route during projection. This mode needs a one-time head-unit reboot after installation (long-press the volume knob); until then the old virtual-display path is used automatically. To intercept the steering-wheel buttons, the app enables its own accessibility service. It works only while the toggle is on and is used solely for the star. It does not change the firmware or the car itself, and it is fully reversible.
+The projection runs in one of the two modes described above. In Factory mode BYDMate creates a virtual display and mirrors the chosen app into it without changing any system settings. In Extended mode the app is launched as a window directly on the instrument-cluster display, so the voice agent and the HUD can see the route during projection. To intercept the steering-wheel buttons, the app enables its own accessibility service. It works only while the toggle is on and is used solely for the star. It does not change the firmware or the car itself, and it is fully reversible.
 
 ---
 

@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.7] - 2026-07-21
+
 ### Новое
 - HUD и проекция на приборку продолжают вести маршрут при свёрнутом Яндекс Навигаторе: данные читаются из его уведомления (порт проверенных решений @RBGboost, автора донорского приложения yandexhud)
 - Предупреждения о камерах на HUD: значок камеры и расстояние до неё вместо стрелки манёвра, пока Навигатор показывает камеру
@@ -770,7 +772,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.6.3...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.7...HEAD
+[3.7]: https://github.com/AndyShaman/BYDMate/compare/v3.6.3...v3.7
 [3.6.3]: https://github.com/AndyShaman/BYDMate/compare/v3.6.2...v3.6.3
 [3.6.2]: https://github.com/AndyShaman/BYDMate/compare/v3.6.1...v3.6.2
 [3.6.1]: https://github.com/AndyShaman/BYDMate/compare/v3.6...v3.6.1
