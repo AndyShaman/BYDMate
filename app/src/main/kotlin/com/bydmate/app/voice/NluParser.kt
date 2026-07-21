@@ -49,6 +49,14 @@ object NluParser {
         if (effectiveActions.isEmpty() || devices.isEmpty()) return ParseResult.Unrecognized
 
         val devices2 = disambiguateAirflow(devices, stems, lang)
+
+        // "все сиденья"/"сидений" (plural) targets BOTH seats, but the catalog emits one
+        // command per (action, device): a fast-path would actuate the driver seat only and
+        // still claim success. Hand to the agent, which fans out per seat (issue #98).
+        val seatPresent = devices2.any { it.name.startsWith("SEAT") }
+        val pluralSeat = VoiceStemmer.stem("сидения") in stems
+        if (seatPresent && (Qual.ALL in qualifiers || pluralSeat)) return ParseResult.Unrecognized
+
         val leveledActions = upgradeSeatLevel(effectiveActions, devices2, number)
         val refinedDevices = refineDevices(devices2, qualifiers)
 
@@ -84,7 +92,7 @@ object NluParser {
             if (has("задние", "заднее", "задний", "задняя")) out.add(Qual.REAR)
             if (has("левое", "левый", "левая")) out.add(Qual.LEFT)
             if (has("правое", "правый", "правая")) out.add(Qual.RIGHT)
-            if (has("все")) out.add(Qual.ALL)
+            if (has("все", "всех")) out.add(Qual.ALL)
         } else {
             if (has("driver")) out.add(Qual.DRIVER)
             if (has("passenger")) out.add(Qual.PASSENGER)

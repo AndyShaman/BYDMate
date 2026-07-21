@@ -56,7 +56,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
-        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). GPS не передаётся. */
+        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). GPS передаётся только если включён KEY_ABRP_SEND_LOCATION. */
         const val KEY_ABRP_ENABLED = "abrp_telemetry_enabled"
         /** API-ключ приложения Iternio ([abetterrouteplanner.com/resources/api](https://abetterrouteplanner.com/resources/api)). */
         const val KEY_ABRP_API_KEY = "abrp_api_key"
@@ -66,6 +66,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         const val KEY_PARKING_CAMERA_URL = "parking_camera_url"
         const val KEY_PARKING_CAMERAS = "parking_cameras"
+        /** Отправлять GPS-координаты и курс в телеметрию ABRP (opt-in, по умолчанию выкл). */
+        const val KEY_ABRP_SEND_LOCATION = "abrp_send_location"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_VEHICLE_PROFILE = "vehicle_profile"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"

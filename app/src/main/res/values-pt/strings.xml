@@ -18,6 +18,14 @@
     <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
     <string name="settings_cluster_auto_container_desc">Ativar o modo de projeção do painel automaticamente</string>
     <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
+    <string name="settings_projection_mode_title">Modo de projeção</string>
+    <string name="settings_projection_mode_direct">Estendido</string>
+    <string name="settings_projection_mode_vd">De fábrica</string>
+    <string name="settings_projection_mode_help" formatted="false">De fábrica: funciona como nas versões anteriores à 3.6, nenhuma configuração do sistema do carro é alterada, os controles de ajuste funcionam com mais precisão. Desvantagem: o agente de voz e o HUD não veem a tela do navegador, as orientações vêm apenas da notificação. Estendido: o navegador roda direto no painel de instrumentos, o agente e o HUD conseguem vê-lo. Ativa o modo de janelas do sistema, é preciso reiniciar o DiLink uma vez. Para voltar ao estado de fábrica: mude para De fábrica, a configuração do sistema volta ao valor de fábrica e é aplicada por completo após uma reinicialização. O modo em si é aplicado na próxima projeção.</string>
+    <string name="projection_extended_confirm_title">Ativar o modo estendido?</string>
+    <string name="projection_extended_confirm_body">O modo estendido altera uma configuração de janelas do sistema do DiLink para que o navegador rode direto no painel de instrumentos e o agente de voz e o HUD possam vê-lo. Será preciso reiniciar o DiLink uma vez. Para restaurar o estado de fábrica, volte para De fábrica e reinicie o DiLink.</string>
+    <string name="projection_extended_confirm_enable">Ativar</string>
+    <string name="projection_extended_confirm_cancel">Cancelar</string>
     <string name="settings_display_app_title">Aplicativo no painel</string>
     <string name="settings_display_size_header">Tamanho da janela no painel</string>
     <string name="settings_display_size_width">Largura</string>
@@ -83,8 +91,10 @@
     <string name="settings_cancel_button">Cancelar</string>
     <string name="settings_abrp_section_header">ABRP - telemetria</string>
     <string name="settings_abrp_telemetry_label">Dados ao vivo -&gt; A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado - o ABRP lê as coordenadas por conta própria.</string>
+    <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado por padrão.</string>
     <string name="settings_abrp_token_label">Token de dados ao vivo do ABRP</string>
+    <string name="settings_abrp_location_label">Enviar coordenadas ao ABRP</string>
+    <string name="settings_abrp_location_description">Adiciona a posição GPS e o rumo do carro à telemetria. Desligado por padrão: o ABRP no DiLink lê a localização por conta própria. Ative se a seta do carro no ABRP ficar atrás da posição real.</string>
     <string name="settings_abrp_save_button">Salvar ABRP</string>
     <string name="settings_openrouter_api_key_label">Chave de API do OpenRouter</string>
     <string name="settings_openrouter_model_selected">Modelo: %1$s</string>
@@ -320,6 +330,9 @@
     <string name="automation_action_cluster_projection">Projeção no painel de instrumentos</string>
     <string name="automation_action_cluster_projection_on">Ativar</string>
     <string name="automation_action_cluster_projection_off">Desativar</string>
+    <string name="automation_action_hotspot">Ponto de acesso Wi-Fi</string>
+    <string name="automation_action_hotspot_on">Ativar</string>
+    <string name="automation_action_hotspot_off">Desativar</string>
     <string name="automation_action_speak">Falar texto</string>
     <string name="automation_action_agent_query">Perguntar ao agente</string>
     <string name="auto_act_speak">Falar texto</string>
@@ -834,6 +847,7 @@
     <string name="auto_msg_url_no_scheme">Ação nº %1$d: a URL deve conter um esquema (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Ação nº %1$d: modo do Yandex Music não selecionado</string>
     <string name="auto_msg_sentry_invalid">Ação nº %1$d: estado do modo sentinela inválido</string>
+    <string name="auto_msg_hotspot_invalid">Ação nº %1$d: estado do ponto de acesso inválido</string>
     <string name="auto_msg_speak_text_empty">Ação nº %1$d: texto para fala não definido</string>
     <string name="auto_msg_agent_query_prompt_empty">Ação nº %1$d: consulta ao agente não definida</string>
     <string name="auto_msg_name_cond_action_required">Nome, ao menos uma condição e ao menos uma ação são obrigatórios</string>
@@ -1051,4 +1065,6 @@
     <string name="settings_hud_status_on">Transmissão para o HUD ativa</string>
     <string name="settings_hud_status_bind_failed">Falha ao conectar ao barramento SOME/IP</string>
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
+    <string name="settings_secret_show">Mostrar chave</string>
+    <string name="settings_secret_hide">Ocultar chave</string>
 </resources>

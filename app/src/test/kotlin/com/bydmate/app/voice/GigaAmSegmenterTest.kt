@@ -2,6 +2,8 @@ package com.bydmate.app.voice
 
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
+import io.mockk.verifyOrder
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
@@ -236,6 +238,60 @@ class GigaAmSegmenterTest {
         engine.warmUp()
 
         assertEquals(0, recognizerCreations)
+    }
+
+    // --- ASR crash-loop guard (field defect: Sea Lion 07, corrupt model -> SIGABRT loop) ---
+
+    @Test fun `tripped guard reports not ready and blocks every native load path`() = runTest {
+        val guard = mockk<AsrLoadGuard>(relaxed = true)
+        every { guard.isTripped() } returns true
+        var recognizerCreations = 0
+        var vadCreations = 0
+        val engine = GigaAmAsrEngine(
+            modelManager = readyModelManager(),
+            recognizerFactory = { recognizerCreations++; FakeRecognizerHandle() },
+            vadFactory = { vadCreations++; FakeVadHandle() },
+            loadGuard = guard,
+        )
+
+        assertFalse(engine.isReady())
+        engine.warmUp()
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        assertEquals(0, recognizerCreations)
+        assertEquals(0, vadCreations)
+    }
+
+    @Test fun `successful loads bracket the guard - begin then success per artifact`() = runTest {
+        val guard = mockk<AsrLoadGuard>(relaxed = true)
+        every { guard.isTripped() } returns false
+        val engine = GigaAmAsrEngine(
+            readyModelManager(), { FakeRecognizerHandle() }, { FakeVadHandle() }, guard)
+
+        engine.transcribe(flowOf(ShortArray(160))).collect {}
+
+        verifyOrder {
+            guard.noteLoadBegin(AsrLoadGuard.ARTIFACT_RECOGNIZER)
+            guard.noteLoadSuccess(AsrLoadGuard.ARTIFACT_RECOGNIZER)
+            guard.noteLoadBegin(AsrLoadGuard.ARTIFACT_VAD)
+            guard.noteLoadSuccess(AsrLoadGuard.ARTIFACT_VAD)
+        }
+    }
+
+    @Test fun `recognizer factory failure leaves begin without success - the crash signature`() = runTest {
+        val guard = mockk<AsrLoadGuard>(relaxed = true)
+        every { guard.isTripped() } returns false
+        val engine = GigaAmAsrEngine(
+            modelManager = readyModelManager(),
+            recognizerFactory = { error("native load died") },
+            vadFactory = { FakeVadHandle() },
+            loadGuard = guard,
+        )
+
+        engine.warmUp()   // swallows the failure via its own runCatching
+
+        verify { guard.noteLoadBegin(AsrLoadGuard.ARTIFACT_RECOGNIZER) }
+        verify(exactly = 0) { guard.noteLoadSuccess(any()) }
     }
 
     @Test fun `blank recognizer text does not emit an utterance`() = runTest {

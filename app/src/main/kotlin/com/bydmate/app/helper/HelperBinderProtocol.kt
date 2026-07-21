@@ -35,12 +35,6 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
- *   TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY : writeString(name), writeInt(width), writeInt(height),
- *                                            writeInt(density), writeInt(flags), writeInt(clusterDisplayId)
- *       -> reply: writeInt(status), writeInt(displayId)
- *   TX_LAUNCH_CLUSTER_ANCHOR : writeInt(displayId)         -> reply: writeInt(status), writeInt(0)
- *   TX_SET_STOCK_PROJECTION : writeInt(enabled 0/1)        -> reply: writeInt(status), writeInt(0)
- *       enabled=0 starts a short best-effort suppression burst; the car may restart stock Navi.
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -72,21 +66,18 @@ object HelperBinderProtocol {
     const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
     const val TX_ENABLE_NOTIFICATION_LISTENER = IBinder.FIRST_CALL_TRANSACTION + 18  // 19
     /** Cluster compositor power via the auto_container service (Wave P). [int on] -> [int status]. */
-    const val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19         // 20
-    const val TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY =
-        IBinder.FIRST_CALL_TRANSACTION + 20                                    // 21
-    const val TX_LAUNCH_CLUSTER_ANCHOR = IBinder.FIRST_CALL_TRANSACTION + 21    // 22
-    const val TX_SET_STOCK_PROJECTION = IBinder.FIRST_CALL_TRANSACTION + 22     // 23
+    val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19
 
     /**
      * Batched autoservice read. Request: int count, then count × (int tx, int dev, int fid).
      * Reply: int count, then count × (int status, int value) — same (status, value)
      * convention as TX_READ, one pair per requested triple, in request order.
      * count outside [1, MAX_BATCH_ITEMS] → reply is a single int 0 (no pairs).
-     * Added in wave L. Kept after the DM projection transactions so a stale
-     * DM helper does not mistake batch reads for Presentation projection.
+     * Added in wave L; an older daemon returns false for this code (unknown
+     * transaction → Binder.onTransact default), which the client treats as
+     * "batch unsupported" and falls back to per-fid reads.
      */
-    val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 23               // 24
+    val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 20
 
     /** Direct freeform launch for cluster projection: [String pkg, int displayId,
      *  int left, int top, int right, int bottom] -> [int status (0 ok, -2 freeform
@@ -102,6 +93,11 @@ object HelperBinderProtocol {
      *  hardcoded target) so the in-app log recorder sees the daemon's logcat lines.
      *  (no args) -> [int status, int 0]. */
     val TX_GRANT_READ_LOGS: Int = IBinder.FIRST_CALL_TRANSACTION + 23          // 24
+
+    /** Enable (1) or disable (0) the Wi-Fi hotspot via BydTetheringInterface / ConnectivityManager
+     *  reflection (TETHERING_WIFI = 0). Requires TETHER_PRIVILEGED held by shell uid.
+     *  Request: [int enable: 1=on, 0=off] -> [int status (0=ok, -1=fail), int 0]. */
+    val TX_SET_HOTSPOT: Int = IBinder.FIRST_CALL_TRANSACTION + 24              // 25
 
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128
@@ -125,9 +121,4 @@ object HelperBinderProtocol {
      */
     const val NOTIFICATION_LISTENER_COMPONENT =
         "com.bydmate.app/com.bydmate.app.media.MediaSessionListenerService"
-    const val CLUSTER_ANCHOR_COMPONENT =
-        "com.bydmate.app/com.bydmate.app.cluster.ClusterAnchorActivity"
-    const val STOCK_MAP_PACKAGE = "com.byd.launchermap"
-    const val STOCK_VIRTUAL_BIND_COMPONENT =
-        "com.byd.launchermap/com.byd.automap.service.VirtualBindService"
 }

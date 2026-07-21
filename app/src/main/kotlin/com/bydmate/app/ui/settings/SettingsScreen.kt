@@ -95,7 +95,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -594,7 +598,14 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 label = stringResource(R.string.settings_abrp_token_label),
                 value = state.abrpUserToken,
                 onValueChange = { viewModel.updateAbrpUserToken(it) },
-                keyboardType = KeyboardType.Password
+                keyboardType = KeyboardType.Password,
+                secret = true
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_abrp_location_label),
+                description = stringResource(R.string.settings_abrp_location_description),
+                checked = state.abrpSendLocation,
+                onCheckedChange = { viewModel.toggleAbrpSendLocation(it) },
             )
             SettingActionRow(
                 title = stringResource(R.string.settings_abrp_save_button),
@@ -621,7 +632,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.openRouterApiKey,
             onValueChange = { viewModel.saveOpenRouterApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingActionRow(
             title = stringResource(R.string.settings_openrouter_model_pick),
@@ -644,7 +656,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.zaiApiKey,
             onValueChange = { viewModel.saveZaiApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingHint(stringResource(R.string.settings_zai_hint))
     }
@@ -689,7 +702,8 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
             label = stringResource(R.string.settings_conn_api_key_label),
             value = state.customApiKey,
             onValueChange = { viewModel.saveCustomApiKey(it) },
-            keyboardType = KeyboardType.Password
+            keyboardType = KeyboardType.Password,
+            secret = true
         )
         SettingsTextField(
             label = stringResource(R.string.settings_conn_model_label),
@@ -740,6 +754,7 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
                 value = state.exaApiKey,
                 onValueChange = { viewModel.saveExaApiKey(it) },
                 keyboardType = KeyboardType.Password,
+                secret = true
             )
             SettingHint(stringResource(R.string.settings_exa_search_hint))
         }
@@ -1149,9 +1164,14 @@ private fun DisplaySection() {
     var autoContainer by remember {
         mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, true))
     }
-    val rebootPending = remember {
-        prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false)
+    var rebootPending by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false))
     }
+    var directProjection by remember {
+        mutableStateOf(ClusterProjectionManager.isDirectProjectionEnabled(context))
+    }
+    var extendedConfirmOpen by remember { mutableStateOf(false) }
+    var modeHelpOpen by remember { mutableStateOf(false) }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -1187,7 +1207,69 @@ private fun DisplaySection() {
                     prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
                 },
             )
-            if (rebootPending) {
+            SettingDivider()
+            // Transport selector: direct freeform (agent/HUD can see the navigator) vs the
+            // pre-3.6 VirtualDisplay pipeline. VD also returns the system freeform flag to its
+            // factory value — the fix for third-party projection apps broken by a stale flag.
+            SettingChipRow(
+                title = stringResource(R.string.settings_projection_mode_title),
+                options = listOf(
+                    stringResource(R.string.settings_projection_mode_vd),
+                    stringResource(R.string.settings_projection_mode_direct),
+                ),
+                selectedIndex = if (directProjection) 1 else 0,
+                onSelect = { index ->
+                    val direct = index == 1
+                    if (direct != directProjection) {
+                        if (direct) {
+                            // Extended transport changes a system window setting - informed
+                            // consent first: what changes, why, and how to restore factory.
+                            extendedConfirmOpen = true
+                        } else {
+                            directProjection = false
+                            rebootPending = false
+                            ClusterProjectionManager.setDirectProjectionEnabled(
+                                context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                        }
+                    }
+                },
+                onHelp = { modeHelpOpen = !modeHelpOpen },
+            )
+            if (modeHelpOpen) {
+                SettingHint(text = stringResource(R.string.settings_projection_mode_help))
+            }
+            if (extendedConfirmOpen) {
+                AlertDialog(
+                    onDismissRequest = { extendedConfirmOpen = false },
+                    containerColor = CardSurface,
+                    title = {
+                        Text(
+                            stringResource(R.string.projection_extended_confirm_title),
+                            color = TextPrimary,
+                        )
+                    },
+                    text = {
+                        Text(
+                            stringResource(R.string.projection_extended_confirm_body),
+                            color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            extendedConfirmOpen = false
+                            directProjection = true
+                            ClusterProjectionManager.setDirectProjectionEnabled(
+                                context, true, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                        }) { Text(stringResource(R.string.projection_extended_confirm_enable), color = AccentGreen) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { extendedConfirmOpen = false }) {
+                            Text(stringResource(R.string.projection_extended_confirm_cancel), color = TextSecondary)
+                        }
+                    },
+                )
+            }
+            if (rebootPending && directProjection) {
                 SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
             }
             // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
@@ -2398,7 +2480,8 @@ private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewMode
                 label = "API Key",
                 value = state.aliceApiKey,
                 onValueChange = { viewModel.updateAliceApiKey(it) },
-                keyboardType = KeyboardType.Password
+                keyboardType = KeyboardType.Password,
+                secret = true
             )
             SettingActionRow(
                 title = "Сохранить",
@@ -2628,14 +2711,32 @@ private fun SettingsTextField(
     label: String,
     value: String,
     onValueChange: (String) -> Unit,
-    keyboardType: KeyboardType
+    keyboardType: KeyboardType,
+    secret: Boolean = false
 ) {
+    // Secret fields (API keys, tokens) are masked so screenshots and over-the-shoulder
+    // looks do not leak them; the eye icon reveals the value while editing.
+    var revealed by remember { mutableStateOf(false) }
     OutlinedTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
+        visualTransformation = if (secret && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        trailingIcon = if (secret) {
+            {
+                IconButton(onClick = { revealed = !revealed }) {
+                    Icon(
+                        imageVector = if (revealed) Icons.Filled.VisibilityOff else Icons.Filled.Visibility,
+                        contentDescription = stringResource(
+                            if (revealed) R.string.settings_secret_hide else R.string.settings_secret_show
+                        ),
+                        tint = TextSecondary,
+                    )
+                }
+            }
+        } else null,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(8.dp),
         colors = OutlinedTextFieldDefaults.colors(

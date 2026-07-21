@@ -56,7 +56,7 @@ object NavA11yFeed {
 
     /** Pure gate, unit-tested separately from the framework-bound onEvent. */
     fun shouldProcess(pkg: String?, eventType: Int, nowMs: Long, lastMs: Long): Boolean {
-        if (pkg == null || pkg !in NavPackages.YANDEX_NAVI) return false
+        if (pkg == null || pkg !in NavPackages.GUIDANCE_SOURCES) return false
         if (eventType != AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED &&
             eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return false
         return nowMs - lastMs >= DEBOUNCE_MS

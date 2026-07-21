@@ -169,7 +169,8 @@ object WidgetController {
         expandedState.value = false
 
         val panelCompose = ComposeView(viewCtx).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            // Dispose on view detach to avoid attach-vs-onDestroy race (see ListeningOverlay).
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {
@@ -195,7 +196,8 @@ object WidgetController {
         val buttonLifecycleOwner = OverlayLifecycleOwner().also { it.onCreate() }
         buttonLifecycle = buttonLifecycleOwner
         val buttonCompose = ComposeView(viewCtx).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            // Dispose on view detach to avoid attach-vs-onDestroy race (see ListeningOverlay).
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(buttonLifecycleOwner)
             setViewTreeSavedStateRegistryOwner(buttonLifecycleOwner)
             setContent {
@@ -550,7 +552,8 @@ object WidgetController {
         }
 
         val compose = ComposeView(context).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            // Dispose on view detach to avoid attach-vs-onDestroy race (see ListeningOverlay).
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(lifecycleOwner)
             setViewTreeSavedStateRegistryOwner(lifecycleOwner)
             setContent {

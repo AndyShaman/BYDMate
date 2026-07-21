@@ -132,6 +132,16 @@ class ClusterProjectionStateTest {
         assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
     }
 
+    // --- shouldPowerDownCompositor (#85/#62: no ИПЦ write on cars we never powered up) ---
+
+    @Test fun `power-down is owed only when our write-ahead marker is set`() {
+        assertEquals(true, shouldPowerDownCompositor(markerSet = true))
+    }
+
+    @Test fun `no marker - compositor was never powered by us - no ИПЦ write`() {
+        assertEquals(false, shouldPowerDownCompositor(markerSet = false))
+    }
+
     // --- shouldRecoverDirectTask (freeform task stranded on cluster display after crash) ---
 
     @Test fun `no marker means nothing to recover for direct task`() {
@@ -197,5 +207,15 @@ class ClusterProjectionStateTest {
     fun `freeformBounds carries offsets into all four edges`() {
         val geo = ClusterGeometry(width = 640, height = 240, xOffset = 320, yOffset = 120)
         assertArrayEquals(intArrayOf(320, 120, 960, 360), freeformBounds(geo))
+    }
+
+    // --- projection transport -> Settings.Global enable_freeform_support ---
+
+    @Test fun `direct transport arms the freeform flag`() {
+        assertEquals(1, freeformFlagValue(directEnabled = true))
+    }
+
+    @Test fun `VD transport returns the freeform flag to its factory value`() {
+        assertEquals(0, freeformFlagValue(directEnabled = false))
     }
 }

@@ -21,6 +21,14 @@
     <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
     <string name="settings_cluster_auto_container_desc">自动将仪表盘切换到投屏模式</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
+    <string name="settings_projection_mode_title">投影模式</string>
+    <string name="settings_projection_mode_direct">扩展</string>
+    <string name="settings_projection_mode_vd">出厂</string>
+    <string name="settings_projection_mode_help" formatted="false">出厂：与 3.6 之前的版本相同，不更改车辆的任何系统设置，调节滑块工作更精确。缺点：语音助手和 HUD 看不到导航画面，引导信息仅来自通知。扩展：导航直接运行在仪表盘上，助手和 HUD 可以看到它。会开启系统窗口模式，需要重启一次 DiLink。恢复出厂状态：切换回出厂，系统设置将恢复为出厂值，重启后完全生效。模式本身在下次投影时生效。</string>
+    <string name="projection_extended_confirm_title">开启扩展模式？</string>
+    <string name="projection_extended_confirm_body">扩展模式会更改 DiLink 的系统窗口设置，让导航直接运行在仪表盘上，语音助手和 HUD 可以看到它。需要重启一次 DiLink。要恢复出厂状态，请切换回出厂并重启 DiLink。</string>
+    <string name="projection_extended_confirm_enable">开启</string>
+    <string name="projection_extended_confirm_cancel">取消</string>
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
     <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>
@@ -69,8 +77,10 @@
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - 遥测</string>
     <string name="settings_abrp_telemetry_label">实时数据 -> A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。不发送 GPS 坐标，ABRP 自行读取。</string>
+    <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。默认不发送 GPS 坐标。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
+    <string name="settings_abrp_location_label">向 ABRP 发送坐标</string>
+    <string name="settings_abrp_location_description">将车辆的 GPS 位置和航向加入遥测。默认关闭：DiLink 上的 ABRP 会自行读取位置。若 ABRP 中的车辆箭头落后于实际位置，可开启此项。</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
     <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API 密钥</string>
@@ -948,6 +958,7 @@
     <string name="auto_msg_url_no_scheme">动作 #%1$d：URL 必须包含协议头（http://, yandexmusic://, tel:, ...）</string>
     <string name="auto_msg_ymusic_mode_missing">动作 #%1$d：未选择 Yandex 音乐模式</string>
     <string name="auto_msg_sentry_invalid">动作 #%1$d：哨兵模式状态无效</string>
+    <string name="auto_msg_hotspot_invalid">动作 #%1$d：热点状态无效</string>
     <string name="auto_msg_speak_text_empty">动作 #%1$d：未设置朗读文本</string>
     <string name="auto_msg_agent_query_prompt_empty">动作 #%1$d：未设置代理查询内容</string>
     <string name="auto_msg_name_cond_action_required">名称和至少一个条件及动作是必需的</string>
@@ -966,6 +977,9 @@
     <string name="automation_action_cluster_projection">投射到仪表盘</string>
     <string name="automation_action_cluster_projection_on">开启</string>
     <string name="automation_action_cluster_projection_off">关闭</string>
+    <string name="automation_action_hotspot">Wi-Fi热点</string>
+    <string name="automation_action_hotspot_on">开启</string>
+    <string name="automation_action_hotspot_off">关闭</string>
     <string name="automation_action_speak">朗读文字</string>
     <string name="automation_action_agent_query">询问语音助手</string>
     <string name="auto_act_speak">朗读文字</string>
@@ -1173,4 +1187,6 @@
     <string name="settings_hud_status_on">正在向 HUD 传输</string>
     <string name="settings_hud_status_bind_failed">无法连接 SOME/IP 总线</string>
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
+    <string name="settings_secret_show">显示密钥</string>
+    <string name="settings_secret_hide">隐藏密钥</string>
 </resources>

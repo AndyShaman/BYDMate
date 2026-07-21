@@ -61,7 +61,8 @@ object OverlayNotificationManager {
         lifecycleOwner.onCreate()
 
         val composeView = ComposeView(context).apply {
-            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            // Dispose on view detach to avoid attach-vs-onDestroy race (see ListeningOverlay).
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
         }
         composeView.setViewTreeLifecycleOwner(lifecycleOwner)
         composeView.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
@@ -87,8 +88,10 @@ object OverlayNotificationManager {
             if (!dismissed) {
                 dismissed = true
                 try {
-                    lifecycleOwner.onDestroy()
+                    // removeView must precede onDestroy: detach triggers composition dispose,
+                    // so the recomposer is torn down cleanly before the lifecycle is destroyed.
                     wm.removeView(composeView)
+                    lifecycleOwner.onDestroy()
                 } catch (e: Exception) {
                     Log.w(TAG, "dismiss failed: ${e.message}")
                 }

@@ -54,18 +54,33 @@ class HudPushLoop(
             return false
         }
         val signPng = if (speedSignEnabled() && s.speedLimit > 0) HudSpeedSign.render(s.speedLimit) else null
+        // Camera takeover (donor LoopRunner): while a camera alert is active the icon
+        // slot (f8) shows the camera, f9 counts down to the camera, and the reference
+        // arrow (f28) is suppressed so the HUD doesn't draw a stale maneuver arrow.
+        val cameraActive = s.cameraAlert.isNotEmpty()
+        val baseIcon = HudIconLoader.iconFor(s.maneuverGaode) ?: s.maneuverPng
         val frame = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = s.maneuverGaode,
-            distanceMeters = s.distanceMeters,
-            road = s.road,
+            distanceMeters = if (cameraActive && s.cameraDistanceMeters > 0) s.cameraDistanceMeters else s.distanceMeters,
+            road = runningLine(s),
             etaString = etaString(s.etaSeconds),
             totalDistMeters = s.totalDistMeters,
             speedLimit = s.speedLimit,
-            maneuverIconPng = HudIconLoader.iconFor(s.maneuverGaode),
+            maneuverIconPng = if (cameraActive) s.cameraIconPng ?: baseIcon else baseIcon,
             speedSignPng = signPng,
+            suppressArrow = cameraActive,
         )
         sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame)
         return true
+    }
+
+    /** Donor running line (f10): beyond 3 km to go, enrich the street with remaining
+     *  time and wall-clock arrival: "<road> | ЧЧ:ММ мин | ЧЧ:ММ". */
+    internal fun runningLine(s: NavGuidanceHub.Snapshot): String {
+        if (s.totalDistMeters <= 3000 || s.etaSeconds <= 0 || s.road.isEmpty()) return s.road
+        val etaTotalMin = s.etaSeconds / 60
+        val remStr = String.format(Locale.US, "%02d:%02d", etaTotalMin / 60, etaTotalMin % 60)
+        return "${s.road} | $remStr мин | ${etaString(s.etaSeconds)}"
     }
 
     /** Remaining seconds -> wall-clock arrival "HH:MM" (f26); null when unknown. */

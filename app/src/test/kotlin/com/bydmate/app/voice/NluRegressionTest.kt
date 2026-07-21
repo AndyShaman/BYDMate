@@ -35,6 +35,12 @@ class NluRegressionTest {
         "подогрев сиденья пассажира на 3" to "副驾座椅加热3档",
         "включи вентиляцию сиденья" to "主驾座椅通风1档",
         "подогрев сиденья на 5" to null,       // level 5 -> agent (seat_heat_driver_5)
+        // issue #98 (Song L, VoiceJournal): "сидений" missed the seat slot and the phrase
+        // dispatched cabin airflow 打开空调通风; plural/"всех" must go to the agent (both seats)
+        "включи вентиляцию всех сидений" to null,
+        "включи подогрев всех сидений" to null,
+        "включи вентиляцию сидений" to null,
+        "выключи обогрев всех сидений" to null,
         // locks / car
         "закрой машину" to "车门上锁",
         "открой машину" to "车门解锁",

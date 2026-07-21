@@ -52,19 +52,6 @@ interface HelperClient {
     suspend fun createVirtualDisplay(
         name: String, width: Int, height: Int, density: Int, flags: Int, surface: Surface,
     ): Int?
-    /** Creates a daemon-owned Presentation on the private IPC display and renders a VD into it. */
-    suspend fun createPresentationVirtualDisplay(
-        name: String,
-        width: Int,
-        height: Int,
-        density: Int,
-        flags: Int,
-        clusterDisplayId: Int,
-    ): Int?
-    /** Starts BYDMate's display anchor directly on the private cluster display. */
-    suspend fun launchClusterAnchor(displayId: Int): Boolean
-    /** Briefly suppresses/restores the stock map Presentation that otherwise covers display 2. */
-    suspend fun setStockProjectionEnabled(enabled: Boolean): Boolean
     suspend fun releaseVirtualDisplay(displayId: Int): Boolean
     suspend fun launchApp(packageName: String): Boolean
     /** Task id of [packageName]'s running task, or null if not running / channel unavailable. */
@@ -110,6 +97,10 @@ interface HelperClient {
 
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
+
+    /** Enable or disable the Wi-Fi hotspot (TETHERING_WIFI) via the daemon (shell uid holds
+     *  TETHER_PRIVILEGED). True on daemon status 0. Needs on-car validation. */
+    suspend fun setHotspot(enable: Boolean): Boolean
 
     /**
      * Direct cluster projection: find-or-launch [packageName], switch its task to freeform,
@@ -182,34 +173,6 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         if (readAccepted(status) && id > 0) id else null
     }
 
-    override suspend fun createPresentationVirtualDisplay(
-        name: String,
-        width: Int,
-        height: Int,
-        density: Int,
-        flags: Int,
-        clusterDisplayId: Int,
-    ): Int? = transactParsed(HelperBinderProtocol.TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY, { d ->
-        d.writeString(name)
-        d.writeInt(width)
-        d.writeInt(height)
-        d.writeInt(density)
-        d.writeInt(flags)
-        d.writeInt(clusterDisplayId)
-    }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
-        val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed null
-        val id = if (reply.dataAvail() >= 4) reply.readInt() else -1
-        if (readAccepted(status) && id > 0) id else null
-    }
-
-    override suspend fun launchClusterAnchor(displayId: Int): Boolean =
-        statusOk(HelperBinderProtocol.TX_LAUNCH_CLUSTER_ANCHOR) { it.writeInt(displayId) }
-
-    override suspend fun setStockProjectionEnabled(enabled: Boolean): Boolean =
-        statusOk(HelperBinderProtocol.TX_SET_STOCK_PROJECTION) {
-            it.writeInt(if (enabled) 1 else 0)
-        }
-
     override suspend fun releaseVirtualDisplay(displayId: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_RELEASE_VIRTUAL_DISPLAY) { it.writeInt(displayId) }
 
@@ -271,6 +234,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
     override suspend fun setClusterContainerMode(on: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }
+
+    override suspend fun setHotspot(enable: Boolean): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_HOTSPOT) { it.writeInt(if (enable) 1 else 0) }
 
     // FORCE_TIMEOUT_MS, not the default 2s: mirrors launchAndForce (launch retry loop in the
     // daemon can take up to ~9.5s on a cold start before the pin loop even begins).

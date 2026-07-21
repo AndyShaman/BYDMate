@@ -131,6 +131,7 @@ data class SettingsUiState(
     val abrpApiKey: String = "",
     val abrpUserToken: String = "",
     val abrpCarModel: String = "",
+    val abrpSendLocation: Boolean = false,
     val abrpSaveStatus: String? = null,
     val parkingCameraUrl: String = SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
     val parkingCameras: List<ParkingCamera> = listOf(ParkingCameraConfig.defaultCamera(SettingsRepository.DEFAULT_PARKING_CAMERA_URL)),
@@ -232,6 +233,7 @@ class SettingsViewModel @Inject constructor(
     private val openRouterClient: OpenRouterClient,
     private val placeRepository: PlaceRepository,
     private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
+    private val hudController: com.bydmate.app.hud.HudController,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -343,6 +345,7 @@ class SettingsViewModel @Inject constructor(
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
             val abrpUserToken = settingsRepository.getString(SettingsRepository.KEY_ABRP_USER_TOKEN, "")
             val abrpCarModel = settingsRepository.getString(SettingsRepository.KEY_ABRP_CAR_MODEL, "")
+            val abrpSendLocation = settingsRepository.getString(SettingsRepository.KEY_ABRP_SEND_LOCATION, "false") == "true"
             val parkingCameraUrl = settingsRepository.getString(
                 SettingsRepository.KEY_PARKING_CAMERA_URL,
                 SettingsRepository.DEFAULT_PARKING_CAMERA_URL,
@@ -437,6 +440,7 @@ class SettingsViewModel @Inject constructor(
                     abrpApiKey = abrpApiKey,
                     abrpUserToken = abrpUserToken,
                     abrpCarModel = abrpCarModel,
+                    abrpSendLocation = abrpSendLocation,
                     parkingCameraUrl = parkingCameraUrl,
                     parkingCameras = parkingCameras,
                     mapTileSource = mapTileSource,
@@ -1040,6 +1044,13 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    fun toggleAbrpSendLocation(enabled: Boolean) {
+        _uiState.update { it.copy(abrpSendLocation = enabled) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ABRP_SEND_LOCATION, enabled.toString())
+        }
+    }
+
     fun updateAbrpApiKey(value: String) {
         _uiState.update { it.copy(abrpApiKey = value) }
     }
@@ -1613,6 +1624,64 @@ class SettingsViewModel @Inject constructor(
                     .getInt("pre_duck_volume", -1)
                 appendLine("pre_duck_volume: " + if (preDuck >= 0) "$preDuck" else "(none)")
             } catch (e: Exception) { appendLine("(failed to gather audio state: ${e.message})") }
+
+            appendLine("--- displays ---")
+            try {
+                // Cluster projection needs an Android-managed cluster display; on several
+                // platforms (Song family, DiLink 3/4) resolveClusterDisplay finds nothing.
+                // The full list shows whether a cluster surface exists under another name.
+                val dm = appContext.getSystemService(Context.DISPLAY_SERVICE)
+                    as android.hardware.display.DisplayManager
+                dm.displays.forEach { d ->
+                    val p = android.graphics.Point()
+                    @Suppress("DEPRECATION") d.getRealSize(p)
+                    appendLine("id=${d.displayId} name=\"${d.name}\" ${p.x}x${p.y} state=${d.state}")
+                }
+            } catch (e: Exception) { appendLine("(failed to gather displays: ${e.message})") }
+
+            appendLine("--- hud ---")
+            try {
+                // Mirrors the Settings HUD row: enabled pref, probe verdict, live status.
+                // UNSUPPORTED = the SOME/IP gateway package is absent on this firmware.
+                val hudPrefs = appContext.getSharedPreferences(
+                    com.bydmate.app.hud.HudController.PREFS_NAME, Context.MODE_PRIVATE)
+                appendLine("enabled: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_ENABLED, false)}")
+                appendLine("supported_pref: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SUPPORTED, true)}")
+                appendLine("status: ${hudController.status.value}")
+                val gatewayPresent =
+                    com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)
+                appendLine("someip_gateway: " + if (gatewayPresent) "present" else "absent")
+                appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
+            } catch (e: Exception) { appendLine("(failed to gather hud state: ${e.message})") }
+
+            appendLine("--- steering key ---")
+            try {
+                // Same two liveness signals TrackingService.starServiceRunning() checks:
+                // our service's own connected flag and the framework's bound-a11y set.
+                // The raw Secure setting is listed too - on some firmwares it desyncs
+                // from the actually-bound set across ignition cycles (DiLink 4 reports).
+                appendLine("a11y_connected: ${com.bydmate.app.cluster.SteeringWheelKeyService.isConnected}")
+                val am = appContext.getSystemService(Context.ACCESSIBILITY_SERVICE)
+                    as android.view.accessibility.AccessibilityManager
+                val ours = android.content.ComponentName.unflattenFromString(
+                    com.bydmate.app.helper.HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT)
+                val bound = ours != null && am.getEnabledAccessibilityServiceList(
+                    android.accessibilityservice.AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+                    .any { android.content.ComponentName.unflattenFromString(it.id ?: "") == ours }
+                appendLine("a11y_framework_bound: $bound")
+                val secure = android.provider.Settings.Secure.getString(
+                    appContext.contentResolver, "enabled_accessibility_services")
+                appendLine("a11y_secure_setting: ${secure ?: "(null)"}")
+                val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                appendLine(
+                    "voice_ptt: enabled=${voicePrefs.getBoolean("voice_enabled", false)} " +
+                        "keycode=${voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)}"
+                )
+                val clusterPrefs = appContext.getSharedPreferences(
+                    com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+                appendLine("mirror_enabled: ${clusterPrefs.getBoolean(
+                    com.bydmate.app.cluster.ClusterProjectionManager.KEY_MIRROR_ENABLED, false)}")
+            } catch (e: Exception) { appendLine("(failed to gather steering key state: ${e.message})") }
 
             appendLine("--- native assistant packages ---")
             try {

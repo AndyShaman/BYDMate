@@ -78,52 +78,10 @@ class HelperClientProjectionTest {
     }
 
     @Test
-    fun `createPresentationVirtualDisplay sends geometry and cluster display id`() = runBlocking {
-        var name: String? = null
-        val args = IntArray(5)
-        val fake = capturingFake(status = 0, value = 7) { p ->
-            name = p.readString()
-            for (i in args.indices) args[i] = p.readInt()
-        }
-
-        val id = clientWith(fake).createPresentationVirtualDisplay(
-            name = "BYDMate_Cluster_VD",
-            width = 1920,
-            height = 720,
-            density = 320,
-            flags = 322,
-            clusterDisplayId = 2,
-        )
-
-        assertEquals(7, id)
-        assertEquals("BYDMate_Cluster_VD", name)
-        assertArrayEquals(intArrayOf(1920, 720, 320, 322, 2), args)
-    }
-
-    @Test
     fun `getTaskId returns id, or null when not found`() = runBlocking {
         assertEquals(57, clientWith(capturingFake(status = 0, value = 57)).getTaskId("ru.yandex.yandexnavi"))
         assertNull(clientWith(capturingFake(status = 0, value = -1)).getTaskId("ru.yandex.yandexnavi"))
         assertNull(clientWith(capturingFake(status = -1, value = 0)).getTaskId("ru.yandex.yandexnavi"))
-    }
-
-    @Test
-    fun `launchClusterAnchor sends display id`() = runBlocking {
-        var displayId = -1
-        val ok = clientWith(capturingFake(status = 0, value = 0) { displayId = it.readInt() })
-            .launchClusterAnchor(2)
-        assertTrue(ok)
-        assertEquals(2, displayId)
-    }
-
-    @Test
-    fun `setStockProjectionEnabled sends boolean as int`() = runBlocking {
-        var raw = -1
-        val client = clientWith(capturingFake(status = 0, value = 0) { raw = it.readInt() })
-        assertTrue(client.setStockProjectionEnabled(true))
-        assertEquals(1, raw)
-        assertTrue(client.setStockProjectionEnabled(false))
-        assertEquals(0, raw)
     }
 
     @Test

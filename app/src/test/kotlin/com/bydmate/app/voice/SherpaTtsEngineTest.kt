@@ -827,4 +827,22 @@ class SherpaTtsEngineTest {
         // 48000 frames at 24kHz = 2000ms -> bound = max(3000, 2000 + 2000) = 4000ms.
         assertEquals(4_000L, SherpaTtsEngine.writeWaitBoundMs(48_000, 24_000, 1.0f))
     }
+
+    // --- Task 2: TTS load guard gate ---
+
+    @Test
+    fun `isReady returns false when TTS load guard is tripped`() {
+        val mm = mockk<TtsModelManager> { every { isReady(any()) } returns true }
+        val guard = mockk<AsrLoadGuard> { every { isTripped() } returns true }
+        val engine = SherpaTtsEngine(mm, loadGuard = guard)
+        assertFalse(engine.isReady())
+    }
+
+    @Test
+    fun `isReady returns true when model is ready and TTS guard is not tripped`() {
+        val mm = mockk<TtsModelManager> { every { isReady(any()) } returns true }
+        val guard = mockk<AsrLoadGuard> { every { isTripped() } returns false }
+        val engine = SherpaTtsEngine(mm, loadGuard = guard)
+        assertTrue(engine.isReady())
+    }
 }

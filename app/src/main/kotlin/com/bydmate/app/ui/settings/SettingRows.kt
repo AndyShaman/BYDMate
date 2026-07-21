@@ -1,8 +1,10 @@
 package com.bydmate.app.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +29,7 @@ import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -257,6 +260,7 @@ fun SettingChipRow(
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
     enabled: Boolean = true,
+    onHelp: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -266,6 +270,7 @@ fun SettingChipRow(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         RowLabel(title, description, enabled, Modifier.weight(1f))
+        if (onHelp != null) SettingHelpBadge(onHelp)
         Row(
             modifier = Modifier.horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -278,6 +283,22 @@ fun SettingChipRow(
                 )
             }
         }
+    }
+}
+
+/** Small "?" badge that toggles an explanatory SettingHint below the row (BatteryHealthDialog idiom). */
+@Composable
+fun SettingHelpBadge(onClick: () -> Unit) {
+    val source = remember { MutableInteractionSource() }
+    Box(
+        modifier = Modifier
+            .padding(horizontal = 6.dp)
+            .size(18.dp)
+            .border(1.5.dp, TextMuted, CircleShape)
+            .clickable(indication = null, interactionSource = source, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text("?", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
     }
 }
 

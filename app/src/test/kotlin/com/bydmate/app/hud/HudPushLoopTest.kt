@@ -82,4 +82,79 @@ class HudPushLoopTest {
         assertEquals(null, loop.etaString(0))
         assertTrue(loop.etaString(1620)!!.matches(Regex("""\d{2}:\d{2}""")))
     }
+
+    @Test fun `camera alert takes over icon distance and arrow`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(
+                maneuverGaode = 2, distanceMeters = 900, road = "A",
+                cameraAlert = "camera", cameraDistanceMeters = 400, cameraIconPng = byteArrayOf(7),
+            ),
+            nowMs = 1000L,
+        )
+        val sink = FakeSink()
+        HudPushLoop(sink, nowMsProvider = { 1000L }).tick(wasActive = false)
+        val expected = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 400, road = "A",
+            etaString = null, totalDistMeters = 0, speedLimit = 0,
+            maneuverIconPng = byteArrayOf(7), speedSignPng = null,
+            suppressArrow = true,
+        )
+        assertArrayEquals(expected, sink.events.single().second)
+    }
+
+    @Test fun `camera without icon and distance falls back to maneuver values`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(
+                maneuverGaode = 2, distanceMeters = 900, road = "A",
+                cameraAlert = "camera", cameraDistanceMeters = 0, cameraIconPng = null,
+            ),
+            nowMs = 1000L,
+        )
+        val sink = FakeSink()
+        HudPushLoop(sink, nowMsProvider = { 1000L }).tick(wasActive = false)
+        val expected = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 900, road = "A",
+            etaString = null, totalDistMeters = 0, speedLimit = 0,
+            maneuverIconPng = HudIconLoader.iconFor(2), speedSignPng = null,
+            suppressArrow = true,
+        )
+        assertArrayEquals(expected, sink.events.single().second)
+    }
+
+    @Test fun `notification png used when icon pack has no maneuver`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(maneuverGaode = 0, distanceMeters = 300, road = "A",
+                maneuverPng = byteArrayOf(5)),
+            nowMs = 1000L,
+        )
+        val sink = FakeSink()
+        HudPushLoop(sink, nowMsProvider = { 1000L }).tick(wasActive = false)
+        val expected = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 0, distanceMeters = 300, road = "A",
+            etaString = null, totalDistMeters = 0, speedLimit = 0,
+            maneuverIconPng = byteArrayOf(5), speedSignPng = null,
+        )
+        assertArrayEquals(expected, sink.events.single().second)
+    }
+
+    @Test fun `running line appears beyond 3 km`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(maneuverGaode = 2, distanceMeters = 250, road = "Минское шоссе",
+                etaSeconds = 3900, totalDistMeters = 12_000),
+            nowMs = 1_000_000_000_000L,
+        )
+        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1_000_000_000_000L })
+        val line = loop.runningLine(NavGuidanceHub.snapshot(1_000_000_000_000L))
+        assertEquals("Минское шоссе | 01:05 мин | ${loop.etaString(3900)}", line)
+    }
+
+    @Test fun `running line absent for short remainder`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(distanceMeters = 250, road = "ул. Ленина",
+                etaSeconds = 600, totalDistMeters = 2000),
+            nowMs = 1000L,
+        )
+        val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
+        assertEquals("ул. Ленина", loop.runningLine(NavGuidanceHub.snapshot(1000L)))
+    }
 }

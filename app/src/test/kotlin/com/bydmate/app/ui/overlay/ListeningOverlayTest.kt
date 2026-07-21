@@ -199,6 +199,29 @@ class ListeningOverlayTest {
         assertTrue(dialog.destroyed)
     }
 
+    // --- Task 4 regression: teardown order (removeView-before-onDestroy discipline) ---
+
+    // Verifies that a rapid show()→hide() before any real traversal properly destroys the handle
+    // (i.e., RealOverlayHandle.destroy() is reached). The coordinator must not silently discard
+    // the handle. The actual removeView→onDestroy ordering within RealOverlayHandle is enforced
+    // by code review and verified on-device; it cannot be split via this JVM seam.
+    @Test fun `rapid show then hide before traversal destroys the handle`() = runBlocking {
+        var destroyed = false
+        ListeningOverlay.attachWindow = { _, _ ->
+            object : ListeningOverlay.OverlayHandle {
+                override fun destroy() { destroyed = true }
+            }
+        }
+        // Run cleanup inline (simulates traversal arriving before poster fires, i.e., the race).
+        ListeningOverlay.poster = { it.run() }
+
+        ListeningOverlay.show(context, "Слушаю")
+        // hide() immediately — before any real WindowManager traversal would have run.
+        ListeningOverlay.hide()
+
+        assertTrue("handle must be destroyed after rapid show+hide", destroyed)
+    }
+
     // The layout constants are load-bearing (pill below the status bar, dialog a fixed gap under it)
     // and cheap to pin so a future edit to either does not silently regress the geometry.
     @Test fun `layout constants are the agreed defaults`() {

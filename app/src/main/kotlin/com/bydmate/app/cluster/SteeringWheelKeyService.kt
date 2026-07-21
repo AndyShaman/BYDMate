@@ -103,7 +103,7 @@ class SteeringWheelKeyService : AccessibilityService() {
     fun findNavigatorRoot(): android.view.accessibility.AccessibilityNodeInfo? {
         val active = runCatching { rootInActiveWindow }.getOrNull()
         if (active != null) {
-            if (active.packageName?.toString() in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return active
+            if (active.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return active
             @Suppress("DEPRECATION") runCatching { active.recycle() }
         }
         val windowList = runCatching {
@@ -114,7 +114,7 @@ class SteeringWheelKeyService : AccessibilityService() {
         }.getOrNull() ?: return null
         for (window in windowList) {
             val root = runCatching { window.root }.getOrNull() ?: continue
-            if (root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return root
+            if (root.packageName?.toString() in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return root
             @Suppress("DEPRECATION") runCatching { root.recycle() }
         }
         return null

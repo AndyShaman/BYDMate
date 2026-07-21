@@ -22,6 +22,14 @@
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
     <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
+    <string name="settings_projection_mode_title">Режим проекции</string>
+    <string name="settings_projection_mode_direct">Расширенный</string>
+    <string name="settings_projection_mode_vd">Заводской</string>
+    <string name="settings_projection_mode_help" formatted="false">Заводской: как в версиях до 3.6, системные настройки машины не меняются, точнее работают ползунки подстройки. Минус: голосовой агент и HUD не видят экран навигатора, подсказки только из уведомления. Расширенный: навигатор работает прямо на приборке, его видят агент и HUD. Включает системный оконный режим, нужна однократная перезагрузка ДиЛинка. Возврат к заводу: переключите на Заводской, системная настройка вернётся к заводскому значению и полностью применится после перезагрузки. Режим применяется при следующем выводе на приборку.</string>
+    <string name="projection_extended_confirm_title">Включить расширенный режим?</string>
+    <string name="projection_extended_confirm_body">Расширенный режим меняет системную настройку оконного режима ДиЛинка, чтобы навигатор работал прямо на приборке и его видели голосовой агент и HUD. Понадобится однократная перезагрузка ДиЛинка. Чтобы вернуть заводское состояние, переключите обратно на Заводской и перезагрузите ДиЛинк.</string>
+    <string name="projection_extended_confirm_enable">Включить</string>
+    <string name="projection_extended_confirm_cancel">Отмена</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>
@@ -93,8 +101,10 @@
     <!-- Settings: Integrations section -->
     <string name="settings_abrp_section_header">ABRP - телеметрия</string>
     <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
-    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS не передаётся - ABRP читает координаты сам.</string>
+    <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS по умолчанию не передаётся.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
+    <string name="settings_abrp_location_label">Отправлять координаты в ABRP</string>
+    <string name="settings_abrp_location_description">Добавляет GPS-позицию и курс машины в телеметрию. По умолчанию выключено: ABRP на ДиЛинке читает координаты сам. Включите, если стрелка машины в ABRP отстаёт от реального положения.</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
     <string name="settings_parking_camera_section_header">Камера парковки</string>
     <string name="settings_parking_camera_name_label">Название камеры</string>
@@ -410,6 +420,9 @@
     <string name="automation_action_cluster_projection">Вывод на приборку</string>
     <string name="automation_action_cluster_projection_on">Включить</string>
     <string name="automation_action_cluster_projection_off">Отключить</string>
+    <string name="automation_action_hotspot">Точка доступа Wi-Fi</string>
+    <string name="automation_action_hotspot_on">Включить</string>
+    <string name="automation_action_hotspot_off">Отключить</string>
     <string name="automation_action_speak">Озвучить текст</string>
     <string name="automation_action_agent_query">Запрос агенту</string>
     <string name="auto_act_speak">Озвучить текст</string>
@@ -1029,6 +1042,7 @@
     <string name="auto_msg_url_no_scheme">Действие #%1$d: URL должен содержать схему (http://, yandexmusic://, tel:, ...)</string>
     <string name="auto_msg_ymusic_mode_missing">Действие #%1$d: режим Я.Музыки не выбран</string>
     <string name="auto_msg_sentry_invalid">Действие #%1$d: некорректное состояние охранного режима</string>
+    <string name="auto_msg_hotspot_invalid">Действие #%1$d: некорректное состояние точки доступа</string>
     <string name="auto_msg_speak_text_empty">Действие #%1$d: не задан текст для озвучки</string>
     <string name="auto_msg_agent_query_prompt_empty">Действие #%1$d: не задан запрос агенту</string>
     <string name="auto_msg_name_cond_action_required">Название и хотя бы одно условие и действие обязательны</string>
@@ -1242,4 +1256,6 @@
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
+    <string name="settings_secret_show">Показать ключ</string>
+    <string name="settings_secret_hide">Скрыть ключ</string>
 </resources>

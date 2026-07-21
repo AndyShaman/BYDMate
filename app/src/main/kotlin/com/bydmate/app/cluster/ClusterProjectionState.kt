@@ -110,6 +110,13 @@ fun nextMode(current: ClusterMode): ClusterMode =
 fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer: Boolean): Boolean =
     markerSet && mode == ClusterMode.OFF && autoContainer
 
+/**
+ * #85/#62: power-down (18 -> pause -> 0) is an ИПЦ write too - it must only be sent when OUR
+ * write-ahead marker shows this app powered the compositor up. Platforms with no cluster
+ * display (Song family, DiLink 3-4) never set the marker, so their cluster stays untouched.
+ */
+fun shouldPowerDownCompositor(markerSet: Boolean): Boolean = markerSet
+
 /** Direct-task crash recovery fires only when a marker survives AND no projection is live. */
 fun shouldRecoverDirectTask(markerDisplayId: Int, mode: ClusterMode): Boolean =
     markerDisplayId != -1 && mode == ClusterMode.OFF
@@ -130,3 +137,11 @@ fun shouldAbsorbDisplayDensity(liveDirectDisplayId: Int, markerDisplayId: Int, m
  */
 fun shouldClearDirectMarker(resetOk: Boolean, taskFound: Boolean, modeOk: Boolean, moveOk: Boolean): Boolean =
     resetOk && (!taskFound || (modeOk && moveOk))
+
+/**
+ * Settings.Global enable_freeform_support value for the chosen projection transport.
+ * Direct (freeform) needs 1; the VD pipeline needs nothing, so VD writes the factory
+ * value 0 back. The flag is system-wide and survives an app uninstall, which is why
+ * VD mode doubles as the "return the car to factory state" switch.
+ */
+internal fun freeformFlagValue(directEnabled: Boolean): Int = if (directEnabled) 1 else 0

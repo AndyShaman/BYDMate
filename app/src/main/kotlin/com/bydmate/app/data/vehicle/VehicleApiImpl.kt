@@ -9,6 +9,7 @@ import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -79,7 +80,11 @@ class VehicleApiImpl @Inject constructor(
         // open, two still closed). Cancellation takes effect after the loop exits.
         var firstError: Throwable? = null
         withContext(NonCancellable) {
-            for (r in resolved) {
+            for ((i, r) in resolved.withIndex()) {
+                // Song L (#97): a burst of window writes ~5 ms apart all return status=1,
+                // but only the later panes actuate — the first write is silently dropped.
+                // Spacing the sub-writes out keeps every write effective on that platform.
+                if (i > 0) delay(COMPOSITE_WRITE_STAGGER_MS)
                 val res = doWrite(r.actionName, r.value)
                 if (res.isFailure && firstError == null) firstError = res.exceptionOrNull()
             }
@@ -323,6 +328,7 @@ class VehicleApiImpl @Inject constructor(
     companion object {
         private const val TAG = "VehicleApiImpl"
         private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
+        private const val COMPOSITE_WRITE_STAGGER_MS = 150L
         // TODO: route to Crashlytics when Firebase is integrated
     }
 }

@@ -264,6 +264,7 @@ class ActionDispatcher @Inject constructor(
             "delay" -> dispatchDelay(action)
             "media_volume" -> setMediaVolume(action)
             "sentry" -> dispatchSentry(action)
+            "hotspot" -> dispatchHotspot(action)
             "cluster_projection" -> dispatchClusterProjection(action)
             "speak" -> dispatchSpeak(action)
             "agent_query" -> dispatchAgentQuery(action)
@@ -288,6 +289,19 @@ class ActionDispatcher @Inject constructor(
         val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, "Не удалось переключить охранный режим")
+    }
+
+    // --- hotspot (Wi-Fi tethering via helper daemon, shell uid holds TETHER_PRIVILEGED) ---
+
+    private suspend fun dispatchHotspot(action: ActionDef): DispatchResult {
+        val enable = when (action.payload) {
+            "1" -> true
+            "0" -> false
+            else -> return DispatchResult(false, "Некорректное состояние точки доступа Wi-Fi")
+        }
+        val ok = helper.setHotspot(enable)
+        return if (ok) DispatchResult(true)
+        else DispatchResult(false, "Не удалось переключить точку доступа Wi-Fi")
     }
 
     // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---

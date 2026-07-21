@@ -134,6 +134,28 @@ class RuleDraftValidatorTest {
             ActionDef(command = "sentry", displayName = "x", kind = "sentry", payload = "1"))))
     }
 
+    @Test fun hotspot_action_invalid_payload_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "2")))
+        assertEquals(ActionValidationError.HotspotInvalid(1), err)
+    }
+
+    @Test fun hotspot_action_valid_payload_on_is_valid() {
+        assertNull(RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "1"))))
+    }
+
+    @Test fun hotspot_action_valid_payload_off_is_valid() {
+        assertNull(RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "0"))))
+    }
+
+    @Test fun hotspot_action_garbage_payload_is_invalid() {
+        val err = RuleDraftValidator.validateActions(listOf(
+            ActionDef(command = "hotspot", displayName = "x", kind = "hotspot", payload = "on")))
+        assertEquals(ActionValidationError.HotspotInvalid(1), err)
+    }
+
     @Test fun speak_action_blank_text_is_invalid() {
         val err = RuleDraftValidator.validateActions(listOf(
             ActionDef(command = "", displayName = "x", kind = "speak",

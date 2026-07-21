@@ -19,6 +19,7 @@ sealed class ActionValidationError {
     data class YandexMusicModeMissing(val index: Int) : ActionValidationError()
     data class MediaVolumeMissing(val index: Int) : ActionValidationError()
     data class SentryInvalid(val index: Int) : ActionValidationError()
+    data class HotspotInvalid(val index: Int) : ActionValidationError()
     data class SpeakTextEmpty(val index: Int) : ActionValidationError()
     data class AgentQueryPromptEmpty(val index: Int) : ActionValidationError()
 }
@@ -92,6 +93,9 @@ object RuleDraftValidator {
                 }
                 "sentry" -> {
                     if (a.payload !in listOf("0", "1")) return ActionValidationError.SentryInvalid(n)
+                }
+                "hotspot" -> {
+                    if (a.payload !in listOf("0", "1")) return ActionValidationError.HotspotInvalid(n)
                 }
                 "speak" -> {
                     if (payloadJson(a.payload).optString("text").isBlank()) {

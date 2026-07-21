@@ -29,4 +29,11 @@ class NaviRouteHolderPackagesTest {
         NaviRouteHolder.update("com.spotify.music", "x", "y", null, 1000L)
         assertNull(NaviRouteHolder.latest)
     }
+
+    @Test fun `maps package accepted and cleared`() {
+        NaviRouteHolder.update("ru.yandex.yandexmaps", "5 км", "направо", null, 1000L)
+        assertNotNull(NaviRouteHolder.latest)
+        NaviRouteHolder.clear("ru.yandex.yandexmaps")
+        assertNull(NaviRouteHolder.latest)
+    }
 }

@@ -1,5 +1,6 @@
 package com.bydmate.app.hud
 
+import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -161,6 +162,45 @@ class HudProtobufBuilderTest {
             etaString = "12:34", totalDistMeters = 10_000, speedLimit = 60,
             maneuverIconPng = null, speedSignPng = null)
         assertTrue(frame.size <= HudProtobufBuilder.MAX_PAYLOAD_BYTES)
+    }
+
+    @Test fun `suppress arrow zeroes f28 only`() {
+        val f = unwrap(HudProtobufBuilder.buildFrame(
+            maneuverGaode = 2, distanceMeters = 100, road = "x",
+            etaString = null, totalDistMeters = 0, speedLimit = 0,
+            maneuverIconPng = byteArrayOf(1), speedSignPng = null,
+            suppressArrow = true,
+        ))
+        assertEquals(0L, (f[28]!![0] as Long))
+        assertEquals(100L, (f[9]!![0] as Long))
+        assertTrue((f[8]!![0] as ByteArray).contentEquals(byteArrayOf(1)))
+    }
+
+    @Test fun `suppress arrow default false is byte-identical`() {
+        val omitted = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 250, road = "A",
+            etaString = "10:10", totalDistMeters = 1000, speedLimit = 60,
+            maneuverIconPng = byteArrayOf(0x01), speedSignPng = null,
+        )
+        val explicit = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 250, road = "A",
+            etaString = "10:10", totalDistMeters = 1000, speedLimit = 60,
+            maneuverIconPng = byteArrayOf(0x01), speedSignPng = null,
+            suppressArrow = false,
+        )
+        assertArrayEquals(omitted, explicit)
+    }
+
+    @Test fun `suppress arrow survives oversize speed sign fallback`() {
+        val payload = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 100, road = "x",
+            etaString = null, totalDistMeters = 0, speedLimit = 60,
+            maneuverIconPng = ByteArray(40_000) { 1 }, speedSignPng = ByteArray(40_000) { 2 },
+            suppressArrow = true,
+        )
+        val f = unwrap(payload)
+        assertEquals(0L, (f[28]!![0] as Long))
+        assertNull(f[7])
     }
 
     @Test fun `progress clamped to 0-1`() {

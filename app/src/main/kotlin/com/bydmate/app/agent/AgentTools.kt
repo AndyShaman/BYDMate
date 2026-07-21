@@ -555,7 +555,7 @@ class AgentTools @Inject constructor(
                             .put("required", JSONArray(listOf("kind")))))
                     .put("cooldown_seconds", JSONObject()
                         .put("type", "integer")
-                        .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 30, по умолчанию 60"))
+                        .put("description", "Минимальный интервал между срабатываниями в секундах, минимум 1, по умолчанию 60"))
                     .put("play_sound", JSONObject()
                         .put("type", "boolean")
                         .put("description", "Проиграть звуковой сигнал при срабатывании правила, по умолчанию false")),
@@ -1371,6 +1371,10 @@ class AgentTools @Inject constructor(
                 if (!has("street") && hub.road.isNotEmpty()) put("street", hub.road)
                 if (!has("speed_limit") && hub.speedLimit > 0)
                     put("speed_limit", hub.speedLimit.toString())
+                if (!has("remaining_distance") && hub.totalDistMeters > 0)
+                    put("remaining_distance", formatMeters(hub.totalDistMeters))
+                if (!has("remaining_time") && hub.etaSeconds > 0)
+                    put("remaining_time", formatEtaSeconds(hub.etaSeconds))
                 put("hub_age_sec", (nowMs() - hub.lastUpdateMs) / 1000L)
             }
             gate.vehicleSnapshot()?.let { d ->
@@ -1388,6 +1392,13 @@ class AgentTools @Inject constructor(
     private fun formatMeters(meters: Int): String =
         if (meters >= 1000) String.format(java.util.Locale.US, "%.1f км", meters / 1000.0)
         else "$meters м"
+
+    private fun formatEtaSeconds(seconds: Int): String {
+        val min = seconds / 60
+        return if (min >= 60)
+            String.format(java.util.Locale.US, "%d ч %02d мин", min / 60, min % 60)
+        else "$min мин"
+    }
 
     private suspend fun goHomeScreen(): String {
         val result = actionDispatcher.dispatch(
@@ -1613,7 +1624,7 @@ class AgentTools @Inject constructor(
         }
         RuleDraftValidator.validateActions(actions)?.let { return actionErrorJson(it) }
 
-        val cooldown = args.optInt("cooldown_seconds", 60).coerceAtLeast(30)
+        val cooldown = args.optInt("cooldown_seconds", 60).coerceAtLeast(1)
         val playSound = args.optBoolean("play_sound", false)
         val rule = RuleEntity(
             name = name,
@@ -1892,6 +1903,8 @@ class AgentTools @Inject constructor(
             is ActionValidationError.MediaVolumeMissing -> "не указан уровень громкости (действие ${err.index})"
             is ActionValidationError.SentryInvalid ->
                 "некорректное состояние охранного режима (действие ${err.index})"
+            is ActionValidationError.HotspotInvalid ->
+                "некорректное состояние точки доступа (действие ${err.index})"
             is ActionValidationError.SpeakTextEmpty ->
                 "не задан текст для озвучки (действие ${err.index})"
             is ActionValidationError.AgentQueryPromptEmpty ->

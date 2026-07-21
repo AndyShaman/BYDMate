@@ -27,7 +27,7 @@ object NaviScreenReader {
     fun read(root: AccessibilityNodeInfo?): ScreenInfo? {
         if (root == null) return null
         val pkg = root.packageName?.toString() ?: return null
-        if (pkg !in com.bydmate.app.navdata.NavPackages.YANDEX_NAVI) return null
+        if (pkg !in com.bydmate.app.navdata.NavPackages.GUIDANCE_SOURCES) return null
         val maneuverDist = textOf(root, "$pkg:id/text_maneuverballoon_distance")
         val maneuverMetrics = textOf(root, "$pkg:id/text_maneuverballoon_metrics")
         return ScreenInfo(

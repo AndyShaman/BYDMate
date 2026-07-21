@@ -1,21 +1,13 @@
 @file:JvmName("HelperDaemon")
 package com.bydmate.app.helper
 
-import android.app.Presentation
 import android.content.Context
-import android.graphics.Color
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Binder
-import android.os.Bundle
-import android.os.Handler
 import android.view.Surface
-import android.view.SurfaceHolder
-import android.view.SurfaceView
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.CountDownLatch
-import java.util.concurrent.TimeUnit
 import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
@@ -113,11 +105,7 @@ fun main(args: Array<String>) {
     // Keeps created VirtualDisplays alive (their backing Surface comes from the app overlay).
     // Keyed by displayId so TX_RELEASE_VIRTUAL_DISPLAY can release the right one.
     val virtualDisplays = ConcurrentHashMap<Int, VirtualDisplay>()
-    // Presentation hosts are needed on DiLink builds where the IPC display is private to system
-    // processes. The app cannot create a window there even with PROJECT_MEDIA, but this shell
-    // daemon can. Keyed by the nested VirtualDisplay id so the normal release operation owns the
-    // complete lifecycle.
-    val presentationHosts = ConcurrentHashMap<Int, Presentation>()
+
     // Step 3: build our stub Binder.
     val helperBinder = object : Binder() {
         override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
@@ -223,75 +211,10 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
-                HelperBinderProtocol.TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY -> runCatching {
-                    val name = data.readString() ?: "BYDMate_IPC_VD"
-                    val width = data.readInt(); val height = data.readInt()
-                    val density = data.readInt(); val vdFlags = data.readInt()
-                    val clusterDisplayId = data.readInt()
-                    val ctx = systemContext
-                    val id = if (ctx == null) {
-                        -1
-                    } else {
-                        createPresentationVirtualDisplay(
-                            ctx,
-                            virtualDisplays,
-                            presentationHosts,
-                            name,
-                            width,
-                            height,
-                            density,
-                            vdFlags,
-                            clusterDisplayId,
-                        )
-                    }
-                    if (id > 0) { reply?.writeInt(0); reply?.writeInt(id) }
-                    else { reply?.writeInt(-1); reply?.writeInt(0) }
-                    true
-                }.getOrElse {
-                    System.err.println("ERR: create IPC Presentation ${it.message}")
-                    reply?.writeInt(-1); reply?.writeInt(0); true
-                }
-
-                HelperBinderProtocol.TX_LAUNCH_CLUSTER_ANCHOR -> runCatching {
-                    val displayId = data.readInt()
-                    val result = shExec(
-                        "am start --display \"\$1\" -n \"\$2\"",
-                        displayId.toString(),
-                        HelperBinderProtocol.CLUSTER_ANCHOR_COMPONENT,
-                    )
-                    reply?.writeInt(if (result.code == 0) 0 else -1); reply?.writeInt(0)
-                    true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
-
-                HelperBinderProtocol.TX_SET_STOCK_PROJECTION -> runCatching {
-                    val enabled = data.readInt() != 0
-                    if (enabled) {
-                        val result = shExec(
-                            "am startservice -n \"\$1\"",
-                            HelperBinderProtocol.STOCK_VIRTUAL_BIND_COMPONENT,
-                        )
-                        reply?.writeInt(if (result.code == 0) 0 else -1)
-                    } else {
-                        // The car restarts the stock map almost immediately, so this is only a
-                        // narrow projection window: keep killing its visible cluster Activity while
-                        // BYDMate starts the anchor and moves the target app onto our VD.
-                        val result = shExec(
-                            "i=0; while [ \$i -lt 8 ]; do am force-stop \"\$1\" >/dev/null 2>&1; i=\$((i+1)); sleep 0.25; done",
-                            HelperBinderProtocol.STOCK_MAP_PACKAGE,
-                        )
-                        reply?.writeInt(if (result.code == 0) 0 else -1)
-                    }
-                    reply?.writeInt(0)
-                    true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
-
                 HelperBinderProtocol.TX_RELEASE_VIRTUAL_DISPLAY -> runCatching {
                     val displayId = data.readInt()
                     val vd = virtualDisplays.remove(displayId)
                     vd?.release()
-                    presentationHosts.remove(displayId)?.let { presentation ->
-                        Handler(Looper.getMainLooper()).post { runCatching { presentation.dismiss() } }
-                    }
                     reply?.writeInt(if (vd != null) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -322,6 +245,14 @@ fun main(args: Array<String>) {
                     // which the app process picks up on its NEXT start (gids are set at fork).
                     val r = shExec("pm grant \"\$1\" android.permission.READ_LOGS", HelperBinderProtocol.APP_PACKAGE)
                     reply?.writeInt(if (r.code == 0) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_HOTSPOT -> runCatching {
+                    val enable = data.readInt() != 0
+                    val ctx = systemContext
+                    val ok = if (ctx != null) setHotspot(ctx, enable) else false
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
@@ -682,86 +613,6 @@ private fun createVirtualDisplay(
     return id
 }
 
-/**
- * Creates a full-screen Presentation on the private BYD IPC display and uses its SurfaceView as
- * the sink for a nested VirtualDisplay. All window work happens on the daemon main looper; the
- * Binder thread waits only until Surface creation. The returned id is released through the normal
- * TX_RELEASE_VIRTUAL_DISPLAY operation, which also dismisses the Presentation.
- */
-private fun createPresentationVirtualDisplay(
-    ctx: Context,
-    displays: ConcurrentHashMap<Int, VirtualDisplay>,
-    hosts: ConcurrentHashMap<Int, Presentation>,
-    name: String,
-    width: Int,
-    height: Int,
-    density: Int,
-    flags: Int,
-    clusterDisplayId: Int,
-): Int {
-    val displayManager = ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
-    val clusterDisplay = displayManager.getDisplay(clusterDisplayId) ?: return -1
-    val ready = CountDownLatch(1)
-    var surface: Surface? = null
-    var presentation: Presentation? = null
-
-    Handler(Looper.getMainLooper()).post {
-        runCatching {
-            val host = object : Presentation(ctx, clusterDisplay) {
-                override fun onCreate(savedInstanceState: Bundle?) {
-                    super.onCreate(savedInstanceState)
-                    val view = SurfaceView(context).apply {
-                        setBackgroundColor(Color.BLACK)
-                        holder.setFixedSize(width, height)
-                        holder.addCallback(object : SurfaceHolder.Callback {
-                            override fun surfaceCreated(holder: SurfaceHolder) {
-                                surface = holder.surface
-                                ready.countDown()
-                            }
-
-                            override fun surfaceChanged(
-                                holder: SurfaceHolder,
-                                format: Int,
-                                width: Int,
-                                height: Int,
-                            ) = Unit
-
-                            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
-                        })
-                    }
-                    setContentView(view)
-                }
-            }
-            presentation = host
-            host.show()
-        }.onFailure {
-            System.err.println("ERR: show IPC Presentation ${it.message}")
-            ready.countDown()
-        }
-    }
-
-    if (!ready.await(3, TimeUnit.SECONDS)) {
-        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
-        return -1
-    }
-    val sink = surface?.takeIf { it.isValid } ?: run {
-        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
-        return -1
-    }
-    val id = createVirtualDisplay(ctx, displays, name, width, height, density, sink, flags)
-    if (id <= 0) {
-        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
-        return -1
-    }
-    val livePresentation = presentation
-    if (livePresentation == null) {
-        displays.remove(id)?.release()
-        return -1
-    }
-    hosts[id] = livePresentation
-    return id
-}
-
 /** Runs a shell command (shell uid) and returns combined stdout/stderr. Mirrors CarControlImpl.exec. */
 private fun execShell(command: String): String {
     val process = Runtime.getRuntime().exec(arrayOf("sh", "-c", command))
@@ -883,6 +734,78 @@ private fun enableNotificationListener(): Boolean {
 }
 
 /**
+ * Enables or disables the Wi-Fi hotspot (TETHERING_WIFI = 0) via reflection.
+ *
+ * Ported from verified autovoice InterconnectionApiImpl (methods f()/l()). Requires
+ * TETHER_PRIVILEGED which the shell uid holds. Needs on-car validation.
+ *
+ * Primary: android.net.BydTetheringInterface (hidden framework class on DiLink head units).
+ * Legacy fallback: ConnectivityManager.startTethering/stopTethering via reflection
+ * (deprecated API present on older builds).
+ */
+private fun setHotspot(ctx: Context, enable: Boolean): Boolean {
+    return try {
+        // Primary path: BydTetheringInterface (hidden framework class, not in SDK).
+        val bydCls = Class.forName("android.net.BydTetheringInterface")
+        val bydInstance = bydCls.getMethod("getInstance", Context::class.java).invoke(null, ctx)
+        if (enable) {
+            // TetheringManager.TetheringRequest.Builder(0 = TETHERING_WIFI).build()
+            val builderCls = Class.forName("android.net.TetheringManager\$TetheringRequest\$Builder")
+            val builder = builderCls.getConstructor(Int::class.javaPrimitiveType).newInstance(0)
+            val request = builderCls.getMethod("build").invoke(builder)
+            val requestCls = Class.forName("android.net.TetheringManager\$TetheringRequest")
+            val callbackCls = Class.forName("android.net.TetheringManager\$StartTetheringCallback")
+            // Build a no-op Proxy matching the verified autovoice pattern (inner class a in
+            // InterconnectionApiImpl.java): logging-only onTetheringStarted/onTetheringFailed.
+            // Passing null risks an NPE inside the BYD framework wrapper on the callback dispatch.
+            val noOpCallback = java.lang.reflect.Proxy.newProxyInstance(
+                callbackCls.classLoader,
+                arrayOf(callbackCls)
+            ) { _, _, _ -> null }
+            // startTethering(TetheringRequest, Executor, StartTetheringCallback).
+            // Autovoice passes (Executor) null here, but strict AOSP TetheringManager rejects a
+            // null executor; a direct executor satisfies both a strict forwarder and a tolerant
+            // BYD wrapper, and only ever runs the no-op callback dispatch.
+            val directExecutor = java.util.concurrent.Executor { it.run() }
+            bydCls.getMethod("startTethering", requestCls,
+                java.util.concurrent.Executor::class.java, callbackCls)
+                .invoke(bydInstance, request, directExecutor, noOpCallback)
+        } else {
+            // stopTethering(int type) — 0 = TETHERING_WIFI
+            bydCls.getMethod("stopTethering", Int::class.javaPrimitiveType)
+                .invoke(bydInstance, 0)
+        }
+        true
+    } catch (primary: Throwable) {
+        System.err.println("WARN: BydTetheringInterface failed, trying CM legacy: ${primary.message}")
+        // Legacy fallback: ConnectivityManager.startTethering/stopTethering via reflection.
+        try {
+            val cm = ctx.getSystemService("connectivity") ?: return false
+            if (enable) {
+                val callbackCls = Class.forName("android.net.ConnectivityManager\$OnStartTetheringCallback")
+                // OnStartTetheringCallback is an abstract CLASS (not an interface), so Proxy
+                // cannot help. Autovoice used dexmaker to subclass it, which is unavailable here.
+                // Stock AOSP ConnectivityManager.startTethering begins with
+                // Objects.requireNonNull(callback, "OnStartTetheringCallback cannot be null."),
+                // so this call will always throw on stock builds. Kept only as a last-resort
+                // attempt for non-AOSP ROM variants that tolerate a null callback; accepted risk.
+                cm.javaClass.getDeclaredMethod("startTethering",
+                    Int::class.javaPrimitiveType, Boolean::class.javaPrimitiveType, callbackCls)
+                    .invoke(cm, 0, false, null)
+            } else {
+                val m = cm.javaClass.getDeclaredMethod("stopTethering", Int::class.javaPrimitiveType)
+                m.isAccessible = true
+                m.invoke(cm, 0)
+            }
+            true
+        } catch (legacy: Throwable) {
+            System.err.println("WARN: CM hotspot legacy fallback failed: ${legacy.message}")
+            false
+        }
+    }
+}
+
+/**
  * Settings.Global whitelist for TX_PUT_GLOBAL_SETTING: the sentry-mode master switch and the
  * freeform windowing flag (direct cluster projection; the framework reads it once at boot).
  * Values are bounded to 0/1. Anything else is rejected before any shell command runs.
@@ -981,6 +904,7 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     repeat(2) {
         runCatching { moveTaskToDisplayReflect(taskId, displayId) }
         runCatching { setTaskBoundsReflect(taskId, 0, 0, width, height) }
+        runCatching { setFocusedTaskReflect(taskId) }
         Thread.sleep(200L)
     }
     return true

@@ -29,4 +29,9 @@ class NavA11yFeedTest {
         assertFalse(NavA11yFeed.shouldProcess("ru.yandex.yandexnavi", contentChanged, nowMs = 1400, lastMs = 1000))
         assertTrue(NavA11yFeed.shouldProcess("ru.yandex.yandexnavi", contentChanged, nowMs = 1500, lastMs = 1000))
     }
+
+    @Test fun `maps packages pass`() {
+        assertTrue(NavA11yFeed.shouldProcess("ru.yandex.yandexmaps", contentChanged, nowMs = 1000, lastMs = 0))
+        assertTrue(NavA11yFeed.shouldProcess("ru.yandex.yandexmaps.rustore", stateChanged, nowMs = 1000, lastMs = 0))
+    }
 }

@@ -282,6 +282,7 @@ class SettingsViewModelTest {
             openRouterClient = openRouterClient,
             placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = energyDataDeadDetector,
+            hudController = mockk(relaxed = true),
         )
     }
 

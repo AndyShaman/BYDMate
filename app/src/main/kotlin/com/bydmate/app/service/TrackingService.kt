@@ -63,6 +63,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import javax.inject.Inject
+import javax.inject.Named
 
 @AndroidEntryPoint
 class TrackingService : Service(), LocationListener {
@@ -93,7 +94,11 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
+    @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
+    @Inject lateinit var gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
+    @Named("ttsLoadGuard") @Inject lateinit var ttsLoadGuard: com.bydmate.app.voice.AsrLoadGuard
+    @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
 
@@ -299,6 +304,16 @@ class TrackingService : Service(), LocationListener {
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
+        // GPS fix older than this is not forwarded to ABRP: a stale coordinate would
+        // pin the car marker to an old position, which is worse than sending none.
+        private const val TELEMETRY_LOCATION_FRESH_MS = 60_000L
+
+        /** ABRP GPS opt-in gate: toggle ON + fix no older than [TELEMETRY_LOCATION_FRESH_MS]. */
+        internal fun locationForTelemetry(enabled: Boolean, location: Location?, nowMs: Long): Location? {
+            if (!enabled) return null
+            return location?.takeIf { it.time in (nowMs - TELEMETRY_LOCATION_FRESH_MS)..nowMs }
+        }
+
         /**
          * Current widget-session anchor (epoch millis of ignition-on), or null when
          * the vehicle is idle. Consumers: widget duration, ConsumptionAggregator,
@@ -472,6 +487,11 @@ class TrackingService : Service(), LocationListener {
                     this@TrackingService, helperClient, helperBootstrap)
                 com.bydmate.app.cluster.ClusterProjectionManager.recoverStaleDirectTask(
                     this@TrackingService, helperClient, helperBootstrap)
+                // Factory-restore self-heal: with the VD transport pref, re-assert the freeform
+                // flag to 0 at service start - covers a flip whose write failed (daemon down)
+                // and cars where project() never reaches its own write (no cluster display).
+                com.bydmate.app.cluster.ClusterProjectionManager.realignFreeformFlag(
+                    this@TrackingService, helperClient, helperBootstrap)
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")
@@ -483,7 +503,31 @@ class TrackingService : Service(), LocationListener {
         // mic starts recording (field defect: first words swallowed). Fire-and-forget, gated on
         // the voice toggle so we don't load a 226 MiB model for drivers who never enabled voice.
         serviceScope.launch(Dispatchers.IO) {
-            runCatching { if (voiceGate.isEnabled()) continuousAsr.warmUp() }
+            runCatching {
+                // A tripped guard means the last ASR model loads aborted this whole process
+                // from native code (corrupt .onnx -> SIGABRT, no Java exception): the files
+                // are provably unloadable, so delete them (the model is re-downloadable in
+                // Settings) instead of crash-looping on every service start.
+                if (asrLoadGuard.isTripped()) {
+                    Log.w(TAG, "ASR load guard tripped: deleting corrupt model files")
+                    gigaAmModelManager.delete()
+                    asrLoadGuard.reset()
+                    return@runCatching
+                }
+                if (voiceGate.isEnabled()) continuousAsr.warmUp()
+            }
+            // TTS guard: symmetric check in its own runCatching so ASR path is unaffected.
+            runCatching {
+                if (ttsLoadGuard.isTripped()) {
+                    Log.w(TAG, "TTS load guard tripped: deleting corrupt TTS model")
+                    val voicePrefs = getSharedPreferences("voice", Context.MODE_PRIVATE)
+                    val voiceId = voicePrefs.getString("tts_voice", com.bydmate.app.voice.TtsModelManager.DEFAULT_VOICE_ID)
+                        ?: com.bydmate.app.voice.TtsModelManager.DEFAULT_VOICE_ID
+                    val modelDirId = com.bydmate.app.voice.TtsVoiceCatalog.byId(voiceId).modelDirId
+                    ttsModelManager.delete(modelDirId)
+                    ttsLoadGuard.reset()
+                }
+            }
         }
 
         // Keep steering-wheel star control bound across boot and every wake. The bind can lose the
@@ -727,6 +771,12 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
+                val sendLocation = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_SEND_LOCATION,
+                    "false"
+                ) == "true"
+                val location = locationForTelemetry(sendLocation, _lastLocation.value, snapshotMs)
+
                 // Best-effort autoservice enrichment. Snapshots are heavier
                 // (multiple fids) — only read them in CHARGING window where
                 // is_dcfc / kwh_charged actually matter. In DRIVING we still
@@ -754,6 +804,9 @@ class TrackingService : Service(), LocationListener {
                     carModel = carModel,
                     enginePowerKw = enginePowerKw,
                     sampleTimeMs = snapshotMs,
+                    latitude = location?.latitude,
+                    longitude = location?.longitude,
+                    headingDeg = location?.takeIf { it.hasBearing() }?.bearing?.toDouble(),
                 ).onSuccess {
                     synchronized(iternioTelemetryLock) {
                         lastIternioTelemetryMs = snapshotMs
