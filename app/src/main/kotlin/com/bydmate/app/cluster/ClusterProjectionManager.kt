@@ -1,6 +1,7 @@
 package com.bydmate.app.cluster
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.graphics.Point
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -87,6 +88,8 @@ object ClusterProjectionManager {
     private const val KEY_LAST_VD_ID = "last_vd_id"
     /** Wave P: power the cluster compositor automatically around projection (default ON). */
     const val KEY_AUTO_CONTAINER = "auto_container_enabled"
+    /** Projection transport: direct freeform launch (default) vs legacy VirtualDisplay pipeline. */
+    const val KEY_DIRECT_PROJECTION = "direct_projection_enabled"
     // Set while the daemon has powered the cluster compositor up for our projection; cleared only
     // after a CONFIRMED power-down. Survives process death: when the car shuts off mid-projection
     // the off sequence (18 -> pause -> 0) never runs, the compositor reboots in projection mode
@@ -173,6 +176,54 @@ object ClusterProjectionManager {
             Log.i(TAG, "enableStarControl: a11y enabled=$ok")
         }
     }
+
+    /**
+     * Persists the projection transport and immediately aligns Settings.Global
+     * enable_freeform_support with it (1 = direct, 0 = VD/factory). The flag is read once at
+     * boot, so the system-side effect lands on the next DiLink reboot; the projection pipeline
+     * follows the preference on the next star press (same "next press" semantics as the target
+     * app picker). VD also clears the direct-mode reboot hint — it is meaningless while the
+     * direct path is disabled.
+     */
+    fun setDirectProjectionEnabled(
+        context: Context, enabled: Boolean, helper: HelperClient, bootstrap: HelperBootstrap,
+    ) {
+        val appContext = context.applicationContext
+        val edit = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_DIRECT_PROJECTION, enabled)
+        if (!enabled) edit.putBoolean(KEY_FREEFORM_REBOOT_PENDING, false)
+        edit.apply()
+        scope.launch {
+            if (!bootstrap.ensureRunning()) {
+                Log.e(TAG, "helper daemon not running; freeform flag not updated"); return@launch
+            }
+            // Linearized against project(): waits for any in-flight projection attempt and
+            // re-reads the pref inside the lock, so a flip issued mid-attempt cannot be
+            // overwritten by that attempt's stale value.
+            val ok = alignFreeformFlag(appContext, helper)
+            Log.i(TAG, "projection transport flip: direct=$enabled, freeform flag write ok=$ok")
+        }
+    }
+
+    /**
+     * Linearized freeform-flag writer: takes the same [mutex] that serializes project(), and
+     * re-reads the transport pref INSIDE the lock. A flip issued while a projection attempt
+     * is in flight thus converges: the attempt writes its (possibly stale) value first, this
+     * write follows with the freshest pref, and the last write wins in Settings.Global.
+     * Must not be called while already holding [mutex].
+     */
+    internal suspend fun alignFreeformFlag(context: Context, helper: HelperClient): Boolean =
+        mutex.withLock {
+            runCatching {
+                helper.putGlobalSetting(
+                    "enable_freeform_support", freeformFlagValue(readDirectEnabled(context)))
+            }.getOrDefault(false)
+        }
+
+    /** Test seam: runs [block] while holding the projection mutex, so unit tests can pin a
+     *  deterministic interleaving of [alignFreeformFlag] against an in-flight attempt. */
+    internal suspend fun <T> withProjectionLock(block: suspend () -> T): T =
+        mutex.withLock { block() }
 
     /**
      * Apply the size currently saved in prefs to the live projection (size-slider change). No-op
@@ -311,6 +362,46 @@ object ClusterProjectionManager {
     private fun readScalePct(context: Context): Int =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getInt(KEY_SCALE_PCT, DEFAULT_SCALE_PCT)
+
+    /**
+     * One-time 3.6.x migration: the transport default flips to factory/VD, but users who
+     * already ran a direct projection keep freeform — their prefs carry direct-only markers
+     * (KEY_FREEFORM_REBOOT_PENDING and KEY_DIRECT_DISPLAY_ID, the only two keys exclusive to
+     * the direct pipeline). KEY_COMPOSITOR_POWERED is deliberately NOT consulted: it is written
+     * on both transports (auto-container block in project()), so consulting it would falsely
+     * migrate a passive user who ever projected via the factory/VD path. Prefs-only and
+     * idempotent: once KEY_DIRECT_PROJECTION exists (explicitly chosen or migrated) this
+     * is a no-op. No daemon traffic.
+     */
+    internal fun migrateDirectPrefIfNeeded(prefs: SharedPreferences) {
+        if (prefs.contains(KEY_DIRECT_PROJECTION)) return
+        // KEY_COMPOSITOR_POWERED is deliberately NOT consulted: it is written on both
+        // transports, so it would falsely migrate a passive user who projected via VD.
+        val projectedDirect = prefs.contains(KEY_FREEFORM_REBOOT_PENDING) ||
+            prefs.contains(KEY_DIRECT_DISPLAY_ID)
+        if (projectedDirect) prefs.edit().putBoolean(KEY_DIRECT_PROJECTION, true).apply()
+    }
+
+    /** Transport pref as consumers must see it: runs the one-time migration first. */
+    fun isDirectProjectionEnabled(context: Context): Boolean = readDirectEnabled(context)
+
+    /** True when the user ever made an explicit transport choice (UI chip or migration).
+     *  The system freeform flag is managed ONLY for these users; a passive user's flag is
+     *  never touched — it may be owned by a third-party projection app. */
+    private fun hasTransportChoice(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        migrateDirectPrefIfNeeded(prefs)
+        return prefs.contains(KEY_DIRECT_PROJECTION)
+    }
+
+    /** Projection transport chosen in settings: true = direct freeform, false = VD (default). */
+    private fun readDirectEnabled(context: Context): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        migrateDirectPrefIfNeeded(prefs)
+        // Factory (VD) is the default: a fresh install must not require the system
+        // freeform flag. The extended transport is opt-in via the settings chip.
+        return prefs.getBoolean(KEY_DIRECT_PROJECTION, false)
+    }
 
     /** Package to project — user-selectable in settings, defaults to Yandex Navi. */
     private fun targetPackage(context: Context): String =
@@ -492,6 +583,30 @@ object ClusterProjectionManager {
         }
     }
 
+    /**
+     * One-shot at service start, sibling of [recoverStaleCompositor]: with the VD/factory
+     * transport chosen, re-asserts enable_freeform_support=0. Heals a flip whose daemon write
+     * failed (daemon down at flip) and cars whose cluster display never resolves, where the
+     * in-project() write is unreachable (Song / DiLink 3-4). Deliberately writes NOTHING for
+     * the direct pref: arming the system flag belongs to an explicit projection attempt, not
+     * to boot - never-projecting users keep a system untouched by BYDMate.
+     * Passive users (no explicit transport choice, no migration markers) are skipped entirely —
+     * their system flag may belong to a third-party app and is never BYDMate's to manage.
+     */
+    fun realignFreeformFlag(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+        val appContext = context.applicationContext
+        scope.launch {
+            if (!hasTransportChoice(appContext)) return@launch
+            if (readDirectEnabled(appContext)) return@launch
+            if (!bootstrap.ensureRunning()) {
+                Log.w(TAG, "realignFreeformFlag: daemon unreachable; retrying next service start")
+                return@launch
+            }
+            val ok = alignFreeformFlag(appContext, helper)
+            Log.i(TAG, "realignFreeformFlag: VD pref, freeform flag write ok=$ok")
+        }
+    }
+
     /** Returns null only when the overlay is up, the VirtualDisplay exists, and Navi is pinned;
      *  otherwise a failure reason ("daemon" = helper daemon unreachable, "projection" = anything
      *  else) so [applyModeLocked] can report an honest [lastFailure]. */
@@ -502,6 +617,15 @@ object ClusterProjectionManager {
             Log.e(TAG, "helper daemon not running; aborting projection"); return "daemon"
         }
         recoverStaleDirectDensity(context, helper)
+        // VD/factory transport: return the freeform flag to 0 BEFORE any display-dependent
+        // branch. On cars whose cluster display never resolves (Song, DiLink 3-4) project()
+        // exits below, so a later write never runs there - exactly the population the
+        // factory restore exists for. Direct mode keeps its byte-identical call order: its
+        // write stays in the direct-first block below.
+        val direct = readDirectEnabled(context)
+        if (!direct && hasTransportChoice(context)) runCatching {
+            helper.putGlobalSetting("enable_freeform_support", freeformFlagValue(direct))
+        }
         // #85/#62: resolve the display BEFORE any compositor ИПЦ write. Song family /
         // DiLink 3-4 expose no projection display; powering the compositor up there painted
         // a black rectangle on the cluster that survived until reboot. Local read-only
@@ -549,8 +673,18 @@ object ClusterProjectionManager {
         // below. Falls through to the VD pipeline when freeform is not active yet (flag needs
         // one reboot) or anything fails. Skip orphan release when a live member handle is
         // present — it is our own VD retry handle, not an orphan.
-        if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
-        if (tryDirectProjection(context, helper, display, geo, plan)) return null
+        //
+        // The freeform flag is re-asserted on EVERY direct attempt: the framework reads it
+        // once at boot, so a direct write arms the NEXT ignition cycle even when this attempt
+        // still falls back. The VD counterpart write happens above, before the
+        // display-dependent branches.
+        if (direct) {
+            runCatching {
+                helper.putGlobalSetting("enable_freeform_support", freeformFlagValue(direct))
+            }
+            if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
+            if (tryDirectProjection(context, helper, display, geo, plan)) return null
+        }
 
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
@@ -606,9 +740,6 @@ object ClusterProjectionManager {
     private suspend fun tryDirectProjection(
         context: Context, helper: HelperClient, display: Display, geo: ClusterGeometry, plan: RenderPlan,
     ): Boolean {
-        // Persist the freeform flag on every attempt: the framework reads it once at boot, so
-        // writing it now arms the NEXT ignition cycle even when this attempt still falls back.
-        runCatching { helper.putGlobalSetting("enable_freeform_support", 1) }
         val pkg = targetPackage(context)
         val bounds = freeformBounds(geo)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)

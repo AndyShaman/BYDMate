@@ -21,6 +21,14 @@
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
     <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
+    <string name="settings_projection_mode_title">Режим проекции</string>
+    <string name="settings_projection_mode_direct">Расширенный</string>
+    <string name="settings_projection_mode_vd">Заводской</string>
+    <string name="settings_projection_mode_help" formatted="false">Заводской: как в версиях до 3.6, системные настройки машины не меняются, точнее работают ползунки подстройки. Минус: голосовой агент и HUD не видят экран навигатора, подсказки только из уведомления. Расширенный: навигатор работает прямо на приборке, его видят агент и HUD. Включает системный оконный режим, нужна однократная перезагрузка ДиЛинка. Возврат к заводу: переключите на Заводской, системная настройка вернётся к заводскому значению и полностью применится после перезагрузки. Режим применяется при следующем выводе на приборку.</string>
+    <string name="projection_extended_confirm_title">Включить расширенный режим?</string>
+    <string name="projection_extended_confirm_body">Расширенный режим меняет системную настройку оконного режима ДиЛинка, чтобы навигатор работал прямо на приборке и его видели голосовой агент и HUD. Понадобится однократная перезагрузка ДиЛинка. Чтобы вернуть заводское состояние, переключите обратно на Заводской и перезагрузите ДиЛинк.</string>
+    <string name="projection_extended_confirm_enable">Включить</string>
+    <string name="projection_extended_confirm_cancel">Отмена</string>
     <string name="settings_display_app_title">Приложение на приборку</string>
     <string name="settings_display_size_header">Размер окна на приборке</string>
     <string name="settings_display_size_width">Ширина</string>

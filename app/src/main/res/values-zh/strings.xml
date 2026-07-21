@@ -21,6 +21,14 @@
     <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
     <string name="settings_cluster_auto_container_desc">自动将仪表盘切换到投屏模式</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
+    <string name="settings_projection_mode_title">投影模式</string>
+    <string name="settings_projection_mode_direct">扩展</string>
+    <string name="settings_projection_mode_vd">出厂</string>
+    <string name="settings_projection_mode_help" formatted="false">出厂：与 3.6 之前的版本相同，不更改车辆的任何系统设置，调节滑块工作更精确。缺点：语音助手和 HUD 看不到导航画面，引导信息仅来自通知。扩展：导航直接运行在仪表盘上，助手和 HUD 可以看到它。会开启系统窗口模式，需要重启一次 DiLink。恢复出厂状态：切换回出厂，系统设置将恢复为出厂值，重启后完全生效。模式本身在下次投影时生效。</string>
+    <string name="projection_extended_confirm_title">开启扩展模式？</string>
+    <string name="projection_extended_confirm_body">扩展模式会更改 DiLink 的系统窗口设置，让导航直接运行在仪表盘上，语音助手和 HUD 可以看到它。需要重启一次 DiLink。要恢复出厂状态，请切换回出厂并重启 DiLink。</string>
+    <string name="projection_extended_confirm_enable">开启</string>
+    <string name="projection_extended_confirm_cancel">取消</string>
     <string name="settings_display_app_title">投射到仪表盘的应用</string>
     <string name="settings_display_size_header">仪表盘窗口大小</string>
     <string name="settings_display_size_width">宽度</string>

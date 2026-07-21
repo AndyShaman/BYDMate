@@ -476,6 +476,11 @@ class TrackingService : Service(), LocationListener {
                     this@TrackingService, helperClient, helperBootstrap)
                 com.bydmate.app.cluster.ClusterProjectionManager.recoverStaleDirectTask(
                     this@TrackingService, helperClient, helperBootstrap)
+                // Factory-restore self-heal: with the VD transport pref, re-assert the freeform
+                // flag to 0 at service start - covers a flip whose write failed (daemon down)
+                // and cars where project() never reaches its own write (no cluster display).
+                com.bydmate.app.cluster.ClusterProjectionManager.realignFreeformFlag(
+                    this@TrackingService, helperClient, helperBootstrap)
             } catch (e: Exception) {
                 Log.w(TAG, "HelperBootstrap.ensureRunning failed: ${e.message}")
                 ChainLog.append(this@TrackingService, "Helper bootstrap failed: ${e.message}")

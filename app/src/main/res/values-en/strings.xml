@@ -17,6 +17,14 @@
     <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
     <string name="settings_cluster_auto_container_desc">Switch the cluster into projection mode automatically</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
+    <string name="settings_projection_mode_title">Projection mode</string>
+    <string name="settings_projection_mode_direct">Extended</string>
+    <string name="settings_projection_mode_vd">Factory</string>
+    <string name="settings_projection_mode_help" formatted="false">Factory: works like versions before 3.6, no system settings of the car are changed, the adjustment sliders work more precisely. Downside: the voice agent and HUD cannot see the navigator screen, guidance comes from the notification only. Extended: the navigator runs right on the cluster, the agent and HUD can see it. Enables the system freeform window mode, a one-time DiLink reboot is required. To restore factory state: switch back to Factory, the system setting returns to its factory value and fully applies after a reboot. The mode itself applies on the next projection start.</string>
+    <string name="projection_extended_confirm_title">Enable extended mode?</string>
+    <string name="projection_extended_confirm_body">Extended mode changes a DiLink system window setting so the navigator runs right on the instrument cluster and the voice agent and HUD can see it. A one-time DiLink reboot will be required. To restore the factory state, switch back to Factory and reboot DiLink.</string>
+    <string name="projection_extended_confirm_enable">Enable</string>
+    <string name="projection_extended_confirm_cancel">Cancel</string>
     <string name="settings_display_app_title">App on cluster</string>
     <string name="settings_display_size_header">Cluster window size</string>
     <string name="settings_display_size_width">Width</string>

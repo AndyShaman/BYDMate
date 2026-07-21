@@ -137,3 +137,11 @@ fun shouldAbsorbDisplayDensity(liveDirectDisplayId: Int, markerDisplayId: Int, m
  */
 fun shouldClearDirectMarker(resetOk: Boolean, taskFound: Boolean, modeOk: Boolean, moveOk: Boolean): Boolean =
     resetOk && (!taskFound || (modeOk && moveOk))
+
+/**
+ * Settings.Global enable_freeform_support value for the chosen projection transport.
+ * Direct (freeform) needs 1; the VD pipeline needs nothing, so VD writes the factory
+ * value 0 back. The flag is system-wide and survives an app uninstall, which is why
+ * VD mode doubles as the "return the car to factory state" switch.
+ */
+internal fun freeformFlagValue(directEnabled: Boolean): Int = if (directEnabled) 1 else 0

@@ -862,9 +862,14 @@ private fun DisplaySection() {
     var autoContainer by remember {
         mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, true))
     }
-    val rebootPending = remember {
-        prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false)
+    var rebootPending by remember {
+        mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false))
     }
+    var directProjection by remember {
+        mutableStateOf(ClusterProjectionManager.isDirectProjectionEnabled(context))
+    }
+    var extendedConfirmOpen by remember { mutableStateOf(false) }
+    var modeHelpOpen by remember { mutableStateOf(false) }
 
     SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
     Card(
@@ -900,7 +905,69 @@ private fun DisplaySection() {
                     prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
                 },
             )
-            if (rebootPending) {
+            SettingDivider()
+            // Transport selector: direct freeform (agent/HUD can see the navigator) vs the
+            // pre-3.6 VirtualDisplay pipeline. VD also returns the system freeform flag to its
+            // factory value — the fix for third-party projection apps broken by a stale flag.
+            SettingChipRow(
+                title = stringResource(R.string.settings_projection_mode_title),
+                options = listOf(
+                    stringResource(R.string.settings_projection_mode_vd),
+                    stringResource(R.string.settings_projection_mode_direct),
+                ),
+                selectedIndex = if (directProjection) 1 else 0,
+                onSelect = { index ->
+                    val direct = index == 1
+                    if (direct != directProjection) {
+                        if (direct) {
+                            // Extended transport changes a system window setting - informed
+                            // consent first: what changes, why, and how to restore factory.
+                            extendedConfirmOpen = true
+                        } else {
+                            directProjection = false
+                            rebootPending = false
+                            ClusterProjectionManager.setDirectProjectionEnabled(
+                                context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                        }
+                    }
+                },
+                onHelp = { modeHelpOpen = !modeHelpOpen },
+            )
+            if (modeHelpOpen) {
+                SettingHint(text = stringResource(R.string.settings_projection_mode_help))
+            }
+            if (extendedConfirmOpen) {
+                AlertDialog(
+                    onDismissRequest = { extendedConfirmOpen = false },
+                    containerColor = CardSurface,
+                    title = {
+                        Text(
+                            stringResource(R.string.projection_extended_confirm_title),
+                            color = TextPrimary,
+                        )
+                    },
+                    text = {
+                        Text(
+                            stringResource(R.string.projection_extended_confirm_body),
+                            color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            extendedConfirmOpen = false
+                            directProjection = true
+                            ClusterProjectionManager.setDirectProjectionEnabled(
+                                context, true, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                        }) { Text(stringResource(R.string.projection_extended_confirm_enable), color = AccentGreen) }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { extendedConfirmOpen = false }) {
+                            Text(stringResource(R.string.projection_extended_confirm_cancel), color = TextSecondary)
+                        }
+                    },
+                )
+            }
+            if (rebootPending && directProjection) {
                 SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
             }
             // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
