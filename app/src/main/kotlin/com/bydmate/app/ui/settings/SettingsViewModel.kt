@@ -1484,6 +1484,28 @@ class SettingsViewModel @Inject constructor(
                     com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)
                 appendLine("someip_gateway: " + if (gatewayPresent) "present" else "absent")
                 appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
+                // Frame/RC counters from HudPushLoop via HudController.diag().
+                val diag = hudController.diag()
+                appendLine("frames_sent=${diag?.framesSent ?: 0} last_frame_ts=${diag?.lastFrameTs ?: 0}")
+                appendLine("last_fire_rc=${diag?.lastRc ?: "n/a"} nonzero_rc_count=${diag?.nonZeroRcCount ?: 0}")
+                appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
+                appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
+                appendLine("notif_listener_enabled=${
+                    androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(appContext)
+                        .contains(appContext.packageName)
+                }")
+                // Parallel HUD apps: presence affects channel routing decisions.
+                val hudPm = appContext.packageManager
+                listOf(
+                    "com.unkwn2.yandexhud",      // donor HUD app
+                    "com.sr.openbyd",            // OpenBYD
+                    "com.byd.amapservice",       // Amap broadcast receiver (factory)
+                    "com.example.amapservice",   // Amap broadcast receiver (alt)
+                ).forEach { pkg ->
+                    val state = runCatching { hudPm.getApplicationEnabledSetting(pkg) }
+                        .getOrElse { "absent" }
+                    appendLine("pkg $pkg: $state")
+                }
             } catch (e: Exception) { appendLine("(failed to gather hud state: ${e.message})") }
 
             appendLine("--- trip counters ---")
@@ -1623,7 +1645,9 @@ class SettingsViewModel @Inject constructor(
                     // only once READ_LOGS is granted AND the app process restarted - the daemon
                     // runs under the shell uid), guidance feed transitions, grant self-heal.
                     "bydmate_helper:*", "HudIconLoader:*",
-                    "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*"
+                    "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
+                    // Amap-channel wave: notification lane + parser tags.
+                    "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*"
                 ))
 
                 // Background thread to pipe logcat to file with size limit.

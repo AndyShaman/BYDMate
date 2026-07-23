@@ -59,7 +59,9 @@ object NavGuidanceParser {
         // A numbered exit (1..10) is a sufficient roundabout signal even when the balloon
         // desc says "Поверните направо" (Yandex does that on small roundabouts).
         val exitNum = raw.exitNumber?.let { Regex("""\d+""").find(it)?.value }?.toIntOrNull()
-        if (exitNum != null && exitNum in 1..10) return NavManeuverCodes.GAODE_ROUNDABOUT_EXIT
+        // AutoNavi CCW_N_EXIT = 24+N (right-hand traffic); flat 24 only when the
+        // exit number is missing or out of the 1..10 icon range.
+        if (exitNum != null) return if (exitNum in 1..10) NavManeuverCodes.GAODE_ROUNDABOUT_EXIT + exitNum else NavManeuverCodes.GAODE_ROUNDABOUT_EXIT
         return NavManeuverCodes.fromA11yDescription(raw.maneuverDesc)
     }
 

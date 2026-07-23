@@ -32,6 +32,15 @@ class HudIconLoaderTest {
         assertTrue(png.size in 100..20_000)
     }
 
+    @Test fun `roundabout per-exit icons resolve for all 10 exits`() {
+        // Assets 0x19.png (25) .. 0x22.png (34) ship with the donor icon pack.
+        for (exitN in 1..10) {
+            val gaode = 24 + exitN
+            assertNotNull("missing icon for roundabout exit gaode=$gaode (0x${gaode.toString(16)}.png)",
+                HudIconLoader.iconFor(gaode))
+        }
+    }
+
     @Test fun `unknown code returns null`() {
         assertNull(HudIconLoader.iconFor(0))
         assertNull(HudIconLoader.iconFor(999))

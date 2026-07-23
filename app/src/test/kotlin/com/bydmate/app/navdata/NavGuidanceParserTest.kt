@@ -32,8 +32,19 @@ class NavGuidanceParserTest {
     }
 
     @Test fun `exit number forces roundabout exit`() {
+        // Exit 2 -> per-exit code 26 (24+2); flat 24 only when exit number is absent or out of range.
         val d = NavGuidanceParser.parse(raw(maneuverDesc = "Поверните направо", exitNumber = "2", distance = "300", distanceUnit = "м"))!!
-        assertEquals(24, d.maneuverGaode)
+        assertEquals(26, d.maneuverGaode)
+    }
+
+    @Test fun `exit number per-exit codes and out-of-range fallback`() {
+        fun parse(exitNum: String?) = NavGuidanceParser.parse(
+            raw(maneuverDesc = "Выезд с кольца", exitNumber = exitNum, distance = "100", distanceUnit = "м")
+        )!!.maneuverGaode
+        assertEquals(25, parse("1"))
+        assertEquals(34, parse("10"))
+        assertEquals(24, parse("11"))   // out of 1..10 icon range falls back to flat 24
+        assertEquals(24, parse(null))   // absent exit number uses maneuverDesc ("Выезд с кольца" -> 24)
     }
 
     @Test fun `eta minutes and hours parsed`() {

@@ -50,7 +50,17 @@ class NavManeuverCodesTest {
         assertEquals(13, gaode("Кольцевое движение"))
         assertEquals(13, gaode("Въезжайте на кольцо"))
         assertEquals(24, gaode("Выезд с кольца"))
-        assertEquals(24, gaode("2-й съезд"))
+        // Per-exit codes: CCW_N_EXIT = 24+N for N in 1..10.
+        assertEquals(26, gaode("2-й съезд"))
+    }
+
+    @Test fun `roundabout per-exit codes cover 1 through 10`() {
+        assertEquals(25, gaode("1-й съезд"))
+        assertEquals(26, gaode("2-й съезд"))
+        assertEquals(34, gaode("10-й съезд"))
+        // Exit number absent or out of range falls back to flat 24.
+        assertEquals(24, gaode("Выезд с кольца"))
+        assertEquals(24, gaode("11-й съезд"))
     }
 
     @Test fun `arrive ferry tunnel waypoint`() {

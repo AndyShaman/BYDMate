@@ -13,9 +13,10 @@ class HudPushLoopTest {
 
     private class FakeSink : HudEventSink {
         val events = mutableListOf<Pair<Long, ByteArray>>()
+        var nextRc: Int = 0
         override fun fireEvent(topic: Long, payload: ByteArray): Int {
             events.add(topic to payload)
-            return 0
+            return nextRc
         }
     }
 
@@ -156,5 +157,22 @@ class HudPushLoopTest {
         )
         val loop = HudPushLoop(FakeSink(), nowMsProvider = { 1000L })
         assertEquals("ул. Ленина", loop.runningLine(NavGuidanceHub.snapshot(1000L)))
+    }
+
+    @Test fun `tick_updates_diag_counters_and_records_nonzero_rc`() {
+        activeHub(nowMs = 1000L)
+        val sink = FakeSink()
+        val loop = HudPushLoop(sink, nowMsProvider = { 1000L })
+        loop.tick(wasActive = false)
+        assertEquals(1L, loop.framesSent)
+        assertTrue(loop.lastFrameTs > 0L)
+        assertEquals(0, loop.lastRc)
+        assertEquals(0L, loop.nonZeroRcCount)
+
+        sink.nextRc = -5
+        loop.tick(wasActive = true)
+        assertEquals(2L, loop.framesSent)
+        assertEquals(-5, loop.lastRc)
+        assertEquals(1L, loop.nonZeroRcCount)
     }
 }

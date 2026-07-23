@@ -141,6 +141,12 @@ class HudProtobufBuilderTest {
         assertEquals(1, HudProtobufBuilder.gaodeToF28(0))
     }
 
+    @Test fun `gaodeToF28 suppresses arrow for roundabout family`() {
+        for (code in 24..34) {
+            assertEquals("gaode=$code", 0, HudProtobufBuilder.gaodeToF28(code))
+        }
+    }
+
     @Test fun `oversize payload drops speed sign but never maneuver icon`() {
         val bigIcon = ByteArray(40_000) { 1 }
         val bigSign = ByteArray(40_000) { 2 }
