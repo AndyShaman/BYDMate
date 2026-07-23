@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.8.1] - 2026-07-23
+
 ### Исправления
 - Индикация разбаланса ячеек учитывает заряд: предупреждения только в диагностической зоне SOC 20-80% (жёлтым от 50 мВ, красным от 90 мВ, по методике проверки BYD). У полного заряда большой разброс ячеек - нормальная физика LFP, поэтому «Здоровье батареи», карточка батареи на главной и инсайты больше не пугают красным (#113)
 
@@ -788,7 +790,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.8...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.8.1...HEAD
+[3.8.1]: https://github.com/AndyShaman/BYDMate/compare/v3.8...v3.8.1
 [3.8]: https://github.com/AndyShaman/BYDMate/compare/v3.7...v3.8
 [3.7]: https://github.com/AndyShaman/BYDMate/compare/v3.6.3...v3.7
 [3.6.3]: https://github.com/AndyShaman/BYDMate/compare/v3.6.2...v3.6.3
