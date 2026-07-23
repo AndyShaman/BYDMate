@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.8] - 2026-07-23
+
 ### Новое
 - Счётчики TRIP 1 и TRIP 2 на главной, как в машине: пробег, расход в кВт·ч (включая стоянку), время в пути и стоимость с момента сброса; сброс долгим нажатием, подробности по касанию. Карточка «Стоянка» убрана: её данные теперь внутри счётчиков
 - Примечание: после обновления поверх идущей поездки счётчики Trip начинают живой отсчёт со следующей поездки (одноразовый эффект первой сессии)
@@ -783,7 +785,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.7...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.8...HEAD
+[3.8]: https://github.com/AndyShaman/BYDMate/compare/v3.7...v3.8
 [3.7]: https://github.com/AndyShaman/BYDMate/compare/v3.6.3...v3.7
 [3.6.3]: https://github.com/AndyShaman/BYDMate/compare/v3.6.2...v3.6.3
 [3.6.2]: https://github.com/AndyShaman/BYDMate/compare/v3.6.1...v3.6.2
