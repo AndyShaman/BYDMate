@@ -184,6 +184,33 @@ class LocalInsightEngineTest {
     }
 
     @Test
+    fun `cell delta at 90 mV and above produces imbalance insight`() {
+        for (mv in listOf(90.0, 95.0)) {
+            val stats = baseStats(consumptionChangePct = 2.0).copy(cellDeltaMv = mv)
+            val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+            assertTrue("critical title expected at $mv mV", result.title.contains("разброс", ignoreCase = true))
+        }
+    }
+
+    @Test
+    fun `cell delta in warning band gets bullet but not critical title`() {
+        // 60 mV was critical under the old 50 mV threshold (#113)
+        val stats = baseStats(consumptionChangePct = 2.0).copy(cellDeltaMv = 60.0)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("разброс", ignoreCase = true))
+        assertTrue(result.insights.any { it.contains("банок") })
+    }
+
+    @Test
+    fun `cell delta below 50 mV raises no text at all`() {
+        // 40 mV fell into the old 31-50 bullet band; healthy under the new spec (#113)
+        val stats = baseStats(consumptionChangePct = 2.0).copy(cellDeltaMv = 40.0)
+        val result = LocalInsightEngine.generate(stats, res("ru"), 7)
+        assertTrue(!result.title.contains("разброс", ignoreCase = true))
+        assertTrue(result.insights.none { it.contains("банок") })
+    }
+
+    @Test
     fun `mileage bullet threshold scales with period`() {
         val stats = baseStats(consumptionChangePct = 2.0).copy(recentKm = 300.0)
         val weekly = LocalInsightEngine.generate(stats, res("ru"), 7)

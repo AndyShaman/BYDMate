@@ -57,7 +57,7 @@ object LocalInsightEngine {
                     ),
                 )
             }
-            stats.cellDeltaMv != null && stats.cellDeltaMv > 50.0 -> {
+            stats.cellDeltaMv != null && stats.cellDeltaMv >= 90.0 -> {
                 candidates += Candidate(
                     priority = 85,
                     title = res.getString(R.string.local_insight_cell_critical_title),
@@ -226,7 +226,10 @@ object LocalInsightEngine {
             )
         }
 
-        if (stats.cellDeltaMv != null && stats.cellDeltaMv in 31.0..50.0) {
+        // Warning band 50-89 mV matches the yellow zone of the SOC-gated thresholds
+        // (#113); below 50 mV the delta is healthy and must not raise any warning
+        // (the positive cell_ok bullet at very low deltas stays).
+        if (stats.cellDeltaMv != null && stats.cellDeltaMv >= 50.0 && stats.cellDeltaMv < 90.0) {
             bullets += InsightBullet(
                 priority = 48,
                 text = res.getString(R.string.local_insight_cell_delta, stats.cellDeltaMv),

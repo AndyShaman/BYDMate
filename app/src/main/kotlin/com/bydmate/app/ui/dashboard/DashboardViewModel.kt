@@ -153,7 +153,7 @@ class DashboardViewModel @Inject constructor(
                 effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
                     insight.tone,
                     com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
-                    com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
+                    com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin, current.soc)
                 ),
                 insightDate = insightsManager.getCachedDate(days)
             ) }
@@ -226,7 +226,8 @@ class DashboardViewModel @Inject constructor(
                             ),
                             com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(
                                 data?.maxCellVoltage ?: current.cellVoltageMax,
-                                data?.minCellVoltage ?: current.cellVoltageMin
+                                data?.minCellVoltage ?: current.cellVoltageMin,
+                                data?.soc ?: current.soc
                             )
                         ),
                         estimatedRangeKm = rangeKm ?: current.estimatedRangeKm,
@@ -376,7 +377,7 @@ class DashboardViewModel @Inject constructor(
                     effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
                         cached.tone,
                         com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
-                        com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
+                        com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin, current.soc)
                     ),
                     insightDate = insightsManager.getCachedDate()
                 ) }
@@ -520,12 +521,18 @@ class DashboardViewModel @Inject constructor(
     ): String {
         val maxV = data?.maxCellVoltage ?: current.cellVoltageMax
         val minV = data?.minCellVoltage ?: current.cellVoltageMin
-        val delta = if (maxV != null && minV != null) maxV - minV else null
+        val soc = data?.soc ?: current.soc
+        val hasCellData = maxV != null && minV != null
+        // Delta is diagnostic only on the LFP plateau (SOC 20-80%, BYD's check band);
+        // near full charge cells naturally diverge, so outside the band it must not
+        // paint the card red (#113). Out-of-band is "gated", not "missing data".
+        val delta = if (hasCellData && soc != null && soc in 20..80)
+            Math.round((maxV!! - minV!!) * 1000.0) / 1000.0 else null
         val temp = data?.avgBatTemp ?: current.avgBatTemp
-        if (delta == null && temp == null) return current.batteryHealthStatus
+        if (!hasCellData && temp == null) return current.batteryHealthStatus
         return when {
-            (delta != null && delta > 0.10) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
-            (delta != null && delta > 0.05) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
+            (delta != null && delta >= 0.090) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
+            (delta != null && delta >= 0.050) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
             else -> "ok"
         }
     }

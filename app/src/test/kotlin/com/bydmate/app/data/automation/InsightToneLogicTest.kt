@@ -42,18 +42,26 @@ class InsightToneLogicTest {
     }
 
     @Test fun cellDelta_good_at_or_below_003() {
-        assertEquals("good", InsightToneLogic.cellDeltaTone(null, null))
-        assertEquals("good", InsightToneLogic.cellDeltaTone(3.35, 3.34))
-        assertEquals("good", InsightToneLogic.cellDeltaTone(3.37, 3.34))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(null, null, 50))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.35, 3.34, 50))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.384, 3.34, 50)) // 44 mV
     }
 
-    @Test fun cellDelta_warning_003_to_005() {
-        assertEquals("warning", InsightToneLogic.cellDeltaTone(3.38, 3.34))
-        assertEquals("warning", InsightToneLogic.cellDeltaTone(3.39, 3.34))
+    @Test fun cellDelta_warning_50_to_89mv_in_band() {
+        assertEquals("warning", InsightToneLogic.cellDeltaTone(3.39, 3.34, 50))  // 50 mV
+        assertEquals("warning", InsightToneLogic.cellDeltaTone(3.429, 3.34, 50)) // 89 mV
     }
 
-    @Test fun cellDelta_critical_above_005() {
-        assertEquals("critical", InsightToneLogic.cellDeltaTone(3.40, 3.34))
+    @Test fun cellDelta_critical_at_90mv_in_band() {
+        assertEquals("critical", InsightToneLogic.cellDeltaTone(3.43, 3.34, 50)) // 90 mV
+    }
+
+    @Test fun cellDelta_neutral_outside_soc_band() {
+        // 350 mV at full charge is normal LFP top-of-charge divergence (#113)
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.69, 3.34, 100))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.69, 3.34, 19))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.69, 3.34, 81))
+        assertEquals("good", InsightToneLogic.cellDeltaTone(3.69, 3.34, null))
     }
 
     @Test fun worst_picks_highest_severity() {
