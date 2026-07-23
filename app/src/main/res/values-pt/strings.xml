@@ -445,15 +445,22 @@
     <string name="dashboard_unit_km">km</string>
     <string name="dashboard_unit_kwh">kWh</string>
     <string name="dashboard_range_label">autonomia estimada</string>
-    <string name="dashboard_idle_time_min">%1$.0f min</string>
-    <string name="dashboard_idle_time_hours">%1$.1f h</string>
-    <string name="dashboard_idle_drain_parking_label">estacionado</string>
-    <string name="dashboard_idle_drain_title">Consumo inativo</string>
-    <string name="dashboard_idle_drain_rate_label">Taxa</string>
-    <string name="dashboard_idle_drain_rate_value">%1$.2f kWh/h</string>
-    <string name="dashboard_idle_drain_week_label">7 dias</string>
-    <string name="dashboard_idle_drain_week_value">%1$.1f kWh</string>
-    <string name="dashboard_idle_drain_avg_day_label">Média por dia</string>
+    <!-- Trip 1/2 dashboard counters -->
+    <string name="dashboard_trip_since">desde %1$s · %2$d d</string>
+    <string name="dashboard_trip_since_all_time">todo o período</string>
+    <string name="dashboard_trip_count_label">Viagens</string>
+    <string name="dashboard_trip_driving_time_label">Tempo em movimento</string>
+    <string name="dashboard_trip_time_hours_min">%1$d h %2$d min</string>
+    <string name="dashboard_trip_time_min">%1$d min</string>
+    <string name="dashboard_trip_kwh_total_label">Consumo total</string>
+    <string name="dashboard_trip_kwh_driving_label">em movimento</string>
+    <string name="dashboard_trip_kwh_idle_label">estacionado</string>
+    <string name="dashboard_trip_kwh_value">%1$s kWh</string>
+    <string name="dashboard_trip_avg_label">Consumo médio</string>
+    <string name="dashboard_trip_avg_value">%1$s kWh/100km</string>
+    <string name="dashboard_trip_cost_label">Custo</string>
+    <string name="dashboard_trip_reset_hint">Toque longo no botão TRIP para zerar o contador</string>
+
     <string name="dashboard_battery_temp_label">temp. bateria</string>
     <string name="dashboard_battery_voltage_label">Sistema 12V</string>
     <string name="dashboard_insight_no_data">Dados insuficientes para analisar</string>

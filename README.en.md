@@ -65,7 +65,7 @@ A major update. BYDMate moved to its own data stack and learned to mirror naviga
 | **GPS** | Trip logging | GPS routes, distance, speed |
 | **Charge** | Charges | Automatic AC/DC logging, period and lifetime stats, manual add and edit |
 | **AI** | Insights | Driving analysis: on-device rules (default) or LLM via OpenRouter |
-| **Idle** | Idle drain | Idle consumption from energydata |
+| **TRIP** | TRIP 1 / TRIP 2 counters | Distance, kWh (including parked drain), driving time, and cost since last reset; long-press to reset, tap for details |
 | **Bat** | Battery health | Temperature, SoH (on Leopard 3), cell balance, 12V |
 | **Map** | Route map | osmdroid (OpenStreetMap) inside trip detail |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle commands |
@@ -84,7 +84,7 @@ A major update. BYDMate moved to its own data stack and learned to mirror naviga
 
 Around the SOC ring there are four floating-widget-style fields: trip duration, odometer, cabin temperature on top; current trip distance, estimated range, current trip consumption with a trend arrow on the bottom. The colors and trend logic match the floating widget, so the information reads the same on the home screen and over other apps.
 
-Below the ring: AI insight, a small battery health card (SoH on Leopard 3, temperature, 12V), idle drain, recent trips, period filter.
+Below the ring: AI insight, a small battery health card (SoH on Leopard 3, temperature, 12V), two TRIP 1 / TRIP 2 counters, recent trips, period filter. Each counter tracks distance, kWh consumption (including parked drain), driving time, and cost since last reset. Long-press a counter to reset it; tap for a details popup.
 
 ### AI Insights (expanded)
 

@@ -1486,6 +1486,28 @@ class SettingsViewModel @Inject constructor(
                 appendLine("speed_sign: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SPEED_SIGN, true)}")
             } catch (e: Exception) { appendLine("(failed to gather hud state: ${e.message})") }
 
+            appendLine("--- trip counters ---")
+            try {
+                // Live-count integrity: km/kWh only tick when liveWholeSession=true and
+                // both session baselines were captured (restore without them suppresses
+                // the live contribution until the next fresh session).
+                appendLine("live_whole_session: ${com.bydmate.app.service.TrackingService.liveWholeSession.value}")
+                appendLine("session_started_at: ${com.bydmate.app.service.TrackingService.sessionStartedAt.value ?: "null"}")
+                val sessPrefs = appContext.getSharedPreferences("bydmate_widget_session", Context.MODE_PRIVATE)
+                // Literal key names mirror SessionPersistence (private consts there).
+                appendLine("baseline_mileage_km: " + (if (sessPrefs.contains("mileage_start_km_v2_bits"))
+                    Double.fromBits(sessPrefs.getLong("mileage_start_km_v2_bits", 0L)).toString() else "absent"))
+                appendLine("baseline_elec_kwh: " + (if (sessPrefs.contains("elec_start_kwh_v2_bits"))
+                    Double.fromBits(sessPrefs.getLong("elec_start_kwh_v2_bits", 0L)).toString() else "absent"))
+                for (n in 1..2) {
+                    appendLine("trip$n: reset_ts=${settingsRepository.getString("trip${n}_reset_ts", "0")} " +
+                        "corr_km=${settingsRepository.getString("trip${n}_corr_km", "0")} " +
+                        "corr_kwh=${settingsRepository.getString("trip${n}_corr_kwh", "0")} " +
+                        "corr_ms=${settingsRepository.getString("trip${n}_corr_ms", "0")} " +
+                        "excl=${settingsRepository.getString("trip${n}_corr_excl", "0")}")
+                }
+            } catch (e: Exception) { appendLine("(failed to gather trip counter state: ${e.message})") }
+
             appendLine("--- steering key ---")
             try {
                 // Same two liveness signals TrackingService.starServiceRunning() checks:
