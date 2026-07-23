@@ -137,4 +137,18 @@ class NluParserTest {
         assertEquals("mute", vol("turn off sound", VoiceLang.EN))
         assertEquals("unmute", vol("turn on sound", VoiceLang.EN))
     }
+
+    // Seat OFF (singular): "подогрев"/"обдув" also tags an action slot (HEAT_1/VENT_1),
+    // so OFF used to fan out across both seat subsystems (heat-off + vent-off + heat-1
+    // = 3 commands -> Unrecognized -> LLM). With an explicit OFF verb the noun must
+    // narrow the seat family instead. In-car reports: "выключить подогрев сидений не работает".
+    @Test fun seat_heat_off_singular() = assertEquals("主驾座椅加热关闭", cmd("выключи подогрев сиденья"))
+    @Test fun seat_vent_off_singular() = assertEquals("主驾座椅通风关闭", cmd("выключи обдув сиденья"))
+    @Test fun seat_vent_off_ventilation_word() = assertEquals("主驾座椅通风关闭", cmd("выключи вентиляцию сиденья"))
+    @Test fun seat_heat_off_passenger() = assertEquals("副驾座椅加热关闭", cmd("выключи подогрев сиденья пассажира"))
+    @Test fun seat_heat_off_otklyuchi() = assertEquals("主驾座椅加热关闭", cmd("отключи подогрев сиденья"))
+    @Test fun seat_heat_off_en() = assertEquals("主驾座椅加热关闭", cmd("turn off seat heating", VoiceLang.EN))
+    // Regression guards: ON path and mirror heat must not change.
+    @Test fun seat_heat_on_still_level1() = assertEquals("主驾座椅加热1档", cmd("включи подогрев сиденья"))
+    @Test fun mirror_heat_off_still_resolves() = assertEquals("关闭后视镜加热", cmd("выключи подогрев зеркал"))
 }

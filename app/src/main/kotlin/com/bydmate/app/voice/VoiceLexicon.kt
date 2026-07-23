@@ -14,10 +14,10 @@ object VoiceLexicon {
         ActionSlot.OPEN to listOf("открой", "открыть", "открывай", "опусти", "опустить"),
         ActionSlot.CLOSE to listOf("закрой", "закрыть", "закрывай", "подними", "поднять"),
         ActionSlot.ON to listOf("включи", "включить", "вкл", "запусти", "заблокируй", "запри"),
-        ActionSlot.OFF to listOf("выключи", "выключить", "выкл", "отключи", "разблокируй", "отопри"),
+        ActionSlot.OFF to listOf("выключи", "выключить", "выкл", "отключи", "отключить", "разблокируй", "отопри"),
         ActionSlot.SET to listOf("поставь", "установи", "сделай", "выстави"),
         ActionSlot.VENT to listOf("проветри", "проветрить", "проветривание"),
-        ActionSlot.HEAT_1 to listOf("подогрев"),  // level disambiguated by number/strength below
+        ActionSlot.HEAT_1 to listOf("подогрев", "обогрев"),  // level disambiguated by number/strength below
         ActionSlot.HEAT_2 to emptyList(),
         ActionSlot.VENT_1 to listOf("вентиляция", "обдув"),
         ActionSlot.VENT_2 to emptyList(),

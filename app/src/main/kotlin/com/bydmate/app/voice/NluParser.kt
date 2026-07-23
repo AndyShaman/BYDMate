@@ -1,7 +1,12 @@
 package com.bydmate.app.voice
 
 sealed interface ParseResult {
-    data class Command(val command: String) : ParseResult
+    /** One utterance can resolve to several dispatchable commands (plural seats fan
+     *  out per side). Single-command callers keep using [command]. */
+    data class Command(val commands: List<String>) : ParseResult {
+        constructor(command: String) : this(listOf(command))
+        val command: String? get() = commands.singleOrNull()
+    }
     data class RelativeTemp(val sign: Int) : ParseResult
     data class Volume(val payload: String) : ParseResult
     data object Unrecognized : ParseResult
@@ -49,16 +54,32 @@ object NluParser {
         if (effectiveActions.isEmpty() || devices.isEmpty()) return ParseResult.Unrecognized
 
         val devices2 = disambiguateAirflow(devices, stems, lang)
+        val (actions2, devices3) = narrowSeatOff(effectiveActions, devices2)
+        val leveledActions = upgradeSeatLevel(actions2, devices3, number)
 
-        // "все сиденья"/"сидений" (plural) targets BOTH seats, but the catalog emits one
-        // command per (action, device): a fast-path would actuate the driver seat only and
-        // still claim success. Hand to the agent, which fans out per seat (issue #98).
-        val seatPresent = devices2.any { it.name.startsWith("SEAT") }
+        // "все сиденья"/"сидений" (plural) targets BOTH seats. The catalog emits one
+        // command per (action, device), so fan out per side; each side must resolve to
+        // exactly ONE command, otherwise the utterance is ambiguous and goes to the
+        // agent (issue #98). EN has no plural detection ("seats" stems to "seat"):
+        // it reaches this branch only via the ALL qualifier ("all seats").
+        val seatPresent = devices3.any { it.name.startsWith("SEAT") }
         val pluralSeat = VoiceStemmer.stem("сидения") in stems
-        if (seatPresent && (Qual.ALL in qualifiers || pluralSeat)) return ParseResult.Unrecognized
+        if (seatPresent && (Qual.ALL in qualifiers || pluralSeat)) {
+            val perSide = listOf(this::driverSeat, this::passengerSeat).map { side ->
+                val sideDevices = devices3.mapTo(LinkedHashSet()) {
+                    if (it.name.startsWith("SEAT")) side(it) else it
+                }
+                val sideResolved = LinkedHashSet<String>()
+                for (a in leveledActions) for (d in sideDevices) {
+                    VoiceCatalog.resolve(a, d, number)?.let { sideResolved.add(it) }
+                }
+                sideResolved
+            }
+            return if (perSide.all { it.size == 1 }) ParseResult.Command(perSide.map { it.first() })
+            else ParseResult.Unrecognized
+        }
 
-        val leveledActions = upgradeSeatLevel(effectiveActions, devices2, number)
-        val refinedDevices = refineDevices(devices2, qualifiers)
+        val refinedDevices = refineDevices(devices3, qualifiers)
 
         val resolved = LinkedHashSet<String>()
         for (a in leveledActions) for (d in refinedDevices) {
@@ -177,6 +198,28 @@ object NluParser {
             windshield -> devices - DeviceSlot.AC_FLOW                          // defrost wins
             else -> devices - DeviceSlot.DEFROST_FRONT                          // climate airflow default
         }
+    }
+
+    /** "выключи подогрев сиденья": the noun "подогрев"/"обдув" tags a second action
+     *  slot (HEAT_1/VENT_1), so an explicit OFF fans out across BOTH seat subsystems
+     *  (heat-off + vent-off + heat-1 = 3 commands -> Unrecognized). With OFF present
+     *  the noun is a subsystem selector, not an action: keep only the named seat
+     *  family and drop the noun slot. Non-seat devices pass through untouched
+     *  ("выключи подогрев зеркал" already resolves via OFF+MIRROR_HEAT). */
+    private fun narrowSeatOff(
+        actions: Set<ActionSlot>,
+        devices: Set<DeviceSlot>,
+    ): Pair<Set<ActionSlot>, Set<DeviceSlot>> {
+        if (ActionSlot.OFF !in actions) return actions to devices
+        if (devices.none { it.name.startsWith("SEAT") }) return actions to devices
+        val heatNoun = ActionSlot.HEAT_1 in actions
+        val ventNoun = ActionSlot.VENT_1 in actions
+        if (heatNoun == ventNoun) return actions to devices  // neither or both: nothing to narrow
+        val family = if (heatNoun) "HEAT" else "VENT"
+        val narrowedDevices = devices.filterTo(LinkedHashSet()) {
+            !it.name.startsWith("SEAT") || it.name.endsWith(family)
+        }
+        return (actions - ActionSlot.HEAT_1 - ActionSlot.VENT_1) to narrowedDevices
     }
 
     private fun driverSeat(d: DeviceSlot) = when (d) {

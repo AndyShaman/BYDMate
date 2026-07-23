@@ -455,7 +455,7 @@ class VoiceController @Inject constructor(
      *  of partials and for routing the final. */
     private suspend fun resolve(text: String, lang: VoiceLang): Resolution? =
         when (val r = NluParser.parse(text, lang)) {
-            is ParseResult.Command -> Resolution.Cmd(r.command)
+            is ParseResult.Command -> Resolution.Cmd(r.commands)
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
             ParseResult.Unrecognized -> automationResolver.match(text)?.let { Resolution.Auto(it) }
@@ -465,7 +465,7 @@ class VoiceController @Inject constructor(
      *  legacy one-shot path (no per-utterance decode timing there). */
     private suspend fun apply(res: Resolution, transcript: String, decodeMs: Long? = null) {
         when (res) {
-            is Resolution.Cmd -> execute(res.command, transcript, decodeMs)
+            is Resolution.Cmd -> execute(res.commands, transcript, decodeMs)
             is Resolution.RelTemp -> dispatchRelativeTemp(res.sign, transcript, decodeMs)
             is Resolution.Vol -> dispatchVolume(res.payload, transcript, decodeMs)
             is Resolution.Auto -> fireAutomation(res.ruleId, transcript, decodeMs)
@@ -503,20 +503,22 @@ class VoiceController @Inject constructor(
         clearJob?.cancel()
     }
 
-    private suspend fun execute(command: String, transcript: String, decodeMs: Long? = null) {
+    private suspend fun execute(commands: List<String>, transcript: String, decodeMs: Long? = null) {
         val snapshot = gate.vehicleSnapshot()
+        val cmdLog = commands.joinToString("+")
         // Fail CLOSED on unknown speed for window- and sunroof-open commands (both speed-gated
         // predicates after the T12 split): ActionDispatcher.getBlockReason() returns null
         // (no block) when data == null, so without this guard a voice "открой окна"/"открой люк"
         // at unknown speed would dispatch unchecked. Sunshade needs no speed and is not held.
         // Automations keep the fail-soft data==null semantics untouched.
-        if (snapshot == null && (ActionDispatcher.isWindowOpenCommand(command) ||
-                ActionDispatcher.isSunroofOpenCommand(command))) {
+        if (snapshot == null && commands.any {
+                ActionDispatcher.isWindowOpenCommand(it) || ActionDispatcher.isSunroofOpenCommand(it)
+            }) {
             earcon.fail()
             val reason = "Скорость неизвестна"
             _state.value = VoiceUiState.Blocked(reason)
             record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
-                "NLU blocked (speed unknown): cmd=$command transcript=\"$transcript\"")
+                "NLU blocked (speed unknown): cmd=$cmdLog transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             return
         }
@@ -524,26 +526,34 @@ class VoiceController @Inject constructor(
         // (>80 km/h window-open block, frunk standstill block) apply to voice
         // commands exactly as they do to automations (voice-agent spec invariant).
         // DispatchResult.reason holds the error string (not .message — real field name is `reason`).
-        val result = actionDispatcher.dispatch(
-            ActionDef(command = command, displayName = command, kind = "param"),
-            data = snapshot
-        )
-        if (result.success) {
+        // Plural seats resolve to several commands: dispatch in order, stop at the first
+        // failure so the announce never claims success for a half-done utterance (#98).
+        var failReason: String? = null
+        for (command in commands) {
+            val result = actionDispatcher.dispatch(
+                ActionDef(command = command, displayName = command, kind = "param"),
+                data = snapshot
+            )
+            if (!result.success) {
+                failReason = result.reason ?: transcript
+                break
+            }
+        }
+        if (failReason == null) {
             earcon.ok()
             _state.value = VoiceUiState.Done(transcript)
             record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
-                "NLU dispatched: cmd=$command transcript=\"$transcript\"")
+                "NLU dispatched: cmd=$cmdLog transcript=\"$transcript\"")
             announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
             // Fire-and-forget: the note must never make the voice announce path wait on the
             // agent's mutex, which may be held by a concurrent ask().
             scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
         } else {
-            val reason = result.reason ?: transcript
             earcon.fail()
-            _state.value = VoiceUiState.Blocked(reason)
-            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
-                "NLU blocked: cmd=$command transcript=\"$transcript\" reason=$reason")
-            announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
+            _state.value = VoiceUiState.Blocked(failReason)
+            record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, failReason,
+                "NLU blocked: cmd=$cmdLog transcript=\"$transcript\" reason=$failReason")
+            announce("Голос", "Услышал: «$transcript». Отказ: $failReason", "Не получилось")
         }
     }
 
@@ -561,7 +571,7 @@ class VoiceController @Inject constructor(
             return
         }
         val target = (acTemp + sign).coerceIn(16, 30)
-        execute("设置温度$target", transcript, decodeMs)
+        execute(listOf("设置温度$target"), transcript, decodeMs)
     }
 
     /** Media volume is not speed-gated (not a window op). Dispatch as a
@@ -762,7 +772,7 @@ class VoiceController @Inject constructor(
     /** A resolved, actionable command. Decoupled from ParseResult/automation so a transcript can be
      *  resolved once (side-effect-free) and applied later — the basis of early-fire vs final routing. */
     private sealed interface Resolution {
-        data class Cmd(val command: String) : Resolution
+        data class Cmd(val commands: List<String>) : Resolution
         data class RelTemp(val sign: Int) : Resolution
         data class Vol(val payload: String) : Resolution
         data class Auto(val ruleId: Long) : Resolution
