@@ -1,5 +1,6 @@
 package com.bydmate.app.hud
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -73,6 +74,10 @@ class HudAmapBroadcaster(private val context: Context) {
         if (capable && guiding) sendStop()
     }
 
+    // Donor flag value 0x11000000 = FLAG_RECEIVER_FOREGROUND | 0x01000000 (hidden
+    // framework FLAG_RECEIVER_INCLUDE_BACKGROUND, no public constant) — must stay a
+    // raw literal to match OpenBYD's broadcast byte-for-byte.
+    @SuppressLint("WrongConstant")
     private fun buildGuideIntent(s: NavGuidanceHub.Snapshot): Intent {
         val routeRemDis = if (s.totalDistMeters > 0) s.totalDistMeters else -1
         val routeRemTime = if (s.etaSeconds > 0) s.etaSeconds else -1
@@ -113,10 +118,11 @@ class HudAmapBroadcaster(private val context: Context) {
             intent.putExtra("ROUTE_REMAIN_TIME_AUTO", timeStr)
             intent.putExtra("ROUTE_REMAIN_TIME_STRING", timeStr)
         }
-        intent.addFlags(285212672)  // 0x11000000: RECEIVER_FOREGROUND | INCLUDE_STOPPED_PACKAGES
+        intent.addFlags(285212672)  // 0x11000000: RECEIVER_FOREGROUND | hidden RECEIVER_INCLUDE_BACKGROUND
         return intent
     }
 
+    @SuppressLint("WrongConstant")  // same donor flag literal as buildGuideIntent
     private fun sendStop() {
         guiding = false
         try {
