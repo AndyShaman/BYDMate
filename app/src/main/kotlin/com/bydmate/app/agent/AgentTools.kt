@@ -31,6 +31,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.domain.calculator.RangeEstimate
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.media.NaviRouteHolder
@@ -390,7 +391,8 @@ class AgentTools @Inject constructor(
                 "лимит скорости speed_limit и номер съезда exit_number (только когда Навигатор " +
                 "на экране), заряд soc и запас хода range_km. Отвечай по этим полям на вопросы " +
                 "сколько ехать, какой поворот, когда приедем, хватит ли заряда. Если поля нет " +
-                "в ответе, этих данных сейчас нет - скажи честно.",
+                "в ответе, этих данных сейчас нет - скажи честно." +
+                " Поле energy_estimate: сколько кВтч уйдёт до конца маршрута и сколько процентов батареи останется на финише.",
             JSONObject(), emptyList(),
         ))
         put(tool(
@@ -724,15 +726,26 @@ class AgentTools @Inject constructor(
                 ?.firstOrNull { PlaceGeometry.isInside(lat, lon, it.lat, it.lon, it.radiusM) }
                 ?.let { p -> o.put("place", p.name) }
         }
+        var soh: Double? = null
         runCatchingCancellable { batteryStateRepository.refresh() }.getOrNull()?.let { b ->
+            soh = b.sohPercent?.toDouble()
             // Float -> Double: Android org.json has no put(String, float) overload.
-            putIf("soh_percent", b.sohPercent?.toDouble())
+            putIf("soh_percent", soh)
             putIf("lifetime_km", b.lifetimeKm?.toDouble())
             putIf("lifetime_kwh", b.lifetimeKwh?.toDouble())
         }
-        runCatchingCancellable { rangeCalculator.estimate(d.soc, d.totalElecConsumption) }.getOrNull()?.let {
-            o.put("range_km", it.roundToInt())
-        }
+        runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption) }
+            .getOrNull()?.let { est ->
+                o.put("range_km", est.rangeKm.roundToInt())
+                o.put("battery_capacity_kwh", est.capacityKwh)
+                o.put("battery_remaining_kwh", (est.remainingKwh * 10).roundToInt() / 10.0)
+                o.put("avg_consumption_kwh_100km", (est.avgKwhPer100 * 10).roundToInt() / 10.0)
+                val s = soh
+                if (s != null && s in com.bydmate.app.data.charging.AutoserviceChargingDetector.SOH_SANITY_MIN..100.0) {
+                    o.put("battery_effective_capacity_kwh",
+                        ((est.capacityKwh * s / 100.0) * 10).roundToInt() / 10.0)
+                }
+            }
         return o.toString()
     }
 
@@ -1377,10 +1390,35 @@ class AgentTools @Inject constructor(
                     put("remaining_time", formatEtaSeconds(hub.etaSeconds))
                 put("hub_age_sec", (nowMs() - hub.lastUpdateMs) / 1000L)
             }
-            gate.vehicleSnapshot()?.let { d ->
+            // Capture SOC, range, and detailed estimate for energy projection.
+            val routeEst: RangeEstimate? = gate.vehicleSnapshot()?.let { d ->
                 put("soc", d.soc)
-                runCatchingCancellable { rangeCalculator.estimate(d.soc, d.totalElecConsumption) }
-                    .getOrNull()?.let { put("range_km", it.roundToInt()) }
+                val e = runCatchingCancellable {
+                    rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption)
+                }.getOrNull()
+                e?.let { put("range_km", it.rangeKm.roundToInt()) }
+                e
+            }
+            // Remaining route length: hub numeric first, else the Navigator screen string.
+            val remainingRouteKm: Double? =
+                if (hub.active && hub.totalDistMeters > 0) hub.totalDistMeters / 1000.0
+                else parseDistanceKm(screen?.remainingDistance)
+            // Guard capacityKwh > 0 so the division for soc_at_arrival never produces NaN.
+            if (routeEst != null && routeEst.capacityKwh > 0 && routeEst.avgKwhPer100 > 0
+                && remainingRouteKm != null && remainingRouteKm > 0) {
+                val needed = remainingRouteKm * routeEst.avgKwhPer100 / 100.0
+                val socAtArrival = (routeEst.remainingKwh - needed) / routeEst.capacityKwh * 100.0
+                put("energy_estimate", org.json.JSONObject().apply {
+                    put("remaining_km", (remainingRouteKm * 10).roundToInt() / 10.0)
+                    put("avg_consumption_kwh_100km", (routeEst.avgKwhPer100 * 10).roundToInt() / 10.0)
+                    put("energy_needed_kwh", (needed * 10).roundToInt() / 10.0)
+                    put("battery_now_kwh", (routeEst.remainingKwh * 10).roundToInt() / 10.0)
+                    put("soc_at_arrival_percent", socAtArrival.roundToInt().coerceIn(0, 100))
+                    put("enough", routeEst.remainingKwh >= needed)
+                    if (socAtArrival < 10.0) put("warning",
+                        "на финише останется меньше 10 процентов батареи, предупреди водителя")
+                    put("note", "расход средний по данным приложения, оценка примерная")
+                })
             }
             // Screen values are live; notification age matters only when it is the source.
             put("age_min", if (snap != null) ((nowMs() - snap.postedAtMs) / 60_000L) else 0L)
@@ -1392,6 +1430,18 @@ class AgentTools @Inject constructor(
     private fun formatMeters(meters: Int): String =
         if (meters >= 1000) String.format(java.util.Locale.US, "%.1f км", meters / 1000.0)
         else "$meters м"
+
+    // Strict full-string match: "124 км", "1,5 км", "800 м", "1 234 км" (thousands
+    // separators: space or NBSP). Signs, latin units or extra text -> null.
+    private fun parseDistanceKm(text: String?): Double? {
+        if (text == null) return null
+        val m = Regex("""^\s*(\d{1,3}(?:[  ]\d{3})+|\d+)(?:[.,](\d+))?\s*(км|м)\.?\s*$""")
+            .find(text) ?: return null
+        val intPart = m.groupValues[1].replace(" ", "").replace(" ", "")
+        val frac = m.groupValues[2]
+        val v = (intPart + if (frac.isNotEmpty()) ".$frac" else "").toDoubleOrNull() ?: return null
+        return if (m.groupValues[3] == "м") v / 1000.0 else v
+    }
 
     private fun formatEtaSeconds(seconds: Int): String {
         val min = seconds / 60

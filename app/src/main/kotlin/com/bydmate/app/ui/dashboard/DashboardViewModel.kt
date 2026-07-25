@@ -10,6 +10,9 @@ import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.TripCounterMath
+import com.bydmate.app.data.trips.TripCounterUi
+import com.bydmate.app.data.trips.TripResetState
 import com.bydmate.app.domain.battery.AvgSocCalculator
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
@@ -18,11 +21,14 @@ import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.Calendar
@@ -50,7 +56,6 @@ data class DashboardUiState(
     // Legacy aliases for backward compat
     val totalKmToday: Double = 0.0,
     val totalKwhToday: Double = 0.0,
-    val idleDrainKwhToday: Double = 0.0,
     val lastTrip: TripEntity? = null,
     val recentTrips: List<TripEntity> = emptyList(),
     val isServiceRunning: Boolean = false,
@@ -63,9 +68,6 @@ data class DashboardUiState(
     val exteriorTemp: Int? = null,
     val batteryHealthStatus: String = "ok",
     val voltage12vStatus: String = "ok",
-    val idleDrainPercent: Double = 0.0,
-    val idleDrainRate: Double = 0.0,
-    val idleDrainHours: Double = 0.0,
     val insightTitle: String? = null,
     val insightSummary: String? = null,
     val insightDynamics: List<DynamicMetric> = emptyList(),
@@ -78,12 +80,8 @@ data class DashboardUiState(
     val batteryHealthExpanded: Boolean = false,
     val avgSocSinceCharge: Int? = null,
     val avgSocAllTime: Int? = null,
-    val idleDrainExpanded: Boolean = false,
-    val idleDrainKwhWeek: Double = 0.0,
-    val idleDrainHoursWeek: Double = 0.0,
     val estimatedRangeKm: Double? = null,
     val vehicleDataConnected: Boolean = true,
-    val idleDrainAvailable: Boolean = true,
     val adbConnected: Boolean? = null,
     val currentSoh: Float? = null,
     val currentLifetimeKm: Float? = null,
@@ -97,6 +95,11 @@ data class DashboardUiState(
     val consumption: Double? = null,
     val consumptionTrend: Trend = Trend.NONE,
     val isCharging: Boolean = false,
+    // Resettable trip counters (TRIP 1 / TRIP 2 buttons).
+    val trip1: TripCounterUi? = null,
+    val trip2: TripCounterUi? = null,
+    val trip1Expanded: Boolean = false,
+    val trip2Expanded: Boolean = false,
 )
 
 @HiltViewModel
@@ -113,6 +116,10 @@ class DashboardViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
 
+    // Reset anchors for the two resettable trip counters.
+    private val trip1Reset = MutableStateFlow<TripResetState?>(null)
+    private val trip2Reset = MutableStateFlow<TripResetState?>(null)
+
     init {
         cleanupBadIdleDrainData()
         observeLiveData()
@@ -123,6 +130,7 @@ class DashboardViewModel @Inject constructor(
         loadPeriodSummary()
         viewModelScope.launch { loadAutoserviceFlag() }
         observeVehicleProfile()
+        observeTripCounters()
     }
 
     fun setPeriod(period: DashboardPeriod) {
@@ -150,7 +158,7 @@ class DashboardViewModel @Inject constructor(
                 effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
                     insight.tone,
                     com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
-                    com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
+                    com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin, current.soc)
                 ),
                 insightDate = insightsManager.getCachedDate(days)
             ) }
@@ -223,7 +231,8 @@ class DashboardViewModel @Inject constructor(
                             ),
                             com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(
                                 data?.maxCellVoltage ?: current.cellVoltageMax,
-                                data?.minCellVoltage ?: current.cellVoltageMin
+                                data?.minCellVoltage ?: current.cellVoltageMin,
+                                data?.soc ?: current.soc
                             )
                         ),
                         estimatedRangeKm = rangeKm ?: current.estimatedRangeKm,
@@ -269,12 +278,10 @@ class DashboardViewModel @Inject constructor(
     private fun loadCurrency() {
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
-            val dataSource = settingsRepository.getDataSource()
             val vehicleProfile = settingsRepository.getVehicleProfile()
             _uiState.update {
                 it.copy(
                     currencySymbol = symbol,
-                    idleDrainAvailable = dataSource == SettingsRepository.DataSource.ENERGYDATA,
                     vehicleProfileId = vehicleProfile.id
                 )
             }
@@ -299,18 +306,6 @@ class DashboardViewModel @Inject constructor(
             val avg = if (summary.totalKm > 0) summary.totalKwh / summary.totalKm * 100.0 else 0.0
             val avgFuel = if (summary.totalKm > 0) summary.totalFuelLiters / summary.totalKm * 100.0 else 0.0
 
-            // Idle drain always uses today
-            val (dayStart, dayEnd) = todayRange()
-            val idleDrain = idleDrainDao.getTodayDrainKwh(dayStart, dayEnd)
-            val idleDrainHours = idleDrainDao.getTodayDrainHours(dayStart, dayEnd)
-            val batteryCapacity = settingsRepository.getBatteryCapacity()
-            val idleDrainPercent = if (batteryCapacity > 0) idleDrain / batteryCapacity * 100.0 else 0.0
-            val idleDrainRate = if (idleDrainHours > 0) idleDrain / idleDrainHours else 0.0
-
-            val weekStart = dayStart - 6 * 24 * 60 * 60 * 1000L
-            val idleDrainWeek = idleDrainDao.getTodayDrainKwh(weekStart, dayEnd)
-            val idleDrainHoursWeek = idleDrainDao.getTodayDrainHours(weekStart, dayEnd)
-
             _uiState.update {
                 it.copy(
                     totalKm = summary.totalKm,
@@ -321,13 +316,7 @@ class DashboardViewModel @Inject constructor(
                     totalCost = summary.totalCost,
                     tripCount = summary.tripCount,
                     totalKmToday = if (period == DashboardPeriod.TODAY) summary.totalKm else it.totalKmToday,
-                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday,
-                    idleDrainKwhToday = idleDrain,
-                    idleDrainPercent = idleDrainPercent,
-                    idleDrainRate = idleDrainRate,
-                    idleDrainHours = idleDrainHours,
-                    idleDrainKwhWeek = idleDrainWeek,
-                    idleDrainHoursWeek = idleDrainHoursWeek
+                    totalKwhToday = if (period == DashboardPeriod.TODAY) summary.totalKwh else it.totalKwhToday
                 )
             }
         }
@@ -408,7 +397,7 @@ class DashboardViewModel @Inject constructor(
                     effectiveInsightTone = com.bydmate.app.data.automation.InsightToneLogic.worst(
                         cached.tone,
                         com.bydmate.app.data.automation.InsightToneLogic.voltage12vTone(current.voltage12v),
-                        com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin)
+                        com.bydmate.app.data.automation.InsightToneLogic.cellDeltaTone(current.cellVoltageMax, current.cellVoltageMin, current.soc)
                     ),
                     insightDate = insightsManager.getCachedDate()
                 ) }
@@ -439,11 +428,81 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    private fun observeTripCounters() {
+        viewModelScope.launch {
+            trip1Reset.value = settingsRepository.getTripResetState(1)
+            trip2Reset.value = settingsRepository.getTripResetState(2)
+            val tariff = settingsRepository.getTripCostTariff()
+            launch { collectTripCounter(1, trip1Reset, tariff) }
+            launch { collectTripCounter(2, trip2Reset, tariff) }
+        }
+    }
+
+    /** Room aggregate re-queries on every reset (flatMapLatest) and re-emits on any
+     *  trips-table change; the live-session flows tick while driving, keeping the
+     *  button values fresh mid-trip. The flatMapLatest key is the pair (reset, sessionStart):
+     *  a new session invalidates the landed-row query. The DAO receives sessionStart so only
+     *  rows within the current session window are subtracted from the live delta.
+     *  liveWholeSession from TrackingService guards coverage: when false (baseline gap after
+     *  a restart) compute() suppresses live km/kWh to avoid unknown-window inflation. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun collectTripCounter(n: Int, resetFlow: StateFlow<TripResetState?>, tariff: Double) {
+        resetFlow.filterNotNull()
+            .combine(TrackingService.sessionStartedAt) { reset, sessionStart -> reset to sessionStart }
+            .flatMapLatest { (reset, sessionStart) ->
+                val landedFrom = sessionStart ?: Long.MAX_VALUE
+                combine(
+                    tripRepository.observeCounterStats(reset.resetTs, landedFrom),
+                    TrackingService.tripDistanceKm,
+                    TrackingService.tripKwhConsumed,
+                    TrackingService.sessionStartedAt,
+                    TrackingService.liveWholeSession,
+                ) { stats, liveKm, liveKwh, sessionStartInner, liveWholeSession ->
+                    TripCounterMath.compute(stats, reset, liveKm, liveKwh, sessionStartInner,
+                        liveWholeSession, System.currentTimeMillis(), tariff)
+                }
+            }.collect { ui ->
+                _uiState.update { if (n == 1) it.copy(trip1 = ui) else it.copy(trip2 = ui) }
+            }
+    }
+
+    /** Long-press reset: instant, no confirmation (approved design). Captures the live
+     *  session's current progress as the correction so the counter restarts from ~zero
+     *  immediately even mid-drive. When coverage is degraded the live partials are not a
+     *  valid pre-reset measurement: store zero corrections and mark the straddling row for
+     *  whole-row exclusion instead (counting restarts from the next trip). */
+    fun resetTripCounter(n: Int) {
+        viewModelScope.launch {
+            val now = System.currentTimeMillis()
+            val continuous = TrackingService.liveWholeSession.value &&
+                TrackingService.sessionStartedAt.value != null
+            val state = TripResetState(
+                resetTs = now,
+                corrKm = if (continuous) TrackingService.tripDistanceKm.value ?: 0.0 else 0.0,
+                corrKwh = if (continuous) TrackingService.tripKwhConsumed.value ?: 0.0 else 0.0,
+                corrMs = TrackingService.sessionStartedAt.value?.let { now - it } ?: 0L,
+                excludeStraddling = !continuous,
+            )
+            settingsRepository.setTripResetState(n, state)
+            if (n == 1) trip1Reset.value = state else trip2Reset.value = state
+        }
+    }
+
+    fun toggleTripExpanded(n: Int) {
+        _uiState.update {
+            val t1 = n == 1 && !it.trip1Expanded
+            val t2 = n == 2 && !it.trip2Expanded
+            it.copy(trip1Expanded = t1, trip2Expanded = t2,
+                insightExpanded = false, batteryHealthExpanded = false)
+        }
+    }
+
     fun toggleBatteryHealthExpanded() {
         _uiState.update { it.copy(
             batteryHealthExpanded = !it.batteryHealthExpanded,
             insightExpanded = false,
-            idleDrainExpanded = false
+            trip1Expanded = false,
+            trip2Expanded = false,
         ) }
         if (_uiState.value.batteryHealthExpanded) {
             viewModelScope.launch { computeAvgSoc() }
@@ -470,16 +529,9 @@ class DashboardViewModel @Inject constructor(
     fun toggleInsightExpanded() {
         _uiState.update { it.copy(
             insightExpanded = !it.insightExpanded,
-            idleDrainExpanded = false,
-            batteryHealthExpanded = false
-        ) }
-    }
-
-    fun toggleIdleDrainExpanded() {
-        _uiState.update { it.copy(
-            idleDrainExpanded = !it.idleDrainExpanded,
-            insightExpanded = false,
-            batteryHealthExpanded = false
+            batteryHealthExpanded = false,
+            trip1Expanded = false,
+            trip2Expanded = false,
         ) }
     }
 
@@ -489,12 +541,18 @@ class DashboardViewModel @Inject constructor(
     ): String {
         val maxV = data?.maxCellVoltage ?: current.cellVoltageMax
         val minV = data?.minCellVoltage ?: current.cellVoltageMin
-        val delta = if (maxV != null && minV != null) maxV - minV else null
+        val soc = data?.soc ?: current.soc
+        val hasCellData = maxV != null && minV != null
+        // Delta is diagnostic only on the LFP plateau (SOC 20-80%, BYD's check band);
+        // near full charge cells naturally diverge, so outside the band it must not
+        // paint the card red (#113). Out-of-band is "gated", not "missing data".
+        val delta = if (hasCellData && soc != null && soc in 20..80)
+            Math.round((maxV!! - minV!!) * 1000.0) / 1000.0 else null
         val temp = data?.avgBatTemp ?: current.avgBatTemp
-        if (delta == null && temp == null) return current.batteryHealthStatus
+        if (!hasCellData && temp == null) return current.batteryHealthStatus
         return when {
-            (delta != null && delta > 0.10) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
-            (delta != null && delta > 0.05) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
+            (delta != null && delta >= 0.090) || (temp != null && (temp < 5 || temp > 50)) -> "critical"
+            (delta != null && delta >= 0.050) || (temp != null && (temp < 5 || temp > 45)) -> "warning"
             else -> "ok"
         }
     }

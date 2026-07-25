@@ -301,6 +301,11 @@ class TrackingService : Service(), LocationListener {
         private val _tripDistanceKm = MutableStateFlow<Double?>(null)
         val tripDistanceKm: StateFlow<Double?> = _tripDistanceKm
 
+        /** Live trip energy (current totalElec minus session-start totalElec), kWh.
+         *  Null when idle, data unready or during a BMS recalibration tick. */
+        private val _tripKwhConsumed = MutableStateFlow<Double?>(null)
+        val tripKwhConsumed: StateFlow<Double?> = _tripKwhConsumed
+
         private val _lastLocation = MutableStateFlow<Location?>(null)
         val lastLocation: StateFlow<Location?> = _lastLocation
 
@@ -321,6 +326,29 @@ class TrackingService : Service(), LocationListener {
          */
         private val _sessionStartedAt = MutableStateFlow<Long?>(null)
         val sessionStartedAt: StateFlow<Long?> = _sessionStartedAt
+
+        /** True when the live odometer/energy baseline covers the entire current session:
+         *  set to true on fresh session start and on restart when both baselines are
+         *  recovered from SessionPersistence; false when the baselines could not be
+         *  restored (process killed before the first persist tick). When false, the trip
+         *  counter suppresses km/kWh live contribution to avoid an unknown-window gap. */
+        private val _liveWholeSession = MutableStateFlow(true)
+        val liveWholeSession: StateFlow<Boolean> = _liveWholeSession
+
+        /** Initial live-coverage decision at service (re)start.
+         *  @param restoredBaselinesOk null when there was no valid persisted session,
+         *  otherwise whether BOTH odometer/energy baselines were restored with it.
+         *  @param retainedAnchor true when a session anchor survived in the companion
+         *  from a previous service instance of the same process. Such a session has
+         *  empty instance baselines, so its coverage is degraded unless proven whole. */
+        internal fun computeInitialCoverage(
+            restoredBaselinesOk: Boolean?,
+            retainedAnchor: Boolean,
+        ): Boolean = when {
+            restoredBaselinesOk != null -> restoredBaselinesOk
+            retainedAnchor -> false
+            else -> true
+        }
 
         private val _isRunning = MutableStateFlow(false)
         val isRunning: StateFlow<Boolean> = _isRunning
@@ -394,10 +422,12 @@ class TrackingService : Service(), LocationListener {
         // service instance in the same process must not leak to the widget before
         // the first polling tick overwrites it.
         _tripDistanceKm.value = null
+        _tripKwhConsumed.value = null
 
         // Restore widget session anchor if the process was killed mid-trip.
         // Aggregator will resume cumulative mode on its first post-restart tick
-        // as long as the session is still live (powerState ≥ 1 within grace window).
+        // as long as the session is still live (powerState >= 1 within grace window).
+        var restoredBaselinesOk: Boolean? = null
         sessionPersistence = SessionPersistence(this)
         val restored = sessionPersistence.load()
         if (restored != null) {
@@ -410,13 +440,31 @@ class TrackingService : Service(), LocationListener {
                 Log.i(TAG, "Discarded stale session: startedAt=${restored.sessionStartedAt}, " +
                     "idleFor=${idleFor}s (>= ${SESSION_IDLE_CLOSE_MS / 1000}s)")
                 sessionPersistence.clear()
+                // Also clear the companion anchor: it is just as stale as the persisted one.
+                _sessionStartedAt.value = null
             } else {
                 _sessionStartedAt.value = restored.sessionStartedAt
                 sessionLastActiveTs = restored.lastActiveTs
+                // Restore live-trip baselines so the delta still covers the whole session.
+                // If both are available the baseline window is intact (liveWholeSession=true).
+                // If either is missing (process killed before the first baseline persist)
+                // the window has a gap and km/kWh live contribution is suppressed.
+                sessionStartMileageKm = restored.mileageStartKm
+                sessionStartTotalElecKwh = restored.elecStartKwh
+                val baselinesOk = restored.mileageStartKm != null && restored.elecStartKwh != null
+                restoredBaselinesOk = baselinesOk
                 Log.i(TAG, "Restored session: startedAt=${restored.sessionStartedAt}, " +
-                    "lastActiveTs=${restored.lastActiveTs}")
+                    "lastActiveTs=${restored.lastActiveTs}, baselinesOk=$baselinesOk")
             }
         }
+        // Compute the coverage flag deterministically across all three paths:
+        //   valid restore   -> baselinesOk
+        //   stale/null restore with retained companion anchor -> false (degraded)
+        //   no restore, no retained anchor -> true (fresh session on next ignition-on)
+        _liveWholeSession.value = computeInitialCoverage(
+            restoredBaselinesOk,
+            retainedAnchor = _sessionStartedAt.value != null && restoredBaselinesOk == null,
+        )
 
         // Finalize a driving session left open by a hard power-cut at ignition-off
         // (the head unit dies before the 30-sec idle-close can fire onSessionEnd),
@@ -648,15 +696,20 @@ class TrackingService : Service(), LocationListener {
         if (active) {
             sessionLastActiveTs = now
             if (currentSession == null) {
+                // Fresh session start: baselines are set immediately, so the window is intact.
                 _sessionStartedAt.value = now
                 sessionStartMileageKm = data.mileage
                 sessionStartTotalElecKwh = data.totalElecConsumption
+                _liveWholeSession.value = true
                 lastSessionRepository.onSessionStart(soc = data.soc, ts = now)
                 Log.i(TAG, "Widget session START at $now " +
                     "(powerOn=$powerOn, driving=$driving, mileageStart=${data.mileage}, " +
                     "totalElecStart=${data.totalElecConsumption})")
             } else {
                 // Lazy-init both baselines if DiPars was unready at the exact session-start tick.
+                // For a restored session whose baselines were missing, _liveWholeSession is already
+                // false and must NOT be lifted here: the gap in coverage persists until session end.
+                // For a fresh session, _liveWholeSession is already true; no change needed.
                 if (sessionStartMileageKm == null && data.mileage != null) {
                     sessionStartMileageKm = data.mileage
                 }
@@ -677,7 +730,9 @@ class TrackingService : Service(), LocationListener {
                 _sessionStartedAt.value = null
                 sessionStartMileageKm = null
                 sessionStartTotalElecKwh = null
+                _liveWholeSession.value = true   // reset for next fresh session
                 _tripDistanceKm.value = null
+                _tripKwhConsumed.value = null
                 sessionPersistence.clear()
                 // Refresh cached last-trip-avg so the post-end widget shows the trip we just closed.
                 serviceScope.launch {
@@ -1113,8 +1168,16 @@ class TrackingService : Service(), LocationListener {
                     _lastRangeKm.value = rangeKm
 
                     _tripDistanceKm.value = tripDistance
+                    _tripKwhConsumed.value = tripKwhConsumed
 
-                    sessionId?.let { sessionPersistence.save(it, sessionLastActiveTs) }
+                    sessionId?.let {
+                        sessionPersistence.save(
+                            it,
+                            sessionLastActiveTs,
+                            sessionStartMileageKm,
+                            sessionStartTotalElecKwh,
+                        )
+                    }
 
                     // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                     // Live power integration removed — motor power ≠ total battery drain.

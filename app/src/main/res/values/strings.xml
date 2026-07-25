@@ -587,17 +587,23 @@
     <string name="dashboard_unit_km">км</string>
     <string name="dashboard_unit_kwh">кВт·ч</string>
     <string name="dashboard_range_label">расчётный пробег</string>
-    <string name="dashboard_idle_time_min">%1$.0f мин</string>
-    <string name="dashboard_idle_time_hours">%1$.1f ч</string>
-
-    <!-- Idle drain card -->
-    <string name="dashboard_idle_drain_parking_label">стоянка</string>
-    <string name="dashboard_idle_drain_title">Расход на стоянке</string>
-    <string name="dashboard_idle_drain_rate_label">Скорость</string>
-    <string name="dashboard_idle_drain_rate_value">%1$.2f кВт·ч/час</string>
-    <string name="dashboard_idle_drain_week_label">За 7 дней</string>
-    <string name="dashboard_idle_drain_week_value">%1$.1f кВт·ч</string>
-    <string name="dashboard_idle_drain_avg_day_label">Ср. в день</string>
+    <!-- Trip 1/2 dashboard counters -->
+    <string name="dashboard_trip1_label" translatable="false">TRIP 1</string>
+    <string name="dashboard_trip2_label" translatable="false">TRIP 2</string>
+    <string name="dashboard_trip_since">с %1$s · %2$d дн.</string>
+    <string name="dashboard_trip_since_all_time">за всё время</string>
+    <string name="dashboard_trip_count_label">Поездок</string>
+    <string name="dashboard_trip_driving_time_label">Время в пути</string>
+    <string name="dashboard_trip_time_hours_min">%1$d ч %2$d мин</string>
+    <string name="dashboard_trip_time_min">%1$d мин</string>
+    <string name="dashboard_trip_kwh_total_label">Расход всего</string>
+    <string name="dashboard_trip_kwh_driving_label">в движении</string>
+    <string name="dashboard_trip_kwh_idle_label">на стоянке</string>
+    <string name="dashboard_trip_kwh_value">%1$s кВт·ч</string>
+    <string name="dashboard_trip_avg_label">Средний расход</string>
+    <string name="dashboard_trip_avg_value">%1$s кВт·ч/100км</string>
+    <string name="dashboard_trip_cost_label">Стоимость</string>
+    <string name="dashboard_trip_reset_hint">Долгое нажатие на кнопке TRIP сбрасывает счётчик</string>
 
     <!-- Battery card -->
     <string name="dashboard_battery_temp_label">темп. бат.</string>

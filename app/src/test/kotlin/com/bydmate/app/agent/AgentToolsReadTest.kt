@@ -17,6 +17,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.domain.calculator.RangeEstimate
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -81,7 +82,8 @@ class AgentToolsReadTest {
         )
         coEvery { battery.refresh() } returns
             BatteryState(80f, 12.5f, 100f, null, null, autoserviceAvailable = true)
-        coEvery { range.estimate(80, 1234.5) } returns 321.4
+        coEvery { range.estimateDetailed(80, 1234.5) } returns
+            RangeEstimate(rangeKm = 321.4, avgKwhPer100 = 18.0, capacityKwh = 72.9, remainingKwh = 200.0)
         val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
         assertEquals(80, out.getInt("soc_percent"))
         assertEquals("P", out.getString("gear"))

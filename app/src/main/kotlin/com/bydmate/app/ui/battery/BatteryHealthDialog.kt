@@ -52,8 +52,9 @@ import com.bydmate.app.ui.theme.TextSecondary
  *  - "Lifetime" — values from BMS via autoservice. If autoservice is disabled,
  *    a placeholder with a hint to enable «Системные данные» is shown instead.
  *
- * Cell delta is colored against an LFP-friendly scale: <30mV green, 30-100mV
- * yellow, >100mV red.
+ * Cell delta is colored only inside the LFP diagnostic band (SOC 20-80%):
+ * <50mV green, 50-89mV yellow, 90mV+ red; outside the band the value stays
+ * neutral (#113).
  *
  * Positioning matches AI Insights / parking dialog (Alignment.CenterStart),
  * tap on scrim or on the card body dismisses.
@@ -120,7 +121,8 @@ fun BatteryHealthDialog(
                     BanksBlock(
                         cellMin = liveCellVoltageMin,
                         cellMax = liveCellVoltageMax,
-                        cellDelta = liveCellDelta
+                        cellDelta = liveCellDelta,
+                        soc = liveSoc
                     )
 
                     SectionHeader(stringResource(R.string.battery_health_lifetime_header))
@@ -179,7 +181,8 @@ private fun LiveBlock(
 private fun BanksBlock(
     cellMin: Double?,
     cellMax: Double?,
-    cellDelta: Double?
+    cellDelta: Double?,
+    soc: Int?
 ) {
     Row(
         modifier = Modifier
@@ -201,7 +204,7 @@ private fun BanksBlock(
         StatCell(
             "Δ",
             cellDelta?.let { stringResource(R.string.battery_health_cell_delta_value, it) } ?: "—",
-            cellDeltaColor(cellDelta)
+            cellDeltaColor(cellDelta, soc)
         )
     }
 }
@@ -263,11 +266,25 @@ private fun StatCell(label: String, value: String, valueColor: Color) {
     }
 }
 
-private fun cellDeltaColor(delta: Double?): Color = when {
-    delta == null -> TextPrimary
-    delta < 0.030 -> AccentGreen
-    delta < 0.100 -> SocYellow
-    else -> SocRed
+/**
+ * Cell imbalance cue, gated to the LFP plateau (SOC 20-80%) where the delta is
+ * actually diagnostic — BYD's own HV battery check runs in this band with a 90 mV
+ * threshold. Near full charge the leader cell hits the voltage knee first while the
+ * rest sit lower, so a large delta there is normal LFP physics, not a defect; the
+ * value stays neutral outside the band to avoid false "battery problem" alarms
+ * (issue #113).
+ */
+internal fun cellDeltaColor(delta: Double?, soc: Int?): Color {
+    if (delta == null) return TextPrimary
+    if (soc == null || soc !in 20..80) return TextPrimary
+    // Round to millivolt precision so exact 50/90 mV boundaries survive IEEE 754
+    // subtraction noise (3.43 - 3.34 = 0.0899999…).
+    val mv = Math.round(delta * 1000.0) / 1000.0
+    return when {
+        mv < 0.050 -> AccentGreen
+        mv < 0.090 -> SocYellow
+        else -> SocRed
+    }
 }
 
 /**

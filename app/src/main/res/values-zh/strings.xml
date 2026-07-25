@@ -501,17 +501,21 @@
     <string name="dashboard_unit_km">公里</string>
     <string name="dashboard_unit_kwh">kWh</string>
     <string name="dashboard_range_label">预估续航</string>
-    <string name="dashboard_idle_time_min">%1$.0f 分钟</string>
-    <string name="dashboard_idle_time_hours">%1$.1f 小时</string>
-
-    <!-- Idle drain card -->
-    <string name="dashboard_idle_drain_parking_label">停车</string>
-    <string name="dashboard_idle_drain_title">停车能耗</string>
-    <string name="dashboard_idle_drain_rate_label">速率</string>
-    <string name="dashboard_idle_drain_rate_value">%1$.2f kWh/小时</string>
-    <string name="dashboard_idle_drain_week_label">近 7 天</string>
-    <string name="dashboard_idle_drain_week_value">%1$.1f kWh</string>
-    <string name="dashboard_idle_drain_avg_day_label">日均</string>
+    <!-- Trip 1/2 dashboard counters -->
+    <string name="dashboard_trip_since">自 %1$s · %2$d 天</string>
+    <string name="dashboard_trip_since_all_time">全部时间</string>
+    <string name="dashboard_trip_count_label">行程数</string>
+    <string name="dashboard_trip_driving_time_label">行驶时间</string>
+    <string name="dashboard_trip_time_hours_min">%1$d 小时 %2$d 分</string>
+    <string name="dashboard_trip_time_min">%1$d 分</string>
+    <string name="dashboard_trip_kwh_total_label">总耗电</string>
+    <string name="dashboard_trip_kwh_driving_label">行驶</string>
+    <string name="dashboard_trip_kwh_idle_label">驻车</string>
+    <string name="dashboard_trip_kwh_value">%1$s 千瓦时</string>
+    <string name="dashboard_trip_avg_label">平均能耗</string>
+    <string name="dashboard_trip_avg_value">%1$s 千瓦时/100公里</string>
+    <string name="dashboard_trip_cost_label">费用</string>
+    <string name="dashboard_trip_reset_hint">长按 TRIP 按钮清零</string>
 
     <!-- Battery card -->
     <string name="dashboard_battery_temp_label">电池温度</string>

@@ -21,4 +21,11 @@ class AgentPromptTest {
     @Test fun prompt_explains_exact_time_trigger() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("time_range"))
     }
+
+    // Users reported the agent calling the car a hybrid (LLM world-knowledge about
+    // Fangchengbao Bao 5/8 leaking in). The prompt must pin the powertrain.
+    @Test fun prompt_pins_pure_ev() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("электромобиль"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("гибрид"))
+    }
 }

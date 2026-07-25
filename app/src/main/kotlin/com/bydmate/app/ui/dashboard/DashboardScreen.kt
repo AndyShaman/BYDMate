@@ -1,8 +1,10 @@
 package com.bydmate.app.ui.dashboard
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -30,6 +32,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -65,6 +68,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
@@ -307,23 +311,19 @@ fun DashboardScreen(
                             borderColor = worstColor,
                             onClick = { viewModel.toggleBatteryHealthExpanded() }
                         )
-                        // Idle drain card — hidden in DiPlus mode (no zero-km records)
-                        if (state.idleDrainAvailable) {
-                            val idleTimeStr = if (state.idleDrainHours < 1.0)
-                                stringResource(R.string.dashboard_idle_time_min, state.idleDrainHours * 60)
-                            else stringResource(R.string.dashboard_idle_time_hours, state.idleDrainHours)
-                            CompactCard(
-                                leftValue = "%.1f".format(state.idleDrainKwhToday),
-                                leftLabel = stringResource(R.string.dashboard_unit_kwh),
-                                rightValue = idleTimeStr,
-                                rightLabel = stringResource(R.string.dashboard_idle_drain_parking_label),
-                                borderColor = when {
-                                    state.idleDrainPercent > 5.0 -> SocRed
-                                    state.idleDrainPercent > 2.0 -> SocYellow
-                                    else -> AccentGreen
-                                },
-                                onClick = { viewModel.toggleIdleDrainExpanded() }
-                            )
+                        // TRIP 1 / TRIP 2 resettable counters row
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            TripCounterButton(stringResource(R.string.dashboard_trip1_label), state.trip1,
+                                Modifier.weight(1f),
+                                onClick = { viewModel.toggleTripExpanded(1) },
+                                onLongClick = { viewModel.resetTripCounter(1) })
+                            TripCounterButton(stringResource(R.string.dashboard_trip2_label), state.trip2,
+                                Modifier.weight(1f),
+                                onClick = { viewModel.toggleTripExpanded(2) },
+                                onLongClick = { viewModel.resetTripCounter(2) })
                         }
                     }
 
@@ -452,25 +452,17 @@ fun DashboardScreen(
                             onDismiss = { viewModel.toggleBatteryHealthExpanded() },
                         )
                     }
-                    if (state.idleDrainExpanded) {
-                        val color = when {
-                            state.idleDrainPercent > 5.0 -> SocRed
-                            state.idleDrainPercent > 2.0 -> SocYellow
-                            else -> AccentGreen
-                        }
-                        CardDetailDialog(
-                            title = stringResource(R.string.dashboard_idle_drain_title),
-                            borderColor = color,
-                            onDismiss = { viewModel.toggleIdleDrainExpanded() }
-                        ) {
-                            if (state.idleDrainRate > 0) {
-                                DetailRow(stringResource(R.string.dashboard_idle_drain_rate_label), stringResource(R.string.dashboard_idle_drain_rate_value, state.idleDrainRate), color)
-                            }
-                            DetailRow(stringResource(R.string.dashboard_idle_drain_week_label), stringResource(R.string.dashboard_idle_drain_week_value, state.idleDrainKwhWeek), TextPrimary)
-                            if (state.idleDrainKwhWeek > 0) {
-                                DetailRow(stringResource(R.string.dashboard_idle_drain_avg_day_label), stringResource(R.string.dashboard_idle_drain_week_value, state.idleDrainKwhWeek / 7.0), TextPrimary)
-                            }
-                        }
+                    // TRIP 1 popup
+                    state.trip1?.let { t ->
+                        if (state.trip1Expanded) TripCounterDialog(
+                            stringResource(R.string.dashboard_trip1_label), t, state.currencySymbol
+                        ) { viewModel.toggleTripExpanded(1) }
+                    }
+                    // TRIP 2 popup
+                    state.trip2?.let { t ->
+                        if (state.trip2Expanded) TripCounterDialog(
+                            stringResource(R.string.dashboard_trip2_label), t, state.currencySymbol
+                        ) { viewModel.toggleTripExpanded(2) }
                     }
                 }
             }
@@ -672,42 +664,40 @@ private fun InsightCard(
 }
 
 // ============================================================================
-// Compact card — same look for all three
+// TRIP 1 / TRIP 2 counter button
 // ============================================================================
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun CompactCard(
-    leftValue: String,
-    leftLabel: String,
-    rightValue: String,
-    rightLabel: String,
-    borderColor: Color,
-    hasData: Boolean = true,
-    onClick: () -> Unit
+private fun TripCounterButton(
+    label: String,
+    ui: TripCounterUi?,
+    modifier: Modifier,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        border = androidx.compose.foundation.BorderStroke(1.5.dp, borderColor.copy(alpha = 0.5f)),
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onClick() }
+        border = androidx.compose.foundation.BorderStroke(1.5.dp, AccentGreen.copy(alpha = 0.5f)),
+        modifier = modifier.combinedClickable(onClick = onClick, onLongClick = onLongClick)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(leftValue, color = if (hasData) borderColor else TextMuted,
-                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text(leftLabel, color = TextMuted, fontSize = 11.sp)
-            }
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(rightValue, color = if (hasData) borderColor else TextMuted,
-                    fontSize = 20.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                Text(rightLabel, color = TextMuted, fontSize = 11.sp)
+            Text(label, color = AccentGreen, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceEvenly) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("%.0f".format(ui?.km ?: 0.0), color = AccentGreen,
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.dashboard_unit_km), color = TextMuted, fontSize = 10.sp)
+                }
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text("%.1f".format(ui?.kwh ?: 0.0), color = AccentGreen,
+                        fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+                    Text(stringResource(R.string.dashboard_unit_kwh), color = TextMuted, fontSize = 10.sp)
+                }
             }
         }
     }
@@ -751,6 +741,78 @@ private fun BatteryCell(value: String, label: String, color: Color) {
         Text(value, color = color, fontSize = 17.sp, fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace)
         Text(label, color = TextMuted, fontSize = 10.sp)
+    }
+}
+
+// ============================================================================
+// TRIP counter detail popup helpers
+// ============================================================================
+
+@Composable
+private fun TripDetailRow(
+    label: String,
+    value: String,
+    valueColor: Color = TextPrimary,
+    labelColor: Color = TextSecondary,
+    indent: Boolean = false,
+    small: Boolean = false,
+) {
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Text(label, color = labelColor, fontSize = if (small) 12.sp else 13.sp,
+            modifier = if (indent) Modifier.padding(start = 14.dp) else Modifier)
+        Text(value, color = valueColor, fontSize = if (small) 12.sp else 13.sp,
+            fontWeight = if (small) FontWeight.Normal else FontWeight.SemiBold,
+            fontFamily = FontFamily.Monospace)
+    }
+}
+
+@Composable
+private fun TripCounterDialog(
+    label: String,
+    ui: TripCounterUi,
+    currencySymbol: String,
+    onDismiss: () -> Unit,
+) {
+    CardDetailDialog(title = null, borderColor = AccentGreen, onDismiss = onDismiss) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Bottom) {
+            Text(label, color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(
+                if (ui.resetTs == 0L) stringResource(R.string.dashboard_trip_since_all_time)
+                else stringResource(R.string.dashboard_trip_since,
+                    java.text.SimpleDateFormat("d MMMM", java.util.Locale.getDefault())
+                        .format(java.util.Date(ui.resetTs)),
+                    ((System.currentTimeMillis() - ui.resetTs) / 86_400_000L)),
+                color = TextMuted, fontSize = 11.sp)
+        }
+        Row(verticalAlignment = Alignment.Bottom) {
+            Text("%.1f".format(ui.km), color = TextPrimary, fontSize = 30.sp,
+                fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Spacer(Modifier.width(6.dp))
+            Text(stringResource(R.string.dashboard_unit_km), color = TextSecondary, fontSize = 14.sp)
+        }
+        val totalMin = ui.drivingMs / 60_000L
+        val timeStr = if (totalMin >= 60)
+            stringResource(R.string.dashboard_trip_time_hours_min, totalMin / 60, totalMin % 60)
+        else stringResource(R.string.dashboard_trip_time_min, totalMin)
+        TripDetailRow(stringResource(R.string.dashboard_trip_count_label), ui.tripCount.toString())
+        TripDetailRow(stringResource(R.string.dashboard_trip_driving_time_label), timeStr)
+        HorizontalDivider(color = CardBorder)
+        TripDetailRow(stringResource(R.string.dashboard_trip_kwh_total_label),
+            stringResource(R.string.dashboard_trip_kwh_value, "%.1f".format(ui.kwh)), valueColor = AccentGreen)
+        TripDetailRow(stringResource(R.string.dashboard_trip_kwh_driving_label),
+            stringResource(R.string.dashboard_trip_kwh_value, "%.1f".format(ui.drivingKwh)),
+            labelColor = TextMuted, indent = true, small = true)
+        TripDetailRow(stringResource(R.string.dashboard_trip_kwh_idle_label),
+            stringResource(R.string.dashboard_trip_kwh_value, "%.1f".format(ui.idleKwh)),
+            labelColor = TextMuted, indent = true, small = true)
+        if (ui.km > 0.0) TripDetailRow(stringResource(R.string.dashboard_trip_avg_label),
+            stringResource(R.string.dashboard_trip_avg_value, "%.1f".format(ui.kwh / ui.km * 100.0)))
+        HorizontalDivider(color = CardBorder)
+        TripDetailRow(stringResource(R.string.dashboard_trip_cost_label),
+            "%.2f %s".format(ui.cost, currencySymbol))
+        Text(stringResource(R.string.dashboard_trip_reset_hint), color = TextMuted, fontSize = 11.sp,
+            modifier = Modifier.padding(top = 6.dp))
     }
 }
 

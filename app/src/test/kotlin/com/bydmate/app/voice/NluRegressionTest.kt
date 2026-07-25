@@ -34,13 +34,14 @@ class NluRegressionTest {
         "подогрев сиденья на 2" to "主驾座椅加热2档",
         "подогрев сиденья пассажира на 3" to "副驾座椅加热3档",
         "включи вентиляцию сиденья" to "主驾座椅通风1档",
+        // seat OFF singular (in-car reports 2026-07: "выключить подогрев/обдув не работает").
+        // One-pass stemmer quirk: token "отключить"->"отключи" but surface "отключи"->"отключ",
+        // so BOTH forms must be listed in the lexicon (same as the existing выключи/выключить pair).
+        "выключи подогрев сиденья" to "主驾座椅加热关闭",
+        "выключи обдув сиденья" to "主驾座椅通风关闭",
+        "отключить подогрев сиденья" to "主驾座椅加热关闭",
+        "выключи обогрев сиденья" to "主驾座椅加热关闭",
         "подогрев сиденья на 5" to null,       // level 5 -> agent (seat_heat_driver_5)
-        // issue #98 (Song L, VoiceJournal): "сидений" missed the seat slot and the phrase
-        // dispatched cabin airflow 打开空调通风; plural/"всех" must go to the agent (both seats)
-        "включи вентиляцию всех сидений" to null,
-        "включи подогрев всех сидений" to null,
-        "включи вентиляцию сидений" to null,
-        "выключи обогрев всех сидений" to null,
         // locks / car
         "закрой машину" to "车门上锁",
         "открой машину" to "车门解锁",
@@ -83,5 +84,27 @@ class NluRegressionTest {
         assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("похолоднее", VoiceLang.RU))
         assertEquals(ParseResult.Volume("+1"), NluParser.parse("громче", VoiceLang.RU))
         assertEquals(ParseResult.Volume("mute"), NluParser.parse("выключи звук", VoiceLang.RU))
+    }
+
+    // issue #98 follow-up: plural/"всех" used to bail to the agent (LLM-only users got
+    // nothing). The quick-path now fans out per seat: exactly one command per side.
+    private val pluralFixtures: List<Pair<String, List<String>>> = listOf(
+        "включи вентиляцию всех сидений" to listOf("主驾座椅通风1档", "副驾座椅通风1档"),
+        "включи подогрев всех сидений" to listOf("主驾座椅加热1档", "副驾座椅加热1档"),
+        "включи вентиляцию сидений" to listOf("主驾座椅通风1档", "副驾座椅通风1档"),
+        "выключи обогрев всех сидений" to listOf("主驾座椅加热关闭", "副驾座椅加热关闭"),
+        "выключи подогрев сидений" to listOf("主驾座椅加热关闭", "副驾座椅加热关闭"),
+        "выключи обдув сидений" to listOf("主驾座椅通风关闭", "副驾座椅通风关闭"),
+    )
+
+    @Test fun plural_seat_fixtures_fan_out_both_seats() {
+        val failures = StringBuilder()
+        pluralFixtures.forEach { (text, expected) ->
+            val actual = (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.commands
+            if (actual != expected) {
+                failures.append("\"$text\": expected=$expected actual=$actual\n")
+            }
+        }
+        assertEquals("NLU plural regressions:\n$failures", "", failures.toString())
     }
 }

@@ -217,6 +217,8 @@ class TripRepository @Inject constructor(
 
     suspend fun getPeriodSummary(from: Long, to: Long) = tripDao.getPeriodSummary(from, to)
 
+    fun observeCounterStats(from: Long, sessionStart: Long) = tripDao.observeCounterStats(from, sessionStart)
+
     suspend fun getTripPointsByTimeRange(from: Long, to: Long): List<TripPointEntity> =
         tripPointDao.getByTimeRange(from, to)
 

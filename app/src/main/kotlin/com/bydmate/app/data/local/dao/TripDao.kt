@@ -125,6 +125,44 @@ interface TripDao {
         ORDER BY start_ts DESC LIMIT :limit
     """)
     suspend fun getRecentForEmaFiltered(minKm: Double, limit: Int): List<TripEntity>
+
+    /** Trip 1/2 counter aggregate since a reset anchor. Filter is by trip END so the
+     *  trip a reset happened inside still lands in the counter whole — the caller
+     *  subtracts the pre-reset correction ONLY once the straddling row actually lands
+     *  (straddling* buckets), and never more than the straddling row contributed.
+     *  Idle (parking drain) rows are zero-km trips written by HistoryImporter —
+     *  their kWh/cost is inside the totals; the idle bucket only splits it out for
+     *  display. Only driving rows are counted in straddling buckets: corrections always
+     *  describe driving sessions, never idle drain.
+     *  Landed-session buckets (landedSession*) = driving rows already written to Room
+     *  for the current live session (start_ts >= :sessionStart). The live contribution
+     *  in compute() is treated as the not-yet-landed remainder: live - landedSession,
+     *  clamped >= 0. This prevents double-counting when TripRecorder closes a trip at
+     *  the DRIVE->ACC transition while the live session is still active (powerState >= 1).
+     *  Window integrity is guaranteed by the TrackingService liveWholeSession flag: when
+     *  the flag is false the counter suppresses live km/kWh entirely (Room-only mode).
+     *  @param sessionStart lower bound of the live-session window; Long.MAX_VALUE when no
+     *  active session (DAO returns zero for all landedSession buckets). */
+    @Query(
+        """
+        SELECT COALESCE(SUM(distance_km), 0.0) AS totalKm,
+               COALESCE(SUM(kwh_consumed), 0.0) AS totalKwh,
+               COALESCE(SUM(cost), 0.0) AS totalCost,
+               COALESCE(SUM(CASE WHEN COALESCE(distance_km, 0) > 0 THEN COALESCE(kwh_consumed, 0) ELSE 0 END), 0.0) AS drivingKwh,
+               COALESCE(SUM(CASE WHEN COALESCE(distance_km, 0) <= 0 THEN COALESCE(kwh_consumed, 0) ELSE 0 END), 0.0) AS idleKwh,
+               COUNT(CASE WHEN COALESCE(distance_km, 0) > 0 THEN 1 END) AS tripCount,
+               COALESCE(SUM(CASE WHEN COALESCE(distance_km, 0) > 0 AND end_ts IS NOT NULL THEN end_ts - start_ts ELSE 0 END), 0) AS drivingMs,
+               COALESCE(SUM(CASE WHEN start_ts < :from AND COALESCE(distance_km, 0) > 0 THEN COALESCE(distance_km, 0) ELSE 0 END), 0.0) AS straddlingKm,
+               COALESCE(SUM(CASE WHEN start_ts < :from AND COALESCE(distance_km, 0) > 0 THEN COALESCE(kwh_consumed, 0) ELSE 0 END), 0.0) AS straddlingKwh,
+               COALESCE(SUM(CASE WHEN start_ts < :from AND COALESCE(distance_km, 0) > 0 AND end_ts IS NOT NULL THEN end_ts - start_ts ELSE 0 END), 0) AS straddlingMs,
+               COUNT(CASE WHEN start_ts < :from AND COALESCE(distance_km, 0) > 0 THEN 1 END) AS straddlingTripCount,
+               COALESCE(SUM(CASE WHEN start_ts >= :sessionStart AND COALESCE(distance_km, 0) > 0 THEN COALESCE(distance_km, 0) ELSE 0 END), 0.0) AS landedSessionKm,
+               COALESCE(SUM(CASE WHEN start_ts >= :sessionStart AND COALESCE(distance_km, 0) > 0 THEN COALESCE(kwh_consumed, 0) ELSE 0 END), 0.0) AS landedSessionKwh,
+               COALESCE(SUM(CASE WHEN start_ts >= :sessionStart AND COALESCE(distance_km, 0) > 0 AND end_ts IS NOT NULL THEN end_ts - start_ts ELSE 0 END), 0) AS landedSessionMs
+        FROM trips WHERE COALESCE(end_ts, start_ts) >= :from
+        """
+    )
+    fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats>
 }
 
 data class TripSummary(
@@ -133,4 +171,34 @@ data class TripSummary(
     val totalFuelLiters: Double = 0.0,
     val tripCount: Int = 0,
     val totalCost: Double = 0.0
+)
+
+data class TripCounterStats(
+    val totalKm: Double,
+    val totalKwh: Double,
+    val totalCost: Double,
+    val drivingKwh: Double,
+    val idleKwh: Double,
+    val tripCount: Int,
+    val drivingMs: Long,
+    /** Km contributed by the trip that straddled the reset anchor (start_ts < from, driving only).
+     *  Zero when no such trip has landed yet. Used as the cap on Room-side correction subtraction
+     *  so a lost straddling trip never makes the correction bite into later trips. */
+    val straddlingKm: Double,
+    /** kWh contributed by the straddling trip (same row as straddlingKm). */
+    val straddlingKwh: Double,
+    /** Duration ms contributed by the straddling trip (same row as straddlingKm). */
+    val straddlingMs: Long,
+    /** Number of driving rows straddling the reset anchor (same rows as straddlingKm);
+     *  subtracted from tripCount when the reset excludes the straddling row whole. */
+    val straddlingTripCount: Int,
+    /** Km from driving rows already written to Room for the current live session
+     *  (start_ts >= sessionStart). Subtracted from the live contribution so Room and live
+     *  don't double-count the same trip when TripRecorder closes at DRIVE→ACC while the
+     *  session is still alive. Zero when sessionStart = Long.MAX_VALUE (no active session). */
+    val landedSessionKm: Double,
+    /** kWh from driving rows already landed for the current live session. */
+    val landedSessionKwh: Double,
+    /** Duration ms from driving rows already landed for the current live session. */
+    val landedSessionMs: Long,
 )

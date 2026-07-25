@@ -16,6 +16,7 @@ import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.dao.TripCounterStats
 import com.bydmate.app.data.local.dao.TripSummary
 import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.database.AppDatabase
@@ -125,6 +126,7 @@ class SettingsViewModelTest {
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()
         override suspend fun getForEmaSince(fromTs: Long): List<TripEntity> = emptyList()
         override suspend fun getRecentForEmaFiltered(minKm: Double, limit: Int): List<TripEntity> = emptyList()
+        override fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats> = flowOf(TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L))
     }
 
     private class StubTripPointDao : TripPointDao {

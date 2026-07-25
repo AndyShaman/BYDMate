@@ -3,6 +3,7 @@ package com.bydmate.app.data.repository
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.trips.TripResetState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -482,6 +483,25 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setLastStateTs(ts: Long) =
         setString(KEY_LAST_STATE_TS, ts.toString())
+
+    /** Trip 1/2 dashboard counter anchors (n = 1 or 2). Generic settings rows, no migration. */
+    suspend fun getTripResetState(n: Int): TripResetState = TripResetState(
+        resetTs = getString("trip${n}_reset_ts", "0").toLongOrNull() ?: 0L,
+        corrKm = getString("trip${n}_corr_km", "0").toDoubleOrNull() ?: 0.0,
+        corrKwh = getString("trip${n}_corr_kwh", "0").toDoubleOrNull() ?: 0.0,
+        corrMs = getString("trip${n}_corr_ms", "0").toLongOrNull() ?: 0L,
+        excludeStraddling = getString("trip${n}_corr_excl", "0") == "1",
+    )
+
+    /** All 5 keys written in a single Room transaction so a process kill cannot
+     *  leave a partial anchor (e.g. resetTs updated but corrMs stale). */
+    suspend fun setTripResetState(n: Int, state: TripResetState) = setStrings(mapOf(
+        "trip${n}_reset_ts" to state.resetTs.toString(),
+        "trip${n}_corr_km" to state.corrKm.toString(),
+        "trip${n}_corr_kwh" to state.corrKwh.toString(),
+        "trip${n}_corr_ms" to state.corrMs.toString(),
+        "trip${n}_corr_excl" to if (state.excludeStraddling) "1" else "0",
+    ))
 
     suspend fun isMigrationV2_4_17Done(): Boolean =
         getString(KEY_MIGRATION_V2_4_17, "false") == "true"

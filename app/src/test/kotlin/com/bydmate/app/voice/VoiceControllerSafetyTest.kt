@@ -799,4 +799,46 @@ class VoiceControllerSafetyTest {
         assertEquals(1, feedbackCount.get())
         assertEquals("Отказ: boom", presented.get())
     }
+
+    // --- Task 5: plural seat commands fan out sequentially ---
+
+    /** Plural seat OFF fans out to BOTH seats: two sequential dispatches (driver first),
+     *  one success announce. Snapshot=null is fine: seat commands are not speed-gated. */
+    @Test
+    fun `plural seat off dispatches both seats in order`() {
+        val dispatched = mutableListOf<String>()
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
+            dispatched.add(firstArg<ActionDef>().command)
+            DispatchResult(true, null)
+        }
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(gateEnabled = true, snapshot = null, dispatcher = dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("выключи подогрев сидений"))
+        awaitTrue { dispatched.size == 2 }
+        assertEquals(listOf("主驾座椅加热关闭", "副驾座椅加热关闭"), dispatched)
+    }
+
+    /** First seat failing stops the fan-out: exactly ONE dispatch, no second write. */
+    @Test
+    fun `plural seat off stops after first failure`() {
+        val dispatched = mutableListOf<String>()
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        coEvery { dispatcher.dispatch(any<ActionDef>(), any()) } coAnswers {
+            dispatched.add(firstArg<ActionDef>().command)
+            DispatchResult(false, "нет связи")
+        }
+        val fakeAsr = FakeContinuousAsr(ready = true)
+        val controller = makeController(gateEnabled = true, snapshot = null, dispatcher = dispatcher, continuousAsr = fakeAsr)
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("выключи подогрев сидений"))
+        awaitTrue { dispatched.size == 1 }
+        Thread.sleep(300)
+        assertEquals(listOf("主驾座椅加热关闭"), dispatched)
+    }
 }

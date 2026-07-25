@@ -18,6 +18,8 @@ class HudPushLoop(
     private val sink: HudEventSink,
     private val speedSignEnabled: () -> Boolean = { true },
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
+    /** Channel A broadcaster; null keeps all existing tests unchanged. */
+    internal val amap: HudAmapBroadcaster? = null,
 ) {
     companion object {
         private const val TAG = "HudPushLoop"
@@ -26,6 +28,12 @@ class HudPushLoop(
 
     private var job: Job? = null
     private var counter = 0   // clear frames only; guidance frames carry the constant 2 in f2
+
+    /** §5 diagnostics, read by the settings dump via HudController.diag(). */
+    @Volatile var framesSent: Long = 0L; private set
+    @Volatile var lastFrameTs: Long = 0L; private set
+    @Volatile var lastRc: Int = 0; private set
+    @Volatile var nonZeroRcCount: Long = 0L; private set
 
     fun start(scope: CoroutineScope, periodMs: Long = PERIOD_MS) {
         if (job?.isActive == true) return
@@ -41,6 +49,7 @@ class HudPushLoop(
     fun stop() {
         job?.cancel()
         job = null
+        amap?.onStop()
     }
 
     /** One tick; returns whether guidance was active (input for the next tick). */
@@ -51,6 +60,7 @@ class HudPushLoop(
                 sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, HudProtobufBuilder.buildClearFrame(counter++))
                 Log.i(TAG, "guidance ended, clear frame sent")
             }
+            amap?.onSnapshot(null)
             return false
         }
         val signPng = if (speedSignEnabled() && s.speedLimit > 0) HudSpeedSign.render(s.speedLimit) else null
@@ -70,7 +80,12 @@ class HudPushLoop(
             speedSignPng = signPng,
             suppressArrow = cameraActive,
         )
-        sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame)
+        val rc = sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame)
+        framesSent++
+        lastFrameTs = System.currentTimeMillis()
+        lastRc = rc
+        if (rc != 0) nonZeroRcCount++
+        amap?.onSnapshot(s)
         return true
     }
 

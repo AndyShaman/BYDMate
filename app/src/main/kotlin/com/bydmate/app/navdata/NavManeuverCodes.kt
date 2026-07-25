@@ -31,7 +31,9 @@ object NavManeuverCodes {
         val lower = text.lowercase().trim().replace('\u00A0', ' ')
 
         val exitNum = ROUNDABOUT_EXIT_RE.find(lower)?.groupValues?.get(1)?.toIntOrNull()
-        if (exitNum != null && exitNum in 1..10) return GAODE_ROUNDABOUT_EXIT
+        // AutoNavi CCW_N_EXIT = 24+N (right-hand traffic); flat 24 only when the
+        // exit number is missing or out of the 1..10 icon range.
+        if (exitNum != null) return if (exitNum in 1..10) GAODE_ROUNDABOUT_EXIT + exitNum else GAODE_ROUNDABOUT_EXIT
 
         return when {
             "въезд на паром" in lower -> GAODE_FERRY

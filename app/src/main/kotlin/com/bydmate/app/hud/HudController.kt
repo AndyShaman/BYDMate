@@ -35,6 +35,17 @@ class HudController @Inject constructor(
 ) {
     enum class Status { OFF, UNSUPPORTED, CONNECTING, ON, BIND_FAILED }
 
+    /** Snapshot of HUD push-loop diagnostics for the settings dump. */
+    data class HudDiag(
+        val framesSent: Long,
+        val lastFrameTs: Long,
+        val lastRc: Int,
+        val nonZeroRcCount: Long,
+        val amapCapable: Boolean = false,
+        val amapFramesSent: Long = 0,
+        val amapStopsSent: Long = 0,
+    )
+
     companion object {
         private const val TAG = "HudController"
         const val PREFS_NAME = "hud"
@@ -68,6 +79,18 @@ class HudController @Inject constructor(
 
     fun setSpeedSignEnabled(on: Boolean) {
         prefs().edit().putBoolean(KEY_SPEED_SIGN, on).apply()
+    }
+
+    fun diag(): HudDiag? = loop?.let { l ->
+        HudDiag(
+            framesSent = l.framesSent,
+            lastFrameTs = l.lastFrameTs,
+            lastRc = l.lastRc,
+            nonZeroRcCount = l.nonZeroRcCount,
+            amapCapable = l.amap?.capable ?: false,
+            amapFramesSent = l.amap?.framesSent ?: 0,
+            amapStopsSent = l.amap?.stopsSent ?: 0,
+        )
     }
 
     /** True only when the feature is on AND the gateway probe confirmed support -
@@ -128,7 +151,8 @@ class HudController @Inject constructor(
                 HudIconLoader.init(context)
                 bridge = b
                 NavA11yFeed.enabled = true
-                loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() })
+                loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() },
+                    amap = HudAmapBroadcaster(context))
                     .also { it.start(scope) }
                 _status.value = Status.ON
                 Log.i(TAG, "HUD output active")

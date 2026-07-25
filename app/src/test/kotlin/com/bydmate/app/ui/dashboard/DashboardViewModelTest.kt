@@ -10,6 +10,7 @@ import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.data.local.dao.TripCounterStats
 import com.bydmate.app.data.local.dao.TripSummary
 import com.bydmate.app.data.local.dao.TripTombstoneDao
 import com.bydmate.app.data.local.database.AppDatabase
@@ -38,11 +39,14 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
+import io.mockk.spyk
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -101,6 +105,7 @@ class DashboardViewModelTest {
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()
         override suspend fun getForEmaSince(fromTs: Long): List<TripEntity> = emptyList()
         override suspend fun getRecentForEmaFiltered(minKm: Double, limit: Int): List<TripEntity> = emptyList()
+        override fun observeCounterStats(from: Long, landedFrom: Long): Flow<TripCounterStats> = flowOf(TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L))
     }
 
     private class StubTripPointDao : TripPointDao {
@@ -167,6 +172,39 @@ class DashboardViewModelTest {
         override fun getAll(): Flow<List<com.bydmate.app.data.local.entity.ChargeEntity>> = flowOf(charges)
     }
 
+    /** Overrides observeCounterStats to return a fixed stats value for counter tests. */
+    private class StubTripDaoWithCounterStats(
+        private val stats: TripCounterStats
+    ) : TripDao by StubTripDao() {
+        override fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats> = flowOf(stats)
+    }
+
+    /**
+     * Returns empty stats when from > 1 (i.e. after any real reset timestamp),
+     * and populated stats when from <= 1 (initial load with resetTs=0).
+     * Used to verify that the counter recollects ~zero after a reset.
+     */
+    private class StubTripDaoForResetBehavior : TripDao by StubTripDao() {
+        override fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats> = flowOf(
+            if (from <= 1L)
+                TripCounterStats(40.0, 9.5, 1.9, 8.0, 1.5, 2, 3_000L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
+            else
+                TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
+        )
+    }
+
+    /**
+     * Recording stub: captures the sessionStart argument passed to observeCounterStats.
+     * Used to verify that DashboardViewModel forwards the correct window boundary.
+     */
+    private class RecordingTripDao : TripDao by StubTripDao() {
+        var capturedSessionStart: Long? = null
+        override fun observeCounterStats(from: Long, sessionStart: Long): Flow<TripCounterStats> {
+            capturedSessionStart = sessionStart
+            return flowOf(TripCounterStats(0.0, 0.0, 0.0, 0.0, 0.0, 0, 0L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L))
+        }
+    }
+
     private class StubBatterySnapshotDao : BatterySnapshotDao {
         override fun getAll(): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
         override fun getRecent(limit: Int): Flow<List<BatterySnapshotEntity>> = flowOf(emptyList())
@@ -217,14 +255,17 @@ class DashboardViewModelTest {
         fakeAutoservice: VehicleApi,
         insightsManager: InsightsManager? = null,
         trips: List<TripEntity> = emptyList(),
-        charges: List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        charges: List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList(),
+        settingsRepositoryOverride: SettingsRepository? = null,
+        tripDaoOverride: TripDao? = null,
     ): DashboardViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
         val settingsDao = FakeSettingsDao()
-        val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
+        val settingsRepo = settingsRepositoryOverride
+            ?: SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
-        val tripDao = StubTripDaoWithTrips(trips)
+        val tripDao = tripDaoOverride ?: StubTripDaoWithTrips(trips)
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
@@ -367,6 +408,141 @@ class DashboardViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(7, vm.uiState.value.insightPeriodDays)
+    }
+
+    @Test
+    fun trip_counters_load_from_room_stats() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            tripDaoOverride = StubTripDaoWithCounterStats(
+                TripCounterStats(40.0, 9.5, 1.9, 8.0, 1.5, 2, 3_000L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
+            ),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        val t1 = vm.uiState.value.trip1
+        assertNotNull(t1)
+        assertEquals(40.0, t1!!.km, 0.001)
+        assertEquals(9.5, t1.kwh, 0.001)
+        assertEquals(2, t1.tripCount)
+    }
+
+    @Test
+    fun reset_persists_anchor_and_recollects() = runTest {
+        val realSettingsRepo = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
+        val spySettings = spyk(realSettingsRepo)
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            settingsRepositoryOverride = spySettings,
+            tripDaoOverride = StubTripDaoWithCounterStats(
+                TripCounterStats(40.0, 9.5, 1.9, 8.0, 1.5, 2, 3_000L, 0.0, 0.0, 0L, 0, 0.0, 0.0, 0L)
+            ),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.resetTripCounter(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+        coVerify { spySettings.setTripResetState(1, any()) }
+    }
+
+    /**
+     * After resetTripCounter the DAO is re-queried with the new resetTs (≫ 1).
+     * StubTripDaoForResetBehavior returns empty stats for any from > 1, so trip1.km
+     * must drop to ~0 after the reset completes.
+     *
+     * Closes Minor-b from the audit: verifies the recollect actually lands.
+     */
+    @Test
+    fun reset_recollects_and_shows_zero_when_no_trips_after_anchor() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            tripDaoOverride = StubTripDaoForResetBehavior(),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        // Initial state: resetTs=0 → DAO returns 40km.
+        assertEquals(40.0, vm.uiState.value.trip1!!.km, 0.001)
+
+        vm.resetTripCounter(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // After reset: resetTs = System.currentTimeMillis() >> 1 → DAO returns 0.
+        assertEquals(0.0, vm.uiState.value.trip1!!.km, 0.001)
+    }
+
+    @Test
+    fun toggle_trip_expanded_is_mutually_exclusive() = runTest {
+        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(null, available = false))
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.toggleTripExpanded(1)
+        assertTrue(vm.uiState.value.trip1Expanded)
+        vm.toggleTripExpanded(2)
+        assertTrue(vm.uiState.value.trip2Expanded)
+        assertFalse(vm.uiState.value.trip1Expanded)
+    }
+
+    /**
+     * Recording-stub test: when the VM starts with no active session
+     * (TrackingService.sessionStartedAt = null), the DAO must be called
+     * with sessionStart = Long.MAX_VALUE so all landed-session buckets return zero.
+     * Window integrity is guaranteed by liveWholeSession; its initial value (true)
+     * is immaterial here since live km/kWh are zero anyway (no active session).
+     */
+    @Test
+    fun `DAO receives sessionStart MAX_VALUE when no active session`() = runTest {
+        val recordingDao = RecordingTripDao()
+        buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            tripDaoOverride = recordingDao,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(Long.MAX_VALUE, recordingDao.capturedSessionStart)
+    }
+
+    /**
+     * Codex round-5 Major-1: reset with no active session (sessionStartedAt=null in companion).
+     * continuous = liveWholeSession.value && sessionStartedAt != null = false (no session).
+     * DashboardViewModel must write excludeStraddling=true, corrKm=0, corrKwh=0.
+     */
+    @Test
+    fun `reset with no active session sets excludeStraddling true and zero corrections`() = runTest {
+        val fakeDao = FakeSettingsDao()
+        val settingsRepo = SettingsRepository(fakeDao, mockk<LocalePreferences>(relaxed = true))
+        val before = System.currentTimeMillis()
+
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            settingsRepositoryOverride = settingsRepo,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // TrackingService.sessionStartedAt is null in tests (no running service).
+        // continuous = false -> excludeStraddling = true, corrections = 0.
+        vm.resetTripCounter(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val loaded = settingsRepo.getTripResetState(1)
+        assertTrue("resetTs must be >= before", loaded.resetTs >= before)
+        assertTrue("excludeStraddling must be true when no active session", loaded.excludeStraddling)
+        assertEquals(0.0, loaded.corrKm, 0.0001)
+        assertEquals(0.0, loaded.corrKwh, 0.0001)
+    }
+
+    /**
+     * Codex round-5: reset_persists_anchor_and_recollects still works (regression guard).
+     * spyk verifies setTripResetState is still called after the refactor.
+     */
+    @Test
+    fun `degraded reset persists anchor via setTripResetState`() = runTest {
+        val realSettingsRepo = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
+        val spySettings = spyk(realSettingsRepo)
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            settingsRepositoryOverride = spySettings,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.resetTripCounter(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { spySettings.setTripResetState(1, any()) }
     }
 
     @Test

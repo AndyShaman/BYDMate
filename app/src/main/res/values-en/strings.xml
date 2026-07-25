@@ -484,15 +484,22 @@
     <string name="dashboard_unit_km">km</string>
     <string name="dashboard_unit_kwh">kWh</string>
     <string name="dashboard_range_label">estimated range</string>
-    <string name="dashboard_idle_time_min">%1$.0f min</string>
-    <string name="dashboard_idle_time_hours">%1$.1f h</string>
-    <string name="dashboard_idle_drain_parking_label">parking</string>
-    <string name="dashboard_idle_drain_title">Idle drain</string>
-    <string name="dashboard_idle_drain_rate_label">Rate</string>
-    <string name="dashboard_idle_drain_rate_value">%1$.2f kWh/h</string>
-    <string name="dashboard_idle_drain_week_label">7 days</string>
-    <string name="dashboard_idle_drain_week_value">%1$.1f kWh</string>
-    <string name="dashboard_idle_drain_avg_day_label">Avg. per day</string>
+    <!-- Trip 1/2 dashboard counters -->
+    <string name="dashboard_trip_since">since %1$s · %2$d d</string>
+    <string name="dashboard_trip_since_all_time">all time</string>
+    <string name="dashboard_trip_count_label">Trips</string>
+    <string name="dashboard_trip_driving_time_label">Driving time</string>
+    <string name="dashboard_trip_time_hours_min">%1$d h %2$d min</string>
+    <string name="dashboard_trip_time_min">%1$d min</string>
+    <string name="dashboard_trip_kwh_total_label">Total consumption</string>
+    <string name="dashboard_trip_kwh_driving_label">driving</string>
+    <string name="dashboard_trip_kwh_idle_label">parked</string>
+    <string name="dashboard_trip_kwh_value">%1$s kWh</string>
+    <string name="dashboard_trip_avg_label">Average</string>
+    <string name="dashboard_trip_avg_value">%1$s kWh/100km</string>
+    <string name="dashboard_trip_cost_label">Cost</string>
+    <string name="dashboard_trip_reset_hint">Long-press a TRIP button to reset the counter</string>
+
     <string name="dashboard_battery_temp_label">battery temp.</string>
     <string name="dashboard_battery_voltage_label">12V system</string>
     <string name="dashboard_insight_no_data">Not enough data to analyze</string>

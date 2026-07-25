@@ -443,8 +443,16 @@ class InsightsManager @Inject constructor(
         val drainHours = idleDrainDao.getHoursSince(weekAgo)
 
         val liveData = TrackingService.lastData.value
-        val cellDeltaMv = if (liveData?.maxCellVoltage != null && liveData.minCellVoltage != null) {
-            (liveData.maxCellVoltage - liveData.minCellVoltage) * 1000.0
+        // Cell delta is diagnostic only on the LFP plateau (SOC 20-80%, BYD's check
+        // band); at the top of charge divergence is normal physics, so outside the
+        // band it is not reported to the insight engines at all (#113).
+        val liveSoc = liveData?.soc
+        val cellDeltaMv = if (liveData?.maxCellVoltage != null && liveData.minCellVoltage != null &&
+            liveSoc != null && liveSoc in 20..80
+        ) {
+            // Whole-millivolt rounding: exact 50/90 mV thresholds downstream must not
+            // miss on IEEE 754 subtraction noise ((3.43 - 3.34) * 1000 = 89.9999…).
+            Math.round((liveData.maxCellVoltage - liveData.minCellVoltage) * 1000.0).toDouble()
         } else null
 
         var v12TrendDelta: Double? = null

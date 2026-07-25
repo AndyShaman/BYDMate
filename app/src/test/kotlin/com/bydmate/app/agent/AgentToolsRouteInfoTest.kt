@@ -13,6 +13,7 @@ import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.domain.calculator.RangeEstimate
 import com.bydmate.app.media.NaviNotificationParser
 import com.bydmate.app.media.NaviRouteHolder
 import com.bydmate.app.media.NaviScreenReader
@@ -132,7 +133,8 @@ class AgentToolsRouteInfoTest {
         )
         val t = tools()
         every { gate.vehicleSnapshot() } returns AgentToolsReadTest.snapshot(soc = 80, totalElec = 1234.5)
-        coEvery { range.estimate(80, 1234.5) } returns 320.0
+        coEvery { range.estimateDetailed(80, 1234.5) } returns
+            RangeEstimate(rangeKm = 320.0, avgKwhPer100 = 18.0, capacityKwh = 72.9, remainingKwh = 200.0)
         val out = JSONObject(t.execute(AgentToolCall("1", "get_route_info", "{}")))
         assertEquals(80, out.getInt("soc"))
         assertEquals(320, out.getInt("range_km"))
