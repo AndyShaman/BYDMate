@@ -805,11 +805,22 @@ object ClusterProjectionManager {
                 delay(100)
                 anchorSurface?.takeIf { it.isValid }?.let { surface ->
                     if (stockProjectionSuspended) runCatching { helper.setStockProjectionEnabled(false) }
+                    if (autoContainerEnabled(context)) powerUpCompositorForProjection(context, helper)
                     return if (projectOnAnchorSurface(context, helper, surface)) null else "projection"
                 }
             }
         }
+        if (autoContainerEnabled(context)) powerUpCompositorForProjection(context, helper)
         return if (projectThroughDaemonPresentation(context, helper)) null else "projection"
+    }
+
+    private suspend fun powerUpCompositorForProjection(context: Context, helper: HelperClient) {
+        @Suppress("ApplySharedPref")
+        val markerWritten = withContext(Dispatchers.IO) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
+        }
+        if (markerWritten) runCatching { helper.setClusterContainerMode(true) }
     }
 
     /** Uses the SurfaceView already hosted by ClusterAnchorActivity on the private display. */

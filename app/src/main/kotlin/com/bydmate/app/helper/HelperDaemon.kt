@@ -1041,7 +1041,9 @@ private fun resolveOrLaunchTask(packageName: String): Int {
 
 /**
  * Launches [packageName] on [displayId] and pins it there with a short persistence loop
- * (move -> bounds -> focus, x2). Returns true once redirection ran. Mirrors CarControlImpl.launchAndForce.
+ * (move -> bounds, x2). The target is deliberately not focused: on DiLink 5, focusing a task on
+ * the nested VirtualDisplay hides the display-2 anchor Activity, destroys its Surface, and makes
+ * the VirtualDisplay disappear. Returns true once redirection ran.
  * Blocking (Thread.sleep) — runs on a binder threadpool thread; the app side uses a 15s timeout.
  */
 private fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean {
@@ -1049,14 +1051,13 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
     if (taskId <= 0) return false
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
-    // on a fullscreen task — that must NOT abort the move/focus or bubble up as a launchAndForce
+    // on a fullscreen task — that must NOT abort the move or bubble up as a launchAndForce
     // failure, otherwise the caller tears down the VirtualDisplay Navi was just moved onto before it
     // can render. The VD size (mini=640 / full=1280) already sets the geometry, so a resize failure
     // is harmless.
     repeat(2) {
         runCatching { moveTaskToDisplayReflect(taskId, displayId) }
         runCatching { setTaskBoundsReflect(taskId, 0, 0, width, height) }
-        runCatching { setFocusedTaskReflect(taskId) }
         Thread.sleep(200L)
     }
     return true

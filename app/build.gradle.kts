@@ -29,8 +29,8 @@ android {
         targetSdk = 29
         // DM build based on upstream 3.8.1. Keep code above upstream 383
         // so installed DM builds receive this update.
-        versionCode = 384
-        versionName = "3.8.1-dm.1"
+        versionCode = 385
+        versionName = "3.8.1-dm.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
