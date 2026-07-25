@@ -57,7 +57,7 @@ class HudController @Inject constructor(
     @Volatile private var loop: HudPushLoop? = null
 
     private val _status = MutableStateFlow(
-        if (isEnabled() && !prefs().getBoolean(KEY_SUPPORTED, true)) Status.UNSUPPORTED else Status.OFF)
+        if (isEnabled() && !prefs().getBoolean(KEY_SUPPORTED, false)) Status.UNSUPPORTED else Status.OFF)
     val status: StateFlow<Status> = _status.asStateFlow()
 
     private fun prefs() = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -72,7 +72,7 @@ class HudController @Inject constructor(
 
     /** True only when the feature is on AND the gateway probe confirmed support -
      *  the a11y keep-alive gate must not fire on the raw pref (Codex fix 1). */
-    fun requiresA11y(): Boolean = isEnabled() && prefs().getBoolean(KEY_SUPPORTED, true) &&
+    fun requiresA11y(): Boolean = isEnabled() && prefs().getBoolean(KEY_SUPPORTED, false) &&
         HudSomeIpBridge.isServicePresent(context.packageManager)
 
     fun setEnabled(on: Boolean) {

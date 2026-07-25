@@ -1646,7 +1646,7 @@ class SettingsViewModel @Inject constructor(
                 val hudPrefs = appContext.getSharedPreferences(
                     com.bydmate.app.hud.HudController.PREFS_NAME, Context.MODE_PRIVATE)
                 appendLine("enabled: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_ENABLED, false)}")
-                appendLine("supported_pref: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SUPPORTED, true)}")
+                appendLine("supported_pref: ${hudPrefs.getBoolean(com.bydmate.app.hud.HudController.KEY_SUPPORTED, false)}")
                 appendLine("status: ${hudController.status.value}")
                 val gatewayPresent =
                     com.bydmate.app.hud.HudSomeIpBridge.isServicePresent(appContext.packageManager)

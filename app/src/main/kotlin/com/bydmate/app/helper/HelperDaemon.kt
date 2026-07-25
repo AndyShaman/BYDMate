@@ -1,13 +1,21 @@
 @file:JvmName("HelperDaemon")
 package com.bydmate.app.helper
 
+import android.app.Presentation
 import android.content.Context
+import android.graphics.Color
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Binder
+import android.os.Bundle
+import android.os.Handler
 import android.view.Surface
+import android.view.SurfaceHolder
+import android.view.SurfaceView
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
@@ -105,6 +113,9 @@ fun main(args: Array<String>) {
     // Keeps created VirtualDisplays alive (their backing Surface comes from the app overlay).
     // Keyed by displayId so TX_RELEASE_VIRTUAL_DISPLAY can release the right one.
     val virtualDisplays = ConcurrentHashMap<Int, VirtualDisplay>()
+    // Presentation hosts are needed on DiLink builds where the IPC display is private to system
+    // processes. Keyed by nested VirtualDisplay id so release owns the complete lifecycle.
+    val presentationHosts = ConcurrentHashMap<Int, Presentation>()
 
     // Step 3: build our stub Binder.
     val helperBinder = object : Binder() {
@@ -211,10 +222,72 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_CREATE_PRESENTATION_VIRTUAL_DISPLAY -> runCatching {
+                    val name = data.readString() ?: "BYDMate_IPC_VD"
+                    val width = data.readInt(); val height = data.readInt()
+                    val density = data.readInt(); val vdFlags = data.readInt()
+                    val clusterDisplayId = data.readInt()
+                    val ctx = systemContext
+                    val id = if (ctx == null) {
+                        -1
+                    } else {
+                        createPresentationVirtualDisplay(
+                            ctx,
+                            virtualDisplays,
+                            presentationHosts,
+                            name,
+                            width,
+                            height,
+                            density,
+                            vdFlags,
+                            clusterDisplayId,
+                        )
+                    }
+                    if (id > 0) { reply?.writeInt(0); reply?.writeInt(id) }
+                    else { reply?.writeInt(-1); reply?.writeInt(0) }
+                    true
+                }.getOrElse {
+                    System.err.println("ERR: create IPC Presentation ${it.message}")
+                    reply?.writeInt(-1); reply?.writeInt(0); true
+                }
+
+                HelperBinderProtocol.TX_LAUNCH_CLUSTER_ANCHOR -> runCatching {
+                    val displayId = data.readInt()
+                    val result = shExec(
+                        "am start --display \"\$1\" -n \"\$2\"",
+                        displayId.toString(),
+                        HelperBinderProtocol.CLUSTER_ANCHOR_COMPONENT,
+                    )
+                    reply?.writeInt(if (result.code == 0) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_SET_STOCK_PROJECTION -> runCatching {
+                    val enabled = data.readInt() != 0
+                    if (enabled) {
+                        val result = shExec(
+                            "am startservice -n \"\$1\"",
+                            HelperBinderProtocol.STOCK_VIRTUAL_BIND_COMPONENT,
+                        )
+                        reply?.writeInt(if (result.code == 0) 0 else -1)
+                    } else {
+                        val result = shExec(
+                            "i=0; while [ \$i -lt 8 ]; do am force-stop \"\$1\" >/dev/null 2>&1; i=\$((i+1)); sleep 0.25; done",
+                            HelperBinderProtocol.STOCK_MAP_PACKAGE,
+                        )
+                        reply?.writeInt(if (result.code == 0) 0 else -1)
+                    }
+                    reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_RELEASE_VIRTUAL_DISPLAY -> runCatching {
                     val displayId = data.readInt()
                     val vd = virtualDisplays.remove(displayId)
                     vd?.release()
+                    presentationHosts.remove(displayId)?.let { presentation ->
+                        Handler(Looper.getMainLooper()).post { runCatching { presentation.dismiss() } }
+                    }
                     reply?.writeInt(if (vd != null) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -610,6 +683,85 @@ private fun createVirtualDisplay(
     val id = vd.display?.displayId ?: -1
     if (id <= 0) { vd.release(); return -1 }
     store[id] = vd
+    return id
+}
+
+/**
+ * Creates a full-screen Presentation on the private BYD IPC display and uses its SurfaceView as
+ * the sink for a nested VirtualDisplay. All window work happens on the daemon main looper; the
+ * Binder thread waits only until Surface creation.
+ */
+private fun createPresentationVirtualDisplay(
+    ctx: Context,
+    displays: ConcurrentHashMap<Int, VirtualDisplay>,
+    hosts: ConcurrentHashMap<Int, Presentation>,
+    name: String,
+    width: Int,
+    height: Int,
+    density: Int,
+    flags: Int,
+    clusterDisplayId: Int,
+): Int {
+    val displayManager = ctx.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+    val clusterDisplay = displayManager.getDisplay(clusterDisplayId) ?: return -1
+    val ready = CountDownLatch(1)
+    var surface: Surface? = null
+    var presentation: Presentation? = null
+
+    Handler(Looper.getMainLooper()).post {
+        runCatching {
+            val host = object : Presentation(ctx, clusterDisplay) {
+                override fun onCreate(savedInstanceState: Bundle?) {
+                    super.onCreate(savedInstanceState)
+                    val view = SurfaceView(context).apply {
+                        setBackgroundColor(Color.BLACK)
+                        holder.setFixedSize(width, height)
+                        holder.addCallback(object : SurfaceHolder.Callback {
+                            override fun surfaceCreated(holder: SurfaceHolder) {
+                                surface = holder.surface
+                                ready.countDown()
+                            }
+
+                            override fun surfaceChanged(
+                                holder: SurfaceHolder,
+                                format: Int,
+                                width: Int,
+                                height: Int,
+                            ) = Unit
+
+                            override fun surfaceDestroyed(holder: SurfaceHolder) = Unit
+                        })
+                    }
+                    setContentView(view)
+                }
+            }
+            presentation = host
+            host.show()
+        }.onFailure {
+            System.err.println("ERR: show IPC Presentation ${it.message}")
+            ready.countDown()
+        }
+    }
+
+    if (!ready.await(3, TimeUnit.SECONDS)) {
+        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
+        return -1
+    }
+    val sink = surface?.takeIf { it.isValid } ?: run {
+        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
+        return -1
+    }
+    val id = createVirtualDisplay(ctx, displays, name, width, height, density, sink, flags)
+    if (id <= 0) {
+        presentation?.let { Handler(Looper.getMainLooper()).post { runCatching { it.dismiss() } } }
+        return -1
+    }
+    val livePresentation = presentation
+    if (livePresentation == null) {
+        displays.remove(id)?.release()
+        return -1
+    }
+    hosts[id] = livePresentation
     return id
 }
 
