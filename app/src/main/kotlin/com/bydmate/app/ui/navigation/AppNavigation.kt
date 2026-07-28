@@ -26,6 +26,7 @@ import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Bolt
 import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
+import androidx.compose.material.icons.outlined.Radio
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -48,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -64,6 +66,7 @@ import com.bydmate.app.ui.dashboard.DashboardScreen
 import com.bydmate.app.ui.settings.DonateDialog
 import com.bydmate.app.ui.settings.DonateEntry
 import com.bydmate.app.ui.settings.DonationReminder
+import com.bydmate.app.ui.radio.RadioScreen
 import com.bydmate.app.ui.settings.SettingsScreen
 import com.bydmate.app.ui.settings.UpdateDialog
 import com.bydmate.app.ui.settings.UpdateState
@@ -76,6 +79,7 @@ enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Trips("trips", R.string.nav_tab_trips, Icons.Outlined.DirectionsCar),
     Charges("charges", R.string.nav_tab_charges, Icons.Outlined.BatteryChargingFull),
     Automation("automation", R.string.nav_tab_automation, Icons.Outlined.Bolt),
+    Radio("radio", R.string.nav_tab_radio, Icons.Outlined.Radio),
     Settings("settings", R.string.nav_tab_settings, Icons.Outlined.Settings)
 }
 
@@ -89,8 +93,12 @@ fun AppNavigation(
     val currentDestination = navBackStackEntry?.destination
 
     var startDestination by remember { mutableStateOf<String?>(null) }
+    // Read once behind the same loading gate as the start destination, so the very first frame of
+    // the bar already has the right tab count instead of flickering a sixth tab in.
+    var radioEnabledInitial by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
+        radioEnabledInitial = settingsRepository.isRadioEnabled()
         startDestination = if (settingsRepository.isSetupCompleted()) "dashboard" else "welcome"
     }
 
@@ -194,6 +202,21 @@ fun AppNavigation(
 
     val isWelcome = currentDestination?.route == "welcome"
 
+    // Radio is opt-in: its tab is absent from the bar until switched on in Settings. The route
+    // itself stays registered so a restored back stack cannot land on a missing destination —
+    // instead we bounce it back to the dashboard below.
+    val radioEnabled by settingsRepository.observeRadioEnabled()
+        .collectAsStateWithLifecycle(initialValue = radioEnabledInitial)
+    LaunchedEffect(radioEnabled, currentDestination?.route) {
+        if (!radioEnabled && currentDestination?.route == Screen.Radio.route) {
+            navController.navigate(Screen.Dashboard.route) {
+                popUpTo(navController.graph.findStartDestination().id) { saveState = true }
+                launchSingleTop = true
+            }
+        }
+    }
+    val visibleScreens = Screen.entries.filter { it != Screen.Radio || radioEnabled }
+
     Scaffold(
         containerColor = NavyDark,
         bottomBar = {
@@ -201,7 +224,7 @@ fun AppNavigation(
                 NavigationBar(
                     containerColor = NavBarBackground
                 ) {
-                    Screen.entries.forEach { screen ->
+                    visibleScreens.forEach { screen ->
                         NavigationBarItem(
                             icon = {
                                 Icon(
@@ -255,6 +278,7 @@ fun AppNavigation(
                 ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
             }
             composable(Screen.Automation.route) { AutomationScreen() }
+            composable(Screen.Radio.route) { RadioScreen() }
             composable(Screen.Settings.route) {
                 SettingsScreen(
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },

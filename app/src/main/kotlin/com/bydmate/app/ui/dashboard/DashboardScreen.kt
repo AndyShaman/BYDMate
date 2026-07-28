@@ -72,6 +72,7 @@ import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
 import com.bydmate.app.ui.components.consumptionColor
+import com.bydmate.app.ui.radio.DashboardRadioControl
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.widget.TRIP_DISTANCE_TREND_THRESHOLD_KM
 import com.bydmate.app.ui.widget.formatDurationShort
@@ -478,6 +479,9 @@ fun DashboardScreen(
                     StatCard(stringResource(R.string.dashboard_stat_consumption), if (state.avgConsumption > 0) "%.1f/100".format(state.avgConsumption) else "—", null, consColor, Modifier.weight(1f))
                     StatCard(stringResource(R.string.dashboard_stat_cost), "%.2f %s".format(state.totalCost, state.currencySymbol), null, AccentGreen, Modifier.weight(1f))
                 }
+
+                // Renders nothing while Radio is switched off in Settings.
+                DashboardRadioControl()
 
                 SectionHeader(text = stringResource(R.string.dashboard_recent_trips_title))
                 Row(

@@ -1231,4 +1231,47 @@
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
     <string name="settings_secret_show">Показать ключ</string>
     <string name="settings_secret_hide">Скрыть ключ</string>
+    <!-- Radio tab -->
+    <string name="nav_tab_radio">Радио</string>
+    <string name="radio_empty">Пока нет станций. Добавьте первую радиостанцию.</string>
+    <string name="radio_add_button">Добавить</string>
+    <string name="radio_status_idle">Не воспроизводится</string>
+    <string name="radio_status_buffering">Буферизация…</string>
+    <string name="radio_status_playing">Играет</string>
+    <string name="radio_status_paused">Пауза</string>
+    <string name="radio_action_stop">Стоп</string>
+    <string name="radio_error_stream">Не удалось воспроизвести поток. Проверьте URL и подключение.</string>
+    <string name="radio_error_audio_focus">Аудио занято другим приложением</string>
+    <string name="radio_edit_dialog_title_new">Новая радиостанция</string>
+    <string name="radio_edit_dialog_title_edit">Редактировать станцию</string>
+    <string name="radio_edit_name_label">Название</string>
+    <string name="radio_edit_url_label">URL потока</string>
+    <string name="radio_edit_url_hint">Прямая ссылка на поток (mp3, aac, HLS)</string>
+    <string name="radio_edit_icon_label">URL иконки (необязательно)</string>
+    <string name="radio_edit_icon_pick">Выбрать изображение с устройства</string>
+    <string name="radio_delete_confirm_title">Удалить станцию?</string>
+    <string name="radio_delete_confirm_text">%1$s — восстановить будет нельзя.</string>
+    <!-- Radio: dashboard control and settings -->
+    <string name="radio_empty_short">Нет станций</string>
+    <string name="radio_pick_station">Нажмите, чтобы выбрать станцию</string>
+    <string name="radio_action_play">Играть</string>
+    <string name="radio_action_prev">Предыдущая</string>
+    <string name="radio_action_next">Следующая</string>
+    <string name="settings_section_radio_title">Радио</string>
+    <string name="settings_radio_enabled_title">Вкладка «Радио»</string>
+    <string name="settings_radio_enabled_desc">Показывать вкладку «Радио» и блок управления на Главной. По умолчанию выключено.</string>
+    <string name="settings_radio_saver_title">Экономить трафик</string>
+    <string name="settings_radio_saver_desc">Играть встроенные станции с облегчённого потока. Заметно меньше трафика при небольшой потере качества. Станции без второго потока и ваши собственные не меняются.</string>
+    <string name="settings_radio_restore_title">Стартовый набор станций</string>
+    <string name="settings_radio_restore_desc">Вернуть встроенные станции, которые вы удалили. Ваши собственные станции не тронутся.</string>
+    <string name="settings_radio_restore_button">Восстановить</string>
+    <string name="settings_radio_restore_done">Добавлено станций: %1$d</string>
+    <string name="settings_radio_restore_nothing">Все встроенные станции уже в списке</string>
+    <string name="settings_radio_station_count">Станций в списке: %1$d</string>
+    <string name="radio_find_button">Найти</string>
+    <string name="radio_search_title">Поиск радиостанций</string>
+    <string name="radio_search_field">Название станции</string>
+    <string name="radio_search_sources">Источники: %1$s</string>
+    <string name="radio_search_prompt">Введите название и нажмите поиск</string>
+    <string name="radio_search_empty">Ничего не найдено</string>
 </resources>

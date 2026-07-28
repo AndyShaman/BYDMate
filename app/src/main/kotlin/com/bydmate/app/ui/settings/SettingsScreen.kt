@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhoneAndroid
 import androidx.compose.material.icons.outlined.Place
+import androidx.compose.material.icons.outlined.Radio
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -97,6 +99,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.horizontalScroll
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bydmate.app.media.RadioController
+import com.bydmate.app.ui.radio.RadioViewModel
+import com.bydmate.app.ui.radio.toTracks
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -135,6 +140,7 @@ private enum class SettingsSection(@StringRes val labelRes: Int, val icon: Image
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
+    RADIO(R.string.settings_section_radio_title, Icons.Outlined.Radio),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     SERVICE(R.string.settings_section_service_title, Icons.Outlined.Build),
     APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
@@ -265,6 +271,7 @@ fun SettingsScreen(
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.PLACES -> PlacesSection()
+                        SettingsSection.RADIO -> RadioSection()
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -831,6 +838,58 @@ private fun WidgetSection() {
 private fun PlacesSection() {
     SectionHeader(text = stringResource(R.string.settings_section_places_title))
     PlacesInlineContent()
+}
+
+@Composable
+private fun RadioSection(viewModel: RadioViewModel = hiltViewModel()) {
+    val context = LocalContext.current
+    val enabled by viewModel.enabled.collectAsStateWithLifecycle()
+    val stations by viewModel.stations.collectAsStateWithLifecycle()
+    val dataSaver by viewModel.dataSaver.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        viewModel.presetsRestored.collect { added ->
+            val message = if (added > 0) {
+                context.getString(R.string.settings_radio_restore_done, added)
+            } else {
+                context.getString(R.string.settings_radio_restore_nothing)
+            }
+            Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_section_radio_title))
+    SettingToggleRow(
+        title = stringResource(R.string.settings_radio_enabled_title),
+        description = stringResource(R.string.settings_radio_enabled_desc),
+        checked = enabled,
+        onCheckedChange = { checked ->
+            // Switching off must not leave a stream playing behind an invisible UI.
+            if (!checked) RadioController.stop(context)
+            viewModel.setEnabled(checked)
+        },
+    )
+    SettingDivider()
+    SettingToggleRow(
+        title = stringResource(R.string.settings_radio_saver_title),
+        description = stringResource(R.string.settings_radio_saver_desc),
+        checked = dataSaver,
+        onCheckedChange = { checked ->
+            viewModel.setDataSaver(checked)
+            // A stream already playing would otherwise keep the old bitrate until the driver
+            // switches station by hand.
+            RadioController.reload(context, stations.toTracks(context, checked))
+        },
+    )
+    SettingDivider()
+    SettingActionRow(
+        title = stringResource(R.string.settings_radio_restore_title),
+        description = stringResource(R.string.settings_radio_restore_desc),
+        buttonLabel = stringResource(R.string.settings_radio_restore_button),
+        onClick = { viewModel.restorePresets() },
+        enabled = enabled,
+    )
+    SettingHint(stringResource(R.string.settings_radio_station_count, stations.size))
 }
 
 @Composable

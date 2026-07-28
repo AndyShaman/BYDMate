@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -26,6 +27,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.ui.radio.RadioStationIcon
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurfaceElevated
@@ -102,6 +104,8 @@ fun WidgetButtonPanel(
     expanded: Boolean,
     scaleFactor: Float,
     onButtonClick: (Int) -> Unit,
+    radio: RadioCell? = null,
+    onRadioClick: () -> Unit = {},
 ) {
     val baseDensity = LocalDensity.current
     val scaledDensity = Density(
@@ -116,19 +120,33 @@ fun WidgetButtonPanel(
         val panelW = WidgetButtonLayout.PANEL_WIDTH_DP.dp
         val panelH = WidgetButtonLayout.PANEL_HEIGHT_DP.dp
 
+        // A fifth cell would leave 2.5 dp between buttons at the full size, so the cells shrink
+        // when radio is present. The pocket itself still measures BUTTON_DP, so the window
+        // geometry in [WidgetButtonLayout] is untouched and nothing can be clipped.
+        val cell = if (radio != null) RADIO_ROW_CELL_DP.dp else button
+
         Box(modifier = Modifier.size(width = panelW, height = panelH + pocket)) {
-            // Bottom row (buttons 1–4): spans the panel width in the pocket below.
+            // Bottom row: radio (when the feature is on) followed by automation buttons 1–4.
             Row(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .width(panelW)
                     .height(button),
                 horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                ButtonCell(number = 1, expanded = expanded, staggerIndex = 0, onClick = onButtonClick)
-                ButtonCell(number = 2, expanded = expanded, staggerIndex = 1, onClick = onButtonClick)
-                ButtonCell(number = 3, expanded = expanded, staggerIndex = 2, onClick = onButtonClick)
-                ButtonCell(number = 4, expanded = expanded, staggerIndex = 3, onClick = onButtonClick)
+                if (radio != null) {
+                    RadioCellView(
+                        state = radio,
+                        size = cell,
+                        expanded = expanded,
+                        onClick = onRadioClick,
+                    )
+                }
+                ButtonCell(number = 1, expanded = expanded, staggerIndex = 0, size = cell, onClick = onButtonClick)
+                ButtonCell(number = 2, expanded = expanded, staggerIndex = 1, size = cell, onClick = onButtonClick)
+                ButtonCell(number = 3, expanded = expanded, staggerIndex = 2, size = cell, onClick = onButtonClick)
+                ButtonCell(number = 4, expanded = expanded, staggerIndex = 3, size = cell, onClick = onButtonClick)
             }
         }
     }
@@ -144,6 +162,7 @@ private fun ButtonCell(
     number: Int,
     expanded: Boolean,
     staggerIndex: Int,
+    size: androidx.compose.ui.unit.Dp,
     onClick: (Int) -> Unit,
 ) {
     // progress: 0 = hidden behind panel edge, 1 = fully visible in position.
@@ -158,7 +177,7 @@ private fun ButtonCell(
 
     Box(
         modifier = Modifier
-            .size(WidgetButtonLayout.BUTTON_DP.dp)
+            .size(size)
             .offset(y = -dy)
             .alpha(progress)
             .background(CardSurfaceElevated, RoundedCornerShape(12.dp))
@@ -173,5 +192,66 @@ private fun ButtonCell(
             fontWeight = FontWeight.Bold,
             fontFamily = FontFamily.Monospace,
         )
+    }
+}
+
+/** Cell size once the radio cell joins the row — five cells no longer fit at [WidgetButtonLayout.BUTTON_DP]. */
+private const val RADIO_ROW_CELL_DP = 44
+
+/** What the widget needs to render the radio cell; null hides it entirely. */
+data class RadioCell(
+    val iconRef: String?,
+    val stationName: String,
+    val active: Boolean,
+    val buffering: Boolean,
+)
+
+/**
+ * Radio cell: the station's own logo doubles as the button face, so the driver reads which
+ * station is on without any text — there is no room for a name at this size.
+ *
+ * Tapping stops what is playing or starts the list; a green ring marks "on air" because the
+ * logo alone cannot say whether the stream is actually running.
+ */
+@Composable
+private fun RadioCellView(
+    state: RadioCell,
+    size: androidx.compose.ui.unit.Dp,
+    expanded: Boolean,
+    onClick: () -> Unit,
+) {
+    val progress by animateFloatAsState(
+        targetValue = if (expanded) 1f else 0f,
+        animationSpec = tween(durationMillis = 240),
+        label = "radioCellSlide",
+    )
+    val dy = ((1f - progress) * WidgetButtonLayout.BUTTON_DP).dp
+
+    Box(
+        modifier = Modifier
+            .size(size)
+            .offset(y = -dy)
+            .alpha(progress)
+            .background(CardSurfaceElevated, RoundedCornerShape(12.dp))
+            .border(
+                width = if (state.active) 2.dp else 1.5.dp,
+                color = if (state.active) AccentGreen else CardBorder,
+                shape = RoundedCornerShape(12.dp),
+            )
+            .clickable(enabled = expanded) { onClick() },
+        contentAlignment = Alignment.Center,
+    ) {
+        RadioStationIcon(
+            iconUrl = state.iconRef,
+            fallbackText = state.stationName,
+            modifier = Modifier.size(size - 10.dp),
+        )
+        if (state.buffering) {
+            CircularProgressIndicator(
+                color = AccentGreen,
+                strokeWidth = 2.dp,
+                modifier = Modifier.size(size - 22.dp),
+            )
+        }
     }
 }

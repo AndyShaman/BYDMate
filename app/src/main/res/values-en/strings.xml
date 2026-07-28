@@ -1077,4 +1077,47 @@
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
     <string name="settings_secret_show">Show key</string>
     <string name="settings_secret_hide">Hide key</string>
+    <!-- Radio tab -->
+    <string name="nav_tab_radio">Radio</string>
+    <string name="radio_empty">No stations yet. Add your first radio station.</string>
+    <string name="radio_add_button">Add</string>
+    <string name="radio_status_idle">Not playing</string>
+    <string name="radio_status_buffering">Buffering…</string>
+    <string name="radio_status_playing">Playing</string>
+    <string name="radio_status_paused">Paused</string>
+    <string name="radio_action_stop">Stop</string>
+    <string name="radio_error_stream">Could not play the stream. Check the URL and your connection.</string>
+    <string name="radio_error_audio_focus">Audio is busy in another app</string>
+    <string name="radio_edit_dialog_title_new">New radio station</string>
+    <string name="radio_edit_dialog_title_edit">Edit station</string>
+    <string name="radio_edit_name_label">Name</string>
+    <string name="radio_edit_url_label">Stream URL</string>
+    <string name="radio_edit_url_hint">Direct stream link (mp3, aac, HLS)</string>
+    <string name="radio_edit_icon_label">Icon URL (optional)</string>
+    <string name="radio_edit_icon_pick">Pick an image from the device</string>
+    <string name="radio_delete_confirm_title">Delete station?</string>
+    <string name="radio_delete_confirm_text">%1$s — this cannot be undone.</string>
+    <!-- Radio: dashboard control and settings -->
+    <string name="radio_empty_short">No stations</string>
+    <string name="radio_pick_station">Tap to pick a station</string>
+    <string name="radio_action_play">Play</string>
+    <string name="radio_action_prev">Previous</string>
+    <string name="radio_action_next">Next</string>
+    <string name="settings_section_radio_title">Radio</string>
+    <string name="settings_radio_enabled_title">Radio tab</string>
+    <string name="settings_radio_enabled_desc">Show the Radio tab and the dashboard control. Off by default.</string>
+    <string name="settings_radio_saver_title">Save mobile data</string>
+    <string name="settings_radio_saver_desc">Play built-in stations from their lighter stream. Noticeably less data for a small drop in quality. Stations with no second stream, and your own, are unchanged.</string>
+    <string name="settings_radio_restore_title">Built-in station set</string>
+    <string name="settings_radio_restore_desc">Bring back the built-in stations you deleted. Your own stations are left untouched.</string>
+    <string name="settings_radio_restore_button">Restore</string>
+    <string name="settings_radio_restore_done">Stations added: %1$d</string>
+    <string name="settings_radio_restore_nothing">All built-in stations are already in the list</string>
+    <string name="settings_radio_station_count">Stations in the list: %1$d</string>
+    <string name="radio_find_button">Find</string>
+    <string name="radio_search_title">Find a station</string>
+    <string name="radio_search_field">Station name</string>
+    <string name="radio_search_sources">Sources: %1$s</string>
+    <string name="radio_search_prompt">Type a name and hit search</string>
+    <string name="radio_search_empty">Nothing found</string>
 </resources>

@@ -20,6 +20,10 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
 import com.bydmate.app.cluster.ClusterEntryPoint
+import com.bydmate.app.media.RadioController
+import com.bydmate.app.media.RadioPlayback
+import com.bydmate.app.media.RadioStatus
+import com.bydmate.app.ui.radio.toTracks
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
@@ -35,6 +39,7 @@ import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Singleton controller that owns the floating-widget + trash-zone overlay
@@ -92,6 +97,10 @@ object WidgetController {
     private var insideTempState = mutableStateOf<Int?>(null)
     private var batTempState = mutableStateOf<Int?>(null)
     private var voltsState = mutableStateOf<Double?>(null)
+    // Radio cell: hidden until the feature is switched on, so an opted-out driver sees the
+    // widget exactly as before.
+    private var radioEnabledState = mutableStateOf(false)
+    private var radioPlaybackState = mutableStateOf(RadioPlayback())
     private var alphaState = mutableStateOf(1.0f)
     private var scaleState = mutableStateOf(1.0f)
     private var trashActive = mutableStateOf(false)
@@ -199,10 +208,22 @@ object WidgetController {
             setViewTreeLifecycleOwner(buttonLifecycleOwner)
             setViewTreeSavedStateRegistryOwner(buttonLifecycleOwner)
             setContent {
+                val playback = radioPlaybackState.value
                 WidgetButtonPanel(
                     expanded = expandedState.value,
                     scaleFactor = scaleState.value,
                     onButtonClick = { n -> onWidgetButtonClick(viewCtx, n) },
+                    radio = if (radioEnabledState.value) {
+                        RadioCell(
+                            iconRef = playback.stationIcon,
+                            stationName = playback.stationName,
+                            active = playback.isActive,
+                            buffering = playback.status == RadioStatus.BUFFERING,
+                        )
+                    } else {
+                        null
+                    },
+                    onRadioClick = { onRadioCellClick(viewCtx) },
                 )
             }
         }
@@ -381,6 +402,52 @@ object WidgetController {
                 voiceController.listening.collect { listeningState.value = it }
             } catch (e: Exception) {
                 Log.w(TAG, "listening subscription failed: ${e.message}")
+            }
+        }
+
+        scope.launch {
+            try {
+                EntryPointAccessors.fromApplication(appCtx, ClusterEntryPoint::class.java)
+                    .radioRepository()
+                    .observeEnabled()
+                    .collect { radioEnabledState.value = it }
+            } catch (e: Exception) {
+                Log.w(TAG, "radio-enabled subscription failed: ${e.message}")
+            }
+        }
+        scope.launch {
+            RadioController.state.collect { radioPlaybackState.value = it }
+        }
+    }
+
+    /**
+     * Radio cell tap: stop what is on air, or start the station list from the top.
+     *
+     * Starting needs the live list (and the data-saver choice, which rewrites stream URLs), so it
+     * goes through the repository rather than replaying a cached playlist. [RadioController]
+     * requires the main thread, hence the hop back after the DB read.
+     */
+    private fun onRadioCellClick(context: Context) {
+        collapsePanel()
+        val appContext = context.applicationContext
+        if (RadioController.state.value.isActive) {
+            RadioController.stop(appContext)
+            return
+        }
+        // dataScope lives as long as the widget is on screen; no widget, nothing to start.
+        val scope = dataScope ?: return
+        scope.launch {
+            try {
+                val tracks = withContext(Dispatchers.IO) {
+                    val repository = EntryPointAccessors
+                        .fromApplication(appContext, ClusterEntryPoint::class.java)
+                        .radioRepository()
+                    repository.getAllSnapshot().toTracks(appContext, repository.isDataSaver())
+                }
+                if (tracks.isEmpty()) return@launch
+                RadioController.play(appContext, tracks, 0)
+            } catch (e: Exception) {
+                Log.w(TAG, "radio cell start failed: ${e.message}")
             }
         }
     }

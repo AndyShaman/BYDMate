@@ -1074,4 +1074,47 @@
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
     <string name="settings_secret_show">Mostrar chave</string>
     <string name="settings_secret_hide">Ocultar chave</string>
+    <!-- Radio tab -->
+    <string name="nav_tab_radio">Rádio</string>
+    <string name="radio_empty">Ainda não há estações. Adicione a sua primeira estação de rádio.</string>
+    <string name="radio_add_button">Adicionar</string>
+    <string name="radio_status_idle">Sem reprodução</string>
+    <string name="radio_status_buffering">A carregar…</string>
+    <string name="radio_status_playing">A tocar</string>
+    <string name="radio_status_paused">Em pausa</string>
+    <string name="radio_action_stop">Parar</string>
+    <string name="radio_error_stream">Não foi possível reproduzir o stream. Verifique o URL e a ligação.</string>
+    <string name="radio_error_audio_focus">O áudio está a ser usado por outra aplicação</string>
+    <string name="radio_edit_dialog_title_new">Nova estação de rádio</string>
+    <string name="radio_edit_dialog_title_edit">Editar estação</string>
+    <string name="radio_edit_name_label">Nome</string>
+    <string name="radio_edit_url_label">URL do stream</string>
+    <string name="radio_edit_url_hint">Ligação direta do stream (mp3, aac, HLS)</string>
+    <string name="radio_edit_icon_label">URL do ícone (opcional)</string>
+    <string name="radio_edit_icon_pick">Escolher uma imagem do dispositivo</string>
+    <string name="radio_delete_confirm_title">Eliminar estação?</string>
+    <string name="radio_delete_confirm_text">%1$s — não será possível recuperar.</string>
+    <!-- Radio: dashboard control and settings -->
+    <string name="radio_empty_short">Sem estações</string>
+    <string name="radio_pick_station">Toque para escolher uma estação</string>
+    <string name="radio_action_play">Reproduzir</string>
+    <string name="radio_action_prev">Anterior</string>
+    <string name="radio_action_next">Seguinte</string>
+    <string name="settings_section_radio_title">Rádio</string>
+    <string name="settings_radio_enabled_title">Separador Rádio</string>
+    <string name="settings_radio_enabled_desc">Mostrar o separador Rádio e o controlo no Painel. Desligado por predefinição.</string>
+    <string name="settings_radio_saver_title">Economizar dados</string>
+    <string name="settings_radio_saver_desc">Tocar as estações incorporadas pelo fluxo mais leve. Bem menos dados com uma pequena perda de qualidade. Estações sem um segundo fluxo, e as suas, não mudam.</string>
+    <string name="settings_radio_restore_title">Conjunto de estações incorporadas</string>
+    <string name="settings_radio_restore_desc">Repor as estações incorporadas que eliminou. As suas próprias estações não são alteradas.</string>
+    <string name="settings_radio_restore_button">Repor</string>
+    <string name="settings_radio_restore_done">Estações adicionadas: %1$d</string>
+    <string name="settings_radio_restore_nothing">Todas as estações incorporadas já estão na lista</string>
+    <string name="settings_radio_station_count">Estações na lista: %1$d</string>
+    <string name="radio_find_button">Buscar</string>
+    <string name="radio_search_title">Buscar estação</string>
+    <string name="radio_search_field">Nome da estação</string>
+    <string name="radio_search_sources">Fontes: %1$s</string>
+    <string name="radio_search_prompt">Digite um nome e toque em buscar</string>
+    <string name="radio_search_empty">Nada encontrado</string>
 </resources>

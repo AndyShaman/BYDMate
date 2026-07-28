@@ -37,6 +37,12 @@ open class SettingsRepository @Inject constructor(
         const val KEY_DEDUP_CLEANUP_DONE = "dedup_cleanup_done"
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
         const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
+        const val KEY_RADIO_PRESETS_SEEDED = "radio_presets_seeded"
+        const val KEY_RADIO_PRESETS_RETIRED = "radio_presets_retired"
+        /** Play built-in stations from their lighter mount where they publish one. */
+        const val KEY_RADIO_DATA_SAVER = "radio_data_saver"
+        /** Radio tab + dashboard control. Off until the driver opts in. */
+        const val KEY_RADIO_ENABLED = "radio_enabled"
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
@@ -233,6 +239,43 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setConsumptionRecalcDone() =
         setString(KEY_CONSUMPTION_RECALC_DONE, "true")
+
+    /** One-shot flag: the built-in radio stations are inserted only on the very first Radio open. */
+    suspend fun isRadioPresetsSeeded(): Boolean =
+        getString(KEY_RADIO_PRESETS_SEEDED, "false") == "true"
+
+    suspend fun setRadioPresetsSeeded() =
+        setString(KEY_RADIO_PRESETS_SEEDED, "true")
+
+    /**
+     * One-shot flag: stations dropped from the built-in list are retired from an existing
+     * install exactly once, so a user who re-adds one by hand keeps it.
+     */
+    suspend fun isRadioPresetsRetired(): Boolean =
+        getString(KEY_RADIO_PRESETS_RETIRED, "false") == "true"
+
+    suspend fun setRadioPresetsRetired() =
+        setString(KEY_RADIO_PRESETS_RETIRED, "true")
+
+    /** Off by default: the Radio tab and its dashboard control appear only once switched on. */
+    suspend fun isRadioEnabled(): Boolean =
+        getString(KEY_RADIO_ENABLED, "false") == "true"
+
+    suspend fun setRadioEnabled(enabled: Boolean) =
+        setString(KEY_RADIO_ENABLED, if (enabled) "true" else "false")
+
+    fun observeRadioEnabled(): Flow<Boolean> =
+        observeString(KEY_RADIO_ENABLED).map { it == "true" }
+
+    /** Off by default: full-bitrate streams unless the driver asks to save mobile data. */
+    suspend fun isRadioDataSaver(): Boolean =
+        getString(KEY_RADIO_DATA_SAVER, "false") == "true"
+
+    suspend fun setRadioDataSaver(enabled: Boolean) =
+        setString(KEY_RADIO_DATA_SAVER, if (enabled) "true" else "false")
+
+    fun observeRadioDataSaver(): Flow<Boolean> =
+        observeString(KEY_RADIO_DATA_SAVER).map { it == "true" }
 
     suspend fun getMapTileSource(): String =
         getString(KEY_MAP_TILE_SOURCE, DEFAULT_MAP_TILE_SOURCE)

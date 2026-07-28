@@ -152,6 +152,12 @@ dependencies {
     // OkHttp
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
 
+    // Media3 (internet radio). Framework MediaPlayer cannot decode the HE-AAC (.aacp) mounts
+    // most Russian stations serve — ExoPlayer can. media3-session brings the media notification
+    // and hardware/steering-wheel transport buttons. Pinned to 1.4.x: 1.5+ needs compileSdk 35.
+    implementation("androidx.media3:media3-exoplayer:1.4.1")
+    implementation("androidx.media3:media3-session:1.4.1")
+
     // osmdroid (maps)
     implementation("org.osmdroid:osmdroid-android:6.1.20")
 

@@ -1192,4 +1192,47 @@
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
     <string name="settings_secret_show">显示密钥</string>
     <string name="settings_secret_hide">隐藏密钥</string>
+    <!-- Radio tab -->
+    <string name="nav_tab_radio">电台</string>
+    <string name="radio_empty">还没有电台。请添加第一个电台。</string>
+    <string name="radio_add_button">添加</string>
+    <string name="radio_status_idle">未播放</string>
+    <string name="radio_status_buffering">缓冲中…</string>
+    <string name="radio_status_playing">播放中</string>
+    <string name="radio_status_paused">已暂停</string>
+    <string name="radio_action_stop">停止</string>
+    <string name="radio_error_stream">无法播放该音频流。请检查网址和网络连接。</string>
+    <string name="radio_error_audio_focus">音频被其他应用占用</string>
+    <string name="radio_edit_dialog_title_new">新建电台</string>
+    <string name="radio_edit_dialog_title_edit">编辑电台</string>
+    <string name="radio_edit_name_label">名称</string>
+    <string name="radio_edit_url_label">音频流网址</string>
+    <string name="radio_edit_url_hint">直接的音频流链接（mp3、aac、HLS）</string>
+    <string name="radio_edit_icon_label">图标网址（可选）</string>
+    <string name="radio_edit_icon_pick">从设备选择图片</string>
+    <string name="radio_delete_confirm_title">删除电台？</string>
+    <string name="radio_delete_confirm_text">%1$s — 此操作无法撤销。</string>
+    <!-- Radio: dashboard control and settings -->
+    <string name="radio_empty_short">没有电台</string>
+    <string name="radio_pick_station">点按以选择电台</string>
+    <string name="radio_action_play">播放</string>
+    <string name="radio_action_prev">上一个</string>
+    <string name="radio_action_next">下一个</string>
+    <string name="settings_section_radio_title">电台</string>
+    <string name="settings_radio_enabled_title">电台标签页</string>
+    <string name="settings_radio_enabled_desc">显示电台标签页和首页上的控制条。默认关闭。</string>
+    <string name="settings_radio_saver_title">节省流量</string>
+    <string name="settings_radio_saver_desc">以低码率音源播放内置电台。流量明显减少，音质略有下降。没有第二路音源的电台和您自己添加的电台不受影响。</string>
+    <string name="settings_radio_restore_title">内置电台列表</string>
+    <string name="settings_radio_restore_desc">恢复您删除的内置电台。您自己添加的电台不会受影响。</string>
+    <string name="settings_radio_restore_button">恢复</string>
+    <string name="settings_radio_restore_done">已添加电台：%1$d</string>
+    <string name="settings_radio_restore_nothing">所有内置电台都已在列表中</string>
+    <string name="settings_radio_station_count">列表中的电台数：%1$d</string>
+    <string name="radio_find_button">搜索</string>
+    <string name="radio_search_title">搜索电台</string>
+    <string name="radio_search_field">电台名称</string>
+    <string name="radio_search_sources">来源：%1$s</string>
+    <string name="radio_search_prompt">输入名称后点击搜索</string>
+    <string name="radio_search_empty">未找到结果</string>
 </resources>
