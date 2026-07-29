@@ -7,6 +7,8 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
+// LeftTapMode is in the same package (com.bydmate.app.ui.widget) — no import needed.
+
 class WidgetPreferencesTest {
 
     private lateinit var store: MutableMap<String, Any?>
@@ -164,6 +166,31 @@ class WidgetPreferencesTest {
         val migrated = WidgetPreferences(fakeSharedPrefs(store))
         assertTrue(migrated.isLeftTapZoningEnabled())
         assertFalse(store.containsKey(WidgetPreferences.LEGACY_KEY_LEFT_TAP_NAVIGATOR))
+    }
+
+    // --- LeftTapMode tests ---
+
+    @Test fun `leftTapMode defaults to APP when key is absent`() {
+        assertFalse(store.containsKey(WidgetPreferences.KEY_LEFT_TAP_MODE))
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+
+    @Test fun `setLeftTapMode SPLIT persists`() {
+        prefs.setLeftTapMode(LeftTapMode.SPLIT)
+        assertEquals(LeftTapMode.SPLIT, prefs.getLeftTapMode())
+    }
+
+    @Test fun `setLeftTapMode round-trip SPLIT back to APP`() {
+        prefs.setLeftTapMode(LeftTapMode.SPLIT)
+        prefs.setLeftTapMode(LeftTapMode.APP)
+        assertEquals(LeftTapMode.APP, prefs.getLeftTapMode())
+    }
+
+    @Test fun `getLeftTapMode returns APP when stored value is unrecognised`() {
+        // Simulate a future enum value written by a newer install, then downgraded.
+        store[WidgetPreferences.KEY_LEFT_TAP_MODE] = "UNKNOWN_FUTURE_VALUE"
+        val fresh = WidgetPreferences(fakeSharedPrefs(store))
+        assertEquals(LeftTapMode.APP, fresh.getLeftTapMode())
     }
 
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---

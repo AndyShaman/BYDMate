@@ -653,6 +653,15 @@
     <string name="settings_config_export_confirm_title">Exportar configuração?</string>
     <string name="settings_config_export_confirm_body">O backup contém o histórico de viagens com rotas GPS e as suas chaves de API em texto simples. O ficheiro será guardado na pasta pública Download. Guarde-o num local seguro e não o partilhe.</string>
     <string name="settings_config_export_confirm_ok">Exportar</string>
+    <!-- Fid catalog dump (Task O) -->
+    <string name="settings_fid_dump_button">Salvar catálogo de fids</string>
+    <string name="settings_fid_dump_desc">Nomes e valores das constantes do SDK. Apenas identificadores técnicos: sem VIN, sem localização, sem dados pessoais</string>
+    <string name="settings_fid_dump_saved">Salvo: %1$s</string>
+    <string name="settings_fid_dump_in_progress">Lendo os fids...</string>
+    <string name="settings_fid_dump_empty">O catálogo de fids está vazio neste firmware</string>
+    <string name="settings_fid_dump_error_unavailable">daemon indisponível</string>
+    <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
+    <string name="settings_fid_dump_error_read">erro de leitura: %1$s</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Carroceria</string>
@@ -1074,4 +1083,50 @@
     <string name="settings_hud_hint">Requer versão com head-up display. Os dados vêm da janela do Yandex Navigator</string>
     <string name="settings_secret_show">Mostrar chave</string>
     <string name="settings_secret_hide">Ocultar chave</string>
+
+    <!-- Split-screen pill menu -->
+    <string name="split_menu_mirror">Trocar lados</string>
+    <string name="split_menu_swap">Trocar aplicativos</string>
+    <string name="split_menu_pick_left">Aplicativo à esquerda…</string>
+    <string name="split_menu_pick_right">Aplicativo à direita…</string>
+    <string name="split_menu_exit">Sair</string>
+    <string name="split_picker_title_change">Escolher aplicativo</string>
+    <string name="split_picker_title_left">Escolha um aplicativo para o painel esquerdo</string>
+    <string name="split_picker_title_right">Escolha um aplicativo para o painel direito</string>
+    <string name="split_picker_title_wide">Escolha um aplicativo para o painel largo (2/3)</string>
+    <string name="split_picker_title_narrow">Escolha um aplicativo para o painel estreito (1/3)</string>
+    <string name="split_freeform_reboot_hint">A tela dividida será ativada após reiniciar o carro</string>
+    <string name="split_launch_failed">Falha ao iniciar a tela dividida</string>
+    <!-- Automation action: split_screen -->
+    <string name="automation_action_split_screen">Tela dividida</string>
+    <string name="auto_act_split_screen">Tela dividida</string>
+    <!-- Automation actions: split_screen_close / split_screen_toggle (no payload) -->
+    <string name="automation_action_split_screen_close">Fechar tela dividida</string>
+    <string name="auto_act_split_screen_close">Fechar tela dividida</string>
+    <string name="automation_action_split_screen_toggle">Alternar tela dividida</string>
+    <string name="auto_act_split_screen_toggle">Alternar tela dividida</string>
+    <string name="split_action_narrow_label">Aplicativo 1/3</string>
+    <string name="split_action_wide_label">Aplicativo 2/3</string>
+    <string name="split_action_side_left">1/3 esquerda</string>
+    <string name="split_action_side_right">1/3 direita</string>
+    <string name="split_action_tap_to_configure">Escolher aplicativos</string>
+    <string name="auto_msg_split_narrow_empty">Ação #%1$d: aplicativo 1/3 não selecionado</string>
+    <string name="auto_msg_split_wide_empty">Ação #%1$d: aplicativo 2/3 não selecionado</string>
+    <string name="auto_msg_split_same_package">Ação #%1$d: os dois aplicativos devem ser diferentes</string>
+    <string name="auto_msg_split_invalid_side">Ação #%1$d: lado deve ser left ou right</string>
+    <string name="settings_widget_left_tap_mode_label">Ação do toque esquerdo</string>
+    <string name="settings_widget_left_tap_mode_app">Abrir aplicativo</string>
+    <string name="settings_widget_left_tap_mode_split">Iniciar tela dividida</string>
+    <!-- Split-screen settings section -->
+    <string name="settings_section_split_title">Tela dividida</string>
+    <string name="settings_split_enable_title">Tela dividida 1/3 + 2/3</string>
+    <string name="settings_split_enable_desc">Duas janelas freeform: uma em um terço da tela, a outra em dois terços. Desativado por padrão.</string>
+    <string name="settings_split_clear_pair_title">Redefinir último par</string>
+    <string name="settings_split_clear_pair_desc">Limpar o par de aplicativos salvo. O próximo lançamento abrirá o seletor.</string>
+    <string name="settings_split_pair_cleared">Par redefinido</string>
+    <string name="settings_split_wide_app_title">Painel largo (2/3)</string>
+    <string name="settings_split_narrow_app_title">Painel estreito (1/3)</string>
+    <string name="settings_split_app_not_selected">não selecionado</string>
+    <string name="settings_split_howto_body">Há três maneiras de ligar a tela dividida.\nA mais simples: toque no terço esquerdo do widget flutuante. Para isso, ative Zonas de toque na seção Toque no widget e escolha Iniciar tela dividida em Ação do toque esquerdo.\nPelas automações: adicione a ação Tela dividida a uma regra. Ao lado ficam Fechar tela dividida e Alternar tela dividida.\nPor voz: basta pedir ao Agente de voz para ligar a tela dividida.</string>
+    <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
 </resources>

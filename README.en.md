@@ -258,6 +258,41 @@ The arrow does not jump at every red light — it has light inertia: to change c
 
 ---
 
+## Split screen
+
+Two apps on screen at once: one takes two thirds, the other one third. A typical pair is a navigator on the wide side and music or a messenger on the narrow one. Sides can be swapped, apps can be changed on the fly, and the chosen pair is remembered.
+
+### Enabling
+
+1. Open **Settings → Split screen** and turn on the "Split screen 1/3 + 2/3" toggle.
+2. If a note about rebooting appears under the toggle, reboot the head unit once (long-press the volume wheel). If you already use the "Extended" projection mode, no reboot is needed - everything required is already active.
+
+While the feature is off, the app does not touch any system settings. Turning the toggle off restores the setting to its factory value.
+
+### Launching
+
+Three ways. The "?" badge next to the section header in Settings shows this right in the car.
+
+- **From the widget** (the easiest). In Settings, under "Widget tap", enable "Tap zoning" and set "Left tap action" to "Launch split screen". A tap on the left third of the widget now opens the split; another tap closes it.
+- **From automations.** Rules have three actions: "Split screen", "Close split screen" and "Toggle split screen". For example, start the split whenever navigation launches.
+- **By voice.** Ask the agent to turn on split screen.
+
+### First launch and choosing apps
+
+On the first launch the app asks what to show: first you pick the app for the wide part (2/3), then for the narrow one (1/3). The pair is remembered and opens right away next time. You can change apps via the pill or in Settings; the "Reset last pair" button lives there too.
+
+### The control pill
+
+While the split is active, a small pill sits at the bottom of the screen. Tapping it opens a menu: swap sides, swap apps, pick a different app for the left or right pane, exit to normal full screen. When the split closes, the pill disappears on its own.
+
+### How it coexists with everything else
+
+- If something fullscreen takes over (reverse gear, cameras, video), the split closes by itself. Bring it back the usual way - a widget tap or a voice command.
+- The Back button from BYDMate returns you to the split.
+- If you start the native DiLink split screen, ours ends cleanly - two splits cannot run at once.
+
+---
+
 ## Charges
 
 The **Charges** tab automatically logs every real top-up: list of charges by month, period and lifetime stats, AC and DC filters. Not every plug-in becomes a record: a record is created only if SoC actually rose. If somebody just touched the gun and pulled it out a minute later, nothing lands in the log.
@@ -326,7 +361,9 @@ BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Tai 3). On other 
 - **Charges**: the AC/DC algorithm was tuned for Leopard 3. On other models records may appear with delay or wrong power, especially for DC. Use manual add and edit when automation misses.
 - **Automation and floating widget**: work the same on every model since they use the car's system service.
 
-If something does not work or shows strange values, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your car model and DiLink firmware version. We need reports like that to widen support.
+If something does not work or shows strange values, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your car model and DiLink firmware version - and attach your car's parameter catalog: **Settings → Data → "Save fid catalog"**. A `fid-dump-….txt` file will appear in the Download folder. It contains technical parameter identifiers only - no VIN, no location, no personal data.
+
+Why this matters. Different BYD models use different parameter sets: a command that turns on seat ventilation on a Leopard 3 may have a different number on a Song, or not exist at all. That is exactly why some functions fail on other cars. The catalog from your car shows which parameters it really has - so we fix things using your car's data instead of guessing.
 
 ---
 

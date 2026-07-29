@@ -29,6 +29,8 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
+import com.bydmate.app.util.appLocalizedContext
+import java.io.File
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
@@ -44,9 +46,11 @@ import kotlinx.coroutines.test.setMain
 import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import io.mockk.coEvery
@@ -1118,5 +1122,205 @@ class SettingsViewModelTest {
         val vm = buildViewModel()
         vm.resetTripSourceDetection()
         verify(exactly = 1) { energyDataDeadDetector.reset() }
+    }
+
+    @Test
+    fun `dumpFids calls ensureRunning before helperClient dumpFids (C-3)`() = runTest {
+        // C-3: ensureRunning must be called before dumpFids so a stale old-format daemon is
+        // replaced before the TX_DUMP_FIDS call is attempted.
+        //
+        // Anti-vacuity: removing helperBootstrap.ensureRunning() from SettingsViewModel.dumpFids()
+        // makes "ensureRunning" absent from callOrder, failing the assertEquals assertion.
+        val callOrder = mutableListOf<String>()
+        coEvery { helperBootstrap.ensureRunning() } answers { callOrder += "ensureRunning"; true }
+        coEvery { helperClient.dumpFids() } answers { callOrder += "dumpFids"; DumpFidsResult.BinderAbsent }
+        val vm = buildViewModel()
+        vm.dumpFids()
+        awaitFidDumpDone(vm)
+        assertEquals(
+            "ensureRunning must be called before dumpFids",
+            listOf("ensureRunning", "dumpFids"),
+            callOrder,
+        )
+    }
+
+    @Test
+    fun `dumpFids sets unavailable error status when helperClient returns BinderAbsent`() = runTest {
+        coEvery { helperClient.dumpFids() } returns DumpFidsResult.BinderAbsent
+        val vm = buildViewModel()
+        vm.dumpFids()
+        // dumpFids() runs on the real Dispatchers.IO, which the test scheduler cannot advance.
+        val status = awaitFidDumpDone(vm)
+        // settings_fid_dump_error_unavailable renders as "демон недоступен" (RU) or "daemon unavailable" (EN).
+        assertTrue(
+            "BinderAbsent must map to unavailable string, was: $status",
+            status.contains("daemon") || status.contains("демон"),
+        )
+    }
+
+    @Test
+    fun `dumpFids sets read-error status when helperClient returns ReadError`() = runTest {
+        coEvery { helperClient.dumpFids() } returns DumpFidsResult.ReadError("status=-1 at chunk 0")
+        val vm = buildViewModel()
+        vm.dumpFids()
+        // dumpFids() runs on the real Dispatchers.IO, which the test scheduler cannot advance.
+        val status = awaitFidDumpDone(vm)
+        // settings_fid_dump_error_read renders as "ошибка чтения: ..." (RU) or "read error: ..." (EN).
+        // Also must NOT use the unavailable string (would be the wrong failure kind).
+        assertTrue(
+            "ReadError must map to read-error string, was: $status",
+            status.contains("read error") || status.contains("ошибка чтения"),
+        )
+        assertFalse(
+            "ReadError must not map to unavailable string, was: $status",
+            status.contains("daemon") || status.contains("демон"),
+        )
+    }
+
+    @Test
+    fun `dumpFids sets empty-firmware status when helperClient returns Success with blank string`() = runTest {
+        coEvery { helperClient.dumpFids() } returns DumpFidsResult.Success("")
+        val vm = buildViewModel()
+        vm.dumpFids()
+        // dumpFids() runs on the real Dispatchers.IO, which the test scheduler cannot advance.
+        val status = awaitFidDumpDone(vm)
+        // Matches both English ("empty") and Russian ("пуст") renderings of the status string.
+        assertTrue(
+            "Success blank dump must show empty-firmware status, was: $status",
+            status.contains("empty") || status.contains("пуст"),
+        )
+    }
+
+    // ---------------------------------------------------------------------------
+    // W6-F4: the dump must land straight in the public Download folder so the user
+    // can reach it with a file manager or adb pull (filesDir was unreachable). No
+    // subfolder: CSV export, backup, APK update and the log export all write there too.
+    // ---------------------------------------------------------------------------
+
+    private fun publicDumpDir(): File =
+        android.os.Environment.getExternalStoragePublicDirectory(
+            android.os.Environment.DIRECTORY_DOWNLOADS
+        )
+
+    private fun fallbackDumpDir(): File =
+        ApplicationProvider.getApplicationContext<Context>().getExternalFilesDir(null)!!
+
+    private fun dumpFilesIn(dir: File): List<File> =
+        dir.listFiles { _, name -> name.startsWith("fid-dump-") && name.endsWith(".txt") }
+            ?.toList() ?: emptyList()
+
+    /** Download is shared with other exports — clear only our own dumps, never the folder. */
+    private fun clearDumpsIn(dir: File) = dumpFilesIn(dir).forEach { it.delete() }
+
+    /**
+     * dumpFids() runs on the real [Dispatchers.IO], so the test scheduler cannot advance it —
+     * poll the status until it leaves the "in progress" state.
+     */
+    private fun awaitFidDumpDone(vm: SettingsViewModel, timeoutMs: Long = 10_000): String {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val inProgress = ctx.appLocalizedContext()
+            .getString(com.bydmate.app.R.string.settings_fid_dump_in_progress)
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val status = vm.uiState.value.fidDumpStatus
+            if (status != null && status != inProgress) return status
+            Thread.sleep(10)
+        }
+        throw AssertionError("dumpFids did not finish within $timeoutMs ms")
+    }
+
+    @Test
+    fun `dumpFids writes into the public Download folder keeping the 3-line header (W6-F4)`() = runTest {
+        // Anti-vacuity: any other target (filesDir, or a BYDMate/ subfolder) leaves Download
+        // itself empty and the size assertion fails.
+        clearDumpsIn(publicDumpDir())
+        val dump = "FID_A=1\nFID_B=2\n"
+        coEvery { helperClient.dumpFids() } returns DumpFidsResult.Success(dump)
+        val vm = buildViewModel()
+
+        vm.dumpFids()
+        val status = awaitFidDumpDone(vm)
+
+        val files = dumpFilesIn(publicDumpDir())
+        assertEquals("dump must be written straight to Download, status was: $status", 1, files.size)
+        val file = files.single()
+        assertTrue(
+            "file name must stay fid-dump-<yyyyMMdd-HHmmss>.txt, was ${file.name}",
+            Regex("""fid-dump-\d{8}-\d{6}\.txt""").matches(file.name),
+        )
+        val lines = file.readText().lines()
+        // Full structure, not just the prefix: dropping the version code, the timestamp, the
+        // build id or the double space between model and build must fail the assertions.
+        assertTrue(
+            "line 1 must be 'BYDMate <name> (<code>), <yyyy-MM-dd HH:mm>', was: ${lines[0]}",
+            Regex("""^BYDMate .+ \(\d+\), \d{4}-\d{2}-\d{2} \d{2}:\d{2}$""").matches(lines[0]),
+        )
+        assertTrue(
+            "line 2 must be 'model: <model>  build: <build>' (double space), was: ${lines[1]}",
+            Regex("""^model: .+ {2}build: .+$""").matches(lines[1]),
+        )
+        assertEquals("line 3 must be the separator", "---", lines[2])
+        assertEquals("body must be the raw dump", dump, file.readText().substringAfter("---\n"))
+        // Path shape only. The share sheet cannot be asserted here: Robolectric puts
+        // getExternalStorageDirectory() under external-cache/ while the public Download lives
+        // under external-files/, so <external-path path="Download/"> never matches in tests.
+        // The fallback branch, whose root IS resolvable, carries the share assertion instead.
+        assertTrue(
+            "status must end with the visible path without a subfolder, was: $status",
+            status.endsWith("Download/${file.name}"),
+        )
+    }
+
+    @Test
+    fun `dumpFids keeps a two-file rolling window in the public folder (W6-F4)`() = runTest {
+        // Anti-vacuity: pointing the cleanup at any other folder leaves all 3 files here.
+        val dir = publicDumpDir().apply { mkdirs() }
+        clearDumpsIn(dir)
+        val oldest = File(dir, "fid-dump-20200101-000000.txt").apply {
+            writeText("oldest"); setLastModified(1_000_000L)
+        }
+        val newer = File(dir, "fid-dump-20200102-000000.txt").apply {
+            writeText("newer"); setLastModified(2_000_000L)
+        }
+        coEvery { helperClient.dumpFids() } returns DumpFidsResult.Success("FID_A=1\n")
+        val vm = buildViewModel()
+
+        vm.dumpFids()
+        val status = awaitFidDumpDone(vm)
+
+        val names = dumpFilesIn(dir).map { it.name }
+        assertEquals("rolling window must keep exactly 2 dumps, was $names (status: $status)", 2, names.size)
+        assertFalse("oldest dump must be deleted", oldest.exists())
+        assertTrue("most recent previous dump must survive", newer.exists())
+    }
+
+    @Test
+    fun `dumpFids falls back to app external files dir when public folder is unavailable (W6-F4)`() = runTest {
+        // Force the public candidate to fail by making Download read-only. (Replacing it with a
+        // regular file does not work: the Robolectric shadow re-creates the public dir on every
+        // getExternalStoragePublicDirectory() call.)
+        val publicDir = publicDumpDir().apply { mkdirs(); setWritable(false) }
+        assertFalse(
+            "precondition: Download must be non-writable for this test (are you running as root?)",
+            publicDir.canWrite(),
+        )
+        clearDumpsIn(fallbackDumpDir())
+        try {
+            coEvery { helperClient.dumpFids() } returns DumpFidsResult.Success("FID_A=1\n")
+            val vm = buildViewModel()
+
+            vm.dumpFids()
+            val status = awaitFidDumpDone(vm)
+
+            val files = dumpFilesIn(fallbackDumpDir())
+            assertEquals("dump must land in the getExternalFilesDir fallback, status: $status", 1, files.size)
+            assertFalse(
+                "fallback must not surface an error, status: $status",
+                status.contains("Ошибка") || status.contains("Error"),
+            )
+            assertTrue("status must name the saved file, was: $status", status.contains(files.single().name))
+        } finally {
+            publicDir.setWritable(true)
+        }
     }
 }

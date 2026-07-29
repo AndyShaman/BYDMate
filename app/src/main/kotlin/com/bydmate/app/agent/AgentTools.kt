@@ -53,6 +53,14 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
+import com.bydmate.app.split.DisabledSplitPreferences
+import com.bydmate.app.split.Pane
+import com.bydmate.app.split.SplitPair
+import com.bydmate.app.split.SplitPreferences
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitSessionState
+import com.bydmate.app.split.SplitSide
+import com.bydmate.app.split.SplitStartResult
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
@@ -86,6 +94,19 @@ class AgentTools @Inject constructor(
     private val zaiSearchClient: ZaiSearchClient,
     private val llmConnections: LlmConnectionResolver,
 ) {
+    // Split-screen dependencies are not in the @Inject constructor to avoid updating
+    // every existing test file. Hilt injects them via method injection after construction;
+    // tests that cover split_screen call injectSplit() directly.
+    private var splitPrefs: SplitPreferences = DisabledSplitPreferences
+    private var splitMgr: SplitSessionManager? = null
+
+    /** Called by Hilt after construction; call manually in unit tests that test split_screen. */
+    @Inject
+    internal fun injectSplit(prefs: SplitPreferences, mgr: SplitSessionManager) {
+        splitPrefs = prefs
+        splitMgr = mgr
+    }
+
     /** Test seam — deterministic time for period queries. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
@@ -454,6 +475,30 @@ class AgentTools @Inject constructor(
                 .put("description", "true = включить охранный режим, false = выключить")),
             listOf("on"),
         ))
+        put(tool(
+            "split_screen",
+            "Разделённый экран: два приложения рядом (1/3 + 2/3). " +
+                "action=start — запустить пару (без narrow_app/wide_app = восстановить последнюю пару); " +
+                "mirror — перенести узкую панель на другую сторону; " +
+                "swap — поменять приложения местами; " +
+                "change — заменить приложение в панели (side = сторона экрана, app = приложение); " +
+                "exit — выйти из разделённого режима.",
+            JSONObject()
+                .put("action", JSONObject().put("type", "string")
+                    .put("enum", JSONArray(listOf("start", "mirror", "swap", "change", "exit")))
+                    .put("description", "Операция над разделённым экраном"))
+                .put("narrow_app", JSONObject().put("type", "string")
+                    .put("description", "Для action=start: приложение в узкой панели (1/3)"))
+                .put("wide_app", JSONObject().put("type", "string")
+                    .put("description", "Для action=start: приложение в широкой панели (2/3)"))
+                .put("side", JSONObject().put("type", "string")
+                    .put("enum", JSONArray(listOf("left", "right")))
+                    .put("description", "Для action=start: сторона узкой панели (по умолчанию right). " +
+                        "Для action=change: сторона экрана заменяемой панели"))
+                .put("app", JSONObject().put("type", "string")
+                    .put("description", "Только для action=change: новое приложение")),
+            listOf("action"),
+        ))
         if (includeAutomationTools) {
             put(tool(
                 "create_automation",
@@ -522,7 +567,8 @@ class AgentTools @Inject constructor(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
                                         "yandex_music", "sentry", "app_launch",
-                                        "cluster_projection", "speak", "agent_query")))
+                                        "cluster_projection", "speak", "agent_query",
+                                        "split_screen")))
                                     .put("description", "Тип действия"))
                                 .put("command_id", JSONObject()
                                     .put("type", "string")
@@ -552,6 +598,13 @@ class AgentTools @Inject constructor(
                                     .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать"))
                                 .put("app", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране"))
+                                .put("narrow_app", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=split_screen: приложение в узкой панели (1/3), название как на домашнем экране"))
+                                .put("wide_app", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=split_screen: приложение в широкой панели (2/3), название как на домашнем экране"))
+                                .put("side", JSONObject().put("type", "string")
+                                    .put("enum", JSONArray(listOf("left", "right")))
+                                    .put("description", "Только для kind=split_screen: сторона узкой панели, left или right (по умолчанию right)"))
                                 .put("prompt", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=agent_query: запрос агенту, ответ будет озвучен")))
                             .put("required", JSONArray(listOf("kind")))))
@@ -620,6 +673,7 @@ class AgentTools @Inject constructor(
                 "launch_app" -> launchAppTool(args)
                 "set_cluster_projection" -> setClusterProjection(args)
                 "set_sentry" -> setSentry(args)
+                "split_screen" -> splitScreen(args)
                 "set_automation_enabled" -> setAutomationEnabled(args)
                 "create_automation" -> createAutomation(args)
                 else -> """{"error":"неизвестный инструмент ${call.name}"}"""
@@ -1604,6 +1658,108 @@ class AgentTools @Inject constructor(
         }
     }
 
+    // --- split_screen ---
+
+    private suspend fun splitScreen(args: JSONObject): String {
+        if (!splitPrefs.isFeatureEnabled()) {
+            return """{"error":"разделение экрана выключено в настройках"}"""
+        }
+        val mgr = splitMgr
+            ?: return """{"error":"разделение экрана недоступно"}"""
+        return when (val action = args.optString("action").trim()) {
+            "start" -> {
+                val narrowName = args.optString("narrow_app").trim().takeIf { it.isNotEmpty() }
+                val wideName = args.optString("wide_app").trim().takeIf { it.isNotEmpty() }
+                when {
+                    narrowName == null && wideName == null -> {
+                        // No apps specified — restore the last saved pair.
+                        val result = mgr.startLastPair()
+                            ?: return """{"error":"нет сохранённой пары приложений для восстановления"}"""
+                        splitStartResultJson(result)
+                    }
+                    narrowName != null && wideName != null -> {
+                        val (_, narrowPkg) = when (val r = resolveLauncherApp(narrowName)) {
+                            is Built.Error -> return JSONObject().put("error", r.message).toString()
+                            is Built.Value -> r.value
+                        }
+                        val (_, widePkg) = when (val r = resolveLauncherApp(wideName)) {
+                            is Built.Error -> return JSONObject().put("error", r.message).toString()
+                            is Built.Value -> r.value
+                        }
+                        if (narrowPkg == widePkg) {
+                            return """{"error":"оба приложения одинаковые, выбери разные"}"""
+                        }
+                        val side = parseSplitSide(args.optString("side"))
+                        splitStartResultJson(mgr.start(SplitPair(narrowPkg, widePkg, side)))
+                    }
+                    else -> """{"error":"укажи оба приложения (narrow_app и wide_app) или ни одного"}"""
+                }
+            }
+            "mirror" -> {
+                if (mgr.state.value is SplitSessionState.Idle) {
+                    return """{"error":"сплит не запущен"}"""
+                }
+                mgr.mirror()
+                OK
+            }
+            "swap" -> {
+                if (mgr.state.value is SplitSessionState.Idle) {
+                    return """{"error":"сплит не запущен"}"""
+                }
+                mgr.swapApps()
+                OK
+            }
+            "change" -> {
+                val active = mgr.state.value as? SplitSessionState.Active
+                    ?: return """{"error":"сплит не запущен"}"""
+                val sideStr = args.optString("side").trim()
+                if (sideStr.isEmpty()) {
+                    return """{"error":"не указана сторона (поле side: left или right)"}"""
+                }
+                val appName = args.optString("app").trim()
+                if (appName.isEmpty()) {
+                    return """{"error":"не указано приложение (поле app)"}"""
+                }
+                val (_, newPkg) = when (val r = resolveLauncherApp(appName)) {
+                    is Built.Error -> return JSONObject().put("error", r.message).toString()
+                    is Built.Value -> r.value
+                }
+                val sideEnum = parseSplitSide(sideStr)
+                // Determine which Pane corresponds to the requested screen side.
+                val pane = if (sideEnum == active.pair.narrowSide) Pane.NARROW else Pane.WIDE
+                // Reject if the replacement would make both panes show the same app.
+                val otherPkg = if (pane == Pane.NARROW) active.pair.widePkg else active.pair.narrowPkg
+                if (newPkg == otherPkg) {
+                    return """{"error":"оба приложения одинаковые, выбери разные"}"""
+                }
+                splitStartResultJson(mgr.changeApp(pane, newPkg))
+            }
+            "exit" -> {
+                if (mgr.state.value is SplitSessionState.Idle) {
+                    return """{"error":"сплит не запущен"}"""
+                }
+                mgr.exit()
+                OK
+            }
+            else -> JSONObject().put("error", "неизвестное действие split_screen: $action").toString()
+        }
+    }
+
+    /** Converts a side string ("left" / anything else → right) to [SplitSide]. */
+    private fun parseSplitSide(s: String): SplitSide =
+        if (s.trim().lowercase() == "left") SplitSide.LEFT else SplitSide.RIGHT
+
+    /** Maps [SplitStartResult] to a terse tool-result JSON string. */
+    private fun splitStartResultJson(result: SplitStartResult): String = when (result) {
+        SplitStartResult.OK -> OK
+        SplitStartResult.FREEFORM_UNAVAILABLE ->
+            """{"error":"разделение экрана будет доступно после перезагрузки машины"}"""
+        SplitStartResult.LAUNCH_FAILED ->
+            """{"error":"не удалось запустить приложение"}"""
+        SplitStartResult.DISABLED ->
+            """{"error":"разделение экрана выключено в настройках"}"""
+    }
+
     private suspend fun setAutomationEnabled(args: JSONObject): String {
         val name = args.optString("name").trim()
         if (name.isEmpty()) return """{"error":"не указано имя"}"""
@@ -1935,6 +2091,27 @@ class AgentTools @Inject constructor(
                 Built.Value(ActionDef(command = "", displayName = "Запрос агенту", kind = "agent_query",
                     payload = JSONObject().put("prompt", prompt).toString()))
             }
+            "split_screen" -> {
+                val narrowName = a.optString("narrow_app").trim()
+                if (narrowName.isEmpty()) return Built.Error("не указано приложение 1/3 (поле narrow_app)")
+                val wideName = a.optString("wide_app").trim()
+                if (wideName.isEmpty()) return Built.Error("не указано приложение 2/3 (поле wide_app)")
+                val (narrowLabel, narrowPkg) = when (val r = resolveLauncherApp(narrowName)) {
+                    is Built.Error -> return r
+                    is Built.Value -> r.value
+                }
+                val (wideLabel, widePkg) = when (val r = resolveLauncherApp(wideName)) {
+                    is Built.Error -> return r
+                    is Built.Value -> r.value
+                }
+                val side = if (a.optString("side").trim().lowercase() == "left") "left" else "right"
+                Built.Value(ActionDef(
+                    command = "", displayName = "Сплит: $narrowLabel + $wideLabel",
+                    kind = "split_screen",
+                    payload = JSONObject().put("narrow", narrowPkg).put("wide", widePkg)
+                        .put("side", side).toString(),
+                ))
+            }
             else -> Built.Error("недопустимый тип действия: $kind")
         }
     }
@@ -1959,6 +2136,14 @@ class AgentTools @Inject constructor(
                 "не задан текст для озвучки (действие ${err.index})"
             is ActionValidationError.AgentQueryPromptEmpty ->
                 "не задан запрос агенту (действие ${err.index})"
+            is ActionValidationError.SplitScreenNarrowEmpty ->
+                "не выбрано приложение 1/3 (действие ${err.index})"
+            is ActionValidationError.SplitScreenWideEmpty ->
+                "не выбрано приложение 2/3 (действие ${err.index})"
+            is ActionValidationError.SplitScreenSamePackage ->
+                "оба приложения должны быть разными (действие ${err.index})"
+            is ActionValidationError.SplitScreenInvalidSide ->
+                "неверная сторона split_screen (действие ${err.index})"
         }
         return JSONObject().put("error", msg).toString()
     }

@@ -513,4 +513,62 @@ object AppModule {
     ): com.bydmate.app.data.vehicle.HelperBootstrap =
         com.bydmate.app.data.vehicle.HelperBootstrap(adb, helper, context)
 
+    @Provides
+    @Singleton
+    fun provideSplitPreferences(
+        @ApplicationContext ctx: Context,
+    ): com.bydmate.app.split.SplitPreferences =
+        com.bydmate.app.split.SplitPreferencesImpl(ctx)
+
+    @Provides
+    @Singleton
+    fun provideSplitBackdrop(
+        controller: com.bydmate.app.split.SplitOverlayController,
+    ): com.bydmate.app.split.SplitBackdrop = controller
+
+    @Provides
+    @Singleton
+    fun provideSplitSessionManager(
+        helper: com.bydmate.app.data.vehicle.HelperClient,
+        prefs: com.bydmate.app.split.SplitPreferences,
+        backdrop: com.bydmate.app.split.SplitBackdrop,
+        @javax.inject.Named("io") dispatcher: kotlinx.coroutines.CoroutineDispatcher,
+        @ApplicationContext ctx: Context,
+        bootstrap: com.bydmate.app.data.vehicle.HelperBootstrap,
+    ): com.bydmate.app.split.SplitSessionManager = com.bydmate.app.split.SplitSessionManager(
+        helper = helper,
+        prefs = prefs,
+        backdrop = backdrop,
+        scope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + dispatcher
+        ),
+        onFreeformLive = { com.bydmate.app.cluster.ClusterProjectionManager.clearSplitRebootHint(ctx) },
+        nowMs = android.os.SystemClock::elapsedRealtime,
+        mediaSource = com.bydmate.app.split.ProductionMediaSessionSource(ctx),
+        applyCalibratedBounds = { taskId, displayId ->
+            com.bydmate.app.cluster.ClusterProjectionManager.applyCalibratedBoundsToTask(taskId, displayId, ctx, helper)
+        },
+        // W6-F1 FIX-B: end our own cluster projection of a pane app before the split places it,
+        // so the projection is not left reporting FULLSCREEN with an orphaned overlay/VD.
+        // Lock order SSM.mutex → CPM.mutex, same as applyCalibratedBounds.
+        endClusterProjection = { pkg ->
+            com.bydmate.app.cluster.ClusterProjectionManager.endProjectionForPkg(pkg, ctx, helper, bootstrap)
+        },
+    ).also { mgr ->
+        // Wire departure-grace callback so ClusterProjectionManager can notify SplitSessionManager
+        // before a direct-projection cluster send (Q1 / F-1). onBeforeClusterSend lives on the
+        // process-level object (static); @Singleton ensures a single registration (no stale-ref risk).
+        // Lock order: CPM.mutex → [beginClusterSend lock-free] — no SSM.mutex acquired here.
+        com.bydmate.app.cluster.ClusterProjectionManager.onBeforeClusterSend = { pkg ->
+            mgr.beginClusterSend(pkg)
+        }
+        // F-1/D-3: release the departure grace when the whole projection pipeline terminates without
+        // placing the task on the cluster (terminal VD failures: surface timeout, createVd fail,
+        // launchAndForce=false, exception). UNAVAILABLE/FAILED from tryDirectProjection do NOT
+        // call this — grace must survive the VD-fallback which can run for up to ~22s total.
+        com.bydmate.app.cluster.ClusterProjectionManager.onClusterSendFailed = { pkg ->
+            mgr.endClusterSend(pkg)
+        }
+    }
+
 }

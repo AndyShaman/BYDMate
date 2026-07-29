@@ -370,6 +370,10 @@ class AutomationViewModel @Inject constructor(
             is ActionValidationError.HotspotInvalid -> ctx.getString(R.string.auto_msg_hotspot_invalid, err.index)
             is ActionValidationError.SpeakTextEmpty -> ctx.getString(R.string.auto_msg_speak_text_empty, err.index)
             is ActionValidationError.AgentQueryPromptEmpty -> ctx.getString(R.string.auto_msg_agent_query_prompt_empty, err.index)
+            is ActionValidationError.SplitScreenNarrowEmpty -> ctx.getString(R.string.auto_msg_split_narrow_empty, err.index)
+            is ActionValidationError.SplitScreenWideEmpty -> ctx.getString(R.string.auto_msg_split_wide_empty, err.index)
+            is ActionValidationError.SplitScreenSamePackage -> ctx.getString(R.string.auto_msg_split_same_package, err.index)
+            is ActionValidationError.SplitScreenInvalidSide -> ctx.getString(R.string.auto_msg_split_invalid_side, err.index)
             null -> null
         }
     }
@@ -795,6 +799,79 @@ fun ActionDef.agentPrompt(): String = try {
 fun ActionDef.withAgentPrompt(prompt: String): ActionDef = copy(
     payload = org.json.JSONObject().apply { put("prompt", prompt) }.toString()
 )
+
+// --- Split screen helpers ---
+
+fun newSplitScreenAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_split_screen),
+    kind = "split_screen",
+    payload = """{"narrow":"","wide":"","narrowLabel":"","wideLabel":"","side":"right"}"""
+)
+
+/** "Close split screen" — no payload: the action always targets the running session. */
+fun newSplitScreenCloseAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_split_screen_close),
+    kind = "split_screen_close",
+    payload = null
+)
+
+/** "Toggle split screen" — no payload: exits a running session, else restores the last pair. */
+fun newSplitScreenToggleAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = context.getString(R.string.auto_act_split_screen_toggle),
+    kind = "split_screen_toggle",
+    payload = null
+)
+
+fun ActionDef.splitNarrowPkg(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("narrow")
+} catch (e: Exception) { "" }
+
+fun ActionDef.splitWidePkg(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("wide")
+} catch (e: Exception) { "" }
+
+fun ActionDef.splitNarrowLabel(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("narrowLabel")
+} catch (e: Exception) { "" }
+
+fun ActionDef.splitWideLabel(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("wideLabel")
+} catch (e: Exception) { "" }
+
+/** Returns the narrow-pane side: "left" or "right". Defaults to "right" when missing. */
+fun ActionDef.splitSide(): String = try {
+    org.json.JSONObject(payload ?: "{}").optString("side", "right").let {
+        if (it in listOf("left", "right")) it else "right"
+    }
+} catch (e: Exception) { "right" }
+
+fun ActionDef.withSplitScreen(
+    narrowPkg: String,
+    narrowLabel: String,
+    widePkg: String,
+    wideLabel: String,
+    side: String,
+): ActionDef {
+    val displayName = if (narrowLabel.isNotBlank() && wideLabel.isNotBlank()) {
+        "$narrowLabel / $wideLabel"
+    } else {
+        // Caller will resolve the localized default from context; use stable English here.
+        "Split Screen"
+    }
+    return copy(
+        displayName = displayName,
+        payload = org.json.JSONObject().apply {
+            put("narrow", narrowPkg)
+            put("wide", widePkg)
+            put("narrowLabel", narrowLabel)
+            put("wideLabel", wideLabel)
+            put("side", side)
+        }.toString()
+    )
+}
 
 /**
  * Pure list reorder used by the automation editor's up/down arrows: returns a new

@@ -35,6 +35,26 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
  *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
+ *   TX_GET_TASK_STATE : writeString(packageName)
+ *       -> reply: writeInt(status), then on status 0:
+ *          writeInt(taskId)   // -1 = no running task
+ *          writeInt(windowingMode), writeInt(left), writeInt(top), writeInt(right), writeInt(bottom)
+ *          All six ints are always present when status == 0; taskId -1 means not running (others = 0).
+ *   TX_APP_SPLIT_SUPPORTED : writeString(packageName)
+ *       -> reply: writeInt(status), writeInt(supported)   // status -1 on exception; supported 0|1
+ *   TX_GET_VERSION : (no args)
+ *       -> reply: writeInt(status=0), writeInt(versionCode)  // BuildConfig.VERSION_CODE frozen at spawn time
+ *       An old daemon without this handler makes transact return false → client treats it as null.
+ *   TX_GET_TOP_PACKAGE : (no args)
+ *       -> reply: writeInt(status=0), writeString(packageName)  // "" when no top task
+ *       An old daemon without this handler makes transact return false → client returns null.
+ *   TX_RAISE_FREEFORM_TASK : writeString(packageName), writeInt(displayId)
+ *       -> reply: writeInt(status), writeInt(0)  // status 0 = ok; -1 = failed/component unresolved
+ *       An old daemon without this handler makes transact return false → client returns false.
+ *   TX_DUMP_FIDS : (no args)
+ *       -> reply: writeInt(status), writeString(dump)  // status 0 = ok; -1 = reflection failed
+ *       dump = sorted "ClassName.FIELD_NAME=value" lines joined with \n; empty string on non-BYD firmware.
+ *       An old daemon without this handler makes transact return false → client returns null.
  *
  * Projection status: 0 = success, <0 = error/unavailable. Surface is written LAST so a
  * marshalling test can assert the scalar args without round-tripping the Surface.
@@ -99,8 +119,91 @@ object HelperBinderProtocol {
      *  Request: [int enable: 1=on, 0=off] -> [int status (0=ok, -1=fail), int 0]. */
     val TX_SET_HOTSPOT: Int = IBinder.FIRST_CALL_TRANSACTION + 24              // 25
 
+    /** Reads windowing state (taskId, windowingMode, bounds) for a package via ActivityTaskManager.
+     *  Request: [String pkg] -> [int status (0=ok/-1=error), int taskId (-1=not running),
+     *  int windowingMode, int left, int top, int right, int bottom].
+     *  All seven ints are present when status == 0; taskId -1 means no running task (others = 0). */
+    val TX_GET_TASK_STATE: Int = IBinder.FIRST_CALL_TRANSACTION + 25           // 26
+
+    /** Queries IStatusBarService.isAppSuportSplit (BYD extension, tx 82) for split-screen eligibility.
+     *  Request: [String pkg] -> [int status (0=ok/-1=exception), int supported (0|1)]. */
+    val TX_APP_SPLIT_SUPPORTED: Int = IBinder.FIRST_CALL_TRANSACTION + 26      // 27
+
+    /** Force-stops [packageName] via IActivityManager.forceStopPackage (shell uid holds
+     *  FORCE_STOP_PACKAGES). Used before freeform re-launch to clear a stale fullscreen task
+     *  that resists windowing-mode changes (on-car: Home+relaunch leaves task mode=1 invisible).
+     *  Request: [String pkg] -> [int status (0=ok/-1=failed), int 0]. */
+    val TX_FORCE_STOP: Int = IBinder.FIRST_CALL_TRANSACTION + 27               // 28
+
+    /** Returns the versionCode the daemon was compiled with (BuildConfig.VERSION_CODE, frozen at
+     *  spawn time since CLASSPATH is fixed to the APK at spawn). The client uses this to detect
+     *  stale daemons that survived an APK update. (no args) -> [int status (0=ok), int versionCode].
+     *  An old daemon without this handler makes transact return false → client returns null. */
+    val TX_GET_VERSION: Int = IBinder.FIRST_CALL_TRANSACTION + 28              // 29
+
+    /** Returns the package name of the foreground (top-of-stack) task via getTasks reflection.
+     *  Used by the media-key reroute guard to detect when com.byd.mediacenter has surfaced over
+     *  an active split without a per-package fullscreen-mode query that is false for backgrounded
+     *  tasks. (no args) -> [int status (0=ok/-1=error), String packageName ("" when no top task)].
+     *  An old daemon without this handler makes transact return false → client returns null. */
+    val TX_GET_TOP_PACKAGE: Int = IBinder.FIRST_CALL_TRANSACTION + 29          // 30
+
+    /**
+     * Raises an existing recents-typed freeform task to front via `am start --windowingMode 5
+     * --activityType 3 --display <displayId> -n <component>`. Used by reAssertSplitZOrder to
+     * recover split pane Z-order after a steering-wheel media key event (Task N: recents-typed
+     * pane tasks nest under a shared root task, so setFocusedRootTask on a leaf id is a no-op).
+     *
+     * Request: [String pkg, int displayId]
+     * Reply:   [int status (0=ok, -1=failed/unresolved), int 0]
+     *
+     * An old daemon without this handler makes transact return false → client returns false
+     * and falls back to setFocusedTask (386-era behavior). New TX only; no changes to prior codes.
+     */
+    val TX_RAISE_FREEFORM_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 30      // 31
+
+    /**
+     * Reflects all static int/long constants from android.hardware.bydauto.BYDAutoFeatureIds
+     * and BYDAutoConstants (and their declared inner classes) via plain reflection.
+     * Returns sorted "ClassName.FIELD=value" lines joined with \n; empty string on firmware
+     * without the BYD SDK classes (non-BYD Android). No hidden-API bypass needed: the daemon
+     * runs under app_process where hidden-API enforcement is inactive.
+     *
+     * Chunked transport (v2, Q4): the full dump may exceed the ~1 MB binder transaction limit.
+     * Request:  int offset  (0-based byte offset into the UTF-8 encoded dump string; send 0 first)
+     * Reply:    int status  (0 = ok, -1 = reflection / internal error)
+     *           int totalLength  (total UTF-8 byte count; fixed across chunks for one sequence)
+     *           byte[] chunk     (up to [DUMP_CHUNK_MAX] bytes starting at [offset])
+     * Client loops: send next offset = previous offset + chunk.size; stop when offset >= totalLength.
+     * Daemon builds the full dump on offset==0 and caches it (@Volatile); subsequent offsets reuse
+     * the cache.
+     * On old daemons (pre-Q4) transact returns false → client returns [DumpFidsResult.BinderAbsent].
+     */
+    val TX_DUMP_FIDS: Int = IBinder.FIRST_CALL_TRANSACTION + 31               // 32
+
+    /**
+     * Returns the windowing state of the top root task on the primary display (display 0).
+     * Used by SplitSessionManager to detect when a foreign fullscreen app has covered the split
+     * session (COVERED teardown, Q3 / F-3). Uses the same getTasks reflection surface as
+     * TX_GET_TASK_STATE and TX_GET_TOP_PACKAGE.
+     *
+     * (no args) -> [int status (0=ok/-1=error/no task), String pkg, int taskId,
+     *               int windowingMode, int activityType, int displayId]
+     *
+     * An old daemon without this handler makes transact return false → client returns null,
+     * and SplitSessionManager skips COVERED detection that tick (fail-safe).
+     */
+    val TX_GET_TOP_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 32            // 33
+
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128
+
+    /**
+     * Maximum chunk size for TX_DUMP_FIDS chunked transport (UTF-8 bytes per reply).
+     * 64 KiB is well under the ~1 MB binder transaction limit shared across the process,
+     * leaving ample headroom for status/totalLength overhead and concurrent transactions.
+     */
+    const val DUMP_CHUNK_MAX: Int = 64 * 1024
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"

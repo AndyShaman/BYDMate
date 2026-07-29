@@ -750,6 +750,15 @@
     <string name="settings_config_export_confirm_title">导出配置？</string>
     <string name="settings_config_export_confirm_body">备份包含带 GPS 路线的行程历史以及未加密的 API 密钥。文件将保存到公共 Download 文件夹。请妥善保管，不要转发给他人。</string>
     <string name="settings_config_export_confirm_ok">导出</string>
+    <!-- Fid catalog dump (Task O) -->
+    <string name="settings_fid_dump_button">保存 fid 目录</string>
+    <string name="settings_fid_dump_desc">SDK 常量的名称和数值。仅技术标识符：不含 VIN，不含定位，不含个人数据</string>
+    <string name="settings_fid_dump_saved">已保存：%1$s</string>
+    <string name="settings_fid_dump_in_progress">正在读取 fid...</string>
+    <string name="settings_fid_dump_empty">此固件上的 fid 目录为空</string>
+    <string name="settings_fid_dump_error_unavailable">守护进程不可用</string>
+    <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
+    <string name="settings_fid_dump_error_read">读取错误：%1$s</string>
     <string name="settings_display_button_change">更改</string>
     <string name="settings_display_button_title">触发按键</string>
     <string name="steering_button_aux_left">左侧辅助键</string>
@@ -1192,4 +1201,50 @@
     <string name="settings_hud_hint">需要配备抬头显示的车型。数据来自 Yandex 导航窗口</string>
     <string name="settings_secret_show">显示密钥</string>
     <string name="settings_secret_hide">隐藏密钥</string>
+
+    <!-- Split-screen pill menu -->
+    <string name="split_menu_mirror">切换位置</string>
+    <string name="split_menu_swap">交换应用</string>
+    <string name="split_menu_pick_left">左侧应用…</string>
+    <string name="split_menu_pick_right">右侧应用…</string>
+    <string name="split_menu_exit">退出</string>
+    <string name="split_picker_title_change">选择应用</string>
+    <string name="split_picker_title_left">选择左侧分屏的应用</string>
+    <string name="split_picker_title_right">选择右侧分屏的应用</string>
+    <string name="split_picker_title_wide">选择宽屏区域 (2/3) 的应用</string>
+    <string name="split_picker_title_narrow">选择窄屏区域 (1/3) 的应用</string>
+    <string name="split_freeform_reboot_hint">重启车机后将启用分屏</string>
+    <string name="split_launch_failed">启动分屏失败</string>
+    <!-- Automation action: split_screen -->
+    <string name="automation_action_split_screen">分屏</string>
+    <string name="auto_act_split_screen">分屏</string>
+    <!-- Automation actions: split_screen_close / split_screen_toggle (no payload) -->
+    <string name="automation_action_split_screen_close">关闭分屏</string>
+    <string name="auto_act_split_screen_close">关闭分屏</string>
+    <string name="automation_action_split_screen_toggle">切换分屏</string>
+    <string name="auto_act_split_screen_toggle">切换分屏</string>
+    <string name="split_action_narrow_label">1/3 应用</string>
+    <string name="split_action_wide_label">2/3 应用</string>
+    <string name="split_action_side_left">1/3 在左</string>
+    <string name="split_action_side_right">1/3 在右</string>
+    <string name="split_action_tap_to_configure">选择应用</string>
+    <string name="auto_msg_split_narrow_empty">操作 #%1$d：未选择 1/3 应用</string>
+    <string name="auto_msg_split_wide_empty">操作 #%1$d：未选择 2/3 应用</string>
+    <string name="auto_msg_split_same_package">操作 #%1$d：两个应用必须不同</string>
+    <string name="auto_msg_split_invalid_side">操作 #%1$d：方向须为 left 或 right</string>
+    <string name="settings_widget_left_tap_mode_label">左侧点击操作</string>
+    <string name="settings_widget_left_tap_mode_app">启动应用</string>
+    <string name="settings_widget_left_tap_mode_split">启动分屏</string>
+    <!-- Split-screen settings section -->
+    <string name="settings_section_split_title">分屏</string>
+    <string name="settings_split_enable_title">分屏 1/3 + 2/3</string>
+    <string name="settings_split_enable_desc">两个自由窗口：一个占三分之一，另一个占三分之二。默认关闭。</string>
+    <string name="settings_split_clear_pair_title">重置上次应用对</string>
+    <string name="settings_split_clear_pair_desc">清除保存的应用对，下次启动时将打开选择器。</string>
+    <string name="settings_split_pair_cleared">应用对已重置</string>
+    <string name="settings_split_wide_app_title">宽屏区域 (2/3)</string>
+    <string name="settings_split_narrow_app_title">窄屏区域 (1/3)</string>
+    <string name="settings_split_app_not_selected">未选择</string>
+    <string name="settings_split_howto_body">打开分屏有三种方式。\n最简单的一种：点击悬浮小组件左侧三分之一的区域。先在“点击小组件”里开启“点击区域”，再把“左侧点击操作”设为“启动分屏”。\n用自动化：在规则里添加“分屏”动作，旁边还有“关闭分屏”和“切换分屏”。\n用语音：直接让语音智能体打开分屏就行。</string>
+    <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
 </resources>

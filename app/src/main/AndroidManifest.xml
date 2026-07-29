@@ -83,6 +83,15 @@
             </intent-filter>
         </activity>
 
+        <!-- Split-screen backdrop: fullscreen NavyDark activity, lives while a split session
+             is active. Not exported; started by SplitOverlayController. -->
+        <activity
+            android:name=".split.SplitStageActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:theme="@style/Theme.BYDMate" />
+
         <service
             android:name=".service.TrackingService"
             android:foregroundServiceType="location"

@@ -661,6 +661,15 @@
     <string name="settings_config_export_confirm_title">Export configuration?</string>
     <string name="settings_config_export_confirm_body">The backup contains your trip history with GPS routes and your API keys in plain text. The file is saved to the public Download folder. Keep it somewhere safe and do not share it.</string>
     <string name="settings_config_export_confirm_ok">Export</string>
+    <!-- Fid catalog dump (Task O) -->
+    <string name="settings_fid_dump_button">Save fid catalog</string>
+    <string name="settings_fid_dump_desc">SDK constant names and values. Technical identifiers only: no VIN, no location, no personal data</string>
+    <string name="settings_fid_dump_saved">Saved: %1$s</string>
+    <string name="settings_fid_dump_in_progress">Reading fids...</string>
+    <string name="settings_fid_dump_empty">Fid catalog is empty on this firmware</string>
+    <string name="settings_fid_dump_error_unavailable">daemon unavailable</string>
+    <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
+    <string name="settings_fid_dump_error_read">read error: %1$s</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Body</string>
@@ -1077,4 +1086,51 @@
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
     <string name="settings_secret_show">Show key</string>
     <string name="settings_secret_hide">Hide key</string>
+
+    <!-- Split-screen pill menu -->
+    <string name="split_menu_mirror">Switch sides</string>
+    <string name="split_menu_swap">Swap apps</string>
+    <string name="split_menu_pick_left">App on the left…</string>
+    <string name="split_menu_pick_right">App on the right…</string>
+    <string name="split_menu_exit">Exit</string>
+    <string name="split_picker_title_change">Choose an app</string>
+    <string name="split_picker_title_left">Choose an app for the left pane</string>
+    <string name="split_picker_title_right">Choose an app for the right pane</string>
+    <string name="split_picker_title_wide">Choose an app for the wide pane (2/3)</string>
+    <string name="split_picker_title_narrow">Choose an app for the narrow pane (1/3)</string>
+    <string name="split_freeform_reboot_hint">Split screen will activate after restarting the car</string>
+    <string name="split_launch_failed">Failed to launch split screen</string>
+    <!-- Automation action: split_screen -->
+    <string name="automation_action_split_screen">Split Screen</string>
+    <string name="auto_act_split_screen">Split Screen</string>
+    <!-- Automation actions: split_screen_close / split_screen_toggle (no payload) -->
+    <string name="automation_action_split_screen_close">Close Split Screen</string>
+    <string name="auto_act_split_screen_close">Close Split Screen</string>
+    <string name="automation_action_split_screen_toggle">Toggle Split Screen</string>
+    <string name="auto_act_split_screen_toggle">Toggle Split Screen</string>
+    <string name="split_action_narrow_label">App 1/3</string>
+    <string name="split_action_wide_label">App 2/3</string>
+    <string name="split_action_side_left">1/3 left</string>
+    <string name="split_action_side_right">1/3 right</string>
+    <string name="split_action_tap_to_configure">Pick apps</string>
+    <string name="auto_msg_split_narrow_empty">Action #%1$d: app 1/3 not selected</string>
+    <string name="auto_msg_split_wide_empty">Action #%1$d: app 2/3 not selected</string>
+    <string name="auto_msg_split_same_package">Action #%1$d: both apps must be different</string>
+    <string name="auto_msg_split_invalid_side">Action #%1$d: side must be left or right</string>
+    <string name="settings_widget_left_tap_mode_label">Left tap action</string>
+    <string name="settings_widget_left_tap_mode_app">Launch app</string>
+    <string name="settings_widget_left_tap_mode_split">Launch split screen</string>
+    <!-- Split-screen settings section -->
+    <string name="settings_section_split_title">Split screen</string>
+    <string name="settings_split_enable_title">Split screen 1/3 + 2/3</string>
+    <string name="settings_split_enable_desc">Two freeform windows: one at one-third of the screen, the other at two-thirds. Off by default.</string>
+    <string name="settings_split_clear_pair_title">Reset last pair</string>
+    <string name="settings_split_clear_pair_desc">Clear the saved app pair. The next launch will open the picker.</string>
+    <string name="settings_split_pair_cleared">Pair cleared</string>
+    <string name="settings_split_wide_app_title">Wide pane (2/3)</string>
+    <string name="settings_split_narrow_app_title">Narrow pane (1/3)</string>
+    <string name="settings_split_app_not_selected">not selected</string>
+    <string name="settings_split_howto_body">There are three ways to turn on split screen.\nThe easiest one: tap the left third of the floating widget. To set that up, turn on Tap zoning in the Widget tap section and pick Launch split screen under Left tap action.\nFrom automations: add the Split Screen action to a rule. Close Split Screen and Toggle Split Screen sit right next to it.\nBy voice: just ask the Voice agent to turn on split screen.</string>
+
+    <string name="split_feature_disabled">Split screen is disabled in settings</string>
 </resources>

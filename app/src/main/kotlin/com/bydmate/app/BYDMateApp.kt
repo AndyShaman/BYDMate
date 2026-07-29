@@ -48,6 +48,7 @@ class BYDMateApp : Application(), Configuration.Provider {
     @Inject lateinit var chargeDao: ChargeDao
     @Inject lateinit var localePreferences: LocalePreferences
     @Inject lateinit var insightsManager: InsightsManager
+    @Inject lateinit var splitOverlayController: com.bydmate.app.split.SplitOverlayController
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -97,7 +98,9 @@ class BYDMateApp : Application(), Configuration.Provider {
             }
         }
         scheduleDataThinning()
-        registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this))
+        registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this, splitOverlayController))
+        // Start split-screen overlay observers (mirrors WidgetController init pattern).
+        splitOverlayController.start(appScope)
     }
 
     /**
@@ -158,32 +161,33 @@ class BYDMateApp : Application(), Configuration.Provider {
         }
     }
 
-    private class WidgetLifecycleCallbacks(private val app: Context) : ActivityLifecycleCallbacks {
-        private var resumedCount = 0
+    private class WidgetLifecycleCallbacks(
+        private val app: Context,
+        private val splitOverlay: com.bydmate.app.split.SplitOverlayController,
+    ) : ActivityLifecycleCallbacks {
+        private val counter = ForegroundActivityCounter()
 
         override fun onActivityCreated(activity: Activity, savedInstanceState: Bundle?) {}
         override fun onActivityStarted(activity: Activity) {}
 
         override fun onActivityResumed(activity: Activity) {
-            resumedCount++
-            if (resumedCount == 1) {
-                // User opened BYDMate → widget hides; also clear the
-                // "hidden until app launch" long-press flag so it reappears
-                // next time the app goes to background.
-                WidgetPreferences(app).setHiddenUntilAppLaunch(false)
-                WidgetController.setAppForegrounded(true)
-            }
+            if (!counter.onResumed(activity.javaClass)) return
+            // User opened BYDMate → widget hides; also clear the
+            // "hidden until app launch" long-press flag so it reappears
+            // next time the app goes to background.
+            WidgetPreferences(app).setHiddenUntilAppLaunch(false)
+            WidgetController.setAppForegrounded(true)
+            // Same edge hides the split pill (390-4) — the session keeps running.
+            splitOverlay.setOwnAppForegrounded(true)
         }
 
         override fun onActivityPaused(activity: Activity) {
-            resumedCount--
-            if (resumedCount <= 0) {
-                resumedCount = 0
-                WidgetController.setAppForegrounded(false)
-                val prefs = WidgetPreferences(app)
-                if (prefs.isEnabled() && Settings.canDrawOverlays(app)) {
-                    WidgetController.attach(app)
-                }
+            if (!counter.onPaused(activity.javaClass)) return
+            WidgetController.setAppForegrounded(false)
+            splitOverlay.setOwnAppForegrounded(false)
+            val prefs = WidgetPreferences(app)
+            if (prefs.isEnabled() && Settings.canDrawOverlays(app)) {
+                WidgetController.attach(app)
             }
         }
 

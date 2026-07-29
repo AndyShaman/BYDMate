@@ -19,9 +19,12 @@ import javax.inject.Singleton
  * under shell uid that survives app reinstalls and reboots-less updates. A daemon
  * spawned by a previous app version still answers the binder ping but lacks any
  * handler added in the update — so newer ops (sentry mode, assistant disable)
- * silently failed until a head-unit reboot. We therefore remember the app
- * versionCode the live daemon was spawned for: a mismatch means "stale", and we
- * kill the old daemon and spawn a fresh one carrying the current handlers.
+ * silently failed until a head-unit reboot. The authoritative staleness signal is
+ * a live query to the daemon itself (TX_GET_VERSION): the daemon's CLASSPATH is
+ * frozen at spawn time, so BuildConfig.VERSION_CODE in the running JVM reflects
+ * exactly which APK spawned it. A pref-based bookkeeping value can drift (e.g.
+ * daemon re-spawned by a boot path after the pref was already updated); the live
+ * query cannot.
  */
 @Singleton
 class HelperBootstrap @Inject constructor(
@@ -45,28 +48,36 @@ class HelperBootstrap @Inject constructor(
 
     /**
      * Order of operations:
-     *   1. If a daemon spawned by THIS app version is already alive, reuse it.
-     *   2. Otherwise, if the live daemon is from an older app version, kill it so the
-     *      fresh spawn can take the binder service + file lock. (On a clean boot —
-     *      same version, daemon simply absent — there is nothing to kill.)
-     *   3. Spawn via app_process and poll the binder ping up to [POLL_ATTEMPTS] times.
-     *   4. Persist the spawned versionCode ONLY after a fresh spawn was actually dispatched
-     *      AND the ping confirms it. A failed kill or a failed spawn dispatch bails without
-     *      persisting — otherwise a stale daemon that still answers the ping (helper.isAlive()
-     *      is a binder ping; helperHeartbeat() is the ps-level check, and the two can diverge)
-     *      would get recorded as the current version.
+     *   1. Ask the live daemon which versionCode it was built from (TX_GET_VERSION). The daemon's
+     *      CLASSPATH is frozen at spawn time, so this reply is authoritative. If it matches the
+     *      installed versionCode, the daemon is current — reuse it.
+     *   2. Otherwise the daemon is stale (wrong version, too old for TX_GET_VERSION, or dead).
+     *      Kill when either the binder ping succeeds (isAlive) OR the ps-level check shows a
+     *      process still holding the lock (helperHeartbeat). The binder check alone is
+     *      insufficient: after an uninstall+reinstall the app uid changes, and the daemon's
+     *      UID gate rejects TX_PING, so isAlive()=false while the process is very much alive.
+     *   3. Spawn via app_process; poll daemonVersion() up to [POLL_ATTEMPTS] times — this
+     *      simultaneously confirms liveness AND that the fresh daemon carries the right version.
+     *      A spawn that answers with the wrong version is treated as a failure (return false).
+     *   4. Persist the versionCode (secondary bookkeeping) ONLY after the version poll succeeds.
+     *      A failed kill or spawn dispatch bails without persisting.
      */
     private suspend fun ensureRunningLocked(): Boolean {
         val want = installedVersionCode()
-        val spawnedFor = prefs.getLong(KEY_SPAWNED_VERSION, NO_STORED_VERSION)
-        // Reuse only a daemon this exact app version spawned.
-        if (spawnedFor == want && helper.isAlive()) return true
-        // Version changed → an older daemon may be holding the service + lock; kill it first.
-        // Same version but dead (post-reboot) → nothing to kill, just respawn.
-        if (spawnedFor != want) {
+        // If our own versionCode cannot be read (should never happen), degrade gracefully:
+        // trust the binder ping rather than hammering the daemon with kill+spawn on every call.
+        if (want == VERSION_READ_FAILED) return helper.isAlive()
+        // Live query is authoritative: daemon's CLASSPATH is frozen at spawn time, so
+        // VERSION_CODE in the running JVM reflects which APK it was spawned from.
+        if (helper.daemonVersion() == want) return true
+        // Daemon is stale (wrong version, too old for TX_GET_VERSION) or dead.
+        // Kill when either the binder ping responds (isAlive) OR the process is visible in ps
+        // (helperHeartbeat): a process holding the file lock must be killed before we spawn even
+        // if its UID gate has gone mute (uid change after reinstall makes every transact fail).
+        if (helper.isAlive() || adb.helperHeartbeat()) {
             // If the kill could not even be dispatched (no ADB connection / exec threw), we have
             // no evidence the stale daemon is gone. Bail rather than spawn over a possibly-live
-            // old daemon and then record the new version against it; the next call retries.
+            // old daemon; the next call retries.
             if (!adb.killHelper()) {
                 Log.w(TAG, "killHelper dispatch failed; not spawning to avoid stale daemon")
                 return false
@@ -74,9 +85,8 @@ class HelperBootstrap @Inject constructor(
             // kill -9 is async, and the old daemon holds the exclusive lock + binder name until
             // it actually dies. The fresh daemon uses a NON-blocking tryLock() and exits cleanly
             // if the lock is still held — which would leave the STALE daemon registered, so
-            // helper.isAlive() below would falsely confirm the new version. Wait (bounded) for the
-            // old process to disappear before spawning. First run / no old process → heartbeat is
-            // already false → the loop never runs.
+            // daemonVersion() below would falsely confirm the new version. Wait (bounded) for the
+            // old process to disappear before spawning.
             var stillAlive = adb.helperHeartbeat()
             var attempts = 0
             var killRounds = 0
@@ -95,16 +105,16 @@ class HelperBootstrap @Inject constructor(
                 if (stillAlive && killRounds < KILL_ROUNDS && !adb.killHelper()) break
             }
             // If the stale daemon refuses to die, do NOT spawn over it: the fresh daemon would
-            // lose the lock race and exit, and helper.isAlive() would then confirm the OLD daemon
-            // and wrongly persist the new version. Bail so the next ensureRunning() retries the
-            // kill instead of silently recording a stale daemon as current.
+            // lose the lock race and exit, and daemonVersion() would then reflect the OLD daemon
+            // and wrongly confirm a fresh version. Bail so the next ensureRunning() retries the
+            // kill instead of silently accepting a stale daemon.
             if (stillAlive) {
                 Log.w(TAG, "stale helper still alive after kill; not spawning to avoid lock race")
                 return false
             }
         }
         // If the spawn dispatch itself failed, do NOT fall through to the poll: a stale daemon (or
-        // any leftover process) answering helper.isAlive() would otherwise get the current
+        // any leftover process) answering daemonVersion() would otherwise get the current
         // versionCode persisted against it, masking that no fresh daemon was actually launched.
         if (!adb.spawnHelper()) {
             Log.w(TAG, "spawnHelper dispatch failed; not persisting version")
@@ -112,7 +122,9 @@ class HelperBootstrap @Inject constructor(
         }
         repeat(POLL_ATTEMPTS) {
             delay(POLL_INTERVAL_MS)
-            if (helper.isAlive()) {
+            // daemonVersion() == want confirms both liveness and that the fresh daemon carries
+            // the right handlers. A spawn that answers a wrong version is treated as failure.
+            if (helper.daemonVersion() == want) {
                 prefs.edit().putLong(KEY_SPAWNED_VERSION, want).apply()
                 return true
             }
@@ -138,9 +150,6 @@ class HelperBootstrap @Inject constructor(
         private const val TAG = "HelperBootstrap"
         private const val PREFS = "helper"
         private const val KEY_SPAWNED_VERSION = "spawned_version_code"
-        // Default for "no daemon ever spawned" — distinct from VERSION_READ_FAILED so the two
-        // unknown states never collide into a false version match.
-        private const val NO_STORED_VERSION = -1L
         private const val VERSION_READ_FAILED = Long.MIN_VALUE
         private const val POLL_ATTEMPTS = 15
         private const val POLL_INTERVAL_MS = 200L

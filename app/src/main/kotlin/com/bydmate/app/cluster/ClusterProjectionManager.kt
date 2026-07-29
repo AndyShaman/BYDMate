@@ -20,7 +20,10 @@ import com.bydmate.app.R
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.split.DisabledSplitPreferences
+import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -100,6 +103,10 @@ object ClusterProjectionManager {
     // Set when the freeform switch was rejected: enable_freeform_support is read once at boot,
     // so the settings screen shows a "reboot the car" hint until a direct attempt succeeds.
     const val KEY_FREEFORM_REBOOT_PENDING = "freeform_reboot_pending"
+    // Set when split-screen is enabled and enable_freeform_support was 0 at the time (direct
+    // projection was off). The flag is read once at boot, so freeform will become active only
+    // after the next DiLink restart. Cleared when split is disabled.
+    const val KEY_SPLIT_FREEFORM_REBOOT_PENDING = "split_freeform_reboot_pending"
     // Cluster display id while direct projection is active; persisted (like KEY_LAST_VD_ID) so
     // a fresh process after a crash can still restore windowing mode and drop the density
     // override on the next pull-back.
@@ -114,6 +121,47 @@ object ClusterProjectionManager {
     @Volatile
     var currentMode: ClusterMode = ClusterMode.OFF
         private set
+
+    /**
+     * Split-screen feature preferences. Set by the DI container (Task 8) so the freeform
+     * flag computation includes the split consumer. Defaults to the disabled no-op, which
+     * keeps freeformFlagValue() byte-identical to the pre-split behavior.
+     */
+    @Volatile
+    var splitPreferences: SplitPreferences = DisabledSplitPreferences
+
+    /**
+     * Called synchronously before [helper.launchFreeform] in the direct-projection path so
+     * [SplitSessionManager] can arm a departure-grace window for the pane being transferred
+     * (Q1 / F-1). Set by the DI container; null when split is not active.
+     *
+     * **Lock-order contract:** the caller ([tryDirectProjection]) holds [ClusterProjectionManager.mutex]
+     * when it invokes this callback. The implementation ([SplitSessionManager.beginClusterSend])
+     * is intentionally lock-free — it reads StateFlow.value and writes @Volatile fields without
+     * acquiring [SplitSessionManager.mutex], so there is NO lock-order inversion here.
+     * The inverse direction (SSM.mutex → CPM.mutex) exists in the watchdog path via
+     * [applyCalibratedBoundsToTask]; that SSM → CPM direction is the ONLY permitted order.
+     * NEVER acquire CPM.mutex from inside a callback that was called while already holding it.
+     */
+    @Volatile
+    var onBeforeClusterSend: ((String) -> Unit)? = null
+
+    /**
+     * Called on every terminal VD failure (surface timeout, stale-VD release failure,
+     * createVirtualDisplay failure, launchAndForce=false, or exception) where the task is
+     * confirmed NOT on the cluster, releasing the departure grace armed by [onBeforeClusterSend]
+     * early rather than waiting for the full [SplitSessionManager.DEPARTURE_GRACE_MS] backstop.
+     * UNAVAILABLE and FAILED results from [tryDirectProjection] do NOT invoke this callback —
+     * those paths fall through to the VD pipeline, so grace must remain active until the VD
+     * pipeline itself terminates. Set by the DI container alongside [onBeforeClusterSend]; null
+     * when split is not active.
+     *
+     * Same lock-order contract as [onBeforeClusterSend]: invoked while holding
+     * [ClusterProjectionManager.mutex] — the implementation ([SplitSessionManager.endClusterSend])
+     * must NOT acquire [SplitSessionManager.mutex].
+     */
+    @Volatile
+    var onClusterSendFailed: ((String) -> Unit)? = null
 
     /** Why the last FULLSCREEN attempt failed, for honest voice answers; null after success/OFF.
      *  "daemon" = helper daemon unreachable (transient, retry later); anything else is a free-form
@@ -162,6 +210,84 @@ object ClusterProjectionManager {
         setMode(context, nextMode(currentMode), helper, bootstrap)
 
     /**
+     * Applies the user's calibrated cluster window bounds to [taskId] on [taskDisplayId].
+     *
+     * Called ONCE by SplitSessionManager when a split pane's task departs to the cluster display
+     * via the native "show on cluster" button (Task M). No-ops unless [taskDisplayId] matches the
+     * RESOLVED cluster display id (queried via [resolveClusterDisplay] under [mutex]).
+     *
+     * Why resolveClusterDisplay rather than directDisplayId: directDisplayId is a live-session-only
+     * member assigned only when OUR direct freeform projection is running. The target scenario
+     * (native BYD "show on cluster" button) does not involve our projection at all, so
+     * directDisplayId is -1 and gating on it would make this function always a no-op.
+     * resolveClusterDisplay locates the display by name ("XDJAScreenProjection") and works
+     * regardless of whether our projection is active. Taking [mutex] here is safe under the
+     * established lock order: this function is called from [SplitSessionManager]'s watchdog
+     * (already holding SSM.mutex) via the [applyCalibratedBounds] lambda, so the acquisition
+     * order is SSM.mutex → CPM.mutex — the only permitted direction (see [onBeforeClusterSend]
+     * KDoc for the full cycle analysis).
+     *
+     * Density is explicitly out of scope: the native mechanism owns the cluster display when this
+     * is called, and a density change is a car-visible side effect outside the split session.
+     * Fail-soft: any daemon error is swallowed — the departure is already done.
+     */
+    /**
+     * Returns true when calibration succeeded or was not applicable (early-exit paths);
+     * false when [helper.setTaskBounds] returned false (IPC failure). The false return
+     * signals [SplitSessionManager] to retry on the next watchdog tick (D-1-R1).
+     */
+    suspend fun applyCalibratedBoundsToTask(taskId: Int, taskDisplayId: Int, context: Context, helper: HelperClient): Boolean {
+        if (taskDisplayId <= 0) return true
+        return mutex.withLock {
+            val clusterDisplay = resolveClusterDisplay(context) ?: return@withLock true
+            if (taskDisplayId != clusterDisplay.displayId) return@withLock true
+            val (widthPct, heightPct) = readSizePct(context)
+            val (offsetXPct, offsetYPct) = readOffsetPct(context)
+            val geo = geometryFor(
+                ClusterMode.FULLSCREEN, clusterWidth, clusterHeight,
+                widthPct, heightPct, offsetXPct, offsetYPct,
+            ) ?: return@withLock true
+            val b = freeformBounds(geo)
+            // D-1-R1: propagate the IPC result — false means the daemon rejected the call.
+            // Other exceptions (CancellationException re-thrown; unknown exceptions = false).
+            val ok = runCatching { helper.setTaskBounds(taskId, b[0], b[1], b[2], b[3]) }
+                .onFailure { if (it is CancellationException) throw it }
+                .getOrDefault(false)
+            Log.i(TAG, "applyCalibratedBoundsToTask: task=$taskId display=$taskDisplayId bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] ok=$ok")
+            ok
+        }
+    }
+
+    /**
+     * Ends the running projection when it is the one holding [pkg] on the cluster (W6-F1 FIX-B).
+     *
+     * Called by [SplitSessionManager] when a split session is starting and [pkg]'s task is found on
+     * a non-main display. Without this the split path would force-stop the app out from under a live
+     * projection, leaving this manager reporting [ClusterMode.FULLSCREEN] with nothing on the
+     * cluster (overlay still attached, VirtualDisplay still alive, density override still applied).
+     *
+     * Runs the ordinary [applyModeLocked] OFF sequence — pull-back, overlay teardown, VD release,
+     * density reset, markers, compositor power-down — no separate teardown logic exists here.
+     *
+     * Returns true when a projection of [pkg] was torn down, false when there is nothing to do
+     * (mode already OFF, or the projection belongs to another package — e.g. Navi projecting while
+     * a different app is being placed into a pane).
+     *
+     * **Lock order:** the caller holds [SplitSessionManager.mutex] and this function takes
+     * [mutex] — the sanctioned SSM → CPM direction, identical to the watchdog's
+     * [applyCalibratedBoundsToTask] path. Never invoke it from a callback that already holds
+     * [mutex] (see [onBeforeClusterSend] KDoc for the full cycle analysis).
+     */
+    suspend fun endProjectionForPkg(
+        pkg: String, context: Context, helper: HelperClient, bootstrap: HelperBootstrap,
+    ): Boolean = mutex.withLock {
+        if (currentMode == ClusterMode.OFF || projectedPackage != pkg) return@withLock false
+        Log.i(TAG, "endProjectionForPkg: $pkg is on the cluster — ending projection before the split launch")
+        applyModeLocked(context.applicationContext, ClusterMode.OFF, helper, bootstrap)
+        true
+    }
+
+    /**
      * Self-enable our steering-wheel accessibility service via the daemon, so star control works on
      * a clean install with NO ADB (DiLink has no a11y settings UI). Called when the user turns the
      * settings switch on. [bootstrap] starts the daemon first if it is not up yet; the daemon op is
@@ -175,6 +301,26 @@ object ClusterProjectionManager {
             val ok = helper.enableAccessibilityService()
             Log.i(TAG, "enableStarControl: a11y enabled=$ok")
         }
+    }
+
+    /**
+     * Arms [KEY_SPLIT_FREEFORM_REBOOT_PENDING] when [splitEnabled] is true and direct projection
+     * is off (meaning enable_freeform_support was 0 before the split toggle fired). Called by the
+     * settings toggle so the UI can show a "reboot required" hint. No-op when direct projection is
+     * already on — freeform is already active, no reboot needed. No-op when [splitEnabled] is false
+     * (call [clearSplitRebootHint] instead when disabling split).
+     */
+    fun armSplitRebootHintIfNeeded(context: Context, splitEnabled: Boolean) {
+        if (!splitEnabled) return
+        if (isDirectProjectionEnabled(context)) return
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_SPLIT_FREEFORM_REBOOT_PENDING, true).apply()
+    }
+
+    /** Clears [KEY_SPLIT_FREEFORM_REBOOT_PENDING]; called when the split feature is disabled. */
+    fun clearSplitRebootHint(context: Context) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_SPLIT_FREEFORM_REBOOT_PENDING, false).apply()
     }
 
     /**
@@ -216,7 +362,8 @@ object ClusterProjectionManager {
         mutex.withLock {
             runCatching {
                 helper.putGlobalSetting(
-                    "enable_freeform_support", freeformFlagValue(readDirectEnabled(context)))
+                    "enable_freeform_support",
+                    freeformFlagValue(readDirectEnabled(context), splitPreferences.isFeatureEnabled()))
             }.getOrDefault(false)
         }
 
@@ -592,18 +739,33 @@ object ClusterProjectionManager {
      * to boot - never-projecting users keep a system untouched by BYDMate.
      * Passive users (no explicit transport choice, no migration markers) are skipped entirely —
      * their system flag may belong to a third-party app and is never BYDMate's to manage.
+     *
+     * @param force When true, bypasses the passive-user and direct-only guards. Pass true for
+     *              an explicit user action (e.g. disabling split in settings) so the flag is
+     *              written even when no projection transport has been chosen.
      */
-    fun realignFreeformFlag(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
+    fun realignFreeformFlag(
+        context: Context,
+        helper: HelperClient,
+        bootstrap: HelperBootstrap,
+        force: Boolean = false,
+    ) {
         val appContext = context.applicationContext
         scope.launch {
-            if (!hasTransportChoice(appContext)) return@launch
-            if (readDirectEnabled(appContext)) return@launch
+            val splitEnabled = splitPreferences.isFeatureEnabled()
+            // Skip passive users (no explicit transport or split choice) — their flag may be
+            // owned by a third-party app. A split-enabled user is always an active user.
+            // [force] bypasses this guard for explicit user toggle actions.
+            if (!force && !hasTransportChoice(appContext) && !splitEnabled) return@launch
+            // When direct is chosen (and split is off), the flag is already 1 from project().
+            // Only VD/factory transport and the split consumer need this boot-time realignment.
+            if (!force && readDirectEnabled(appContext) && !splitEnabled) return@launch
             if (!bootstrap.ensureRunning()) {
                 Log.w(TAG, "realignFreeformFlag: daemon unreachable; retrying next service start")
                 return@launch
             }
             val ok = alignFreeformFlag(appContext, helper)
-            Log.i(TAG, "realignFreeformFlag: VD pref, freeform flag write ok=$ok")
+            Log.i(TAG, "realignFreeformFlag: freeform flag write ok=$ok (split=$splitEnabled, force=$force)")
         }
     }
 
@@ -624,7 +786,9 @@ object ClusterProjectionManager {
         // write stays in the direct-first block below.
         val direct = readDirectEnabled(context)
         if (!direct && hasTransportChoice(context)) runCatching {
-            helper.putGlobalSetting("enable_freeform_support", freeformFlagValue(direct))
+            helper.putGlobalSetting(
+                "enable_freeform_support",
+                freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
         }
         // #85/#62: resolve the display BEFORE any compositor ИПЦ write. Song family /
         // DiLink 3-4 expose no projection display; powering the compositor up there painted
@@ -680,18 +844,38 @@ object ClusterProjectionManager {
         // display-dependent branches.
         if (direct) {
             runCatching {
-                helper.putGlobalSetting("enable_freeform_support", freeformFlagValue(direct))
+                helper.putGlobalSetting(
+                    "enable_freeform_support",
+                    freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
             }
             if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
             if (tryDirectProjection(context, helper, display, geo, plan)) return null
         }
 
+        // F-1 fix (Round 8): hoist pkg so all VD terminal failure paths can call onClusterSendFailed.
+        // Grace was armed by onBeforeClusterSend in tryDirectProjection (direct=true path) and must
+        // be released on every path where the task is confirmed NOT on the cluster. On success (null)
+        // the watchdog's departed-branch resolves grace via the normal departure detection flow.
+        // Grace is armed on every path that reaches here: direct=true fires onBeforeClusterSend
+        // inside tryDirectProjection; direct=false (VD-only) fires the re-arm six lines below (line
+        // 835). Safety: terminal VD failures call endClusterSend to release grace early; the
+        // DEPARTURE_GRACE_MS backstop bounds the suppression in case a terminal is missed; and a
+        // successful VD projection is resolved normally by the watchdog's departed-branch detection.
+        val pkg = targetPackage(context)
+        // F-1 fix (Round 9 / NEW-8-1): re-arm departure grace at VD-path entry. The full worst-case
+        // VD pipeline (surface 3s + release stale VD ~2s + createVd ~2s + launchAndForce up to
+        // FORCE_TIMEOUT_MS=15s) can easily exceed DEPARTURE_GRACE_MS. beginClusterSend is
+        // idempotent (overwrites deadline, no-op outside an active session), so calling it here and
+        // again just before launchAndForce is always safe. The first re-arm covers surface→createVd;
+        // the second re-arm covers the launchAndForce window specifically.
+        onBeforeClusterSend?.invoke(pkg)
         return try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
                 addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
             if (surface == null) {
                 Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
+                onClusterSendFailed?.invoke(pkg)
                 hideOverlay(helper); return "projection"
             }
             // Release a stale VD (a prior release that failed) before overwriting the id. If it
@@ -701,6 +885,7 @@ object ClusterProjectionManager {
                 val staleId = remoteDisplayId
                 if (!helper.releaseVirtualDisplay(staleId)) {
                     Log.w(TAG, "stale releaseVirtualDisplay($staleId) failed; aborting to keep retry handle")
+                    onClusterSendFailed?.invoke(pkg)
                     hideOverlay(helper); return "projection"
                 }
                 remoteDisplayId = -1
@@ -712,15 +897,23 @@ object ClusterProjectionManager {
             }
             val id = createClusterVd(helper, plan, surface)
             if (id == null) {
-                Log.e(TAG, "createVirtualDisplay failed"); hideOverlay(helper); return "projection"
+                Log.e(TAG, "createVirtualDisplay failed")
+                onClusterSendFailed?.invoke(pkg)
+                hideOverlay(helper); return "projection"
             }
             remoteDisplayId = id
             saveLastVdId(context, id)
-            val pkg = targetPackage(context)
             Log.i(TAG, "VirtualDisplay id=$id ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}; launchAndForce $pkg")
+            // F-1 / NEW-8-1 second re-arm: launchAndForce can block up to FORCE_TIMEOUT_MS=15s,
+            // which approaches the DEPARTURE_GRACE_MS set by the VD-entry re-arm above. Refresh
+            // grace immediately before this call so the full DEPARTURE_GRACE_MS window covers the
+            // task-transition phase (see SSM.DEPARTURE_GRACE_MS invariant KDoc for derivation).
+            onBeforeClusterSend?.invoke(pkg)
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
-                Log.e(TAG, "launchAndForce failed"); hideOverlay(helper); return "projection"
+                Log.e(TAG, "launchAndForce failed")
+                onClusterSendFailed?.invoke(pkg)
+                hideOverlay(helper); return "projection"
             }
             projectedPackage = pkg
             null
@@ -729,6 +922,7 @@ object ClusterProjectionManager {
             // overlay down and report failure so applyModeLocked falls back to OFF + pull-back,
             // keeping currentMode honest.
             Log.e(TAG, "projection threw: ${e.message}", e)
+            onClusterSendFailed?.invoke(pkg)
             hideOverlay(helper); "projection"
         }
     }
@@ -761,6 +955,10 @@ object ClusterProjectionManager {
             Log.w(TAG, "direct projection: write-ahead marker not persisted; VD fallback")
             return false
         }
+        // Notify SplitSessionManager that [pkg] is about to be sent to the cluster so it can
+        // suppress watchdog misclassifications during the transient REMOVE+RELAUNCH (Q1 / F-1).
+        // No-op when [pkg] is not a split pane or no session is active.
+        onBeforeClusterSend?.invoke(pkg)
         return when (helper.launchFreeform(pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3])) {
             FreeformLaunchResult.OK -> {
                 directDisplayId = display.displayId
@@ -772,6 +970,12 @@ object ClusterProjectionManager {
                 true
             }
             FreeformLaunchResult.UNAVAILABLE -> {
+                // Task was not moved, but grace must SURVIVE: execution falls through to the VD
+                // fallback which owns the task for up to SURFACE_TIMEOUT_MS. Releasing grace here
+                // (old D-3) left a window where the task was transiently fullscreen@display0 while
+                // the VD pipeline was still running — the watchdog classified MAXIMIZED and killed
+                // the session on a routine fallback (F-1 class). onClusterSendFailed is now called
+                // only at terminal VD failures (inside project()), where the task is confirmed gone.
                 val firstTime = !prefs.getBoolean(KEY_FREEFORM_REBOOT_PENDING, false)
                 prefs.edit()
                     .putBoolean(KEY_FREEFORM_REBOOT_PENDING, true)
@@ -794,6 +998,8 @@ object ClusterProjectionManager {
                 false
             }
             FreeformLaunchResult.FAILED -> {
+                // Same rationale as UNAVAILABLE above: grace survives for the VD fallback.
+                // onClusterSendFailed is called only at terminal VD failures, not here.
                 Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
                 false
             }

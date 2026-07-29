@@ -55,16 +55,18 @@ fun AppLaunchPickerDialog(
     showMinimizeToggle: Boolean = false,
     initialMinimize: Boolean = false,
     onMinimizeChanged: ((Boolean) -> Unit)? = null,
+    excludedPackages: Set<String> = emptySet(),
 ) {
     val context = LocalContext.current
     val apps = remember { queryLaunchableApps(context) }
     var search by remember { mutableStateOf("") }
     var minimize by remember { mutableStateOf(initialMinimize) }
 
-    val filtered = remember(search, apps) {
+    val filtered = remember(search, apps, excludedPackages) {
         val q = search.trim().lowercase()
-        if (q.isEmpty()) apps
-        else apps.filter { it.label.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
+        val base = if (excludedPackages.isEmpty()) apps else apps.filter { it.packageName !in excludedPackages }
+        if (q.isEmpty()) base
+        else base.filter { it.label.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
     }
 
     val fieldColors = OutlinedTextFieldDefaults.colors(

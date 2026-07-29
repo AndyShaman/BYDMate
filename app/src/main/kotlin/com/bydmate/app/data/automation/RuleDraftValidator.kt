@@ -22,6 +22,10 @@ sealed class ActionValidationError {
     data class HotspotInvalid(val index: Int) : ActionValidationError()
     data class SpeakTextEmpty(val index: Int) : ActionValidationError()
     data class AgentQueryPromptEmpty(val index: Int) : ActionValidationError()
+    data class SplitScreenNarrowEmpty(val index: Int) : ActionValidationError()
+    data class SplitScreenWideEmpty(val index: Int) : ActionValidationError()
+    data class SplitScreenSamePackage(val index: Int) : ActionValidationError()
+    data class SplitScreenInvalidSide(val index: Int) : ActionValidationError()
 }
 
 /** Reason a trigger draft failed validation (currently: voice-phrase collisions only). */
@@ -106,6 +110,16 @@ object RuleDraftValidator {
                     if (payloadJson(a.payload).optString("prompt").isBlank()) {
                         return ActionValidationError.AgentQueryPromptEmpty(n)
                     }
+                }
+                "split_screen" -> {
+                    val json = payloadJson(a.payload)
+                    val narrow = json.optString("narrow")
+                    if (narrow.isBlank()) return ActionValidationError.SplitScreenNarrowEmpty(n)
+                    val wide = json.optString("wide")
+                    if (wide.isBlank()) return ActionValidationError.SplitScreenWideEmpty(n)
+                    if (narrow == wide) return ActionValidationError.SplitScreenSamePackage(n)
+                    val side = json.optString("side")
+                    if (side !in listOf("left", "right")) return ActionValidationError.SplitScreenInvalidSide(n)
                 }
             }
         }

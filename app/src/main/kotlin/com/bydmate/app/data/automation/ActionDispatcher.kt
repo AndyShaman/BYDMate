@@ -15,12 +15,18 @@ import android.os.Bundle
 import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.media.MediaSessionListenerService
+import com.bydmate.app.split.SplitPair
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitSessionState
+import com.bydmate.app.split.SplitSide
+import com.bydmate.app.split.SplitStartResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import org.json.JSONObject
@@ -38,6 +44,7 @@ class ActionDispatcher @Inject constructor(
     private val voiceActions: dagger.Lazy<com.bydmate.app.voice.VoiceAutomationActions>,
     private val clusterVoiceControl: ClusterVoiceControl,
     private val audioCapture: com.bydmate.app.voice.AudioCapture,
+    private val splitSessionManager: SplitSessionManager,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -263,6 +270,9 @@ class ActionDispatcher @Inject constructor(
             "cluster_projection" -> dispatchClusterProjection(action)
             "speak" -> dispatchSpeak(action)
             "agent_query" -> dispatchAgentQuery(action)
+            "split_screen" -> dispatchSplitScreen(action)
+            "split_screen_close" -> dispatchSplitScreenClose()
+            "split_screen_toggle" -> dispatchSplitScreenToggle()
             else -> DispatchResult(false, "Unknown action kind: ${action.kind}")
         }
     } catch (e: Exception) {
@@ -326,6 +336,67 @@ class ActionDispatcher @Inject constructor(
         val prompt = parsePayload(action.payload)?.optString("prompt")?.trim().orEmpty()
         if (prompt.isEmpty()) return DispatchResult(false, "не задан запрос")
         return voiceActions.get().agentQuery(prompt)
+    }
+
+    /**
+     * "split_screen": launch two apps in freeform split layout via SplitSessionManager.
+     * Payload: {"narrow":"<pkg>","wide":"<pkg>","side":"left"|"right"}.
+     * No speed/safety gate — split is not a dangerous action.
+     */
+    private suspend fun dispatchSplitScreen(action: ActionDef): DispatchResult {
+        val json = parsePayload(action.payload)
+            ?: return DispatchResult(false, "payload не задан")
+        val narrow = json.optString("narrow").takeIf(String::isNotBlank)
+            ?: return DispatchResult(false, "narrow не задан")
+        val wide = json.optString("wide").takeIf(String::isNotBlank)
+            ?: return DispatchResult(false, "wide не задан")
+        val side = when (json.optString("side")) {
+            "left" -> SplitSide.LEFT
+            "right" -> SplitSide.RIGHT
+            else -> return DispatchResult(false, "неверная сторона")
+        }
+        return when (splitSessionManager.start(SplitPair(narrow, wide, side))) {
+            SplitStartResult.OK -> DispatchResult(true)
+            SplitStartResult.FREEFORM_UNAVAILABLE ->
+                DispatchResult(false, context.getString(R.string.split_freeform_reboot_hint))
+            SplitStartResult.LAUNCH_FAILED ->
+                DispatchResult(false, context.getString(R.string.split_launch_failed))
+            SplitStartResult.DISABLED ->
+                DispatchResult(false, context.getString(R.string.split_feature_disabled))
+        }
+    }
+
+    /**
+     * "split_screen_close": end the split session. No payload, no speed gate.
+     * Idempotent — an absent session already IS the requested end state, and
+     * exit() is a no-op there, so this reports success either way.
+     */
+    private suspend fun dispatchSplitScreenClose(): DispatchResult {
+        splitSessionManager.exit()
+        return DispatchResult(true)
+    }
+
+    /**
+     * "split_screen_toggle": session running → exit, otherwise restore the last pair.
+     * No payload, no speed gate. The first-pair picker is deliberately NOT opened from
+     * automation (a rule fires without anyone waiting to answer a dialog), so a pair
+     * that was never saved is a plain failure.
+     */
+    private suspend fun dispatchSplitScreenToggle(): DispatchResult {
+        if (splitSessionManager.state.value is SplitSessionState.Active) {
+            splitSessionManager.exit()
+            return DispatchResult(true)
+        }
+        return when (splitSessionManager.startLastPair()) {
+            null -> DispatchResult(false, "пара для разделения экрана не сохранена")
+            SplitStartResult.OK -> DispatchResult(true)
+            SplitStartResult.FREEFORM_UNAVAILABLE ->
+                DispatchResult(false, context.getString(R.string.split_freeform_reboot_hint))
+            SplitStartResult.LAUNCH_FAILED ->
+                DispatchResult(false, context.getString(R.string.split_launch_failed))
+            SplitStartResult.DISABLED ->
+                DispatchResult(false, context.getString(R.string.split_feature_disabled))
+        }
     }
 
     private suspend fun dispatchDelay(action: ActionDef): DispatchResult {

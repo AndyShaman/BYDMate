@@ -22,8 +22,16 @@ import com.bydmate.app.MainActivity
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.split.SplitOverlayController
+import com.bydmate.app.split.SplitSessionManager
+import com.bydmate.app.split.SplitSessionState
+import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
+import com.bydmate.app.ui.overlay.OverlayNotificationManager
+import dagger.hilt.EntryPoint
+import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
+import dagger.hilt.components.SingletonComponent
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -35,6 +43,17 @@ import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+
+/**
+ * Hilt entry point used by [WidgetController] (a singleton object, not Hilt-managed)
+ * to reach the split-screen singletons without constructor injection.
+ */
+@EntryPoint
+@InstallIn(SingletonComponent::class)
+interface SplitWidgetEntryPoint {
+    fun splitSessionManager(): SplitSessionManager
+    fun splitOverlayController(): SplitOverlayController
+}
 
 /**
  * Singleton controller that owns the floating-widget + trash-zone overlay
@@ -617,13 +636,28 @@ object WidgetController {
 
     /**
      * Called from SettingsViewModel after the user switches app language.
-     * Detaches the overlay so the next attach (driven by ActivityLifecycle
-     * callbacks when the user leaves Settings) recreates ComposeView against
-     * the freshly-localized Configuration context.
+     * Detaches the widget overlay (if attached) and re-localizes the split pill.
+     *
+     * [appCtx] must be supplied by the caller — NOT derived from [widgetView]. The
+     * widget is detached while the Settings Activity is foregrounded (BYDMateApp
+     * .onActivityResumed → setAppForegrounded(true) → detach()), so widgetView is
+     * always null at the moment the user changes the language. A widgetView-based
+     * lookup would be a silent no-op; using the caller's context fixes this regardless
+     * of whether the floating widget is enabled (C-5).
+     *
+     * [splitOverlayRelocaleAction] is overridable in unit tests to avoid requiring a
+     * Hilt-initialized application context in the test environment.
      */
+    internal var splitOverlayRelocaleAction: (Context) -> Unit = { ctx ->
+        EntryPointAccessors.fromApplication(ctx, SplitWidgetEntryPoint::class.java)
+            .splitOverlayController().relocale()
+    }
+
     @Synchronized
-    fun relocale() {
+    fun relocale(appCtx: Context) {
         if (widgetView != null) detach()
+        // C-5: always invoke via caller-supplied appCtx, not widgetView?.context.
+        splitOverlayRelocaleAction(appCtx)
     }
 
     private fun localizedContext(appCtx: Context): Context {
@@ -643,6 +677,39 @@ object WidgetController {
     /** Pure visibility decision, unit-tested: camera always hides, YouTube only by opt-in. */
     fun shouldHideOverlay(cameraActive: Boolean, youtubeForeground: Boolean, hideOnYoutube: Boolean): Boolean =
         cameraActive || (youtubeForeground && hideOnYoutube)
+
+    /**
+     * Split-mode left tap, as an inverse toggle: no session → restore the last pair
+     * ([onNoPair] when nothing has been saved yet), session → [SplitSessionManager.exit].
+     *
+     * A zombie session (state is Active but the panes are already dead) still routes to
+     * exit: exit() tears such a session down fail-soft, so the tap doubles as the manual
+     * recovery path. No pane-liveness probing here on purpose.
+     *
+     * The predicate reads [SplitSessionManager.state] synchronously; a tap racing a
+     * teardown is acceptable — the next tap simply starts a session.
+     *
+     * [onError] receives a string resource id so the decision stays Context-free
+     * (and unit-testable); the caller renders it via OverlayNotificationManager,
+     * whose show() is suspending — hence the suspend callback.
+     */
+    internal suspend fun runSplitTap(
+        manager: SplitSessionManager,
+        onNoPair: () -> Unit,
+        onError: suspend (Int) -> Unit,
+    ) {
+        if (manager.state.value is SplitSessionState.Active) {
+            manager.exit()
+            return
+        }
+        when (manager.startLastPair()) {
+            null -> onNoPair()
+            SplitStartResult.OK -> Unit
+            SplitStartResult.FREEFORM_UNAVAILABLE -> onError(R.string.split_freeform_reboot_hint)
+            SplitStartResult.LAUNCH_FAILED -> onError(R.string.split_launch_failed)
+            SplitStartResult.DISABLED -> onError(R.string.split_feature_disabled)
+        }
+    }
 
     // --- Touch handling ---
 
@@ -769,9 +836,8 @@ object WidgetController {
                         ) && prefs.isLeftTapZoningEnabled()
 
                         if (leftTap) {
-                            // Left zone always launches the configured app immediately,
-                            // independent of the buttons feature (unchanged behavior).
-                            launchLeftApp()
+                            // Route left-zone tap to the user-configured mode.
+                            handleLeftTap()
                         } else if (!buttonsEnabled) {
                             // Feature off: a right/center tap opens BYDMate, as before.
                             openBydMate()
@@ -827,6 +893,14 @@ object WidgetController {
             }
         }
 
+        /** Dispatches to app-launch or split-screen based on the saved mode. */
+        private fun handleLeftTap() {
+            when (prefs.getLeftTapMode()) {
+                LeftTapMode.APP -> launchLeftApp()
+                LeftTapMode.SPLIT -> launchSplit()
+            }
+        }
+
         private fun launchLeftApp() {
             try {
                 val intent = context.packageManager
@@ -837,6 +911,35 @@ object WidgetController {
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "launchLeftApp failed: ${e.message}")
+            }
+        }
+
+        /**
+         * Toggles the split session: starts the last saved pair, or exits the running
+         * one (see [runSplitTap]). If no pair exists yet, opens the first-pair picker
+         * overlay. Error states are shown via [OverlayNotificationManager].
+         */
+        private fun launchSplit() {
+            dataScope?.launch {
+                try {
+                    val ep = EntryPointAccessors.fromApplication(
+                        context.applicationContext,
+                        SplitWidgetEntryPoint::class.java,
+                    )
+                    runSplitTap(
+                        manager = ep.splitSessionManager(),
+                        onNoPair = { ep.splitOverlayController().showFirstPairPicker() },
+                        onError = { res ->
+                            OverlayNotificationManager.show(
+                                context.applicationContext,
+                                context.getString(res),
+                                "",
+                            )
+                        },
+                    )
+                } catch (e: Exception) {
+                    Log.w(TAG, "launchSplit failed: ${e.message}")
+                }
             }
         }
     }

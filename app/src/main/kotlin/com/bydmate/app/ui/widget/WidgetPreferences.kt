@@ -6,6 +6,9 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
+/** What the left-third tap should do when zoning is enabled. */
+enum class LeftTapMode { APP, SPLIT }
+
 /**
  * Thin wrapper around the "bydmate_widget" SharedPreferences file.
  * Keeps the keys in one place and exposes a Flow so Settings UI can react
@@ -114,10 +117,20 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
             .apply()
     }
 
+    fun getLeftTapMode(): LeftTapMode =
+        prefs.getString(KEY_LEFT_TAP_MODE, null)
+            ?.let { runCatching { LeftTapMode.valueOf(it) }.getOrNull() }
+            ?: LeftTapMode.APP
+
+    fun setLeftTapMode(mode: LeftTapMode) {
+        prefs.edit().putString(KEY_LEFT_TAP_MODE, mode.name).apply()
+    }
+
     data class LeftTapAppState(
         val enabled: Boolean,
         val packageName: String,
         val label: String,
+        val mode: LeftTapMode = LeftTapMode.APP,
     )
 
     fun leftTapAppFlow(): Flow<LeftTapAppState> = callbackFlow {
@@ -125,11 +138,13 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
             enabled = isLeftTapZoningEnabled(),
             packageName = getLeftTapAppPackage(),
             label = getLeftTapAppLabel(),
+            mode = getLeftTapMode(),
         )
         val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
             if (changedKey == KEY_LEFT_TAP_ZONING ||
                 changedKey == KEY_LEFT_TAP_APP_PKG ||
-                changedKey == KEY_LEFT_TAP_APP_LABEL
+                changedKey == KEY_LEFT_TAP_APP_LABEL ||
+                changedKey == KEY_LEFT_TAP_MODE
             ) {
                 trySend(snapshot())
             }
@@ -200,6 +215,7 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_LEFT_TAP_ZONING = "widget_left_tap_zoning"
         const val KEY_LEFT_TAP_APP_PKG = "widget_left_tap_app_pkg"
         const val KEY_LEFT_TAP_APP_LABEL = "widget_left_tap_app_label"
+        const val KEY_LEFT_TAP_MODE = "widget_left_tap_mode"
         const val KEY_BUTTONS_ENABLED = "widget_buttons_enabled"
         const val KEY_HIDE_ON_YOUTUBE = "widget_hide_on_youtube"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"

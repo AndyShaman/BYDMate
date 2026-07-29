@@ -24,3 +24,4 @@ fun Context.appLocalizedContext(): Context {
     }
     return createConfigurationContext(config)
 }
+

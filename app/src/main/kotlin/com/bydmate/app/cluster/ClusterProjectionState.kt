@@ -143,5 +143,10 @@ fun shouldClearDirectMarker(resetOk: Boolean, taskFound: Boolean, modeOk: Boolea
  * Direct (freeform) needs 1; the VD pipeline needs nothing, so VD writes the factory
  * value 0 back. The flag is system-wide and survives an app uninstall, which is why
  * VD mode doubles as the "return the car to factory state" switch.
+ *
+ * [splitEnabled] is the split-screen master switch: when true, the flag stays at 1
+ * regardless of the cluster projection transport — the OS needs freeform active for
+ * split to work. Default false keeps the behavior byte-identical to the pre-split code.
  */
-internal fun freeformFlagValue(directEnabled: Boolean): Int = if (directEnabled) 1 else 0
+internal fun freeformFlagValue(directEnabled: Boolean, splitEnabled: Boolean = false): Int =
+    if (directEnabled || splitEnabled) 1 else 0

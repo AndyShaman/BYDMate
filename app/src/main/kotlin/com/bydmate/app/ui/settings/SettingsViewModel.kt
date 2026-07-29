@@ -3,6 +3,8 @@ package com.bydmate.app.ui.settings
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.os.Build
+import androidx.core.content.FileProvider
 import android.os.Environment
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
@@ -34,6 +36,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.util.CrashLog
+import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.R
 import org.json.JSONArray
 import org.json.JSONObject
@@ -52,6 +55,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
@@ -125,6 +129,8 @@ data class SettingsUiState(
     val abrpSaveStatus: String? = null,
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
+    /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
+    val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
     // Voice settings
     val voiceEnabled: Boolean = false,
@@ -249,7 +255,7 @@ class SettingsViewModel @Inject constructor(
         // Force overlay teardown so the next attach picks up the new locale.
         // applicationContext keeps a stale Configuration after setApplicationLocales,
         // which leaves the floating widget rendering against the old language.
-        WidgetController.relocale()
+        WidgetController.relocale(appContext)  // C-5: pass context from VM, not from widgetView
     }
 
     /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */
@@ -1816,6 +1822,119 @@ class SettingsViewModel @Inject constructor(
     /** Dismiss the config backup/restore status message. */
     fun clearConfigStatus() {
         _uiState.update { it.copy(configStatus = null) }
+    }
+
+    /**
+     * Reflects all static int/long constants out of the BYD SDK fid classes via the helper
+     * daemon, writes the result to the public Download/fid-dump-<timestamp>.txt, prepends a
+     * 3-line header, then fires the standard ACTION_SEND share sheet.
+     *
+     * The folder is public (W6-F4) because the previous private filesDir target was reachable
+     * neither by a file manager nor by `adb pull`, so users could not hand the dump over.
+     *
+     * Privacy: NO automatic upload, NO background collection. The dump contains only SDK
+     * constant names/values; no VIN, no location, no personal data. The file leaves the
+     * device only through the user-driven share sheet.
+     */
+    fun dumpFids() {
+        // Compute the locale-aware context on the calling thread (Main) before switching to IO.
+        // This avoids thread-specific Robolectric issues and is cheap (createConfigurationContext).
+        val lc = appContext.appLocalizedContext()
+        viewModelScope.launch(Dispatchers.IO) {
+            _uiState.update { it.copy(fidDumpStatus = lc.getString(R.string.settings_fid_dump_in_progress)) }
+            // C-3: ensure fresh daemon so old-format TX_DUMP_FIDS replies are never encountered.
+            helperBootstrap.ensureRunning()
+            val dumpResult = helperClient.dumpFids()
+            val dump: String = when (dumpResult) {
+                is DumpFidsResult.BinderAbsent -> {
+                    _uiState.update {
+                        it.copy(fidDumpStatus = lc.getString(
+                            R.string.settings_error_with_message,
+                            lc.getString(R.string.settings_fid_dump_error_unavailable),
+                        ))
+                    }
+                    return@launch
+                }
+                is DumpFidsResult.ReadError -> {
+                    _uiState.update {
+                        it.copy(fidDumpStatus = lc.getString(
+                            R.string.settings_error_with_message,
+                            lc.getString(R.string.settings_fid_dump_error_read, dumpResult.detail),
+                        ))
+                    }
+                    return@launch
+                }
+                is DumpFidsResult.Success -> dumpResult.dump
+            }
+            if (dump.isBlank()) {
+                _uiState.update { it.copy(fidDumpStatus = lc.getString(R.string.settings_fid_dump_empty)) }
+                return@launch
+            }
+            try {
+                val timestamp = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())
+                val fileName = "fid-dump-$timestamp.txt"
+                // Same candidate chain and same target folder as startLogRecording(): straight
+                // into the public Download, no subfolder — CSV export, config backup and the APK
+                // update all land there too.
+                val dir = listOfNotNull(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS),
+                    File("/storage/emulated/0/Download"),
+                    appContext.getExternalFilesDir(null),
+                ).firstOrNull { (it.isDirectory || it.mkdirs()) && it.canWrite() }
+                if (dir == null) {
+                    _uiState.update { it.copy(fidDumpStatus = lc.getString(R.string.settings_log_error_no_fs_access)) }
+                    return@launch
+                }
+                // Keep only the most recent dump so a share still reading the previous URI
+                // can finish; the new file makes it the second, giving a two-file rolling window.
+                dir.listFiles { _, name -> name.startsWith("fid-dump-") && name.endsWith(".txt") }
+                    ?.sortedByDescending { it.lastModified() }
+                    ?.drop(1)
+                    ?.forEach { it.delete() }
+                val file = File(dir, fileName)
+                file.bufferedWriter().use { out ->
+                    val pi = appContext.packageManager.getPackageInfo(appContext.packageName, 0)
+                    val vName = pi.versionName ?: "?"
+                    val vCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P)
+                        pi.longVersionCode.toString()
+                    else
+                        @Suppress("DEPRECATION") pi.versionCode.toString()
+                    val model = Build.MODEL
+                    val buildId = Build.DISPLAY
+                    val date = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
+                    out.appendLine("BYDMate $vName ($vCode), $date")
+                    out.appendLine("model: $model  build: $buildId")
+                    out.appendLine("---")
+                    out.append(dump)
+                }
+                val uri = FileProvider.getUriForFile(
+                    appContext, "${appContext.packageName}.fileprovider", file,
+                )
+                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                    type = "text/plain"
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                }
+                val chooser = Intent.createChooser(shareIntent, null).apply {
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                appContext.startActivity(chooser)
+                // Show the path the user actually sees in a file manager (storage root stripped),
+                // e.g. "Download/fid-dump-20260729-120000.txt".
+                val storageRoot = Environment.getExternalStorageDirectory()?.absolutePath
+                val visiblePath = file.absolutePath.let { path ->
+                    if (storageRoot != null && path.startsWith(storageRoot))
+                        path.removePrefix(storageRoot).trimStart('/')
+                    else
+                        path
+                }
+                _uiState.update { it.copy(fidDumpStatus = lc.getString(R.string.settings_fid_dump_saved, visiblePath)) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(fidDumpStatus = lc.getString(R.string.settings_error_with_message, e.message ?: "?"))
+                }
+            }
+        }
     }
 
     /**

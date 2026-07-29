@@ -17,6 +17,7 @@ import com.bydmate.app.cluster.DEFAULT_SCALE_PCT
 import com.bydmate.app.cluster.NAVI_PACKAGE
 import dagger.hilt.android.EntryPointAccessors
 import kotlin.math.roundToInt
+import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
 import androidx.compose.foundation.background
@@ -127,12 +128,15 @@ import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.TtsVoiceCatalog
 import com.bydmate.app.voice.online.TtsRouter
 import com.bydmate.app.hud.HudController
+import com.bydmate.app.split.SplitRole
+import com.bydmate.app.split.applyPick
 import java.util.Locale
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
     VOICE(R.string.settings_section_voice_agent, Icons.Outlined.Mic),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
+    SPLIT(R.string.settings_section_split_title, Icons.Outlined.Apps),
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
     PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
@@ -264,6 +268,7 @@ fun SettingsScreen(
                         SettingsSection.VOICE -> VoiceSettingsContent(state, viewModel, onNavigateToVoiceJournal, onNavigateToAgentChat)
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
+                        SettingsSection.SPLIT -> SplitSection()
                         SettingsSection.PLACES -> PlacesSection()
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
@@ -686,6 +691,11 @@ private fun WidgetSection() {
     val context = LocalContext.current
     val prefs = remember { WidgetPreferences(context) }
     val enabled by prefs.enabledFlow().collectAsStateWithLifecycle(initialValue = prefs.isEnabled())
+    // Read split feature state once at composition time to gate the left-tap mode chip.
+    val splitFeatureEnabled = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+            .splitPreferences().isFeatureEnabled()
+    }
     val alpha by prefs.alphaFlow().collectAsStateWithLifecycle(initialValue = prefs.getAlpha())
     val scale by prefs.scaleFlow().collectAsStateWithLifecycle(initialValue = prefs.getScale())
     val leftTapApp by prefs.leftTapAppFlow().collectAsStateWithLifecycle(
@@ -797,6 +807,21 @@ private fun WidgetSection() {
                 onCheckedChange = { prefs.setLeftTapZoningEnabled(it) },
                 enabled = enabled,
             )
+            if (leftTapApp.enabled) {
+                SettingChipRow(
+                    title = stringResource(R.string.settings_widget_left_tap_mode_label),
+                    options = listOf(
+                        stringResource(R.string.settings_widget_left_tap_mode_app),
+                        stringResource(R.string.settings_widget_left_tap_mode_split),
+                    ),
+                    selectedIndex = if (leftTapApp.mode == LeftTapMode.APP) 0 else 1,
+                    onSelect = { idx ->
+                        prefs.setLeftTapMode(if (idx == 0) LeftTapMode.APP else LeftTapMode.SPLIT)
+                    },
+                    // Disabled when split feature is off: prevents selecting split mode (Fix 1).
+                    enabled = enabled && splitFeatureEnabled,
+                )
+            }
             SettingToggleRow(
                 title = stringResource(R.string.settings_widget_buttons_label),
                 description = stringResource(R.string.settings_widget_buttons_description),
@@ -809,7 +834,7 @@ private fun WidgetSection() {
                 description = stringResource(R.string.settings_widget_left_tap_description),
                 value = leftTapApp.label,
                 onClick = { showLeftTapPicker = true },
-                enabled = leftTapApp.enabled && enabled,
+                enabled = leftTapApp.enabled && leftTapApp.mode == LeftTapMode.APP && enabled,
             )
         }
     }
@@ -1184,6 +1209,197 @@ private fun steeringButtonLabel(keyCode: Int): String {
     else stringResource(R.string.steering_button_unknown, keyCode)
 }
 
+/**
+ * «Разделение экрана» settings section.
+ *
+ * Controls the split-screen 1/3+2/3 feature:
+ *   1. Master toggle — writes to SplitPreferences and realigns enable_freeform_support via
+ *      ClusterProjectionManager.realignFreeformFlag().
+ *   2. Reboot hint — shown when freeform was not yet active at the time split was enabled
+ *      (flag is read once at boot). Mirrors the projection section's mechanism.
+ *   3. Clear-last-pair row — lets the user discard the saved pair so the next launch
+ *      opens the picker instead of the saved apps.
+ */
+@Composable
+private fun SplitSection() {
+    val context = LocalContext.current
+    val entryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
+    val splitPrefs = remember { entryPoint.splitPreferences() }
+    val clusterPrefs = remember {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
+    var splitEnabled by remember { mutableStateOf(splitPrefs.isFeatureEnabled()) }
+    var hasLastPair by remember { mutableStateOf(splitPrefs.getLastPair() != null) }
+    var splitRebootPending by remember {
+        mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false))
+    }
+    var clearStatus by remember { mutableStateOf<String?>(null) }
+    // "?" badge on the section header; the text it toggles is the first block inside the card.
+    var howToOpen by remember { mutableStateOf(false) }
+
+    // App pair picker state. Initialized from the stored pair; updated on every pick or clear.
+    var displayWidePkg by remember { mutableStateOf(splitPrefs.getLastPair()?.widePkg) }
+    var displayNarrowPkg by remember { mutableStateOf(splitPrefs.getLastPair()?.narrowPkg) }
+    // Non-null while a picker dialog is open; identifies which role is being configured.
+    var openPicker by remember { mutableStateOf<SplitRole?>(null) }
+
+    SectionHeader(
+        text = stringResource(R.string.settings_section_split_title),
+        onHelp = { howToOpen = !howToOpen },
+    )
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            // How-to text lives inside the card (like every other SettingHint) even though the
+            // "?" that toggles it sits on the section header just above.
+            if (howToOpen) {
+                SettingHint(text = stringResource(R.string.settings_split_howto_body))
+                SettingDivider()
+            }
+            SettingToggleRow(
+                title = stringResource(R.string.settings_split_enable_title),
+                description = stringResource(R.string.settings_split_enable_desc),
+                checked = splitEnabled,
+                onCheckedChange = { enabled ->
+                    splitPrefs.setFeatureEnabled(enabled)
+                    splitEnabled = enabled
+                    if (enabled) {
+                        // Arm the reboot hint when enabling split while freeform is not yet live
+                        // (direct projection is off → flag was 0). Mirrors the projection section's
+                        // KEY_FREEFORM_REBOOT_PENDING mechanism for the split consumer.
+                        ClusterProjectionManager.armSplitRebootHintIfNeeded(context, splitEnabled = true)
+                        splitRebootPending = clusterPrefs.getBoolean(
+                            ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false)
+                    } else {
+                        ClusterProjectionManager.clearSplitRebootHint(context)
+                        splitRebootPending = false
+                    }
+                    // force=true on explicit disable: bypass the passive-user guard so the flag
+                    // is written to 0 even when no projection transport has been chosen (Fix 2).
+                    ClusterProjectionManager.realignFreeformFlag(
+                        context, entryPoint.helperClient(), entryPoint.helperBootstrap(),
+                        force = !enabled)
+                },
+            )
+            // Reboot hint: shown when split was enabled while freeform was not yet active.
+            // enable_freeform_support is read once at boot, so a restart is required.
+            if (splitRebootPending && splitEnabled) {
+                SettingHint(text = stringResource(R.string.split_freeform_reboot_hint))
+            }
+            if (splitEnabled) {
+                SettingDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.settings_split_wide_app_title),
+                    value = displayWidePkg?.let { resolveAppLabel(context, it) }
+                        ?: stringResource(R.string.settings_split_app_not_selected),
+                    onClick = {
+                        // Refresh display from the stored pair so the exclusion set and
+                        // current-app highlight reflect any external change (e.g. overlay picker).
+                        splitPrefs.getLastPair()?.let {
+                            displayWidePkg = it.widePkg
+                            displayNarrowPkg = it.narrowPkg
+                        }
+                        openPicker = SplitRole.WIDE
+                    },
+                )
+                SettingDivider()
+                SettingValueRow(
+                    title = stringResource(R.string.settings_split_narrow_app_title),
+                    value = displayNarrowPkg?.let { resolveAppLabel(context, it) }
+                        ?: stringResource(R.string.settings_split_app_not_selected),
+                    onClick = {
+                        splitPrefs.getLastPair()?.let {
+                            displayWidePkg = it.widePkg
+                            displayNarrowPkg = it.narrowPkg
+                        }
+                        openPicker = SplitRole.NARROW
+                    },
+                )
+            }
+            SettingDivider()
+            SettingActionRow(
+                title = stringResource(R.string.settings_split_clear_pair_title),
+                description = stringResource(R.string.settings_split_clear_pair_desc),
+                buttonLabel = stringResource(R.string.settings_split_clear_pair_title),
+                onClick = {
+                    splitPrefs.clearLastPair()
+                    hasLastPair = false
+                    displayWidePkg = null
+                    displayNarrowPkg = null
+                    clearStatus = context.getString(R.string.settings_split_pair_cleared)
+                },
+                style = SettingButtonStyle.Secondary,
+                enabled = hasLastPair && splitEnabled,
+            )
+            clearStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+        }
+    }
+
+    // Picker for the wide (2/3) app.
+    if (openPicker == SplitRole.WIDE) {
+        val excludedPkg = displayNarrowPkg
+        AppLaunchPickerDialog(
+            currentPackage = splitPrefs.getLastPair()?.widePkg ?: "",
+            excludedPackages = if (excludedPkg != null) setOf(excludedPkg) else emptySet(),
+            onDismiss = { openPicker = null },
+            onSelect = { pkg, _ ->
+                val result = applyPick(
+                    stored = splitPrefs.getLastPair(),
+                    pendingOther = displayNarrowPkg,
+                    role = SplitRole.WIDE,
+                    pkg = pkg,
+                )
+                if (result != null) {
+                    splitPrefs.saveLastPair(result)
+                    hasLastPair = true
+                    displayWidePkg = result.widePkg
+                    displayNarrowPkg = result.narrowPkg
+                } else {
+                    displayWidePkg = pkg
+                }
+                clearStatus = null
+                openPicker = null
+            },
+        )
+    }
+
+    // Picker for the narrow (1/3) app.
+    if (openPicker == SplitRole.NARROW) {
+        val excludedPkg = displayWidePkg
+        AppLaunchPickerDialog(
+            currentPackage = splitPrefs.getLastPair()?.narrowPkg ?: "",
+            excludedPackages = if (excludedPkg != null) setOf(excludedPkg) else emptySet(),
+            onDismiss = { openPicker = null },
+            onSelect = { pkg, _ ->
+                val result = applyPick(
+                    stored = splitPrefs.getLastPair(),
+                    pendingOther = displayWidePkg,
+                    role = SplitRole.NARROW,
+                    pkg = pkg,
+                )
+                if (result != null) {
+                    splitPrefs.saveLastPair(result)
+                    hasLastPair = true
+                    displayWidePkg = result.widePkg
+                    displayNarrowPkg = result.narrowPkg
+                } else {
+                    displayNarrowPkg = pkg
+                }
+                clearStatus = null
+                openPicker = null
+            },
+        )
+    }
+}
+
 private sealed interface LearnUiState {
     data object Waiting : LearnUiState
     data class Rejected(val keyCode: Int) : LearnUiState
@@ -1464,6 +1680,18 @@ private fun ServiceSection(state: SettingsUiState, viewModel: SettingsViewModel)
             if (state.configStatus != null) {
                 SettingHint(
                     text = state.configStatus!!,
+                )
+            }
+            SettingDivider()
+            SettingActionRow(
+                title = stringResource(R.string.settings_fid_dump_button),
+                description = stringResource(R.string.settings_fid_dump_desc),
+                buttonLabel = stringResource(R.string.settings_fid_dump_button),
+                onClick = { viewModel.dumpFids() },
+            )
+            if (state.fidDumpStatus != null) {
+                SettingHint(
+                    text = state.fidDumpStatus!!,
                 )
             }
         }
@@ -2409,14 +2637,21 @@ private fun SearchStatusCard(state: SettingsUiState) {
 }
 
 @Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        color = TextPrimary,
-        fontSize = 16.sp,
-        fontWeight = FontWeight.SemiBold,
-        modifier = Modifier.fillMaxWidth()
-    )
+private fun SectionHeader(text: String, onHelp: (() -> Unit)? = null) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            color = TextPrimary,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f)
+        )
+        // Optional "?" badge (SettingHelpBadge idiom) for sections that need a how-to.
+        if (onHelp != null) SettingHelpBadge(onHelp)
+    }
 }
 
 @Composable

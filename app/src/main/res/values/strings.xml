@@ -814,6 +814,16 @@
     <string name="settings_config_export_confirm_title">Экспортировать конфигурацию?</string>
     <string name="settings_config_export_confirm_body">Бэкап содержит историю поездок с GPS-маршрутами и введённые API-ключи в незашифрованном виде. Файл будет сохранён в общедоступную папку Download. Храните его в надёжном месте и не пересылайте посторонним.</string>
     <string name="settings_config_export_confirm_ok">Экспортировать</string>
+    <!-- Fid catalog dump (Task O) -->
+    <string name="settings_fid_dump_button">Сохранить каталог fid\'ов</string>
+    <string name="settings_fid_dump_desc">Имена и значения констант SDK. Только технические идентификаторы: без VIN, без геолокации, без личных данных</string>
+    <!-- %1$s = file name -->
+    <string name="settings_fid_dump_saved">Сохранено: %1$s</string>
+    <string name="settings_fid_dump_in_progress">Чтение fid\'ов...</string>
+    <string name="settings_fid_dump_empty">Каталог fid\'ов пуст на этой прошивке</string>
+    <string name="settings_fid_dump_error_unavailable">демон недоступен</string>
+    <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
+    <string name="settings_fid_dump_error_read">ошибка чтения: %1$s</string>
     <!-- ==== Automation i18n (systematized) ==== -->
     <!-- categories -->
     <string name="auto_cat_body">Кузов</string>
@@ -1231,4 +1241,50 @@
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
     <string name="settings_secret_show">Показать ключ</string>
     <string name="settings_secret_hide">Скрыть ключ</string>
+
+    <!-- Split-screen pill menu -->
+    <string name="split_menu_mirror">Поменять стороны</string>
+    <string name="split_menu_swap">Поменять приложения</string>
+    <string name="split_menu_pick_left">Приложение слева…</string>
+    <string name="split_menu_pick_right">Приложение справа…</string>
+    <string name="split_menu_exit">Выход</string>
+    <string name="split_picker_title_change">Выберите приложение</string>
+    <string name="split_picker_title_left">Выберите приложение для левой панели</string>
+    <string name="split_picker_title_right">Выберите приложение для правой панели</string>
+    <string name="split_picker_title_wide">Выберите приложение для широкой панели (2/3)</string>
+    <string name="split_picker_title_narrow">Выберите приложение для узкой панели (1/3)</string>
+    <string name="split_freeform_reboot_hint">Разделение экрана включится после перезагрузки машины</string>
+    <string name="split_launch_failed">Не удалось запустить разделение экрана</string>
+    <!-- Automation action: split_screen -->
+    <string name="automation_action_split_screen">Разделение экрана</string>
+    <string name="auto_act_split_screen">Разделение экрана</string>
+    <!-- Automation actions: split_screen_close / split_screen_toggle (no payload) -->
+    <string name="automation_action_split_screen_close">Закрыть разделение экрана</string>
+    <string name="auto_act_split_screen_close">Закрыть разделение экрана</string>
+    <string name="automation_action_split_screen_toggle">Переключить разделение экрана</string>
+    <string name="auto_act_split_screen_toggle">Переключить разделение экрана</string>
+    <string name="split_action_narrow_label">Приложение 1/3</string>
+    <string name="split_action_wide_label">Приложение 2/3</string>
+    <string name="split_action_side_left">1/3 слева</string>
+    <string name="split_action_side_right">1/3 справа</string>
+    <string name="split_action_tap_to_configure">Выбрать приложения</string>
+    <string name="auto_msg_split_narrow_empty">Действие #%1$d: не выбрано приложение 1/3</string>
+    <string name="auto_msg_split_wide_empty">Действие #%1$d: не выбрано приложение 2/3</string>
+    <string name="auto_msg_split_same_package">Действие #%1$d: оба приложения должны быть разными</string>
+    <string name="auto_msg_split_invalid_side">Действие #%1$d: неверная сторона (left/right)</string>
+    <string name="settings_widget_left_tap_mode_label">Действие левого тапа</string>
+    <string name="settings_widget_left_tap_mode_app">Запускать приложение</string>
+    <string name="settings_widget_left_tap_mode_split">Запускать разделение экрана</string>
+    <!-- Split-screen settings section -->
+    <string name="settings_section_split_title">Разделение экрана</string>
+    <string name="settings_split_enable_title">Разделение экрана 1/3 + 2/3</string>
+    <string name="settings_split_enable_desc">Два freeform-окна: одно на треть экрана, другое на две трети. По умолчанию выключено.</string>
+    <string name="settings_split_clear_pair_title">Сбросить последнюю пару</string>
+    <string name="settings_split_clear_pair_desc">Удалить сохранённую пару приложений. Следующий запуск откроет пикер.</string>
+    <string name="settings_split_pair_cleared">Пара сброшена</string>
+    <string name="settings_split_wide_app_title">Широкая часть (2/3)</string>
+    <string name="settings_split_narrow_app_title">Узкая часть (1/3)</string>
+    <string name="settings_split_app_not_selected">не выбрано</string>
+    <string name="settings_split_howto_body">Разделение экрана можно включить тремя способами.\nСамый простой: тап по левой трети плавающего виджета. Для этого в разделе «Тап по виджету» включите «Зонирование тапов», а в пункте «Действие левого тапа» выберите «Запускать разделение экрана».\nЧерез автоматизации: добавьте в правило действие «Разделение экрана». Рядом есть «Закрыть разделение экрана» и «Переключить разделение экрана».\nГолосом: просто попросите голос-агента включить разделение экрана.</string>
+    <string name="split_feature_disabled">Разделение экрана выключено в настройках</string>
 </resources>

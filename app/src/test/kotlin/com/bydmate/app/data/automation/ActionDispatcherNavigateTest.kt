@@ -27,7 +27,8 @@ class ActionDispatcherNavigateTest {
     private val dispatcher = ActionDispatcher(vehicleApi, helper, app,
         dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
         mockk<ClusterVoiceControl>(relaxed = true),
-        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true))
+        mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
+        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true))
 
     private fun actionDef(payload: String) =
         ActionDef(command = "", displayName = "navi", kind = "navigate", payload = payload)

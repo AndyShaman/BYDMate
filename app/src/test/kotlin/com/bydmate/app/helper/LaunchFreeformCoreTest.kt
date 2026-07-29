@@ -19,7 +19,10 @@ class LaunchFreeformCoreTest {
         focus: (Int) -> Unit = { ops += "focus:$it" },
         state: (Int) -> TaskModeState? = { null },
         log: (String, Throwable?) -> Unit = { m, t -> logs += m; logThrowables += t },
-    ): Int = launchFreeformCore(taskId, 4, 0, 38, 1280, 441, setMode, move, bounds, focus, state, log) { ops += "sleep:$it" }
+        resolveCurrentTaskId: () -> Int = { taskId },
+    ): Int = launchFreeformCore(
+        taskId, 4, 0, 38, 1280, 441, setMode, move, bounds, focus, state, log, resolveCurrentTaskId,
+    ) { ops += "sleep:$it" }
 
     @Test
     fun `happy path switches mode first then pins twice`() {
@@ -227,5 +230,82 @@ class LaunchFreeformCoreTest {
         assertTrue(isFreeformUnsupported(RuntimeException("outer", IllegalStateException("freeform windows disabled"))))
         assertFalse(isFreeformUnsupported(IllegalArgumentException("Unable to find task id=16")))
         assertFalse(isFreeformUnsupported(IllegalStateException(null as String?)))
+    }
+
+    // --- Fix round 390-3b: setMode may RECREATE the task, giving it a new id ---
+
+    @Test
+    fun `a task recreated by setMode is retargeted for the whole placement`() {
+        // Fleet scenario: a fullscreen STANDARD navigator is sent to the cluster. The compat path
+        // cannot re-type it in place, so it removes the stack and relaunches — new task id 37.
+        // Phase 2 and the final confirmation must address 37; hitting the dead 36 would either
+        // throw (VD fallback over an already-created direct task) or silently no-op (a false OK
+        // with no bounds and no focus).
+        var recreated = false
+        val result = run(
+            setMode = { t, m -> ops += "mode:$t:$m"; recreated = true },
+            state = { t ->
+                ops += "state:$t"
+                if (recreated) TaskModeState(WINDOWING_MODE_FREEFORM, 4)
+                else TaskModeState(WINDOWING_MODE_FULLSCREEN, 0)
+            },
+            resolveCurrentTaskId = { if (recreated) 37 else 36 },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertEquals(
+            listOf(
+                "state:36",
+                "mode:36:5",
+                "state:37",
+                "move:37:4", "bounds:37:0,38,1280,441", "focus:37", "sleep:200",
+                "move:37:4", "bounds:37:0,38,1280,441", "focus:37", "sleep:200",
+                "state:37",
+            ),
+            ops,
+        )
+        assertTrue(
+            "the retarget must be logged",
+            logs.any { it.contains("task recreated by setMode: 36 -> 37") },
+        )
+    }
+
+    @Test
+    fun `a task that keeps its id runs byte-for-byte as before`() {
+        // RECENTS task: the compat path flips it in place, the resolver keeps answering 36.
+        var flipped = false
+        val result = run(
+            setMode = { t, m -> ops += "mode:$t:$m"; flipped = true },
+            state = { t ->
+                ops += "state:$t"
+                if (flipped) TaskModeState(WINDOWING_MODE_FREEFORM, 4)
+                else TaskModeState(WINDOWING_MODE_FULLSCREEN, 0)
+            },
+            resolveCurrentTaskId = { 36 },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertEquals(
+            listOf(
+                "state:36",
+                "mode:36:5",
+                "state:36",
+                "move:36:4", "bounds:36:0,38,1280,441", "focus:36", "sleep:200",
+                "move:36:4", "bounds:36:0,38,1280,441", "focus:36", "sleep:200",
+                "state:36",
+            ),
+            ops,
+        )
+        assertFalse("no retarget must be logged", logs.any { it.contains("task recreated") })
+    }
+
+    @Test
+    fun `an unresolvable id mid-relaunch keeps the last known task`() {
+        // The resolver can momentarily see no task while it relaunches; -1 must not become the
+        // target (taskId <= 0 would make every downstream call meaningless).
+        val result = run(
+            state = { TaskModeState(WINDOWING_MODE_FREEFORM, 4) },
+            resolveCurrentTaskId = { -1 },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertTrue("phase 2 must still address 36", ops.any { it == "move:36:4" })
     }
 }

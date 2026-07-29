@@ -218,4 +218,27 @@ class ClusterProjectionStateTest {
     @Test fun `VD transport returns the freeform flag to its factory value`() {
         assertEquals(0, freeformFlagValue(directEnabled = false))
     }
+
+    // --- split as second freeform consumer ---
+
+    @Test fun `split ON with VD transport yields flag 1`() {
+        assertEquals(1, freeformFlagValue(directEnabled = false, splitEnabled = true))
+    }
+
+    @Test fun `split ON with direct transport yields flag 1`() {
+        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = true))
+    }
+
+    @Test fun `split OFF with direct transport yields flag 1`() {
+        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
+    }
+
+    @Test fun `split OFF with VD transport yields flag 0 - unchanged from today`() {
+        assertEquals(0, freeformFlagValue(directEnabled = false, splitEnabled = false))
+    }
+
+    @Test fun `toggling split off while direct is enabled still yields flag 1`() {
+        // Direct keeps the flag live regardless of split state.
+        assertEquals(1, freeformFlagValue(directEnabled = true, splitEnabled = false))
+    }
 }
