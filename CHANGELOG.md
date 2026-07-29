@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.9] - 2026-07-29
+
 ### Новое
 - Разделение экрана 1/3+2/3: два freeform-окна на DiLink, управление пилюлей внизу (поменять стороны, приложения, пикер замены, выход в полный экран). Запуск с виджета, автоматизации и голосовой командой. Тумблер в настройках, секция «Разделение экрана» (по умолчанию выключено).
 - Каталог fid'ов: кнопка «Сохранить каталог fid'ов» в Настройки → Данные — выгружает в Download список параметров машины для поддержки других моделей (без VIN и личных данных).
@@ -795,7 +797,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.8.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.9...HEAD
+[3.9]: https://github.com/AndyShaman/BYDMate/compare/v3.8.1...v3.9
 [3.8.1]: https://github.com/AndyShaman/BYDMate/compare/v3.8...v3.8.1
 [3.8]: https://github.com/AndyShaman/BYDMate/compare/v3.7...v3.8
 [3.7]: https://github.com/AndyShaman/BYDMate/compare/v3.6.3...v3.7
