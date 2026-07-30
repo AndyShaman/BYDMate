@@ -1,5 +1,6 @@
 package com.bydmate.app.domain.calculator
 
+import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Singleton
 
 /** Test-friendly seam: production binding is OdometerConsumptionBuffer. */
@@ -25,14 +26,31 @@ class RangeCalculator(
     private val buffer: ConsumptionAvgSource,
     private val capacityProvider: suspend () -> Double,
     private val socInterpolator: SocInterpolator,
+    private val manualCalculator: ManualRangeCalculator = ManualRangeCalculator(),
+    private val methodProvider: suspend () -> String = { SettingsRepository.RANGE_CALC_AUTO },
+    private val manualTableProvider: suspend () -> List<SettingsRepository.ManualRangePoint> = { emptyList() },
 ) {
     /**
      * Returns full estimation breakdown, or null when inputs are insufficient.
      *
+     * When SettingsRepository.KEY_RANGE_CALC_METHOD is "manual", delegates to
+     * [ManualRangeCalculator] (a user-edited temperature table) instead of the
+     * historical/live consumption blend below. [exteriorTempC] is only consulted
+     * in that mode.
+     *
      *   remaining_kwh = SOC * cap / 100 - socInterpolator.carryOver(totalElec, soc)
      *   range_km      = remaining_kwh / recent_avg * 100
      */
-    suspend fun estimateDetailed(soc: Int?, totalElecKwh: Double?): RangeEstimate? {
+    suspend fun estimateDetailed(soc: Int?, totalElecKwh: Double?, exteriorTempC: Int? = null): RangeEstimate? {
+        if (methodProvider() == SettingsRepository.RANGE_CALC_MANUAL) {
+            return manualCalculator.estimateDetailed(
+                soc = soc,
+                temperatureC = exteriorTempC,
+                table = manualTableProvider(),
+                fallbackCapacityKwh = capacityProvider(),
+            )
+        }
+
         if (soc == null || soc <= 0 || soc > 100) return null
         val cap = capacityProvider()
         // Capacity is a free-form user setting: outside the sane EV range it is a
@@ -55,8 +73,8 @@ class RangeCalculator(
     }
 
     /** Returns estimated range in km, or null when inputs are insufficient. */
-    suspend fun estimate(soc: Int?, totalElecKwh: Double?): Double? =
-        estimateDetailed(soc, totalElecKwh)?.rangeKm
+    suspend fun estimate(soc: Int?, totalElecKwh: Double?, exteriorTempC: Int? = null): Double? =
+        estimateDetailed(soc, totalElecKwh, exteriorTempC)?.rangeKm
 
     companion object {
         /** Plausible EV battery capacity bounds for the user-entered setting, kWh. */

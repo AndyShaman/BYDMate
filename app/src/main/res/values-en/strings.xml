@@ -74,6 +74,23 @@
     <string name="settings_consumption_good_label">Good &lt; (kWh/100km)</string>
     <string name="settings_consumption_bad_label">Bad &gt; (kWh/100km)</string>
 
+    <!-- Settings: Range calculation method (Auto = learned history, Manual = user table) -->
+    <string name="settings_range_calc_section_header">Range calculation method</string>
+    <string name="settings_range_calc_method_label">Calculation method</string>
+    <string name="settings_range_calc_auto">Auto</string>
+    <string name="settings_range_calc_manual">Manual</string>
+    <string name="settings_range_calc_method_desc">\"Auto\" uses trip history and live consumption. \"Manual\" uses your own temperature-based consumption table.</string>
+    <string name="settings_range_calc_edit_table_button">Consumption table</string>
+    <string name="settings_range_calc_edit_table_desc">5 points: temperature → consumption (and optionally range at 100% charge)</string>
+    <string name="range_table_dialog_title">Temperature consumption table</string>
+    <string name="range_table_dialog_note1">Consumption (kWh/100km) is required; range at 100% charge is optional and used to derive a more accurate effective capacity.</string>
+    <string name="range_table_dialog_col_temp">°C</string>
+    <string name="range_table_dialog_col_consumption">Consumption</string>
+    <string name="range_table_dialog_col_range">Range</string>
+    <string name="range_table_dialog_reset">Reset to defaults</string>
+    <string name="range_table_dialog_cancel">Cancel</string>
+    <string name="range_table_dialog_save">Save</string>
+
     <!-- Settings: Trips section -->
     <string name="settings_trips_datasource_header">Trip data source</string>
     <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong and other models without built-in DB — DiPlus TripInfo.</string>

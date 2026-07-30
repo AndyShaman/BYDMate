@@ -81,6 +81,23 @@
     <string name="settings_consumption_good_label">Хороший &lt; (кВт·ч/100км)</string>
     <string name="settings_consumption_bad_label">Плохой &gt; (кВт·ч/100км)</string>
 
+    <!-- Settings: Range calculation method (Auto = learned history, Manual = user table) -->
+    <string name="settings_range_calc_section_header">Способ расчёта запаса хода</string>
+    <string name="settings_range_calc_method_label">Метод расчёта</string>
+    <string name="settings_range_calc_auto">Авто</string>
+    <string name="settings_range_calc_manual">Ручной</string>
+    <string name="settings_range_calc_method_desc">«Авто» — по истории поездок и текущему расходу. «Ручной» — по вашей таблице расхода в зависимости от температуры.</string>
+    <string name="settings_range_calc_edit_table_button">Таблица расхода</string>
+    <string name="settings_range_calc_edit_table_desc">5 точек: температура → расход (и, опционально, запас хода на 100% заряда)</string>
+    <string name="range_table_dialog_title">Таблица расхода по температуре</string>
+    <string name="range_table_dialog_note1">Расход (кВт·ч/100км) обязателен; запас хода на 100% заряда — опционален и используется для точнее рассчитанной ёмкости.</string>
+    <string name="range_table_dialog_col_temp">°C</string>
+    <string name="range_table_dialog_col_consumption">Расход</string>
+    <string name="range_table_dialog_col_range">Запас</string>
+    <string name="range_table_dialog_reset">Сбросить по умолчанию</string>
+    <string name="range_table_dialog_cancel">Отмена</string>
+    <string name="range_table_dialog_save">Сохранить</string>
+
     <!-- Settings: Trips section -->
     <string name="settings_trips_datasource_header">Источник данных поездок</string>
     <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong и другие модели без встроенной БД — DiPlus TripInfo.</string>

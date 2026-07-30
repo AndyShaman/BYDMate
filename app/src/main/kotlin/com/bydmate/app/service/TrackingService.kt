@@ -1180,7 +1180,11 @@ class TrackingService : Service(), LocationListener {
                         shortAvg = shortAvg,
                     )
 
-                    val rangeKm = rangeCalculator.estimate(soc = data.soc, totalElecKwh = data.totalElecConsumption)
+                    val rangeKm = rangeCalculator.estimate(
+                        soc = data.soc,
+                        totalElecKwh = data.totalElecConsumption,
+                        exteriorTempC = data.exteriorTemp,
+                    )
                     _lastRangeKm.value = rangeKm
 
                     _tripDistanceKm.value = tripDistance

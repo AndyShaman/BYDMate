@@ -7,6 +7,8 @@ import com.bydmate.app.data.trips.TripResetState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,6 +32,9 @@ open class SettingsRepository @Inject constructor(
         const val KEY_TRIP_COST_TARIFF = "trip_cost_tariff" // "home", "dc", or numeric
         const val KEY_CONSUMPTION_GOOD = "consumption_good_threshold"
         const val KEY_CONSUMPTION_BAD = "consumption_bad_threshold"
+        /** "auto" (historical/live blend, default) or "manual" (user temperature table). */
+        const val KEY_RANGE_CALC_METHOD = "range_calc_method"
+        const val KEY_MANUAL_RANGE_TABLE = "manual_range_table_json"
         const val KEY_LAST_KNOWN_SOC = "last_known_soc"
         const val KEY_LAST_SOC_TIMESTAMP = "last_soc_timestamp"
         const val KEY_LAST_ENERGYDATA_IMPORT_TS = "last_energydata_import_ts"
@@ -120,6 +125,19 @@ open class SettingsRepository @Inject constructor(
         const val DEFAULT_CONSUMPTION_GOOD = "20"
         const val DEFAULT_CONSUMPTION_BAD = "30"
         const val DEFAULT_MAP_TILE_SOURCE = "osm" // "osm" or "amap"
+        const val RANGE_CALC_AUTO = "auto"
+        const val RANGE_CALC_MANUAL = "manual"
+        const val DEFAULT_RANGE_CALC_METHOD = RANGE_CALC_AUTO
+
+        /** Ported defaults from the nordpool1hprices companion app's BYD Atto 3 reference table
+         *  (kWh/km converted to kWh/100km to match this app's existing consumption unit). */
+        fun defaultManualRangeTable(): List<ManualRangePoint> = listOf(
+            ManualRangePoint(20, 16.3, 350.0),
+            ManualRangePoint(10, 18.5, 250.0),
+            ManualRangePoint(0, 20.6, 200.0),
+            ManualRangePoint(-10, 25.0, 180.0),
+            ManualRangePoint(-20, 27.2, 161.0),
+        )
 
         val CURRENCIES = listOf(
             Currency("BYN", "BYN"),
@@ -136,6 +154,17 @@ open class SettingsRepository @Inject constructor(
     data class Currency(val code: String, val symbol: String)
 
     enum class DataSource { ENERGYDATA }
+
+    /**
+     * One row of the user-editable manual range table: consumption (and optionally the
+     * vehicle's own 100%-SOC range) at a reference temperature. [ManualRangeCalculator]
+     * interpolates between rows for the vehicle's current exterior temperature.
+     */
+    data class ManualRangePoint(
+        val temperatureC: Int,
+        val consumptionKwhPer100Km: Double,
+        val rangeKmAt100Soc: Double? = null,
+    )
 
     suspend fun getString(key: String, default: String): String =
         settingsDao.get(key) ?: default
@@ -192,6 +221,47 @@ open class SettingsRepository @Inject constructor(
             it?.parseNumericSetting() ?: DEFAULT_CONSUMPTION_BAD.toDouble()
         },
     ) { good, bad -> good to bad }
+
+    suspend fun getRangeCalcMethod(): String =
+        getString(KEY_RANGE_CALC_METHOD, DEFAULT_RANGE_CALC_METHOD)
+
+    suspend fun setRangeCalcMethod(value: String) =
+        setString(KEY_RANGE_CALC_METHOD, value)
+
+    fun observeRangeCalcMethod(): Flow<String> =
+        observeString(KEY_RANGE_CALC_METHOD).map { it ?: DEFAULT_RANGE_CALC_METHOD }
+
+    private fun manualRangePointToJson(p: ManualRangePoint): JSONObject = JSONObject().apply {
+        put("temperatureC", p.temperatureC)
+        put("consumptionKwhPer100Km", p.consumptionKwhPer100Km)
+        put("rangeKmAt100Soc", p.rangeKmAt100Soc ?: JSONObject.NULL)
+    }
+
+    private fun manualRangePointFromJson(o: JSONObject): ManualRangePoint = ManualRangePoint(
+        temperatureC = o.getInt("temperatureC"),
+        consumptionKwhPer100Km = o.getDouble("consumptionKwhPer100Km"),
+        rangeKmAt100Soc = if (o.isNull("rangeKmAt100Soc")) null else o.getDouble("rangeKmAt100Soc"),
+    )
+
+    suspend fun getManualRangeTable(): List<ManualRangePoint> {
+        val raw = getString(KEY_MANUAL_RANGE_TABLE, "")
+        if (raw.isBlank()) return defaultManualRangeTable()
+        return try {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).map { i -> manualRangePointFromJson(arr.getJSONObject(i)) }
+                .ifEmpty { defaultManualRangeTable() }
+        } catch (_: Exception) {
+            defaultManualRangeTable()
+        }
+    }
+
+    suspend fun setManualRangeTable(points: List<ManualRangePoint>) {
+        val arr = JSONArray()
+        points.sortedByDescending { it.temperatureC }.forEach { arr.put(manualRangePointToJson(it)) }
+        setString(KEY_MANUAL_RANGE_TABLE, arr.toString())
+    }
+
+    suspend fun resetManualRangeTable() = setManualRangeTable(defaultManualRangeTable())
 
     suspend fun saveLastKnownSoc(soc: Int) {
         setString(KEY_LAST_KNOWN_SOC, soc.toString())

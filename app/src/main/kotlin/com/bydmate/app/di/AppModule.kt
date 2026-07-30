@@ -29,6 +29,7 @@ import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.trips.TripRecorder
 import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
 import com.bydmate.app.domain.calculator.RangeAvgSource
+import com.bydmate.app.domain.calculator.ManualRangeCalculator
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.SocInterpolator
 import com.bydmate.app.domain.calculator.SocInterpolatorPrefs
@@ -364,14 +365,22 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideManualRangeCalculator(): ManualRangeCalculator = ManualRangeCalculator()
+
+    @Provides
+    @Singleton
     fun provideRangeCalculator(
         rangeAvgSource: RangeAvgSource,
         settingsRepository: SettingsRepository,
         socInterpolator: SocInterpolator,
+        manualRangeCalculator: ManualRangeCalculator,
     ): RangeCalculator = RangeCalculator(
         buffer = rangeAvgSource,
         capacityProvider = { settingsRepository.getBatteryCapacity() },
         socInterpolator = socInterpolator,
+        manualCalculator = manualRangeCalculator,
+        methodProvider = { settingsRepository.getRangeCalcMethod() },
+        manualTableProvider = { settingsRepository.getManualRangeTable() },
     )
 
     @Provides

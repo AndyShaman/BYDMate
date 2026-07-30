@@ -185,6 +185,16 @@ fun SettingsScreen(
         )
     }
 
+    // Manual range calculation table dialog
+    if (state.showManualRangeTableDialog) {
+        ManualRangeTableDialog(
+            currentTable = state.manualRangeTable,
+            onDismiss = { viewModel.hideManualRangeTableDialog() },
+            onSave = { viewModel.saveManualRangeTable(it) },
+            onReset = { viewModel.resetManualRangeTable() },
+        )
+    }
+
     // Update dialog
     if (state.showUpdateDialog) {
         UpdateDialog(
@@ -486,6 +496,42 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 keyboardType = KeyboardType.Decimal
             )
             SettingHint(stringResource(R.string.settings_consumption_bad_desc))
+        }
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_range_calc_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingChipRow(
+                title = stringResource(R.string.settings_range_calc_method_label),
+                description = stringResource(R.string.settings_range_calc_method_desc),
+                options = listOf(
+                    stringResource(R.string.settings_range_calc_auto),
+                    stringResource(R.string.settings_range_calc_manual),
+                ),
+                selectedIndex = if (state.rangeCalcMethod == SettingsRepository.RANGE_CALC_MANUAL) 1 else 0,
+                onSelect = { idx ->
+                    viewModel.saveRangeCalcMethod(
+                        if (idx == 1) SettingsRepository.RANGE_CALC_MANUAL else SettingsRepository.RANGE_CALC_AUTO
+                    )
+                },
+            )
+            if (state.rangeCalcMethod == SettingsRepository.RANGE_CALC_MANUAL) {
+                SettingDivider()
+                SettingActionRow(
+                    title = stringResource(R.string.settings_range_calc_edit_table_button),
+                    description = stringResource(R.string.settings_range_calc_edit_table_desc),
+                    buttonLabel = stringResource(R.string.settings_range_calc_edit_table_button),
+                    onClick = { viewModel.showManualRangeTableDialog() },
+                )
+            }
         }
     }
 }

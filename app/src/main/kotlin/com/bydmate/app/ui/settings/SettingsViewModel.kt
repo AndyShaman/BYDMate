@@ -103,6 +103,9 @@ data class SettingsUiState(
     val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
+    val rangeCalcMethod: String = SettingsRepository.DEFAULT_RANGE_CALC_METHOD,
+    val manualRangeTable: List<SettingsRepository.ManualRangePoint> = SettingsRepository.defaultManualRangeTable(),
+    val showManualRangeTableDialog: Boolean = false,
     val lastBootInfo: String? = null,
     val chainLog: String? = null,
     val openRouterApiKey: String = "",
@@ -312,6 +315,8 @@ class SettingsViewModel @Inject constructor(
                 SettingsRepository.KEY_CONSUMPTION_BAD,
                 SettingsRepository.DEFAULT_CONSUMPTION_BAD
             )
+            val rangeCalcMethod = settingsRepository.getRangeCalcMethod()
+            val manualRangeTable = settingsRepository.getManualRangeTable()
 
             // Read boot log from SharedPreferences
             val bootInfo = readBootInfo()
@@ -398,6 +403,8 @@ class SettingsViewModel @Inject constructor(
                     tripCostTariff = tripCostTariff,
                     consumptionGood = consumptionGood,
                     consumptionBad = consumptionBad,
+                    rangeCalcMethod = rangeCalcMethod,
+                    manualRangeTable = manualRangeTable,
                     lastBootInfo = bootInfo,
                     chainLog = chainLog,
                     openRouterApiKey = apiKey,
@@ -460,6 +467,31 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_BATTERY_CAPACITY, value)
         }
+    }
+
+    /** Switch between the learned (auto) and user-edited (manual) range calculators. */
+    fun saveRangeCalcMethod(value: String) {
+        _uiState.update { it.copy(rangeCalcMethod = value) }
+        viewModelScope.launch { settingsRepository.setRangeCalcMethod(value) }
+    }
+
+    fun showManualRangeTableDialog() {
+        _uiState.update { it.copy(showManualRangeTableDialog = true) }
+    }
+
+    fun hideManualRangeTableDialog() {
+        _uiState.update { it.copy(showManualRangeTableDialog = false) }
+    }
+
+    fun saveManualRangeTable(table: List<SettingsRepository.ManualRangePoint>) {
+        _uiState.update { it.copy(manualRangeTable = table, showManualRangeTableDialog = false) }
+        viewModelScope.launch { settingsRepository.setManualRangeTable(table) }
+    }
+
+    fun resetManualRangeTable() {
+        val defaults = SettingsRepository.defaultManualRangeTable()
+        _uiState.update { it.copy(manualRangeTable = defaults, showManualRangeTableDialog = false) }
+        viewModelScope.launch { settingsRepository.resetManualRangeTable() }
     }
 
     /** Update tariff in UI only (no DB save until explicit "Save" press). */
