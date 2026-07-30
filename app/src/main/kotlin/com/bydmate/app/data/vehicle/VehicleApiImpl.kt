@@ -3,6 +3,7 @@ package com.bydmate.app.data.vehicle
 import android.util.Log
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.autoservice.BatteryReading
+import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
@@ -22,12 +23,15 @@ class VehicleApiImpl @Inject constructor(
     private val allowlist: WriteAllowlist,
     private val writeLogDao: VehicleWriteLogDao,
     private val seatStore: SeatChannelStore,
+    private val windowStore: WindowChannelStore,
 ) : VehicleApi {
 
     private val seatChannel = AdaptiveSeatChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value) },
         seatStore,
     )
+
+    private val windowChannel = WindowChannelRouter(helper, windowStore)
 
     // Liveness + snapshots — passthroughs.
     override suspend fun isAvailable(): Boolean = autoservice.isAvailable()
@@ -48,7 +52,17 @@ class VehicleApiImpl @Inject constructor(
     override suspend fun readWindowDriver(): Int? = autoservice.getInt(1001, 947912728)
     override suspend fun readWindowPassenger(): Int? = autoservice.getInt(1001, 1267728400)
     override suspend fun readWindowRearLeft(): Int? = autoservice.getInt(1001, 947912736)
-    override suspend fun readWindowRearRight(): Int? = autoservice.getInt(1001, 947912752)
+    /**
+     * DiLink 5.0 fid, falling back to its alternative-generation twin ONLY when the primary
+     * reports DEVICE_THE_FEATURE_LINK_ERROR — the fid is absent on this generation (#79).
+     * Any other sentinel is a transient fault and must not be answered from a different fid.
+     */
+    override suspend fun readWindowRearRight(): Int? {
+        val raw = autoservice.getIntRaw(1001, 947912752) ?: return null
+        SentinelDecoder.decodeInt(raw)?.let { return it }
+        if (raw != SentinelDecoder.FEATURE_LINK_ERROR) return null
+        return autoservice.getInt(1001, 1267728408)
+    }
 
     // ─── Writes ────────────────────────────────────────────────────────────────
 
@@ -146,7 +160,14 @@ class VehicleApiImpl @Inject constructor(
      * physical actuator moved. Locks and select climate flags do have readback.
      */
     // internal for testing the Unsupported path (non-validated helper-false flow).
-    internal suspend fun doWrite(actionName: String, value: Int): Result<Unit> {
+    internal suspend fun doWrite(requestedAction: String, requestedValue: Int): Result<Unit> {
+        // Percent window writes are re-targeted to the CTRL channel on firmwares without
+        // the percent family (#79). Percent-capable units and an undecided probe get the
+        // request back unchanged, so their write path is untouched.
+        val routed = windowChannel.route(requestedAction, requestedValue)
+        val actionName = routed.actionName
+        val value = routed.value
+
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWrite: action=$actionName not in allowlist")
             logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)

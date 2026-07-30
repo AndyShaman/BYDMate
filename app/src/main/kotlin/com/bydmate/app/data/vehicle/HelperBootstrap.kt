@@ -131,11 +131,38 @@ class HelperBootstrap @Inject constructor(
         }
         val log = adb.readHelperLog()
         Log.w(TAG, "helper unreachable after spawn; daemon log:\n$log")
+        recordSpawnFailure(log)
         return false
     }
 
     /** Cheap reachability check — no side effects. */
     suspend fun isHealthy(): Boolean = helper.isAlive()
+
+    /**
+     * Keeps the tail of the daemon log from the last "spawned but unreachable" round, so the
+     * diagnostic dump can show WHY the daemon never came up (#64). Logcat has usually rotated
+     * by the time the user files the report.
+     */
+    private fun recordSpawnFailure(log: String?) {
+        val tail = log?.lines()?.filter { it.isNotBlank() }?.takeLast(FAIL_LOG_LINES)
+            ?.joinToString("\n")
+            ?.takeIf { it.isNotEmpty() }
+            ?: "(daemon log unavailable)"
+        prefs.edit()
+            .putLong(KEY_LAST_FAIL_TS, System.currentTimeMillis())
+            .putString(KEY_LAST_FAIL_LOG, tail)
+            .apply()
+    }
+
+    /** Last recorded spawn failure, or null if the daemon has never failed to come up. */
+    fun lastSpawnFailure(): SpawnFailure? {
+        val ts = prefs.getLong(KEY_LAST_FAIL_TS, 0L)
+        if (ts <= 0L) return null
+        return SpawnFailure(ts, prefs.getString(KEY_LAST_FAIL_LOG, "").orEmpty())
+    }
+
+    /** Timestamp + daemon log tail of a failed spawn. */
+    data class SpawnFailure(val ts: Long, val logTail: String)
 
     /** Installed versionCode of our own package; a distinct sentinel if it cannot be read
      *  (never expected — our own package always exists). The sentinel differs from the stored
@@ -150,6 +177,9 @@ class HelperBootstrap @Inject constructor(
         private const val TAG = "HelperBootstrap"
         private const val PREFS = "helper"
         private const val KEY_SPAWNED_VERSION = "spawned_version_code"
+        private const val KEY_LAST_FAIL_TS = "helper_last_fail_ts"
+        private const val KEY_LAST_FAIL_LOG = "helper_last_fail_log"
+        private const val FAIL_LOG_LINES = 10
         private const val VERSION_READ_FAILED = Long.MIN_VALUE
         private const val POLL_ATTEMPTS = 15
         private const val POLL_INTERVAL_MS = 200L

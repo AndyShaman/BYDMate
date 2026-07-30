@@ -71,6 +71,7 @@ class NativeParsReaderTest {
         coEvery { auto.isAvailable() } returns true
         // Default: all fids return null (no data / sentinel)
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
 
         // Override per FidMap entry where the fixture has a real raw_int.
@@ -80,7 +81,12 @@ class NativeParsReaderTest {
         for (entry in FidMap.entries) {
             val raw = fixtureMap[entry.device to entry.fid] ?: continue
             when (entry.transact) {
-                5 -> coEvery { auto.getInt(entry.device, entry.fid) } returns raw
+                // getIntRaw too: the reader takes the windowRR sample through it, and the
+                // fixture's raw word is what both accessors would report for the same read.
+                5 -> {
+                    coEvery { auto.getInt(entry.device, entry.fid) } returns raw
+                    coEvery { auto.getIntRaw(entry.device, entry.fid) } returns raw
+                }
                 7 -> coEvery { auto.getFloat(entry.device, entry.fid) } returns
                         java.lang.Float.intBitsToFloat(raw)
             }
@@ -200,6 +206,7 @@ class NativeParsReaderTest {
         val auto = mockk<AutoserviceClient>()
         coEvery { auto.isAvailable() } returns true
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
         // Liveness gate: provide mileage (raw 37998 × 0.1 = 3799.8 km).
         coEvery { auto.getInt(1014, 1246765072) } returns 37998
@@ -230,6 +237,7 @@ class NativeParsReaderTest {
         coEvery { auto.isAvailable() } returns true
         // All reads return null — simulates sentinel-spam or disconnected autoservice.
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
 
         val settings = mockk<SettingsRepository>()
@@ -250,10 +258,12 @@ class NativeParsReaderTest {
         val auto = mockk<AutoserviceClient>()
         coEvery { auto.isAvailable() } returns true
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
         coEvery { auto.getFloat(fid("soc").device, fid("soc").fid) } returns 87.0f
         for ((field, raw) in ints) {
             coEvery { auto.getInt(fid(field).device, fid(field).fid) } returns raw
+            coEvery { auto.getIntRaw(fid(field).device, fid(field).fid) } returns raw
         }
         val settings = mockk<SettingsRepository>()
         coEvery { settings.getBatteryCapacity() } returns 72.9
@@ -345,6 +355,7 @@ class NativeParsReaderTest {
         val auto = mockk<AutoserviceClient>()
         coEvery { auto.isAvailable() } returns true
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
         // Liveness gate: provide mileage (raw 37998 × 0.1 = 3799.8 km).
         coEvery { auto.getInt(1014, 1246765072) } returns 37998

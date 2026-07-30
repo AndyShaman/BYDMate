@@ -38,7 +38,14 @@ class VehicleApiNonCancellableTest {
         override fun setWinner(channel: SeatChannel) {}
     }
 
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
+    private val windowStore = object : WindowChannelStore {
+        override fun winner() = WindowChannel.UNKNOWN
+        override fun setWinner(channel: WindowChannel) {}
+        override fun ctrlCandidateAtMs() = 0L
+        override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+
+    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     /**
      * Composite window command (后排车窗全开 = rear windows fully open) fans out to two

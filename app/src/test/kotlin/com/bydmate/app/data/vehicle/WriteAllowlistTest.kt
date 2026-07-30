@@ -305,6 +305,31 @@ class WriteAllowlistTest {
         assertEquals(1125122072, al.find("passenger_seat_vent_fallback")!!.writeFid)
     }
 
+    // ── #79: window CTRL channel (the only window family DiLink 3.0 exposes) ──
+    @Test fun `window ctrl entries cover all four doors with range 1 to 5`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val expected = mapOf(
+            "window_driver_ctrl" to 1125122104,
+            "window_passenger_ctrl" to 1125122107,
+            "window_rear_left_ctrl" to 1125122112,
+            "window_rear_right_ctrl" to 1125122115,
+        )
+        for ((name, fid) in expected) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals("$name dev", 1001, e.dev)
+            assertEquals("$name fid", fid, e.writeFid)
+            assertEquals("$name valueMin", 1, e.valueMin)
+            assertEquals("$name valueMax", 5, e.valueMax)
+            assertEquals("$name category", "windows", e.category)
+        }
+        // The whole family is unvalidated: the front fids were live-confirmed on Leopard 3
+        // only for values 1/2, which is narrower than the declared 1..5 range, and the rear
+        // fids are no-ops there. A DiLink 3.0 field report has to cover the range.
+        for (name in expected.keys) {
+            assertFalse("$name must not claim live validation", al.find(name)!!.validated)
+        }
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }

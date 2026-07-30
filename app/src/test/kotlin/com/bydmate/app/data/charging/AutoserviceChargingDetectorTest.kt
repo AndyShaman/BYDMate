@@ -35,6 +35,7 @@ class AutoserviceChargingDetectorTest {
     ) : AutoserviceClient {
         override suspend fun isAvailable(): Boolean = available
         override suspend fun getInt(dev: Int, fid: Int): Int? = null
+        override suspend fun getIntRaw(dev: Int, fid: Int): Int? = null
         override suspend fun getFloat(dev: Int, fid: Int): Float? = null
         override suspend fun readBatterySnapshot(): BatteryReading? = battery
         override suspend fun readChargingSnapshot(): ChargingReading? = charging

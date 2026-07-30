@@ -744,7 +744,8 @@ class AgentTools @Inject constructor(
         }
         // Gun fid: 1=NONE, 2=AC, 3=DC, 4=AC_DC, 5=VTOL -- NONE is 1, not 0.
         putIf("charging_gun_connected", d.chargeGunState?.let { it >= 2 })
-        putIf("drive_mode", when (d.driveMode) { 1 -> "ECO"; 2 -> "SPORT"; else -> null })
+        // Off-road submodes (snow/sand/mud/mountain) are indistinguishable on this fid.
+        putIf("drive_mode", when (d.driveMode) { 1 -> "ECO"; 2 -> "SPORT"; 3 -> "NORMAL"; 4 -> "OFFROAD"; else -> null })
         putIf("power_state", when (d.powerState) { 0 -> "OFF"; 1 -> "ON"; 2 -> "DRIVE"; else -> null })
         putIf("work_mode", when (d.workMode) { 0 -> "STOP"; 1 -> "EV"; 2 -> "FORCED_EV"; 3 -> "HEV"; else -> null })
         putIf("light_low_beam_on", d.lightLow?.let { it == 1 })

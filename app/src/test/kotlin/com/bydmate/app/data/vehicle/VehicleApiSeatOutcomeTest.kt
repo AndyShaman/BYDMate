@@ -23,7 +23,14 @@ class VehicleApiSeatOutcomeTest {
         override fun winner() = SeatChannel.UNKNOWN
         override fun setWinner(channel: SeatChannel) {}
     }
-    private val impl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
+
+    private val windowStore = object : WindowChannelStore {
+        override fun winner() = WindowChannel.UNKNOWN
+        override fun setWinner(channel: WindowChannel) {}
+        override fun ctrlCandidateAtMs() = 0L
+        override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+    private val impl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     @Test fun `doWriteOutcome maps status 1 to REAL`() = runTest {
         val e = allowlist.find("driver_seat_vent_switch")!!

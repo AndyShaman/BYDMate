@@ -51,6 +51,8 @@ class HelperBootstrapTest {
         // mid-sequence: the initial kill dispatches, the retry kill cannot).
         var failDispatchFromCall = Int.MAX_VALUE
         var onSpawn: () -> Boolean = { true }
+        // Daemon log contents readHelperLog() hands back; null = transport error.
+        var helperLog: String? = null
         override suspend fun connect() = Result.success(Unit)
         override suspend fun isConnected() = true
         override suspend fun exec(cmd: String): String? = null
@@ -62,7 +64,7 @@ class HelperBootstrapTest {
             if (killSucceeds && killEffective && killCalls >= killsNeededToDie) processAlive = false
             return killSucceeds
         }
-        override suspend fun readHelperLog(): String? = null
+        override suspend fun readHelperLog(): String? = helperLog
         override suspend fun helperHeartbeat(): Boolean = processAlive
         override suspend fun shutdown() {}
     }
@@ -319,6 +321,47 @@ class HelperBootstrapTest {
         assertFalse("wrong version after spawn must return false", boot.ensureRunning())
         assertEquals("must attempt the spawn", 1, adb.spawnCalls)
         assertEquals("must NOT persist on wrong version", -1L, prefs().getLong(KEY, -1L))
+    }
+
+    // ── #64: keep the daemon log tail from a failed spawn for the diagnostic dump ──
+
+    @Test
+    fun `a spawn that never becomes reachable stores the daemon log tail`() = runTest {
+        val adb = FakeAdb()
+        // 12 numbered lines plus a blank one — only the last 10 non-blank lines are kept.
+        adb.helperLog = (1..12).joinToString("\n") { "line$it" } + "\n\n"
+        val helper = FakeHelper(alive = false, version = null)
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        assertFalse("spawn never answers the right version", boot.ensureRunning())
+
+        val failure = boot.lastSpawnFailure()
+        assertTrue("failure must be recorded", failure != null)
+        assertTrue("timestamp must be set", failure!!.ts > 0L)
+        val lines = failure.logTail.lines()
+        assertEquals("only the last 10 lines are kept", 10, lines.size)
+        assertEquals("line3", lines.first())
+        assertEquals("line12", lines.last())
+    }
+
+    @Test
+    fun `an unreadable daemon log is recorded as such`() = runTest {
+        val adb = FakeAdb()   // readHelperLog() returns null
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertEquals("(daemon log unavailable)", boot.lastSpawnFailure()?.logTail)
+    }
+
+    @Test
+    fun `no failure is reported when the daemon comes up`() = runTest {
+        val adb = FakeAdb()
+        val helper = FakeHelper(alive = false)
+        adb.onSpawn = { helper.alive = true; helper.version = baselineVersion(); true }
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        assertTrue(boot.ensureRunning())
+        assertEquals(null, boot.lastSpawnFailure())
     }
 
     companion object {

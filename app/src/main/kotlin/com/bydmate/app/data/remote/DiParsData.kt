@@ -41,7 +41,7 @@ data class DiParsData(
     val tirePressFR: Int?,
     val tirePressRL: Int?,
     val tirePressRR: Int?,
-    val driveMode: Int?,          // 1=ECO, 2=SPORT
+    val driveMode: Int?,          // 1=ECO, 2=SPORT, 3=NORMAL, 4=off-road category; 0 (transient) suppressed in reader
     val workMode: Int?,           // 0=stop, 1=EV, 2=forced EV, 3=HEV
     val autoPark: Int?,           // 0=disabled, 1=standby, 2=active
     val rain: Int?,

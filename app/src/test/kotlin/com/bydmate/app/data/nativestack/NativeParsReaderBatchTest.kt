@@ -53,6 +53,7 @@ class NativeParsReaderBatchTest {
         val auto = mockk<AutoserviceClient>()
         coEvery { auto.isAvailable() } returns true
         coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
         coEvery { auto.getFloat(any(), any()) } returns null
         coEvery { auto.getFloat(fid("soc").device, fid("soc").fid) } returns soc
         coEvery { auto.getInt(fid("mileage").device, fid("mileage").fid) } returns mileageRaw
@@ -204,6 +205,224 @@ class NativeParsReaderBatchTest {
         coVerify(exactly = 0) { auto.isAvailable() }
     }
 
+    /** DiLink 5.0: the primary RR fid answers, so the alternative-generation fid is ignored. */
+    @Test
+    fun `windowRR prefers the primary generation fid`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("windowRR").field to 30,
+                fid("windowRRGen3").field to 80,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val reader = NativeParsReader(auto, settings, helper, gate)
+        val data = reader.fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertEquals(30, data!!.windowRR)
+    }
+
+    /** DiLink 3.0 (#79): the primary RR fid is a link-error sentinel (65535 → null after
+     *  SentinelDecoder), so the value comes from the alternative-generation fid. */
+    @Test
+    fun `windowRR falls back to the alternative generation fid on a link error`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("windowRR").field to 65535,
+                fid("windowRRGen3").field to 80,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val reader = NativeParsReader(auto, settings, helper, gate)
+        val data = reader.fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertEquals(80, data!!.windowRR)
+    }
+
+    /** A transient sentinel is NOT "this fid does not exist here": answering it from the
+     *  other generation's fid would report a value read somewhere else (codex, wave C). */
+    @Test
+    fun `windowRR does not fall back on a transient sentinel`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("windowRR").field to -10013,   // wrong transact, transient
+                fid("windowRRGen3").field to 80,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertNull("a transient sentinel must not borrow the other generation's fid", data!!.windowRR)
+    }
+
+    /** A per-item protocol failure is not a link error either — no raw value to gate on. */
+    @Test
+    fun `windowRR does not fall back when the primary read itself failed`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val pairs = FidMap.entries.map { entry ->
+            when (entry.field) {
+                "soc" -> 0 to java.lang.Float.floatToRawIntBits(50.0f)
+                "windowRR" -> -998 to 65535
+                "windowRRGen3" -> 0 to 80
+                else -> 0 to -10011
+            }
+        }
+        coEvery { helper.readBatch(any()) } returns pairs
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertNull(data!!.windowRR)
+    }
+
+    @Test
+    fun `sunroof percent decodes from batch`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("sunroof").field to 50,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val reader = NativeParsReader(auto, settings, helper, gate)
+        val data = reader.fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertEquals(50, data!!.sunroof)
+    }
+
+    /** driveMode 0 is the transient state while the driver switches modes, not a mode. With
+     *  no mode seen yet in this process there is nothing to hold, so it stays null. */
+    @Test
+    fun `driveMode transient zero is suppressed to null`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("driveMode").field to 0,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val reader = NativeParsReader(auto, settings, helper, gate)
+        val data = reader.fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertNull(data!!.driveMode)
+    }
+
+    @Test
+    fun `driveMode off-road code 4 decodes from batch`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("driveMode").field to 4,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val reader = NativeParsReader(auto, settings, helper, gate)
+        val data = reader.fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertEquals(4, data!!.driveMode)
+    }
+
+    /** Codex, wave C: dropping the transient 0 to null and then reporting the real mode again
+     *  is a null→value edge, which "!=" rules read as a change. Holding the last real mode
+     *  means the switch produces no edge at all. */
+    @Test
+    fun `driveMode holds the last real mode across a transient zero`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+        fun pairs(driveMode: Int) = mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("driveMode").field to driveMode,
+            ),
+        )
+        val reader = NativeParsReader(auto, settings, helper, gate)
+
+        coEvery { helper.readBatch(any()) } returns pairs(3)
+        assertEquals(3, reader.fetch()!!.driveMode)
+
+        coEvery { helper.readBatch(any()) } returns pairs(0)
+        assertEquals("a switch in flight must look like no change", 3, reader.fetch()!!.driveMode)
+
+        coEvery { helper.readBatch(any()) } returns pairs(2)
+        assertEquals(2, reader.fetch()!!.driveMode)
+
+        coEvery { helper.readBatch(any()) } returns pairs(0)
+        assertEquals("and the held value follows the latest real mode", 2, reader.fetch()!!.driveMode)
+    }
+
+    /** An unavailable fid stays unavailable — the hold only covers the transient 0. */
+    @Test
+    fun `driveMode reports null again when the fid goes unavailable`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+        val reader = NativeParsReader(auto, settings, helper, gate)
+
+        coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("driveMode").field to 3,
+            ),
+        )
+        assertEquals(3, reader.fetch()!!.driveMode)
+
+        // -10011 is rejected by SentinelDecoder, so the field decodes to null.
+        coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
+            mapOf(fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f)),
+        )
+        assertNull(reader.fetch()!!.driveMode)
+    }
+
     @Test
     fun `OFF never touches the batch transport`() = runTest {
         val auto = liveAutoservice(soc = 42.0f)
@@ -217,6 +436,58 @@ class NativeParsReaderBatchTest {
         assertNotNull(data)
         assertEquals(42, data!!.soc)
         coVerify(exactly = 0) { helper.readBatch(any()) }
+    }
+
+    /** The ADB path must decide the fallback from ONE raw sample of the primary fid: reading it
+     *  twice (once filtered, once raw) would let a window that moved in between decide the
+     *  generation (codex, wave C). */
+    @Test
+    fun `the ADB path samples the primary window fid exactly once`() = runTest {
+        val rr = fid("windowRR")
+        val gen3 = fid("windowRRGen3")
+        val auto = liveAutoservice(soc = 55.0f)
+        coEvery { auto.getIntRaw(rr.device, rr.fid) } returns 65535
+        coEvery { auto.getInt(gen3.device, gen3.fid) } returns 80
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val gate = gateFixedAt(BatchMode.OFF)
+
+        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+
+        assertNotNull("fetch() returned null", data)
+        assertEquals("the fallback must come from that same sample", 80, data!!.windowRR)
+        coVerify(exactly = 1) { auto.getIntRaw(rr.device, rr.fid) }
+        coVerify(exactly = 0) { auto.getInt(rr.device, rr.fid) }
+    }
+
+    /** The VALIDATING shadow snapshot is compared and thrown away, so nothing it saw may leak
+     *  into the next snapshot that IS returned (codex, wave C). */
+    @Test
+    fun `the VALIDATING shadow snapshot does not seed the sticky driveMode`() = runTest {
+        val auto = liveAutoservice(soc = 60.0f)   // ADB reports no driveMode at all
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val gate = gateFixedAt(BatchMode.VALIDATING)
+        fun pairs(driveMode: Int) = mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(50.0f),
+                fid("driveMode").field to driveMode,
+            ),
+        )
+        val reader = NativeParsReader(auto, settings, helper, gate)
+
+        coEvery { helper.readBatch(any()) } returns pairs(3)
+        assertNull("VALIDATING returns the ADB snapshot, which has no driveMode", reader.fetch()!!.driveMode)
+
+        coEvery { gate.mode() } returns BatchMode.ACTIVE
+        coEvery { helper.readBatch(any()) } returns pairs(0)
+        assertNull("the shadow's mode must not be held as the last real mode", reader.fetch()!!.driveMode)
+
+        // Positive control: a mode seen on the production path IS held across a transient 0.
+        coEvery { helper.readBatch(any()) } returns pairs(3)
+        assertEquals(3, reader.fetch()!!.driveMode)
+        coEvery { helper.readBatch(any()) } returns pairs(0)
+        assertEquals(3, reader.fetch()!!.driveMode)
     }
 
     @Test

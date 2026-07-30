@@ -183,7 +183,8 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
          * Candidate (unvalidated) native channels staged for an in-vehicle snap.
          * Holds the seat heat/vent dev=1001 fallback channel (competitor-v80 fids)
          * used by AdaptiveSeatChannel when the primary dev=1000 path returns a
-         * permanent error on non-Leopard-3 models. The merge order in [loadProduction]
+         * permanent error on non-Leopard-3 models, plus the window CTRL channel used
+         * by [WindowChannelRouter] on DiLink 3.0. The merge order in [loadProduction]
          * folds these in after competitor JSON; LIVE_VALIDATED wins on collision.
          */
         val CANDIDATE_UNVALIDATED: List<WriteEntry> = listOf(
@@ -191,6 +192,16 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // value range 1..6: 1=off, 2=lvl1 ... 6=lvl5. Used by AdaptiveSeatChannel
             // when dev=1000 primary returns NOOP/PERMANENT (e.g. Song Plus / DiLink 3).
             // Not live-validated on those models yet — confirmed via competitor-v80.
+            // Window CTRL channel (1=open, 2=close, 3=stop, 4=half, 5=vent) — the only
+            // window family present in BOTH DiLink 3.0 and 5.0 catalogs (#79), used by
+            // [WindowChannelRouter]. Unvalidated as a family: the front fids are
+            // live-validated on Leopard 3 only for values 1/2 (see the short-form
+            // open/close entries), the rear short-form fids are no-ops there. The
+            // DiLink 3.0 field report will confirm the full 1..5 range.
+            WriteEntry("window_driver_ctrl",     1001, 1125122104, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
+            WriteEntry("window_passenger_ctrl",  1001, 1125122107, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
+            WriteEntry("window_rear_left_ctrl",  1001, 1125122112, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
+            WriteEntry("window_rear_right_ctrl", 1001, 1125122115, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

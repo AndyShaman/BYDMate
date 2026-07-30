@@ -31,6 +31,13 @@ class NativeParsReader @Inject constructor(
     private val batchItems: List<BatchReadItem> =
         FidMap.entries.map { BatchReadItem(it.transact, it.device, it.fid) }
 
+    /**
+     * Last driveMode the car actually reported. The fid answers 0 while a mode switch is in
+     * flight, which is not a mode — holding the previous one keeps "!=" rules from seeing a
+     * null→value edge on the next poll and firing on a switch the user only passed through.
+     */
+    @Volatile private var lastDriveMode: Int? = null
+
     override suspend fun fetch(): DiParsData? = when (gate.mode()) {
         BatchMode.ACTIVE -> fetchViaBatch() ?: fetchViaAdb()
         BatchMode.OFF -> fetchViaAdb()
@@ -40,7 +47,16 @@ class NativeParsReader @Inject constructor(
             if (batchRaw == null) {
                 gate.recordBatchUnavailable()
             } else {
-                gate.recordComparison(adb, assembleSnapshot(decodeBatch(batchRaw)))
+                gate.recordComparison(
+                    adb,
+                    // Shadow snapshot: compared, never returned — so it must not update
+                    // any state a returned snapshot depends on (see stickyDriveMode).
+                    assembleSnapshot(
+                        decodeBatch(batchRaw),
+                        windowRrRawFromBatch(batchRaw),
+                        rememberSticky = false,
+                    ),
+                )
             }
             adb // the proven path stays primary until promotion
         }
@@ -48,8 +64,12 @@ class NativeParsReader @Inject constructor(
 
     private suspend fun fetchViaBatch(): DiParsData? {
         val pairs = helperClient.readBatch(batchItems) ?: return null
-        return assembleSnapshot(decodeBatch(pairs))
+        return assembleSnapshot(decodeBatch(pairs), windowRrRawFromBatch(pairs))
     }
+
+    /** Raw pre-decode windowRR value when the read itself succeeded, else null. */
+    private fun windowRrRawFromBatch(pairs: List<Pair<Int, Int>>): Int? =
+        pairs.getOrNull(windowRrIndex)?.let { (status, word) -> if (status == 0) word else null }
 
     /**
      * Decodes raw (status, value) pairs with the EXACT pipeline the ADB path uses:
@@ -86,17 +106,19 @@ class NativeParsReader @Inject constructor(
         // Decoded values keyed by FidEntry.field.
         val decoded = mutableMapOf<String, Any?>()
 
+        // Raw pre-decode windowRR sample; the fallback decision must be about the SAME
+        // sample the value came from, or a window that moved between two reads would
+        // decide the generation.
+        var windowRrRaw: Int? = null
+
         for (entry in FidMap.entries) {
-            val value: Any? = when (entry.transact) {
-                5 -> {
-                    val raw = autoservice.getInt(entry.device, entry.fid)
-                    if (raw == null) null
-                    else when (entry.decoder) {
-                        Decoder.INT_SCALED -> ParamDecoder.decodeScaled(raw, entry.scale)
-                        else               -> ParamDecoder.decodeInt(raw, entry.decoder)
-                    }
+            val value: Any? = when {
+                entry === windowRrEntry -> {
+                    windowRrRaw = autoservice.getIntRaw(entry.device, entry.fid)
+                    decodeTx5(entry, windowRrRaw?.let { SentinelDecoder.decodeInt(it) })
                 }
-                7 -> {
+                entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(entry.device, entry.fid))
+                entry.transact == 7 -> {
                     // AutoserviceClient.getFloat already rejects float sentinels (-1.0f, NaN, Inf).
                     // Convert Float back to its raw IEEE-754 bits so ParamDecoder.decodeFloat
                     // can apply its SentinelDecoder path (which also rejects -1.0f etc.).
@@ -109,7 +131,15 @@ class NativeParsReader @Inject constructor(
             decoded[entry.field] = value
         }
 
-        return assembleSnapshot(decoded)
+        return assembleSnapshot(decoded, windowRrRaw)
+    }
+
+    /** tx=5 decode tail, shared by the plain reads and the raw windowRR sample. */
+    private fun decodeTx5(entry: FidEntry, raw: Int?): Any? = raw?.let {
+        when (entry.decoder) {
+            Decoder.INT_SCALED -> ParamDecoder.decodeScaled(it, entry.scale)
+            else               -> ParamDecoder.decodeInt(it, entry.decoder)
+        }
     }
 
     /**
@@ -118,7 +148,11 @@ class NativeParsReader @Inject constructor(
      * by either the ADB loop or the daemon batch. Extracted in wave L so the two
      * paths cannot drift.
      */
-    private suspend fun assembleSnapshot(decoded: Map<String, Any?>): DiParsData? {
+    private suspend fun assembleSnapshot(
+        decoded: Map<String, Any?>,
+        windowRrPrimaryRaw: Int?,
+        rememberSticky: Boolean = true,
+    ): DiParsData? {
         // Battery capacity comes from user settings, not from autoservice.
         val batteryCapacityKwh = settings.getBatteryCapacity()
 
@@ -214,8 +248,13 @@ class NativeParsReader @Inject constructor(
             windowFL            = field<Int>("windowFL"),
             windowFR            = field<Int>("windowFR"),
             windowRL            = field<Int>("windowRL"),
-            windowRR            = field<Int>("windowRR"),
-            sunroof             = null,  // removed from FidMap: fid returns enum(1=open,2=closed,5=vent) not percent
+            // DiLink 5.0 fid first. The alternative-generation fid stands in ONLY when the
+            // primary answered DEVICE_THE_FEATURE_LINK_ERROR, i.e. the fid does not exist on
+            // this generation (#79) — a transient sentinel (-10013, protocol error) must not
+            // be answered with a reading taken from a different fid.
+            windowRR            = field<Int>("windowRR")
+                ?: field<Int>("windowRRGen3")?.takeIf { windowRrPrimaryRaw == FEATURE_LINK_ERROR },
+            sunroof             = field<Int>("sunroof"),  // percent; 7 = vent detent
             trunk               = field<Int>("trunk"),
             hood                = field<Int>("hood"),
             seatbeltFL          = field<Int>("seatbeltFL"),
@@ -224,7 +263,9 @@ class NativeParsReader @Inject constructor(
             tirePressFR         = field<Int>("tirePressFR"),
             tirePressRL         = field<Int>("tirePressRL"),
             tirePressRR         = field<Int>("tirePressRR"),
-            driveMode           = field<Int>("driveMode"),
+            // 0 = transient state while switching modes, not a mode — hold the previous
+            // value (see lastDriveMode) so "!=" rules see no edge during the switch.
+            driveMode           = stickyDriveMode(field<Int>("driveMode"), rememberSticky),
             workMode            = field<Int>("workMode"),
             autoPark            = null,  // not in FidMap (unknown source)
             rain                = rain,  // derived from wiperRelay + autoWipers (see above)
@@ -251,5 +292,31 @@ class NativeParsReader @Inject constructor(
             autoWipers          = autoWipers,
             bmsState            = bmsState,
         )
+    }
+
+    /**
+     * 0 from the driveMode fid means "switching", so it is answered with the last real mode.
+     * Null (fid unavailable) passes through, and so does 0 until the car has reported a mode
+     * once in this process — there is nothing to hold yet.
+     *
+     * [remember] is false for the shadow snapshot VALIDATING builds only to compare
+     * transports: a sample that is never returned to consumers must not become the value a
+     * later production snapshot holds.
+     */
+    private fun stickyDriveMode(raw: Int?, remember: Boolean): Int? {
+        if (raw == null) return null
+        if (raw != 0) {
+            if (remember) lastDriveMode = raw
+            return raw
+        }
+        return lastDriveMode
+    }
+
+    private companion object {
+        /** DEVICE_THE_FEATURE_LINK_ERROR: the fid is absent on this generation. */
+        const val FEATURE_LINK_ERROR = SentinelDecoder.FEATURE_LINK_ERROR
+
+        val windowRrEntry: FidEntry = FidMap.entries.first { it.field == "windowRR" }
+        val windowRrIndex: Int = FidMap.entries.indexOf(windowRrEntry)
     }
 }

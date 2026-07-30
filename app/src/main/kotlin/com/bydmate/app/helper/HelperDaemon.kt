@@ -12,7 +12,10 @@ import java.util.concurrent.ConcurrentHashMap
 import android.os.IBinder
 import android.os.Looper
 import android.os.Parcel
+import java.io.File
 import java.io.RandomAccessFile
+import java.lang.reflect.InvocationTargetException
+import java.lang.reflect.UndeclaredThrowableException
 import java.nio.channels.FileChannel
 import java.nio.channels.FileLock
 import java.nio.channels.OverlappingFileLockException
@@ -20,6 +23,58 @@ import kotlin.system.exitProcess
 
 // Lock path on the device filesystem (writable by shell uid).
 private const val LOCK_PATH = "/data/local/tmp/bydmate_helper.lock"
+
+// SELinux domain of the running process; the daemon must land in the shell domain to be
+// allowed to addService. Unreadable on some firmwares — never fatal.
+private const val SELINUX_ATTR_PATH = "/proc/self/attr/current"
+
+// Stack frames printed alongside a bootstrap failure — enough to name the rejecting
+// framework call without burying the log.
+private const val FAILURE_STACK_FRAMES = 4
+
+// Guard against a pathological cause cycle while unwrapping reflection wrappers.
+private const val MAX_CAUSE_HOPS = 4
+
+/**
+ * SELinux context of this process, or a marker when the attr file cannot be read.
+ * [path] is a parameter so the JVM unit test can point it at a temp file.
+ */
+internal fun readSelinuxContext(path: String = SELINUX_ATTR_PATH): String =
+    // The kernel NUL-terminates the attr value; drop it or the log line carries a stray byte.
+    runCatching { File(path).readText().filter { it.code != 0 }.trim() }
+        .getOrNull()?.takeIf { it.isNotEmpty() } ?: "(unavailable)"
+
+/**
+ * Renders a bootstrap failure together with its REAL cause.
+ *
+ * ServiceManager.addService is invoked reflectively, so the caught exception is an
+ * InvocationTargetException whose own message is always null — printing just that message
+ * is what left issue #64 ("ERR: addService null") undiagnosable. Unwraps the reflection
+ * wrappers, then prints the unwrapped class + message plus the top stack frames.
+ */
+internal fun describeBootstrapFailure(t: Throwable, frames: Int = FAILURE_STACK_FRAMES): String {
+    val root = unwrapReflectionCause(t)
+    return buildString {
+        append(root.javaClass.name)
+        append(": ")
+        append(root.message ?: "(no message)")
+        if (root !== t) append(" [wrapped in ${t.javaClass.simpleName}]")
+        root.stackTrace.take(frames).forEach { append("\n  at $it") }
+    }
+}
+
+/** Peels InvocationTargetException / UndeclaredThrowableException down to the real throwable. */
+private fun unwrapReflectionCause(t: Throwable): Throwable {
+    var current = t
+    var hops = 0
+    while (hops < MAX_CAUSE_HOPS &&
+        (current is InvocationTargetException || current is UndeclaredThrowableException)
+    ) {
+        current = current.cause ?: break
+        hops++
+    }
+    return current
+}
 
 /**
  * Acquires an exclusive file lock on [path]. Returns a (FileChannel, FileLock) pair on
@@ -84,6 +139,14 @@ fun main(args: Array<String>) {
     // stack frame is never unwound (loop() blocks forever). The lock stays live.
     @Suppress("UNUSED_VARIABLE") val lockChannel = lockPair.first
     @Suppress("UNUSED_VARIABLE") val lockHandle = lockPair.second
+
+    // Identity of the spawned process. addService is only permitted from the shell domain,
+    // so a wrong uid or SELinux context explains a registration refusal on its own (#64).
+    println(
+        "BOOT uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} " +
+            "selinux=${readSelinuxContext()}"
+    )
+    System.out.flush()
 
     // Prepare the main looper BEFORE ActivityThread.systemMain (OpenBYD EntryPoint order),
     // then acquire a system Context for the projection DisplayManager calls.
@@ -468,7 +531,7 @@ fun main(args: Array<String>) {
         smCls.getMethod("addService", String::class.java, IBinder::class.java)
             .invoke(null, HelperBinderProtocol.SERVICE_NAME, helperBinder)
     } catch (e: Exception) {
-        System.err.println("ERR: addService ${e.message}")
+        System.err.println("ERR: addService ${describeBootstrapFailure(e)}")
         // exitProcess so the OS releases the file lock we hold; a bare return would
         // leave a hung lock-holding daemon and block every future spawn.
         exitProcess(4)

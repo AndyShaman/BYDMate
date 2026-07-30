@@ -15,7 +15,9 @@ package com.bydmate.app.data.autoservice
  */
 object SentinelDecoder {
 
-    private const val FEATURE_LINK_ERROR = 0x0000FFFF
+    /** Public: callers that must tell "fid absent on this generation" from other sentinels
+     *  (window generation fallback / probe, #79) compare against this exact value. */
+    const val FEATURE_LINK_ERROR = 0x0000FFFF
     private const val NOT_INITIALIZED_20BIT = 0x000FFFFF
     private const val WRONG_TRANSACT = -10013
     private const val WRONG_DIRECTION = -10011

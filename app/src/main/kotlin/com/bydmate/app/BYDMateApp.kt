@@ -19,6 +19,7 @@ import com.bydmate.app.data.local.DataThinningWorker
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.decideLanguage
+import com.bydmate.app.data.automation.DriveModeRuleMigration
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
@@ -49,6 +50,7 @@ class BYDMateApp : Application(), Configuration.Provider {
     @Inject lateinit var localePreferences: LocalePreferences
     @Inject lateinit var insightsManager: InsightsManager
     @Inject lateinit var splitOverlayController: com.bydmate.app.split.SplitOverlayController
+    @Inject lateinit var driveModeRuleMigration: DriveModeRuleMigration
 
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
@@ -90,6 +92,8 @@ class BYDMateApp : Application(), Configuration.Provider {
                 settingsRepository.setMigrationV2_4_17Done()
                 android.util.Log.i("BYDMateApp", "v2.4.17 migration: removed $removed phantom autoservice rows")
             }
+            // One-shot: revive DriveMode rules saved against the old "0" = NORMAL code.
+            driveModeRuleMigration.runOnce()
             // One-time cleanup of existing duplicates from v2.0.0
             historyImporter.cleanupDuplicates()
             // Only sync if setup is completed (prevents duplicates during first wizard run)

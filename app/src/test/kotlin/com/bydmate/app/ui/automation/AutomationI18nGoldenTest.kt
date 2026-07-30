@@ -349,7 +349,9 @@ class AutomationI18nGoldenTest {
     // param -> list of (value, ru-label)
     private val parEnumRu = mapOf<String, List<Pair<String, String>>>(
         "Gear" to listOf("1" to "P", "2" to "R", "3" to "N", "4" to "D"),
-        "DriveMode" to listOf("0" to "NORMAL", "1" to "ECO", "2" to "SPORT", "4" to "SNOW"),
+        // Live codes (Leopard 3 2026-07-30): 1=ECO, 2=SPORT, 3=NORMAL, 4=any off-road
+        // submode; 0 is the transient switching state and is not offered as a choice.
+        "DriveMode" to listOf("1" to "ECO", "2" to "SPORT", "3" to "NORMAL", "4" to "Внедорожный"),
         "ChargingStatus" to listOf("0" to "Нет", "1" to "Подключён", "2" to "Заряжается"),
         "PowerState" to listOf("0" to "OFF", "1" to "ON", "2" to "DRIVE"),
         "DoorFL" to listOf("0" to "Закрыта", "1" to "Открыта"),

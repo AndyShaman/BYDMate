@@ -15,6 +15,13 @@ interface AutoserviceClient {
     /** Best-effort liveness check: ADB connected AND a known fid (SoH) returns a real value. */
     suspend fun isAvailable(): Boolean
     suspend fun getInt(dev: Int, fid: Int): Int?
+
+    /**
+     * tx=5 value with NO sentinel filtering — null only on ADB/parse failure. For callers
+     * that must tell one sentinel from another, e.g. "65535 = this fid does not exist on
+     * this generation" apart from a transient -10013 (#79). Prefer [getInt] otherwise.
+     */
+    suspend fun getIntRaw(dev: Int, fid: Int): Int?
     suspend fun getFloat(dev: Int, fid: Int): Float?
     suspend fun readBatterySnapshot(): BatteryReading?
     suspend fun readChargingSnapshot(): ChargingReading?
@@ -66,7 +73,7 @@ class AutoserviceClientImpl @Inject constructor(
         return false
     }
 
-    override suspend fun getInt(dev: Int, fid: Int): Int? {
+    override suspend fun getIntRaw(dev: Int, fid: Int): Int? {
         val cmd = "service call autoservice ${FidRegistry.TX_GET_INT} i32 $dev i32 $fid"
         val raw = adb.exec(cmd)
         if (raw == null) {
@@ -76,8 +83,12 @@ class AutoserviceClientImpl @Inject constructor(
         val value = parseParcelInt(raw)
         if (value == null) {
             if (logThrottle.shouldLog("getInt:$dev:$fid")) Log.w(TAG, "getInt($dev,$fid): parse failed: ${raw.take(160)}")
-            return null
         }
+        return value
+    }
+
+    override suspend fun getInt(dev: Int, fid: Int): Int? {
+        val value = getIntRaw(dev, fid) ?: return null
         val decoded = SentinelDecoder.decodeInt(value)
         if (decoded == null) {
             if (logThrottle.shouldLog("getInt:$dev:$fid")) {

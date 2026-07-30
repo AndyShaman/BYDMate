@@ -705,6 +705,7 @@
     <string name="auto_enum_code_n">N</string>
     <string name="auto_enum_code_normal">NORMAL</string>
     <string name="auto_enum_code_off">OFF</string>
+    <string name="auto_enum_code_offroad">OFF-ROAD</string>
     <string name="auto_enum_code_on">ON</string>
     <string name="auto_enum_code_p">P</string>
     <string name="auto_enum_code_r">R</string>

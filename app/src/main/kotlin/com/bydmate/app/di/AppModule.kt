@@ -472,6 +472,11 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideWindowChannelStore(@ApplicationContext ctx: Context): com.bydmate.app.data.vehicle.WindowChannelStore =
+        com.bydmate.app.data.vehicle.WindowChannelStorePrefs(ctx.getSharedPreferences("window_channel", Context.MODE_PRIVATE))
+
+    @Provides
+    @Singleton
     fun provideVehicleApi(
         parsReader: com.bydmate.app.data.nativestack.ParsReader,
         autoservice: com.bydmate.app.data.autoservice.AutoserviceClient,
@@ -479,8 +484,11 @@ object AppModule {
         allowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
         writeLogDao: VehicleWriteLogDao,
         seatChannelStore: com.bydmate.app.data.vehicle.SeatChannelStore,
+        windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
     ): com.bydmate.app.data.vehicle.VehicleApi =
-        com.bydmate.app.data.vehicle.VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore)
+        com.bydmate.app.data.vehicle.VehicleApiImpl(
+            parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
+        )
 
     @Provides
     @Singleton
@@ -498,8 +506,8 @@ object AppModule {
             "update_prefs",
             "bydmate_range_prefs",
             // Durable user voice/agent settings (AC-03). Deliberately NOT included:
-            // energydata_sync / energydata_liveness / seat_channel — per-device learned
-            // state that must not migrate to another car.
+            // energydata_sync / energydata_liveness / seat_channel / window_channel —
+            // per-device learned state that must not migrate to another car.
             "voice",
         )
     )

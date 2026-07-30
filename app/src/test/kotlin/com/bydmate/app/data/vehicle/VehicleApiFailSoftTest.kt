@@ -31,7 +31,14 @@ class VehicleApiFailSoftTest {
         override fun setWinner(channel: SeatChannel) {}
     }
 
-    private val api: VehicleApiImpl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao, seatStore)
+    private val windowStore = object : WindowChannelStore {
+        override fun winner() = WindowChannel.UNKNOWN
+        override fun setWinner(channel: WindowChannel) {}
+        override fun ctrlCandidateAtMs() = 0L
+        override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+
+    private val api: VehicleApiImpl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, dao, seatStore, windowStore)
 
     // ── Test 1: allowlist miss returns Result failure AllowlistMiss ───────────
 
@@ -72,7 +79,7 @@ class VehicleApiFailSoftTest {
                 source = "test",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
         coEvery { helper.write(1001, 999000003, 2) } returns true
         coEvery { helper.read(1001, 999000004) } returns -10011L
 
@@ -101,7 +108,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
 
         coEvery { helper.write(1001, 999999999, 1) } returns false
 
@@ -136,7 +143,7 @@ class VehicleApiFailSoftTest {
                 source = "competitor-v80",
             )
         ))
-        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore)
+        val customApi = VehicleApiImpl(parsReader, autoservice, helper, customAllowlist, dao, seatStore, windowStore)
         coEvery { helper.write(any(), any(), any()) } returns true
         coEvery { helper.read(any(), any()) } returns -10011L
 

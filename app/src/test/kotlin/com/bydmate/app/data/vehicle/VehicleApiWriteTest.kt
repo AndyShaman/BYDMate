@@ -37,7 +37,14 @@ class VehicleApiWriteTest {
         override fun setWinner(channel: SeatChannel) {}
     }
 
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
+    private val windowStore = object : WindowChannelStore {
+        override fun winner() = WindowChannel.UNKNOWN
+        override fun setWinner(channel: WindowChannel) {}
+        override fun ctrlCandidateAtMs() = 0L
+        override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+
+    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     // ── Test 1: writeAcOn happy path ──────────────────────────────────────────
 
@@ -93,7 +100,7 @@ class VehicleApiWriteTest {
     // ── Test 5: allowlist miss returns failure without crash ──────────────────
 
     @Test fun `write method with EMPTY allowlist returns failure AllowlistMiss without throwing`() = runTest {
-        val emptyApi: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, WriteAllowlist.EMPTY, writeLogDao, seatStore)
+        val emptyApi: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, WriteAllowlist.EMPTY, writeLogDao, seatStore, windowStore)
         val result = emptyApi.writeAcOn()
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull() is VehicleWriteError.AllowlistMiss)

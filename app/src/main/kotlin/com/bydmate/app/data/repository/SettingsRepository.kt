@@ -38,6 +38,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
         const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
+        /** DriveMode trigger value "0" (old "NORMAL") rewritten to the real NORMAL code "3". */
+        const val KEY_DRIVEMODE_RULE_MIGRATION = "drivemode_rule_migration_v2"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
         const val KEY_OPENROUTER_MODEL = "openrouter_model"
         /** Exa (api.exa.ai) BYOK for the web_search tool. Blank = openrouter:web_search server tool
@@ -245,6 +247,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setIdleDrainV2CleanupDone() =
         setString(KEY_IDLE_DRAIN_V2_CLEANUP, "true")
+
+    suspend fun isDriveModeRuleMigrationDone(): Boolean =
+        getString(KEY_DRIVEMODE_RULE_MIGRATION, "false") == "true"
+
+    suspend fun setDriveModeRuleMigrationDone() =
+        setString(KEY_DRIVEMODE_RULE_MIGRATION, "true")
 
     suspend fun getDataSource(): DataSource = DataSource.ENERGYDATA
 

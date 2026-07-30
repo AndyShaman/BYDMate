@@ -24,7 +24,14 @@ class VehicleApiReadTest {
         override fun winner() = SeatChannel.UNKNOWN
         override fun setWinner(channel: SeatChannel) {}
     }
-    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore)
+
+    private val windowStore = object : WindowChannelStore {
+        override fun winner() = WindowChannel.UNKNOWN
+        override fun setWinner(channel: WindowChannel) {}
+        override fun ctrlCandidateAtMs() = 0L
+        override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+    private val api: VehicleApi = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
 
     @Test fun `readSnapshot delegates to ParsReader fetch`() = runTest {
         val expected = diParsData(soc = 73, speed = 0)
@@ -60,5 +67,32 @@ class VehicleApiReadTest {
     @Test fun `readSoc delegates to AutoserviceClient getFloat dev=1014 fid=1246777400`() = runTest {
         coEvery { autoservice.getFloat(1014, 1246777400) } returns 73.5f
         assertEquals(73.5f, api.readSoc())
+    }
+
+    // ── #79: rear-right window read across generations ────────────────────────
+    @Test fun `readWindowRearRight returns the DiLink 5 fid value`() = runTest {
+        coEvery { autoservice.getIntRaw(1001, 947912752) } returns 40
+
+        assertEquals(40, api.readWindowRearRight())
+    }
+
+    @Test fun `readWindowRearRight falls back to the alternative fid on a link error`() = runTest {
+        coEvery { autoservice.getIntRaw(1001, 947912752) } returns 65535
+        coEvery { autoservice.getInt(1001, 1267728408) } returns 80
+
+        assertEquals(80, api.readWindowRearRight())
+    }
+
+    /** Any other sentinel is a transient fault, not a missing fid — no cross-fid answer. */
+    @Test fun `readWindowRearRight reports null on a transient sentinel`() = runTest {
+        coEvery { autoservice.getIntRaw(1001, 947912752) } returns -10013
+
+        assertNull(api.readWindowRearRight())
+    }
+
+    @Test fun `readWindowRearRight reports null when the read itself fails`() = runTest {
+        coEvery { autoservice.getIntRaw(1001, 947912752) } returns null
+
+        assertNull(api.readWindowRearRight())
     }
 }

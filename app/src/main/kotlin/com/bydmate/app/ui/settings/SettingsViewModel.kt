@@ -50,11 +50,13 @@ import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
@@ -1361,6 +1363,33 @@ class SettingsViewModel @Inject constructor(
             "Проверка связи. Вызови инструмент get_vehicle_state и ответь одним коротким " +
                 "предложением: какой заряд батареи."
         private const val MINIMAX_SOURCE = "minimax"
+        /** Shared budget for the two daemon-backed dump sections (liveness + seat reads).
+         *  The dump must not hang on a wedged daemon. */
+        private const val HELPER_DIAG_BUDGET_MS = 3_000L
+    }
+
+    /** What the two daemon-backed dump sections need; nulls mean "not obtained in budget". */
+    private data class HelperDiagnostics(val alive: Boolean?, val seats: List<Pair<Int, Int>>?)
+
+    /**
+     * Collects daemon liveness and the seat fid snapshot under ONE shared budget.
+     *
+     * A binder transact is a blocking call: wrapping it in withTimeoutOrNull here would not
+     * return until the call finished, because cancellation only takes effect at a suspension
+     * point. So the reads run in a coroutine that is NOT a child of the dump, and only the
+     * WAIT is bounded — a wedged daemon leaves an IO thread parked instead of stalling the
+     * dump the user is trying to send us.
+     */
+    private suspend fun gatherHelperDiagnostics(): HelperDiagnostics {
+        val probe = viewModelScope.async(Dispatchers.IO) {
+            HelperDiagnostics(
+                alive = runCatching { helperClient.isAlive() }.getOrNull(),
+                // One binder round-trip for all ten seat reads.
+                seats = runCatching { helperClient.readBatch(SeatsDiagnostics.batchItems) }.getOrNull(),
+            )
+        }
+        return withTimeoutOrNull(HELPER_DIAG_BUDGET_MS) { probe.await() }
+            ?: HelperDiagnostics(null, null)
     }
 
     /**
@@ -1591,6 +1620,26 @@ class SettingsViewModel @Inject constructor(
                     appendLine("$pkg: $state")
                 }
             } catch (e: Exception) { appendLine("(failed to gather assistant package state: ${e.message})") }
+
+            // Both daemon sections come from one detached probe (see gatherHelperDiagnostics).
+            val helperDiag = gatherHelperDiagnostics()
+
+            appendLine("--- helper daemon ---")
+            try {
+                appendLine("alive: ${helperDiag.alive?.toString() ?: "(unknown — probe timed out)"}")
+                val failure = helperBootstrap.lastSpawnFailure()
+                if (failure == null) {
+                    appendLine("last_spawn_failure: (none)")
+                } else {
+                    appendLine("last_spawn_failure: ${
+                        SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(failure.ts))
+                    }")
+                    failure.logTail.lines().forEach { appendLine("  $it") }
+                }
+            } catch (e: Exception) { appendLine("(failed to gather helper daemon state: ${e.message})") }
+
+            appendLine("--- seats ---")
+            SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }
 
             appendLine("--- last crash ---")
             try {

@@ -65,6 +65,12 @@ object FidMap {
         FidEntry("windowFR",             1001, 1267728400,   5, Decoder.INT_PERCENT),
         FidEntry("windowRL",             1001, 947912736,    5, Decoder.INT_PERCENT),
         FidEntry("windowRR",             1001, 947912752,    5, Decoder.INT_PERCENT),
+        // DiLink 3.0 catalogs expose the RR window percent under a different fid
+        // (BODYWORK_WINDOW_RIGHT_REAR_PERCENT 0x4b900018). Same semantics, read as a
+        // fallback when the DiLink 5.0 fid above returns a link error (#79).
+        FidEntry("windowRRGen3",         1001, 1267728408,   5, Decoder.INT_PERCENT),
+        // Percent fid (live Leopard 3 2026-07-30): 0=closed, 7=vent detent, 50=half, 100=open
+        FidEntry("sunroof",              1001, 1101004808,   5, Decoder.INT_PERCENT),
         FidEntry("trunk",                1001, 1074790416,   5, Decoder.INT_ENUM),
         FidEntry("lockFL",               1032, 1081081864,   5, Decoder.INT_ENUM),
         FidEntry("driveMode",            1006, 555745294,    5, Decoder.INT_ENUM),
