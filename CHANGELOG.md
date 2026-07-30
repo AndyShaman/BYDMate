@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.9.1] - 2026-07-30
+
 ### Исправления
 - Разделение экрана: обе панели снова реагируют на касания (раньше работала только одна, вторую перекрывал невидимый щит системы).
 
@@ -803,7 +805,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.9...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.9.1...HEAD
+[3.9.1]: https://github.com/AndyShaman/BYDMate/compare/v3.9...v3.9.1
 [3.9]: https://github.com/AndyShaman/BYDMate/compare/v3.8.1...v3.9
 [3.8.1]: https://github.com/AndyShaman/BYDMate/compare/v3.8...v3.8.1
 [3.8]: https://github.com/AndyShaman/BYDMate/compare/v3.7...v3.8
