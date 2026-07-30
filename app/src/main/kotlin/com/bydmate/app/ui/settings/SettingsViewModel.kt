@@ -1500,6 +1500,20 @@ class SettingsViewModel @Inject constructor(
                     androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(appContext)
                         .contains(appContext.packageName)
                 }")
+                // Self-heal runs for every daemon-backed grant: all-false reasserts point at the
+                // daemon path, true reasserts with granted=false at the system reverting us.
+                val healHistory = com.bydmate.app.service.GrantSelfHeal.history()
+                if (healHistory.isEmpty()) {
+                    appendLine("grant_heal_history: (none)")
+                } else {
+                    appendLine("grant_heal_history:")
+                    val healSdf = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+                    healHistory.forEach { e ->
+                        appendLine("${healSdf.format(Date(e.ts))} ${e.name} reason=${e.reason} " +
+                            "tries=${e.tries} reasserts=${e.reasserts.joinToString(",", "[", "]")} " +
+                            "granted=${e.granted}")
+                    }
+                }
                 // Parallel HUD apps: presence affects channel routing decisions.
                 val hudPm = appContext.packageManager
                 listOf(

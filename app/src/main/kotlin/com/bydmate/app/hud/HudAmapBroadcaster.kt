@@ -6,9 +6,11 @@ import android.content.Intent
 import android.util.Log
 import com.bydmate.app.navdata.NavGuidanceHub
 
-/** Channel A: standard AutoNavi/Amap HUD broadcast, ported verbatim from OpenBYD 2.4.2
- *  (HudController.java:210-320 in the decompile). Fires alongside the SOME/IP frame on
- *  the same NavGuidanceHub snapshot. Capability-gated: without a known receiver package
+/** Channel A: standard AutoNavi/Amap HUD broadcast. Broadcast format is donor-derived
+ *  (OpenBYD 2.4.2 HudController.java:210-320 in the decompile); icon mapping is
+ *  receiver-derived from the com.byd.amapservice canonical AutoNavi table — not OpenBYD's
+ *  broadcast path, which is dead code on-car. Fires alongside the SOME/IP frame on the
+ *  same NavGuidanceHub snapshot. Capability-gated: without a known receiver package
  *  installed nothing is broadcast and no further work happens after the one-time lazy
  *  package probe. */
 class HudAmapBroadcaster(private val context: Context) {
@@ -18,22 +20,29 @@ class HudAmapBroadcaster(private val context: Context) {
         const val ACTION = "AUTONAVI_STANDARD_BROADCAST_SEND"
         val RECEIVER_PACKAGES = listOf("com.byd.amapservice", "com.example.amapservice")
 
-        /** gaode turn code -> coarse Amap broadcast icon, ported from OpenBYD 2.4.2
-         *  HudController.mapTurnKindToAmapBroadcastIcon (bytecode-derived, :146-208).
-         *  The second switch in the bytecode covers only 15..20 for roundabouts; all other
-         *  codes outside the explicit cases fall through to the default (STRAIGHT = 2). */
+        /** Maps our internal maneuver code to the canonical AutoNavi NEW_ICON value decoded
+         *  by the receiver (com.byd.amapservice m[] array). The previous OpenBYD-derived
+         *  table was wrong because OpenBYD's broadcast path is dead code on-car. Default
+         *  9=straight; the old default 2 rendered as a left arrow on-car. */
         fun gaodeToAmapIcon(gaode: Int): Int = when (gaode) {
-            48 -> 12       // DESTINATION
-            1 -> 6         // LEFT
-            2 -> 4         // RIGHT
-            3, 4 -> 7      // SLIGHT_LEFT, SLIGHT_LEFT_ALT
-            5, 6 -> 3      // SLIGHT_RIGHT, SLIGHT_RIGHT_ALT
-            7 -> 6         // SHARP_LEFT (treated as LEFT in broadcast channel)
-            8 -> 4         // SHARP_RIGHT (treated as RIGHT in broadcast channel)
-            9, 10 -> 5     // U_TURN_LEFT, U_TURN_RIGHT
-            11, 12 -> 2    // STRAIGHT_SOLID, STRAIGHT_DOTTED
-            15, 16, 17, 18, 19, 20 -> 8  // ROUNDABOUT family (donor second switch La)
-            else -> 2      // default: STRAIGHT
+            1 -> 2         // LEFT
+            2 -> 3         // RIGHT
+            3 -> 4         // SLIGHT_LEFT
+            4 -> 5         // SLIGHT_RIGHT
+            7 -> 6         // SHARP_LEFT
+            8 -> 7         // SHARP_RIGHT
+            9 -> 8         // U_TURN_LEFT
+            10 -> 19       // U_TURN_RIGHT
+            11, 12 -> 9    // STRAIGHT (solid, dotted)
+            13 -> 11       // ROUNDABOUT_ENTER
+            24 -> 12       // ROUNDABOUT_EXIT
+            in 25..34 -> 12 // NUMBERED_ROUNDABOUT_EXIT (exit number = code-24, sent as ROUNG_ABOUT_NUM extra)
+            45 -> 10       // WAYPOINT
+            46 -> 13       // SERVICE_AREA
+            47 -> 14       // TOLLBOOTH
+            48 -> 15       // DESTINATION
+            49 -> 16       // TUNNEL
+            else -> 9      // neutral default: STRAIGHT
         }
     }
 
@@ -89,6 +98,9 @@ class HudAmapBroadcaster(private val context: Context) {
         intent.putExtra("IS_BYD_MAP", true)
         intent.putExtra("IS_BYD_BAIDU_MAP", false)
         intent.putExtra("NEW_ICON", gaodeToAmapIcon(s.maneuverGaode))
+        if (s.maneuverGaode in 25..34) {
+            intent.putExtra("ROUNG_ABOUT_NUM", s.maneuverGaode - 24)
+        }
         intent.putExtra("SEG_REMAIN_DIS", s.distanceMeters)
         intent.putExtra("NEXT_ROAD_NAME", s.road)
         intent.putExtra("ROUTE_REMAIN_DIS", routeRemDis)

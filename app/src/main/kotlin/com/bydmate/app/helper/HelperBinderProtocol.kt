@@ -233,10 +233,11 @@ object HelperBinderProtocol {
         "com.bydmate.app/com.bydmate.app.cluster.SteeringWheelKeyService"
 
     /**
-     * Flattened ComponentName of our notification-listener stub — appended (never clobbering
-     * existing entries) to Settings.Secure enabled_notification_listeners by the narrow
-     * enableNotificationListener daemon op, mirroring ACCESSIBILITY_SERVICE_COMPONENT. Grants
-     * MediaSessionManager.getActiveSessions() access to our process for real Yandex Music playback.
+     * Flattened ComponentName of our notification-listener stub — granted by the narrow
+     * enableNotificationListener daemon op. Primary: `cmd notification allow_listener` updates
+     * NMS's canonical approved list. Fallback: appended (never clobbering existing entries) to
+     * Settings.Secure enabled_notification_listeners on firmwares without cmd notification.
+     * Grants MediaSessionManager.getActiveSessions() access to our process for Yandex Music.
      */
     const val NOTIFICATION_LISTENER_COMPONENT =
         "com.bydmate.app/com.bydmate.app.media.MediaSessionListenerService"

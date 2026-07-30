@@ -1059,16 +1059,38 @@ private fun enableAccessibilityService(): Boolean {
 }
 
 /**
- * Self-grants notification-listener access for our MediaSessionListenerService stub, mirroring
- * enableAccessibilityService's remove-wait-readd cycle: NotificationManagerService's Settings
- * observer only re-binds listeners when the enabled_notification_listeners string actually
- * changes value, so re-adding a component already present would silently no-op after a crash.
+ * Self-grants notification-listener access for our MediaSessionListenerService stub.
+ *
+ * Primary: `cmd notification allow_listener <component>` — the official NMS API that writes to
+ * the canonical approved list inside NotificationManagerService. On some firmwares (Sea Lion 06/07)
+ * NMS reconciles enabled_notification_listeners from that internal list on every Settings change,
+ * so a raw settings-put entry is stripped immediately; cmd allow_listener is the only path that
+ * sticks (donor-verified). Verified by reading back the secure setting.
+ *
+ * Fallback: remove-wait-readd settings-put cycle — for firmwares that predate `cmd notification`.
+ * NMS's Settings observer only re-binds listeners when the string actually changes value, so
+ * re-adding a component already present would silently no-op after a crash.
  * Read-modify-write preserves other apps' listeners (our component is the only one we ever touch).
+ *
  * App-scoped, reversible Secure setting only; touches nothing on the vehicle (no autoservice/CAN).
  */
 private fun enableNotificationListener(): Boolean {
     val component = HelperBinderProtocol.NOTIFICATION_LISTENER_COMPONENT
     val target = canonicalComponent(component)
+
+    // Primary path: cmd notification allow_listener writes to NMS's canonical approved list.
+    // On firmwares where NMS reconciles the raw secure setting from that list, raw settings-put
+    // entries are stripped on the next reconciliation cycle; this path is immune to that.
+    // Readback is gated on exit code == 0: a stale raw entry in the setting could otherwise
+    // false-positive the check when the canonical NMS grant is absent (the exact reconciliation
+    // case), causing the function to return true before the fallback ever runs.
+    val cmdResult = shExec("cmd notification allow_listener \"\$1\"", component)
+    if (cmdResult.code == 0) {
+        val afterCmd = (readSecure("enabled_notification_listeners") ?: "").split(':').filter { it.isNotEmpty() }
+        if (afterCmd.any { canonicalComponent(it) == target }) return true
+    }
+
+    // Fallback: remove-wait-readd settings-put for firmwares without `cmd notification`.
     val current = readSecure("enabled_notification_listeners") ?: return false
     val others = current.split(':').filter { it.isNotEmpty() && canonicalComponent(it) != target }
     if (shExec("settings put secure enabled_notification_listeners \"\$1\"", others.joinToString(":")).code != 0) return false

@@ -4,8 +4,9 @@ import android.util.Log
 import com.bydmate.app.data.vehicle.HelperClient
 
 /** Self-grants notification-listener access for MediaSessionListenerService via the helper
- *  daemon (settings put secure enabled_notification_listeners), preserving any listeners already
- *  enabled. The daemon op itself is idempotent; this is a thin fire-and-forget wrapper. */
+ *  daemon. The daemon tries `cmd notification allow_listener` first (updates NMS's canonical
+ *  approved list); falls back to settings put secure enabled_notification_listeners on firmwares
+ *  that predate cmd notification. Preserves any listeners already enabled; idempotent. */
 object MediaSessionGrant {
     private const val TAG = "MediaSessionGrant"
 

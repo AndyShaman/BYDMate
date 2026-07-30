@@ -77,8 +77,8 @@ class HudAmapBroadcasterTest {
         assertEquals(0, i.getIntExtra("EXTRA_IS_FOREGROUND", -99))
         assertTrue(i.getBooleanExtra("IS_BYD_MAP", false))
         assertFalse(i.getBooleanExtra("IS_BYD_BAIDU_MAP", true))
-        // Icon: gaode=2 (RIGHT) -> Amap icon 4
-        assertEquals(4, i.getIntExtra("NEW_ICON", -99))
+        // Icon: gaode=2 (RIGHT) -> Amap icon 3
+        assertEquals(3, i.getIntExtra("NEW_ICON", -99))
         // Distance/road
         assertEquals(500, i.getIntExtra("SEG_REMAIN_DIS", -99))
         assertEquals("Ленина", i.getStringExtra("NEXT_ROAD_NAME"))
@@ -145,34 +145,65 @@ class HudAmapBroadcasterTest {
 
     @Test
     fun gaode_to_amap_icon_complete_mapping() {
-        assertEquals(6, HudAmapBroadcaster.gaodeToAmapIcon(1))    // LEFT
-        assertEquals(4, HudAmapBroadcaster.gaodeToAmapIcon(2))    // RIGHT
-        assertEquals(7, HudAmapBroadcaster.gaodeToAmapIcon(3))    // SLIGHT_LEFT
-        assertEquals(7, HudAmapBroadcaster.gaodeToAmapIcon(4))    // SLIGHT_LEFT_ALT
-        assertEquals(3, HudAmapBroadcaster.gaodeToAmapIcon(5))    // SLIGHT_RIGHT
-        assertEquals(3, HudAmapBroadcaster.gaodeToAmapIcon(6))    // SLIGHT_RIGHT_ALT
-        assertEquals(6, HudAmapBroadcaster.gaodeToAmapIcon(7))    // SHARP_LEFT (treated as LEFT)
-        assertEquals(4, HudAmapBroadcaster.gaodeToAmapIcon(8))    // SHARP_RIGHT (treated as RIGHT)
-        assertEquals(5, HudAmapBroadcaster.gaodeToAmapIcon(9))    // U_TURN_LEFT
-        assertEquals(5, HudAmapBroadcaster.gaodeToAmapIcon(10))   // U_TURN_RIGHT
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(11))   // STRAIGHT_SOLID
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(12))   // STRAIGHT_DOTTED
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(13))   // DETOUR_RIGHT (default)
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(14))   // DETOUR_LEFT (default)
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(15))   // ROUNDABOUT family
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(16))
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(17))
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(18))
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(19))
-        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(20))
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(21))   // default (not in switch)
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(23))   // default
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(24))   // default (second switch covers 15-20 only)
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(44))   // default
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(47))   // TOLLBOOTH (default)
-        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(48))  // DESTINATION
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(49))   // TUNNEL (default)
-        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(0))    // unknown (default)
+        // Canonical AutoNavi NEW_ICON semantics (com.byd.amapservice m[] array)
+        assertEquals(2, HudAmapBroadcaster.gaodeToAmapIcon(1))    // LEFT
+        assertEquals(3, HudAmapBroadcaster.gaodeToAmapIcon(2))    // RIGHT
+        assertEquals(4, HudAmapBroadcaster.gaodeToAmapIcon(3))    // SLIGHT_LEFT
+        assertEquals(5, HudAmapBroadcaster.gaodeToAmapIcon(4))    // SLIGHT_RIGHT
+        assertEquals(6, HudAmapBroadcaster.gaodeToAmapIcon(7))    // SHARP_LEFT
+        assertEquals(7, HudAmapBroadcaster.gaodeToAmapIcon(8))    // SHARP_RIGHT
+        assertEquals(8, HudAmapBroadcaster.gaodeToAmapIcon(9))    // U_TURN_LEFT
+        assertEquals(19, HudAmapBroadcaster.gaodeToAmapIcon(10))  // U_TURN_RIGHT
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(11))   // STRAIGHT_SOLID
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(12))   // STRAIGHT_DOTTED
+        assertEquals(11, HudAmapBroadcaster.gaodeToAmapIcon(13))  // ROUNDABOUT_ENTER
+        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(24))  // ROUNDABOUT_EXIT
+        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(25))  // NUMBERED_ROUNDABOUT_EXIT (exit 1)
+        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(27))  // NUMBERED_ROUNDABOUT_EXIT (exit 3)
+        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(34))  // NUMBERED_ROUNDABOUT_EXIT (exit 10)
+        assertEquals(10, HudAmapBroadcaster.gaodeToAmapIcon(45))  // WAYPOINT
+        assertEquals(13, HudAmapBroadcaster.gaodeToAmapIcon(46))  // SERVICE_AREA
+        assertEquals(14, HudAmapBroadcaster.gaodeToAmapIcon(47))  // TOLLBOOTH
+        assertEquals(15, HudAmapBroadcaster.gaodeToAmapIcon(48))  // DESTINATION
+        assertEquals(16, HudAmapBroadcaster.gaodeToAmapIcon(49))  // TUNNEL
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(99))   // unknown -> neutral STRAIGHT
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(0))    // unknown -> neutral STRAIGHT
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(5))    // unmapped -> neutral STRAIGHT
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(6))    // unmapped -> neutral STRAIGHT
+        assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(14))   // unmapped -> neutral STRAIGHT
+    }
+
+    @Test
+    fun roundabout_num_extra_present_for_codes_25_to_34_absent_for_24() {
+        installAmapService()
+        val b = HudAmapBroadcaster(context)
+
+        // code=27 -> icon=12, ROUNG_ABOUT_NUM=3
+        b.onSnapshot(snapshot(maneuverGaode = 27))
+        var i = shadowApp.broadcastIntents[0]
+        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(3, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
+        shadowApp.clearBroadcastIntents()
+
+        // code=25 -> icon=12, ROUNG_ABOUT_NUM=1
+        b.onSnapshot(snapshot(maneuverGaode = 25))
+        i = shadowApp.broadcastIntents[0]
+        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(1, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
+        shadowApp.clearBroadcastIntents()
+
+        // code=34 -> icon=12, ROUNG_ABOUT_NUM=10
+        b.onSnapshot(snapshot(maneuverGaode = 34))
+        i = shadowApp.broadcastIntents[0]
+        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(10, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
+        shadowApp.clearBroadcastIntents()
+
+        // code=24 (plain exit) -> icon=12, ROUNG_ABOUT_NUM must NOT be present
+        b.onSnapshot(snapshot(maneuverGaode = 24))
+        i = shadowApp.broadcastIntents[0]
+        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(-99, i.getIntExtra("ROUNG_ABOUT_NUM", -99))  // -99 sentinel means key absent
     }
 
     @Test

@@ -128,6 +128,7 @@ class TrackingService : Service(), LocationListener {
     @Volatile private var cachedLastTripAvg: Double? = null
 
     private var lastSummaryLogTs: Long = 0L
+    @Volatile private var lastGuidanceGrantRearmTs: Long = 0L
     // Live charging-end detector. We track gun-connect state across polls and
     // fire runCatchUp on the connected→disconnected edge. The gun signal is
     // sourced from autoservice (system SDK) — DiPlus' chargeGunState is
@@ -203,11 +204,7 @@ class TrackingService : Service(), LocationListener {
     private val notificationListenerGrant by lazy {
         GrantSelfHeal(
             name = "notification listener",
-            isGranted = {
-                val component = ComponentName(this, com.bydmate.app.media.MediaSessionListenerService::class.java)
-                getSystemService(NotificationManager::class.java)
-                    ?.isNotificationListenerAccessGranted(component) == true
-            },
+            isGranted = ::notificationListenerGranted,
             reassert = {
                 helperBootstrap.ensureRunning() &&
                     com.bydmate.app.media.MediaSessionGrant.ensureGranted(helperClient)
@@ -243,6 +240,10 @@ class TrackingService : Service(), LocationListener {
         private const val SESSION_IDLE_CLOSE_MS = 10_000L
         // Throttle for the periodic INFO summary so logcat doesn't get flooded.
         private const val SUMMARY_LOG_INTERVAL_MS = 60_000L
+        // Guidance-active re-arm of the notification-listener grant: one 6×5 s
+        // self-heal run per 10 min at most, so a permanently-failing grant can't
+        // hammer the daemon for a whole trip.
+        private const val GUIDANCE_GRANT_REARM_MS = 600_000L
         // Startup catch-up retries while the autoservice SOC fid is still
         // sentinel/unavailable during the cold-start window. 4 extra tries × 3 s
         // ≈ 12 s of grace before giving up — enough for the fid cache to warm so
@@ -770,6 +771,22 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "Range live: sessionKm=${"%.1f".format(liveSessionKm)}, " +
             "liveAvg=${liveAvg?.let { "%.1f".format(it) } ?: "—"} kWh/100, " +
             "samples=${liveTripBuffer.sampleCount()}")
+
+        maybeRearmNotificationListenerGrant(now)
+    }
+
+    /**
+     * Last-chance re-arm of the notification-listener grant while guidance is running. The
+     * startup/SCREEN_ON attempts can all fire before the helper daemon is up (field reports from
+     * Sea Lion 07/06), and by the time it matters — Navigator minimized, HUD fed from the
+     * notification — nothing retries. Guidance-active is exactly that moment.
+     */
+    private fun maybeRearmNotificationListenerGrant(now: Long) {
+        if (!com.bydmate.app.navdata.NavGuidanceHub.snapshot(now).active) return
+        if (now - lastGuidanceGrantRearmTs < GUIDANCE_GRANT_REARM_MS) return
+        if (runCatching { notificationListenerGranted() }.getOrDefault(false)) return
+        lastGuidanceGrantRearmTs = now
+        serviceScope.launch { notificationListenerGrant.ensure("guidance-active") }
     }
 
     /**
@@ -1387,6 +1404,12 @@ class TrackingService : Service(), LocationListener {
         // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
         if (!mirrorEnabled && !voiceEnabled && !hudController.requiresA11y()) return
         starGrant.ensure(reason)
+    }
+
+    private fun notificationListenerGranted(): Boolean {
+        val component = ComponentName(this, com.bydmate.app.media.MediaSessionListenerService::class.java)
+        return getSystemService(NotificationManager::class.java)
+            ?.isNotificationListenerAccessGranted(component) == true
     }
 
     /**
