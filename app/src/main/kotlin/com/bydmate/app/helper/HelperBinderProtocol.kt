@@ -24,7 +24,9 @@ import android.os.IBinder
  *   TX_SET_TASK_BOUNDS : writeInt(taskId), writeInt(left), writeInt(top), writeInt(right), writeInt(bottom)
  *       -> reply: writeInt(status), writeInt(0)
  *   TX_SET_FOCUSED_TASK : writeInt(taskId)                -> reply: writeInt(status), writeInt(0)
- *   TX_SET_TASK_WINDOWING_MODE : writeInt(taskId), writeInt(windowingMode) -> reply: writeInt(status), writeInt(0)
+ *   TX_SET_TASK_WINDOWING_MODE : writeInt(taskId), writeInt(windowingMode), writeInt(activityType)
+ *       -> reply: writeInt(status), writeInt(0)
+ *       activityType = trailing int, absent on old clients -> RECENTS (see PANE_TYPE_*).
  *   TX_GRANT_OVERLAY_PERMISSION : (no args)               -> reply: writeInt(status), writeInt(0)
  *   TX_LAUNCH_AND_FORCE : writeString(packageName), writeInt(displayId), writeInt(width), writeInt(height)
  *       -> reply: writeInt(status), writeInt(0)           // status 0 = redirection completed
@@ -48,8 +50,9 @@ import android.os.IBinder
  *   TX_GET_TOP_PACKAGE : (no args)
  *       -> reply: writeInt(status=0), writeString(packageName)  // "" when no top task
  *       An old daemon without this handler makes transact return false → client returns null.
- *   TX_RAISE_FREEFORM_TASK : writeString(packageName), writeInt(displayId)
+ *   TX_RAISE_FREEFORM_TASK : writeString(packageName), writeInt(displayId), writeInt(activityType)
  *       -> reply: writeInt(status), writeInt(0)  // status 0 = ok; -1 = failed/component unresolved
+ *       activityType = trailing int, absent on old clients → RECENTS (see PANE_TYPE_*).
  *       An old daemon without this handler makes transact return false → client returns false.
  *   TX_DUMP_FIDS : (no args)
  *       -> reply: writeInt(status), writeString(dump)  // status 0 = ok; -1 = reflection failed
@@ -99,9 +102,10 @@ object HelperBinderProtocol {
      */
     val TX_READ_BATCH: Int = IBinder.FIRST_CALL_TRANSACTION + 20
 
-    /** Direct freeform launch for cluster projection: [String pkg, int displayId,
-     *  int left, int top, int right, int bottom] -> [int status (0 ok, -2 freeform
-     *  unavailable, -1 failed), int 0]. */
+    /** Direct freeform launch for cluster projection and split panes: [String pkg, int displayId,
+     *  int left, int top, int right, int bottom, int activityType] -> [int status (0 ok, -2 freeform
+     *  unavailable, -1 failed), int 0]. activityType = trailing int, absent on old clients →
+     *  RECENTS (see PANE_TYPE_*). */
     val TX_LAUNCH_FREEFORM: Int = IBinder.FIRST_CALL_TRANSACTION + 21          // 22
 
     /** `wm density` override on a NON-default display: [int displayId, int density
@@ -149,12 +153,14 @@ object HelperBinderProtocol {
     val TX_GET_TOP_PACKAGE: Int = IBinder.FIRST_CALL_TRANSACTION + 29          // 30
 
     /**
-     * Raises an existing recents-typed freeform task to front via `am start --windowingMode 5
-     * --activityType 3 --display <displayId> -n <component>`. Used by reAssertSplitZOrder to
-     * recover split pane Z-order after a steering-wheel media key event (Task N: recents-typed
-     * pane tasks nest under a shared root task, so setFocusedRootTask on a leaf id is a no-op).
+     * Raises an existing freeform task to front via `am start --windowingMode 5
+     * [--activityType 3] --display <displayId> -n <component>`, relaunching it when its live
+     * activityType diverges from the requested one. Used by reAssertSplitZOrder to
+     * recover split pane Z-order after a steering-wheel media key event (Task N: up to 391
+     * recents-typed pane tasks nested under a shared root task, so setFocusedRootTask on a leaf id
+     * was a no-op; panes are STANDARD from 392, but the raise stays the primary path).
      *
-     * Request: [String pkg, int displayId]
+     * Request: [String pkg, int displayId, int activityType]
      * Reply:   [int status (0=ok, -1=failed/unresolved), int 0]
      *
      * An old daemon without this handler makes transact return false → client returns false
@@ -204,6 +210,16 @@ object HelperBinderProtocol {
      * leaving ample headroom for status/totalLength overhead and concurrent transactions.
      */
     const val DUMP_CHUNK_MAX: Int = 64 * 1024
+
+    /** WindowConfiguration activityType values carried as the trailing int of
+     *  TX_LAUNCH_FREEFORM / TX_RAISE_FREEFORM_TASK / TX_SET_TASK_WINDOWING_MODE.
+     *  STANDARD panes own their root task (split touch fix, 392); RECENTS is kept for
+     *  cluster projection (suppresses the freeform caption on the cluster display).
+     *  Mixed-version: an old daemon simply never reads the trailing int (legacy RECENTS
+     *  behavior); an old app not writing it makes the new daemon read it as absent and
+     *  default to RECENTS. HelperBootstrap's version gate makes both windows transient. */
+    const val PANE_TYPE_STANDARD = 1
+    const val PANE_TYPE_RECENTS = 3
 
     /** Our own package — target of the narrow grantOverlayPermission appops call. */
     const val APP_PACKAGE = "com.bydmate.app"

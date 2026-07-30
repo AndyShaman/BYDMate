@@ -13,15 +13,18 @@ class LaunchFreeformCoreTest {
 
     private fun run(
         taskId: Int = 36,
+        desiredActivityType: Int = ACTIVITY_TYPE_RECENTS,
         setMode: (Int, Int) -> Unit = { t, m -> ops += "mode:$t:$m" },
         move: (Int, Int) -> Unit = { t, d -> ops += "move:$t:$d" },
         bounds: (Int, Int, Int, Int, Int) -> Unit = { t, l, tp, r, b -> ops += "bounds:$t:$l,$tp,$r,$b" },
         focus: (Int) -> Unit = { ops += "focus:$it" },
         state: (Int) -> TaskModeState? = { null },
+        getActivityType: (Int) -> Int = { -1 },
         log: (String, Throwable?) -> Unit = { m, t -> logs += m; logThrowables += t },
         resolveCurrentTaskId: () -> Int = { taskId },
     ): Int = launchFreeformCore(
-        taskId, 4, 0, 38, 1280, 441, setMode, move, bounds, focus, state, log, resolveCurrentTaskId,
+        taskId, 4, 0, 38, 1280, 441, desiredActivityType, setMode, move, bounds, focus, state,
+        getActivityType, log, resolveCurrentTaskId,
     ) { ops += "sleep:$it" }
 
     @Test
@@ -86,11 +89,64 @@ class LaunchFreeformCoreTest {
     }
 
     @Test
-    fun `already freeform task skips the mode switch`() {
+    fun `already freeform task of the desired type skips the mode switch`() {
         var disp = 0
         val result = run(
+            desiredActivityType = ACTIVITY_TYPE_RECENTS,
             move = { t, d -> ops += "move:$t:$d"; disp = d },
             state = { TaskModeState(WINDOWING_MODE_FREEFORM, disp) },
+            getActivityType = { ACTIVITY_TYPE_RECENTS },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertTrue(ops.none { it.startsWith("mode:") })
+        assertTrue(ops.contains("move:36:4"))
+    }
+
+    @Test
+    fun `already freeform STANDARD task with RECENTS desired is retyped`() {
+        // Cluster direction: a pane of the active split (STANDARD since 392) sent to the cluster
+        // must still end up RECENTS. Skipping setMode on windowingMode alone left it STANDARD.
+        var disp = 0
+        var type = ACTIVITY_TYPE_STANDARD
+        val result = run(
+            desiredActivityType = ACTIVITY_TYPE_RECENTS,
+            setMode = { t, m -> ops += "mode:$t:$m"; type = ACTIVITY_TYPE_RECENTS },
+            move = { t, d -> ops += "move:$t:$d"; disp = d },
+            state = { TaskModeState(WINDOWING_MODE_FREEFORM, disp) },
+            getActivityType = { type },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertTrue("the retype must go through setMode", ops.contains("mode:36:5"))
+        assertTrue(ops.contains("move:36:4"))
+    }
+
+    @Test
+    fun `already freeform RECENTS task with STANDARD desired is retyped`() {
+        // Split direction: a v3.9 leftover pane is RECENTS+freeform; without the retype it keeps
+        // the shared-root input shield and only the top pane receives touch.
+        var disp = 0
+        var type = ACTIVITY_TYPE_RECENTS
+        val result = run(
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            setMode = { t, m -> ops += "mode:$t:$m"; type = ACTIVITY_TYPE_STANDARD },
+            move = { t, d -> ops += "move:$t:$d"; disp = d },
+            state = { TaskModeState(WINDOWING_MODE_FREEFORM, disp) },
+            getActivityType = { type },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertTrue("the retype must go through setMode", ops.contains("mode:36:5"))
+        assertTrue(ops.contains("move:36:4"))
+    }
+
+    @Test
+    fun `already freeform task with unknown type is left alone`() {
+        // -1 means reflection is broken or the task is gone: no blind retype (conservative).
+        var disp = 0
+        val result = run(
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            move = { t, d -> ops += "move:$t:$d"; disp = d },
+            state = { TaskModeState(WINDOWING_MODE_FREEFORM, disp) },
+            getActivityType = { -1 },
         )
         assertEquals(FreeformResultCodes.OK, result)
         assertTrue(ops.none { it.startsWith("mode:") })
@@ -122,7 +178,7 @@ class LaunchFreeformCoreTest {
     @Test
     fun `degenerate bounds map to FAILED without ops`() {
         val r = launchFreeformCore(
-            36, 4, 100, 100, 100, 200,
+            36, 4, 100, 100, 100, 200, ACTIVITY_TYPE_STANDARD,
             { _, _ -> ops += "mode" }, { _, _ -> }, { _, _, _, _, _ -> }, { },
         ) { }
         assertEquals(FreeformResultCodes.FAILED, r)

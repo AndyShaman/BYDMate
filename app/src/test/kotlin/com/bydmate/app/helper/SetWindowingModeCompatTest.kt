@@ -27,6 +27,7 @@ class SetWindowingModeCompatTest {
 
     private fun run(
         mode: Int = WINDOWING_MODE_FREEFORM,
+        desiredActivityType: Int = ACTIVITY_TYPE_RECENTS,
         reflectSet: (Int, Int) -> Unit = { t, m -> ops += "reflect:$t:$m" },
         resolveComponent: () -> String? = { ops += "resolve"; "ru.yandex.yandexnavi/.core.NavigatorActivity" },
         shell: (String, List<String>) -> String = { script, args ->
@@ -34,7 +35,9 @@ class SetWindowingModeCompatTest {
             ""
         },
         getActivityType: (Int) -> Int = { _ -> -1 },
-    ) = setWindowingModeCompat(36, mode, 4, reflectSet, resolveComponent, shell, getActivityType) { ops += "sleep:$it" }
+    ) = setWindowingModeCompat(
+        36, mode, 4, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType,
+    ) { ops += "sleep:$it" }
 
     @Test
     fun `reflect path works - shell never touched`() {
@@ -306,6 +309,52 @@ class SetWindowingModeCompatTest {
         )
     }
 
+    // --- 392: the mirror direction — panes want STANDARD, so RECENTS is now the wrong type ---
+
+    @Test fun `desired STANDARD with a live STANDARD task uses reflectSet fast path`() {
+        run(
+            mode = WINDOWING_MODE_FREEFORM,
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            getActivityType = { _ -> ACTIVITY_TYPE_STANDARD },
+        )
+        assertEquals(listOf("reflect:36:5"), ops)
+    }
+
+    @Test fun `desired STANDARD with a live RECENTS task removes the stack and relaunches untyped`() {
+        // Runtime migration of a v3.9 pane: RECENTS is no longer the desired type, so the task
+        // is recreated — and the relaunch must NOT carry --activityType.
+        run(
+            mode = WINDOWING_MODE_FREEFORM,
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            getActivityType = { _ -> ACTIVITY_TYPE_RECENTS },
+        )
+        assertEquals(
+            listOf(
+                "resolve",
+                "shell:am stack remove 36",
+                "sleep:500",
+                "shell:am start --windowingMode 5 --display 4 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
+            ),
+            ops,
+        )
+    }
+
+    @Test fun `desired STANDARD with unknown type keeps the conservative plain relaunch`() {
+        run(
+            mode = WINDOWING_MODE_FREEFORM,
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            getActivityType = { _ -> -1 },
+        )
+        assertFalse("no stack remove on an unknown type", ops.any { "am stack remove" in it })
+        assertEquals(
+            listOf(
+                "resolve",
+                "shell:am start --windowingMode 5 --display 4 -n ru.yandex.yandexnavi/.core.NavigatorActivity",
+            ),
+            ops,
+        )
+    }
+
     // --- F5: fullscreen pull-back component with '$' arrives verbatim in args ---
 
     @Test
@@ -350,6 +399,7 @@ class SetWindowingModeCompatTest {
         handleSetWindowingModeTx(
             taskId = 10,
             mode = WINDOWING_MODE_FREEFORM,
+            desiredActivityType = ACTIVITY_TYPE_RECENTS,
             reflectSet = { _, _ -> reflectCalled = true },
             resolveComponent = { "com.example/.Activity" },
             shell = { _, _ -> shellCalled = true; "" },
@@ -368,6 +418,7 @@ class SetWindowingModeCompatTest {
         handleSetWindowingModeTx(
             taskId = 10,
             mode = WINDOWING_MODE_FREEFORM,
+            desiredActivityType = ACTIVITY_TYPE_RECENTS,
             reflectSet = { _, _ -> reflectCalled = true },
             resolveComponent = { "com.example/.Activity" },
             shell = { _, _ -> shellCalled = true; "" },

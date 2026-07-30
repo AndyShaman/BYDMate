@@ -26,13 +26,15 @@ class RaiseFreeformTaskCoreTest {
     private fun run(
         packageName: String = "com.example.navi",
         displayId: Int = 0,
+        desiredActivityType: Int = ACTIVITY_TYPE_RECENTS,
         resolveComponent: (String) -> String? = { "com.example.navi/com.example.navi.MainActivity" },
         shell: (String, List<String>) -> String = { script, args -> shellCmds += effectiveCmd(script, args); "" },
         taskIdForPackage: (String) -> Int = { _ -> -1 },
         getActivityType: (Int) -> Int = { _ -> -1 },
         sleep: (Long) -> Unit = { shellCmds += "sleep:$it" },
     ) = raiseFreeformTaskCore(
-        packageName, displayId, resolveComponent, shell, taskIdForPackage, getActivityType, sleep,
+        packageName, displayId, desiredActivityType, resolveComponent, shell, taskIdForPackage,
+        getActivityType, sleep,
     )
 
     // --- flag correctness ---
@@ -149,6 +151,42 @@ class RaiseFreeformTaskCoreTest {
         assertTrue(ok)
         assertEquals(1, shellCmds.size)
         assertFalse("no stack remove when there is no task", shellCmds.any { "am stack remove" in it })
+    }
+
+    // --- 392: panes are raised as STANDARD; the v3.9 RECENTS panes migrate on first raise ---
+
+    @Test
+    fun `raise of a live STANDARD task with STANDARD desired stays a single am start`() {
+        val ok = run(
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            taskIdForPackage = { 42 },
+            getActivityType = { ACTIVITY_TYPE_STANDARD },
+        )
+        assertTrue(ok)
+        assertEquals(
+            listOf("am start --windowingMode 5 --display 0 -n com.example.navi/com.example.navi.MainActivity"),
+            shellCmds,
+        )
+    }
+
+    @Test
+    fun `raise of a live RECENTS task with STANDARD desired recreates it untyped`() {
+        // Runtime migration of a v3.9 pane: the live task is RECENTS, the session now wants
+        // STANDARD, so the task is removed and recreated without --activityType.
+        val ok = run(
+            desiredActivityType = ACTIVITY_TYPE_STANDARD,
+            taskIdForPackage = { 42 },
+            getActivityType = { ACTIVITY_TYPE_RECENTS },
+        )
+        assertTrue(ok)
+        assertEquals(
+            listOf(
+                "am stack remove 42",
+                "sleep:500",
+                "am start --windowingMode 5 --display 0 -n com.example.navi/com.example.navi.MainActivity",
+            ),
+            shellCmds,
+        )
     }
 
     @Test

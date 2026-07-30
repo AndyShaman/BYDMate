@@ -187,7 +187,7 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE -> runCatching {
                     val taskId = data.readInt(); val mode = data.readInt()
                     handleSetWindowingModeTx(
-                        taskId, mode,
+                        taskId, mode, readTrailingPaneType(data),
                         reflectSet = ::setTaskWindowingModeReflect,
                         resolveComponent = { packageForTask(taskId)?.let { resolveLaunchComponent(it) } },
                         shell = amShell,
@@ -379,7 +379,7 @@ fun main(args: Array<String>) {
                     val displayId = data.readInt()
                     val l = data.readInt(); val t = data.readInt()
                     val r = data.readInt(); val b = data.readInt()
-                    val status = launchFreeform(pkg, displayId, l, t, r, b)
+                    val status = launchFreeform(pkg, displayId, l, t, r, b, readTrailingPaneType(data))
                     reply?.writeInt(status); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -408,7 +408,7 @@ fun main(args: Array<String>) {
                     val pkg = data.readString() ?: ""
                     val displayId = data.readInt()
                     val ok = raiseFreeformTaskCore(
-                        pkg, displayId, ::resolveLaunchComponent, amShell,
+                        pkg, displayId, readTrailingPaneType(data), ::resolveLaunchComponent, amShell,
                         taskIdForPackage = { p -> findTaskState(p)?.taskId ?: -1 },
                         getActivityType = ::taskActivityType,
                         sleep = { ms -> Thread.sleep(ms) },
@@ -483,6 +483,13 @@ fun main(args: Array<String>) {
     // AppRuntime::onStarted — Looper.loop() plays NO role in transaction dispatch here;
     // it is purely a blocking keepalive for the main thread.
     Looper.loop()
+}
+
+// Trailing activityType int: absent when the caller predates the split touch fix →
+// legacy RECENTS. Values other than STANDARD are coerced to RECENTS (conservative).
+internal fun readTrailingPaneType(data: Parcel): Int {
+    val raw = if (data.dataAvail() > 0) data.readInt() else ACTIVITY_TYPE_RECENTS
+    return if (raw == ACTIVITY_TYPE_STANDARD) ACTIVITY_TYPE_STANDARD else ACTIVITY_TYPE_RECENTS
 }
 
 /**
@@ -1195,17 +1202,20 @@ private fun resolveLaunchComponent(packageName: String): String? {
  * than flipped post-launch). The monkey fallback is always plain — monkey has no
  * windowing-mode flag. Package-name validation is the first gate; no shell command is
  * issued for an invalid name. [windowingMode] null is the plain path, identical to the
- * original launchApp behavior.
+ * original launchApp behavior; [activityType] is then unused.
  */
 internal fun launchAppCore(
     packageName: String,
     windowingMode: Int?,
     displayId: Int,
+    activityType: Int,
     resolveComponent: (String) -> String?,
     shell: (String, List<String>) -> String,
 ): Boolean {
     if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
-    val modePrefix = if (windowingMode != null) "--windowingMode $windowingMode --activityType $ACTIVITY_TYPE_RECENTS --display $displayId " else ""
+    // STANDARD is what `am start` assigns by default — only RECENTS needs the explicit flag.
+    val typeFlag = if (activityType == ACTIVITY_TYPE_RECENTS) "--activityType $ACTIVITY_TYPE_RECENTS " else ""
+    val modePrefix = if (windowingMode != null) "--windowingMode $windowingMode $typeFlag--display $displayId " else ""
     val component = resolveComponent(packageName)
     if (component != null) {
         // Component is passed as positional "$1" — never interpolated into the sh -c string.
@@ -1223,12 +1233,12 @@ internal fun launchAppCore(
  * obvious "Error". Mirrors CarControlImpl.launchApp (simplified to a boolean).
  */
 private fun launchApp(packageName: String): Boolean =
-    launchAppCore(packageName, null, 0, ::resolveLaunchComponent, amShell)
+    launchAppCore(packageName, null, 0, ACTIVITY_TYPE_STANDARD, ::resolveLaunchComponent, amShell)
 
 /**
  * Testable core of the "raise existing freeform task" operation: issues the single
- * `am start --windowingMode 5 --activityType 3 --display <displayId> -n <component>` command
- * that brings a running recents-typed freeform task back to front without cold-launching it.
+ * `am start --windowingMode 5 [--activityType 3] --display <displayId> -n <component>` command
+ * that brings a running freeform task back to front without cold-launching it.
  *
  * Package regex-gated (same rule as [launchAppCore]). Returns false when the package is
  * invalid, the component cannot be resolved (app is not installed / no LAUNCHER activity),
@@ -1236,11 +1246,13 @@ private fun launchApp(packageName: String): Boolean =
  * those would open a second fullscreen task, collapsing the split.
  *
  * Note: `am start -n` WILL cold-launch a dead pane app (in freeform on the given display,
- * by virtue of the --windowingMode 5 --activityType 3 flags); this is the intended recovery
- * behavior when a pane app was killed while the split session was active.
+ * by virtue of the --windowingMode 5 flag); this is the intended recovery behavior when a
+ * pane app was killed while the split session was active.
  *
- * The freeform placement itself is delegated to [ensureRecentsFreeform] — the single owner of
- * the "a live freeform task must be RECENTS" invariant, shared with [setWindowingModeCompat].
+ * The freeform placement itself is delegated to [ensureTypedFreeform] — the single owner of
+ * the "a live freeform task must match its desired activityType" invariant, shared with
+ * [setWindowingModeCompat]; [desiredActivityType] is the caller's choice (split panes:
+ * STANDARD, cluster projection: RECENTS).
  * Its [IllegalStateException] is mapped back to this function's Boolean contract.
  *
  * NOTE: the defaults of [taskIdForPackage] / [getActivityType] report "no task / unknown type",
@@ -1252,6 +1264,7 @@ private fun launchApp(packageName: String): Boolean =
 internal fun raiseFreeformTaskCore(
     packageName: String,
     displayId: Int,
+    desiredActivityType: Int,
     resolveComponent: (String) -> String?,
     shell: (String, List<String>) -> String,
     taskIdForPackage: (String) -> Int = { _ -> -1 },
@@ -1263,7 +1276,7 @@ internal fun raiseFreeformTaskCore(
     val taskId = taskIdForPackage(packageName)
     val activityType = if (taskId != -1) getActivityType(taskId) else -1
     return try {
-        ensureRecentsFreeform(taskId, activityType, displayId, component, shell, sleep)
+        ensureTypedFreeform(taskId, activityType, desiredActivityType, displayId, component, shell, sleep)
         true
     } catch (e: IllegalStateException) {
         false
@@ -1271,23 +1284,28 @@ internal fun raiseFreeformTaskCore(
 }
 
 /**
- * The single owner of the freeform typing invariant: **any live task placed into freeform must
- * be typed RECENTS.** AOSP-12 draws the window caption (X / maximize) exactly for
- * `activityType == STANDARD && windowingMode == FREEFORM` (`Task.hasWindowDecorCaption`), and
- * `am start --activityType 3` types a task only when it is CREATED — the flag never re-types a
- * live task (on-car 390: both panes read type=standard mode=freeform after an in-place flip).
+ * The single owner of the freeform typing invariant: **a live freeform task must match its
+ * desired activityType.** `am start --activityType N` types a task only when it is CREATED — the
+ * flag never re-types a live task (on-car 390: both panes read type=standard mode=freeform after
+ * an in-place flip), so a live task of the wrong type has to be removed and recreated.
  * Both freeform entry points — [raiseFreeformTaskCore] and the freeform branch of
  * [setWindowingModeCompat] — go through here instead of each deciding for itself.
  *
- * Three cases, by [activityType]:
- * - RECENTS: light path — the single `am start` with the freeform flags re-uses the existing
- *   task and applies mode+display to it (validated on-car; the task id survives).
- * - STANDARD: `am stack remove` → settle → the same `am start`, which recreates the task as
- *   RECENTS. The app PROCESS and its services survive the remove (only activities die), so
- *   media keeps playing and the navigator restores its own guidance session.
- * - No task ([taskId] == -1) or unknown type (-1: reflection broken, task not found): the same
- *   single `am start`, which creates the task with the flags applied. Nothing is removed on a
- *   guess — killing activities blindly is worse than a caption, and there may be no task at all.
+ * [desiredActivityType] is the caller's choice: split panes ask for STANDARD (392), cluster
+ * projection asks for RECENTS. Migration note: v3.9 created its panes as RECENTS, so on the
+ * first 392 split the live panes are re-typed through the remove branch below.
+ *
+ * Three cases, by [liveActivityType]:
+ * - Already the desired type: light path — the single `am start` with the freeform flags re-uses
+ *   the existing task and applies mode+display to it (validated on-car; the task id survives).
+ * - The other half of the STANDARD/RECENTS pair: `am stack remove` → settle → the same `am start`,
+ *   which recreates the task with the desired type. The app PROCESS and its services survive the
+ *   remove (only activities die), so media keeps playing and the navigator restores its own
+ *   guidance session.
+ * - No task ([taskId] == -1), unknown type (-1: reflection broken, task not found) or an exotic
+ *   type (HOME/ASSISTANT/DREAM): the same single `am start`, which creates the task with the flags
+ *   applied. Nothing is removed on a guess — killing activities blindly is worse than a mistyped
+ *   task, and there may be no task at all.
  *
  * Throws [IllegalStateException] when the remove or the start fails. A swallowed remove failure
  * would let the relaunch deliver its intent to the still-alive task and report success with the
@@ -1295,15 +1313,21 @@ internal fun raiseFreeformTaskCore(
  * executing" is the am wording for an in-process throw, while a missing task prints nothing and
  * the relaunch then correctly creates a fresh task.
  */
-internal fun ensureRecentsFreeform(
+internal fun ensureTypedFreeform(
     taskId: Int,
-    activityType: Int,
+    liveActivityType: Int,
+    desiredActivityType: Int,
     displayId: Int,
     component: String,
     shell: (String, List<String>) -> String,
     sleep: (Long) -> Unit,
 ) {
-    if (taskId != -1 && activityType == ACTIVITY_TYPE_STANDARD) {
+    // Only the STANDARD <-> RECENTS pair is ever retyped. Exotic live types (HOME/ASSISTANT/DREAM)
+    // and the unknown -1 are left untouched: nothing this daemon places into freeform is supposed
+    // to carry them, and removing such a task would be a behavior change on the RECENTS direction
+    // that v3.9 never made (fleet safety).
+    val retypable = liveActivityType == ACTIVITY_TYPE_STANDARD || liveActivityType == ACTIVITY_TYPE_RECENTS
+    if (taskId != -1 && retypable && liveActivityType != desiredActivityType) {
         // taskId is an internal Int — safe to inline; no user/PM input involved.
         val removed = shell("am stack remove $taskId", emptyList())
         if (removed.contains("Error") || removed.contains("Exception")) {
@@ -1311,8 +1335,10 @@ internal fun ensureRecentsFreeform(
         }
         sleep(500L)
     }
-    // Component is passed as positional "$1" — never interpolated into the sh -c string.
-    val out = shell("am start --windowingMode $WINDOWING_MODE_FREEFORM --activityType $ACTIVITY_TYPE_RECENTS --display $displayId -n \"\$1\"", listOf(component))
+    // STANDARD is the default type `am start` assigns at task creation — the flag is only
+    // needed for RECENTS. Component is passed as positional "$1" — never interpolated.
+    val typeFlag = if (desiredActivityType == ACTIVITY_TYPE_RECENTS) "--activityType $ACTIVITY_TYPE_RECENTS " else ""
+    val out = shell("am start --windowingMode $WINDOWING_MODE_FREEFORM $typeFlag--display $displayId -n \"\$1\"", listOf(component))
     // Same failure wording as the remove above: am prints "Error:" for a rejected intent and
     // "Exception occurred while executing" for an in-process throw. Both mean the pane is not there.
     if (out.contains("Error") || out.contains("Exception")) {
@@ -1409,13 +1435,19 @@ internal fun dumpFidsChunkBytes(
 /**
  * Finds [packageName]'s task id, launching the app and polling (16 x 500ms + settle pause)
  * when it is not running yet. Shared by launchAndForce and launchFreeform. Blocking.
- * [windowingMode] non-null (freeform path only) passes the mode to the launch command so the
- * task is born freeform; null (plain path, launchAndForce) keeps the existing behavior.
+ * [windowingMode] non-null (freeform path only) passes the mode and [activityType] to the launch
+ * command so the task is born freeform with the right type; null (plain path, launchAndForce)
+ * keeps the existing behavior and ignores [activityType].
  */
-private fun resolveOrLaunchTask(packageName: String, windowingMode: Int? = null, displayId: Int = 0): Int {
+private fun resolveOrLaunchTask(
+    packageName: String,
+    windowingMode: Int? = null,
+    displayId: Int = 0,
+    activityType: Int,
+): Int {
     var taskId = findTaskId(packageName)
     if (taskId <= 0) {
-        launchAppCore(packageName, windowingMode, displayId, ::resolveLaunchComponent, amShell)
+        launchAppCore(packageName, windowingMode, displayId, activityType, ::resolveLaunchComponent, amShell)
         var attempt = 1
         while (attempt < 16) {
             taskId = findTaskId(packageName)
@@ -1434,7 +1466,7 @@ private fun resolveOrLaunchTask(packageName: String, windowingMode: Int? = null,
  * Blocking (Thread.sleep) — runs on a binder threadpool thread; the app side uses a 15s timeout.
  */
 private fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean {
-    val taskId = resolveOrLaunchTask(packageName)
+    val taskId = resolveOrLaunchTask(packageName, activityType = ACTIVITY_TYPE_STANDARD) // ignored: windowingMode == null
     if (taskId <= 0) return false
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
@@ -1461,15 +1493,18 @@ internal object FreeformResultCodes {
 // WindowConfiguration windowing modes (android.app; hidden constants, stable since API 28).
 internal const val WINDOWING_MODE_FULLSCREEN = 1
 internal const val WINDOWING_MODE_FREEFORM = 5
-// AOSP-12 caption gate: hasWindowDecorCaption() returns true only when activityType == 1 (STANDARD)
-// and windowingMode == 5 (FREEFORM). A task CREATED with activityType = RECENTS (3) suppresses the
-// freeform DecorCaption entirely — no X/maximize buttons drawn over pane app UI.
-// Validated on-car 2026-07-28 (car386-L1-*.png): caption absent, app fully usable.
-// IMPORTANT (on-car 390): `--activityType 3` types a task only when the task is CREATED. Passing it
-// to `am start` for an ALREADY LIVE task changes the windowing mode and nothing else — the task
-// stays STANDARD and the caption appears. Anything that has to end up RECENTS must therefore
-// remove the live task first and let the relaunch create it (see [setWindowingModeCompat] and
-// [raiseFreeformTaskCore]).
+// Who wants which type (392): split panes are STANDARD, cluster projection stays RECENTS.
+// RECENTS suppresses the AOSP-12 freeform DecorCaption (hasWindowDecorCaption() is true only for
+// activityType == STANDARD && windowingMode == FREEFORM), which is why v3.9 created panes as
+// RECENTS — but recents-typed tasks nest as leaves under one shared root task, so their input
+// shields are not cropped to the pane bounds and only the top pane receives touch (on-car
+// 2026-07-29, ActivityRecordInputSink fullscreen; memory project_split_screen_wave.md). Panes
+// therefore take the caption and keep their own root task; the cluster has a single pane and is
+// unaffected, so it keeps RECENTS.
+// IMPORTANT (on-car 390): `--activityType N` types a task only when the task is CREATED. Passing it
+// to `am start` for an ALREADY LIVE task changes the windowing mode and nothing else. Re-typing a
+// live task therefore means removing it and letting the relaunch create it (see
+// [ensureTypedFreeform], the single owner of that rule).
 internal const val ACTIVITY_TYPE_RECENTS = 3
 internal const val ACTIVITY_TYPE_STANDARD = 1
 
@@ -1504,12 +1539,15 @@ internal fun isFreeformUnsupported(t: Throwable): Boolean =
 internal fun handleSetWindowingModeTx(
     taskId: Int,
     mode: Int,
+    desiredActivityType: Int,
     reflectSet: (Int, Int) -> Unit,
     resolveComponent: () -> String?,
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int,
     sleep: (Long) -> Unit,
-) = setWindowingModeCompat(taskId, mode, 0, reflectSet, resolveComponent, shell, getActivityType, sleep)
+) = setWindowingModeCompat(
+    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, sleep,
+)
 
 /**
  * Windowing-mode switch that survives ROMs without the binder API. AOSP S removed
@@ -1522,15 +1560,14 @@ internal fun handleSetWindowingModeTx(
  * throw is rethrown untouched so [launchFreeformCore]'s classification still sees it.
  *
  * Q2 / F-2+F-6: [getActivityType] is queried before attempting [reflectSet] in the freeform
- * direction. [reflectSet] changes [windowingMode] but preserves [activityType] — so a task left
- * as STANDARD by a prior fullscreen exit relaunch would become a STANDARD freeform pane with
- * native caption buttons. When [getActivityType] returns anything other than [ACTIVITY_TYPE_RECENTS],
- * [reflectSet] is skipped and the shell path is taken directly.
+ * direction. [reflectSet] changes the windowing mode but preserves the activityType — so a task
+ * of the wrong type would stay that way. When [getActivityType] returns anything other than
+ * [desiredActivityType], [reflectSet] is skipped and the shell path is taken directly.
  *
- * The shell freeform path itself is [ensureRecentsFreeform] — the single owner of the "a live
- * freeform task must be RECENTS" invariant, shared with [raiseFreeformTaskCore]; the type read
- * here is handed to it. For the fullscreen direction the type check is irrelevant ([skipReflect]
- * stays false) and that branch is untouched.
+ * The shell freeform path itself is [ensureTypedFreeform] — the single owner of the "a live
+ * freeform task must match its desired activityType" invariant, shared with
+ * [raiseFreeformTaskCore]; the type read here is handed to it. For the fullscreen direction the
+ * type check is irrelevant ([skipReflect] stays false) and that branch is untouched.
  * Default [getActivityType] returns -1 (unknown) — the conservative path (skip reflectSet, plain
  * relaunch).
  * NOTE: omitting [getActivityType] silently disables the reflectSet fast path for the freeform
@@ -1540,27 +1577,28 @@ internal fun setWindowingModeCompat(
     taskId: Int,
     windowingMode: Int,
     freeformDisplayId: Int,
+    desiredActivityType: Int,
     reflectSet: (Int, Int) -> Unit,
     resolveComponent: () -> String?,
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int = { _ -> -1 },
     sleep: (Long) -> Unit,
 ) {
-    // Skip reflectSet when placing into freeform and the task's activityType is not RECENTS.
-    // reflectSet changes windowingMode but preserves the existing activityType; the shell path
-    // enforces type=3 (--activityType 3). Unknown type (-1) is treated as non-RECENTS (conservative).
+    // Skip reflectSet when placing into freeform and the task's activityType is not the desired
+    // one. reflectSet changes windowingMode but preserves the existing activityType; the shell
+    // path recreates the task with the right type. Unknown type (-1) never matches — conservative.
     val skipReflect: Boolean
     var freeformType = -1
     if (windowingMode == WINDOWING_MODE_FREEFORM) {
         val type = getActivityType(taskId)
         freeformType = type
-        val branch = when (type) {
-            ACTIVITY_TYPE_RECENTS  -> "reflectSet (activityType=RECENTS)"
-            ACTIVITY_TYPE_STANDARD -> "shell coerce (activityType=STANDARD)"
-            else                   -> "shell coerce (activityType unknown=$type, reflection broken or task not found)"
+        val branch = when {
+            type == desiredActivityType -> "reflectSet (activityType matches desired=$desiredActivityType)"
+            type == -1                  -> "shell coerce (activityType unknown, reflection broken or task not found; desired=$desiredActivityType)"
+            else                        -> "shell coerce (activityType=$type, desired=$desiredActivityType)"
         }
         android.util.Log.d("bydmate_helper", "setWindowingModeCompat task=$taskId mode=$windowingMode → $branch")
-        skipReflect = type != ACTIVITY_TYPE_RECENTS
+        skipReflect = type != desiredActivityType
     } else {
         skipReflect = false
     }
@@ -1576,7 +1614,7 @@ internal fun setWindowingModeCompat(
         ?: throw IllegalStateException("setWindowingModeCompat: no launcher component for task=$taskId")
     if (windowingMode == WINDOWING_MODE_FREEFORM) {
         // The typing invariant lives in one place for both freeform entry points.
-        ensureRecentsFreeform(taskId, freeformType, freeformDisplayId, component, shell, sleep)
+        ensureTypedFreeform(taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep)
     } else {
         // A swallowed remove failure would let the relaunch deliver its intent to the
         // still-alive freeform task and report success with the task stranded on the
@@ -1597,9 +1635,13 @@ internal fun setWindowingModeCompat(
 /**
  * Testable core of the direct freeform launch. Idempotent against a task stranded mid-way by a
  * quickboot kill: [state] reads the task's live windowing mode + display, so an already-freeform
- * task skips [setMode], a [setMode] throw is forgiven when the mode landed anyway (relaunch
- * race), and a [move] that throws "already there" is accepted when the task sits on the target
- * display. [setMode] gets ONE bounded retry after a settle pause — a transient vendor throw
+ * task of the [desiredActivityType] skips [setMode], a [setMode] throw is forgiven when the mode
+ * landed anyway (relaunch race), and a [move] that throws "already there" is accepted when the
+ * task sits on the target display. [getActivityType] guards that skip: a live task whose type
+ * differs from [desiredActivityType] goes through [setMode] (and thus [ensureTypedFreeform]) to be
+ * recreated with the right type, because the type is the caller's whole point — RECENTS for the
+ * cluster, STANDARD for split panes. Unknown type (-1) skips the check, as does the default
+ * [getActivityType]. [setMode] gets ONE bounded retry after a settle pause — a transient vendor throw
  * (e.g. racing the task's own relaunch) must not dump the launch into the VD fallback.
  * Availability probe: AOSP does NOT throw when freeform is off — Task.setWindowingMode silently
  * coerces the request to UNDEFINED — so the probe is the live state: no throw + state still not
@@ -1613,8 +1655,8 @@ internal fun setWindowingModeCompat(
  * [bounds] and [focus] remain best-effort (mirroring launchAndForce), two passes with a settle
  * pause.
  *
- * Task identity: [setMode] may RECREATE the task instead of flipping it (a live STANDARD task
- * cannot be re-typed in place — see [ensureRecentsFreeform]), which gives it a NEW id and leaves
+ * Task identity: [setMode] may RECREATE the task instead of flipping it (a live task cannot be
+ * re-typed in place — see [ensureTypedFreeform]), which gives it a NEW id and leaves
  * the incoming [taskId] pointing at a removed task. [resolveCurrentTaskId] is re-queried after
  * every [setMode] attempt and its answer is the single source of truth for the rest of the run:
  * state verification, the reparent, bounds, focus and the final confirmation all address the live
@@ -1626,11 +1668,13 @@ internal fun launchFreeformCore(
     taskId: Int,
     displayId: Int,
     left: Int, top: Int, right: Int, bottom: Int,
+    desiredActivityType: Int,
     setMode: (Int, Int) -> Unit,
     move: (Int, Int) -> Unit,
     bounds: (Int, Int, Int, Int, Int) -> Unit,
     focus: (Int) -> Unit,
     state: (Int) -> TaskModeState? = { null },
+    getActivityType: (Int) -> Int = { -1 },
     log: (String, Throwable?) -> Unit = { _, _ -> },
     resolveCurrentTaskId: () -> Int = { taskId },
     sleep: (Long) -> Unit,
@@ -1646,8 +1690,18 @@ internal fun launchFreeformCore(
             liveTaskId = resolved
         }
     }
+    // A task that is already freeform is only "ready" when it also carries the desired
+    // activityType: the retype happens inside [setMode], so accepting it on the windowing mode
+    // alone would leave a split pane STANDARD on the cluster, or a v3.9 RECENTS leftover
+    // un-migrated in a split (final review 2026-07-29). An unreadable type (-1) keeps the historic
+    // skip — no blind retype.
+    fun typeMatches(t: Int): Boolean {
+        val live = runCatching { getActivityType(t) }.getOrNull() ?: return true
+        return live == -1 || live == desiredActivityType
+    }
     // Phase 1: ensure the task is in freeform (idempotent, one bounded retry, state-verified).
-    var freeform = runCatching { state(liveTaskId) }.getOrNull()?.windowingMode == WINDOWING_MODE_FREEFORM
+    var freeform = runCatching { state(liveTaskId) }.getOrNull()?.windowingMode == WINDOWING_MODE_FREEFORM &&
+        typeMatches(liveTaskId)
     var lastThrown: Throwable? = null
     var silentNoOp = false
     var attempt = 0
@@ -1664,7 +1718,7 @@ internal fun launchFreeformCore(
         refreshTaskId()
         val after = runCatching { state(liveTaskId) }.getOrNull()
         freeform = when {
-            after != null -> after.windowingMode == WINDOWING_MODE_FREEFORM
+            after != null -> after.windowingMode == WINDOWING_MODE_FREEFORM && typeMatches(liveTaskId)
             else -> lastThrown == null // state unknown: trust the call outcome (legacy behavior)
         }
         if (!freeform) {
@@ -1713,17 +1767,25 @@ internal fun launchFreeformCore(
  * task to freeform, move it to [displayId], apply the window bounds and focus it. Blocking
  * (launch retry loop) — binder threadpool thread; the app side uses a 15s timeout.
  */
-private fun launchFreeform(packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int): Int {
-    val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId)
+private fun launchFreeform(
+    packageName: String,
+    displayId: Int,
+    left: Int, top: Int, right: Int, bottom: Int,
+    activityType: Int,
+): Int {
+    val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId, activityType)
     return launchFreeformCore(
-        taskId, displayId, left, top, right, bottom,
+        taskId, displayId, left, top, right, bottom, activityType,
         setMode = { t, m ->
             setWindowingModeCompat(
                 t, m, displayId,
-                ::setTaskWindowingModeReflect, { resolveLaunchComponent(packageName) },
-                amShell,
-                // Q2 / F-2+F-6: read live activityType so a STANDARD task left by a prior
-                // fullscreen exit is coerced back to RECENTS via shell relaunch (--activityType 3).
+                desiredActivityType = activityType,
+                reflectSet = ::setTaskWindowingModeReflect,
+                resolveComponent = { resolveLaunchComponent(packageName) },
+                shell = amShell,
+                // Q2 / F-2+F-6: read live activityType so a task of the wrong type (left by a
+                // prior fullscreen exit relaunch, or created by an older version) is recreated
+                // with the desired one via the shell path.
                 getActivityType = { ti -> taskActivityType(ti) },
             ) { Thread.sleep(it) }
         },
@@ -1731,6 +1793,9 @@ private fun launchFreeform(packageName: String, displayId: Int, left: Int, top: 
         bounds = ::setTaskBoundsReflect,
         focus = ::setFocusedTaskReflect,
         state = ::taskModeState,
+        // Same live-type lookup the setMode lambda feeds to ensureTypedFreeform: an already
+        // freeform task of the wrong type must not skip the retype.
+        getActivityType = { ti -> taskActivityType(ti) },
         // android.util.Log reaches logcat from the app_process daemon; System.err goes nowhere.
         // Passing the throwable prints the full stack trace including the cause chain.
         log = { msg, t -> android.util.Log.w("bydmate_helper", msg, t) },

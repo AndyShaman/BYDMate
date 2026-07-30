@@ -7,6 +7,7 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RaiseOutcome
 import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.data.vehicle.TopTaskInfo
+import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -463,12 +464,15 @@ class SplitSessionManager(
             Log.d(TAG, "reassertPanes: $pkg is in mode ${state.windowingMode}, not ours — skipping")
             return
         }
-        if (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT) != RaiseOutcome.RAISED) {
+        if (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, HelperBinderProtocol.PANE_TYPE_STANDARD)
+            != RaiseOutcome.RAISED
+        ) {
             Log.w(TAG, "reassertPanes: raise did not land for $pkg — leaving the session as is")
             return
         }
-        // The raise may have RECREATED the task (a STANDARD-typed task cannot be re-typed in
-        // place), so the bounds go to the id read AFTER the raise, never the one read before it.
+        // The raise may have RECREATED the task: a live task cannot be re-typed in place in either
+        // direction of the STANDARD/RECENTS pair (the daemon removes it and relaunches), so the
+        // bounds go to the id read AFTER the raise, never the one read before it.
         val raised = helper.getTaskState(pkg)
         if (raised == null || raised.taskId == -1) {
             Log.w(TAG, "reassertPanes: $pkg has no readable task after the raise — bounds skipped")
@@ -659,6 +663,7 @@ class SplitSessionManager(
                 val result = helper.launchFreeform(
                     newPkg, DISPLAY_SPLIT,
                     paneBounds.left, paneBounds.top, paneBounds.right, paneBounds.bottom,
+                    HelperBinderProtocol.PANE_TYPE_STANDARD,
                 )
                 if (result == FreeformLaunchResult.UNAVAILABLE) return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
                 if (result == FreeformLaunchResult.FAILED) return@withLock SplitStartResult.LAUNCH_FAILED
@@ -766,7 +771,10 @@ class SplitSessionManager(
             // Not on the split display (cluster, or INVALID mid-reparent): leave it to placePane.
             if (splitDisplayOnly && state.displayId != DISPLAY_SPLIT) return@runCatching
             // Step 1: gentle mode flip — preserves the app process (media session survives).
-            helper.setTaskWindowingMode(state.taskId, WINDOWING_FREEFORM)
+            // STANDARD, like every other pane placement: a task flipped into freeform must end up
+            // with its own root task, otherwise it lands as a leaf under the shared root and the
+            // pane stays touch-dead.
+            helper.setTaskWindowingMode(state.taskId, WINDOWING_FREEFORM, HelperBinderProtocol.PANE_TYPE_STANDARD)
             val afterFlip = helper.getTaskState(pkg)
             if (afterFlip != null && afterFlip.windowingMode == WINDOWING_FREEFORM) return@runCatching
             // Step 2: flip did not land — force-stop so launchFreeform creates a fresh task.
@@ -779,20 +787,23 @@ class SplitSessionManager(
      *
      * Restart path (W6-F1): after a COVERED teardown the pane apps keep running in the background.
      * On the next start [HelperClient.launchFreeform] resolves that live task id and hands it to
-     * the daemon's moveRootTaskToDisplay + setFocusedRootTask reflection. Pane tasks are
-     * recents-typed leaves under a shared freeform root (Task L/N), so ATMS rejects the move
+     * the daemon's moveRootTaskToDisplay + setFocusedRootTask reflection. Up to 391 pane tasks were
+     * recents-typed leaves under a shared freeform root (Task L/N), so ATMS rejected the move
      * ("moveRootTaskToTaskDisplayArea: Unknown rootTaskId", on-car 389) and setFocusedRootTask on
-     * a leaf id is a silent no-op — yet the final state still reads freeform@display0, so the
-     * daemon reports OK. Result: backdrop up, panes left behind it (black backdrop + pill).
+     * a leaf id was a silent no-op — yet the final state still read freeform@display0, so the
+     * daemon reported OK. Result: backdrop up, panes left behind it (black backdrop + pill).
+     * From 392 on panes are STANDARD with their own root tasks, yet a live task is still never
+     * handed to the plain launch path: the raise below stays the restart mechanism.
      *
      * Branches, by the live state of [pkg]'s task:
      *
      * 1. **No task** (state null or taskId -1) — clean start. Untouched [HelperClient.launchFreeform]
-     *    path: the daemon cold-launches the app in freeform. Fleet safety: behaviour unchanged.
+     *    path: the daemon cold-launches the app in freeform, STANDARD-typed since 392.
      *
      * 2. **Task on the split display** — restart path, [raisePaneLocked]: the Task N mechanism
-     *    (`am start --windowingMode 5 --activityType 3 --display 0 -n <component>`), which Android
-     *    treats as "bring this task to front" regardless of task nesting. Anything other than a
+     *    (`am start --windowingMode 5 --display 0 -n <component>` — STANDARD needs no
+     *    `--activityType`, it is what am assigns by default), which Android treats as "bring this
+     *    task to front" regardless of task nesting. Anything other than a
      *    confirmed raise ends in force-stop + fresh launch — see [raisePaneLocked].
      *
      * 3. **Task on another display** (displayId > 0, i.e. on the cluster) — first ask
@@ -873,16 +884,20 @@ class SplitSessionManager(
 
     /** Plain freeform launch of [pkg] into [bounds] on the split display. Must hold [mutex]. */
     private suspend fun launchPaneLocked(pkg: String, bounds: SplitBounds): FreeformLaunchResult =
-        helper.launchFreeform(pkg, DISPLAY_SPLIT, bounds.left, bounds.top, bounds.right, bounds.bottom)
+        helper.launchFreeform(
+            pkg, DISPLAY_SPLIT, bounds.left, bounds.top, bounds.right, bounds.bottom,
+            HelperBinderProtocol.PANE_TYPE_STANDARD,
+        )
 
     /**
      * Force-stops [pkg] and launches it fresh. Used wherever the existing task cannot be trusted to
-     * come to front: handing a live recents-leaf task to launchFreeform is exactly the path that
-     * reports a false OK while the pane stays behind the backdrop.
+     * come to front: handing a live task to launchFreeform is exactly the path that reports a false
+     * OK while the pane stays behind the backdrop (on 391 the live task was a recents leaf under a
+     * shared root; the false OK is a property of the move path, not of the leaf typing).
      *
      * The force-stop result is load-bearing (FIX round 3). On the [RaiseOutcome.NO_REPLY] path the
      * transport is already unreliable, so forceStop can fail while the very next launchFreeform
-     * reconnects to a revived daemon, meets the SAME live recents leaf and reproduces the silent
+     * reconnects to a revived daemon, meets the SAME live task and reproduces the silent
      * false OK. So: a failed forceStop is followed by one authoritative re-read; if the task is
      * still alive the launch is NOT attempted and the pane fails honestly (the caller already ends
      * the session and hides the backdrop). Deliberately no second forceStop attempt — a failed
@@ -919,7 +934,7 @@ class SplitSessionManager(
      *  - [RaiseOutcome.NO_REPLY] — no usable reply: unknown TX (daemon predating Task N), timeout
      *    or dead binder. The earlier "old daemon → plain launchFreeform for 386 parity" branch was
      *    removed deliberately: that parity preserved exactly the broken path (launchFreeform on a
-     *    live recents leaf = silent false OK). Force-stop + launch works on every daemon
+     *    live task = silent false OK). Force-stop + launch works on every daemon
      *    generation; the cost is killing the app process in the rare stale-daemon window.
      *  - the raise ran but the pane never came up within [PANE_RAISE_MAX_ATTEMPTS] attempts.
      *
@@ -927,7 +942,7 @@ class SplitSessionManager(
      */
     private suspend fun raisePaneLocked(pkg: String, bounds: SplitBounds): FreeformLaunchResult {
         repeat(PANE_RAISE_MAX_ATTEMPTS) { index ->
-            when (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT)) {
+            when (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, HelperBinderProtocol.PANE_TYPE_STANDARD)) {
                 RaiseOutcome.RAISED -> {
                     val raised = helper.getTaskState(pkg)
                     if (raised != null && raised.taskId != -1 &&
@@ -1099,11 +1114,15 @@ class SplitSessionManager(
      * the media-key reroute guard (when the media center becomes the foreground top-of-stack
      * task during an active split — no windowing-mode flip is needed).
      *
-     * Task-N root cause: Task L's `--activityType 3` makes pane tasks type=recents, which nest
-     * as leaf tasks under a shared freeform root task. setFocusedRootTask on a leaf id is a
+     * Task-N root cause: up to 391 Task L's `--activityType 3` made pane tasks type=recents, which
+     * nested as leaf tasks under a shared freeform root task. setFocusedRootTask on a leaf id is a
      * silent no-op, leaving the backdrop covering both panes. Fix: use
-     * `am start --windowingMode 5 --activityType 3 --display 0 -n <component>` (TX_RAISE_FREEFORM_TASK),
+     * `am start --windowingMode 5 --display 0 -n <component>` (TX_RAISE_FREEFORM_TASK) — no
+     * `--activityType` flag, since STANDARD is the type am assigns at task creation by default —
      * which Android recognises as "bring existing task to front" regardless of task nesting.
+     * From 392 on panes are STANDARD with their own root tasks, so setFocusedRootTask would work on
+     * them again — but the raise stays the primary path (it also restores a stopped pane), and
+     * setFocusedTask below remains the fallback for daemons that predate TX_RAISE_FREEFORM_TASK.
      *
      * Old-daemon compatibility: if raiseFreeformTask returns false (TX unrecognised by an older
      * daemon that predates Task N), fall back to setFocusedTask — behavior then equals 386-era
@@ -1136,8 +1155,10 @@ class SplitSessionManager(
         val wideDeparted = widePaneDepartedEmitted
         // Try raise via TX_RAISE_FREEFORM_TASK; fall back to setFocusedTask when the daemon
         // is too old to handle the new TX (returns false) or the raise itself fails.
-        val raise1 = narrowDeparted || helper.raiseFreeformTask(narrowPkg)
-        val raise2 = wideDeparted  || helper.raiseFreeformTask(widePkg)
+        val raise1 = narrowDeparted ||
+            helper.raiseFreeformTask(narrowPkg, activityType = HelperBinderProtocol.PANE_TYPE_STANDARD)
+        val raise2 = wideDeparted ||
+            helper.raiseFreeformTask(widePkg, activityType = HelperBinderProtocol.PANE_TYPE_STANDARD)
         // Log raw raise outcomes BEFORE the fallback masks them — critical for on-car diagnosis
         // if the raise stops working (component resolution fails, am start errors, binder timeout).
         // A departed pane has raise=true by the departed flag; that path is never logged here.

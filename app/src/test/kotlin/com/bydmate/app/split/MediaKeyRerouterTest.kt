@@ -209,7 +209,7 @@ class MediaKeyRerouterIntegrationTest {
         // forceStop and the restart path added in W6-F1 bails out instead of placing the pane.
         coEvery { forceStop(any()) } returns true
         pkgs.forEach { pkg ->
-            coEvery { launchFreeform(pkg, any(), any(), any(), any(), any()) } returns FreeformLaunchResult.OK
+            coEvery { launchFreeform(pkg, any(), any(), any(), any(), any(), any()) } returns FreeformLaunchResult.OK
         }
     }
 

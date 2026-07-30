@@ -6,6 +6,7 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RaiseOutcome
 import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.data.vehicle.TopTaskInfo
+import com.bydmate.app.helper.HelperBinderProtocol
 import io.mockk.Called
 import io.mockk.clearMocks
 import io.mockk.coEvery
@@ -78,7 +79,7 @@ private fun HelperClient.stubLaunch(vararg pkgs: String, result: FreeformLaunchR
     // explicitly AFTER calling stubLaunch.
     coEvery { forceStop(any()) } returns true
     pkgs.forEach { pkg ->
-        coEvery { launchFreeform(pkg, any(), any(), any(), any(), any()) } returns result
+        coEvery { launchFreeform(pkg, any(), any(), any(), any(), any(), any()) } returns result
     }
 }
 
@@ -314,7 +315,7 @@ class SplitSessionManagerTest {
         // Session must still be active and no setTaskBounds / setTaskWindowingMode called.
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
         coVerify(exactly = 0) { helper.setTaskBounds(any(), any(), any(), any(), any()) }
-        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), any()) }
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), any(), any()) }
     }
 
     // ── Watchdog: bounds drift → snap-back ────────────────────────────────────
@@ -486,7 +487,7 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
@@ -496,14 +497,14 @@ class SplitSessionManagerTest {
 
         // Wide first, then narrow — narrow ends up on top exactly as at start.
         coVerifyOrder {
-            helper.raiseFreeformTaskDetailed("pkg.wide", 0)
+            helper.raiseFreeformTaskDetailed("pkg.wide", 0, HelperBinderProtocol.PANE_TYPE_STANDARD)
             helper.setTaskBounds(10, wide.left, wide.top, wide.right, wide.bottom)
-            helper.raiseFreeformTaskDetailed("pkg.narrow", 0)
+            helper.raiseFreeformTaskDetailed("pkg.narrow", 0, HelperBinderProtocol.PANE_TYPE_STANDARD)
             helper.setTaskBounds(11, narrow.left, narrow.top, narrow.right, narrow.bottom)
         }
         // Cosmetic only.
         coVerify(exactly = 0) { helper.forceStop(any()) }
-        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -525,7 +526,7 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(
             helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, tickDelayMs = 100,
@@ -543,8 +544,8 @@ class SplitSessionManagerTest {
 
         mgr.onBackdropResurfaced()
 
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, any()) }
         coVerify(exactly = 0) { helper.setTaskBounds(11, any(), any(), any(), any()) }
     }
 
@@ -554,7 +555,7 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
@@ -563,8 +564,8 @@ class SplitSessionManagerTest {
 
         mgr.onBackdropResurfaced()
 
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
-        coVerify(exactly = 0) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, any()) }
+        coVerify(exactly = 0) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
         coVerify(exactly = 0) { helper.forceStop("pkg.narrow") }
     }
 
@@ -581,7 +582,7 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
@@ -592,10 +593,10 @@ class SplitSessionManagerTest {
 
         mgr.onBackdropResurfaced()
 
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, any()) }
         coVerify(exactly = 0) { helper.setTaskBounds(11, any(), any(), any(), any()) }
         // The healthy pane is still reasserted.
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
     }
 
     /**
@@ -611,7 +612,7 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
@@ -640,7 +641,7 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         coVerify(exactly = 0) { helper.getTaskState(any()) }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed(any(), any()) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed(any(), any(), any()) }
     }
 
     @Test fun `onBackdropResurfaced keeps the session alive when the raise fails`() = runTest {
@@ -649,12 +650,12 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
         mgr.start(pair)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.REFUSED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.REFUSED
         clearMocks(helper, answers = false)
 
         mgr.events.test {
@@ -1119,7 +1120,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.DISABLED, result)
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         // No launch attempts when the gate fires.
-        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     @Test fun `startLastPair returns DISABLED when feature is off`() = runTest {
@@ -1131,7 +1132,7 @@ class SplitSessionManagerTest {
         val result = mgr.startLastPair()
 
         assertEquals(SplitStartResult.DISABLED, result)
-        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
     }
 
     // ── Fix 4: partial-failure cleanup ────────────────────────────────────────
@@ -1141,7 +1142,7 @@ class SplitSessionManagerTest {
         val (wide, _) = boundsFor(SplitSide.RIGHT)
         // Wide launches OK; narrow fails.
         helper.stubLaunch("pkg.wide")
-        coEvery { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) } returns FreeformLaunchResult.FAILED
+        coEvery { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) } returns FreeformLaunchResult.FAILED
         // Wide task is resolvable for the revert call.
         helper.stubTask("pkg.wide", taskId = 10, mode = 5, b = wide)
 
@@ -1182,20 +1183,25 @@ class SplitSessionManagerTest {
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
-        // Step 1: gentle mode flip attempted for both tasks.
-        coVerify { helper.setTaskWindowingMode(10, 5) }
-        coVerify { helper.setTaskWindowingMode(11, 5) }
+        // Step 1: gentle mode flip attempted for both tasks — as STANDARD, so the flipped task
+        // gets its own root task (own input shield) exactly like a freshly launched pane.
+        coVerify { helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
+        coVerify { helper.setTaskWindowingMode(11, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
         // Step 2: flip failed → forceStop called as fallback.
         coVerify { helper.forceStop("pkg.wide") }
         coVerify { helper.forceStop("pkg.narrow") }
         // Order per pane: mode-flip → forceStop → launch.
         coVerifyOrder {
-            helper.setTaskWindowingMode(10, 5)
+            helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_STANDARD)
             helper.forceStop("pkg.wide")
-            helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any())
-            helper.setTaskWindowingMode(11, 5)
+            helper.launchFreeform(
+                "pkg.wide", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
+            helper.setTaskWindowingMode(11, 5, HelperBinderProtocol.PANE_TYPE_STANDARD)
             helper.forceStop("pkg.narrow")
-            helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any())
+            helper.launchFreeform(
+                "pkg.narrow", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
         }
     }
 
@@ -1216,20 +1222,21 @@ class SplitSessionManagerTest {
         )
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         // Task-N daemon: the flipped task is then raised into the pane (W6-F1 restart path).
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         // Flip attempted.
-        coVerify { helper.setTaskWindowingMode(10, 5) }
-        coVerify { helper.setTaskWindowingMode(11, 5) }
+        coVerify { helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
+        coVerify { helper.setTaskWindowingMode(11, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
         // Flip succeeded → forceStop must NOT be called (app process survives, media keeps playing).
         coVerify(exactly = 0) { helper.forceStop(any()) }
         // After the flip the task exists in freeform on display 0, so W6-F1 places it by raising it
-        // (bounds stamped explicitly) instead of going through launchFreeform.
-        coVerify { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
-        coVerify { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        // (bounds stamped explicitly) instead of going through launchFreeform. The raise carries
+        // STANDARD so the pane keeps its own root task.
+        coVerify { helper.raiseFreeformTaskDetailed("pkg.wide", 0, HelperBinderProtocol.PANE_TYPE_STANDARD) }
+        coVerify { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, HelperBinderProtocol.PANE_TYPE_STANDARD) }
         coVerify { helper.setTaskBounds(10, wide.left, wide.top, wide.right, wide.bottom) }
         coVerify { helper.setTaskBounds(11, narrow.left, narrow.top, narrow.right, narrow.bottom) }
         // Session is Active after a successful start.
@@ -1260,7 +1267,7 @@ class SplitSessionManagerTest {
         // Fast path: no task → neither forceStop nor setTaskWindowingMode→5 called.
         coVerify(exactly = 0) { helper.forceStop(any()) }
         // setTaskWindowingMode→5 is not called in the fast path (only in tearDown for →1).
-        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 5) }
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 5, any()) }
     }
 
     @Test fun `start does NOT call forceStop when task is already in freeform mode`() = runTest {
@@ -1272,13 +1279,13 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         // Task-N daemon: the existing panes are raised, which must not force-stop them either.
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         coVerify(exactly = 0) { helper.forceStop(any()) }
-        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 5) }
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 5, any()) }
     }
 
     // ── Bug A (same defect class): changeApp must also call forceStopIfNeeded ────────
@@ -1300,9 +1307,19 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(true, backdrop.shown)
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
-        // Both windows launched after backdrop confirmed resumed.
-        coVerify { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        // Both windows launched after backdrop confirmed resumed, as STANDARD activities: a
+        // recents-typed pane nests as a leaf under a shared root and inherits that root's
+        // fullscreen input shield, which swallows touches on the lower pane (on-car 391).
+        coVerify {
+            helper.launchFreeform(
+                "pkg.wide", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
+        }
+        coVerify {
+            helper.launchFreeform(
+                "pkg.narrow", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
+        }
     }
 
     @Test fun `startLocked still launches windows when backdrop show returns false (degraded)`() = runTest {
@@ -1322,8 +1339,8 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
         // Windows launched even though the backdrop signal was not received.
-        coVerify { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
+        coVerify { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
     }
 
     // ── Fix D: start must survive caller-scope cancellation (widget bare-backdrop bug) ──
@@ -1355,8 +1372,8 @@ class SplitSessionManagerTest {
         // The session must have reached Active despite the caller being cancelled —
         // work continued in the manager's own scope.
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
-        coVerify { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
+        coVerify { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
     }
 
     @Test fun `backdrop hidden via try-finally when start fails after backdrop shown`() = runTest {
@@ -1443,8 +1460,8 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result2)
 
         // Guard must have suppressed the second launch — each app launched exactly once.
-        coVerify(exactly = 1) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify(exactly = 1) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 1) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
     }
 
     @Test fun `same-pair start after time window expires triggers full relaunch`() = runTest {
@@ -1473,8 +1490,8 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, mgr.start(pair))
 
         // Each app must have been launched twice (once per start cycle).
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
     }
 
@@ -1505,8 +1522,8 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, mgr.start(pair))
 
         // Full relaunch must have happened.
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.narrow", any(), any(), any(), any(), any(), any()) }
     }
 
     // ── changeApp: same-task-id guard (pane-closed restore path) ─────────────
@@ -1573,14 +1590,16 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitStartResult.OK, result)
         // Step 1: gentle flip attempted.
-        coVerify { helper.setTaskWindowingMode(20, 5) }
+        coVerify { helper.setTaskWindowingMode(20, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
         // Step 2: flip failed → forceStop called.
         coVerify { helper.forceStop("pkg.new") }
-        // Order: flip → forceStop → launch.
+        // Order: flip → forceStop → launch. The replacement pane is launched as STANDARD too.
         coVerifyOrder {
-            helper.setTaskWindowingMode(20, 5)
+            helper.setTaskWindowingMode(20, 5, HelperBinderProtocol.PANE_TYPE_STANDARD)
             helper.forceStop("pkg.new")
-            helper.launchFreeform("pkg.new", any(), any(), any(), any(), any())
+            helper.launchFreeform(
+                "pkg.new", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
         }
         // Session updated to use pkg.new in the narrow pane.
         val active = mgr.state.value as? SplitSessionState.Active
@@ -1773,7 +1792,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
         // launchFreeform must have been called a second time (first start + this start).
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     @Test fun `start after MAXIMIZED within double-tap window still launches (guard cleared by watchdog)`() = runTest {
@@ -1808,7 +1827,7 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitStartResult.OK, result)
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
-        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 2) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     // ── Task M: pane departure to the cluster display ──────────────────────────
@@ -2511,9 +2530,11 @@ class SplitSessionManagerTest {
         advanceTimeBy(200); runCurrent()  // first media poll tick (50ms) → reroute fires
 
         // Departed narrow pane: raiseFreeformTask must NOT be called (would yank it off the cluster).
-        coVerify(exactly = 0) { helper.raiseFreeformTask("pkg.narrow") }
-        // Non-departed wide pane: must still be raised normally.
-        coVerify(atLeast = 1) { helper.raiseFreeformTask("pkg.wide") }
+        coVerify(exactly = 0) { helper.raiseFreeformTask("pkg.narrow", activityType = any()) }
+        // Non-departed wide pane: must still be raised normally, as a STANDARD pane.
+        coVerify(atLeast = 1) {
+            helper.raiseFreeformTask("pkg.wide", 0, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        }
         // setFocusedTask for narrow: also skipped (raise1=true via departed flag short-circuit).
         coVerify(exactly = 0) { helper.setFocusedTask(11) }
     }
@@ -2545,8 +2566,8 @@ class SplitSessionManagerTest {
         every { mediaSource.findController(any()) } returns controller
         every { controller.packageName } returns "pkg.narrow"
 
-        coEvery { helper.raiseFreeformTask("pkg.narrow") } answers { raiseNarrowOrder = callOrder++; true }
-        coEvery { helper.raiseFreeformTask("pkg.wide") } answers { raiseWideOrder = callOrder++; true }
+        coEvery { helper.raiseFreeformTask("pkg.narrow", activityType = any()) } answers { raiseNarrowOrder = callOrder++; true }
+        coEvery { helper.raiseFreeformTask("pkg.wide", activityType = any()) } answers { raiseWideOrder = callOrder++; true }
 
         val (wide, narrow) = boundsFor(SplitSide.RIGHT)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
@@ -2593,7 +2614,7 @@ class SplitSessionManagerTest {
         coEvery { backdrop.show() } returns true
         every { backdrop.hide() } just runs
         // Simulate old daemon: raise returns false for both panes.
-        coEvery { helper.raiseFreeformTask(any()) } returns false
+        coEvery { helper.raiseFreeformTask(any(), activityType = any()) } returns false
         // Old-daemon fallback: setFocusedTask succeeds for both task ids.
         coEvery { helper.setFocusedTask(any()) } returns true
 
@@ -2625,7 +2646,7 @@ class SplitSessionManagerTest {
         coEvery { backdrop.show() } returns true
         every { backdrop.hide() } just runs
         // All raise calls fail (old daemon / component not found).
-        coEvery { helper.raiseFreeformTask(any()) } returns false
+        coEvery { helper.raiseFreeformTask(any(), activityType = any()) } returns false
         // Fallback setFocusedTask also fails for both panes.
         coEvery { helper.setFocusedTask(any()) } returns false
 
@@ -2654,7 +2675,7 @@ class SplitSessionManagerTest {
      *
      * Anti-vacuity: removing `narrowPaneDepartedEmitted = false` from the death branch leaves
      * the flag true; reAssertSplitZOrder then short-circuits via `narrowDeparted || raise1`
-     * and `raiseFreeformTask("pkg.narrow")` is never called — the coVerify fails.
+     * and `raiseFreeformTask("pkg.narrow", activityType = any())` is never called — the coVerify fails.
      */
     @Test fun `P2 departed flag cleared on death - reroute reAssert raises pane`() = runTest {
         val helper = mockk<HelperClient>(relaxed = true)
@@ -2686,7 +2707,7 @@ class SplitSessionManagerTest {
             SplitTaskState(taskId = 11, windowingMode = 5, 0, 0, 1280, 480, displayId = 2)
         helper.stubTask("pkg.wide", 10, 5, wide)
         advanceTimeBy(150); runCurrent()
-        coVerify(exactly = 0) { helper.raiseFreeformTask("pkg.narrow") }  // still departed
+        coVerify(exactly = 0) { helper.raiseFreeformTask("pkg.narrow", activityType = any()) }  // still departed
 
         // Step 2: Narrow task dies on cluster — P2 fix clears narrowPaneDepartedEmitted.
         coEvery { helper.getTaskState("pkg.narrow") } returns SplitTaskState(-1, 0, 0, 0, 0, 0)
@@ -2699,7 +2720,7 @@ class SplitSessionManagerTest {
 
         // P2 cleared the flag on death → raiseFreeformTask IS called for pkg.narrow.
         // Without P2: flag stays true, raise is skipped, pane stays under backdrop.
-        coVerify(atLeast = 1) { helper.raiseFreeformTask("pkg.narrow") }
+        coVerify(atLeast = 1) { helper.raiseFreeformTask("pkg.narrow", activityType = any()) }
     }
 
     /**
@@ -3806,7 +3827,7 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.narrow", 11, 5, narrow)
         // launchFreeform would report OK — it must not be used on this path at all.
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
         val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
@@ -3816,11 +3837,15 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
         assertEquals(true, backdrop.shown)
-        // Task N mechanism (am start --windowingMode 5 --activityType 3 --display 0 -n <cmp>).
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        // Task N mechanism (am start --windowingMode 5 --activityType 1 --display 0 -n <cmp>).
+        coVerify(exactly = 1) {
+            helper.raiseFreeformTaskDetailed("pkg.wide", 0, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        }
+        coVerify(exactly = 1) {
+            helper.raiseFreeformTaskDetailed("pkg.narrow", 0, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        }
         // move-TX path (daemon moveRootTaskToDisplay + setFocusedRootTask by leaf id) must not run.
-        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform(any(), any(), any(), any(), any(), any(), any()) }
         // Pane geometry is stamped explicitly on the raise path.
         coVerify { helper.setTaskBounds(10, wide.left, wide.top, wide.right, wide.bottom) }
         coVerify { helper.setTaskBounds(11, narrow.left, narrow.top, narrow.right, narrow.bottom) }
@@ -3840,7 +3865,7 @@ class SplitSessionManagerTest {
         val liveFreeform = SplitTaskState(10, 5, wide.left, wide.top, wide.right, wide.bottom)
         val neverRaised = SplitTaskState(10, 1, wide.left, wide.top, wide.right, wide.bottom)
         coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(liveFreeform, liveFreeform, neverRaised)
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
         // Fresh relaunch also fails → the session must end honestly instead of going zombie.
         helper.stubLaunch("pkg.wide", result = FreeformLaunchResult.FAILED)
@@ -3856,10 +3881,10 @@ class SplitSessionManagerTest {
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         assertEquals(false, backdrop.shown)
         // Finite retry loop, then ONE fresh relaunch (force-stop + launch).
-        coVerify(exactly = 2) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 2) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
     }
 
@@ -3892,7 +3917,7 @@ class SplitSessionManagerTest {
 
         // Pane apps died: tasks are gone and every task op throws on the dead ids.
         coEvery { helper.getTaskState(any()) } returns SplitTaskState(-1, 0, 0, 0, 0, 0)
-        coEvery { helper.setTaskWindowingMode(any(), any()) } throws IllegalStateException("dead task")
+        coEvery { helper.setTaskWindowingMode(any(), any(), any()) } throws IllegalStateException("dead task")
         coEvery { helper.setFocusedTask(any()) } throws IllegalStateException("dead task")
 
         mgr.events.test {
@@ -3930,7 +3955,7 @@ class SplitSessionManagerTest {
         val backdrop = FakeSplitBackdrop()
         val (wide, _) = boundsFor(SplitSide.RIGHT)
         helper.stubTask("pkg.wide", 10, 5, wide)
-        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0) } returns RaiseOutcome.NO_REPLY
+        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) } returns RaiseOutcome.NO_REPLY
         helper.stubLaunch("pkg.wide")
         coEvery { helper.forceStop("pkg.wide") } returns false
 
@@ -3939,7 +3964,7 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitStartResult.LAUNCH_FAILED, result)
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
-        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -3961,7 +3986,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returnsMany listOf(
             null, null, SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom),
         )
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.NO_REPLY
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.NO_REPLY
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         coEvery { helper.forceStop(any()) } returns false
 
@@ -3970,7 +3995,7 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitStartResult.OK, result)
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
     }
 
@@ -3990,7 +4015,7 @@ class SplitSessionManagerTest {
         val liveWide = SplitTaskState(10, 5, wide.left, wide.top, wide.right, wide.bottom)
         // Classification sees the live task; the post-forceStop re-read is unreadable (null).
         coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(liveWide, liveWide, null)
-        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0) } returns RaiseOutcome.NO_REPLY
+        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) } returns RaiseOutcome.NO_REPLY
         helper.stubLaunch("pkg.wide")
         coEvery { helper.forceStop("pkg.wide") } returns false
 
@@ -3998,7 +4023,7 @@ class SplitSessionManagerTest {
         val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         assertEquals(SplitStartResult.LAUNCH_FAILED, result)
-        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -4014,7 +4039,7 @@ class SplitSessionManagerTest {
         val backdrop = FakeSplitBackdrop()
         val (wide, _) = boundsFor(SplitSide.RIGHT)
         helper.stubTask("pkg.wide", 10, 5, wide)
-        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0) } returns RaiseOutcome.REFUSED
+        coEvery { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) } returns RaiseOutcome.REFUSED
         coEvery { helper.forceStop(any()) } returns true
         helper.stubLaunch("pkg.wide", result = FreeformLaunchResult.FAILED)
 
@@ -4023,10 +4048,10 @@ class SplitSessionManagerTest {
 
         assertEquals(SplitStartResult.LAUNCH_FAILED, result)
         // One attempt only: REFUSED is terminal, no retry storm.
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
     }
 
@@ -4045,7 +4070,7 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.wide", 10, 5, wide)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.NO_REPLY
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.NO_REPLY
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
@@ -4056,15 +4081,15 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
         // One attempt per pane (NO_REPLY is terminal), then force-stop + fresh launch for both.
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, any()) }
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) { helper.forceStop("pkg.narrow") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.narrow", 0, narrow.left, narrow.top, narrow.right, narrow.bottom)
+            helper.launchFreeform("pkg.narrow", 0, narrow.left, narrow.top, narrow.right, narrow.bottom, any())
         }
     }
 
@@ -4090,7 +4115,7 @@ class SplitSessionManagerTest {
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom),
         )
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
@@ -4099,12 +4124,12 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
         // The clean-start pane is untouched by both the cluster and the raise branch.
         coVerify(exactly = 0) { helper.forceStop("pkg.narrow") }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, any()) }
     }
 
     /**
@@ -4126,7 +4151,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.wide") } returns SplitTaskState(10, 1, 0, 0, 1280, 480, displayId = 2)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val hookCalls = mutableListOf<String>()
         val mgr = SplitSessionManager(
@@ -4137,11 +4162,14 @@ class SplitSessionManagerTest {
 
         assertEquals("Cluster hook must run for the projected pane", listOf("pkg.wide"), hookCalls)
         // Nothing touched the cluster task before the hook decided what to do with it.
-        coVerify(exactly = 0) { helper.setTaskWindowingMode(10, any()) }
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(10, any(), any()) }
         // Hook said "not ours" → deterministic force-stop + fresh launch, as in the unit test.
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform(
+                "pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom,
+                HelperBinderProtocol.PANE_TYPE_STANDARD,
+            )
         }
     }
 
@@ -4159,12 +4187,12 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(stale, flipped, flipped)
         helper.stubTask("pkg.narrow", 11, 5, narrow)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
-        coVerify(exactly = 1) { helper.setTaskWindowingMode(10, 5) }
+        coVerify(exactly = 1) { helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }
         // The flip landed, so no force-stop of the app process.
         coVerify(exactly = 0) { helper.forceStop("pkg.wide") }
     }
@@ -4189,7 +4217,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returns
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val ended = mutableListOf<String>()
@@ -4204,9 +4232,9 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         assertEquals(listOf("pkg.wide"), ended)
         // Projection ended → task at home → raise path, app process preserved.
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
         coVerify(exactly = 0) { helper.forceStop("pkg.wide") }
-        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -4222,7 +4250,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returns
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(
@@ -4233,9 +4261,9 @@ class SplitSessionManagerTest {
 
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
     }
 
     /**
@@ -4251,7 +4279,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returns
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(
@@ -4263,7 +4291,7 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.OK, result)
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
     }
 
@@ -4287,16 +4315,16 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returns
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
         val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         assertEquals(SplitStartResult.OK, result)
-        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 1) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
         coVerify(exactly = 0) { helper.forceStop("pkg.wide") }
-        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any()) }
+        coVerify(exactly = 0) { helper.launchFreeform("pkg.wide", any(), any(), any(), any(), any(), any()) }
     }
 
     /**
@@ -4313,7 +4341,7 @@ class SplitSessionManagerTest {
         coEvery { helper.getTaskState("pkg.narrow") } returns
             SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        coEvery { helper.raiseFreeformTaskDetailed(any(), any()) } returns RaiseOutcome.RAISED
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
         coEvery { helper.forceStop(any()) } returns true
 
         val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
@@ -4321,9 +4349,9 @@ class SplitSessionManagerTest {
 
         coVerify(exactly = 1) { helper.forceStop("pkg.wide") }
         coVerify(exactly = 1) {
-            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom)
+            helper.launchFreeform("pkg.wide", 0, wide.left, wide.top, wide.right, wide.bottom, any())
         }
-        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed("pkg.wide", 0, any()) }
     }
 
     /**

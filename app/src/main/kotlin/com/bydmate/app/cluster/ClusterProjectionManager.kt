@@ -20,6 +20,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.split.DisabledSplitPreferences
 import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
@@ -959,7 +960,14 @@ object ClusterProjectionManager {
         // suppress watchdog misclassifications during the transient REMOVE+RELAUNCH (Q1 / F-1).
         // No-op when [pkg] is not a split pane or no session is active.
         onBeforeClusterSend?.invoke(pkg)
-        return when (helper.launchFreeform(pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3])) {
+        // RECENTS, unlike the split panes (which went STANDARD in 392 to get their own input
+        // shield): the cluster hosts a single task alone on its display, so the shared-root
+        // touch defect never applied here — and this typing is what the on-car acceptance of
+        // the projection path was run with. Fleet safety: do not change it without a car.
+        return when (helper.launchFreeform(
+            pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
+            HelperBinderProtocol.PANE_TYPE_RECENTS,
+        )) {
             FreeformLaunchResult.OK -> {
                 directDisplayId = display.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()

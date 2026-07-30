@@ -27,9 +27,10 @@ class LaunchAppCoreTest {
         packageName: String = "anddea.youtube",
         windowingMode: Int? = WINDOWING_MODE_FREEFORM,
         displayId: Int = 0,
+        activityType: Int = ACTIVITY_TYPE_RECENTS,
         resolveComponent: (String) -> String? = { "anddea.youtube/com.google.android.youtube.app.honeycomb.Shell\$HomeActivity" },
         shell: (String, List<String>) -> String = { script, args -> shellCmds += effectiveCmd(script, args); "" },
-    ) = launchAppCore(packageName, windowingMode, displayId, resolveComponent, shell)
+    ) = launchAppCore(packageName, windowingMode, displayId, activityType, resolveComponent, shell)
 
     // --- freeform path ---
 
@@ -67,6 +68,26 @@ class LaunchAppCoreTest {
         val monkeyCmd = shellCmds.first { it.startsWith("monkey") }
         assertFalse("monkey must not carry --windowingMode", monkeyCmd.contains("--windowingMode"))
         assertFalse("monkey must not carry --activityType", monkeyCmd.contains("--activityType"))
+    }
+
+    // --- activityType is the caller's choice (392: panes STANDARD, cluster RECENTS) ---
+
+    @Test
+    fun `standard freeform launch omits activityType flag`() {
+        val commands = mutableListOf<String>()
+        launchAppCore("ru.yandex.music", 5, 0, 1,
+            resolveComponent = { "ru.yandex.music/.main.MainScreenActivity" },
+            shell = { cmd, _ -> commands += cmd; "" })
+        assertEquals("am start --windowingMode 5 --display 0 -n \"\$1\"", commands[0])
+    }
+
+    @Test
+    fun `recents freeform launch keeps activityType 3 flag`() {
+        val commands = mutableListOf<String>()
+        launchAppCore("ru.yandex.music", 5, 2, 3,
+            resolveComponent = { "ru.yandex.music/.main.MainScreenActivity" },
+            shell = { cmd, _ -> commands += cmd; "" })
+        assertEquals("am start --windowingMode 5 --activityType 3 --display 2 -n \"\$1\"", commands[0])
     }
 
     // --- plain path ---

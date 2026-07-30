@@ -53,24 +53,38 @@ class HelperClientDirectProjectionTest {
 
     @Test
     fun `launchFreeform marshals args in order and maps status 0 to OK`() = runBlocking {
-        var code = -1; var pkg: String? = null; val nums = IntArray(5)
+        var code = -1; var pkg: String? = null; val nums = IntArray(6)
         val result = clientWith(fakeWithStatus(0, capture = {
-            pkg = it.readString(); for (i in 0..4) nums[i] = it.readInt()
-        }, seenCode = { code = it })).launchFreeform("ru.yandex.yandexnavi", 4, 0, 38, 1280, 441)
+            pkg = it.readString(); for (i in 0..5) nums[i] = it.readInt()
+        }, seenCode = { code = it })).launchFreeform(
+            "ru.yandex.yandexnavi", 4, 0, 38, 1280, 441, HelperBinderProtocol.PANE_TYPE_RECENTS,
+        )
         assertEquals(FreeformLaunchResult.OK, result)
         assertEquals(HelperBinderProtocol.TX_LAUNCH_FREEFORM, code)
         assertEquals("ru.yandex.yandexnavi", pkg)
-        assertArrayEquals(intArrayOf(4, 0, 38, 1280, 441), nums)
+        assertArrayEquals(intArrayOf(4, 0, 38, 1280, 441, 3), nums)
+    }
+
+    /** The pane activityType is the trailing int — split panes ask for STANDARD (touch fix, 392). */
+    @Test
+    fun `launchFreeform writes the requested activityType after bottom`() = runBlocking {
+        var pkg: String? = null; val nums = IntArray(6)
+        clientWith(fakeWithStatus(0, capture = {
+            pkg = it.readString(); for (i in 0..5) nums[i] = it.readInt()
+        })).launchFreeform("pkg.narrow", 0, 0, 0, 640, 1200, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        assertEquals("pkg.narrow", pkg)
+        assertArrayEquals(intArrayOf(0, 0, 0, 640, 1200, 1), nums)
     }
 
     @Test
     fun `launchFreeform maps -2 to UNAVAILABLE and other failures to FAILED`() = runBlocking {
+        val recents = HelperBinderProtocol.PANE_TYPE_RECENTS
         assertEquals(FreeformLaunchResult.UNAVAILABLE,
-            clientWith(fakeWithStatus(-2)).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10))
+            clientWith(fakeWithStatus(-2)).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10, recents))
         assertEquals(FreeformLaunchResult.FAILED,
-            clientWith(fakeWithStatus(-1)).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10))
+            clientWith(fakeWithStatus(-1)).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10, recents))
         assertEquals(FreeformLaunchResult.FAILED,
-            clientWith(null).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10))
+            clientWith(null).launchFreeform("ru.yandex.yandexnavi", 4, 0, 0, 10, 10, recents))
     }
 
     @Test

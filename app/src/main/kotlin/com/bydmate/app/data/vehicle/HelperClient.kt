@@ -127,7 +127,11 @@ interface HelperClient {
     suspend fun moveTaskToDisplay(taskId: Int, displayId: Int): Boolean
     suspend fun setTaskBounds(taskId: Int, left: Int, top: Int, right: Int, bottom: Int): Boolean
     suspend fun setFocusedTask(taskId: Int): Boolean
-    suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int): Boolean
+    /** [activityType] applies to the freeform direction only (see [HelperBinderProtocol.PANE_TYPE_STANDARD]);
+     *  the fullscreen direction ignores it, hence the legacy RECENTS default. */
+    suspend fun setTaskWindowingMode(
+        taskId: Int, windowingMode: Int, activityType: Int = HelperBinderProtocol.PANE_TYPE_RECENTS,
+    ): Boolean
     /**
      * Narrow appops grant to our own package: SYSTEM_ALERT_WINDOW (draw the cluster overlay)
      * and PROJECT_MEDIA (third-party access to the fission screen-projection display, else
@@ -171,13 +175,18 @@ interface HelperClient {
     suspend fun setHotspot(enable: Boolean): Boolean
 
     /**
-     * Direct cluster projection: find-or-launch [packageName], switch its task to freeform,
+     * Direct freeform launch: find-or-launch [packageName], switch its task to freeform,
      * move it to [displayId] with the given window bounds and focus it. UNAVAILABLE = the
      * freeform switch was rejected (enable_freeform_support not active yet; takes effect after
      * a head-unit reboot) — callers fall back to the VirtualDisplay pipeline. Long-running.
+     *
+     * [activityType] decides how the task is typed: [HelperBinderProtocol.PANE_TYPE_STANDARD]
+     * for split panes (own root task → own input shield), [HelperBinderProtocol.PANE_TYPE_RECENTS]
+     * for cluster projection (no freeform caption).
      */
     suspend fun launchFreeform(
         packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int,
+        activityType: Int,
     ): FreeformLaunchResult
 
     /** `wm density` override on a NON-default display via the daemon; [density] 0 = reset.
@@ -234,24 +243,25 @@ interface HelperClient {
     suspend fun getTopTaskPackageOrSkip(): String?
 
     /**
-     * Raises an existing recents-typed freeform task for [pkg] to front via the daemon's
-     * `am start --windowingMode 5 --activityType 3 --display [displayId] -n <component>` path.
-     * Returns true when the daemon confirms the raise command ran without error.
+     * Raises the pane task for [pkg] to front via the daemon's `am start --windowingMode 5
+     * [--activityType 3] --display [displayId] -n <component>` path, relaunching it if its
+     * activityType diverges from [activityType]. Returns true when the daemon confirms the
+     * raise command ran without error.
      *
      * An old daemon without TX_RAISE_FREEFORM_TASK makes transact return false → returns false.
      * Callers (reAssertSplitZOrder) treat false as "fall back to setFocusedTask" so 386-era
      * behavior is preserved when talking to a pre-Task-N daemon.
      */
-    suspend fun raiseFreeformTask(pkg: String, displayId: Int = 0): Boolean
+    suspend fun raiseFreeformTask(pkg: String, displayId: Int = 0, activityType: Int): Boolean
 
     /**
      * Same call as [raiseFreeformTask], but reports WHY a raise did not happen (W6-F1 FIX-A).
      * [SplitSessionManager]'s restart path needs the distinction: a daemon that refused the raise
      * and a daemon that never answered both mean "this task will not come to front", and handing
-     * the same recents-leaf task to [launchFreeform] would silently report success while the pane
+     * the same live pane task to [launchFreeform] would silently report success while the pane
      * stays behind the backdrop. See [RaiseOutcome].
      */
-    suspend fun raiseFreeformTaskDetailed(pkg: String, displayId: Int = 0): RaiseOutcome
+    suspend fun raiseFreeformTaskDetailed(pkg: String, displayId: Int = 0, activityType: Int): RaiseOutcome
 
     /**
      * Reflects all static int/long constants out of the BYD SDK classes
@@ -362,9 +372,9 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // FORCE_TIMEOUT_MS, not the default 2s: on ROMs without the binder API (DiLink 5 removed
     // setTaskWindowingMode with AOSP S) the daemon restores fullscreen by removing the stack and
     // relaunching via `am start` with a settle pause — well over the 2s default.
-    override suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int): Boolean =
+    override suspend fun setTaskWindowingMode(taskId: Int, windowingMode: Int, activityType: Int): Boolean =
         transactParsed(HelperBinderProtocol.TX_SET_TASK_WINDOWING_MODE, {
-            it.writeInt(taskId); it.writeInt(windowingMode)
+            it.writeInt(taskId); it.writeInt(windowingMode); it.writeInt(activityType)
         }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             readAccepted(status)
@@ -407,10 +417,12 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // daemon can take up to ~9.5s on a cold start before the pin loop even begins).
     override suspend fun launchFreeform(
         packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int,
+        activityType: Int,
     ): FreeformLaunchResult =
         transactParsed(HelperBinderProtocol.TX_LAUNCH_FREEFORM, { d ->
             d.writeString(packageName); d.writeInt(displayId)
             d.writeInt(left); d.writeInt(top); d.writeInt(right); d.writeInt(bottom)
+            d.writeInt(activityType)
         }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             if (reply.dataAvail() < 4) return@transactParsed FreeformLaunchResult.FAILED
             when (reply.readInt()) {
@@ -512,15 +524,15 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // (cmd package resolve-activity + am start) — each can outrun REQ_TIMEOUT_MS on cold
     // DiLink hardware. 4.5 s covers both comfortably; FORCE_TIMEOUT_MS (15 s) is wrong
     // here because this call runs inside the session mutex on every reroute.
-    override suspend fun raiseFreeformTask(pkg: String, displayId: Int): Boolean =
-        raiseFreeformTaskDetailed(pkg, displayId) == RaiseOutcome.RAISED
+    override suspend fun raiseFreeformTask(pkg: String, displayId: Int, activityType: Int): Boolean =
+        raiseFreeformTaskDetailed(pkg, displayId, activityType) == RaiseOutcome.RAISED
 
     // transactParsed already separates the two failure modes: null = no usable reply (unknown TX
     // on an old daemon, timeout, dead binder), false = the daemon replied with a rejected status.
     // The plain Boolean API collapses both into false; this variant keeps them apart (FIX-A).
-    override suspend fun raiseFreeformTaskDetailed(pkg: String, displayId: Int): RaiseOutcome {
+    override suspend fun raiseFreeformTaskDetailed(pkg: String, displayId: Int, activityType: Int): RaiseOutcome {
         val accepted: Boolean? = transactParsed(HelperBinderProtocol.TX_RAISE_FREEFORM_TASK, {
-            it.writeString(pkg); it.writeInt(displayId)
+            it.writeString(pkg); it.writeInt(displayId); it.writeInt(activityType)
         }, timeoutMs = RAISE_TIMEOUT_MS) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             readAccepted(status)

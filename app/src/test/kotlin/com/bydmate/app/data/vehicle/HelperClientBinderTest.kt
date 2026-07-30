@@ -72,6 +72,21 @@ class HelperClientBinderTest {
             throw DeadObjectException("test dead binder")
     }
 
+    /**
+     * Live fake that hands the request args (after the interface token) to [capture]
+     * before replying with (status=0, value=0).
+     */
+    private fun capturingFake(capture: (Parcel) -> Unit): IBinder = object : FakeIBinder() {
+        override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+            data.setDataPosition(0)
+            data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+            capture(data)
+            reply!!.writeInt(0); reply.writeInt(0)
+            reply.setDataPosition(0)
+            return true
+        }
+    }
+
     /** Creates a HelperClientImpl with [resolveBinder] overridden to return [binder]. */
     private fun clientWith(binder: IBinder?): HelperClientImpl = object : HelperClientImpl() {
         override fun resolveBinder(): IBinder? = binder
@@ -384,14 +399,16 @@ class HelperClientBinderTest {
     @Test
     fun `raiseFreeformTask returns true when status is 0`() = runBlocking {
         val client = clientWith(liveFake(status = 0))
-        assertTrue(client.raiseFreeformTask("com.example.navi", displayId = 0))
+        assertTrue(client.raiseFreeformTask(
+            "com.example.navi", displayId = 0, activityType = HelperBinderProtocol.PANE_TYPE_RECENTS))
     }
 
     /** TC-29: raiseFreeformTask returns false when daemon replies status=-1 (raise failed / component not found). */
     @Test
     fun `raiseFreeformTask returns false when status is negative`() = runBlocking {
         val client = clientWith(liveFake(status = -1))
-        assertFalse(client.raiseFreeformTask("com.example.navi", displayId = 0))
+        assertFalse(client.raiseFreeformTask(
+            "com.example.navi", displayId = 0, activityType = HelperBinderProtocol.PANE_TYPE_RECENTS))
     }
 
     /**
@@ -401,7 +418,41 @@ class HelperClientBinderTest {
      */
     @Test
     fun `raiseFreeformTask returns false when transact is rejected (old daemon fallback path)`() = runBlocking {
-        assertFalse(clientWith(rejectingFake).raiseFreeformTask("com.example.navi", displayId = 0))
+        assertFalse(clientWith(rejectingFake).raiseFreeformTask(
+            "com.example.navi", displayId = 0, activityType = HelperBinderProtocol.PANE_TYPE_RECENTS))
+    }
+
+    /** TC-30a: the pane activityType is the trailing int, written after displayId. */
+    @Test
+    fun `raiseFreeformTask marshals activityType after displayId`() = runBlocking {
+        var pkg: String? = null; var displayId = -1; var activityType = -1
+        clientWith(capturingFake {
+            pkg = it.readString(); displayId = it.readInt(); activityType = it.readInt()
+        }).raiseFreeformTask("com.example.navi", displayId = 0,
+            activityType = HelperBinderProtocol.PANE_TYPE_STANDARD)
+        assertEquals("com.example.navi", pkg)
+        assertEquals(0, displayId)
+        assertEquals(HelperBinderProtocol.PANE_TYPE_STANDARD, activityType)
+    }
+
+    /** TC-30b: setTaskWindowingMode writes the requested activityType after windowingMode. */
+    @Test
+    fun `setTaskWindowingMode marshals activityType after windowingMode`() = runBlocking {
+        val args = IntArray(3)
+        clientWith(capturingFake { for (i in 0..2) args[i] = it.readInt() })
+            .setTaskWindowingMode(5, 5, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        assertEquals(5, args[0]); assertEquals(5, args[1])
+        assertEquals(HelperBinderProtocol.PANE_TYPE_STANDARD, args[2])
+    }
+
+    /** TC-30c: without an explicit activityType the fullscreen direction keeps legacy RECENTS. */
+    @Test
+    fun `setTaskWindowingMode defaults activityType to RECENTS`() = runBlocking {
+        val args = IntArray(3)
+        clientWith(capturingFake { for (i in 0..2) args[i] = it.readInt() })
+            .setTaskWindowingMode(5, 1)
+        assertEquals(5, args[0]); assertEquals(1, args[1])
+        assertEquals(HelperBinderProtocol.PANE_TYPE_RECENTS, args[2])
     }
 
     // ---------------------------------------------------------------------------

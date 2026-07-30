@@ -10,7 +10,9 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.HelperBinderProtocol
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.After
@@ -130,7 +132,7 @@ class ClusterProjectionSendFailureTest {
 
         val helper = mockk<HelperClient>(relaxed = true)
         coEvery {
-            helper.launchFreeform(any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         } returns FreeformLaunchResult.UNAVAILABLE
 
         val bootstrap = mockk<HelperBootstrap>(relaxed = true)
@@ -163,7 +165,7 @@ class ClusterProjectionSendFailureTest {
 
         val helper = mockk<HelperClient>(relaxed = true)
         coEvery {
-            helper.launchFreeform(any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         } returns FreeformLaunchResult.FAILED
 
         val bootstrap = mockk<HelperBootstrap>(relaxed = true)
@@ -206,7 +208,7 @@ class ClusterProjectionSendFailureTest {
 
         val helper = mockk<HelperClient>(relaxed = true)
         coEvery {
-            helper.launchFreeform(any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         } returns FreeformLaunchResult.UNAVAILABLE
 
         val bootstrap = mockk<HelperBootstrap>(relaxed = true)
@@ -229,6 +231,13 @@ class ClusterProjectionSendFailureTest {
             "restoring the removed UNAVAILABLE call gives count=2",
             1, callCount,
         )
+        // Fleet safety: the cluster keeps launching its projected app as a RECENTS-typed task.
+        // Only the split panes were flipped to STANDARD; the cluster path must stay byte-identical.
+        coVerify {
+            helper.launchFreeform(
+                any(), any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_RECENTS,
+            )
+        }
     }
 
     /**
@@ -270,7 +279,7 @@ class ClusterProjectionSendFailureTest {
 
         val helper = mockk<HelperClient>(relaxed = true)
         coEvery {
-            helper.launchFreeform(any(), any(), any(), any(), any(), any())
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), any())
         } returns FreeformLaunchResult.UNAVAILABLE
         coEvery { helper.createVirtualDisplay(any(), any(), any(), any(), any(), any()) } returns 1
         // Ensures a stale remoteDisplayId left by a prior test does not short-circuit into the
