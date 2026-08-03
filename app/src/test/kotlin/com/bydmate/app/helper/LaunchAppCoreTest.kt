@@ -107,6 +107,25 @@ class LaunchAppCoreTest {
         assertTrue("first command must be plain am start -n", shellCmds.first().startsWith("am start -n "))
     }
 
+    @Test
+    fun `plain path with target display births the task there via display-only flag`() {
+        val commands = mutableListOf<String>()
+        launchAppCore("ru.dublgis.dgismobile", null, 7, ACTIVITY_TYPE_STANDARD,
+            resolveComponent = { "ru.dublgis.dgismobile/.GrymMobileActivity" },
+            shell = { cmd, _ -> commands += cmd; "" })
+        assertEquals("am start --display 7 -n \"\$1\"", commands[0])
+        assertTrue("must not carry --windowingMode", commands.none { "--windowingMode" in it })
+    }
+
+    @Test
+    fun `plain path on main display keeps the legacy flagless command`() {
+        val commands = mutableListOf<String>()
+        launchAppCore("ru.dublgis.dgismobile", null, 0, ACTIVITY_TYPE_STANDARD,
+            resolveComponent = { "ru.dublgis.dgismobile/.GrymMobileActivity" },
+            shell = { cmd, _ -> commands += cmd; "" })
+        assertEquals("am start -n \"\$1\"", commands[0])
+    }
+
     // --- validation gate ---
 
     @Test

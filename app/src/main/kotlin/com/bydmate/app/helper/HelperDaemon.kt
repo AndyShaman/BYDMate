@@ -1300,7 +1300,12 @@ internal fun launchAppCore(
     if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
     // STANDARD is what `am start` assigns by default — only RECENTS needs the explicit flag.
     val typeFlag = if (activityType == ACTIVITY_TYPE_RECENTS) "--activityType $ACTIVITY_TYPE_RECENTS " else ""
-    val modePrefix = if (windowingMode != null) "--windowingMode $windowingMode $typeFlag--display $displayId " else ""
+    // displayId != 0 births the task on the target display: 2GIS/Qt dies on a cross-display move.
+    val modePrefix = when {
+        windowingMode != null -> "--windowingMode $windowingMode $typeFlag--display $displayId "
+        displayId != 0 -> "--display $displayId "
+        else -> ""
+    }
     val component = resolveComponent(packageName)
     if (component != null) {
         // Component is passed as positional "$1" — never interpolated into the sh -c string.
@@ -1551,7 +1556,10 @@ private fun resolveOrLaunchTask(
  * Blocking (Thread.sleep) — runs on a binder threadpool thread; the app side uses a 15s timeout.
  */
 private fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean {
-    val taskId = resolveOrLaunchTask(packageName, activityType = ACTIVITY_TYPE_STANDARD) // ignored: windowingMode == null
+    // Not-yet-running apps are born on the target display — 2GIS/Qt dies if moved there instead.
+    val taskId = resolveOrLaunchTask(
+        packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
+    )
     if (taskId <= 0) return false
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
@@ -1564,6 +1572,15 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
         runCatching { setTaskBoundsReflect(taskId, 0, 0, width, height) }
         runCatching { setFocusedTaskReflect(taskId) }
         Thread.sleep(200L)
+    }
+    // App died during the move (2GIS/Qt) → relaunch ONCE born on the display; no retry loop.
+    if (findTaskId(packageName) <= 0) {
+        val rebornId = resolveOrLaunchTask(
+            packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
+        )
+        if (rebornId <= 0) return false
+        runCatching { setTaskBoundsReflect(rebornId, 0, 0, width, height) }
+        runCatching { setFocusedTaskReflect(rebornId) }
     }
     return true
 }
