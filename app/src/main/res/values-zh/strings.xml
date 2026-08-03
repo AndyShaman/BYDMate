@@ -822,6 +822,10 @@
     <string name="auto_enum_open_f">打开</string>
     <string name="auto_enum_open_m">打开</string>
     <string name="auto_enum_recirc">内循环</string>
+    <string name="auto_enum_turn_off">关闭</string>
+    <string name="auto_enum_turn_left">左转</string>
+    <string name="auto_enum_turn_right">右转</string>
+    <string name="auto_enum_turn_hazard">双闪</string>
     <string name="auto_enum_unfastened">未系</string>
     <string name="auto_enum_unlocked">已解锁</string>
     <!-- trigger param names -->
@@ -869,6 +873,7 @@
     <string name="auto_param_rain">雨量</string>
     <string name="auto_param_lightlow">近光灯</string>
     <string name="auto_param_drl">日行灯</string>
+    <string name="auto_param_turnsignal">转向灯</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">车窗通风</string>
     <string name="auto_act_close_all_windows">关闭所有车窗</string>
@@ -933,6 +938,8 @@
     <string name="auto_act_ambient_light_off">氛围灯关</string>
     <string name="auto_act_drl_on">日行灯开</string>
     <string name="auto_act_drl_off">日行灯关</string>
+    <string name="auto_act_hazard_on">打开双闪</string>
+    <string name="auto_act_hazard_off">关闭双闪</string>
     <string name="auto_act_interior_light_on">车内灯开</string>
     <string name="auto_act_interior_light_off">车内灯关</string>
     <string name="auto_act_lock_doors">车门上锁</string>

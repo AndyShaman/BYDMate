@@ -287,6 +287,7 @@ class SettingsViewModelTest {
             placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = energyDataDeadDetector,
             hudController = mockk(relaxed = true),
+            fidSubscriptionManager = mockk(relaxed = true),
         )
     }
 

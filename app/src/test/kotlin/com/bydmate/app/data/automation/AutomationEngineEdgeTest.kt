@@ -143,6 +143,17 @@ class AutomationEngineEdgeTest {
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
     }
 
+    @Test fun `turn signal edge fires once on off to left transition`() = runBlocking {
+        val r = rule(1, listOf(paramTrigger("TurnSignal", "==", "2")))
+        val (engine, ruleDao) = setup { listOf(r) }
+
+        engine.evaluate(diParsData(turnSignal = 1), null)  // seed: off
+        engine.evaluate(diParsData(turnSignal = 2), null)  // front: left
+        engine.evaluate(diParsData(turnSignal = 2), null)  // held on — no second front
+
+        coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
+    }
+
     @Test fun `rule with playSound plays chime once on fire`() = runBlocking {
         mockkObject(OverlayNotificationManager)
         try {

@@ -138,7 +138,18 @@ class HudProtobufBuilderTest {
         assertEquals(9, HudProtobufBuilder.gaodeToF28(10))
         assertEquals(1, HudProtobufBuilder.gaodeToF28(11))   // straight & everything else
         assertEquals(1, HudProtobufBuilder.gaodeToF28(13))
-        assertEquals(1, HudProtobufBuilder.gaodeToF28(0))
+    }
+
+    @Test fun `no maneuver clears the arrow instead of drawing straight`() {
+        assertEquals(0, HudProtobufBuilder.gaodeToF28(0))
+        val f = unwrap(HudProtobufBuilder.buildFrame(
+            maneuverGaode = 0, distanceMeters = 250, road = "A",
+            etaString = null, totalDistMeters = 0, speedLimit = 60,
+            maneuverIconPng = null, speedSignPng = null,
+        ))
+        assertEquals(0L, (f[28]!![0] as Long))
+        assertNull(f[8])
+        assertEquals(60L, (f[11]!![0] as Long))
     }
 
     @Test fun `gaodeToF28 suppresses arrow for roundabout family`() {

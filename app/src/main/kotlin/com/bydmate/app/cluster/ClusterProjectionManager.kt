@@ -185,6 +185,21 @@ object ClusterProjectionManager {
     private var clusterHeight: Int = 480
     private var clusterDensityDpi: Int = 320
 
+    /** True from the first step of a projection attempt until it has either published its
+     *  overlay/direct display or failed. See [isProjectionActive]. */
+    @Volatile
+    private var projectionAttemptInProgress = false
+
+    /**
+     * True while something of ours is on the cluster: the VD overlay is attached, a direct
+     * freeform session is live, or an attempt is in flight. Read lock-free, like [currentMode] —
+     * the only consumer is the blind-spot pipeline, which asks before powering the cluster
+     * compositor DOWN (it must not black out a running or starting projection). Taking [mutex]
+     * here would block the 150 ms camera loop behind a whole projection attempt.
+     */
+    fun isProjectionActive(): Boolean =
+        overlayView != null || directDisplayId != -1 || projectionAttemptInProgress
+
     /**
      * Drive the projection to [mode], serialized under [mutex]. Idempotent — a no-op when already
      * in [mode]. Auto-launch is delegated to the daemon's [launchAndForce] (it [launchApp]s Navi
@@ -599,7 +614,15 @@ object ClusterProjectionManager {
                 if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
             }
             ClusterMode.FULLSCREEN -> {
-                val failure = project(context, mode, helper, bootstrap)
+                // Marks the window where the compositor is already powered up but overlayView /
+                // directDisplayId are not set yet, so [isProjectionActive] cannot answer "false"
+                // to anyone deciding whether to power the compositor down.
+                projectionAttemptInProgress = true
+                val failure = try {
+                    project(context, mode, helper, bootstrap)
+                } finally {
+                    projectionAttemptInProgress = false
+                }
                 if (failure == null) {
                     currentMode = mode
                     lastFailure = null

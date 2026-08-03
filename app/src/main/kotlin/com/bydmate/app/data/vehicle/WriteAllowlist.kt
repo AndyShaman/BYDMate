@@ -73,6 +73,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1023 to 1330643002,  // SET_INSIDE_LIGHT_STATE_SET (interior light on/off)
             1023 to 1069547536,  // SET_INTERIOR_ATMOSPHERE_LAMP_BRIGHTNESS_SET (ambient)
             1004 to 1125122118,  // DRL (daytime running lights) on/off
+            1004 to 871366669,   // hazard lights — live-validated on Leopard 3 2026-07-31
             1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
             1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
         )
@@ -152,6 +153,11 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // DRL (daytime running lights) — 1=on, 2=off (0 invalid), dev=1004 carve-out
             WriteEntry("drl_on",  1004, 1125122118, null, 1, 1, "lights", true, "live-leopard3-2026-05-29"),
             WriteEntry("drl_off", 1004, 1125122118, null, 2, 2, "lights", true, "live-leopard3-2026-05-29"),
+            // hazard lights — 0=off, 1=hazard (2/3 = turn signals, deliberately not exposed),
+            // dev=1004 carve-out. No readback: the read fid 950009900 is a different mask
+            // (6 while hazard is on), and reading 871366669 itself returns -10011 (write-only).
+            WriteEntry("hazard_on",  1004, 871366669, null, 1, 1, "lights", true, "live-leopard3-2026-07-31"),
+            WriteEntry("hazard_off", 1004, 871366669, null, 0, 0, "lights", true, "live-leopard3-2026-07-31"),
             // mirror heat = rear-window defrost (single button on Leopard 3) — 1=on, 0=off, dev=1000
             WriteEntry("defrost_rear_on",  1000, 501219357, null, 1, 1, "climate", true, "live-leopard3-2026-05-29"),
             WriteEntry("defrost_rear_off", 1000, 501219357, null, 0, 0, "climate", true, "live-leopard3-2026-05-29"),

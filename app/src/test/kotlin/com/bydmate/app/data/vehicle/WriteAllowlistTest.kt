@@ -239,6 +239,26 @@ class WriteAllowlistTest {
         assertEquals(2, al.find("drl_off")!!.valueMin)
     }
 
+    @Test fun `hazard is carved out of banned dev 1004`() {
+        assertTrue(
+            "hazard write fid must be carved out of the dev 1004 ban",
+            (1004 to 871366669) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS,
+        )
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val on = al.find("hazard_on")
+        assertNotNull(on)
+        assertEquals(1004, on!!.dev)
+        assertEquals(871366669, on.writeFid)
+        assertEquals(1, on.valueMin)
+        assertEquals(1, on.valueMax)
+        // read channel 950009900 carries a different mask — readback would false-mismatch
+        assertNull(on.readbackFid)
+        val off = al.find("hazard_off")!!
+        assertEquals(0, off.valueMin)
+        assertEquals(0, off.valueMax)
+        assertNull(off.readbackFid)
+    }
+
     // ── Seat heat/vent re-wired to validated dev=1000 switch+level 2026-06-29 ──
     @Test fun `seat heat and vent switch plus level entries are validated on dev 1000`() {
         val al = WriteAllowlist.loadProduction { "{}" }

@@ -126,6 +126,31 @@ class LaunchAppCoreTest {
         assertEquals("am start -n \"\$1\"", commands[0])
     }
 
+    @Test
+    fun `plain path with target display does not fall back to monkey when am fails`() {
+        val commands = mutableListOf<String>()
+        val ok = launchAppCore("ru.dublgis.dgismobile", null, 7, ACTIVITY_TYPE_STANDARD,
+            resolveComponent = { "ru.dublgis.dgismobile/.GrymMobileActivity" },
+            shell = { script, args -> commands += effectiveCmd(script, args); "Error: not started" })
+        assertFalse("a display-targeted launch that failed must not report success", ok)
+        assertTrue("monkey cannot target a display and must not be issued",
+            commands.none { it.startsWith("monkey") })
+    }
+
+    @Test
+    fun `plain path on main display still falls back to monkey when am fails`() {
+        val commands = mutableListOf<String>()
+        val ok = launchAppCore("ru.dublgis.dgismobile", null, 0, ACTIVITY_TYPE_STANDARD,
+            resolveComponent = { "ru.dublgis.dgismobile/.GrymMobileActivity" },
+            shell = { script, args ->
+                val cmd = effectiveCmd(script, args)
+                commands += cmd
+                if (cmd.startsWith("monkey")) "" else "Error: not started"
+            })
+        assertTrue("legacy monkey fallback must still rescue the launch", ok)
+        assertTrue("monkey must have been called", commands.any { it.startsWith("monkey") })
+    }
+
     // --- validation gate ---
 
     @Test

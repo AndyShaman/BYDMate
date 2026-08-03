@@ -67,6 +67,28 @@ class NavGuidanceHubTest {
         assertEquals(0, s.speedLimit)
     }
 
+    @Test fun `maneuver and its icon clear after the maneuver timeout`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, distanceMeters = 250, road = "ул. Ленина",
+            maneuverPng = byteArrayOf(5)), nowMs = 1000)
+        // Guidance keeps flowing without a maneuver balloon (straight stretch)
+        val later = 1000 + NavGuidanceHub.MANEUVER_TIMEOUT_MS + 500
+        NavGuidanceHub.update(data(dist = 250, limit = 60), NavGuidanceHub.Source.A11Y, nowMs = later)
+        val s = NavGuidanceHub.snapshot(nowMs = later + 1)
+        assertTrue(s.active)
+        assertEquals(0, s.maneuverGaode)
+        assertNull(s.maneuverPng)
+        assertEquals(250, s.distanceMeters)
+        assertEquals("ул. Ленина", s.road)
+        assertEquals(60, s.speedLimit)   // own freshness, untouched by maneuver expiry
+    }
+
+    @Test fun `fresh maneuver survives up to the timeout`() {
+        NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
+        val s = NavGuidanceHub.snapshot(nowMs = 1000 + NavGuidanceHub.MANEUVER_TIMEOUT_MS)
+        assertEquals(2, s.maneuverGaode)
+    }
+
     @Test fun `no-guidance streak deactivates after hysteresis`() {
         NavGuidanceHub.update(data(gaode = 2, dist = 250), NavGuidanceHub.Source.A11Y, nowMs = 1000)
         NavGuidanceHub.markNoGuidance(nowMs = 2000)   // streak starts

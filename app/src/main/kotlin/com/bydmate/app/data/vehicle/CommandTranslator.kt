@@ -123,6 +123,10 @@ object CommandTranslator {
         "打开日行灯" to Resolved("drl_on",  1),
         "关闭日行灯" to Resolved("drl_off", 2),
 
+        // ── Hazard lights ── LIVE_VALIDATED (dev=1004 carve-out) ──────────────
+        "双闪打开" to Resolved("hazard_on",  1),
+        "双闪关闭" to Resolved("hazard_off", 0),
+
         // ── Mirror heat = rear-window defrost ── LIVE_VALIDATED (dev=1000) ────
         "后视镜加热"   to Resolved("defrost_rear_on",  1),
         "关闭后视镜加热" to Resolved("defrost_rear_off", 0),
