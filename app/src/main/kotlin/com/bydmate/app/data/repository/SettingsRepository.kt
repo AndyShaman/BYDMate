@@ -158,7 +158,7 @@ open class SettingsRepository @Inject constructor(
     /**
      * One row of the user-editable manual range table: consumption (and optionally the
      * vehicle's own 100%-SOC range) at a reference temperature. [ManualRangeCalculator]
-     * interpolates between rows for the vehicle's current exterior temperature.
+     * interpolates between rows for the vehicle's current average battery temperature.
      */
     data class ManualRangePoint(
         val temperatureC: Int,

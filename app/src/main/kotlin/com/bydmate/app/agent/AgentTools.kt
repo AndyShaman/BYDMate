@@ -789,7 +789,7 @@ class AgentTools @Inject constructor(
             putIf("lifetime_km", b.lifetimeKm?.toDouble())
             putIf("lifetime_kwh", b.lifetimeKwh?.toDouble())
         }
-        runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.exteriorTemp) }
+        runCatchingCancellable { rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp) }
             .getOrNull()?.let { est ->
                 o.put("range_km", est.rangeKm.roundToInt())
                 o.put("battery_capacity_kwh", est.capacityKwh)
@@ -1323,7 +1323,7 @@ class AgentTools @Inject constructor(
         val gps = locationProvider() ?: return null
         val d = gate.vehicleSnapshot() ?: return null
         val rangeKm = runCatchingCancellable {
-            rangeCalculator.estimate(d.soc, d.totalElecConsumption, d.exteriorTemp)
+            rangeCalculator.estimate(d.soc, d.totalElecConsumption, d.avgBatTemp)
         }.getOrNull() ?: return null
         val straightKm = PlaceGeometry.distanceMeters(gps.first, gps.second, lat, lon) / 1000.0
         val distanceKm = (straightKm * ROAD_FACTOR).roundToInt()
@@ -1391,7 +1391,7 @@ class AgentTools @Inject constructor(
         val d = gate.vehicleSnapshot()
             ?: return """{"error":"нет данных с машины (нет связи или машина спит)"}"""
         val rangeKm = runCatchingCancellable {
-            rangeCalculator.estimate(d.soc, d.totalElecConsumption, d.exteriorTemp)
+            rangeCalculator.estimate(d.soc, d.totalElecConsumption, d.avgBatTemp)
         }.getOrNull()
             ?: return """{"error":"не хватает данных для оценки запаса хода (нужен пробег с учётом расхода)"}"""
         return JSONObject()
@@ -1449,7 +1449,7 @@ class AgentTools @Inject constructor(
             val routeEst: RangeEstimate? = gate.vehicleSnapshot()?.let { d ->
                 put("soc", d.soc)
                 val e = runCatchingCancellable {
-                    rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.exteriorTemp)
+                    rangeCalculator.estimateDetailed(d.soc, d.totalElecConsumption, d.avgBatTemp)
                 }.getOrNull()
                 e?.let { put("range_km", it.rangeKm.roundToInt()) }
                 e

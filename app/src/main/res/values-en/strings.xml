@@ -88,10 +88,10 @@
     <string name="settings_range_calc_method_label">Calculation method</string>
     <string name="settings_range_calc_auto">Auto</string>
     <string name="settings_range_calc_manual">Manual</string>
-    <string name="settings_range_calc_method_desc">\"Auto\" uses trip history and live consumption. \"Manual\" uses your own temperature-based consumption table.</string>
+    <string name="settings_range_calc_method_desc">\"Auto\" uses trip history and live consumption. \"Manual\" uses your own battery-temperature-based consumption table.</string>
     <string name="settings_range_calc_edit_table_button">Consumption table</string>
-    <string name="settings_range_calc_edit_table_desc">5 points: temperature → consumption (and optionally range at 100% charge)</string>
-    <string name="range_table_dialog_title">Temperature consumption table</string>
+    <string name="settings_range_calc_edit_table_desc">5 points: battery temperature → consumption (and optionally range at 100% charge)</string>
+    <string name="range_table_dialog_title">Battery temperature consumption table</string>
     <string name="range_table_dialog_note1">Consumption (kWh/100km) is required; range at 100% charge is optional and used to derive a more accurate effective capacity.</string>
     <string name="range_table_dialog_col_temp">°C</string>
     <string name="range_table_dialog_col_consumption">Consumption</string>

@@ -35,17 +35,17 @@ class RangeCalculator(
      *
      * When SettingsRepository.KEY_RANGE_CALC_METHOD is "manual", delegates to
      * [ManualRangeCalculator] (a user-edited temperature table) instead of the
-     * historical/live consumption blend below. [exteriorTempC] is only consulted
+     * historical/live consumption blend below. [batteryTempC] is only consulted
      * in that mode.
      *
      *   remaining_kwh = SOC * cap / 100 - socInterpolator.carryOver(totalElec, soc)
      *   range_km      = remaining_kwh / recent_avg * 100
      */
-    suspend fun estimateDetailed(soc: Int?, totalElecKwh: Double?, exteriorTempC: Int? = null): RangeEstimate? {
+    suspend fun estimateDetailed(soc: Int?, totalElecKwh: Double?, batteryTempC: Int? = null): RangeEstimate? {
         if (methodProvider() == SettingsRepository.RANGE_CALC_MANUAL) {
             return manualCalculator.estimateDetailed(
                 soc = soc,
-                temperatureC = exteriorTempC,
+                temperatureC = batteryTempC,
                 table = manualTableProvider(),
                 fallbackCapacityKwh = capacityProvider(),
             )
@@ -73,8 +73,8 @@ class RangeCalculator(
     }
 
     /** Returns estimated range in km, or null when inputs are insufficient. */
-    suspend fun estimate(soc: Int?, totalElecKwh: Double?, exteriorTempC: Int? = null): Double? =
-        estimateDetailed(soc, totalElecKwh, exteriorTempC)?.rangeKm
+    suspend fun estimate(soc: Int?, totalElecKwh: Double?, batteryTempC: Int? = null): Double? =
+        estimateDetailed(soc, totalElecKwh, batteryTempC)?.rangeKm
 
     companion object {
         /** Plausible EV battery capacity bounds for the user-entered setting, kWh. */

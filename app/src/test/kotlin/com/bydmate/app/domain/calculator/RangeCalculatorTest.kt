@@ -1,5 +1,7 @@
 package com.bydmate.app.domain.calculator
 
+import com.bydmate.app.data.repository.SettingsRepository
+
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -107,6 +109,25 @@ class RangeCalculatorTest {
         cap = 72.9
         val after = c.estimate(soc = 50, totalElecKwh = 1500.0)!!
         assertTrue("range increased after capacity bump", after > before * 1.4)
+    }
+    @Test fun `manual mode uses supplied battery temperature`() = runTest {
+        val table = listOf(
+            SettingsRepository.ManualRangePoint(temperatureC = -20, consumptionKwhPer100Km = 30.0),
+            SettingsRepository.ManualRangePoint(temperatureC = 20, consumptionKwhPer100Km = 10.0),
+        )
+        val c = RangeCalculator(
+            buffer = StubBuffer(18.0),
+            capacityProvider = { 60.0 },
+            socInterpolator = StubInterpolator(0.0),
+            methodProvider = { SettingsRepository.RANGE_CALC_MANUAL },
+            manualTableProvider = { table },
+        )
+
+        val cold = c.estimate(soc = 50, totalElecKwh = null, batteryTempC = -20)!!
+        val warm = c.estimate(soc = 50, totalElecKwh = null, batteryTempC = 20)!!
+
+        assertEquals(100.0, cold, 1e-9)
+        assertEquals(300.0, warm, 1e-9)
     }
 }
 
