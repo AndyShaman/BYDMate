@@ -70,4 +70,5 @@ data class DiParsData(
     val wiperRelay: Int? = null,         // 0=idle, non-zero=wiping (raw signal for rain derivation)
     val autoWipers: Int? = null,         // rain-sensing auto wipers: 1=enabled
     val bmsState: Int? = null,           // BMS charging state: 1=CHARGING, 2=FINISH, 13=PAUSE (raw signal for chargingStatus derivation)
+    val turnSignal: Int? = null,         // 1=off, 2=left, 4=right, 6=hazard (mask holds while blinking)
 )

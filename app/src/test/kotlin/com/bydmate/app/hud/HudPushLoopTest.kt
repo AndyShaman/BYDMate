@@ -138,6 +138,27 @@ class HudPushLoopTest {
         assertArrayEquals(expected, sink.events.single().second)
     }
 
+    @Test fun `expired maneuver drops icon and arrow but keeps the speed limit`() {
+        NavGuidanceHub.updateFromNotification(
+            NavGuidanceHub.RichUpdate(maneuverGaode = 2, distanceMeters = 250, road = "A",
+                maneuverPng = byteArrayOf(5)),
+            nowMs = 1000L,
+        )
+        val now = 1000L + NavGuidanceHub.MANEUVER_TIMEOUT_MS + 1
+        NavGuidanceHub.update(
+            NavGuidance(distanceMeters = 250, road = "A", speedLimit = 60),
+            NavGuidanceHub.Source.A11Y, nowMs = now,
+        )
+        val sink = FakeSink()
+        HudPushLoop(sink, nowMsProvider = { now }).tick(wasActive = true)
+        val expected = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 0, distanceMeters = 250, road = "A",
+            etaString = null, totalDistMeters = 0, speedLimit = 60,
+            maneuverIconPng = null, speedSignPng = HudSpeedSign.render(60),
+        )
+        assertArrayEquals(expected, sink.events.single().second)
+    }
+
     @Test fun `running line appears beyond 3 km`() {
         NavGuidanceHub.updateFromNotification(
             NavGuidanceHub.RichUpdate(maneuverGaode = 2, distanceMeters = 250, road = "Минское шоссе",

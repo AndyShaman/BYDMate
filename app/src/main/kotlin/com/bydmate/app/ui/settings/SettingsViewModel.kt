@@ -232,6 +232,7 @@ class SettingsViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
     private val hudController: com.bydmate.app.hud.HudController,
+    private val fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -1673,6 +1674,12 @@ class SettingsViewModel @Inject constructor(
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }
 
+            appendLine("--- fid subscriptions ---")
+            try {
+                SubscriptionDiagnostics.format(fidSubscriptionManager.diagnosticsSnapshot())
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- last crash ---")
             try {
                 val crashes = CrashLog.read(appContext)
@@ -1748,7 +1755,9 @@ class SettingsViewModel @Inject constructor(
                     "bydmate_helper:*", "HudIconLoader:*",
                     "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
                     // Amap-channel wave: notification lane + parser tags.
-                    "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*"
+                    "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
+                    // Blindspot wave: observe-mode fid subscriptions + AVM camera probe.
+                    "FidSubscription:*", "CameraProbe:*"
                 ))
 
                 // Background thread to pipe logcat to file with size limit.

@@ -74,6 +74,8 @@ val TRIGGER_PARAMS = listOf(
         TriggerParamOption("Speed", "车速", R.string.auto_param_speed, R.string.auto_cat_driving, R.string.auto_unit_kmh),
         TriggerParamOption("Gear", "档位", R.string.auto_param_gear, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_p, "2" to R.string.auto_enum_code_r, "3" to R.string.auto_enum_code_n, "4" to R.string.auto_enum_code_d)),
         TriggerParamOption("DriveMode", "整车运行模式", R.string.auto_param_drivemode, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_code_eco, "2" to R.string.auto_enum_code_sport, "3" to R.string.auto_enum_code_normal, "4" to R.string.auto_enum_code_offroad)),
+        // Live codes (Leopard 3 2026-07-31): mask of the blinker lines, holds steady while blinking
+        TriggerParamOption("TurnSignal", "转向灯", R.string.auto_param_turnsignal, R.string.auto_cat_driving, enumValues = listOf("1" to R.string.auto_enum_turn_off, "2" to R.string.auto_enum_turn_left, "4" to R.string.auto_enum_turn_right, "6" to R.string.auto_enum_turn_hazard)),
         TriggerParamOption("SOC", "电量百分比", R.string.auto_param_soc, R.string.auto_cat_energy, R.string.auto_unit_percent),
         TriggerParamOption("ChargingStatus", "充电状态", R.string.auto_param_chargingstatus, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_none, "1" to R.string.auto_enum_connected, "2" to R.string.auto_enum_charging)),
         TriggerParamOption("PowerState", "电源状态", R.string.auto_param_powerstate, R.string.auto_cat_energy, enumValues = listOf("0" to R.string.auto_enum_code_off, "1" to R.string.auto_enum_code_on, "2" to R.string.auto_enum_code_drive)),
@@ -182,6 +184,8 @@ val ACTION_COMMANDS = listOf(
         ActionOption("氛围灯关闭", R.string.auto_act_ambient_light_off, R.string.auto_cat_light),
         ActionOption("打开日行灯", R.string.auto_act_drl_on, R.string.auto_cat_light),
         ActionOption("关闭日行灯", R.string.auto_act_drl_off, R.string.auto_cat_light),
+        ActionOption("双闪打开", R.string.auto_act_hazard_on, R.string.auto_cat_light),
+        ActionOption("双闪关闭", R.string.auto_act_hazard_off, R.string.auto_cat_light),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
         ActionOption("车门上锁", R.string.auto_act_lock_doors, R.string.auto_cat_locks),

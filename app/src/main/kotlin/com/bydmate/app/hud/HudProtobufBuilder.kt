@@ -12,8 +12,12 @@ object HudProtobufBuilder {
     const val MAX_PAYLOAD_BYTES = 65536
     const val MAX_ROAD_CHARS = 200
 
-    /** GAODE maneuver -> f28 reference arrow: 3=left, 2=right, 9=uturn, 0=roundabout, 1=straight/other. */
+    /** GAODE maneuver -> f28 reference arrow: 3=left, 2=right, 9=uturn, 0=none/roundabout,
+     *  1=straight/other. */
     fun gaodeToF28(gaode: Int): Int = when (gaode) {
+        // No maneuver known (expired or unmapped): raw 0 clears the arrow on the glass
+        // (donor buildNew). Mapping it to "straight" left a passed turn hanging there.
+        0 -> 0
         1, 3, 7 -> 3
         2, 4, 8 -> 2
         9, 10 -> 9

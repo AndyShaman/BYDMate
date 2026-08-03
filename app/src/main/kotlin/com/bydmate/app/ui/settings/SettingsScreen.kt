@@ -4,6 +4,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import com.bydmate.app.camera.BlindSpotPositionOverlay
+import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -957,122 +959,203 @@ private fun DisplaySection() {
     var extendedConfirmOpen by remember { mutableStateOf(false) }
     var modeHelpOpen by remember { mutableStateOf(false) }
 
-    SectionHeader(text = stringResource(R.string.settings_display_mirror_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth(),
+    // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
+    // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
+    val applyGeometry: () -> Unit = {
+        prefs.edit()
+            .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
+            .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, offsetXPct)
+            .putInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, offsetYPct)
+            .putInt(ClusterProjectionManager.KEY_SCALE_PCT, scalePct)
+            .apply()
+        ClusterProjectionManager.reproject(
+            context, entryPoint.helperClient(), entryPoint.helperBootstrap())
+    }
+
+    SectionHeader(text = stringResource(R.string.settings_section_display_title))
+    SettingCollapsibleCard(
+        title = stringResource(R.string.settings_display_card_mirror_title),
+        subtitle = if (enabled) {
+            stringResource(
+                R.string.settings_display_card_mirror_sub_app,
+                stringResource(R.string.settings_display_state_on),
+                targetLabel,
+            )
+        } else {
+            stringResource(
+                R.string.settings_display_card_mirror_sub,
+                stringResource(R.string.settings_display_state_off),
+            )
+        },
+        checked = enabled,
+        onCheckedChange = {
+            enabled = it
+            prefs.edit().putBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, it).apply()
+            // Turning the switch on self-enables our a11y key filter via the daemon, so star
+            // control works on a clean install with no ADB (DiLink has no a11y settings UI).
+            if (it) {
+                ClusterProjectionManager.enableStarControl(
+                    entryPoint.helperClient(), entryPoint.helperBootstrap())
+            }
+        },
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_display_mirror_title),
-                description = stringResource(R.string.settings_display_mirror_desc),
-                checked = enabled,
-                onCheckedChange = {
-                    enabled = it
-                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, it).apply()
-                    // Turning the switch on self-enables our a11y key filter via the daemon, so star
-                    // control works on a clean install with no ADB (DiLink has no a11y settings UI).
-                    if (it) {
-                        ClusterProjectionManager.enableStarControl(
-                            entryPoint.helperClient(), entryPoint.helperBootstrap())
+        // Auto power-on toggle: when enabled, ClusterProjectionManager wakes the cluster compositor
+        // before sending the projection window.
+        SettingToggleRow(
+            title = stringResource(R.string.settings_cluster_auto_container_title),
+            description = stringResource(R.string.settings_cluster_auto_container_desc),
+            checked = autoContainer,
+            onCheckedChange = {
+                autoContainer = it
+                prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
+            },
+        )
+        SettingDivider()
+        // Transport selector: direct freeform (agent/HUD can see the navigator) vs the
+        // pre-3.6 VirtualDisplay pipeline. VD also returns the system freeform flag to its
+        // factory value — the fix for third-party projection apps broken by a stale flag.
+        SettingChipRow(
+            title = stringResource(R.string.settings_projection_mode_title),
+            options = listOf(
+                stringResource(R.string.settings_projection_mode_vd),
+                stringResource(R.string.settings_projection_mode_direct),
+            ),
+            selectedIndex = if (directProjection) 1 else 0,
+            onSelect = { index ->
+                val direct = index == 1
+                if (direct != directProjection) {
+                    if (direct) {
+                        // Extended transport changes a system window setting - informed
+                        // consent first: what changes, why, and how to restore factory.
+                        extendedConfirmOpen = true
+                    } else {
+                        directProjection = false
+                        rebootPending = false
+                        ClusterProjectionManager.setDirectProjectionEnabled(
+                            context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                    }
+                }
+            },
+            onHelp = { modeHelpOpen = !modeHelpOpen },
+        )
+        if (modeHelpOpen) {
+            SettingHint(text = stringResource(R.string.settings_projection_mode_help))
+        }
+        if (extendedConfirmOpen) {
+            AlertDialog(
+                onDismissRequest = { extendedConfirmOpen = false },
+                containerColor = CardSurface,
+                title = {
+                    Text(
+                        stringResource(R.string.projection_extended_confirm_title),
+                        color = TextPrimary,
+                    )
+                },
+                text = {
+                    Text(
+                        stringResource(R.string.projection_extended_confirm_body),
+                        color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        extendedConfirmOpen = false
+                        directProjection = true
+                        ClusterProjectionManager.setDirectProjectionEnabled(
+                            context, true, entryPoint.helperClient(), entryPoint.helperBootstrap())
+                    }) { Text(stringResource(R.string.projection_extended_confirm_enable), color = AccentGreen) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { extendedConfirmOpen = false }) {
+                        Text(stringResource(R.string.projection_extended_confirm_cancel), color = TextSecondary)
                     }
                 },
-            )
-            SettingDivider()
-            // Auto power-on toggle: when enabled, ClusterProjectionManager wakes the cluster compositor
-            // before sending the projection window.
-            SettingToggleRow(
-                title = stringResource(R.string.settings_cluster_auto_container_title),
-                description = stringResource(R.string.settings_cluster_auto_container_desc),
-                checked = autoContainer,
-                onCheckedChange = {
-                    autoContainer = it
-                    prefs.edit().putBoolean(ClusterProjectionManager.KEY_AUTO_CONTAINER, it).apply()
-                },
-            )
-            SettingDivider()
-            // Transport selector: direct freeform (agent/HUD can see the navigator) vs the
-            // pre-3.6 VirtualDisplay pipeline. VD also returns the system freeform flag to its
-            // factory value — the fix for third-party projection apps broken by a stale flag.
-            SettingChipRow(
-                title = stringResource(R.string.settings_projection_mode_title),
-                options = listOf(
-                    stringResource(R.string.settings_projection_mode_vd),
-                    stringResource(R.string.settings_projection_mode_direct),
-                ),
-                selectedIndex = if (directProjection) 1 else 0,
-                onSelect = { index ->
-                    val direct = index == 1
-                    if (direct != directProjection) {
-                        if (direct) {
-                            // Extended transport changes a system window setting - informed
-                            // consent first: what changes, why, and how to restore factory.
-                            extendedConfirmOpen = true
-                        } else {
-                            directProjection = false
-                            rebootPending = false
-                            ClusterProjectionManager.setDirectProjectionEnabled(
-                                context, false, entryPoint.helperClient(), entryPoint.helperBootstrap())
-                        }
-                    }
-                },
-                onHelp = { modeHelpOpen = !modeHelpOpen },
-            )
-            if (modeHelpOpen) {
-                SettingHint(text = stringResource(R.string.settings_projection_mode_help))
-            }
-            if (extendedConfirmOpen) {
-                AlertDialog(
-                    onDismissRequest = { extendedConfirmOpen = false },
-                    containerColor = CardSurface,
-                    title = {
-                        Text(
-                            stringResource(R.string.projection_extended_confirm_title),
-                            color = TextPrimary,
-                        )
-                    },
-                    text = {
-                        Text(
-                            stringResource(R.string.projection_extended_confirm_body),
-                            color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
-                        )
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            extendedConfirmOpen = false
-                            directProjection = true
-                            ClusterProjectionManager.setDirectProjectionEnabled(
-                                context, true, entryPoint.helperClient(), entryPoint.helperBootstrap())
-                        }) { Text(stringResource(R.string.projection_extended_confirm_enable), color = AccentGreen) }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { extendedConfirmOpen = false }) {
-                            Text(stringResource(R.string.projection_extended_confirm_cancel), color = TextSecondary)
-                        }
-                    },
-                )
-            }
-            if (rebootPending && directProjection) {
-                SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
-            }
-            // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
-            if (enabled) {
-                SettingDivider()
-                SettingValueRow(
-                    title = stringResource(R.string.settings_display_button_title),
-                    value = steeringButtonLabel(triggerKey),
-                    onClick = { learning = true },
-                )
-            }
-            SettingDivider()
-            // App to project — defaults to Yandex Navi. Takes effect on the next star press, not live.
-            SettingValueRow(
-                title = stringResource(R.string.settings_display_app_title),
-                value = targetLabel,
-                onClick = { pickingApp = true },
             )
         }
+        if (rebootPending && directProjection) {
+            SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
+        }
+        // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
+        if (enabled) {
+            SettingDivider()
+            SettingValueRow(
+                title = stringResource(R.string.settings_display_button_title),
+                value = steeringButtonLabel(triggerKey),
+                onClick = { learning = true },
+            )
+        }
+        SettingDivider()
+        // App to project — defaults to Yandex Navi. Takes effect on the next star press, not live.
+        SettingValueRow(
+            title = stringResource(R.string.settings_display_app_title),
+            value = targetLabel,
+            onClick = { pickingApp = true },
+        )
+        // Defaults (100/100 size, centered, scale 100) reproduce the plain fullscreen projection, so
+        // cars without a native mini zone (e.g. Leopard 3) need no tuning. The offset sliders only
+        // matter once the window is smaller than the panel; on Sea Lion 07 they let the user move the
+        // window into the native mini-cluster zone (#48).
+        SettingSubhead(text = stringResource(R.string.settings_display_window_subhead))
+        SettingSliderRow(
+            title = stringResource(R.string.settings_display_size_width),
+            description = stringResource(R.string.settings_display_size_width_desc),
+            value = widthPct.toFloat(),
+            onValueChange = { widthPct = it.roundToInt() },
+            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
+            valueLabel = "${widthPct}%",
+            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = applyGeometry,
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_display_size_height),
+            description = stringResource(R.string.settings_display_size_height_desc),
+            value = heightPct.toFloat(),
+            onValueChange = { heightPct = it.roundToInt() },
+            valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
+            valueLabel = "${heightPct}%",
+            steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = applyGeometry,
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_display_offset_x),
+            description = stringResource(R.string.settings_display_offset_x_desc),
+            value = offsetXPct.toFloat(),
+            onValueChange = { offsetXPct = it.roundToInt() },
+            valueRange = MIN_OFFSET_PCT.toFloat()..MAX_OFFSET_PCT.toFloat(),
+            valueLabel = "${offsetXPct}%",
+            steps = (MAX_OFFSET_PCT - MIN_OFFSET_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = applyGeometry,
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_display_offset_y),
+            description = stringResource(R.string.settings_display_offset_y_desc),
+            value = offsetYPct.toFloat(),
+            onValueChange = { offsetYPct = it.roundToInt() },
+            valueRange = MIN_OFFSET_PCT.toFloat()..MAX_OFFSET_PCT.toFloat(),
+            valueLabel = "${offsetYPct}%",
+            steps = (MAX_OFFSET_PCT - MIN_OFFSET_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = applyGeometry,
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_display_scale),
+            description = stringResource(R.string.settings_display_scale_desc),
+            value = scalePct.toFloat(),
+            onValueChange = { scalePct = it.roundToInt() },
+            valueRange = MIN_SCALE_PCT.toFloat()..MAX_SCALE_PCT.toFloat(),
+            valueLabel = "${scalePct}%",
+            steps = (MAX_SCALE_PCT - MIN_SCALE_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = applyGeometry,
+        )
     }
 
     // HUD navigation output (factory head-up display via the SOME/IP bus). Uses the same
@@ -1082,46 +1165,43 @@ private fun DisplaySection() {
     var hudSpeedSign by remember { mutableStateOf(hudController.isSpeedSignEnabled()) }
     val hudStatus by hudController.status.collectAsState()
 
-    SectionHeader(text = stringResource(R.string.settings_hud_header))
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth(),
+    SettingCollapsibleCard(
+        title = stringResource(R.string.settings_display_card_hud_title),
+        subtitle = stringResource(
+            R.string.settings_display_card_hud_sub,
+            stringResource(
+                if (hudEnabled) R.string.settings_display_state_on
+                else R.string.settings_display_state_off
+            ),
+        ),
+        checked = hudEnabled,
+        onCheckedChange = {
+            hudEnabled = it
+            hudController.setEnabled(it)
+        },
     ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (hudEnabled) {
             SettingToggleRow(
-                title = stringResource(R.string.settings_hud_title),
-                description = stringResource(R.string.settings_hud_desc),
-                checked = hudEnabled,
+                title = stringResource(R.string.settings_hud_speed_sign_title),
+                description = stringResource(R.string.settings_hud_speed_sign_desc),
+                checked = hudSpeedSign,
                 onCheckedChange = {
-                    hudEnabled = it
-                    hudController.setEnabled(it)
+                    hudSpeedSign = it
+                    hudController.setSpeedSignEnabled(it)
                 },
             )
-            if (hudEnabled) {
-                SettingDivider()
-                SettingToggleRow(
-                    title = stringResource(R.string.settings_hud_speed_sign_title),
-                    description = stringResource(R.string.settings_hud_speed_sign_desc),
-                    checked = hudSpeedSign,
-                    onCheckedChange = {
-                        hudSpeedSign = it
-                        hudController.setSpeedSignEnabled(it)
-                    },
-                )
-                SettingDivider()
-                SettingStatusRow(
-                    title = when (hudStatus) {
-                        HudController.Status.ON -> stringResource(R.string.settings_hud_status_on)
-                        HudController.Status.UNSUPPORTED -> stringResource(R.string.settings_hud_status_unsupported)
-                        HudController.Status.BIND_FAILED -> stringResource(R.string.settings_hud_status_bind_failed)
-                        else -> stringResource(R.string.settings_hud_status_connecting)
-                    },
-                    ok = hudStatus == HudController.Status.ON,
-                )
-            }
-            SettingHint(text = stringResource(R.string.settings_hud_hint))
+            SettingDivider()
+            SettingStatusRow(
+                title = when (hudStatus) {
+                    HudController.Status.ON -> stringResource(R.string.settings_hud_status_on)
+                    HudController.Status.UNSUPPORTED -> stringResource(R.string.settings_hud_status_unsupported)
+                    HudController.Status.BIND_FAILED -> stringResource(R.string.settings_hud_status_bind_failed)
+                    else -> stringResource(R.string.settings_hud_status_connecting)
+                },
+                ok = hudStatus == HudController.Status.ON,
+            )
         }
+        SettingHint(text = stringResource(R.string.settings_hud_hint))
     }
 
     if (learning) {
@@ -1151,90 +1231,136 @@ private fun DisplaySection() {
         )
     }
 
-    SectionHeader(text = stringResource(R.string.settings_display_size_header))
-    // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
-    // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
-    val applyGeometry: () -> Unit = {
-        prefs.edit()
-            .putInt(ClusterProjectionManager.KEY_WIDTH_PCT, widthPct)
-            .putInt(ClusterProjectionManager.KEY_HEIGHT_PCT, heightPct)
-            .putInt(ClusterProjectionManager.KEY_OFFSET_X_PCT, offsetXPct)
-            .putInt(ClusterProjectionManager.KEY_OFFSET_Y_PCT, offsetYPct)
-            .putInt(ClusterProjectionManager.KEY_SCALE_PCT, scalePct)
-            .apply()
-        ClusterProjectionManager.reproject(
-            context, entryPoint.helperClient(), entryPoint.helperBootstrap())
+    BlindSpotCard()
+}
+
+/**
+ * «Слепые зоны»: turn signal → blind-spot camera. Reads and writes the feature's own
+ * SharedPreferences file directly, like the projection cards above; BlindSpotController
+ * re-reads it on every tick, so a change lands without a restart. Turning the switch on asks
+ * for CAMERA — the AVM stack refuses to open the preview without it (as on the probe screen).
+ */
+@Composable
+private fun BlindSpotCard() {
+    val context = LocalContext.current
+    val prefs = remember {
+        context.getSharedPreferences(BlindSpotPreferences.PREFS_NAME, Context.MODE_PRIVATE)
     }
-    // Defaults (100/100 size, centered, scale 100) reproduce the plain fullscreen projection, so
-    // cars without a native mini zone (e.g. Leopard 3) need no tuning. The offset sliders only
-    // matter once the window is smaller than the panel; on Sea Lion 07 they let the user move the
-    // window into the native mini-cluster zone (#48).
-    Card(
-        shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            SettingSliderRow(
-                title = stringResource(R.string.settings_display_size_width),
-                description = stringResource(R.string.settings_display_size_width_desc),
-                value = widthPct.toFloat(),
-                onValueChange = { widthPct = it.roundToInt() },
-                valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
-                valueLabel = "${widthPct}%",
-                steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
-                enabled = enabled,
-                onValueChangeFinished = applyGeometry,
-            )
-            SettingDivider()
-            SettingSliderRow(
-                title = stringResource(R.string.settings_display_size_height),
-                description = stringResource(R.string.settings_display_size_height_desc),
-                value = heightPct.toFloat(),
-                onValueChange = { heightPct = it.roundToInt() },
-                valueRange = MIN_PROJECTION_PCT.toFloat()..MAX_PROJECTION_PCT.toFloat(),
-                valueLabel = "${heightPct}%",
-                steps = (MAX_PROJECTION_PCT - MIN_PROJECTION_PCT) / 2 - 1,
-                enabled = enabled,
-                onValueChangeFinished = applyGeometry,
-            )
-            SettingDivider()
-            SettingSliderRow(
-                title = stringResource(R.string.settings_display_offset_x),
-                description = stringResource(R.string.settings_display_offset_x_desc),
-                value = offsetXPct.toFloat(),
-                onValueChange = { offsetXPct = it.roundToInt() },
-                valueRange = MIN_OFFSET_PCT.toFloat()..MAX_OFFSET_PCT.toFloat(),
-                valueLabel = "${offsetXPct}%",
-                steps = (MAX_OFFSET_PCT - MIN_OFFSET_PCT) / 2 - 1,
-                enabled = enabled,
-                onValueChangeFinished = applyGeometry,
-            )
-            SettingDivider()
-            SettingSliderRow(
-                title = stringResource(R.string.settings_display_offset_y),
-                description = stringResource(R.string.settings_display_offset_y_desc),
-                value = offsetYPct.toFloat(),
-                onValueChange = { offsetYPct = it.roundToInt() },
-                valueRange = MIN_OFFSET_PCT.toFloat()..MAX_OFFSET_PCT.toFloat(),
-                valueLabel = "${offsetYPct}%",
-                steps = (MAX_OFFSET_PCT - MIN_OFFSET_PCT) / 2 - 1,
-                enabled = enabled,
-                onValueChangeFinished = applyGeometry,
-            )
-            SettingDivider()
-            SettingSliderRow(
-                title = stringResource(R.string.settings_display_scale),
-                description = stringResource(R.string.settings_display_scale_desc),
-                value = scalePct.toFloat(),
-                onValueChange = { scalePct = it.roundToInt() },
-                valueRange = MIN_SCALE_PCT.toFloat()..MAX_SCALE_PCT.toFloat(),
-                valueLabel = "${scalePct}%",
-                steps = (MAX_SCALE_PCT - MIN_SCALE_PCT) / 2 - 1,
-                enabled = enabled,
-                onValueChangeFinished = applyGeometry,
-            )
+    var enabled by remember { mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_ENABLED, false)) }
+    var thresholdKmh by remember {
+        mutableStateOf(prefs.getInt(
+            BlindSpotPreferences.KEY_THRESHOLD_KMH, BlindSpotPreferences.DEFAULT_THRESHOLD_KMH))
+    }
+    var pipWidthPct by remember {
+        mutableStateOf(prefs.getInt(
+            BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT))
+    }
+    var bsdGlow by remember { mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BSD_GLOW, true)) }
+
+    // Drag-to-place preview: it lives in a WindowManager overlay, so leaving the screen has to
+    // take it down explicitly. The flag follows the window rather than the clicks — the overlay
+    // also goes away on its own idle timer.
+    val placingState = remember { mutableStateOf(false) }
+    var placing by placingState
+    val positionOverlay = remember {
+        BlindSpotPositionOverlay().apply { onHidden = { placingState.value = false } }
+    }
+    // MainActivity survives configuration changes, so onDispose alone never fires when the driver
+    // goes Home — an opaque touchable window would stay over whatever is on screen.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_PAUSE) positionOverlay.hide()
         }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            positionOverlay.hide()
+        }
+    }
+
+    val cameraPermLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { /* denial is answered by the pipeline itself: the camera simply never opens */ }
+
+    SettingCollapsibleCard(
+        title = stringResource(R.string.settings_blindspot_header),
+        subtitle = stringResource(
+            R.string.settings_display_card_blindspot_sub,
+            stringResource(
+                if (enabled) R.string.settings_display_state_on
+                else R.string.settings_display_state_off
+            ),
+        ),
+        checked = enabled,
+        onCheckedChange = {
+            enabled = it
+            prefs.edit().putBoolean(BlindSpotPreferences.KEY_ENABLED, it).apply()
+            if (it && ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA)
+                != PackageManager.PERMISSION_GRANTED
+            ) {
+                cameraPermLauncher.launch(Manifest.permission.CAMERA)
+            }
+            // Switching off disables the "Готово" row too, so the overlay has to be taken
+            // down here or nothing on screen can dismiss it.
+            if (!it) positionOverlay.hide()
+        },
+    ) {
+        SettingSliderRow(
+            title = stringResource(R.string.settings_blindspot_threshold_title),
+            description = stringResource(R.string.settings_blindspot_threshold_desc),
+            value = thresholdKmh.toFloat(),
+            onValueChange = { thresholdKmh = it.roundToInt() },
+            valueRange = BlindSpotPreferences.MIN_THRESHOLD_KMH.toFloat()..
+                BlindSpotPreferences.MAX_THRESHOLD_KMH.toFloat(),
+            valueLabel = "$thresholdKmh ${stringResource(R.string.auto_unit_kmh)}",
+            steps = (BlindSpotPreferences.MAX_THRESHOLD_KMH - BlindSpotPreferences.MIN_THRESHOLD_KMH) / 5 - 1,
+            enabled = enabled,
+            onValueChangeFinished = {
+                prefs.edit().putInt(BlindSpotPreferences.KEY_THRESHOLD_KMH, thresholdKmh).apply()
+            },
+        )
+        SettingDivider()
+        SettingSliderRow(
+            title = stringResource(R.string.settings_blindspot_pip_width_title),
+            description = stringResource(R.string.settings_blindspot_pip_width_desc),
+            value = pipWidthPct.toFloat(),
+            onValueChange = { pipWidthPct = it.roundToInt() },
+            valueRange = BlindSpotPreferences.MIN_PIP_WIDTH_PCT.toFloat()..
+                BlindSpotPreferences.MAX_PIP_WIDTH_PCT.toFloat(),
+            valueLabel = "${pipWidthPct}%",
+            steps = (BlindSpotPreferences.MAX_PIP_WIDTH_PCT - BlindSpotPreferences.MIN_PIP_WIDTH_PCT) / 2 - 1,
+            enabled = enabled,
+            onValueChangeFinished = {
+                prefs.edit().putInt(BlindSpotPreferences.KEY_PIP_WIDTH_PCT, pipWidthPct).apply()
+                if (placing) positionOverlay.refreshSize()
+            },
+        )
+        SettingDivider()
+        SettingActionRow(
+            title = stringResource(R.string.settings_blindspot_position_title),
+            description = stringResource(R.string.settings_blindspot_position_desc),
+            buttonLabel = stringResource(
+                if (placing) R.string.settings_blindspot_position_done
+                else R.string.settings_blindspot_position_button
+            ),
+            onClick = {
+                if (placing) positionOverlay.hide() else placing = positionOverlay.show(context)
+            },
+            enabled = enabled,
+        )
+        SettingDivider()
+        SettingToggleRow(
+            title = stringResource(R.string.settings_blindspot_glow_title),
+            description = stringResource(R.string.settings_blindspot_glow_desc),
+            checked = bsdGlow,
+            onCheckedChange = {
+                bsdGlow = it
+                prefs.edit().putBoolean(BlindSpotPreferences.KEY_BSD_GLOW, it).apply()
+            },
+            enabled = enabled,
+        )
+        SettingHint(text = stringResource(R.string.settings_blindspot_hint))
     }
 }
 
@@ -1561,7 +1687,10 @@ private fun LearnButtonDialog(
 
 
 @Composable
-private fun ServiceSection(state: SettingsUiState, viewModel: SettingsViewModel) {
+private fun ServiceSection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+) {
     val context = LocalContext.current
 
     // SAF picker for restore — must be declared at composable top level

@@ -47,6 +47,7 @@ fun diParsData(
     rain: Int? = null,
     lightLow: Int? = null,
     drl: Int? = null,
+    turnSignal: Int? = null,
 ) = DiParsData(
     soc = soc, speed = speed, mileage = mileage, power = power,
     chargeGunState = chargeGunState, maxBatTemp = maxBatTemp, avgBatTemp = avgBatTemp,
@@ -61,4 +62,5 @@ fun diParsData(
     lockFL = lockFL, tirePressFL = tirePressFL, tirePressFR = tirePressFR,
     tirePressRL = tirePressRL, tirePressRR = tirePressRR, driveMode = driveMode,
     workMode = workMode, autoPark = autoPark, rain = rain, lightLow = lightLow, drl = drl,
+    turnSignal = turnSignal,
 )

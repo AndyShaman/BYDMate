@@ -481,6 +481,7 @@ class AutomationEngine @Inject constructor(
         "Rain" -> data.rain?.toDouble()
         "LightLow" -> data.lightLow?.toDouble()
         "DRL" -> data.drl?.toDouble()
+        "TurnSignal" -> data.turnSignal?.toDouble()
         "MaxBatTemp" -> data.maxBatTemp?.toDouble()
         "AvgBatTemp" -> data.avgBatTemp?.toDouble()
         "MinBatTemp" -> data.minBatTemp?.toDouble()

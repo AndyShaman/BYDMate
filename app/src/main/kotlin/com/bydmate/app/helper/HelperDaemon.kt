@@ -1286,8 +1286,13 @@ private fun resolveLaunchComponent(packageName: String): String? {
  * YouTube settle inside the freeform task when the mode is applied at creation time rather
  * than flipped post-launch). The monkey fallback is always plain — monkey has no
  * windowing-mode flag. Package-name validation is the first gate; no shell command is
- * issued for an invalid name. [windowingMode] null is the plain path, identical to the
- * original launchApp behavior; [activityType] is then unused.
+ * issued for an invalid name.
+ *
+ * [windowingMode] null is the plain path and [activityType] is then unused, but the plain path
+ * still splits on the display: [displayId] != 0 births the task on the target display and has NO
+ * monkey fallback — monkey cannot target a display, so it would put the app on the main screen and
+ * report a success the caller ([launchAndForce]) cannot distinguish from a real one. Only
+ * [windowingMode] null with [displayId] == 0 is the original launchApp behavior, monkey included.
  */
 internal fun launchAppCore(
     packageName: String,
@@ -1300,7 +1305,12 @@ internal fun launchAppCore(
     if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
     // STANDARD is what `am start` assigns by default — only RECENTS needs the explicit flag.
     val typeFlag = if (activityType == ACTIVITY_TYPE_RECENTS) "--activityType $ACTIVITY_TYPE_RECENTS " else ""
-    val modePrefix = if (windowingMode != null) "--windowingMode $windowingMode $typeFlag--display $displayId " else ""
+    // displayId != 0 births the task on the target display: 2GIS/Qt dies on a cross-display move.
+    val modePrefix = when {
+        windowingMode != null -> "--windowingMode $windowingMode $typeFlag--display $displayId "
+        displayId != 0 -> "--display $displayId "
+        else -> ""
+    }
     val component = resolveComponent(packageName)
     if (component != null) {
         // Component is passed as positional "$1" — never interpolated into the sh -c string.
@@ -1309,6 +1319,9 @@ internal fun launchAppCore(
     }
     val r2 = shell("am start ${modePrefix}-a android.intent.action.MAIN \"\$1\"", listOf(packageName))
     if (!r2.contains("Error")) return true
+    // A display-targeted launch has no monkey fallback: monkey has no --display flag, so it would
+    // start the app on the main screen and return "success" for a target the caller never got.
+    if (windowingMode == null && displayId != 0) return false
     val r3 = shell("monkey -p \"\$1\" -c android.intent.category.LAUNCHER 1", listOf(packageName))
     return !r3.contains("Error") && !r3.contains("error")
 }
@@ -1522,7 +1535,8 @@ internal fun dumpFidsChunkBytes(
  * when it is not running yet. Shared by launchAndForce and launchFreeform. Blocking.
  * [windowingMode] non-null (freeform path only) passes the mode and [activityType] to the launch
  * command so the task is born freeform with the right type; null (plain path, launchAndForce)
- * keeps the existing behavior and ignores [activityType].
+ * ignores [activityType] and, when [displayId] != 0, births the task on that display without the
+ * monkey fallback (see [launchAppCore]).
  */
 private fun resolveOrLaunchTask(
     packageName: String,
@@ -1547,11 +1561,16 @@ private fun resolveOrLaunchTask(
 
 /**
  * Launches [packageName] on [displayId] and pins it there with a short persistence loop
- * (move -> bounds -> focus, x2). Returns true once redirection ran. Mirrors CarControlImpl.launchAndForce.
+ * (move -> bounds -> focus, x2). Returns true once redirection ran; apps that die during the move
+ * (2GIS/Qt) are relaunched ONCE on the target display, and a failed relaunch returns false.
+ * Mirrors CarControlImpl.launchAndForce.
  * Blocking (Thread.sleep) — runs on a binder threadpool thread; the app side uses a 15s timeout.
  */
 private fun launchAndForce(packageName: String, displayId: Int, width: Int, height: Int): Boolean {
-    val taskId = resolveOrLaunchTask(packageName, activityType = ACTIVITY_TYPE_STANDARD) // ignored: windowingMode == null
+    // Not-yet-running apps are born on the target display — 2GIS/Qt dies if moved there instead.
+    val taskId = resolveOrLaunchTask(
+        packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
+    )
     if (taskId <= 0) return false
     // Each redirect op is best-effort, mirroring CarControlImpl (every reflective call there returns
     // a status string and swallows its own exception). resizeTask in particular throws "not allowed"
@@ -1564,6 +1583,19 @@ private fun launchAndForce(packageName: String, displayId: Int, width: Int, heig
         runCatching { setTaskBoundsReflect(taskId, 0, 0, width, height) }
         runCatching { setFocusedTaskReflect(taskId) }
         Thread.sleep(200L)
+    }
+    // Settle before the liveness check: findTaskId matches topActivity OR baseActivity, so a task
+    // whose process is dying can still be listed by getTasks with a stale baseActivity and hide the
+    // death from the check below.
+    Thread.sleep(500L)
+    // App died during the move (2GIS/Qt) → relaunch ONCE born on the display; no retry loop.
+    if (findTaskId(packageName) <= 0) {
+        val rebornId = resolveOrLaunchTask(
+            packageName, windowingMode = null, displayId = displayId, activityType = ACTIVITY_TYPE_STANDARD,
+        )
+        if (rebornId <= 0) return false
+        runCatching { setTaskBoundsReflect(rebornId, 0, 0, width, height) }
+        runCatching { setFocusedTaskReflect(rebornId) }
     }
     return true
 }

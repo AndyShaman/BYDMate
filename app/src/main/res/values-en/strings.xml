@@ -10,6 +10,15 @@
     <string name="settings_section_widget_title">Widget</string>
     <string name="settings_section_display_title">Display</string>
     <!-- Settings: Display section (cluster projection) -->
+    <string name="settings_display_state_on">On</string>
+    <string name="settings_display_state_off">Off</string>
+    <string name="settings_display_card_mirror_title">Cluster projection</string>
+    <string name="settings_display_card_mirror_sub">Navigator via a steering-wheel button. %1$s</string>
+    <string name="settings_display_card_mirror_sub_app">Navigator via a steering-wheel button. %1$s, %2$s</string>
+    <string name="settings_display_card_hud_title">Windshield projection (HUD)</string>
+    <string name="settings_display_card_hud_sub">Navigator guidance on the factory HUD. %1$s</string>
+    <string name="settings_display_card_blindspot_sub">Camera on turn signal. %1$s</string>
+    <string name="settings_display_window_subhead">Cluster window</string>
     <string name="cluster_a11y_description">Intercepts steering-wheel buttons to project navigation onto the instrument cluster. Enabled manually, works only when the feature is on.</string>
     <string name="settings_display_mirror_header">Projection to cluster</string>
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
@@ -740,6 +749,10 @@
     <string name="auto_enum_open_f">Open</string>
     <string name="auto_enum_open_m">Open</string>
     <string name="auto_enum_recirc">Recirculation</string>
+    <string name="auto_enum_turn_off">Off</string>
+    <string name="auto_enum_turn_left">Left</string>
+    <string name="auto_enum_turn_right">Right</string>
+    <string name="auto_enum_turn_hazard">Hazard</string>
     <string name="auto_enum_unfastened">Unfastened</string>
     <string name="auto_enum_unlocked">Unlocked</string>
     <!-- trigger param names -->
@@ -787,6 +800,7 @@
     <string name="auto_param_rain">Rain Sensor</string>
     <string name="auto_param_lightlow">Low Beam</string>
     <string name="auto_param_drl">DRL</string>
+    <string name="auto_param_turnsignal">Turn signal</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Vent Windows</string>
     <string name="auto_act_close_all_windows">Close All Windows</string>
@@ -851,6 +865,8 @@
     <string name="auto_act_ambient_light_off">Ambient Light Off</string>
     <string name="auto_act_drl_on">DRL On</string>
     <string name="auto_act_drl_off">DRL Off</string>
+    <string name="auto_act_hazard_on">Hazard lights: on</string>
+    <string name="auto_act_hazard_off">Hazard lights: off</string>
     <string name="auto_act_interior_light_on">Interior Light On</string>
     <string name="auto_act_interior_light_off">Interior Light Off</string>
     <string name="auto_act_lock_doors">Lock Doors</string>
@@ -1102,6 +1118,22 @@
     <string name="settings_hud_status_on">Streaming to the HUD</string>
     <string name="settings_hud_status_bind_failed">Could not connect to the SOME/IP bus</string>
     <string name="settings_hud_hint">Requires a trim with the head-up display. Data comes from the Yandex Navigator window</string>
+    <!-- Blind-spot cameras -->
+    <string name="settings_blindspot_header">Blind spots</string>
+    <string name="settings_blindspot_title">Camera on turn signal</string>
+    <string name="settings_blindspot_desc">Left turn signal - left camera on the cluster, right one - a small window on the main screen. Off by default.</string>
+    <string name="settings_blindspot_threshold_title">Speed threshold</string>
+    <string name="settings_blindspot_threshold_desc">Below this speed the camera stays hidden</string>
+    <string name="settings_blindspot_pip_width_title">Window width</string>
+    <string name="settings_blindspot_pip_width_desc">Width of the main-screen window as % of the screen width</string>
+    <string name="settings_blindspot_position_title">Window position</string>
+    <string name="settings_blindspot_position_desc">Shows an empty window on top of the screen: drag it with a finger to where the camera should be</string>
+    <string name="settings_blindspot_position_button">Adjust position</string>
+    <string name="settings_blindspot_position_done">Done</string>
+    <string name="settings_blindspot_position_drag">Drag the window</string>
+    <string name="settings_blindspot_glow_title">Highlight when an object is in the blind spot</string>
+    <string name="settings_blindspot_glow_desc">Orange border around the window while the sensor sees a car alongside</string>
+    <string name="settings_blindspot_hint">Requires a trim with surround-view cameras. When the cluster projection is not available, the window works on the main screen.</string>
     <string name="settings_secret_show">Show key</string>
     <string name="settings_secret_hide">Hide key</string>
 

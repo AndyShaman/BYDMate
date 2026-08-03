@@ -632,11 +632,33 @@ cd BYDMate
 
 ---
 
+## Troubleshooting
+
+If something does not work, follow these steps — most issues are solved by the first one, and if not, you will help us find the cause quickly.
+
+**1. Reboot the head unit.** Press and hold the volume wheel until the screen reboots. Some features (split screen, for example) flip a system flag that is only applied at boot — without a reboot the feature looks "broken" while everything is actually fine.
+
+**2. Record logs.** Settings → "Service & Data" section → **"Record logs"** button. Reproduce the problem (tap whatever does not work), then tap **"Stop recording"**. A `bydmate_logs_<date>.txt` file appears in `Download` (recording auto-stops after 2 hours if you forget).
+
+**3. Save the fid catalog.** Settings → "Service & Data" section → **"Save fid catalog"** button. A `fid-dump-<date>.txt` file appears in `Download`. Different BYD models have different command catalogs — this file is how we adapt the app to your car.
+
+**4. Send it to us.** Open an issue in [GitHub Issues](https://github.com/AndyShaman/BYDMate/issues) and attach: your car model and DiLink generation, the BYDMate version, what you tapped and what you expected, and the files from steps 2–3.
+
+Common cases:
+
+- **Split screen or cluster projection does not work** — reboot the head unit (step 1).
+- **A command runs but the car does not react** (windows, sunroof, climate) — your model most likely has a different command catalog: send logs and the fid catalog (steps 2–4).
+- **Something broke after an update** — reboot the head unit; if that does not help, send logs.
+
+---
+
 ## Credits
 
 - **[BYD Trip Info](https://www.byd-seal-forum.de/forum/thread/1811-byd-trip-info-app/)** (`org.jayb.bydapp`) by jayb — the original DiLink trip app, inspiration for BYDMate
 - **[DiPlus](https://www.dilink.cn/)** (迪加) by Van Design — the bridge app for car data, used in early BYDMate versions (no longer required since 3.0.0)
 - **@RBGboost** — reverse engineering of the factory HUD SOME/IP protocol and the original YandexHUD implementation. Yandex Navigator guidance on the HUD in BYDMate is his code and his achievement. You can thank him on Telegram: [@RBGboost](https://t.me/RBGboost)
+- **[byd-turnsignal-cameraview](https://github.com/sunlixWhyNotAvailable/byd-turnsignal-cameraview)** by sunlixWhyNotAvailable — open research into the DiLink camera and window interfaces that the turn-signal blind-spot camera feature is built on. The BYDMate implementation is written from scratch, but this research saved weeks of reverse engineering — thank you!
+- **[danijar2000](https://github.com/danijar2000)** — fix for 2GIS cluster projection (2GIS terminated when its task was moved to the cluster display)
 
 ---
 

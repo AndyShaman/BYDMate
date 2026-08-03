@@ -49,6 +49,8 @@ object FidMap {
         // Lights
         FidEntry("lightLow",             1004, 950009866,    5, Decoder.INT_ENUM),
         FidEntry("drl",                  1004, 1231040528,   5, Decoder.INT_ENUM),
+        // Live Leopard 3 2026-07-31: 1=off, 2=left, 4=right, 6=hazard (mask stays put while blinking)
+        FidEntry("turnSignal",           1004, 950009900,    5, Decoder.INT_ENUM),
         // Graduated from yaml status=candidate without formal D+ snap validation.
         // Smoke on real DiLink will surface sentinel returns or wrong values.
         // If a field shows sentinel/garbage in UI after upgrade — pull the fid from FidMap.

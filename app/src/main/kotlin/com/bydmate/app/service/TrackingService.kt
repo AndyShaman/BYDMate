@@ -100,6 +100,8 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
+    @Inject lateinit var fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager
+    @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -594,6 +596,12 @@ class TrackingService : Service(), LocationListener {
         networkAvailableMonitor.start()
         startPolling()
         startCameraMonitor()
+        // Observe-only fid subscriptions (-test builds only): counts events, never
+        // touches the poll above.
+        fidSubscriptionManager.start()
+        // Blind-spot pipeline: idle until the poll below reports the car near the speed
+        // threshold, and only when the feature is switched on (default off).
+        blindSpotController.start(serviceScope)
         instance = this
         _isRunning.value = true
         ChainLog.append(this, "TrackingService fully started")
@@ -944,6 +952,8 @@ class TrackingService : Service(), LocationListener {
         }
 
         alicePollingManager.stop()
+        fidSubscriptionManager.stop()
+        blindSpotController.stop()
         cameraStateMonitor.stop()
         _cameraActive.value = false
         _youtubeForeground.value = false
@@ -1036,6 +1046,8 @@ class TrackingService : Service(), LocationListener {
             sharedAdaptiveLoop.flow.collect { data ->
                 try {
                     _lastData.value = data
+                    fidSubscriptionManager.onPollSnapshot(data)
+                    blindSpotController.onPollSnapshot(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)

@@ -271,6 +271,7 @@ class NativeParsReader @Inject constructor(
             rain                = rain,  // derived from wiperRelay + autoWipers (see above)
             lightLow            = field<Int>("lightLow"),
             drl                 = field<Int>("drl"),
+            turnSignal          = field<Int>("turnSignal"),
             acDefrostFront      = field<Int>("acDefrostFront"),
             acWindMode          = field<Int>("acWindMode"),
             acCtrlMode          = field<Int>("acCtrlMode"),

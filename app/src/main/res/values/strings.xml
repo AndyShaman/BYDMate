@@ -15,6 +15,15 @@
     <string name="settings_section_widget_title">Виджет</string>
     <string name="settings_section_display_title">Дисплей</string>
     <!-- Settings: Display section (cluster projection) -->
+    <string name="settings_display_state_on">Включено</string>
+    <string name="settings_display_state_off">Выключено</string>
+    <string name="settings_display_card_mirror_title">Проекция на приборку</string>
+    <string name="settings_display_card_mirror_sub">Навигатор кнопкой на руле. %1$s</string>
+    <string name="settings_display_card_mirror_sub_app">Навигатор кнопкой на руле. %1$s, %2$s</string>
+    <string name="settings_display_card_hud_title">Проекция на лобовое (HUD)</string>
+    <string name="settings_display_card_hud_sub">Подсказки навигатора на штатный HUD. %1$s</string>
+    <string name="settings_display_card_blindspot_sub">Камера по поворотнику. %1$s</string>
+    <string name="settings_display_window_subhead">Окно на приборке</string>
     <string name="settings_display_mirror_header">Вывод на приборку</string>
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
@@ -894,6 +903,10 @@
     <string name="auto_enum_open_f">Открыта</string>
     <string name="auto_enum_open_m">Открыт</string>
     <string name="auto_enum_recirc">Внутренний воздух</string>
+    <string name="auto_enum_turn_off">Выключен</string>
+    <string name="auto_enum_turn_left">Левый</string>
+    <string name="auto_enum_turn_right">Правый</string>
+    <string name="auto_enum_turn_hazard">Аварийка</string>
     <string name="auto_enum_unfastened">Не пристёгнут</string>
     <string name="auto_enum_unlocked">Разблокирован</string>
     <!-- trigger param names -->
@@ -941,6 +954,7 @@
     <string name="auto_param_rain">Датчик дождя</string>
     <string name="auto_param_lightlow">Ближний свет</string>
     <string name="auto_param_drl">Дневные ходовые</string>
+    <string name="auto_param_turnsignal">Поворотник</string>
     <!-- action names -->
     <string name="auto_act_vent_windows">Проветривание</string>
     <string name="auto_act_close_all_windows">Закрыть все окна</string>
@@ -1005,6 +1019,8 @@
     <string name="auto_act_ambient_light_off">Амбиент выкл</string>
     <string name="auto_act_drl_on">ДХО вкл</string>
     <string name="auto_act_drl_off">ДХО выкл</string>
+    <string name="auto_act_hazard_on">Аварийка: включить</string>
+    <string name="auto_act_hazard_off">Аварийка: выключить</string>
     <string name="auto_act_interior_light_on">Салонный свет вкл</string>
     <string name="auto_act_interior_light_off">Салонный свет выкл</string>
     <string name="auto_act_lock_doors">Заблокировать</string>
@@ -1257,6 +1273,22 @@
     <string name="settings_hud_status_on">Передача на HUD активна</string>
     <string name="settings_hud_status_bind_failed">Не удалось подключиться к шине SOME/IP</string>
     <string name="settings_hud_hint">Нужна комплектация с проекционным дисплеем. Данные берутся из окна Яндекс Навигатора</string>
+    <!-- Blind-spot cameras -->
+    <string name="settings_blindspot_header">Слепые зоны</string>
+    <string name="settings_blindspot_title">Камера по поворотнику</string>
+    <string name="settings_blindspot_desc">Левый поворотник - левая камера на приборке, правый - окошко на главном экране. По умолчанию выключено.</string>
+    <string name="settings_blindspot_threshold_title">Порог скорости</string>
+    <string name="settings_blindspot_threshold_desc">Ниже этой скорости камера не показывается</string>
+    <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
+    <string name="settings_blindspot_pip_width_desc">Ширина окошка на главном экране в % от ширины экрана</string>
+    <string name="settings_blindspot_position_title">Положение окошка</string>
+    <string name="settings_blindspot_position_desc">Показывает пустое окошко поверх экрана: перетащите его пальцем туда, где будет камера</string>
+    <string name="settings_blindspot_position_button">Настроить положение</string>
+    <string name="settings_blindspot_position_done">Готово</string>
+    <string name="settings_blindspot_position_drag">Перетащите окошко</string>
+    <string name="settings_blindspot_glow_title">Подсветка при объекте в слепой зоне</string>
+    <string name="settings_blindspot_glow_desc">Оранжевая рамка вокруг окна, когда датчик видит машину рядом</string>
+    <string name="settings_blindspot_hint">Нужна комплектация с круговым обзором. Если вывести проекцию на приборку невозможно, окошко работает на главном экране.</string>
     <string name="settings_secret_show">Показать ключ</string>
     <string name="settings_secret_hide">Скрыть ключ</string>
 

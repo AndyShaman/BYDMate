@@ -1,5 +1,6 @@
 package com.bydmate.app.data.nativestack
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Ignore
@@ -47,6 +48,13 @@ class FidMapTest {
             "wiperRelay", "autoWipers",
         )
         assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
+    }
+
+    @Test fun `turn signal read fid is mapped`() {
+        val entry = FidMap.entries.single { it.field == "turnSignal" }
+        assertEquals(1004, entry.device)
+        assertEquals(950009900, entry.fid)
+        assertEquals(5, entry.transact)
     }
 
     @Test fun `every entry has decoder and transact in set 5 7`() {

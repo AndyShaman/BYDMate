@@ -68,7 +68,11 @@ class BYDMateApp : Application(), Configuration.Provider {
         // instantiates this Application. Swallow there; on a real device the call succeeds.
         if (Build.VERSION.SDK_INT >= 28) {
             runCatching {
-                HiddenApiBypass.addHiddenApiExemptions("Landroid/os/ServiceManager;")
+                HiddenApiBypass.addHiddenApiExemptions(
+                    "Landroid/os/ServiceManager;",
+                    // AVMCamera / BmmCameraInfo probe and the BYDAuto*Device listener interfaces.
+                    "Landroid/hardware/",
+                )
             }.onFailure {
                 android.util.Log.w("BYDMateApp", "hidden-api exemption unavailable", it)
             }
