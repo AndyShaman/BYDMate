@@ -65,7 +65,29 @@ private class SuspendingFakeSplitBackdrop : SplitBackdrop {
     override fun hide() { shown = false }
 }
 
+/**
+ * Journal store that counts the physical writes. The ring is fully re-serialised and committed
+ * on every append, so "how many lines are in the ring" does not say how often it was written —
+ * the `(xN)` dedup collapses the text of a repeating payload but still writes each time.
+ */
+private class CountingJournalStore : SplitJournalImpl.Store {
+    var value: String = ""
+    var writes = 0
+    override fun read(): String = value
+    override fun write(value: String) { this.value = value; writes++ }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Firmware pin for the pane-type gate (#130). Every test that asserts a pane activityType says
+ * which branch of [PaneTypePolicy] it means instead of inheriting the JVM default (Build.FINGERPRINT
+ * is null under a plain unit test → RECENTS fallback).
+ */
+private const val KNOWN_GOOD_FINGERPRINT = "BYD/Leopard3/eng.build.20260106:12/user/release-keys"
+private const val SONG_L_FINGERPRINT = "BYD/SongL/eng.build.20260320:12/user/release-keys"
+private val standardPanes = PaneTypePolicy(KNOWN_GOOD_FINGERPRINT)
+private val recentsPanes = PaneTypePolicy(SONG_L_FINGERPRINT)
 
 /** HelperClient stub that accepts a package and returns a happy-path task state. */
 private fun HelperClient.stubTask(pkg: String, taskId: Int, mode: Int, b: SplitBounds) {
@@ -489,7 +511,10 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.narrow", 11, 5, narrow)
         coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
         clearMocks(helper, answers = false)
 
@@ -1180,7 +1205,10 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         coEvery { helper.forceStop(any()) } returns true
 
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         // Step 1: gentle mode flip attempted for both tasks — as STANDARD, so the flipped task
@@ -1224,7 +1252,10 @@ class SplitSessionManagerTest {
         // Task-N daemon: the flipped task is then raised into the pane (W6-F1 restart path).
         coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         // Flip attempted.
@@ -1300,7 +1331,10 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
 
         val backdrop = FakeSplitBackdrop(showResult = true)
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
 
         val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
@@ -1320,6 +1354,66 @@ class SplitSessionManagerTest {
                 "pkg.narrow", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
             )
         }
+    }
+
+    // ── #130: pane type is gated by firmware ─────────────────────────────────────
+
+    @Test fun `startLocked launches panes as RECENTS on a firmware outside the known-good list`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        helper.stubTask("pkg.wide", taskId = 10, mode = 5, b = wide)
+        helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = recentsPanes,
+        )
+
+        assertEquals(SplitStartResult.OK, mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)))
+
+        // On eng.build.20260320 (Song L, Sea Lion 07) a STANDARD pane finishes on the first tap,
+        // so the panes are launched the v3.9 way instead.
+        coVerify {
+            helper.launchFreeform(
+                "pkg.wide", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_RECENTS,
+            )
+        }
+        coVerify {
+            helper.launchFreeform(
+                "pkg.narrow", any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_RECENTS,
+            )
+        }
+        coVerify(exactly = 0) {
+            helper.launchFreeform(any(), any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD)
+        }
+    }
+
+    @Test fun `start raises and mode-flips as RECENTS on a firmware outside the known-good list`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        // Wide task is stale fullscreen (mode flip path), narrow survives in freeform (raise path).
+        coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(
+            SplitTaskState(taskId = 10, windowingMode = 1, 0, 0, 1920, 1080),
+            SplitTaskState(taskId = 10, windowingMode = 5, wide.left, wide.top, wide.right, wide.bottom),
+            SplitTaskState(taskId = 10, windowingMode = 5, wide.left, wide.top, wide.right, wide.bottom),
+        )
+        helper.stubTask("pkg.narrow", 11, 5, narrow)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = recentsPanes,
+        )
+        mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
+
+        // The daemon retypes a live STANDARD task through the same remove+recreate branch, so a
+        // pane left over from a v3.9.1 session migrates to RECENTS on the first start after the update.
+        coVerify { helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_RECENTS) }
+        coVerify { helper.raiseFreeformTaskDetailed("pkg.wide", 0, HelperBinderProtocol.PANE_TYPE_RECENTS) }
+        coVerify { helper.raiseFreeformTaskDetailed("pkg.narrow", 0, HelperBinderProtocol.PANE_TYPE_RECENTS) }
+        coVerify(exactly = 0) { helper.raiseFreeformTaskDetailed(any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD) }
     }
 
     @Test fun `startLocked still launches windows when backdrop show returns false (degraded)`() = runTest {
@@ -1573,7 +1667,10 @@ class SplitSessionManagerTest {
         helper.stubTask("pkg.wide", taskId = 10, mode = 5, b = wide)
         helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
         helper.stubLaunch("pkg.wide", "pkg.narrow")
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
         assertEquals(true, mgr.state.value is SplitSessionState.Active)
 
@@ -2512,6 +2609,7 @@ class SplitSessionManagerTest {
             helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
             tickDelayMs = 100,
             mediaSource = mediaSource, mediaPollDelayMs = 50L,
+            paneTypePolicy = standardPanes,
         )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
         // W6-F1: start() itself now raises pre-existing pane tasks (restart path). Drop those
@@ -3702,6 +3800,66 @@ class SplitSessionManagerTest {
         job.cancel()
     }
 
+    /**
+     * A calibration that keeps failing is retried on every watchdog tick, but only the transition
+     * into the retry state reaches the journal: each append re-reads, re-serialises and commits
+     * the whole ring, and once a second of that is what the `(xN)` dedup hides but does not avoid.
+     *
+     * Anti-vacuity: journaling inside the failure branch instead of on the transition makes the
+     * counted writes grow with the ticks (3 instead of 1).
+     */
+    @Test fun `a calibration stuck in retry journals once, not on every tick`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.nav", "pkg.music")
+        helper.stubTask("pkg.nav", 11, 5, narrow)
+        helper.stubTask("pkg.music", 10, 5, wide)
+        coEvery { helper.getTopTask() } returns null
+        coEvery { helper.getTopTaskPackage() } returns null
+        coEvery { helper.getTopTaskPackageOrSkip() } returns null
+
+        val store = CountingJournalStore()
+        var fakeNow = 0L
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000, nowMs = { fakeNow },
+            applyCalibratedBounds = { _, _ -> false },  // calibration never succeeds
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+        mgr.start(SplitPair("pkg.nav", "pkg.music", SplitSide.RIGHT))
+        runCurrent()
+
+        mgr.beginClusterSend("pkg.nav")
+        coEvery { helper.getTaskState("pkg.nav") } returns
+            SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom, displayId = 4)
+
+        val writesBeforeTicks = store.writes
+        repeat(3) {
+            advanceTimeBy(60_001)
+            runCurrent()
+        }
+
+        assertEquals(
+            "three ticks in calibration-pending must produce exactly one journal write",
+            1, store.writes - writesBeforeTicks,
+        )
+        assertTrue(
+            "the single line must be the retry transition",
+            store.value.trim().endsWith("display=4 calibration failed, retry"),
+        )
+
+        // Leaving the state is a transition too: the recovery line is written once.
+        coEvery { helper.getTaskState("pkg.nav") } returns
+            SplitTaskState(11, 5, narrow.left, narrow.top, narrow.right, narrow.bottom, displayId = 0)
+        fakeNow = 100_000  // past the departure grace, so the else (return-to-main) branch runs
+        advanceTimeBy(60_001)
+        runCurrent()
+        assertTrue(
+            "leaving calibration-pending must be journalled",
+            store.value.lines().last().endsWith("calibration pkg.nav abandoned: back on main display"),
+        )
+    }
+
     // ── Codex fix-round 3: D-2 (graceLock lost-update) ───────────────────────
 
     /**
@@ -3829,7 +3987,10 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
 
         val result = mgr.start(pair)
@@ -4157,6 +4318,7 @@ class SplitSessionManagerTest {
         val mgr = SplitSessionManager(
             helper, FakeSplitPreferences(), backdrop, backgroundScope, tickDelayMs = 60_000,
             endClusterProjection = { pkg -> hookCalls += pkg; false },
+            paneTypePolicy = standardPanes,
         )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
@@ -4189,7 +4351,10 @@ class SplitSessionManagerTest {
         helper.stubLaunch("pkg.wide", "pkg.narrow")
         coEvery { helper.raiseFreeformTaskDetailed(any(), any(), any()) } returns RaiseOutcome.RAISED
 
-        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000)
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), backdrop, backgroundScope, 60_000,
+            paneTypePolicy = standardPanes,
+        )
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
         coVerify(exactly = 1) { helper.setTaskWindowingMode(10, 5, HelperBinderProtocol.PANE_TYPE_STANDARD) }

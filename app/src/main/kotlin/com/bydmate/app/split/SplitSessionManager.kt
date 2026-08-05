@@ -7,7 +7,6 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RaiseOutcome
 import com.bydmate.app.data.vehicle.SplitTaskState
 import com.bydmate.app.data.vehicle.TopTaskInfo
-import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -171,6 +170,9 @@ internal fun boundsFor(side: SplitSide): Pair<SplitBounds, SplitBounds> = when (
 
 private fun SplitTaskState.toBounds() = SplitBounds(left, top, right, bottom)
 
+/** Compact pair description for the journal. */
+private fun SplitPair.label() = "narrow=$narrowPkg wide=$widePkg side=$narrowSide"
+
 private suspend fun HelperClient.setTaskBounds(taskId: Int, b: SplitBounds) =
     setTaskBounds(taskId, b.left, b.top, b.right, b.bottom)
 
@@ -232,7 +234,21 @@ class SplitSessionManager(
      * Null (default) is a no-op — keeps existing tests and cluster-less builds unchanged.
      */
     private val endClusterProjection: (suspend (pkg: String) -> Boolean)? = null,
+    /**
+     * Persistent journal of session transitions (start/placement/watchdog/end), read back by the
+     * diagnostic dump. Default [NoSplitJournal] keeps existing tests unchanged.
+     */
+    private val journal: SplitJournal = NoSplitJournal,
+    /**
+     * Firmware gate for the pane activityType (#130). Read once here and used for every pane
+     * launch / raise / mode flip in this session; the cluster projection keeps its own RECENTS.
+     */
+    paneTypePolicy: PaneTypePolicy = PaneTypePolicy(),
 ) {
+    /** activityType for PANES on this firmware — see [PaneTypePolicy]. */
+    private val paneType: Int = paneTypePolicy.paneType
+    private val paneTypeLabel: String = paneTypePolicy.label
+
     private val _state = MutableStateFlow<SplitSessionState>(SplitSessionState.Idle)
     val state: StateFlow<SplitSessionState> = _state.asStateFlow()
 
@@ -292,6 +308,35 @@ class SplitSessionManager(
     // package here so the next watchdog tick retries. Also gates swapApps/mirror — the pane's
     // cluster geometry is unconfirmed while the set is non-empty. Protected by [graceLock].
     @Volatile private var calibrationPendingPkgs: Set<String> = emptySet()
+
+    /**
+     * Marks [pkg] as awaiting calibration and journals [payload] only when that is a transition
+     * into the state. Calibration retries on every watchdog tick (once a second) — journaling
+     * each attempt would re-read, re-serialise and commit the whole ring that often; the `(xN)`
+     * dedup collapses the text but not the writes.
+     */
+    private fun enterCalibrationPending(pkg: String, payload: String) {
+        val entered = synchronized(graceLock) {
+            val fresh = pkg !in calibrationPendingPkgs
+            calibrationPendingPkgs = calibrationPendingPkgs + pkg
+            fresh
+        }
+        if (entered) journal.append(payload)
+    }
+
+    /**
+     * Clears the calibration-pending marker for [pkg], journaling how the retry loop ended only
+     * when the pane actually was pending. Counterpart of [enterCalibrationPending] — together
+     * they put exactly two lines in the ring per retry sequence, whatever its length.
+     */
+    private fun leaveCalibrationPending(pkg: String, outcome: String) {
+        val wasPending = synchronized(graceLock) {
+            val was = pkg in calibrationPendingPkgs
+            calibrationPendingPkgs = calibrationPendingPkgs - pkg
+            was
+        }
+        if (wasPending) journal.append("calibration $pkg $outcome")
+    }
 
     // Post-departure noise deadlines (Q1 fix-round): set to nowMs() + POST_DEPARTURE_NOISE_MS when
     // the departed branch first confirms a pane on the cluster. Fullscreen@display0 within this
@@ -464,7 +509,7 @@ class SplitSessionManager(
             Log.d(TAG, "reassertPanes: $pkg is in mode ${state.windowingMode}, not ours — skipping")
             return
         }
-        if (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, HelperBinderProtocol.PANE_TYPE_STANDARD)
+        if (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, paneType)
             != RaiseOutcome.RAISED
         ) {
             Log.w(TAG, "reassertPanes: raise did not land for $pkg — leaving the session as is")
@@ -509,6 +554,7 @@ class SplitSessionManager(
                 // Range check (not <) rejects a negative delta from a backward NTP/GPS clock jump
                 // so a jumped clock cannot permanently lock the guard.
                 if (pair == lastStartedPair && now - lastStartMs in 0 until DOUBLE_TAP_WINDOW_MS) {
+                    journal.append("start ${pair.label()} suppressed (double-tap window)")
                     return@withLock SplitStartResult.OK
                 }
                 // Implicit exit of any running session so old freeform tasks are dismissed.
@@ -532,6 +578,11 @@ class SplitSessionManager(
                 coveredTickCount = 0
                 nativeSplitTickCount = 0
                 val result = startLocked(pair)
+                val started = _state.value as? SplitSessionState.Active
+                journal.append(
+                    "start ${pair.label()} -> $result paneType=$paneTypeLabel" +
+                        if (started != null) " tasks narrow=${started.narrowTaskId} wide=${started.wideTaskId}" else ""
+                )
                 if (result == SplitStartResult.OK) {
                     lastStartedPair = pair
                     // Fresh read AFTER startLocked completes: backdrop.show() can take up to 2 s
@@ -652,7 +703,10 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 val current = _state.value as? SplitSessionState.Active
-                    ?: return@withLock SplitStartResult.LAUNCH_FAILED
+                    ?: run {
+                        journal.append("changeApp ${pane.name} $newPkg -> no active session")
+                        return@withLock SplitStartResult.LAUNCH_FAILED
+                    }
                 val (wideBounds, narrowBounds) = boundsFor(current.pair.narrowSide)
                 val paneBounds = if (pane == Pane.NARROW) narrowBounds else wideBounds
                 val oldTaskId = if (pane == Pane.NARROW) current.narrowTaskId else current.wideTaskId
@@ -663,13 +717,22 @@ class SplitSessionManager(
                 val result = helper.launchFreeform(
                     newPkg, DISPLAY_SPLIT,
                     paneBounds.left, paneBounds.top, paneBounds.right, paneBounds.bottom,
-                    HelperBinderProtocol.PANE_TYPE_STANDARD,
+                    paneType,
                 )
-                if (result == FreeformLaunchResult.UNAVAILABLE) return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
-                if (result == FreeformLaunchResult.FAILED) return@withLock SplitStartResult.LAUNCH_FAILED
+                if (result == FreeformLaunchResult.UNAVAILABLE) {
+                    journal.append("changeApp ${pane.name} $newPkg -> freeform unavailable")
+                    return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
+                }
+                if (result == FreeformLaunchResult.FAILED) {
+                    journal.append("changeApp ${pane.name} $newPkg -> launch failed")
+                    return@withLock SplitStartResult.LAUNCH_FAILED
+                }
 
                 val newTaskId = helper.getTaskState(newPkg)?.taskId?.takeIf { it != -1 }
-                    ?: return@withLock SplitStartResult.LAUNCH_FAILED
+                    ?: run {
+                        journal.append("changeApp ${pane.name} $newPkg -> launched but no task id")
+                        return@withLock SplitStartResult.LAUNCH_FAILED
+                    }
 
                 val newNarrowTaskId = if (pane == Pane.NARROW) newTaskId else current.narrowTaskId
                 val newWideTaskId = if (pane == Pane.WIDE) newTaskId else current.wideTaskId
@@ -712,6 +775,7 @@ class SplitSessionManager(
                 // D-1-R3: also clear any pending calibration marker for the replaced package so
                 // swapApps/mirror are not left permanently blocked when a pane is hot-swapped.
                 synchronized(graceLock) { departureGraceDeadlines = departureGraceDeadlines - oldPkg; calibrationPendingPkgs = calibrationPendingPkgs - oldPkg }
+                journal.append("changeApp ${pane.name} $oldPkg -> $newPkg task=$newTaskId")
                 SplitStartResult.OK
             }
         }.also { deferred ->
@@ -771,10 +835,10 @@ class SplitSessionManager(
             // Not on the split display (cluster, or INVALID mid-reparent): leave it to placePane.
             if (splitDisplayOnly && state.displayId != DISPLAY_SPLIT) return@runCatching
             // Step 1: gentle mode flip — preserves the app process (media session survives).
-            // STANDARD, like every other pane placement: a task flipped into freeform must end up
-            // with its own root task, otherwise it lands as a leaf under the shared root and the
-            // pane stays touch-dead.
-            helper.setTaskWindowingMode(state.taskId, WINDOWING_FREEFORM, HelperBinderProtocol.PANE_TYPE_STANDARD)
+            // Typed like every other pane placement ([paneType]): on known-good firmware STANDARD,
+            // so the task flipped into freeform ends up with its own root task instead of a leaf
+            // under the shared root (which leaves the pane touch-dead).
+            helper.setTaskWindowingMode(state.taskId, WINDOWING_FREEFORM, paneType)
             val afterFlip = helper.getTaskState(pkg)
             if (afterFlip != null && afterFlip.windowingMode == WINDOWING_FREEFORM) return@runCatching
             // Step 2: flip did not land — force-stop so launchFreeform creates a fresh task.
@@ -886,7 +950,7 @@ class SplitSessionManager(
     private suspend fun launchPaneLocked(pkg: String, bounds: SplitBounds): FreeformLaunchResult =
         helper.launchFreeform(
             pkg, DISPLAY_SPLIT, bounds.left, bounds.top, bounds.right, bounds.bottom,
-            HelperBinderProtocol.PANE_TYPE_STANDARD,
+            paneType,
         )
 
     /**
@@ -914,11 +978,13 @@ class SplitSessionManager(
      */
     private suspend fun relaunchPaneLocked(pkg: String, bounds: SplitBounds, reason: String): FreeformLaunchResult {
         Log.w(TAG, "placePane: $reason for $pkg — force-stopping and relaunching")
+        journal.append("relaunch $pkg: $reason")
         if (!helper.forceStop(pkg)) {
             // Only a snapshot that positively reports "no task" clears the way for a fresh launch.
             val survivor = helper.getTaskState(pkg)
             if (survivor == null || survivor.taskId != -1) {
                 Log.w(TAG, "placePane: forceStop failed and $pkg task not confirmed gone (state=$survivor) — giving up")
+                journal.append("relaunch $pkg aborted: forceStop failed, task not confirmed gone")
                 return FreeformLaunchResult.FAILED
             }
         }
@@ -942,7 +1008,7 @@ class SplitSessionManager(
      */
     private suspend fun raisePaneLocked(pkg: String, bounds: SplitBounds): FreeformLaunchResult {
         repeat(PANE_RAISE_MAX_ATTEMPTS) { index ->
-            when (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, HelperBinderProtocol.PANE_TYPE_STANDARD)) {
+            when (helper.raiseFreeformTaskDetailed(pkg, DISPLAY_SPLIT, paneType)) {
                 RaiseOutcome.RAISED -> {
                     val raised = helper.getTaskState(pkg)
                     if (raised != null && raised.taskId != -1 &&
@@ -952,6 +1018,7 @@ class SplitSessionManager(
                         return FreeformLaunchResult.OK
                     }
                     Log.w(TAG, "placePane: raise attempt ${index + 1} did not land for $pkg (state=$raised)")
+                    journal.append("raise $pkg attempt ${index + 1} did not land (mode=${raised?.windowingMode} display=${raised?.displayId})")
                 }
                 RaiseOutcome.REFUSED -> return relaunchPaneLocked(pkg, bounds, "daemon refused the raise")
                 RaiseOutcome.NO_REPLY -> return relaunchPaneLocked(pkg, bounds, "no reply to the raise")
@@ -1084,7 +1151,10 @@ class SplitSessionManager(
             .onFailure { if (it is CancellationException) throw it }
         backdrop.hide()
         _state.value = SplitSessionState.Idle
-        if (emitExit) _events.emit(SplitEvent.SessionEnded(EndReason.EXIT))
+        if (emitExit) {
+            journal.append("end EXIT ${current.pair.label()}")
+            _events.emit(SplitEvent.SessionEnded(EndReason.EXIT))
+        }
     }
 
     /**
@@ -1156,9 +1226,9 @@ class SplitSessionManager(
         // Try raise via TX_RAISE_FREEFORM_TASK; fall back to setFocusedTask when the daemon
         // is too old to handle the new TX (returns false) or the raise itself fails.
         val raise1 = narrowDeparted ||
-            helper.raiseFreeformTask(narrowPkg, activityType = HelperBinderProtocol.PANE_TYPE_STANDARD)
+            helper.raiseFreeformTask(narrowPkg, activityType = paneType)
         val raise2 = wideDeparted ||
-            helper.raiseFreeformTask(widePkg, activityType = HelperBinderProtocol.PANE_TYPE_STANDARD)
+            helper.raiseFreeformTask(widePkg, activityType = paneType)
         // Log raw raise outcomes BEFORE the fallback masks them — critical for on-car diagnosis
         // if the raise stops working (component resolution fails, am start errors, binder timeout).
         // A departed pane has raise=true by the departed flag; that path is never logged here.
@@ -1367,6 +1437,9 @@ class SplitSessionManager(
             nativeSplitTickCount++
             Log.d(TAG, "NATIVE_SPLIT tick=$nativeSplitTickCount narrow=${narrowState.windowingMode} wide=${wideState.windowingMode}")
             if (nativeSplitTickCount >= 2) {
+                journal.append(
+                    "end NATIVE_SPLIT modes narrow=${narrowState.windowingMode} wide=${wideState.windowingMode}"
+                )
                 endSessionLeavingPanesLocked(EndReason.NATIVE_SPLIT)
                 return false
             }
@@ -1424,6 +1497,7 @@ class SplitSessionManager(
                     Log.d(TAG, "COVERED tick=$coveredTickCount top=${topTask.pkg}")
                     if (coveredTickCount >= 2) {
                         // Foreign fullscreen covered the split for 2 ticks in a row.
+                        journal.append("end COVERED top=${topTask.pkg}")
                         endSessionLeavingPanesLocked(EndReason.COVERED)
                         return false
                     }
@@ -1508,7 +1582,7 @@ class SplitSessionManager(
                 // D-1-R3: clear any pending calibration marker for the dead task. Without this,
                 // a failed calibration followed by task death leaves calibrationPendingPkgs set
                 // forever, permanently blocking swapApps/mirror for the remainder of the session.
-                synchronized(graceLock) { calibrationPendingPkgs = calibrationPendingPkgs - pkg }
+                leaveCalibrationPending(pkg, "abandoned: task gone")
                 // App closed — emit PaneClosed once per closure (edge-trigger).
                 val alreadyReported = when (pane) {
                     Pane.NARROW -> narrowPaneClosedEmitted
@@ -1519,6 +1593,7 @@ class SplitSessionManager(
                         Pane.NARROW -> narrowPaneClosedEmitted = true
                         Pane.WIDE -> widePaneClosedEmitted = true
                     }
+                    journal.append("pane_closed ${pane.name} $pkg task gone -> picker")
                     _events.emit(SplitEvent.PaneClosed(pane))
                 }
                 false
@@ -1569,12 +1644,15 @@ class SplitSessionManager(
                         .onFailure { if (it is CancellationException) throw it }
                         .getOrDefault(false) != false
                     if (!calibrated) {
-                        synchronized(graceLock) { calibrationPendingPkgs = calibrationPendingPkgs + pkg }
                         Log.w(TAG, "applyCalibratedBounds returned false; will retry next tick (task=${taskState.taskId})")
+                        enterCalibrationPending(
+                            pkg,
+                            "departed ${pane.name} $pkg display=${taskState.displayId} calibration failed, retry",
+                        )
                         return false  // retry on next watchdog tick
                     }
                     // Calibration succeeded (or hook is absent). Clear any pending retry marker.
-                    synchronized(graceLock) { calibrationPendingPkgs = calibrationPendingPkgs - pkg }
+                    leaveCalibrationPending(pkg, "recovered")
 
                     when (pane) {
                         // Set both departed/closed flags only AFTER calibration succeeds:
@@ -1585,6 +1663,7 @@ class SplitSessionManager(
                     }
                     // Open the replacement picker in the vacated pane — the departed task lives
                     // on the cluster, the split slot is visually empty on the main screen.
+                    journal.append("departed ${pane.name} $pkg display=${taskState.displayId} -> picker")
                     _events.emit(SplitEvent.PaneClosed(pane))
                 }
                 false  // session stays Active; no teardown
@@ -1669,6 +1748,7 @@ class SplitSessionManager(
                     backdrop.hide()
                     _state.value = SplitSessionState.Idle
                 }
+                journal.append("end MAXIMIZED ${pane.name} $pkg task=${taskState.taskId}")
                 _events.emit(SplitEvent.SessionEnded(EndReason.MAXIMIZED))
                 true
             }
@@ -1688,7 +1768,7 @@ class SplitSessionManager(
                 // E-3: the task returned to the main display before calibration succeeded. Clear
                 // the calibrationPendingPkgs marker for this pane so that swapApps/mirror are no
                 // longer blocked. The pane is back home; nothing to calibrate.
-                synchronized(graceLock) { calibrationPendingPkgs = calibrationPendingPkgs - pkg }
+                leaveCalibrationPending(pkg, "abandoned: back on main display")
                 // Snap bounds back if the task drifted (silent correction).
                 if (taskState.windowingMode == WINDOWING_FREEFORM &&
                     taskState.toBounds() != expectedBounds

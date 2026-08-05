@@ -3,6 +3,8 @@ package com.bydmate.app.data.vehicle
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -84,5 +86,25 @@ class SeatChannelStorePrefsTest {
             SeatChannel.UNKNOWN,
             store.winner(),
         )
+    }
+
+    // ── Fallback re-probe budget: single-shot per process, re-armed by the manual reset ──
+    // Only the settings-screen reset stores UNKNOWN; learning a channel must not re-arm it.
+    @Test fun `claimReprobe is single-shot and re-armed by a manual reset`() {
+        val sharedPrefs = prefs()
+        sharedPrefs.edit().clear().commit()
+
+        val store = SeatChannelStorePrefs(sharedPrefs)
+        assertFalse("a fresh store still has its probe", store.reprobeExhausted())
+        assertTrue("first claim takes the probe", store.claimReprobe())
+        assertFalse("second claim finds it spent", store.claimReprobe())
+        assertTrue(store.reprobeExhausted())
+
+        store.setWinner(SeatChannel.FALLBACK)
+        assertTrue("learning a channel must not re-arm the probe", store.reprobeExhausted())
+
+        store.setWinner(SeatChannel.UNKNOWN)
+        assertFalse("a manual reset re-arms the probe", store.reprobeExhausted())
+        assertTrue(store.claimReprobe())
     }
 }

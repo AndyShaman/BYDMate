@@ -46,6 +46,7 @@
     <string name="settings_display_offset_y_desc">Window position: 0 - top, 50 - center, 100 - bottom</string>
     <string name="settings_display_scale">Scale</string>
     <string name="settings_display_scale_desc">UI size: lower value - smaller elements and more map in the window</string>
+    <string name="settings_display_scale_direct_hint">Scale applies only in the Factory projection mode. In Extended the app always renders at its native size.</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Right star</string>
     <string name="steering_button_left_star">Left star</string>
@@ -1150,6 +1151,7 @@
     <string name="split_picker_title_narrow">Choose an app for the narrow pane (1/3)</string>
     <string name="split_freeform_reboot_hint">Split screen will activate after restarting the car</string>
     <string name="split_launch_failed">Failed to launch split screen</string>
+    <string name="split_launch_failed_adb">Failed to launch split screen: unlocked ADB is required</string>
     <!-- Automation action: split_screen -->
     <string name="automation_action_split_screen">Split Screen</string>
     <string name="auto_act_split_screen">Split Screen</string>

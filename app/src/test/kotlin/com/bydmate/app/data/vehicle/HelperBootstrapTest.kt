@@ -53,8 +53,10 @@ class HelperBootstrapTest {
         var onSpawn: () -> Boolean = { true }
         // Daemon log contents readHelperLog() hands back; null = transport error.
         var helperLog: String? = null
+        // State of the on-device ADB socket, as the failure classification reads it.
+        var connected = true
         override suspend fun connect() = Result.success(Unit)
-        override suspend fun isConnected() = true
+        override suspend fun isConnected() = connected
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String) = true
         override suspend fun spawnHelper(): Boolean { spawnCalls++; return onSpawn() }
@@ -338,7 +340,8 @@ class HelperBootstrapTest {
         val failure = boot.lastSpawnFailure()
         assertTrue("failure must be recorded", failure != null)
         assertTrue("timestamp must be set", failure!!.ts > 0L)
-        val lines = failure.logTail.lines()
+        assertEquals(HelperBootstrap.SpawnFailReason.DAEMON_SILENT, failure.reason)
+        val lines = failure.detail.lines()
         assertEquals("only the last 10 lines are kept", 10, lines.size)
         assertEquals("line3", lines.first())
         assertEquals("line12", lines.last())
@@ -350,7 +353,66 @@ class HelperBootstrapTest {
         val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
 
         assertFalse(boot.ensureRunning())
-        assertEquals("(daemon log unavailable)", boot.lastSpawnFailure()?.logTail)
+        assertEquals("(daemon log unavailable)", boot.lastSpawnFailure()?.detail)
+    }
+
+    // ── #133: every bail-out records WHY, and names the ADB channel when it is down ──
+
+    @Test
+    fun `a spawn that cannot be dispatched without ADB is recorded as ADB_UNREACHABLE`() = runTest {
+        val adb = FakeAdb()
+        adb.connected = false          // wireless debugging off / grant revoked
+        adb.onSpawn = { false }        // dispatch never reaches the shell
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertEquals(
+            HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE,
+            boot.lastSpawnFailure()?.reason,
+        )
+    }
+
+    @Test
+    fun `a spawn that cannot be dispatched over a live ADB is recorded separately`() = runTest {
+        val adb = FakeAdb()
+        adb.onSpawn = { false }
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertEquals(
+            HelperBootstrap.SpawnFailReason.SPAWN_DISPATCH_FAILED,
+            boot.lastSpawnFailure()?.reason,
+        )
+    }
+
+    @Test
+    fun `a stale daemon that refuses to die is recorded instead of staying silent`() = runTest {
+        val adb = FakeAdb()
+        adb.processAlive = true
+        adb.killEffective = false      // kill dispatches but the process survives
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertEquals("must not spawn over a live stale daemon", 0, adb.spawnCalls)
+        assertEquals(
+            HelperBootstrap.SpawnFailReason.STALE_DAEMON_ALIVE,
+            boot.lastSpawnFailure()?.reason,
+        )
+    }
+
+    @Test
+    fun `a kill that cannot be dispatched without ADB is recorded as ADB_UNREACHABLE`() = runTest {
+        val adb = FakeAdb()
+        adb.processAlive = true
+        adb.killSucceeds = false
+        adb.connected = false
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertEquals(
+            HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE,
+            boot.lastSpawnFailure()?.reason,
+        )
     }
 
     @Test

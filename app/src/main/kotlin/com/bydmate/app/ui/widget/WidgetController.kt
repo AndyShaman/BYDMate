@@ -21,6 +21,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.MainActivity
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.split.SplitOverlayController
 import com.bydmate.app.split.SplitSessionManager
@@ -53,6 +54,7 @@ import kotlinx.coroutines.launch
 interface SplitWidgetEntryPoint {
     fun splitSessionManager(): SplitSessionManager
     fun splitOverlayController(): SplitOverlayController
+    fun helperBootstrap(): HelperBootstrap
 }
 
 /**
@@ -692,11 +694,16 @@ object WidgetController {
      * [onError] receives a string resource id so the decision stays Context-free
      * (and unit-testable); the caller renders it via OverlayNotificationManager,
      * whose show() is suspending — hence the suspend callback.
+     *
+     * [adbBlocked] is consulted only on a launch failure: every window op goes through the helper
+     * daemon, which cannot be (re)spawned without the on-device ADB channel, so a user whose ADB
+     * grant is gone needs to hear that instead of a bare "could not launch" (#133).
      */
     internal suspend fun runSplitTap(
         manager: SplitSessionManager,
         onNoPair: () -> Unit,
         onError: suspend (Int) -> Unit,
+        adbBlocked: suspend () -> Boolean = { false },
     ) {
         if (manager.state.value is SplitSessionState.Active) {
             manager.exit()
@@ -706,7 +713,9 @@ object WidgetController {
             null -> onNoPair()
             SplitStartResult.OK -> Unit
             SplitStartResult.FREEFORM_UNAVAILABLE -> onError(R.string.split_freeform_reboot_hint)
-            SplitStartResult.LAUNCH_FAILED -> onError(R.string.split_launch_failed)
+            SplitStartResult.LAUNCH_FAILED -> onError(
+                if (adbBlocked()) R.string.split_launch_failed_adb else R.string.split_launch_failed
+            )
             SplitStartResult.DISABLED -> onError(R.string.split_feature_disabled)
         }
     }
@@ -935,6 +944,14 @@ object WidgetController {
                                 context.getString(res),
                                 "",
                             )
+                        },
+                        adbBlocked = {
+                            // Only a daemon that is dead RIGHT NOW makes the recorded reason
+                            // relevant: a later successful spawn leaves the old record in place
+                            // for the dump, but isHealthy() then keeps it out of the UI.
+                            val bootstrap = ep.helperBootstrap()
+                            !bootstrap.isHealthy() && bootstrap.lastSpawnFailure()?.reason ==
+                                HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE
                         },
                     )
                 } catch (e: Exception) {

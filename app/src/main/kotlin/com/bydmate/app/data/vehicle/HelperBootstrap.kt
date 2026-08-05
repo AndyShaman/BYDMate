@@ -80,6 +80,8 @@ class HelperBootstrap @Inject constructor(
             // old daemon; the next call retries.
             if (!adb.killHelper()) {
                 Log.w(TAG, "killHelper dispatch failed; not spawning to avoid stale daemon")
+                recordSpawnFailure(adbAwareReason(SpawnFailReason.KILL_DISPATCH_FAILED),
+                    "kill of the stale daemon could not be dispatched")
                 return false
             }
             // kill -9 is async, and the old daemon holds the exclusive lock + binder name until
@@ -110,6 +112,8 @@ class HelperBootstrap @Inject constructor(
             // kill instead of silently accepting a stale daemon.
             if (stillAlive) {
                 Log.w(TAG, "stale helper still alive after kill; not spawning to avoid lock race")
+                recordSpawnFailure(SpawnFailReason.STALE_DAEMON_ALIVE,
+                    "stale daemon survived $KILL_ROUNDS kill rounds; spawn skipped to avoid the lock race")
                 return false
             }
         }
@@ -118,6 +122,8 @@ class HelperBootstrap @Inject constructor(
         // versionCode persisted against it, masking that no fresh daemon was actually launched.
         if (!adb.spawnHelper()) {
             Log.w(TAG, "spawnHelper dispatch failed; not persisting version")
+            recordSpawnFailure(adbAwareReason(SpawnFailReason.SPAWN_DISPATCH_FAILED),
+                "app_process spawn could not be dispatched")
             return false
         }
         repeat(POLL_ATTEMPTS) {
@@ -131,7 +137,11 @@ class HelperBootstrap @Inject constructor(
         }
         val log = adb.readHelperLog()
         Log.w(TAG, "helper unreachable after spawn; daemon log:\n$log")
-        recordSpawnFailure(log)
+        val tail = log?.lines()?.filter { it.isNotBlank() }?.takeLast(FAIL_LOG_LINES)
+            ?.joinToString("\n")
+            ?.takeIf { it.isNotEmpty() }
+            ?: "(daemon log unavailable)"
+        recordSpawnFailure(SpawnFailReason.DAEMON_SILENT, tail)
         return false
     }
 
@@ -139,30 +149,55 @@ class HelperBootstrap @Inject constructor(
     suspend fun isHealthy(): Boolean = helper.isAlive()
 
     /**
-     * Keeps the tail of the daemon log from the last "spawned but unreachable" round, so the
-     * diagnostic dump can show WHY the daemon never came up (#64). Logcat has usually rotated
-     * by the time the user files the report.
+     * Records WHY the daemon is not running (#64, #133), so the diagnostic dump does not have to
+     * rely on logcat — it has usually rotated by the time the user files the report.
+     *
+     * Until 3.11 only the last branch (spawn dispatched, daemon never answered) was recorded, so
+     * every failure that ended earlier — and the ADB-channel failures in particular, which are the
+     * common field case — left the dump printing `last_spawn_failure: (none)` next to a dead daemon.
      */
-    private fun recordSpawnFailure(log: String?) {
-        val tail = log?.lines()?.filter { it.isNotBlank() }?.takeLast(FAIL_LOG_LINES)
-            ?.joinToString("\n")
-            ?.takeIf { it.isNotEmpty() }
-            ?: "(daemon log unavailable)"
+    private fun recordSpawnFailure(reason: SpawnFailReason, detail: String) {
         prefs.edit()
             .putLong(KEY_LAST_FAIL_TS, System.currentTimeMillis())
-            .putString(KEY_LAST_FAIL_LOG, tail)
+            .putString(KEY_LAST_FAIL_REASON, reason.name)
+            .putString(KEY_LAST_FAIL_LOG, detail)
             .apply()
     }
+
+    /**
+     * Distinguishes "the ADB channel itself is down" from a dispatch that failed over a live one.
+     * [AdbOnDeviceClient.isConnected] is a cheap socket-state read with no side effects — the
+     * connect attempt has already happened inside the failed call.
+     */
+    private suspend fun adbAwareReason(overChannel: SpawnFailReason): SpawnFailReason =
+        if (adb.isConnected()) overChannel else SpawnFailReason.ADB_UNREACHABLE
 
     /** Last recorded spawn failure, or null if the daemon has never failed to come up. */
     fun lastSpawnFailure(): SpawnFailure? {
         val ts = prefs.getLong(KEY_LAST_FAIL_TS, 0L)
         if (ts <= 0L) return null
-        return SpawnFailure(ts, prefs.getString(KEY_LAST_FAIL_LOG, "").orEmpty())
+        val reason = runCatching {
+            SpawnFailReason.valueOf(prefs.getString(KEY_LAST_FAIL_REASON, "").orEmpty())
+        }.getOrDefault(SpawnFailReason.DAEMON_SILENT)
+        return SpawnFailure(ts, reason, prefs.getString(KEY_LAST_FAIL_LOG, "").orEmpty())
     }
 
-    /** Timestamp + daemon log tail of a failed spawn. */
-    data class SpawnFailure(val ts: Long, val logTail: String)
+    /** Why the daemon is not running. */
+    enum class SpawnFailReason {
+        /** No ADB channel to 127.0.0.1:5555 — wireless debugging is off or the grant was revoked. */
+        ADB_UNREACHABLE,
+        /** ADB is alive but the kill of the stale daemon could not be dispatched. */
+        KILL_DISPATCH_FAILED,
+        /** The stale daemon survived the kill rounds; spawning over it would lose the lock race. */
+        STALE_DAEMON_ALIVE,
+        /** ADB is alive but the spawn command could not be dispatched. */
+        SPAWN_DISPATCH_FAILED,
+        /** Spawn dispatched, daemon never answered — [detail] holds the daemon log tail. */
+        DAEMON_SILENT,
+    }
+
+    /** Timestamp, classification and either an explanation or the daemon log tail. */
+    data class SpawnFailure(val ts: Long, val reason: SpawnFailReason, val detail: String)
 
     /** Installed versionCode of our own package; a distinct sentinel if it cannot be read
      *  (never expected — our own package always exists). The sentinel differs from the stored
@@ -179,6 +214,7 @@ class HelperBootstrap @Inject constructor(
         private const val KEY_SPAWNED_VERSION = "spawned_version_code"
         private const val KEY_LAST_FAIL_TS = "helper_last_fail_ts"
         private const val KEY_LAST_FAIL_LOG = "helper_last_fail_log"
+        private const val KEY_LAST_FAIL_REASON = "helper_last_fail_reason"
         private const val FAIL_LOG_LINES = 10
         private const val VERSION_READ_FAILED = Long.MIN_VALUE
         private const val POLL_ATTEMPTS = 15

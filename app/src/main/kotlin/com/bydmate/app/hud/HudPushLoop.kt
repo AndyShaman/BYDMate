@@ -20,14 +20,22 @@ class HudPushLoop(
     private val nowMsProvider: () -> Long = { System.currentTimeMillis() },
     /** Channel A broadcaster; null keeps all existing tests unchanged. */
     internal val amap: HudAmapBroadcaster? = null,
+    /** Maneuver-change journal for the diagnostic dump; null = no journalling (tests). */
+    private val maneuvers: HudManeuverJournal? = null,
 ) {
     companion object {
         private const val TAG = "HudPushLoop"
         const val PERIOD_MS = 300L
+        private const val NO_MANEUVER = Int.MIN_VALUE
     }
 
     private var job: Job? = null
     private var counter = 0   // clear frames only; guidance frames carry the constant 2 in f2
+
+    // Last journalled maneuver state; NO_MANEUVER means "nothing recorded yet in this guidance
+    // session", so the first frame of a new session is always written.
+    private var journalledGaode = NO_MANEUVER
+    private var journalledSuppress = false
 
     /** §5 diagnostics, read by the settings dump via HudController.diag(). */
     @Volatile var framesSent: Long = 0L; private set
@@ -61,6 +69,7 @@ class HudPushLoop(
                 Log.i(TAG, "guidance ended, clear frame sent")
             }
             amap?.onSnapshot(null)
+            journalledGaode = NO_MANEUVER
             return false
         }
         val signPng = if (speedSignEnabled() && s.speedLimit > 0) HudSpeedSign.render(s.speedLimit) else null
@@ -86,7 +95,26 @@ class HudPushLoop(
         lastRc = rc
         if (rc != 0) nonZeroRcCount++
         amap?.onSnapshot(s)
+        journalManeuver(s, cameraActive)
         return true
+    }
+
+    /** Records what both channels carried, but only when the maneuver code or the
+     *  arrow-suppression flag changed — the loop itself runs twice a second (#94). */
+    private fun journalManeuver(s: NavGuidanceHub.Snapshot, suppressArrow: Boolean) {
+        val journal = maneuvers ?: return
+        if (s.maneuverGaode == journalledGaode && suppressArrow == journalledSuppress) return
+        journalledGaode = s.maneuverGaode
+        journalledSuppress = suppressArrow
+        val amapBroadcasting = amap?.capable == true
+        journal.append(
+            maneuverGaode = s.maneuverGaode,
+            distanceMeters = s.distanceMeters,
+            f28 = if (suppressArrow) 0 else HudProtobufBuilder.gaodeToF28(s.maneuverGaode),
+            amapIcon = if (amapBroadcasting) HudAmapBroadcaster.gaodeToAmapIcon(s.maneuverGaode) else null,
+            roundaboutNum = if (amapBroadcasting && s.maneuverGaode in 25..34) s.maneuverGaode - 24 else null,
+            suppressArrow = suppressArrow,
+        )
     }
 
     /** Donor running line (f10): beyond 3 km to go, enrich the street with remaining

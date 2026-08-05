@@ -22,6 +22,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
 import com.bydmate.app.cluster.ClusterGeometry
+import com.bydmate.app.cluster.ClusterJournal
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
@@ -73,6 +74,8 @@ class BlindSpotController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val prefs: BlindSpotPreferences,
     private val helper: HelperClient,
+    /** Shared with [ClusterProjectionManager] — one instance, one timeline (#135). */
+    private val clusterJournal: ClusterJournal,
 ) {
     private val probe = AvmCameraProbe()
     private val telemetry = BlindSpotTelemetryGate()
@@ -488,8 +491,12 @@ class BlindSpotController @Inject constructor(
      * out the cluster under it.
      */
     private suspend fun applyCompositor(on: Boolean) {
+        // Journal into the cluster ring, not a camera one: #135 is about what the cluster shows
+        // after a blind-spot alert, and the compositor switches of both owners have to be
+        // readable on one timeline.
         if (!on && ClusterProjectionManager.isProjectionActive()) {
             Log.i(TAG, "compositor stays up: projection active")
+            clusterJournal.append("camera: compositor power-down skipped (projection active)")
             compositorPowered = false
             compositorTarget = false
             return
@@ -499,6 +506,7 @@ class BlindSpotController @Inject constructor(
         // next transition retries instead of assuming the cluster is where we asked for.
         if (ok) compositorPowered = on else compositorTarget = compositorPowered
         Log.i(TAG, "compositor power-${if (on) "up" else "down"} ok=$ok")
+        clusterJournal.append("camera: compositor power-${if (on) "up" else "down"} ok=$ok")
     }
 
     /** Runs the teardown in [ownScope] (so a cancelled fast loop cannot abandon a half-closed

@@ -24,11 +24,15 @@ class VehicleApiImpl @Inject constructor(
     private val writeLogDao: VehicleWriteLogDao,
     private val seatStore: SeatChannelStore,
     private val windowStore: WindowChannelStore,
+    // Null in unit tests (no SharedPreferences); production gets the singleton from AppModule.
+    private val seatJournal: SeatCommandJournal? = null,
 ) : VehicleApi {
 
     private val seatChannel = AdaptiveSeatChannel(
         SeatWriter { name, value -> doWriteOutcome(name, value) },
         seatStore,
+        SeatReadback { group -> readSeatStatus(group) },
+        seatJournal,
     )
 
     private val windowChannel = WindowChannelRouter(helper, windowStore)
@@ -271,8 +275,23 @@ class VehicleApiImpl @Inject constructor(
         val outcome = WriteOutcome.fromStatus(status)
         val ok = outcome == WriteOutcome.REAL
         logWrite(actionName, entry.dev, entry.writeFid, value, status, ok, if (ok) null else "outcome_$outcome", entry.validated)
+        seatJournal?.appendWrite(actionName, entry.dev, entry.writeFid, value, status, outcome)
         return outcome
     }
+
+    /**
+     * dev=1000 status fid of [group] (1=on, 2=off), or null when the read carries no verdict:
+     * the group has no validated status fid (passenger), the daemon did not answer, or the
+     * value is a sentinel (65535 link error, 1048575 uninitialised, -10013/-10011 wrong
+     * transact/direction) — a sentinel says nothing about the write that preceded it, and two
+     * of them in a row would otherwise push a healthy Leopard 3 onto the fallback channel.
+     * A literal 0 is NOT filtered: that is the Song L signal of a status fid nobody wired.
+     */
+    // internal for testing the sentinel filtering (private has no other seam).
+    internal suspend fun readSeatStatus(group: SeatGroup): Int? =
+        WriteAllowlist.SEAT_STATUS_FIDS[group]
+            ?.let { helper.read(WriteAllowlist.SEAT_STATUS_DEV, it) }
+            ?.let { SentinelDecoder.decodeInt(it.toInt()) }
 
     // ─── Observability hook ────────────────────────────────────────────────────
 

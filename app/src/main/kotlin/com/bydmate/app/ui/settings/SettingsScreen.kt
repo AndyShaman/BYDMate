@@ -1156,6 +1156,13 @@ private fun DisplaySection() {
             enabled = enabled,
             onValueChangeFinished = applyGeometry,
         )
+        // #121: only the VD transport can scale (it sizes the render buffer). Direct mode would
+        // need a density override on the live cluster display, which kills Qt apps like 2GIS, so
+        // the slider is inert there. Kept enabled and visible - the value still applies the moment
+        // the user switches back to Factory.
+        if (directProjection) {
+            SettingHint(text = stringResource(R.string.settings_display_scale_direct_hint))
+        }
     }
 
     // HUD navigation output (factory head-up display via the SOME/IP bus). Uses the same

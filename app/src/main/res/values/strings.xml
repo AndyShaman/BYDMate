@@ -50,6 +50,7 @@
     <string name="settings_display_offset_y_desc">Положение окна: 0 - верх, 50 - центр, 100 - низ</string>
     <string name="settings_display_scale">Масштаб</string>
     <string name="settings_display_scale_desc">Крупность интерфейса: меньше значение - мельче элементы и больше карты в окне</string>
+    <string name="settings_display_scale_direct_hint">Масштаб действует только в режиме проекции «Заводской». В «Расширенном» приложение всегда рисуется в натуральную величину.</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Правая звезда</string>
     <string name="steering_button_left_star">Левая звезда</string>
@@ -1305,6 +1306,7 @@
     <string name="split_picker_title_narrow">Выберите приложение для узкой панели (1/3)</string>
     <string name="split_freeform_reboot_hint">Разделение экрана включится после перезагрузки машины</string>
     <string name="split_launch_failed">Не удалось запустить разделение экрана</string>
+    <string name="split_launch_failed_adb">Не удалось запустить разделение экрана: требуется разблокированный ADB</string>
     <!-- Automation action: split_screen -->
     <string name="automation_action_split_screen">Разделение экрана</string>
     <string name="auto_act_split_screen">Разделение экрана</string>

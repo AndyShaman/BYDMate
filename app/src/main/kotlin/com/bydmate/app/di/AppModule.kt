@@ -481,6 +481,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSeatCommandJournal(@ApplicationContext ctx: Context): com.bydmate.app.data.vehicle.SeatCommandJournal =
+        com.bydmate.app.data.vehicle.SeatCommandJournal(
+            ctx.getSharedPreferences(
+                com.bydmate.app.data.vehicle.SeatCommandJournal.PREFS_NAME, Context.MODE_PRIVATE)
+        )
+
+    /** The one journal instance the projection object and the camera both write into (#135). */
+    @Provides
+    @Singleton
+    fun provideClusterJournal(@ApplicationContext ctx: Context): com.bydmate.app.cluster.ClusterJournal =
+        com.bydmate.app.cluster.ClusterJournal.shared(ctx)
+
+    @Provides
+    @Singleton
     fun provideWindowChannelStore(@ApplicationContext ctx: Context): com.bydmate.app.data.vehicle.WindowChannelStore =
         com.bydmate.app.data.vehicle.WindowChannelStorePrefs(ctx.getSharedPreferences("window_channel", Context.MODE_PRIVATE))
 
@@ -494,9 +508,11 @@ object AppModule {
         writeLogDao: VehicleWriteLogDao,
         seatChannelStore: com.bydmate.app.data.vehicle.SeatChannelStore,
         windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
+        seatCommandJournal: com.bydmate.app.data.vehicle.SeatCommandJournal,
     ): com.bydmate.app.data.vehicle.VehicleApi =
         com.bydmate.app.data.vehicle.VehicleApiImpl(
             parsReader, autoservice, helper, allowlist, writeLogDao, seatChannelStore, windowChannelStore,
+            seatCommandJournal,
         )
 
     @Provides
@@ -539,6 +555,13 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideSplitJournal(
+        @ApplicationContext ctx: Context,
+    ): com.bydmate.app.split.SplitJournal =
+        com.bydmate.app.split.SplitJournalImpl(com.bydmate.app.split.PrefsSplitJournalStore(ctx))
+
+    @Provides
+    @Singleton
     fun provideSplitBackdrop(
         controller: com.bydmate.app.split.SplitOverlayController,
     ): com.bydmate.app.split.SplitBackdrop = controller
@@ -552,6 +575,7 @@ object AppModule {
         @javax.inject.Named("io") dispatcher: kotlinx.coroutines.CoroutineDispatcher,
         @ApplicationContext ctx: Context,
         bootstrap: com.bydmate.app.data.vehicle.HelperBootstrap,
+        journal: com.bydmate.app.split.SplitJournal,
     ): com.bydmate.app.split.SplitSessionManager = com.bydmate.app.split.SplitSessionManager(
         helper = helper,
         prefs = prefs,
@@ -571,6 +595,7 @@ object AppModule {
         endClusterProjection = { pkg ->
             com.bydmate.app.cluster.ClusterProjectionManager.endProjectionForPkg(pkg, ctx, helper, bootstrap)
         },
+        journal = journal,
     ).also { mgr ->
         // Wire departure-grace callback so ClusterProjectionManager can notify SplitSessionManager
         // before a direct-projection cluster send (Q1 / F-1). onBeforeClusterSend lives on the

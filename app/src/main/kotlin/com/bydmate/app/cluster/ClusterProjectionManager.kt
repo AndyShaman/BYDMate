@@ -80,9 +80,9 @@ object ClusterProjectionManager {
     // User-tunable window position within the free space (MIN_OFFSET_PCT..MAX, default = centered).
     const val KEY_OFFSET_X_PCT = "offset_x_pct"
     const val KEY_OFFSET_Y_PCT = "offset_y_pct"
-    // User-tunable content scale: VirtualDisplay density as % of cluster dpi (MIN_SCALE_PCT..MAX,
-    // default 100 = native). Tunes what the projected app renders INSIDE the window — how big the
-    // UI is and how much map fits — independent of the window size/position.
+    // User-tunable content scale: VirtualDisplay buffer size as the inverse % of the window
+    // (MIN_SCALE_PCT..MAX, default 100 = 1:1). Tunes what the projected app renders INSIDE the
+    // window — how big the UI is and how much map fits — independent of the window size/position.
     const val KEY_SCALE_PCT = "scale_pct"
     // App to project onto the cluster (default Yandex Navi). Label is cached only for the settings row.
     const val KEY_TARGET_PACKAGE = "target_package"
@@ -191,6 +191,50 @@ object ClusterProjectionManager {
     private var projectionAttemptInProgress = false
 
     /**
+     * Persistent transition journal for the diagnostic dump; installed on the first entry point
+     * that carries a Context, so the deep helpers (createClusterVd, hideOverlay) can journal
+     * without threading a Context through them. Null only before the first projection command
+     * of the process — nothing inside a transition can run before that.
+     */
+    @Volatile
+    private var journal: ClusterJournal? = null
+
+    private fun installJournal(context: Context) {
+        if (journal == null) {
+            journal = ClusterJournal.shared(context)
+        }
+    }
+
+    private fun log(payload: String) {
+        journal?.append(payload)
+    }
+
+    /** Live projection state for the diagnostic dump. Read lock-free, like [isProjectionActive]:
+     *  the dump must not block behind an in-flight transition. */
+    data class Diag(
+        val mode: ClusterMode,
+        val projectedPackage: String?,
+        val vdDisplayId: Int,
+        val directDisplayId: Int,
+        val overlayAttached: Boolean,
+        val attemptInProgress: Boolean,
+        val lastFailure: String?,
+    )
+
+    fun diag(): Diag = Diag(
+        mode = currentMode,
+        projectedPackage = projectedPackage,
+        vdDisplayId = remoteDisplayId,
+        directDisplayId = directDisplayId,
+        overlayAttached = overlayView != null,
+        attemptInProgress = projectionAttemptInProgress,
+        lastFailure = lastFailure,
+    )
+
+    /** Journal ring for the dump, oldest first; usable before any projection ran in this process. */
+    fun journalLines(context: Context): List<String> = ClusterJournal.shared(context).lines()
+
+    /**
      * True while something of ours is on the cluster: the VD overlay is attached, a direct
      * freeform session is live, or an attempt is in flight. Read lock-free, like [currentMode] —
      * the only consumer is the blind-spot pipeline, which asks before powering the cluster
@@ -205,13 +249,24 @@ object ClusterProjectionManager {
      * in [mode]. Auto-launch is delegated to the daemon's [launchAndForce] (it [launchApp]s Navi
      * when its task is absent), so a press with Navi closed launches it onto the cluster.
      * OFF always tears the projection down.
+     *
+     * [reason] identifies the caller in the journal (star key, voice agent, settings, split) —
+     * a field dump about a cluster that changed on its own has to say who asked.
      */
-    fun setMode(context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap) {
+    fun setMode(
+        context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
+        reason: String = "unknown",
+    ) {
         val appContext = context.applicationContext
+        installJournal(appContext)
         scope.launch {
             mutex.withLock {
-                if (mode == currentMode) return@withLock
+                if (mode == currentMode) {
+                    log("setMode $mode: already in this mode (reason=$reason)")
+                    return@withLock
+                }
                 Log.i(TAG, "setMode: $currentMode -> $mode")
+                log("setMode $currentMode -> $mode (reason=$reason)")
                 applyModeLocked(appContext, mode, helper, bootstrap)
             }
         }
@@ -223,7 +278,7 @@ object ClusterProjectionManager {
      * state. Safe from the a11y key thread: setMode hops to [scope] and serializes under [mutex].
      */
     fun toggle(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) =
-        setMode(context, nextMode(currentMode), helper, bootstrap)
+        setMode(context, nextMode(currentMode), helper, bootstrap, reason = "star_key")
 
     /**
      * Applies the user's calibrated cluster window bounds to [taskId] on [taskDisplayId].
@@ -297,8 +352,10 @@ object ClusterProjectionManager {
     suspend fun endProjectionForPkg(
         pkg: String, context: Context, helper: HelperClient, bootstrap: HelperBootstrap,
     ): Boolean = mutex.withLock {
+        installJournal(context)
         if (currentMode == ClusterMode.OFF || projectedPackage != pkg) return@withLock false
         Log.i(TAG, "endProjectionForPkg: $pkg is on the cluster — ending projection before the split launch")
+        log("setMode $currentMode -> OFF (reason=split_takeover pkg=$pkg)")
         applyModeLocked(context.applicationContext, ClusterMode.OFF, helper, bootstrap)
         true
     }
@@ -397,12 +454,14 @@ object ClusterProjectionManager {
      */
     fun reproject(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
+        installJournal(appContext)
         scope.launch {
             mutex.withLock {
                 if (currentMode != ClusterMode.FULLSCREEN) return@withLock
                 Log.i(TAG, "reproject: in-place resize")
                 if (!swapToNewSize(appContext, helper, bootstrap)) {
                     Log.w(TAG, "in-place resize failed; rebuilding projection")
+                    log("resize failed; rebuilding projection (reason=settings)")
                     applyModeLocked(appContext, ClusterMode.FULLSCREEN, helper, bootstrap)
                 }
             }
@@ -437,8 +496,11 @@ object ClusterProjectionManager {
             val taskId = helper.getTaskId(projectedPackage ?: targetPackage(context)) ?: return true
             val b = freeformBounds(geo)
             helper.setTaskBounds(taskId, b[0], b[1], b[2], b[3])
-            applyDirectDensity(helper, directDisplayId, plan)
+            @Suppress("KotlinConstantConditions")
+            if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, directDisplayId, plan)
             Log.i(TAG, "resize (direct): bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] dpi=${plan.densityDpi}")
+            log("resize direct: task=$taskId bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] " +
+                "dpi=${plan.densityDpi} (scale n/a in direct mode)")
             return true
         }
         val oldOverlay = overlayView ?: return true
@@ -449,7 +511,8 @@ object ClusterProjectionManager {
         val geo = geometryFor(
             ClusterMode.FULLSCREEN, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
         ) ?: return true
-        val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
+        val scalePct = readScalePct(context)
+        val plan = renderPlanFor(geo, clusterDensityDpi, scalePct)
 
         // addOverlayAndAwaitSurface points overlayView at the NEW container; oldOverlay keeps the old
         // one so we can drop it after Navi has moved. remoteDisplayId is untouched until we commit.
@@ -483,6 +546,8 @@ object ClusterProjectionManager {
         if (oldVdId != -1) helper.releaseVirtualDisplay(oldVdId)
         removeOverlayView(oldOverlay)
         Log.i(TAG, "resize: swapped to ${geo.width}x${geo.height} (vd $oldVdId -> $newVdId)")
+        log("resize vd: window ${geo.width}x${geo.height} buffer ${plan.bufferWidth}x${plan.bufferHeight} " +
+            "dpi=${plan.densityDpi} (native) scale=$scalePct% (vd $oldVdId -> $newVdId)")
         return true
     }
 
@@ -626,10 +691,14 @@ object ClusterProjectionManager {
                 if (failure == null) {
                     currentMode = mode
                     lastFailure = null
+                    log("projection active: pkg=$projectedPackage " +
+                        if (directDisplayId != -1) "direct display=$directDisplayId"
+                        else "vd=$remoteDisplayId")
                 } else {
                     // projection failed: keep state honest. project() already tore down the
                     // overlay/VD on its failure paths; make sure Navi is back on the main screen.
                     Log.e(TAG, "projection failed; falling back to OFF")
+                    log("projection failed ($failure); falling back to OFF")
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
                     currentMode = ClusterMode.OFF
@@ -658,6 +727,7 @@ object ClusterProjectionManager {
                 .edit().putBoolean(KEY_COMPOSITOR_POWERED, false).apply()
         } else {
             Log.w(TAG, "compositor power-down not confirmed; keeping marker for recovery")
+            log("compositor power-down not confirmed; marker kept")
         }
     }
 
@@ -670,6 +740,7 @@ object ClusterProjectionManager {
      */
     fun recoverStaleCompositor(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
+        installJournal(appContext)
         scope.launch {
             mutex.withLock {
                 val marker = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -680,6 +751,7 @@ object ClusterProjectionManager {
                     return@withLock
                 }
                 Log.i(TAG, "recoverStaleCompositor: powering down compositor left on by a prior session")
+                log("recovery: compositor power-down (marker from a prior session)")
                 powerDownCompositor(appContext, helper)
             }
         }
@@ -718,6 +790,7 @@ object ClusterProjectionManager {
      */
     fun recoverStaleDirectTask(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
+        installJournal(appContext)
         scope.launch {
             mutex.withLock {
                 val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -739,6 +812,7 @@ object ClusterProjectionManager {
                     val relaunchedId = if (modeOk) helper.getTaskId(targetPackage(appContext)) else null
                     if (relaunchedId != null && relaunchedId != taskId) {
                         moveOk = true
+                        log("recovery: task recreated by setMode: $taskId -> $relaunchedId")
                     } else {
                         moveOk = helper.moveTaskToDisplay(taskId, 0)
                         helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
@@ -746,9 +820,12 @@ object ClusterProjectionManager {
                 }
                 if (shouldClearDirectMarker(resetOk, taskId != null, modeOk, moveOk)) {
                     prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, -1).apply()
+                    log("recovery: direct task reclaimed from display $staleId")
                 } else {
                     Log.w(TAG, "recoverStaleDirectTask: recovery incomplete " +
                         "(reset=$resetOk task=${taskId != null} mode=$modeOk move=$moveOk); keeping marker for next start")
+                    log("recovery: direct task reclaim incomplete " +
+                        "(reset=$resetOk task=${taskId != null} mode=$modeOk move=$moveOk); marker kept")
                 }
             }
         }
@@ -800,7 +877,9 @@ object ClusterProjectionManager {
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
     ): String? {
         if (!bootstrap.ensureRunning()) {
-            Log.e(TAG, "helper daemon not running; aborting projection"); return "daemon"
+            Log.e(TAG, "helper daemon not running; aborting projection")
+            log("abort: helper daemon not running")
+            return "daemon"
         }
         recoverStaleDirectDensity(context, helper)
         // VD/factory transport: return the freeform flag to 0 BEFORE any display-dependent
@@ -824,8 +903,12 @@ object ClusterProjectionManager {
             // display that vanished mid-session) must not survive a failed attempt. No-op on
             // cars without a cluster display - overlayView is always null there.
             if (overlayView != null) hideOverlay(helper)
-            Log.e(TAG, "cluster display not found"); return "projection"
+            Log.e(TAG, "cluster display not found")
+            log("abort: cluster display not found")
+            return "projection"
         }
+        log("transport=${if (direct) "direct" else "vd"} display=${display.displayId} " +
+            "${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
         if (autoContainerEnabled(context)) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
@@ -841,18 +924,26 @@ object ClusterProjectionManager {
                 context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
             }
-            if (markerWritten) runCatching { helper.setClusterContainerMode(true) }
+            if (markerWritten) {
+                val up = runCatching { helper.setClusterContainerMode(true) }.getOrDefault(false)
+                log("compositor power-up ok=$up")
+            } else {
+                log("compositor marker not persisted; power-up skipped")
+            }
         }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
         if (!ensureOverlayPermission(context, helper)) {
-            Log.e(TAG, "overlay permission unavailable; aborting projection"); return "projection"
+            Log.e(TAG, "overlay permission unavailable; aborting projection")
+            log("abort: SYSTEM_ALERT_WINDOW unavailable")
+            return "projection"
         }
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)
         val geo = geometryFor(
             mode, clusterWidth, clusterHeight, widthPct, heightPct, offsetXPct, offsetYPct,
         ) ?: return "projection"
-        val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
+        val scalePct = readScalePct(context)
+        val plan = renderPlanFor(geo, clusterDensityDpi, scalePct)
 
         // Direct mode first (2026-07-15, validated on-car): Navi runs ON the cluster display
         // itself, so the a11y feed (voice agent / HUD) can read it — a private VirtualDisplay
@@ -899,6 +990,7 @@ object ClusterProjectionManager {
             }
             if (surface == null) {
                 Log.e(TAG, "overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
+                log("vd: overlay Surface not ready within ${SURFACE_TIMEOUT_MS}ms")
                 onClusterSendFailed?.invoke(pkg)
                 hideOverlay(helper); return "projection"
             }
@@ -909,6 +1001,7 @@ object ClusterProjectionManager {
                 val staleId = remoteDisplayId
                 if (!helper.releaseVirtualDisplay(staleId)) {
                     Log.w(TAG, "stale releaseVirtualDisplay($staleId) failed; aborting to keep retry handle")
+                    log("vd: stale release($staleId) failed; abort (retry handle kept)")
                     onClusterSendFailed?.invoke(pkg)
                     hideOverlay(helper); return "projection"
                 }
@@ -919,9 +1012,12 @@ object ClusterProjectionManager {
                 // daemon only releases ids in its own map, so a reused/stale id is a safe no-op.
                 releaseOrphanedDisplay(context, helper)
             }
+            log("vd plan: buffer ${plan.bufferWidth}x${plan.bufferHeight} window ${geo.width}x${geo.height} " +
+                "dpi=${plan.densityDpi} (native) scale=$scalePct%")
             val id = createClusterVd(helper, plan, surface)
             if (id == null) {
                 Log.e(TAG, "createVirtualDisplay failed")
+                log("vd: create failed ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi}")
                 onClusterSendFailed?.invoke(pkg)
                 hideOverlay(helper); return "projection"
             }
@@ -936,6 +1032,7 @@ object ClusterProjectionManager {
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed")
+                log("vd: launchAndForce failed pkg=$pkg vd=$id (task never appeared on the cluster)")
                 onClusterSendFailed?.invoke(pkg)
                 hideOverlay(helper); return "projection"
             }
@@ -946,6 +1043,7 @@ object ClusterProjectionManager {
             // overlay down and report failure so applyModeLocked falls back to OFF + pull-back,
             // keeping currentMode honest.
             Log.e(TAG, "projection threw: ${e.message}", e)
+            log("vd: threw ${e.javaClass.simpleName}: ${e.message}")
             onClusterSendFailed?.invoke(pkg)
             hideOverlay(helper); "projection"
         }
@@ -977,6 +1075,7 @@ object ClusterProjectionManager {
         }
         if (!markerWritten) {
             Log.w(TAG, "direct projection: write-ahead marker not persisted; VD fallback")
+            log("direct: marker not persisted; VD fallback")
             return false
         }
         // Notify SplitSessionManager that [pkg] is about to be sent to the cluster so it can
@@ -994,9 +1093,12 @@ object ClusterProjectionManager {
             FreeformLaunchResult.OK -> {
                 directDisplayId = display.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
-                applyDirectDensity(helper, display.displayId, plan)
+                @Suppress("KotlinConstantConditions")
+                if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, display.displayId, plan)
                 projectedPackage = pkg
                 Log.i(TAG, "direct projection: $pkg on display ${display.displayId} " +
+                    "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
+                log("direct OK: $pkg display=${display.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
                 true
             }
@@ -1013,6 +1115,7 @@ object ClusterProjectionManager {
                     .putInt(KEY_DIRECT_DISPLAY_ID, -1)
                     .apply()
                 Log.i(TAG, "direct projection: freeform unavailable (reboot pending); VD fallback")
+                log("direct UNAVAILABLE: freeform not active yet (reboot pending); VD fallback")
                 // One-time overlay on the FIRST fallback after install/update: the settings hint
                 // alone is only seen if the user opens Settings. Silent (no ringtone) — this is
                 // informational, not an alarm. Cleared-then-failed-again cycles show it again,
@@ -1032,10 +1135,22 @@ object ClusterProjectionManager {
                 // Same rationale as UNAVAILABLE above: grace survives for the VD fallback.
                 // onClusterSendFailed is called only at terminal VD failures, not here.
                 Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
+                log("direct FAILED: launchFreeform rejected pkg=$pkg display=${display.displayId}; VD fallback")
                 false
             }
         }
     }
+
+    /**
+     * #121: content scale is inert in direct mode. There is no VirtualDisplay to size a buffer on —
+     * the app runs in a freeform window on the real cluster display — so the only lever is a wm
+     * density override on a LIVE display, which is exactly the Configuration change that kills
+     * 2GIS (see [renderPlanFor]). Direct mode therefore always renders at the native density,
+     * i.e. scale 100%. [applyDirectDensity] stays in the tree behind this gate: the density RESET
+     * it can send is still the shape crash recovery uses, and flipping this back is how a future
+     * transport that can scale safely would re-enable the slider.
+     */
+    private const val DIRECT_DENSITY_SCALE_ENABLED = false
 
     /** Density override for direct mode: native dpi -> reset (no override), else the plan's dpi. */
     private suspend fun applyDirectDensity(helper: HelperClient, displayId: Int, plan: RenderPlan) {
@@ -1058,12 +1173,16 @@ object ClusterProjectionManager {
             VIRTUAL_DISPLAY_FLAGS or VD_FLAG_PUBLIC, surface,
         )?.let {
             Log.i(TAG, "VirtualDisplay $it created PUBLIC (a11y-visible)")
+            log("vd created id=$it ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi} PUBLIC")
             return it
         }
         Log.w(TAG, "PUBLIC VirtualDisplay rejected; falling back to private flags")
         return helper.createVirtualDisplay(
             VD_NAME, plan.bufferWidth, plan.bufferHeight, plan.densityDpi, VIRTUAL_DISPLAY_FLAGS, surface,
-        )
+        )?.also {
+            log("vd created id=$it ${plan.bufferWidth}x${plan.bufferHeight}@${plan.densityDpi} " +
+                "PRIVATE (PUBLIC rejected, a11y-invisible)")
+        }
     }
 
     /**
@@ -1084,8 +1203,9 @@ object ClusterProjectionManager {
         if (match == null) {
             // Song family / DiLink 3-4 report no projection surface at all; the full list
             // is the only clue whether a cluster display exists under another name.
-            Log.e(TAG, "no projection display; available: " +
-                dm.displays.joinToString { "${it.displayId}:\"${it.name}\"" })
+            val available = dm.displays.joinToString { "${it.displayId}:\"${it.name}\"" }
+            Log.e(TAG, "no projection display; available: $available")
+            log("no projection display; available: $available")
         }
         if (match != null) {
             val point = Point()
@@ -1200,6 +1320,7 @@ object ClusterProjectionManager {
             val relaunchedId = if (modeOk) helper.getTaskId(pkg) else null
             if (relaunchedId != null && relaunchedId != taskId) {
                 moveOk = true
+                log("pullback: task recreated by setMode: $taskId -> $relaunchedId (pkg=$pkg)")
                 if (focus) helper.setFocusedTask(relaunchedId)
             } else {
                 moveOk = helper.moveTaskToDisplay(taskId, 0)
@@ -1208,6 +1329,7 @@ object ClusterProjectionManager {
             }
         } else {
             Log.d(TAG, "pullBackToMain: projected task ($pkg) not found")
+            log("pullback: task $pkg not found (already gone)")
         }
         // Same confirmed-only invariant as recoverStaleDirectTask: the marker survives until
         // BOTH the density reset and the task reclaim are confirmed (or the task is gone), so
@@ -1225,8 +1347,13 @@ object ClusterProjectionManager {
     private suspend fun hideOverlay(helper: HelperClient) {
         val id = remoteDisplayId
         if (id != -1) {
-            if (helper.releaseVirtualDisplay(id)) remoteDisplayId = -1
-            else Log.w(TAG, "releaseVirtualDisplay($id) failed; keeping id for retry")
+            if (helper.releaseVirtualDisplay(id)) {
+                remoteDisplayId = -1
+                log("vd released id=$id")
+            } else {
+                Log.w(TAG, "releaseVirtualDisplay($id) failed; keeping id for retry")
+                log("vd release($id) failed; id kept for retry")
+            }
         }
         withContext(Dispatchers.Main) {
             overlayView?.let { v ->
@@ -1246,6 +1373,7 @@ object ClusterProjectionManager {
         val id = remoteDisplayId
         if (id != -1) {
             Log.d(TAG, "surfaceDestroyed: releasing leaked VirtualDisplay $id")
+            log("vd: surface destroyed under a live projection; releasing id=$id")
             if (helper.releaseVirtualDisplay(id)) remoteDisplayId = -1
         }
     }

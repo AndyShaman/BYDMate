@@ -25,6 +25,7 @@ import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripPointDao
+import com.bydmate.app.diagnostics.LogRecorder
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.LlmHttpException
 import com.bydmate.app.data.remote.OpenRouterClient
@@ -232,7 +233,11 @@ class SettingsViewModel @Inject constructor(
     private val placeRepository: PlaceRepository,
     private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
     private val hudController: com.bydmate.app.hud.HudController,
+    private val logRecorder: LogRecorder,
     private val fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager,
+    private val splitPreferences: com.bydmate.app.split.SplitPreferences,
+    private val splitSessionManager: com.bydmate.app.split.SplitSessionManager,
+    private val splitJournal: com.bydmate.app.split.SplitJournal,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -285,6 +290,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
+        observeLogRecorder()
     }
 
     /** Load all settings from the repository on init. */
@@ -1380,16 +1386,10 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    private var logProcess: Process? = null
-    private var logFile: File? = null
-    private var logAutoStopJob: Job? = null
-
     companion object {
         private const val TAG = "SettingsViewModel"
-        private const val LOG_MAX_DURATION_MS = 2 * 60 * 60 * 1000L // 2 hours auto-stop
         /** Slug verified in the live OpenRouter catalog (2026-07-08). */
         internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-lite"
-        private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
         private const val PREVIEW_VOICE_TEXT =
             "Маршрут построен. Через двести метров поверните направо."
         private const val AGENT_TEST_PROMPT =
@@ -1558,6 +1558,12 @@ class SettingsViewModel @Inject constructor(
                 appendLine("last_fire_rc=${diag?.lastRc ?: "n/a"} nonzero_rc_count=${diag?.nonZeroRcCount ?: 0}")
                 appendLine("amap_capable=${diag?.amapCapable ?: false} amap_frames=${diag?.amapFramesSent ?: 0} amap_stops=${diag?.amapStopsSent ?: 0}")
                 appendLine("hub_snapshot=${com.bydmate.app.navdata.NavGuidanceHub.snapshot()}")
+                // What each channel actually carried at every maneuver change (#94): the
+                // SOME/IP arrow field next to the Amap icon, on one timeline.
+                val maneuvers = com.bydmate.app.hud.HudManeuverJournal(hudPrefs).lines()
+                appendLine("maneuver history:")
+                if (maneuvers.isEmpty()) appendLine("  (none)")
+                else maneuvers.forEach { appendLine("  $it") }
                 appendLine("notif_listener_enabled=${
                     androidx.core.app.NotificationManagerCompat.getEnabledListenerPackages(appContext)
                         .contains(appContext.packageName)
@@ -1589,6 +1595,56 @@ class SettingsViewModel @Inject constructor(
                     appendLine("pkg $pkg: $state")
                 }
             } catch (e: Exception) { appendLine("(failed to gather hud state: ${e.message})") }
+
+            appendLine("--- cluster ---")
+            try {
+                val cpm = com.bydmate.app.cluster.ClusterProjectionManager
+                val clusterPrefs = appContext.getSharedPreferences(cpm.PREFS_NAME, Context.MODE_PRIVATE)
+                val diag = cpm.diag()
+                appendLine("mode: ${diag.mode} attempt_in_progress=${diag.attemptInProgress} " +
+                    "last_failure=${diag.lastFailure ?: "(none)"}")
+                appendLine("transport: ${if (cpm.isDirectProjectionEnabled(appContext)) "direct" else "vd"} " +
+                    "auto_container=${clusterPrefs.getBoolean(cpm.KEY_AUTO_CONTAINER, true)} " +
+                    "freeform_reboot_pending=${clusterPrefs.getBoolean(cpm.KEY_FREEFORM_REBOOT_PENDING, false)}")
+                appendLine("projected_pkg: ${diag.projectedPackage ?: "(none)"} " +
+                    "target=${clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, "(default)")}")
+                appendLine("vd: id=${diag.vdDisplayId} overlay_attached=${diag.overlayAttached} " +
+                    "direct_display=${diag.directDisplayId} " +
+                    "direct_marker=${clusterPrefs.getInt(cpm.KEY_DIRECT_DISPLAY_ID, -1)}")
+                // The window the user calibrated, resolved against the cluster panel as the
+                // projection itself resolves it — a grey/misplaced cluster (#134) is often just
+                // bounds that fall outside the visible zone.
+                val dm = appContext.getSystemService(Context.DISPLAY_SERVICE)
+                    as android.hardware.display.DisplayManager
+                val clusterDisplay = dm.displays.filter {
+                    it.name.contains("XDJAScreenProjection", ignoreCase = true)
+                }.let { p -> p.firstOrNull { it.name.endsWith("_1") } ?: p.firstOrNull() }
+                if (clusterDisplay == null) {
+                    appendLine("display: (no XDJAScreenProjection surface on this car)")
+                    appendLine("bounds: n/a")
+                } else {
+                    val size = android.graphics.Point()
+                    @Suppress("DEPRECATION") clusterDisplay.getRealSize(size)
+                    val metrics = android.util.DisplayMetrics()
+                    @Suppress("DEPRECATION") clusterDisplay.getMetrics(metrics)
+                    appendLine("display: id=${clusterDisplay.displayId} \"${clusterDisplay.name}\" " +
+                        "${size.x}x${size.y} dpi=${metrics.densityDpi}")
+                    val geo = com.bydmate.app.cluster.geometryFor(
+                        com.bydmate.app.cluster.ClusterMode.FULLSCREEN, size.x, size.y,
+                        clusterPrefs.getInt(cpm.KEY_WIDTH_PCT, com.bydmate.app.cluster.MAX_PROJECTION_PCT),
+                        clusterPrefs.getInt(cpm.KEY_HEIGHT_PCT, com.bydmate.app.cluster.MAX_PROJECTION_PCT),
+                        clusterPrefs.getInt(cpm.KEY_OFFSET_X_PCT, com.bydmate.app.cluster.CENTER_OFFSET_PCT),
+                        clusterPrefs.getInt(cpm.KEY_OFFSET_Y_PCT, com.bydmate.app.cluster.CENTER_OFFSET_PCT),
+                    )
+                    appendLine("bounds: " + if (geo == null) "n/a" else
+                        "[${geo.xOffset},${geo.yOffset},${geo.xOffset + geo.width},${geo.yOffset + geo.height}] " +
+                            "scale=${clusterPrefs.getInt(cpm.KEY_SCALE_PCT, com.bydmate.app.cluster.DEFAULT_SCALE_PCT)}%")
+                }
+                val clusterJournal = cpm.journalLines(appContext)
+                appendLine("journal:")
+                if (clusterJournal.isEmpty()) appendLine("  (empty)")
+                else clusterJournal.forEach { appendLine("  $it") }
+            } catch (e: Exception) { appendLine("(failed to gather cluster state: ${e.message})") }
 
             appendLine("--- trip counters ---")
             try {
@@ -1666,13 +1722,42 @@ class SettingsViewModel @Inject constructor(
                 } else {
                     appendLine("last_spawn_failure: ${
                         SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(failure.ts))
-                    }")
-                    failure.logTail.lines().forEach { appendLine("  $it") }
+                    } reason=${failure.reason}")
+                    failure.detail.lines().forEach { appendLine("  $it") }
                 }
             } catch (e: Exception) { appendLine("(failed to gather helper daemon state: ${e.message})") }
 
+            appendLine("--- split ---")
+            try {
+                appendLine("feature_enabled: ${splitPreferences.isFeatureEnabled()}")
+                val lastPair = splitPreferences.getLastPair()
+                appendLine("last_pair: " + if (lastPair == null) "(none)" else
+                    "narrow=${lastPair.narrowPkg} wide=${lastPair.widePkg} side=${lastPair.narrowSide}")
+                when (val session = splitSessionManager.state.value) {
+                    is com.bydmate.app.split.SplitSessionState.Idle -> appendLine("session: idle")
+                    is com.bydmate.app.split.SplitSessionState.Active -> {
+                        appendLine(
+                            "session: active narrow=${session.pair.narrowPkg}#${session.narrowTaskId} " +
+                                "wide=${session.pair.widePkg}#${session.wideTaskId} side=${session.pair.narrowSide}"
+                        )
+                        val departed = splitSessionManager.departedPanePkgs()
+                        appendLine("departed_panes: " + if (departed.isEmpty()) "(none)" else departed.joinToString(","))
+                    }
+                }
+                val splitLines = splitJournal.read()
+                appendLine("journal:")
+                if (splitLines.isEmpty()) {
+                    appendLine("  (empty)")
+                } else {
+                    splitLines.forEach { appendLine("  $it") }
+                }
+            } catch (e: Exception) { appendLine("(failed to gather split state: ${e.message})") }
+
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }
+
+            appendLine("--- seat command journal ---")
+            SeatsDiagnostics.journalLines(appContext).forEach { appendLine(it) }
 
             appendLine("--- fid subscriptions ---")
             try {
@@ -1703,126 +1788,49 @@ class SettingsViewModel @Inject constructor(
     }
 
     fun startLogRecording() {
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-                val fileName = "bydmate_logs_$timestamp.txt"
-
-                val saveDir = listOf(
-                    android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
-                    File("/storage/emulated/0/Download"),
-                    appContext.getExternalFilesDir(null)
-                ).firstOrNull { dir ->
-                    dir != null && (dir.exists() || dir.mkdirs()) && dir.canWrite()
+        viewModelScope.launch {
+            // Status for a successful start (and for a stop, including the 2h auto-stop)
+            // comes from the recorder state; only failures are reported here.
+            when (val result = logRecorder.start { file -> writeDiagnosticHeader(file) }) {
+                is LogRecorder.StartResult.Started, LogRecorder.StartResult.AlreadyRecording -> Unit
+                LogRecorder.StartResult.NoStorage -> _uiState.update {
+                    it.copy(logSaveStatus = appContext.getString(R.string.settings_log_error_no_fs_access))
                 }
-
-                if (saveDir == null) {
-                    _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_log_error_no_fs_access)) }
-                    return@launch
+                is LogRecorder.StartResult.Failed -> _uiState.update {
+                    it.copy(logSaveStatus = appContext.getString(R.string.settings_error_with_message, result.message))
                 }
-
-                logFile = File(saveDir, fileName)
-
-                // Diagnostic header — written directly to the file before the
-                // logcat pipe so issue #19-style reports include device / setting
-                // context up front instead of being buried in logcat noise.
-                writeDiagnosticHeader(logFile!!)
-
-                // Clear logcat buffer and start continuous recording
-                Runtime.getRuntime().exec(arrayOf("logcat", "-c")).waitFor()
-
-                logProcess = Runtime.getRuntime().exec(arrayOf(
-                    "logcat", "-v", "time",
-                    "-s", "BootReceiver:*",
-                    "TrackingService:*", "TripTracker:*",
-                    "HistoryImporter:*", "EnergyDataReader:*",
-                    "AutoserviceClient:*", "AdbOnDeviceClient:*",
-                    "IternioTelemetryClient:*", "BatteryHealthRepository:*",
-                    "ChargesViewModel:*", "ChargeRepository:*",
-                    // v3.0.3: widen coverage to write/daemon/automation subsystems
-                    "HelperClient:*", "HelperBootstrap:*",
-                    "ActionDispatcher:*", "VehicleApiImpl:*",
-                    "AutomationEngine:*", "AutoserviceDetector:*",
-                    "SteeringWheelKeySvc:*",
-                    // v3.6: voice/audio diagnostics (issue #78 + Song volume reports)
-                    "AudioCapture:*", "SherpaTtsEngine:*", "VoiceController:*",
-                    // HUD wave: SOME/IP output + cluster projection diagnostics
-                    "HudController:*", "HudSomeIpBridge:*", "HudPushLoop:*",
-                    "ClusterProjection:*",
-                    // Direct projection wave: helper daemon (freeform switch diagnostics; visible
-                    // only once READ_LOGS is granted AND the app process restarted - the daemon
-                    // runs under the shell uid), guidance feed transitions, grant self-heal.
-                    "bydmate_helper:*", "HudIconLoader:*",
-                    "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
-                    // Amap-channel wave: notification lane + parser tags.
-                    "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
-                    // Blindspot wave: observe-mode fid subscriptions + AVM camera probe.
-                    "FidSubscription:*", "CameraProbe:*"
-                ))
-
-                // Background thread to pipe logcat to file with size limit.
-                // Open in append mode so the diagnostic header written by
-                // writeDiagnosticHeader() is preserved instead of overwritten.
-                Thread {
-                    try {
-                        logProcess?.inputStream?.bufferedReader()?.use { reader ->
-                            val target = logFile ?: return@Thread
-                            java.io.FileOutputStream(target, /* append = */ true)
-                                .bufferedWriter().use { writer ->
-                                var line = reader.readLine()
-                                while (line != null) {
-                                    // Stop if file exceeds size limit
-                                    if (target.length() > LOG_MAX_SIZE_BYTES) {
-                                        writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
-                                        writer.newLine()
-                                        break
-                                    }
-                                    writer.write(line)
-                                    writer.newLine()
-                                    writer.flush()
-                                    line = reader.readLine()
-                                }
-                            }
-                        }
-                    } catch (_: Exception) {}
-                }.start()
-
-                // Auto-stop after 2 hours
-                logAutoStopJob = viewModelScope.launch {
-                    delay(LOG_MAX_DURATION_MS)
-                    stopLogRecording()
-                }
-
-                _uiState.update {
-                    it.copy(isRecordingLogs = true, logSaveStatus = appContext.getString(R.string.settings_log_recording_started, logFile?.absolutePath ?: "?"))
-                }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")) }
             }
         }
     }
 
     fun stopLogRecording() {
-        logAutoStopJob?.cancel()
-        logAutoStopJob = null
-        viewModelScope.launch(Dispatchers.IO) {
-            try {
-                logProcess?.destroy()
-                logProcess = null
+        viewModelScope.launch { logRecorder.stop() }
+    }
 
-                val file = logFile
-                val sizeKb = (file?.length() ?: 0) / 1024
-
+    /**
+     * Mirrors the recorder state into the UI: a ViewModel created after the app
+     * window was closed picks up a recording that is still running, and a stop
+     * (manual or the 2h auto-stop) reports the saved file from any instance.
+     */
+    private fun observeLogRecorder() {
+        viewModelScope.launch {
+            var first = true
+            logRecorder.state.collect { state ->
                 _uiState.update {
-                    it.copy(
-                        isRecordingLogs = false,
-                        logSaveStatus = appContext.getString(R.string.settings_log_saved, file?.absolutePath ?: "?", sizeKb)
-                    )
+                    val status = when {
+                        state.isRecording -> appContext.getString(
+                            R.string.settings_log_recording_started, state.filePath ?: "?"
+                        )
+                        // A fresh ViewModel must not surface the result of a recording
+                        // the user stopped long ago.
+                        first -> it.logSaveStatus
+                        else -> state.lastStopped?.let { stopped ->
+                            appContext.getString(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
+                        } ?: it.logSaveStatus
+                    }
+                    it.copy(isRecordingLogs = state.isRecording, logSaveStatus = status)
                 }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(isRecordingLogs = false, logSaveStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
-                }
+                first = false
             }
         }
     }

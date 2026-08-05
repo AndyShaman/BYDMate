@@ -6,7 +6,7 @@ const val NAVI_PACKAGE = "ru.yandex.yandexnavi"
 /** Cluster projection state (OFF / FULLSCREEN). */
 enum class ClusterMode { OFF, FULLSCREEN }
 
-/** Where Navi renders on the cluster overlay. VirtualDisplay size == SurfaceView size (1:1). */
+/** Where Navi renders on the cluster overlay: the window rectangle on the panel. */
 data class ClusterGeometry(val width: Int, val height: Int, val xOffset: Int, val yOffset: Int)
 
 /**
@@ -32,9 +32,10 @@ const val CENTER_OFFSET_PCT = 50
  * Content scale for the projected app, tuning what it renders INSIDE the window (how much map
  * fits) rather than where/how big the window is. Orthogonal to [geometryFor].
  *
- * [MIN_SCALE_PCT]..[MAX_SCALE_PCT] set the VirtualDisplay density as a % of the cluster's native dpi:
- * below 100 the app sees a "roomier" logical screen (UI smaller, more map), 100 = native (current
- * behaviour), above 100 = bigger UI / less map.
+ * [MIN_SCALE_PCT]..[MAX_SCALE_PCT] size the VirtualDisplay BUFFER as the inverse % of the window:
+ * below 100 the app renders into a buffer larger than the window and the compositor shrinks it
+ * (UI smaller, more map), 100 = 1:1 (native), above 100 = a smaller buffer stretched up (bigger
+ * UI / less map). See [renderPlanFor] for why the density is never touched.
  */
 const val MIN_SCALE_PCT = 50
 const val MAX_SCALE_PCT = 150
@@ -69,23 +70,33 @@ fun geometryFor(
 
 /**
  * VirtualDisplay buffer size + logical density for a window. [bufferWidth]/[bufferHeight] are the
- * pixels the projected app renders into (== the window). [densityDpi] is the logical density the
- * app sees.
+ * pixels the projected app renders into; the compositor scales them onto the window. [densityDpi]
+ * is the logical density the app sees.
  */
 data class RenderPlan(val bufferWidth: Int, val bufferHeight: Int, val densityDpi: Int)
 
 /**
- * Render plan for [geo] given the content scale. [clusterDensityDpi] is the cluster panel's
- * native density; [scalePct] (coerced to [MIN_SCALE_PCT]..[MAX_SCALE_PCT]) scales it. The default
- * reproduces native rendering: buffer == window, density == cluster dpi.
+ * Render plan for [geo] given the content scale. [scalePct] (coerced to
+ * [MIN_SCALE_PCT]..[MAX_SCALE_PCT]) sizes the buffer inversely — 50% renders into a buffer twice
+ * the window, which the compositor shrinks — while [clusterDensityDpi], the panel's native
+ * density, is passed through untouched. The default reproduces native rendering: buffer == window.
+ *
+ * The density is deliberately never scaled (#121, diagnosed on-car by Chpohan): a VirtualDisplay
+ * created with a non-native density hands the projected app a Configuration change its engine may
+ * treat as fatal — 2GIS (Qt) exits a few seconds after launch at every dpi except the native 320,
+ * 100% reproducible. Same family as the cross-display relaunch fixed in v3.10.
  */
 fun renderPlanFor(
     geo: ClusterGeometry,
     clusterDensityDpi: Int,
     scalePct: Int = DEFAULT_SCALE_PCT,
 ): RenderPlan {
-    val dpi = clusterDensityDpi * scalePct.coerceIn(MIN_SCALE_PCT, MAX_SCALE_PCT) / 100
-    return RenderPlan(geo.width, geo.height, dpi)
+    val clamped = scalePct.coerceIn(MIN_SCALE_PCT, MAX_SCALE_PCT)
+    return RenderPlan(
+        (geo.width * 100 / clamped).coerceAtLeast(1),
+        (geo.height * 100 / clamped).coerceAtLeast(1),
+        clusterDensityDpi,
+    )
 }
 
 /**

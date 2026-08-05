@@ -23,6 +23,8 @@ class VehicleApiReadTest {
     private val seatStore = object : SeatChannelStore {
         override fun winner() = SeatChannel.UNKNOWN
         override fun setWinner(channel: SeatChannel) {}
+        override fun reprobeExhausted() = false
+        override fun claimReprobe() = true
     }
 
     private val windowStore = object : WindowChannelStore {

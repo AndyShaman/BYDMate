@@ -50,6 +50,7 @@
     <string name="settings_display_offset_y_desc">Położenie okna: 0 - góra, 50 - środek, 100 - dół</string>
     <string name="settings_display_scale">Skala</string>
     <string name="settings_display_scale_desc">Wielkość interfejsu: mniejsza wartość - drobniejsze elementy i więcej mapy w oknie</string>
+    <string name="settings_display_scale_direct_hint">Skala działa tylko w trybie projekcji „Fabryczny”. W trybie „Rozszerzony” aplikacja zawsze renderuje się w rozmiarze natywnym.</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Prawa gwiazdka</string>
     <string name="steering_button_left_star">Lewa gwiazdka</string>
@@ -1303,6 +1304,7 @@
     <string name="split_picker_title_narrow">Wybierz aplikację do wąskiego panelu (1/3)</string>
     <string name="split_freeform_reboot_hint">Podział ekranu włączy się po restarcie auta</string>
     <string name="split_launch_failed">Nie udało się uruchomić podziału ekranu</string>
+    <string name="split_launch_failed_adb">Nie udało się uruchomić podziału ekranu: wymagany jest odblokowany ADB</string>
     <!-- Automation action: split_screen -->
     <string name="automation_action_split_screen">Podział ekranu</string>
     <string name="auto_act_split_screen">Podział ekranu</string>

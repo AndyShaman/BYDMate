@@ -5,9 +5,11 @@ import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
+import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -22,6 +24,8 @@ class VehicleApiSeatOutcomeTest {
     private val seatStore = object : SeatChannelStore {
         override fun winner() = SeatChannel.UNKNOWN
         override fun setWinner(channel: SeatChannel) {}
+        override fun reprobeExhausted() = false
+        override fun claimReprobe() = true
     }
 
     private val windowStore = object : WindowChannelStore {
@@ -71,5 +75,38 @@ class VehicleApiSeatOutcomeTest {
     @Test fun `doWriteOutcome on out-of-range is TRANSIENT and skips helper`() = runTest {
         // driver_seat_vent_level range is 1..5; 9 is out of range
         assertEquals(WriteOutcome.TRANSIENT, impl.doWriteOutcome("driver_seat_vent_level", 9))
+    }
+
+    // ── readSeatStatus: the verifier's only evidence, so a sentinel must read as
+    //    "no evidence" (null) — two of them in a row would push a healthy car to the fallback. ──
+
+    private fun statusFid(group: SeatGroup) = WriteAllowlist.SEAT_STATUS_FIDS.getValue(group)
+
+    @Test fun `readSeatStatus passes a real status value through`() = runTest {
+        coEvery { helper.read(1000, statusFid(SeatGroup.DRIVER_VENT), 5) } returns 1L
+        assertEquals(1, impl.readSeatStatus(SeatGroup.DRIVER_VENT))
+    }
+
+    @Test fun `readSeatStatus keeps a literal 0 as the dead-fid signal`() = runTest {
+        coEvery { helper.read(1000, statusFid(SeatGroup.DRIVER_HEAT), 5) } returns 0L
+        assertEquals("0 is the Song L signal, not a sentinel", 0, impl.readSeatStatus(SeatGroup.DRIVER_HEAT))
+    }
+
+    @Test fun `readSeatStatus reports every sentinel as inconclusive`() = runTest {
+        for (sentinel in listOf(65535L, 1048575L, -10013L, -10011L)) {
+            coEvery { helper.read(1000, statusFid(SeatGroup.DRIVER_VENT), 5) } returns sentinel
+            assertNull("sentinel $sentinel must not be a verdict", impl.readSeatStatus(SeatGroup.DRIVER_VENT))
+        }
+    }
+
+    @Test fun `readSeatStatus is inconclusive when the daemon does not answer`() = runTest {
+        coEvery { helper.read(1000, statusFid(SeatGroup.DRIVER_VENT), 5) } returns null
+        assertNull(impl.readSeatStatus(SeatGroup.DRIVER_VENT))
+    }
+
+    @Test fun `readSeatStatus is inconclusive for the passenger groups and reads nothing`() = runTest {
+        assertNull(impl.readSeatStatus(SeatGroup.PASSENGER_VENT))
+        assertNull(impl.readSeatStatus(SeatGroup.PASSENGER_HEAT))
+        coVerify(exactly = 0) { helper.read(any(), any(), any()) }
     }
 }

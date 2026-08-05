@@ -31,7 +31,7 @@ class ClusterVoiceControl @Inject constructor(
 
     fun apply(on: Boolean) = ClusterProjectionManager.setMode(
         context, if (on) ClusterMode.FULLSCREEN else ClusterMode.OFF,
-        helperClient, helperBootstrap)
+        helperClient, helperBootstrap, reason = "voice")
 
     /** Why the last FULLSCREEN attempt failed; null after success/OFF. See [ClusterProjectionManager.lastFailure]. */
     fun lastFailure(): String? = ClusterProjectionManager.lastFailure

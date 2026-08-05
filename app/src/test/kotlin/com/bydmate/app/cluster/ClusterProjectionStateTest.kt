@@ -101,10 +101,22 @@ class ClusterProjectionStateTest {
 
     @Test fun `default render plan matches the window at native density`() {
         assertEquals(RenderPlan(960, 720, 320), renderPlanFor(window960, clusterDensityDpi = 320))
+        assertEquals(RenderPlan(960, 720, 320), renderPlanFor(window960, 320, scalePct = DEFAULT_SCALE_PCT))
     }
 
-    @Test fun `lower scale lowers density without resizing the buffer`() {
-        assertEquals(RenderPlan(960, 720, 160), renderPlanFor(window960, 320, scalePct = 50))
+    @Test fun `lower scale enlarges the buffer and keeps the native density`() {
+        assertEquals(RenderPlan(1920, 1440, 320), renderPlanFor(window960, 320, scalePct = 50))
+    }
+
+    @Test fun `higher scale shrinks the buffer and keeps the native density`() {
+        assertEquals(RenderPlan(640, 480, 320), renderPlanFor(window960, 320, scalePct = 150))
+    }
+
+    /** #121: a non-native density is what kills Qt apps (2GIS) — no scale may ever produce one. */
+    @Test fun `density is never scaled`() {
+        for (pct in MIN_SCALE_PCT..MAX_SCALE_PCT) {
+            assertEquals(320, renderPlanFor(window960, 320, scalePct = pct).densityDpi)
+        }
     }
 
     @Test fun `scale is clamped to the allowed range`() {
@@ -112,6 +124,14 @@ class ClusterProjectionStateTest {
             renderPlanFor(window960, 320, scalePct = MIN_SCALE_PCT),
             renderPlanFor(window960, 320, scalePct = 10),
         )
+        assertEquals(
+            renderPlanFor(window960, 320, scalePct = MAX_SCALE_PCT),
+            renderPlanFor(window960, 320, scalePct = 500),
+        )
+    }
+
+    @Test fun `buffer never floors to zero on a degenerate window`() {
+        assertEquals(RenderPlan(1, 1, 320), renderPlanFor(ClusterGeometry(1, 1, 0, 0), 320, scalePct = 150))
     }
 
     // --- shouldRecoverCompositor (black cluster after car reboot mid-projection) ---

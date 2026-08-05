@@ -33,11 +33,12 @@ class WidgetSplitTapTest {
         every { manager.state } returns MutableStateFlow(s)
     }
 
-    private fun tap() = runTest {
+    private fun tap(adbBlocked: Boolean = false) = runTest {
         WidgetController.runSplitTap(
             manager = manager,
             onNoPair = { noPairCalls++ },
             onError = { errors += it },
+            adbBlocked = { adbBlocked },
         )
     }
 
@@ -98,6 +99,23 @@ class WidgetSplitTapTest {
         coEvery { manager.startLastPair() } returns SplitStartResult.LAUNCH_FAILED
         tap()
         assertEquals(listOf(R.string.split_launch_failed), errors)
+    }
+
+    @Test fun `launch failure with a dead ADB channel names ADB in the message`() {
+        // #133: every window op goes through the helper daemon, which cannot be spawned
+        // without the on-device ADB channel — the user needs to hear that, not a bare
+        // "could not launch".
+        stateIs(SplitSessionState.Idle)
+        coEvery { manager.startLastPair() } returns SplitStartResult.LAUNCH_FAILED
+        tap(adbBlocked = true)
+        assertEquals(listOf(R.string.split_launch_failed_adb), errors)
+    }
+
+    @Test fun `freeform unavailable is unaffected by the ADB state`() {
+        stateIs(SplitSessionState.Idle)
+        coEvery { manager.startLastPair() } returns SplitStartResult.FREEFORM_UNAVAILABLE
+        tap(adbBlocked = true)
+        assertEquals(listOf(R.string.split_freeform_reboot_hint), errors)
     }
 
     @Test fun `disabled feature shows the disabled message`() {

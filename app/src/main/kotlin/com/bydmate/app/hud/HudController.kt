@@ -152,7 +152,8 @@ class HudController @Inject constructor(
                 bridge = b
                 NavA11yFeed.enabled = true
                 loop = HudPushLoop(b, speedSignEnabled = { isSpeedSignEnabled() },
-                    amap = HudAmapBroadcaster(context))
+                    amap = HudAmapBroadcaster(context),
+                    maneuvers = HudManeuverJournal(prefs()))
                     .also { it.start(scope) }
                 _status.value = Status.ON
                 Log.i(TAG, "HUD output active")

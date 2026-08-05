@@ -185,6 +185,30 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("fridge_temp_heat", 1023, 850427928, null, 35, 50, "fridge", true, "live-leopard3-2026-06-29"),
         )
 
+        /** dev of the seat status fids below (same namespace as the primary write channel). */
+        const val SEAT_STATUS_DEV = 1000
+
+        /**
+         * READ-side status fid per seat group (tx=5), the counterpart of the dev=1000
+         * switch entries above: 1=on, 2=off on Leopard 3. [AdaptiveSeatChannel] reads it
+         * back after a switch write, because Song L / Han EV answer status=1 to that write
+         * and actuate nothing (#74/#98/#109) — there the fid stays 0 and the readback is
+         * the only signal that the primary channel is dead on this model.
+         *
+         * DRIVER ONLY. The passenger counterparts in the catalog (711983128 / 711983132)
+         * are AC_PASSENGER_SEAT_VENTILATING_LEVEL / _HEATING_LEVEL — LEVELS (0=off, 1..5),
+         * not this 1=on/2=off status enum, so verifying a level-2 command against "expect 1"
+         * would manufacture a contradiction on a healthy Leopard 3. The passenger status
+         * fids (711983112 / 711983116) are unvalidated on a live car and stay out until a
+         * field dump shows them alive (they are sampled by SeatsDiagnostics). A group with
+         * no entry here reads back as null = inconclusive, which never moves the winner —
+         * the driver vertical alone decides the channel, and the winner is channel-wide.
+         */
+        val SEAT_STATUS_FIDS: Map<SeatGroup, Int> = mapOf(
+            SeatGroup.DRIVER_VENT to 702545928,
+            SeatGroup.DRIVER_HEAT to 702545932,
+        )
+
         /**
          * Candidate (unvalidated) native channels staged for an in-vehicle snap.
          * Holds the seat heat/vent dev=1001 fallback channel (competitor-v80 fids)

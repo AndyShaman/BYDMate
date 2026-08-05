@@ -281,6 +281,17 @@ class WriteAllowlistTest {
         assertEquals(1, lvl.valueMin); assertEquals(5, lvl.valueMax)
     }
 
+    /** The readback verifier compares against a 1=on/2=off enum, so only fids that carry that
+     *  enum may be listed. The passenger pair in the catalog (711983128/711983132) are LEVELS
+     *  and would contradict every level-2..5 command on a healthy Leopard 3. */
+    @Test fun `seat status fids are the driver enum pair only`() {
+        assertEquals(
+            mapOf(SeatGroup.DRIVER_VENT to 702545928, SeatGroup.DRIVER_HEAT to 702545932),
+            WriteAllowlist.SEAT_STATUS_FIDS,
+        )
+        assertEquals(1000, WriteAllowlist.SEAT_STATUS_DEV)
+    }
+
     // ── Fridge carved out of banned dev 1023, validated 2026-06-29 ────────────
     @Test fun `fridge fids are carved out of banned dev 1023`() {
         assertTrue(

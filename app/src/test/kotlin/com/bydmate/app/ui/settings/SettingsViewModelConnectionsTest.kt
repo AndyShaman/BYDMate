@@ -262,7 +262,14 @@ class SettingsViewModelConnectionsTest {
             placeRepository = mockk(relaxed = true),
             energyDataDeadDetector = mockk(relaxed = true),
             hudController = mockk(relaxed = true),
+            // Real recorder with an exec seam that would blow up: these tests never record.
+            logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
+                throw UnsupportedOperationException("no logcat in tests")
+            },
             fidSubscriptionManager = mockk(relaxed = true),
+            splitPreferences = mockk(relaxed = true),
+            splitSessionManager = mockk(relaxed = true),
+            splitJournal = com.bydmate.app.split.NoSplitJournal,
         )
     }
 
