@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.1] - 2026-08-05
+
 ### Исправления
 - Кнопка «Запись логов» больше не сбрасывается при закрытии окна: если запись идёт, при повторном открытии приложения кнопка показывает «Остановить запись» (запись и раньше продолжалась, но выглядела остановленной)
 - Разделённый экран на прошивках, отличных от приёмочной Leopard 3: панели создаются в режиме, который не рушится от касания, поверх окон не появляются системные кнопки (#130)
@@ -855,7 +857,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...HEAD
+[3.11.1]: https://github.com/AndyShaman/BYDMate/compare/v3.11...v3.11.1
 [3.11]: https://github.com/AndyShaman/BYDMate/compare/v3.10...v3.11
 [3.10]: https://github.com/AndyShaman/BYDMate/compare/v3.9.3...v3.10
 [3.9.3]: https://github.com/AndyShaman/BYDMate/compare/v3.9.2...v3.9.3
