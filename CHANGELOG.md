@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11] - 2026-08-05
+
 ### Новое
 - Ручной расчёт запаса хода: в настройках батареи можно выбрать метод «Ручной» и задать таблицу расхода в зависимости от температуры батареи (5 точек, +20…−20 °C, опционально запас хода на 100% заряда). По умолчанию остаётся автоматический расчёт по истории поездок (спасибо Dmitrijsmok, #136)
 - Польский язык интерфейса
@@ -843,7 +845,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.10...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11...HEAD
+[3.11]: https://github.com/AndyShaman/BYDMate/compare/v3.10...v3.11
 [3.10]: https://github.com/AndyShaman/BYDMate/compare/v3.9.3...v3.10
 [3.9.3]: https://github.com/AndyShaman/BYDMate/compare/v3.9.2...v3.9.3
 [3.9.2]: https://github.com/AndyShaman/BYDMate/compare/v3.9.1...v3.9.2
