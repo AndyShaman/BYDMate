@@ -1,0 +1,1338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">BYDMate</string>
+    <string name="cluster_a11y_description">Przechwytywanie przycisków kierownicy do projekcji nawigacji na zestaw wskaźników. Włączane ręcznie, działa tylko przy włączonej funkcji.</string>
+    <string name="settings_language_title">Język</string>
+
+    <!-- Settings: Navigation rail -->
+    <string name="settings_title">Ustawienia</string>
+    <string name="settings_rail_sections_label">Sekcje</string>
+
+    <!-- Settings: Section labels (left pane) -->
+    <string name="settings_section_auto_battery_title">Auto i akumulator</string>
+    <string name="settings_section_trips_title">Przejazdy</string>
+    <string name="settings_section_integrations_title">Integracje</string>
+    <string name="settings_section_widget_title">Widżet</string>
+    <string name="settings_section_display_title">Ekran</string>
+    <!-- Settings: Display section (cluster projection) -->
+    <string name="settings_display_state_on">Włączone</string>
+    <string name="settings_display_state_off">Wyłączone</string>
+    <string name="settings_display_card_mirror_title">Projekcja na wskaźniki</string>
+    <string name="settings_display_card_mirror_sub">Nawigacja przyciskiem na kierownicy. %1$s</string>
+    <string name="settings_display_card_mirror_sub_app">Nawigacja przyciskiem na kierownicy. %1$s, %2$s</string>
+    <string name="settings_display_card_hud_title">Projekcja na szybę (HUD)</string>
+    <string name="settings_display_card_hud_sub">Wskazówki nawigacji na fabryczny HUD. %1$s</string>
+    <string name="settings_display_card_blindspot_sub">Kamera przy kierunkowskazie. %1$s</string>
+    <string name="settings_display_window_subhead">Okno na wskaźnikach</string>
+    <string name="settings_display_mirror_header">Wyświetlanie na wskaźnikach</string>
+    <string name="settings_display_mirror_title">Wyświetlanie na wskaźnikach przyciskiem kierownicy</string>
+    <string name="settings_display_mirror_desc">Krótkie naciśnięcie wybranego przycisku kierownicy przenosi wybraną aplikację na wskaźniki i z powrotem.</string>
+    <string name="settings_cluster_auto_container_title">Od razu pokazuj na wskaźnikach</string>
+    <string name="settings_cluster_auto_container_desc">Automatycznie przełączaj wskaźniki w tryb projekcji</string>
+    <string name="settings_cluster_direct_reboot_hint">Aby asystent głosowy widział nawigację na wskaźnikach, raz zrestartuj DiLink: naciśnij i przytrzymaj pokrętło głośności. Samo zgaszenie silnika nie wystarczy. Do restartu projekcja działa, ale agent nie widzi trasy.</string>
+    <string name="settings_projection_mode_title">Tryb projekcji</string>
+    <string name="settings_projection_mode_direct">Rozszerzony</string>
+    <string name="settings_projection_mode_vd">Fabryczny</string>
+    <string name="settings_projection_mode_help" formatted="false">Fabryczny: jak w wersjach do 3.6, ustawienia systemowe auta nie zmieniają się, dokładniej działają suwaki dopasowania. Minus: asystent głosowy i HUD nie widzą ekranu nawigacji, wskazówki tylko z powiadomienia. Rozszerzony: nawigacja działa bezpośrednio na wskaźnikach, widzą ją agent i HUD. Włącza systemowy tryb okienkowy, wymaga jednorazowego restartu DiLink. Powrót do fabryki: przełącz na Fabryczny, ustawienie systemowe wróci do wartości fabrycznej i w pełni zadziała po restarcie. Tryb jest stosowany przy następnym wyświetleniu na wskaźnikach.</string>
+    <string name="projection_extended_confirm_title">Włączyć tryb rozszerzony?</string>
+    <string name="projection_extended_confirm_body">Tryb rozszerzony zmienia systemowe ustawienie trybu okienkowego DiLink, żeby nawigacja działała bezpośrednio na wskaźnikach i widzieli ją asystent głosowy oraz HUD. Potrzebny będzie jednorazowy restart DiLink. Aby przywrócić stan fabryczny, przełącz z powrotem na Fabryczny i zrestartuj DiLink.</string>
+    <string name="projection_extended_confirm_enable">Włącz</string>
+    <string name="projection_extended_confirm_cancel">Anuluj</string>
+    <string name="settings_display_app_title">Aplikacja na wskaźnikach</string>
+    <string name="settings_display_size_header">Rozmiar okna na wskaźnikach</string>
+    <string name="settings_display_size_width">Szerokość</string>
+    <string name="settings_display_size_width_desc" formatted="false">Szerokość okna w % szerokości wskaźników</string>
+    <string name="settings_display_size_height">Wysokość</string>
+    <string name="settings_display_size_height_desc" formatted="false">Wysokość okna w % wysokości wskaźników</string>
+    <string name="settings_display_offset_x">Przesunięcie w poziomie</string>
+    <string name="settings_display_offset_x_desc">Położenie okna: 0 - lewa krawędź, 50 - środek, 100 - prawa krawędź</string>
+    <string name="settings_display_offset_y">Przesunięcie w pionie</string>
+    <string name="settings_display_offset_y_desc">Położenie okna: 0 - góra, 50 - środek, 100 - dół</string>
+    <string name="settings_display_scale">Skala</string>
+    <string name="settings_display_scale_desc">Wielkość interfejsu: mniejsza wartość - drobniejsze elementy i więcej mapy w oknie</string>
+    <!-- Steering-wheel button names (cluster trigger picker) -->
+    <string name="steering_button_right_star">Prawa gwiazdka</string>
+    <string name="steering_button_left_star">Lewa gwiazdka</string>
+    <string name="steering_button_carousel">Karuzela wskaźników</string>
+    <string name="steering_button_surround_view">Widok 360°</string>
+    <string name="steering_button_voice">Asystent głosowy</string>
+    <string name="steering_button_aux_left">Dodatkowy lewy</string>
+    <string name="steering_button_aux_right">Dodatkowy prawy</string>
+    <string name="steering_button_unknown">Przycisk (kod %1$d)</string>
+    <!-- Cluster trigger-button picker + learn dialog -->
+    <string name="settings_display_button_title">Przycisk uruchamiający</string>
+    <string name="settings_display_button_change">Zmień</string>
+    <string name="learn_button_dialog_title">Przypisz przycisk</string>
+    <string name="learn_button_waiting">Naciśnij przycisk na kierownicy…</string>
+    <string name="learn_button_rejected">Tego przycisku nie można przypisać. Naciśnij inny.</string>
+    <string name="learn_button_captured">Rozpoznany przycisk:</string>
+    <string name="learn_button_timeout">Nie rozpoznano przycisku. Możliwe, że nie jest przekazywany do systemu. Spróbuj innego.</string>
+    <string name="learn_button_save">Zapisz</string>
+    <string name="learn_button_again">Od nowa</string>
+    <string name="learn_button_cancel">Anuluj</string>
+    <string name="settings_section_places_title">Miejsca</string>
+    <string name="settings_section_application_title">Aplikacja</string>
+    <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
+    <string name="settings_smart_home_section_title">Inteligentny dom</string>
+
+    <!-- Settings: Auto and battery section -->
+    <string name="settings_battery_section_header">Akumulator i taryfy</string>
+    <string name="settings_battery_capacity_label">Pojemność akumulatora (kWh)</string>
+    <string name="settings_tariff_home_label">Taryfa domowa (%1$s/kWh)</string>
+    <string name="settings_tariff_dc_label">Taryfa DC (%1$s/kWh)</string>
+    <string name="settings_tariff_trip_label">Taryfa przejazdów</string>
+    <string name="settings_tariff_custom_label">Własna taryfa (%1$s/kWh)</string>
+    <string name="settings_save_tariffs_button">Zapisz taryfy</string>
+    <string name="settings_tariff_future_note">Nowa taryfa dotyczy przyszłych przejazdów.\nJuż policzone przejazdy się nie zmienią.</string>
+    <string name="settings_recalc_all_button">Przelicz wszystkie przejazdy</string>
+    <string name="settings_recalc_note">Przeliczy koszt wszystkich przejazdów\nwedług bieżącej taryfy.</string>
+    <string name="settings_consumption_section_header">Progi zużycia</string>
+    <string name="settings_consumption_good_label">Dobre &lt; (kWh/100 km)</string>
+    <string name="settings_consumption_bad_label">Złe &gt; (kWh/100 km)</string>
+
+    <!-- Settings: Range calculation method (Auto = learned history, Manual = user table) -->
+    <string name="settings_range_calc_section_header">Sposób liczenia zasięgu</string>
+    <string name="settings_range_calc_method_label">Metoda obliczeń</string>
+    <string name="settings_range_calc_auto">Auto</string>
+    <string name="settings_range_calc_manual">Ręczna</string>
+    <string name="settings_range_calc_method_desc">„Auto” — na podstawie historii przejazdów i bieżącego zużycia. „Ręczna” — według twojej tabeli zużycia zależnie od temperatury akumulatora.</string>
+    <string name="settings_range_calc_edit_table_button">Tabela zużycia</string>
+    <string name="settings_range_calc_edit_table_desc">5 punktów: temperatura akumulatora → zużycie (opcjonalnie także zasięg przy 100% naładowania)</string>
+    <string name="range_table_dialog_title">Tabela zużycia według temperatury akumulatora</string>
+    <string name="range_table_dialog_note1">Zużycie (kWh/100 km) jest wymagane; zasięg przy 100% naładowania jest opcjonalny i służy do dokładniejszego wyliczenia pojemności.</string>
+    <string name="range_table_dialog_col_temp">°C</string>
+    <string name="range_table_dialog_col_consumption">Zużycie</string>
+    <string name="range_table_dialog_col_range">Zasięg</string>
+    <string name="range_table_dialog_reset">Przywróć domyślne</string>
+    <string name="range_table_dialog_cancel">Anuluj</string>
+    <string name="range_table_dialog_save">Zapisz</string>
+
+    <!-- Settings: Trips section -->
+    <string name="settings_trips_datasource_header">Źródło danych przejazdów</string>
+    <string name="settings_trips_datasource_note">Titan 3 — BYD energydata.\nSong i inne modele bez wbudowanej bazy — DiPlus TripInfo.</string>
+    <string name="settings_trips_datasource_hint">Jeśli lista jest pusta po 2-3 przejazdach — przełącz tryb.</string>
+    <string name="settings_trips_system_header">Dane systemowe (beta)</string>
+    <string name="settings_trips_system_note">Rozszerzone dane auta: SoH akumulatora, przebieg BMS, statystyki ładowań. Tylko odczyt.</string>
+    <string name="settings_trips_system_enable_label">Włącz</string>
+    <string name="settings_datasource_switching">Przełączanie...</string>
+    <string name="settings_datasource_done">Gotowe</string>
+
+    <!-- Settings: Recalculate confirmation dialog -->
+    <string name="settings_recalc_dialog_title">Przeliczyć koszt?</string>
+    <string name="settings_recalc_dialog_text">Wszystkie przejazdy zostaną przeliczone według taryfy %1$s %2$s/kWh.\nJuż policzone wartości zostaną zastąpione.</string>
+    <string name="settings_recalc_confirm_button">Przelicz</string>
+    <string name="settings_cancel_button">Anuluj</string>
+
+    <!-- Settings: Integrations section -->
+    <string name="settings_abrp_section_header">ABRP - telemetria</string>
+    <string name="settings_abrp_telemetry_label">Dane na żywo -> A Better Route Planner</string>
+    <string name="settings_abrp_telemetry_description">Dane na żywo (SOC, moc, temperatury, licznik, ciśnienie w oponach) trafiają do Iternio Telemetry API, żeby plan w ABRP był aktualny. GPS domyślnie nie jest wysyłany.</string>
+    <string name="settings_abrp_token_label">Token danych na żywo z ABRP</string>
+    <string name="settings_abrp_location_label">Wysyłaj współrzędne do ABRP</string>
+    <string name="settings_abrp_location_description">Dodaje pozycję GPS i kurs auta do telemetrii. Domyślnie wyłączone: ABRP na DiLink sam odczytuje współrzędne. Włącz, jeśli strzałka auta w ABRP nie nadąża za rzeczywistym położeniem.</string>
+    <string name="settings_abrp_save_button">Zapisz ABRP</string>
+    <string name="settings_openrouter_section_header">OpenRouter</string>
+    <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
+    <string name="settings_openrouter_model_selected">Model: %1$s</string>
+    <string name="settings_openrouter_model_pick">Wybierz model</string>
+    <string name="settings_exa_section_header">Exa</string>
+    <string name="settings_exa_search_hint">Do wyszukiwania w internecie przez asystenta głosowego. Bez klucza wyszukiwanie idzie przez OpenRouter</string>
+
+    <!-- Settings: Model picker dialog -->
+    <string name="settings_model_picker_title">Wybór modelu</string>
+    <string name="settings_model_picker_search_label">Szukaj</string>
+    <string name="settings_model_picker_loading">Wczytywanie modeli...</string>
+
+    <!-- Settings: Widget section -->
+    <string name="settings_widget_section_header">Pływający widżet</string>
+    <string name="settings_widget_show_soc_label">Pokazuj widżet SOC</string>
+    <string name="settings_widget_hints">• Długie dotknięcie widżetu - ukryj do następnego otwarcia BYDMate.\n• Przeciągnij do kosza na dole - wyłącz całkiem.\n• Zwykłe dotknięcie - otwórz BYDMate.</string>
+    <string name="settings_widget_hide_youtube_label">Ukrywaj przy YouTube</string>
+    <string name="settings_widget_hide_youtube_description">Panel przycisków chowa się, dopóki YouTube jest na ekranie</string>
+    <string name="settings_widget_reset_position_button">Zresetuj pozycję</string>
+    <string name="settings_reset_seat_channel">Zresetuj kanał foteli</string>
+    <string name="settings_reset_seat_channel_hint">Jeśli podgrzewanie lub wentylacja foteli nie działa po zmianie auta</string>
+    <string name="settings_reset_trip_source">Zresetuj wykrywanie źródła przejazdów</string>
+    <string name="settings_reset_trip_source_hint">Jeśli przejazdy nie są zapisywane: aplikacja od nowa sprawdzi, czy auto prowadzi własną bazę przejazdów, i w razie potrzeby włączy własny zapis</string>
+    <string name="orb_you">Ty:</string>
+    <string name="orb_agent">Agent:</string>
+    <string name="settings_voice_native_assistant_header">Fabryczny asystent głosowy BYD</string>
+    <string name="settings_voice_disable_native_label">Wyłącz fabrycznego asystenta głosowego</string>
+    <string name="settings_voice_disable_native_description">Ukrywa wbudowanego asystenta głosowego BYD, żeby nie przerywał. Odwracalne.</string>
+    <string name="settings_voice_native_assistant_reboot_note">Zmiana zadziała po restarcie jednostki centralnej.</string>
+    <string name="settings_widget_opacity_label">Przezroczystość</string>
+    <string name="settings_widget_scale_label">Rozmiar</string>
+    <string name="settings_widget_tap_section_header">Dotknięcie widżetu</string>
+    <string name="settings_widget_left_tap_zoning_label">Strefy dotknięć</string>
+    <string name="settings_widget_left_tap_zoning_description">Lewa 1/3 - otwiera wybraną aplikację; reszta - BYDMate.</string>
+    <string name="settings_widget_left_tap_label">Aplikacja dla lewego dotknięcia</string>
+    <string name="settings_widget_left_tap_description">Domyślnie Yandex Nawigator. Jeśli aplikacja została usunięta, dotknięcie nie zadziała.</string>
+    <string name="settings_widget_buttons_label">Przyciski na widżecie</string>
+    <string name="settings_widget_buttons_description">Jedno dotknięcie widżetu wysuwa 4 przyciski, podwójne otwiera BYDMate. Przycisk uruchamia regułę z wyzwalaczem „Naciśnięcie przycisku”.</string>
+
+    <!-- Settings: Places section -->
+    <string name="settings_places_section_header">Miejsca</string>
+    <string name="settings_places_entry_title">Punkty do automatyzacji</string>
+    <string name="settings_places_entry_description">Dom, praca, ulubione miejsca - wyzwalacze „Wjazd” / „Wyjazd”</string>
+
+    <!-- Settings: Application section -->
+    <string name="settings_app_units_header">Jednostki i waluta</string>
+    <string name="settings_app_distance_label">Odległość</string>
+    <string name="settings_app_currency_label">Waluta</string>
+    <string name="settings_map_tile_source_label">Źródło mapy</string>
+    <string name="settings_app_data_header">Dane</string>
+    <string name="settings_export_csv_button">Eksport CSV</string>
+    <string name="settings_log_recording_start_button">Zapis logów</string>
+    <string name="settings_log_recording_stop_button">Zatrzymaj zapis</string>
+    <string name="settings_about_header">O aplikacji</string>
+    <string name="settings_copyright">© 2026 AndyShaman</string>
+    <string name="settings_weather_attribution">Dane pogodowe: Open-Meteo.com</string>
+    <string name="settings_autostart_recorded">Autostart: %1$s</string>
+    <string name="settings_autostart_not_recorded">Autostart: nie odnotowany</string>
+    <string name="settings_autostart_open_button">Ustawienia autostartu</string>
+    <string name="settings_update_check_toggle_label">Sprawdzaj aktualizacje</string>
+    <string name="settings_update_check_toggle_description">30 sekund po starcie sprawdzaj GitHub i proponuj aktualizację</string>
+    <string name="settings_update_check_button">Sprawdź aktualizacje teraz</string>
+
+    <!-- Settings: Autoservice status -->
+    <string name="settings_autoservice_disconnected_title">brak połączenia</string>
+    <string name="settings_autoservice_disconnected_detail">zrestartuj aplikację, jeśli ADB jest włączone w Opcjach programisty</string>
+    <string name="settings_autoservice_sentinel_title">połączono, ale dane nie są odczytywane</string>
+    <string name="settings_autoservice_sentinel_detail">możliwe, że funkcja działa tylko na Leopard 3</string>
+    <string name="settings_autoservice_connected_title">połączono</string>
+    <string name="settings_autoservice_connected_detail">SoH %1$s • lifetime %2$s / %3$s</string>
+
+    <!-- Settings: Update dialog -->
+    <string name="settings_update_dialog_title">Aktualizacje</string>
+    <string name="settings_update_current_version">Bieżąca wersja: v%1$s</string>
+    <string name="settings_update_check_now_button">Sprawdź aktualizacje</string>
+    <string name="settings_update_checking">Sprawdzanie...</string>
+    <string name="settings_update_up_to_date">Zainstalowana jest najnowsza wersja</string>
+    <string name="settings_update_available_version">Dostępna wersja: v%1$s</string>
+    <string name="settings_update_whats_new_label">Co nowego:</string>
+    <string name="settings_update_install_button">Pobierz i zainstaluj</string>
+    <string name="settings_update_downloading">Pobieranie v%1$s</string>
+    <string name="settings_update_error">Błąd: %1$s</string>
+    <string name="settings_update_retry_button">Spróbuj ponownie</string>
+    <string name="settings_update_close_button">Zamknij</string>
+
+    <!-- Trips screen -->
+    <string name="trips_filter_all">Wszystkie</string>
+    <string name="trips_filter_trips_only">Przejazdy</string>
+    <string name="trips_filter_stops_only">Postoje</string>
+    <string name="trips_empty">Brak danych za wybrany okres</string>
+    <string name="trips_col_time">czas</string>
+    <string name="trips_col_duration">dług.</string>
+    <string name="trips_col_km">km</string>
+    <string name="trips_col_soc">SOC</string>
+    <string name="trips_col_kwh">kWh</string>
+    <string name="trips_chart_kwh_chip">kWh</string>
+    <string name="trips_chart_no_data">Brak danych</string>
+    <string name="trips_chart_tooltip_count">%1$s · %2$d przej.</string>
+    <!-- Formatted value labels used in month/day summary rows -->
+    <string name="trips_km_value">%1$.0f km</string>
+    <string name="trips_kwh_value">%1$.0f kWh</string>
+    <string name="trips_km_decimal_value">%1$.1f km</string>
+    <string name="trips_kwh_decimal_value">%1$.1f kWh</string>
+
+    <!-- TripDetailDialog -->
+    <string name="trip_detail_title_trip">Przejazd</string>
+    <string name="trip_detail_title_stop">Postój</string>
+    <string name="trip_detail_stats_header">Statystyka</string>
+    <string name="trip_detail_gps_unavailable">Dane GPS niedostępne</string>
+    <string name="trip_detail_distance_label">Dystans</string>
+    <string name="trip_detail_distance_value">%1$.1f km</string>
+    <string name="trip_detail_duration_label">Czas trwania</string>
+    <string name="trip_detail_avg_speed_label">Śr. prędkość</string>
+    <string name="trip_detail_speed_value">%1$.0f km/h</string>
+    <string name="trip_detail_max_speed_label">Maks. prędkość</string>
+    <string name="trip_detail_consumption_label">Pobór</string>
+    <string name="trip_detail_consumption_value">%1$.1f kWh</string>
+    <string name="trip_detail_efficiency_label">Zużycie</string>
+    <string name="trip_detail_cost_label">Koszt</string>
+    <string name="trip_detail_temp_label">Temp.</string>
+
+    <!-- Charges screen -->
+    <string name="charges_filter_all">Wszystkie</string>
+    <string name="charges_add_button">+ ładowanie</string>
+    <string name="charges_empty">Brak ładowań w wybranym okresie</string>
+    <string name="charges_col_time">czas</string>
+    <string name="charges_col_kwh">kWh</string>
+    <string name="charges_kwh_value">%1$.0f kWh</string>
+    <string name="charges_action_edit">Edytuj</string>
+    <string name="charges_action_delete">Usuń</string>
+    <string name="charges_delete_dialog_title">Usunąć ładowanie?</string>
+    <string name="charges_delete_dialog_text">%1$s kWh - nie będzie można tego cofnąć.</string>
+    <string name="trips_delete_dialog_title">Usunąć przejazd?</string>
+    <string name="trips_delete_dialog_text">%1$s km - przejazd i jego trasa zostaną usunięte, nie będzie można tego cofnąć.</string>
+    <string name="charges_onboarding_empty_text">Statystyka ładowań jest niedostępna. Aby widzieć kWh i koszt każdego ładowania - włącz „Dane systemowe” w Ustawieniach.</string>
+    <string name="charges_go_to_settings_button">Przejdź do Ustawień</string>
+    <string name="charges_sentinel_empty_text">W twoim modelu auta statystyka ładowań jest niedostępna - dane diagnostyczne nie są odczytywane. SoH też nie jest pokazywany.</string>
+    <string name="charges_not_tracking_banner">Nowe ładowania nie są teraz śledzone.</string>
+    <string name="charges_enable_tracking_button">Włącz →</string>
+    <string name="charges_stats_period_label">W wybranym okresie</string>
+    <string name="charges_stats_sessions">Sesji</string>
+    <string name="charges_stats_cost">Koszt</string>
+    <string name="charges_stats_lifetime_label">Lifetime (dane systemowe)</string>
+    <string name="charges_stats_pumped_total">Łącznie naładowano</string>
+    <string name="charges_stats_equiv_cycles">Ekwiw. cykli</string>
+    <string name="charges_stats_bms_mileage">Przebieg BMS</string>
+    <string name="charges_stats_per100km">/100 km lifetime</string>
+    <string name="charges_lifetime_waiting">Czekam na pierwszą odpowiedź auta…</string>
+    <string name="charges_lifetime_enable_hint">Włącz „Dane systemowe” w Ustawieniach, żeby widzieć przebieg BMS i łączną energię ładowań.</string>
+    <string name="charges_stats_dynamics_label">Dynamika</string>
+    <string name="charges_chart_cell_delta_title">Δ ogniw (V)</string>
+    <string name="charges_chart_cell_delta_placeholder">Δ ogniw: pokaże się po 3 zakończonych ładowaniach (teraz: %1$d)</string>
+    <string name="charges_chart_bat_temp_title">Temp. akumulatora (°C)</string>
+    <string name="charges_chart_bat_temp_placeholder">Temperatura: pokaże się po 3 zakończonych ładowaniach (teraz: %1$d)</string>
+
+    <!-- Charge edit dialog -->
+    <string name="charges_edit_dialog_title">Edytuj ładowanie</string>
+    <string name="charges_edit_date_label">Data</string>
+    <string name="charges_edit_type_label">Typ:</string>
+    <string name="charges_edit_kwh_label">kWh:</string>
+    <string name="charges_edit_kwh_from_soc">z SOC × %1$.1f kWh</string>
+    <string name="charges_edit_cost_label">Koszt:</string>
+    <string name="charges_edit_tariff_label">%1$s/kWh:</string>
+    <string name="charges_edit_save_button">Zapisz</string>
+
+    <!-- Automation screen -->
+    <string name="automation_tab_title">Automatyzacja</string>
+
+    <!-- Filter chips -->
+    <string name="automation_filter_all">Wszystkie</string>
+    <string name="automation_filter_active">Aktywne</string>
+    <string name="automation_filter_disabled">Wyłączone</string>
+
+    <!-- Header buttons -->
+    <string name="automation_journal_button">Dziennik</string>
+    <string name="automation_create_button">+ Utwórz</string>
+
+    <!-- Rule card context menu -->
+    <string name="automation_menu_edit">Edytuj</string>
+    <string name="automation_menu_duplicate">Duplikuj</string>
+    <string name="automation_menu_delete">Usuń</string>
+
+    <!-- Delete confirmation dialog -->
+    <string name="automation_delete_confirm_title">Usunąć regułę?</string>
+    <string name="automation_delete_confirm_text">Tego działania nie można cofnąć.</string>
+    <string name="automation_delete_button">Usuń</string>
+    <string name="automation_cancel_button">Anuluj</string>
+
+    <!-- Rule card stats -->
+    <string name="automation_rule_triggered_count">Uruchomień: %1$d</string>
+    <string name="automation_rule_last_trigger">Ostatnie: %1$s</string>
+    <string name="automation_rule_cooldown">Pauza: %1$d s</string>
+    <string name="automation_rule_logic_and"> I </string>
+    <string name="automation_rule_logic_or"> LUB </string>
+
+    <!-- Editor dialog -->
+    <string name="automation_editor_new_rule_title">Nowa reguła</string>
+    <string name="automation_rule_name_placeholder">Nazwa reguły</string>
+    <string name="automation_section_when">KIEDY (warunki)</string>
+    <string name="automation_section_then">WTEDY (akcje)</string>
+    <string name="automation_section_settings">USTAWIENIA</string>
+    <string name="automation_logic_and">I (AND)</string>
+    <string name="automation_logic_or">LUB (OR)</string>
+
+    <!-- Settings section in editor -->
+    <string name="automation_setting_cooldown">Pauza między uruchomieniami</string>
+    <string name="automation_setting_unit_sec">s</string>
+    <string name="automation_setting_park_only">Tylko na postoju (P)</string>
+    <string name="automation_setting_confirm_before">Pytaj przed wykonaniem</string>
+    <string name="automation_setting_once_per_trip">Wykonaj raz na przejazd</string>
+
+    <!-- Editor footer buttons -->
+    <string name="automation_save_button">Zapisz</string>
+
+    <!-- Trigger controls -->
+    <string name="automation_trigger_place_deleted">Miejsce usunięte</string>
+    <string name="automation_trigger_place_enter_label">Wjazd</string>
+    <string name="automation_trigger_place_exit_label">Wyjazd</string>
+    <string name="automation_trigger_place_enter_prefix">Wjazd do</string>
+    <string name="automation_trigger_place_exit_prefix">Wyjazd z</string>
+    <string name="automation_trigger_place_deleted_placeholder">&lt;usunięte&gt;</string>
+    <string name="automation_trigger_time_of_day_label">Pora dnia:</string>
+    <string name="automation_trigger_day">Dzień</string>
+    <string name="automation_trigger_night">Noc</string>
+    <string name="automation_trigger_dawn">Świt</string>
+    <string name="automation_trigger_dusk">Zmierzch</string>
+    <string name="automation_trigger_service_start">Uruchomienie BYDMate</string>
+    <string name="automation_trigger_internet">Dostępny internet</string>
+
+    <!-- Add trigger button -->
+    <string name="automation_add_condition_button">+ Dodaj warunek</string>
+    <string name="automation_trigger_type_param">Parametr</string>
+    <string name="automation_trigger_type_place">Miejsce</string>
+    <string name="automation_trigger_type_place_empty_hint">Najpierw utwórz miejsce w ustawieniach</string>
+    <string name="automation_trigger_type_time_of_day">Pora dnia</string>
+    <string name="automation_trigger_type_schedule">Czas / harmonogram</string>
+    <string name="automation_trigger_type_service_start">Uruchomienie BYDMate</string>
+    <string name="automation_trigger_type_internet">Dostępny internet</string>
+    <string name="automation_trigger_type_button_press">Naciśnięcie przycisku</string>
+    <string name="automation_trigger_button_label">Przycisk %1$d</string>
+    <string name="automation_trigger_button_picker_label">Przycisk</string>
+    <string name="automation_trigger_type_voice">Głos</string>
+    <string name="automation_trigger_voice_phrase_label">Fraza wyzwalająca</string>
+    <string name="automation_voice_phrase_empty">Fraza głosowa jest pusta</string>
+    <string name="automation_voice_phrase_builtin">Fraza jest już zajęta przez wbudowaną komendę</string>
+    <string name="automation_voice_phrase_taken">Fraza jest już zajęta przez inną automatyzację</string>
+
+    <!-- Schedule trigger (exact time / range + days of week) -->
+    <string name="automation_schedule_mode_exact">Dokładnie</string>
+    <string name="automation_schedule_mode_range">Przedział</string>
+    <string name="automation_schedule_time_label">Czas:</string>
+    <string name="automation_schedule_from">Od:</string>
+    <string name="automation_schedule_to">Do:</string>
+    <string name="automation_schedule_days_label">Dni tygodnia (puste = codziennie):</string>
+    <string name="automation_day_mon">Pn</string>
+    <string name="automation_day_tue">Wt</string>
+    <string name="automation_day_wed">Śr</string>
+    <string name="automation_day_thu">Cz</string>
+    <string name="automation_day_fri">Pt</string>
+    <string name="automation_day_sat">So</string>
+    <string name="automation_day_sun">Nd</string>
+
+    <!-- Action row: delay -->
+    <string name="automation_action_delay_label">Pauza</string>
+    <string name="automation_delay_0_5s">0,5 s</string>
+    <string name="automation_delay_1s">1 s</string>
+    <string name="automation_delay_2s">2 s</string>
+    <string name="automation_delay_3s">3 s</string>
+    <string name="automation_delay_5s">5 s</string>
+    <string name="automation_delay_10s">10 s</string>
+    <string name="automation_delay_display_name">Pauza %1$s</string>
+
+    <!-- Add action button -->
+    <string name="automation_add_action_button">+ Dodaj akcję</string>
+    <string name="automation_action_dplus_command">Polecenie do auta</string>
+    <string name="automation_action_notification">Powiadomienie</string>
+    <string name="automation_action_app_launch">Uruchomienie aplikacji</string>
+    <string name="automation_action_yandex_music">Yandex Music</string>
+    <string name="automation_action_call">Połączenie</string>
+    <string name="automation_action_navigate">Trasa w Yandex Nawigatorze</string>
+    <string name="automation_action_url">Otwórz URL</string>
+    <string name="automation_action_delay">Pauza</string>
+    <string name="automation_action_media_volume">Głośność multimediów</string>
+    <string name="automation_action_media_volume_label">Głośność</string>
+    <string name="automation_action_sentry">Tryb strażnika</string>
+    <string name="automation_action_sentry_on">Włącz</string>
+    <string name="automation_action_sentry_off">Wyłącz</string>
+    <string name="automation_action_cluster_projection">Wyświetlanie na wskaźnikach</string>
+    <string name="automation_action_cluster_projection_on">Włącz</string>
+    <string name="automation_action_cluster_projection_off">Wyłącz</string>
+    <string name="automation_action_hotspot">Hotspot Wi-Fi</string>
+    <string name="automation_action_hotspot_on">Włącz</string>
+    <string name="automation_action_hotspot_off">Wyłącz</string>
+    <string name="automation_action_speak">Odczytaj tekst</string>
+    <string name="automation_action_agent_query">Zapytanie do agenta</string>
+    <string name="auto_act_speak">Odczytaj tekst</string>
+    <string name="auto_act_agent_query">Zapytanie do agenta</string>
+    <string name="automation_speak_text_label">Tekst do odczytania</string>
+    <string name="automation_agent_prompt_label">Zapytanie do asystenta głosowego</string>
+
+    <!-- Overlay permission dialog -->
+    <string name="automation_overlay_permission_title">Potrzebne uprawnienie</string>
+    <string name="automation_overlay_permission_text">Powiadomienia dźwiękowe pokazują się jako okno nad innymi aplikacjami. Otwórz ustawienia systemowe i włącz \"Nad innymi oknami\" dla BYDMate.</string>
+    <string name="automation_overlay_open_settings">Otwórz ustawienia</string>
+    <string name="automation_overlay_later">Później</string>
+
+    <!-- Action controls: preview placeholders -->
+    <string name="automation_tap_to_configure">Dotknij, aby skonfigurować…</string>
+    <string name="automation_tap_to_pick_app">Dotknij, aby wybrać aplikację…</string>
+    <string name="automation_tap_to_set_phone">Dotknij, aby podać numer…</string>
+    <string name="automation_tap_to_pick_place">Dotknij, aby wybrać miejsce…</string>
+    <string name="automation_tap_to_set_url">Dotknij, aby podać URL…</string>
+
+    <!-- Notification edit dialog -->
+    <string name="automation_notification_title_label">Tytuł</string>
+    <string name="automation_notification_body_label">Tekst (opcjonalnie)</string>
+
+    <!-- Call edit dialog -->
+    <string name="automation_call_dialog_title">Zadzwoń</string>
+    <string name="automation_call_name_label">Imię (opcjonalnie)</string>
+    <string name="automation_call_phone_label">Numer telefonu</string>
+    <string name="automation_call_auto_dial_label">Dzwoń automatycznie</string>
+    <string name="automation_call_auto_dial_hint">Bez naciskania zielonego przycisku</string>
+
+    <!-- Navigate edit dialog -->
+    <string name="automation_navigate_dialog_title">Trasa w Yandex Nawigatorze</string>
+    <string name="automation_navigate_no_places_hint">Najpierw dodaj miejsce w Ustawienia → Miejsca</string>
+    <string name="automation_navigate_pick_place_placeholder">Wybierz miejsce…</string>
+
+    <!-- URL edit dialog -->
+    <string name="automation_url_dialog_title">Otwórz URL</string>
+    <string name="automation_url_field_label">URL</string>
+    <string name="automation_url_minimize_label">Zminimalizuj po uruchomieniu (po 3 s)</string>
+
+    <!-- Yandex Music edit dialog -->
+    <string name="automation_music_dialog_title">Yandex Music</string>
+    <string name="automation_music_what_to_play">Co uruchomić:</string>
+    <string name="automation_music_my_wave">Moja Fala</string>
+    <string name="automation_music_minimize_label">Zminimalizuj po uruchomieniu (po 3 s)</string>
+
+    <!-- Journal dialog -->
+    <string name="automation_journal_title">Dziennik uruchomień</string>
+    <string name="automation_journal_empty">Dziennik jest pusty</string>
+
+    <!-- Journal relative time -->
+    <string name="automation_time_yesterday">wczoraj %1$s</string>
+
+    <!-- Places screen -->
+    <string name="places_tab_title">Miejsca</string>
+    <string name="places_back_content_description">Wstecz</string>
+    <string name="places_add_button">+ Dodaj</string>
+    <string name="places_empty">Nie ma jeszcze miejsc. Dotknij \"+ Dodaj\", aby utworzyć.</string>
+    <string name="places_row_coords">%1$.5f, %2$.5f · %3$d m</string>
+    <string name="places_row_in_use">używane w %1$d regułach</string>
+    <string name="places_edit_content_description">Edytuj</string>
+    <string name="places_delete_content_description">Usuń</string>
+    <string name="places_delete_blocked_message">Miejsce jest używane w %1$d automatyzacjach. Najpierw usuń reguły.</string>
+
+    <!-- Place edit dialog -->
+    <string name="place_edit_dialog_title_new">Nowe miejsce</string>
+    <string name="place_edit_dialog_title_edit">Edytuj miejsce</string>
+    <string name="place_edit_name_label">Nazwa</string>
+    <string name="place_edit_lat_label">Szerokość</string>
+    <string name="place_edit_lon_label">Długość</string>
+    <string name="place_edit_radius_label">Promień, m</string>
+    <string name="place_edit_error_min_radius">Minimalny promień to 20 m</string>
+
+    <!-- Welcome Wizard -->
+    <string name="welcome_step_indicator">Krok %1$d z 3</string>
+    <string name="welcome_model_step_title">Jaki masz model BYD?</string>
+    <string name="welcome_model_step_description">To określi źródło danych przejazdów.\nTitan 3 trzyma dane we wbudowanej bazie BYD (energydata).\nSong i inne modele — tylko w DiPlus.</string>
+    <string name="welcome_model_song_label">Song / inny</string>
+    <string name="welcome_model_change_later">Można to zmienić później w ustawieniach.</string>
+    <string name="welcome_next_button">Dalej</string>
+    <string name="welcome_battery_section_title">Akumulator</string>
+    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 kWh (BEV) lub 31.8 kWh (PHEV)</string>
+    <string name="welcome_tariff_section_title">Taryfy</string>
+    <string name="welcome_tariff_home_label">Ładowanie w domu (%1$s/kWh)</string>
+    <string name="welcome_tariff_dc_label">Szybkie ładowanie DC (%1$s/kWh)</string>
+    <string name="welcome_tariff_cost_section_title">Liczenie kosztu przejazdów</string>
+    <string name="welcome_tariff_home_chip">Domowa</string>
+    <string name="welcome_tariff_custom_chip">Własna</string>
+    <string name="welcome_tariff_cost_note">Koszt = zużycie × taryfa. Można zmienić później w ustawieniach.</string>
+    <string name="welcome_autostart_step_title">Autostart na DiLink</string>
+    <string name="welcome_autostart_step_description">Aby BYDMate uruchamiał się automatycznie po włączeniu jednostki centralnej:</string>
+    <string name="welcome_autostart_instruction_1">1. Naciśnij przycisk po prawej</string>
+    <string name="welcome_autostart_instruction_2">2. Znajdź BYDMate na liście</string>
+    <string name="welcome_autostart_instruction_3">3. Przełącznik musi być WYŁĄCZONY (OFF)</string>
+    <string name="welcome_autostart_off_note">OFF = autostart DOZWOLONY. To czarna lista: wyłączone na niej aplikacje MOGĄ startować same.</string>
+    <string name="welcome_autostart_apk_update_warning">Po aktualizacji APK sprawdź to ustawienie!</string>
+    <string name="welcome_autostart_dilink_section_title">Alternatywa: przez DiLink+ (Di+)</string>
+    <string name="welcome_autostart_dilink_hint">Jeśli autostart nie zadziałał, dodaj w Di+:</string>
+    <string name="welcome_autostart_dilink_instruction">Di+ → Predefined → Startup tasks</string>
+    <string name="welcome_autostart_command_copied_toast">Skopiowano!</string>
+    <string name="welcome_autostart_command_explanation">打开应用 = „otwórz aplikację” + nazwa pakietu.\nDla dwóch aplikacji przez średnik:\n打开应用ru.yandex.yandexnavi;打开应用com.bydmate.app</string>
+    <string name="welcome_system_settings_section_title">Ustawienia systemowe</string>
+    <string name="welcome_autostart_open_settings_button">Otwórz ustawienia autostartu</string>
+    <string name="welcome_autostart_open_settings_error">Nie udało się otworzyć ustawień autostartu DiLink. Otwarto ustawienia aplikacji.</string>
+    <string name="welcome_loading_default">Wczytywanie...</string>
+    <string name="welcome_back_button">Wstecz</string>
+    <string name="welcome_done_button">Uruchom BYDMate</string>
+    <string name="welcome_saving_settings_status">Zapisywanie ustawień...</string>
+    <string name="welcome_updating_data_status">Aktualizacja danych...</string>
+    <string name="welcome_importing_trips_status">Import przejazdów...</string>
+
+    <!-- Service & Notifications -->
+    <string name="service_foreground_content_starting">Uruchamianie…</string>
+    <!-- Foreground notification live text. soc_line: %1$s=SOC string, %2$s=range suffix (or empty), %3$s=bat-temp suffix (or empty) -->
+    <string name="service_notification_soc_line">zasięg: %1$s%2$s%3$s</string>
+    <!-- %1$.0f = range km -->
+    <string name="service_notification_range_suffix"> ~%1$.0f km</string>
+    <!-- %1$d = battery temperature °C -->
+    <string name="service_notification_bat_temp_suffix"> | t° akum.: %1$d°C</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="service_notification_voltage">inst. 12 V: %1$.1f V</string>
+    <!-- Automation confirm notification action buttons -->
+    <string name="service_confirm_action_yes">Wykonaj</string>
+    <string name="service_confirm_action_no">Anuluj</string>
+
+    <!-- Floating widget -->
+    <string name="widget_unit_km">km</string>
+    <!-- Duration compact formats: hours mode and minutes-only mode -->
+    <string name="widget_duration_hours">%1$dg %2$dm</string>
+    <string name="widget_duration_minutes">%1$d min</string>
+    <!-- Trip distance value with unit -->
+    <string name="widget_trip_km_value">%1$.1f km</string>
+    <!-- Range per 1% SOC: %.1f km per percent -->
+    <string name="widget_km_per_percent">%1$.1f</string>
+    <!-- Voltage value with unit: %.1f V -->
+    <string name="widget_voltage_value">%1$.1f V</string>
+    <!-- Long-press toast -->
+    <string name="widget_toast_hidden">Widżet ukryty. Otwórz BYDMate - wróci.</string>
+    <string name="widget_button_no_rules">Brak reguł dla przycisku %1$d</string>
+    <!-- Trash zone labels -->
+    <string name="widget_trash_release">puść - widżet ukryty</string>
+    <string name="widget_trash_hint">przeciągnij tutaj, aby ukryć</string>
+
+    <!-- Dashboard -->
+    <!-- Top bar -->
+    <string name="dashboard_vehicle_data_offline">Brak danych z auta</string>
+    <string name="dashboard_adb_offline">ADB nie odpowiada</string>
+    <string name="dashboard_diplus_offline">DiPlus nie odpowiada</string>
+    <string name="dashboard_status_online">Online</string>
+    <string name="dashboard_status_offline">Offline</string>
+
+    <!-- Left column - live stats -->
+    <string name="dashboard_unit_km">km</string>
+    <string name="dashboard_unit_kwh">kWh</string>
+    <string name="dashboard_range_label">szacowany zasięg</string>
+    <!-- Trip 1/2 dashboard counters -->
+    <string name="dashboard_trip_since">od %1$s · %2$d dni</string>
+    <string name="dashboard_trip_since_all_time">od początku</string>
+    <string name="dashboard_trip_count_label">Przejazdów</string>
+    <string name="dashboard_trip_driving_time_label">Czas jazdy</string>
+    <string name="dashboard_trip_time_hours_min">%1$d godz. %2$d min</string>
+    <string name="dashboard_trip_time_min">%1$d min</string>
+    <string name="dashboard_trip_kwh_total_label">Zużycie łącznie</string>
+    <string name="dashboard_trip_kwh_driving_label">w ruchu</string>
+    <string name="dashboard_trip_kwh_idle_label">na postoju</string>
+    <string name="dashboard_trip_kwh_value">%1$s kWh</string>
+    <string name="dashboard_trip_avg_label">Średnie zużycie</string>
+    <string name="dashboard_trip_avg_value">%1$s kWh/100 km</string>
+    <string name="dashboard_trip_cost_label">Koszt</string>
+    <string name="dashboard_trip_reset_hint">Długie naciśnięcie przycisku TRIP zeruje licznik</string>
+
+    <!-- Battery card -->
+    <string name="dashboard_battery_temp_label">temp. akum.</string>
+    <string name="dashboard_battery_voltage_label">inst. 12 V</string>
+
+    <!-- AI Insight card -->
+    <string name="dashboard_insight_no_data">Za mało danych do analizy</string>
+    <string name="insight_period_week">Tydzień</string>
+    <string name="insight_period_month">Miesiąc</string>
+
+    <!-- Period chips -->
+    <string name="dashboard_period_day">Dzień</string>
+    <string name="dashboard_period_week">Tydz</string>
+    <string name="dashboard_period_month">Mies</string>
+    <string name="dashboard_period_year">Rok</string>
+    <string name="dashboard_period_all">Wszystko</string>
+
+    <!-- Stat cards -->
+    <string name="dashboard_stat_distance">Przebieg</string>
+    <string name="dashboard_stat_energy">Energia</string>
+    <string name="dashboard_stat_consumption">Zużycie</string>
+    <string name="dashboard_stat_cost">Koszt</string>
+    <string name="dashboard_trip_count">%1$d przejazdów</string>
+
+    <!-- Recent trips section -->
+    <string name="dashboard_recent_trips_title">Ostatnie przejazdy</string>
+    <string name="dashboard_col_time">czas</string>
+    <string name="dashboard_col_duration">dług.</string>
+    <string name="dashboard_col_per100">/100</string>
+    <string name="dashboard_empty_no_trips">Nie ma jeszcze przejazdów</string>
+
+    <!-- Dashboard: inline format values (stat cards, voltage) -->
+    <!-- %1$.1f = distance km -->
+    <string name="dashboard_stat_km_value">%1$.1f km</string>
+    <!-- %1$.1f = energy kWh -->
+    <string name="dashboard_stat_kwh_value">%1$.1f kWh</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="dashboard_voltage_value">%1$.1fV</string>
+
+    <!-- Navigation bar tab labels -->
+    <string name="nav_tab_dashboard">Główna</string>
+    <string name="nav_tab_trips">Przejazdy</string>
+    <string name="nav_tab_charges">Ładowania</string>
+    <string name="nav_tab_automation">Automatyzacja</string>
+    <string name="nav_tab_settings">Ustawienia</string>
+
+    <!-- Post-install autostart hint dialog -->
+    <string name="nav_autostart_dialog_title">BYDMate zaktualizowany do v%1$s</string>
+    <string name="nav_autostart_dialog_body">Sprawdź, czy praca w tle nie jest zablokowana:\n\nUstawienia DiLink - General - Disable background Apps - BYDMate - OFF\n\nJeśli przełącznik jest włączony (ON), DiLink może ubić usługę BYDMate - wtedy przejazdy i GPS nie będą zapisywane.</string>
+    <string name="nav_autostart_dialog_button">Rozumiem</string>
+    <string name="nav_autostart_open_settings_error">Nie udało się otworzyć ustawień autostartu DiLink. Otwarto ustawienia aplikacji.</string>
+
+    <!-- AppLaunchPicker dialog -->
+    <string name="applauncher_title">Wybór aplikacji</string>
+    <string name="applauncher_search_label">Szukaj</string>
+    <string name="applauncher_minimize_label">Zminimalizuj po uruchomieniu (po 3 s)</string>
+    <string name="applauncher_empty">Nic nie znaleziono</string>
+    <string name="applauncher_close_button">Zamknij</string>
+
+    <!-- SOC ring: charging icon content description -->
+    <string name="battery_health_charging_cd">Trwa ładowanie</string>
+
+    <!-- Battery health dialog -->
+    <string name="battery_health_dialog_title">Kondycja akumulatora</string>
+    <string name="battery_health_now_header">Teraz (z auta, na żywo)</string>
+    <string name="battery_health_lifetime_header">Lifetime (dane systemowe)</string>
+    <string name="battery_health_cell_delta_label">Δ ogniw</string>
+    <!-- %1$.3f = delta volts -->
+    <string name="battery_health_cell_delta_value">%1$.3f V</string>
+    <string name="battery_health_banks_header">Ogniwa</string>
+    <!-- %1$.3f = cell voltage volts -->
+    <string name="battery_health_cell_voltage_value">%1$.3f V</string>
+    <string name="battery_health_bat_temp_label">temp. akumulatora</string>
+    <string name="battery_health_12v_label">instalacja 12 V</string>
+    <!-- %1$.1f = 12V voltage -->
+    <string name="battery_health_12v_value">%1$.1f V</string>
+    <string name="battery_health_bms_mileage_label">przebieg BMS</string>
+    <!-- %1$.1f = mileage km -->
+    <string name="battery_health_bms_mileage_value">%1$.1f km</string>
+    <string name="battery_health_pumped_label">naładowano</string>
+    <!-- %1$.0f = kWh -->
+    <string name="battery_health_pumped_value">%1$.0f kWh</string>
+    <string name="battery_health_disabled_title">Dane systemowe są wyłączone</string>
+    <string name="battery_health_disabled_hint">Włącz „Dane systemowe” w Ustawieniach, żeby widzieć SoH, przebieg BMS i łącznie naładowaną energię z auta.</string>
+    <string name="battery_health_avg_soc_header">Średni SOC (historia BYDMate)</string>
+    <string name="battery_health_avg_since_charge_label">od ostatniego ładowania</string>
+    <string name="battery_health_avg_all_time_label">od początku</string>
+    <string name="battery_health_avg_soc_hint" formatted="false">Średni ważony poziom naładowania: im dłużej akumulator stoi naładowany, tym wyższa wartość. Dla akumulatora LFP w BYD warto trzymać ją niżej: przechowywanie przy wysokim naładowaniu przyspiesza starzenie. Orientacyjnie: do 65% świetnie, 65-85% normalnie, powyżej 85% lepiej ładować później lub rzadziej. Ładowanie do 100% raz na 1-2 tygodnie i tak jest potrzebne do balansowania ogniw. Liczone na podstawie historii przejazdów i ładowań w BYDMate.</string>
+
+    <!-- Shared summary row (Components.kt SummaryRow) -->
+    <string name="summary_unit_km">km</string>
+    <string name="summary_label_mileage">Przebieg</string>
+    <string name="summary_unit_kwh">kWh</string>
+    <string name="summary_label_energy">Energia</string>
+    <string name="summary_unit_kwh_per_100km">kWh/100 km</string>
+    <string name="summary_label_consumption">Zużycie</string>
+    <string name="summary_label_cost">Koszt</string>
+
+    <!-- Settings: unit chips and language labels -->
+    <string name="settings_tariff_trip_custom_chip">Własna</string>
+    <string name="settings_unit_km">km</string>
+    <string name="settings_unit_miles">mile</string>
+    <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
+    <string name="settings_lang_russian">Русский</string>
+
+    <!-- Settings: ViewModel status strings (user-visible feedback) -->
+    <string name="settings_saved">Zapisano</string>
+    <!-- %1$d = trip count -->
+    <string name="settings_recalc_done">Przeliczono: %1$d przejazdów</string>
+    <string name="settings_export_in_progress">Eksport...</string>
+    <!-- %1$d = trip count, %2$d = charge count, %3$d = track point count, %4$d = idle drain count -->
+    <string name="settings_export_done">Wyeksportowano: %1$d przejazdów, %2$d ładowań, %3$d punktów trasy, %4$d postojów</string>
+    <!-- Generic error with message: %1$s = error text -->
+    <string name="settings_error_with_message">Błąd: %1$s</string>
+    <!-- Error prefix used for color detection in UI (must match start of settings_error_with_message) -->
+    <string name="settings_error_prefix">Błąd</string>
+    <!-- %1$s = file path -->
+    <string name="settings_log_recording_started">Zapis (auto-stop po 2 godz.)... - %1$s</string>
+    <!-- %1$s = file path, %2$d = size KB -->
+    <string name="settings_log_saved">Zapisano: %1$s (%2$d KB)</string>
+    <string name="settings_log_error_no_fs_access">Błąd: brak dostępu do systemu plików</string>
+    <string name="settings_update_check_in_progress">Sprawdzanie...</string>
+    <!-- %1$s = version string -->
+    <string name="settings_update_available_short">Dostępna v%1$s</string>
+
+    <!-- UpdateChecker: download progress strings (passed via callback) -->
+    <string name="update_downloading_progress">Pobieranie: %1$d%%</string>
+    <string name="update_downloading_done">Pobrano. Instalacja...</string>
+    <string name="update_downloading_paused">Pauza...</string>
+    <!-- %1$d = DownloadManager error code -->
+    <string name="update_download_error">Błąd pobierania (kod %1$d)</string>
+    <string name="update_download_notification_description">Aktualizacja BYDMate</string>
+    <!-- Initial 0% progress string -->
+    <string name="update_downloading_start">Pobieranie: 0%%</string>
+
+    <!-- Charges: day group labels -->
+    <!-- %1$s = day-of-week abbreviation -->
+    <string name="charges_day_today">dzisiaj (%1$s)</string>
+    <string name="charges_day_yesterday">wczoraj</string>
+
+    <!-- Common duration formats -->
+    <string name="common_duration_hours_minutes">%1$d godz. %2$d min</string>
+    <string name="common_duration_minutes">%1$d min</string>
+
+    <!-- Automation confirm overlay buttons -->
+    <string name="confirm_overlay_cancel">Anuluj</string>
+    <string name="confirm_overlay_run">Wykonaj</string>
+
+    <!-- AI insight dynamic metric labels -->
+    <string name="insight_metric_consumption">Zużycie</string>
+    <string name="insight_metric_trips">Przejazdy</string>
+    <string name="insight_metric_short_trips">Krótkie &lt; 5 km</string>
+    <string name="insight_metric_avg_distance">Śr. dystans</string>
+    <string name="insight_metric_idle">Postój</string>
+    <string name="insight_section_week_to_week">Tydzień do tygodnia</string>
+    <string name="insight_section_month_to_month">Miesiąc do miesiąca</string>
+    <string name="insight_unit_kwh_per_100">%.1f kWh/100</string>
+    <string name="insight_unit_kwh_per_100_prev">%.1f</string>
+    <string name="insight_trips_value">%1$d · %2$s km</string>
+    <string name="insight_trips_prev">%1$d · %2$s km</string>
+    <string name="insight_short_value">%1$d%% (%2$d/%3$d)</string>
+    <string name="insight_short_prev">%1$d%%</string>
+    <string name="insight_avg_distance_value">%1$s km</string>
+    <string name="insight_idle_value">%1$s kWh · %2$s</string>
+    <string name="insight_idle_prev">%1$s kWh</string>
+    <string name="insight_idle_minutes">%1$s min</string>
+    <string name="insight_idle_hours">%1$s godz.</string>
+    <string name="insight_metric_night_idle">Noc 22:00–06:00</string>
+    <string name="insight_night_idle_value">%1$.1f kWh · %2$d%% postoju</string>
+    <string name="insight_night_idle_prev">%1$.1f kWh</string>
+
+    <!-- Local insight engine (offline rules) -->
+    <string name="local_insight_not_enough_data_title">Za mało danych do analizy</string>
+    <string name="local_insight_not_enough_data_summary">Potrzeba minimum 5 przejazdów w tygodniu</string>
+    <string name="local_insight_consumption_up_title">Zużycie ▲%1$.0f%% w tygodniu</string>
+    <string name="local_insight_consumption_up_title_month">Zużycie ▲%1$.0f%% w miesiącu</string>
+    <string name="local_insight_consumption_up_summary_short">Dużo krótkich przejazdów — nagrzewanie zabiera energię</string>
+    <string name="local_insight_consumption_up_summary">Zużycie wzrosło: %1$.1f → %2$.1f kWh/100</string>
+    <string name="local_insight_consumption_down_title">Zużycie ▼%1$.0f%%</string>
+    <string name="local_insight_consumption_down_summary">Średnio %1$.1f kWh/100 — oszczędniej niż w zeszłym tygodniu</string>
+    <string name="local_insight_consumption_down_summary_month">Średnio %1$.1f kWh/100, oszczędniej niż w zeszłym miesiącu</string>
+    <string name="local_insight_consumption_stable_title">Zużycie stabilne</string>
+    <string name="local_insight_consumption_stable_summary">Średnio %1$.1f kWh/100 w tygodniu</string>
+    <string name="local_insight_consumption_stable_summary_month">Średnio %1$.1f kWh/100 w miesiącu</string>
+    <string name="local_insight_short_trips">%1$d z %2$d przejazdów krótszych niż 5 km (%3$d%%) — łącz krótkie wypady</string>
+    <string name="local_insight_idle">Na postoju z włączonym zapłonem: %1$.1f kWh przez %2$s — %3$d%% tygodniowego zużycia</string>
+    <string name="local_insight_idle_month">Na postoju z włączonym zapłonem: %1$.1f kWh przez %2$s, %3$d%% miesięcznego zużycia</string>
+    <string name="local_insight_12v_critical_title">12V krytycznie niskie</string>
+    <string name="local_insight_12v_critical_summary">Instalacja 12 V ma %1$.1f V — sprawdź akumulator</string>
+    <string name="local_insight_12v_low">12V teraz %1$.1f V — poniżej normy 12.4 V</string>
+    <string name="local_insight_12v_falling">12V spada: %1$.2f → %2$.2f V w ciągu tygodnia</string>
+    <string name="local_insight_12v_falling_month">12V spada: %1$.2f → %2$.2f V w ciągu miesiąca</string>
+    <string name="local_insight_cell_critical_title">Duży rozrzut ogniw</string>
+    <string name="local_insight_cell_critical_summary">Delta %1$.0f mV — pilnuj balansowania</string>
+    <string name="local_insight_cell_delta">Rozrzut ogniw %1$.0f mV — możliwe słabe ogniwo</string>
+    <string name="local_insight_cold">Przy %1$d°C średnie zużycie %2$.1f kWh/100 — zimą to normalne</string>
+    <string name="local_insight_best_worst">Najlepszy przejazd %1$.1f, najgorszy %2$.1f kWh/100</string>
+    <string name="local_insight_cost">W tygodniu %1$.0f %2$s na przejazdy</string>
+    <string name="local_insight_cost_month">W miesiącu %1$.0f %2$s na przejazdy</string>
+    <string name="local_insight_night_idle_title">Nocne zużycie na postoju</string>
+    <string name="local_insight_night_idle_summary">%1$.1f kWh nocą — %2$d%% postoju z włączonym zapłonem</string>
+    <string name="local_insight_night_idle">Nocą (22:00–06:00) z włączonym zapłonem poszło %1$.1f kWh — %2$d%% całego postoju. Wyłączaj zapłon, jeśli klimatyzacja nie jest potrzebna</string>
+    <string name="local_insight_dc_more_expensive">DC %1$.2f %4$s/kWh vs AC %2$.2f — o %3$d%% drożej niż ładowanie w domu</string>
+    <string name="local_insight_dc_heavy">DC %1$.0f kWh (%2$d sesji) vs AC %3$.0f — do codziennych przejazdów domowe AC jest łagodniejsze dla akumulatora</string>
+    <string name="local_insight_ac_only">Wszystkie %2$d ładowania to AC (%1$.0f kWh) — optymalnie dla akumulatora i budżetu</string>
+    <string name="local_insight_ac_only_month">Wszystkie %2$d ładowania w miesiącu to AC (%1$.0f kWh), optymalnie dla akumulatora i budżetu</string>
+    <string name="local_insight_charge_cost_week">Ładowania w tygodniu: %1$.0f %2$s za %3$.0f kWh</string>
+    <string name="local_insight_charge_cost_month">Ładowania w miesiącu: %1$.0f %2$s za %3$.0f kWh</string>
+    <string name="local_insight_consumption_improved">Zużycie spadło o %1$.0f%% — dobra tendencja</string>
+    <string name="local_insight_highway_speed">Średnia prędkość %1$.0f km/h — na trasie zużycie %2$.1f kWh/100, to normalne</string>
+    <string name="local_insight_high_consumption">Średnie zużycie %1$.1f kWh/100 jest wysokie — sprawdź klimatyzację i styl jazdy</string>
+    <string name="local_insight_low_consumption">Świetne zużycie %1$.1f kWh/100 na %2$.0f km w tygodniu</string>
+    <string name="local_insight_low_consumption_month">Świetne zużycie %1$.1f kWh/100 na %2$.0f km w miesiącu</string>
+    <string name="local_insight_idle_rate_high">Wysokie zużycie na postoju ~%1$.1f kWh/godz. — najpewniej klimatyzacja albo ogrzewanie</string>
+    <string name="local_insight_km_up">Przebieg wzrósł: %1$.0f → %2$.0f km — to może tłumaczyć zmianę średniego zużycia</string>
+    <string name="local_insight_trips_more">Przejazdów jest więcej: %1$d vs %2$d w zeszłym tygodniu</string>
+    <string name="local_insight_trips_more_month">Przejazdów jest więcej: %1$d vs %2$d w zeszłym miesiącu</string>
+    <string name="local_insight_weekly_mileage">W tygodniu %1$.0f km w %2$d przejazdach — wystarczy danych do dokładnej oceny</string>
+    <string name="local_insight_monthly_mileage">W miesiącu %1$.0f km w %2$d przejazdach, wystarczy danych do dokładnej oceny</string>
+    <string name="local_insight_12v_ok">12V %1$.1f V — instalacja w normie</string>
+    <string name="local_insight_cell_ok">Rozrzut ogniw %1$.0f mV — balans w normie</string>
+    <string name="local_insight_heat_ac">Przy +%1$d°C zużycie %2$.1f kWh/100 — klimatyzacja dokłada obciążenia</string>
+    <string name="local_insight_best_trip">Najlepszy przejazd %1$.1f kWh/100 na %2$.0f km — udany styl jazdy</string>
+    <string name="local_insight_mixed_charging">Ładowanie w tygodniu: AC %1$.0f kWh, DC %2$.0f kWh — dla akumulatora ładuj częściej w domu</string>
+    <string name="local_insight_mixed_charging_month">Ładowanie w miesiącu: AC %1$.0f kWh, DC %2$.0f kWh, dla akumulatora ładuj częściej w domu</string>
+    <string name="local_insight_low_night_idle">Nocny postój to tylko %1$d%% — dobry nawyk gaszenia auta</string>
+    <string name="local_insight_low_idle_share">Postój z włączonym zapłonem to tylko %1$d%% tygodniowego zużycia, to dobrze</string>
+    <string name="local_insight_low_idle_share_month">Postój z włączonym zapłonem, tylko %1$d%% miesięcznego zużycia, to dobrze</string>
+    <string name="local_insight_cost_per_100">Koszt przebiegu ~%1$.2f %3$s/100 km (%2$.0f %3$s w tygodniu)</string>
+    <string name="local_insight_cost_per_100_month">Koszt przebiegu ~%1$.2f %3$s/100 km (%2$.0f %3$s w miesiącu)</string>
+
+    <!-- Config backup / restore -->
+    <string name="settings_config_export_button">Eksport konfiguracji</string>
+    <string name="settings_config_restore_button">Przywróć konfigurację</string>
+    <!-- %1$s = full file path -->
+    <string name="settings_config_export_done">Kopia zapisana: %1$s</string>
+    <string name="settings_config_restore_confirm_title">Przywrócić konfigurację?</string>
+    <string name="settings_config_restore_confirm_body">Bieżące dane i ustawienia zostaną całkowicie zastąpione zawartością kopii. Tego działania nie da się cofnąć.</string>
+    <string name="settings_config_restore_confirm_ok">Przywróć</string>
+    <string name="settings_config_restore_confirm_cancel">Anuluj</string>
+    <string name="settings_config_export_confirm_title">Wyeksportować konfigurację?</string>
+    <string name="settings_config_export_confirm_body">Kopia zawiera historię przejazdów z trasami GPS oraz wpisane klucze API w postaci niezaszyfrowanej. Plik trafi do ogólnodostępnego folderu Download. Trzymaj go w bezpiecznym miejscu i nie przesyłaj osobom postronnym.</string>
+    <string name="settings_config_export_confirm_ok">Eksportuj</string>
+    <!-- Fid catalog dump (Task O) -->
+    <string name="settings_fid_dump_button">Zapisz katalog fidów</string>
+    <string name="settings_fid_dump_desc">Nazwy i wartości stałych SDK. Tylko identyfikatory techniczne: bez VIN, bez geolokalizacji, bez danych osobowych</string>
+    <!-- %1$s = file name -->
+    <string name="settings_fid_dump_saved">Zapisano: %1$s</string>
+    <string name="settings_fid_dump_in_progress">Odczyt fidów...</string>
+    <string name="settings_fid_dump_empty">Katalog fidów jest pusty na tym oprogramowaniu</string>
+    <string name="settings_fid_dump_error_unavailable">demon niedostępny</string>
+    <!-- %1$s = short technical detail, e.g. "status=-1 at chunk 0" or "transact failed at chunk 2" -->
+    <string name="settings_fid_dump_error_read">błąd odczytu: %1$s</string>
+    <!-- ==== Automation i18n (systematized) ==== -->
+    <!-- categories -->
+    <string name="auto_cat_body">Nadwozie</string>
+    <string name="auto_cat_climate">Klimatyzacja</string>
+    <string name="auto_cat_driving">Jazda</string>
+    <string name="auto_cat_energy">Energia</string>
+    <string name="auto_cat_fridge">Lodówka</string>
+    <string name="auto_cat_light">Światła</string>
+    <string name="auto_cat_locks">Zamki</string>
+    <string name="auto_cat_mirrors">Lusterka</string>
+    <string name="auto_cat_safety">Bezpieczeństwo</string>
+    <string name="auto_cat_seats">Fotele</string>
+    <string name="auto_cat_sunroof">Szyberdach</string>
+    <string name="auto_cat_temperature">Temperatura</string>
+    <string name="auto_cat_windows">Szyby</string>
+    <!-- units -->
+    <string name="auto_unit_celsius">°C</string>
+    <string name="auto_unit_dry_hint">(0=sucho)</string>
+    <string name="auto_unit_light_hint">(1=ciemno, 5=jasno)</string>
+    <string name="auto_unit_key_ok_hint">(0=w normie)</string>
+    <string name="auto_unit_kmh">km/h</string>
+    <string name="auto_unit_kpa">kPa</string>
+    <string name="auto_unit_percent">%</string>
+    <string name="auto_unit_percent_open" formatted="false">% otw.</string>
+    <string name="auto_unit_volt">V</string>
+    <!-- enum labels -->
+    <string name="auto_enum_charging">Ładuje się</string>
+    <string name="auto_enum_closed_f">Zamknięta</string>
+    <string name="auto_enum_closed_m">Zamknięty</string>
+    <string name="auto_enum_code_d">D</string>
+    <string name="auto_enum_code_drive">DRIVE</string>
+    <string name="auto_enum_code_eco">ECO</string>
+    <string name="auto_enum_code_n">N</string>
+    <string name="auto_enum_code_normal">NORMAL</string>
+    <string name="auto_enum_code_off">OFF</string>
+    <string name="auto_enum_code_offroad">Terenowy</string>
+    <string name="auto_enum_code_on">ON</string>
+    <string name="auto_enum_code_p">P</string>
+    <string name="auto_enum_code_r">R</string>
+    <string name="auto_enum_code_snow">SNOW</string>
+    <string name="auto_enum_code_sport">SPORT</string>
+    <string name="auto_enum_connected">Podłączony</string>
+    <string name="auto_enum_fastened">Zapięty</string>
+    <string name="auto_enum_seat_free">Wolny</string>
+    <string name="auto_enum_seat_occupied">Zajęty</string>
+    <string name="auto_enum_fresh_air">Powietrze z zewnątrz</string>
+    <string name="auto_enum_locked">Zablokowany</string>
+    <string name="auto_enum_none">Brak</string>
+    <string name="auto_enum_off">Wył.</string>
+    <string name="auto_enum_on">Wł.</string>
+    <string name="auto_enum_open_f">Otwarta</string>
+    <string name="auto_enum_open_m">Otwarty</string>
+    <string name="auto_enum_recirc">Powietrze z wnętrza</string>
+    <string name="auto_enum_turn_off">Wyłączony</string>
+    <string name="auto_enum_turn_left">Lewy</string>
+    <string name="auto_enum_turn_right">Prawy</string>
+    <string name="auto_enum_turn_hazard">Awaryjne</string>
+    <string name="auto_enum_unfastened">Niezapięty</string>
+    <string name="auto_enum_unlocked">Odblokowany</string>
+    <!-- trigger param names -->
+    <string name="auto_param_speed">Prędkość</string>
+    <string name="auto_param_gear">Bieg</string>
+    <string name="auto_param_drivemode">Tryb jazdy</string>
+    <string name="auto_param_soc">SOC</string>
+    <string name="auto_param_chargingstatus">Status ładowania</string>
+    <string name="auto_param_powerstate">Zasilanie</string>
+    <string name="auto_param_voltage12v">Akumulator 12V</string>
+    <string name="auto_param_mincellvoltage">Napięcie ogniwa (min)</string>
+    <string name="auto_param_maxcellvoltage">Napięcie ogniwa (maks)</string>
+    <string name="auto_param_exttemp">Temp. na zewnątrz</string>
+    <string name="auto_param_insidetemp">Temp. wnętrza</string>
+    <string name="auto_param_avgbattemp">Temp. akumulatora</string>
+    <string name="auto_param_windowfl">Szyba kierowcy</string>
+    <string name="auto_param_windowfr">Szyba pasażera</string>
+    <string name="auto_param_windowrl">Szyba tylna lewa</string>
+    <string name="auto_param_windowrr">Szyba tylna prawa</string>
+    <string name="auto_param_sunroof">Szyberdach</string>
+    <string name="auto_param_doorfl">Drzwi kierowcy</string>
+    <string name="auto_param_doorfr">Drzwi pasażera</string>
+    <string name="auto_param_doorrl">Drzwi tylne lewe</string>
+    <string name="auto_param_doorrr">Drzwi tylne prawe</string>
+    <string name="auto_param_hood">Maska</string>
+    <string name="auto_param_lockfl">Zamek drzwi kierowcy</string>
+    <string name="auto_param_trunk">Bagażnik</string>
+    <string name="auto_param_acstatus">Klimatyzacja</string>
+    <string name="auto_param_accirc">Tryb obiegu</string>
+    <string name="auto_param_actemp">Temp. AC</string>
+    <string name="auto_param_fanlevel">Dmuchawa</string>
+    <string name="auto_param_seatbeltfl">Pas kierowcy</string>
+    <string name="auto_param_seatbeltfr">Pas pasażera</string>
+    <string name="auto_param_occupancyfl">Fotel kierowcy</string>
+    <string name="auto_param_occupancyfr">Fotel pasażera z przodu</string>
+    <string name="auto_param_occupancyrl">Fotel z tyłu po lewej</string>
+    <string name="auto_param_occupancyrm">Fotel z tyłu na środku</string>
+    <string name="auto_param_occupancyrr">Fotel z tyłu po prawej</string>
+    <string name="auto_param_lightlevel">Natężenie światła</string>
+    <string name="auto_param_keybattery">Bateria kluczyka</string>
+    <string name="auto_param_tirepressfl">Ciśnienie opony przód L</string>
+    <string name="auto_param_tirepressfr">Ciśnienie opony przód P</string>
+    <string name="auto_param_tirepressrl">Ciśnienie opony tył L</string>
+    <string name="auto_param_tirepressrr">Ciśnienie opony tył P</string>
+    <string name="auto_param_rain">Czujnik deszczu</string>
+    <string name="auto_param_lightlow">Światła mijania</string>
+    <string name="auto_param_drl">Światła do jazdy dziennej</string>
+    <string name="auto_param_turnsignal">Kierunkowskaz</string>
+    <!-- action names -->
+    <string name="auto_act_vent_windows">Wietrzenie</string>
+    <string name="auto_act_close_all_windows">Zamknij wszystkie szyby</string>
+    <string name="auto_act_open_all_windows">Otwórz wszystkie szyby</string>
+    <string name="auto_act_all_windows_50">Wszystkie szyby na 50%</string>
+    <string name="auto_act_close_front_windows">Zamknij przednie</string>
+    <string name="auto_act_close_rear_windows">Zamknij tylne</string>
+    <string name="auto_act_open_front_windows">Otwórz przednie</string>
+    <string name="auto_act_open_rear_windows">Otwórz tylne</string>
+    <string name="auto_act_open_driver_window">Otwórz szybę kierowcy</string>
+    <string name="auto_act_close_driver_window">Zamknij szybę kierowcy</string>
+    <string name="auto_act_open_passenger_window">Otwórz szybę pasażera</string>
+    <string name="auto_act_close_passenger_window">Zamknij szybę pasażera</string>
+    <string name="auto_act_open_rear_left_window">Otwórz tylną lewą szybę</string>
+    <string name="auto_act_close_rear_left_window">Zamknij tylną lewą szybę</string>
+    <string name="auto_act_open_rear_right_window">Otwórz tylną prawą szybę</string>
+    <string name="auto_act_close_rear_right_window">Zamknij tylną prawą szybę</string>
+    <string name="auto_act_vent_driver_window">Przewietrz szybę kierowcy</string>
+    <string name="auto_act_vent_passenger_window">Przewietrz szybę pasażera</string>
+    <string name="auto_act_vent_rear_left_window">Przewietrz tylną lewą szybę</string>
+    <string name="auto_act_vent_rear_right_window">Przewietrz tylną prawą szybę</string>
+    <string name="auto_act_auto_ac">Auto AC</string>
+    <string name="auto_act_ventilation_no_ac">Nawiew bez AC</string>
+    <string name="auto_act_temp_18c">Temp. 18°C</string>
+    <string name="auto_act_temp_20c">Temp. 20°C</string>
+    <string name="auto_act_temp_22c">Temp. 22°C</string>
+    <string name="auto_act_temp_25c">Temp. 25°C</string>
+    <string name="auto_act_recirculation">Obieg wewnętrzny</string>
+    <string name="auto_act_fresh_air">Obieg zewnętrzny</string>
+    <string name="auto_act_windshield_defog_on">Nawiew na przednią szybę wł.</string>
+    <string name="auto_act_windshield_defog_off">Nawiew na przednią szybę wył.</string>
+    <string name="auto_act_ac_off">Wyłącz klimatyzację</string>
+    <string name="auto_act_ac_auto_on">Klimatyzacja: tryb auto</string>
+    <string name="auto_act_ac_auto_off">Klimatyzacja: tryb ręczny</string>
+    <string name="auto_act_driver_heat_1">Podgrzewanie kierowcy 1</string>
+    <string name="auto_act_driver_heat_2">Podgrzewanie kierowcy 2</string>
+    <string name="auto_act_driver_heat_3">Podgrzewanie kierowcy 3</string>
+    <string name="auto_act_driver_heat_4">Podgrzewanie kierowcy 4</string>
+    <string name="auto_act_driver_heat_5">Podgrzewanie kierowcy 5</string>
+    <string name="auto_act_driver_heat_off">Podgrzewanie kierowcy wył.</string>
+    <string name="auto_act_passenger_heat_1">Podgrzewanie pasażera 1</string>
+    <string name="auto_act_passenger_heat_2">Podgrzewanie pasażera 2</string>
+    <string name="auto_act_passenger_heat_3">Podgrzewanie pasażera 3</string>
+    <string name="auto_act_passenger_heat_4">Podgrzewanie pasażera 4</string>
+    <string name="auto_act_passenger_heat_5">Podgrzewanie pasażera 5</string>
+    <string name="auto_act_passenger_heat_off">Podgrzewanie pasażera wył.</string>
+    <string name="auto_act_driver_vent_1">Wentylacja kierowcy 1</string>
+    <string name="auto_act_driver_vent_2">Wentylacja kierowcy 2</string>
+    <string name="auto_act_driver_vent_3">Wentylacja kierowcy 3</string>
+    <string name="auto_act_driver_vent_4">Wentylacja kierowcy 4</string>
+    <string name="auto_act_driver_vent_5">Wentylacja kierowcy 5</string>
+    <string name="auto_act_driver_vent_off">Wentylacja kierowcy wył.</string>
+    <string name="auto_act_passenger_vent_1">Wentylacja pasażera 1</string>
+    <string name="auto_act_passenger_vent_2">Wentylacja pasażera 2</string>
+    <string name="auto_act_passenger_vent_3">Wentylacja pasażera 3</string>
+    <string name="auto_act_passenger_vent_4">Wentylacja pasażera 4</string>
+    <string name="auto_act_passenger_vent_5">Wentylacja pasażera 5</string>
+    <string name="auto_act_passenger_vent_off">Wentylacja pasażera wył.</string>
+    <string name="auto_act_mirror_heat_on">Podgrzewanie lusterek wł.</string>
+    <string name="auto_act_mirror_heat_off">Podgrzewanie lusterek wył.</string>
+    <string name="auto_act_ambient_light_on">Oświetlenie ambient wł.</string>
+    <string name="auto_act_ambient_light_off">Oświetlenie ambient wył.</string>
+    <string name="auto_act_drl_on">Światła dzienne wł.</string>
+    <string name="auto_act_drl_off">Światła dzienne wył.</string>
+    <string name="auto_act_hazard_on">Awaryjne: włącz</string>
+    <string name="auto_act_hazard_off">Awaryjne: wyłącz</string>
+    <string name="auto_act_interior_light_on">Oświetlenie wnętrza wł.</string>
+    <string name="auto_act_interior_light_off">Oświetlenie wnętrza wył.</string>
+    <string name="auto_act_lock_doors">Zablokuj</string>
+    <string name="auto_act_unlock_doors">Odblokuj</string>
+    <string name="auto_act_sunroof_open_100">Szyberdach otwórz 100%</string>
+    <string name="auto_act_sunroof_open_50">Szyberdach otwórz 50%</string>
+    <string name="auto_act_sunroof_close">Szyberdach zamknij</string>
+    <string name="auto_act_sunshade_open">Roleta otwórz</string>
+    <string name="auto_act_sunshade_close">Roleta zamknij</string>
+    <string name="auto_act_sunroof_stop">Szyberdach zatrzymaj</string>
+    <string name="auto_act_sunroof_updip">Szyberdach uchyl</string>
+    <string name="auto_act_sunroof_comfort">Szyberdach komfort</string>
+    <string name="auto_act_open_trunk">Otwórz bagażnik</string>
+    <string name="auto_act_close_trunk">Zamknij bagażnik</string>
+    <string name="auto_act_open_front_trunk">Otwórz przedni bagażnik</string>
+    <string name="auto_act_close_front_trunk">Zamknij przedni bagażnik</string>
+    <string name="auto_act_fridge_cool">Lodówka: chłodzenie</string>
+    <string name="auto_act_fridge_heat">Lodówka: grzanie</string>
+    <string name="auto_act_fridge_off">Lodówka: wył.</string>
+    <string name="auto_act_fridge_cool_minus6c">Lodówka: chł. -6°C</string>
+    <string name="auto_act_fridge_cool_minus3c">Lodówka: chł. -3°C</string>
+    <string name="auto_act_fridge_cool_0c">Lodówka: chł. 0°C</string>
+    <string name="auto_act_fridge_cool_plus_3c">Lodówka: chł. +3°C</string>
+    <string name="auto_act_fridge_cool_plus_6c">Lodówka: chł. +6°C</string>
+    <string name="auto_act_fridge_heat_35c">Lodówka: grzanie 35°C</string>
+    <string name="auto_act_fridge_heat_40c">Lodówka: grzanie 40°C</string>
+    <string name="auto_act_fridge_heat_45c">Lodówka: grzanie 45°C</string>
+    <string name="auto_act_fridge_heat_50c">Lodówka: grzanie 50°C</string>
+    <!-- automation messages + special-view labels -->
+    <string name="auto_msg_command_missing">Akcja #%1$d: nie podano polecenia</string>
+    <string name="auto_msg_notif_title_empty">Akcja #%1$d: tytuł powiadomienia jest pusty</string>
+    <string name="auto_msg_app_not_selected">Akcja #%1$d: nie wybrano aplikacji</string>
+    <string name="auto_msg_phone_invalid">Akcja #%1$d: numer telefonu jest nieprawidłowy</string>
+    <string name="auto_msg_nav_dest_missing">Akcja #%1$d: nie wybrano miejsca docelowego trasy</string>
+    <string name="auto_msg_url_empty">Akcja #%1$d: URL jest pusty</string>
+    <string name="auto_msg_url_no_scheme">Akcja #%1$d: URL musi zawierać schemat (http://, yandexmusic://, tel:, ...)</string>
+    <string name="auto_msg_ymusic_mode_missing">Akcja #%1$d: nie wybrano trybu Yandex Music</string>
+    <string name="auto_msg_sentry_invalid">Akcja #%1$d: nieprawidłowy stan trybu strażnika</string>
+    <string name="auto_msg_hotspot_invalid">Akcja #%1$d: nieprawidłowy stan hotspotu</string>
+    <string name="auto_msg_speak_text_empty">Akcja #%1$d: nie podano tekstu do odczytania</string>
+    <string name="auto_msg_agent_query_prompt_empty">Akcja #%1$d: nie podano zapytania do agenta</string>
+    <string name="auto_msg_name_cond_action_required">Nazwa oraz co najmniej jeden warunek i jedna akcja są wymagane</string>
+    <string name="auto_rule_copy_suffix">kopia</string>
+    <string name="auto_act_notification">Powiadomienie</string>
+    <string name="automation_setting_play_sound">Wykonuj z dźwiękiem</string>
+    <string name="auto_act_launch_app">Uruchomienie aplikacji</string>
+    <string name="auto_act_call">Połączenie</string>
+    <string name="auto_act_navigate">Trasa w Yandex Nawigatorze</string>
+    <string name="auto_act_open_url">Otwórz URL</string>
+    <string name="auto_act_yandex_music">Yandex Music</string>
+    <string name="auto_msg_media_volume_missing">Akcja #%1$d: nie podano poziomu głośności</string>
+    <!-- automation special triggers/actions -->
+    <string name="auto_trig_place_enter">Wjazd do „%1$s”</string>
+    <string name="auto_trig_service_start">Uruchomienie BYDMate</string>
+    <string name="auto_trig_network_available">Dostępny internet</string>
+    <string name="auto_act_delay_1s">Pauza 1 s</string>
+    <string name="auto_act_media_volume">Głośność multimediów: 2</string>
+    <string name="auto_trig_time_of_day_night">Noc</string>
+    <!-- automation: executeNow toast + a11y -->
+    <string name="auto_msg_dispatch_sent">Wysłano</string>
+    <string name="auto_msg_dispatch_error">Błąd: %1$s</string>
+    <string name="auto_msg_unavailable">niedostępne</string>
+    <string name="auto_a11y_move_up">wyżej</string>
+    <string name="auto_a11y_move_down">niżej</string>
+    <string name="auto_a11y_run_now">wykonaj teraz</string>
+
+    <!-- Voice control (Phase 0) -->
+    <string name="settings_section_voice_agent">Asystent głosowy</string>
+    <string name="settings_voice_button_mic_header">Przycisk i mikrofon</string>
+    <string name="settings_voice_enable_label">Komendy głosowe</string>
+    <string name="settings_voice_enable_description">Komendy przyciskiem kierownicy bez internetu</string>
+    <string name="settings_voice_model_downloading">Pobieranie… %1$d%%</string>
+    <string name="voice_listening">Słucham</string>
+    <string name="voice_thinking">Myślę</string>
+    <string name="voice_error_model_missing">Model głosowy nie jest pobrany. Pobierz go w Ustawieniach, sekcja Asystent głosowy.</string>
+    <string name="voice_error_lang_not_ru">Komendy głosowe rozumieją tylko mowę rosyjską. W Ustawieniach wybierz Język głosu: Русский.</string>
+
+    <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
+    <string name="settings_asr_gigaam_title">Rozpoznawanie mowy</string>
+    <string name="settings_asr_gigaam_ready">Model gotowy</string>
+    <string name="settings_asr_gigaam_download">Pobierz (%1$s)</string>
+    <string name="settings_asr_gigaam_delete">Usuń model</string>
+    <string name="settings_asr_gigaam_download_failed">Nie udało się pobrać modelu</string>
+
+    <string name="settings_voice_button_label">Przypisz przycisk</string>
+    <string name="settings_voice_button_current">Bieżący: %1$s</string>
+    <string name="settings_voice_a11y_hint">Uruchamianie przyciskiem kierownicy wymaga usługi ułatwień dostępu (włącza się automatycznie w sekcji Ekran).</string>
+
+    <!-- call_contact tool: contacts permission row -->
+    <string name="settings_voice_contacts_label">Dostęp do kontaktów</string>
+    <string name="settings_voice_contacts_description">Potrzebny, żeby zadzwonić do kontaktu po imieniu głosem</string>
+    <string name="settings_voice_contacts_granted">Przyznany</string>
+    <string name="settings_voice_contacts_grant">Przyznaj</string>
+
+    <!-- Voice journal: debug screen with the last voice sessions -->
+    <string name="settings_voice_journal_entry_title">Dziennik głosu</string>
+    <string name="settings_voice_journal_entry_description">Ostatnie 50 sesji głosowych</string>
+
+    <!-- TTS: offline synthesis of agent replies (Phase 2) -->
+    <string name="settings_tts_header">Odpowiedzi agenta</string>
+    <string name="settings_tts_toggle">Czytaj odpowiedzi agenta na głos</string>
+    <string name="settings_tts_subtitle">Synteza mowy offline, rosyjski głos</string>
+    <string name="settings_tts_model_delete">Usuń</string>
+    <string name="settings_tts_download_failed">Nie udało się pobrać głosu</string>
+    <string name="settings_voice_volume_hint">Głośność odpowiedzi reguluje systemowy kanał Voice: przyciski głośności na kierownicy albo Ustawienia dźwięku auta</string>
+    <string name="settings_tts_voice_irina">Irina</string>
+    <string name="settings_tts_voice_dmitri">Dmitri</string>
+    <string name="settings_tts_voice_ruslan">Ruslan</string>
+    <string name="settings_tts_voice_alena">Alona</string>
+    <string name="settings_tts_voice_mark">Mark</string>
+    <string name="settings_tts_voice_sofia">Sofia</string>
+    <string name="settings_tts_voice_local_badge">Lokalnie</string>
+    <string name="settings_tts_voice_ready">Pobrany</string>
+    <string name="settings_tts_voice_download_label">Pobierz · %1$d MB</string>
+    <string name="settings_tts_voice_locked_hint">Najpierw pobierz głos</string>
+    <string name="settings_tts_voice_desc_piper">Klasyczna synteza, oszczędna</string>
+    <string name="settings_tts_voice_desc_vits">Bardziej naturalne brzmienie</string>
+    <string name="settings_tts_voice_desc_supertonic">Nowy silnik, najbardziej naturalne brzmienie</string>
+
+    <!-- TTS: online voices (Wave N) -->
+    <string name="settings_tts_voice_online_gemini_desc">Żywy rosyjski · początek odpowiedzi nieco później niż lokalnie</string>
+    <string name="settings_tts_voice_online_gemini_badge">klucz OpenRouter</string>
+    <string name="settings_tts_voice_online_minimax_desc">Żywy rosyjski · początek odpowiedzi nieco później niż lokalnie</string>
+    <string name="settings_tts_voice_online_minimax_badge">potrzebny klucz MiniMax</string>
+    <string name="settings_tts_online_fallback_hint">Głosy online: potrzebna sieć; jeśli usługa nie odpowie w 2 sekundy, wypowiedź zostanie bez dźwięku</string>
+
+    <!-- TTS: keys for online voices (Wave N) -->
+    <string name="settings_tts_keys_header">Klucze do głosów online</string>
+    <string name="settings_tts_keys_openrouter_hint">Klucz i model brane są z sekcji „Połączenia AI”.</string>
+    <string name="settings_minimax_provider_label">Dostawca</string>
+    <string name="settings_minimax_provider_official">Oficjalny</string>
+    <string name="settings_minimax_provider_fal">fal.ai</string>
+    <string name="settings_minimax_provider_replicate">Replicate</string>
+    <string name="settings_minimax_price_hint">$0.06 za 1000 znaków · oficjalny - najszybszy start</string>
+    <string name="settings_minimax_key_saved_placeholder">Klucz zapisany</string>
+
+    <!-- Voice tuning: speed/liveliness sliders + preview (local voices only) -->
+    <string name="settings_tts_tuning_header">Ustawienia głosu lokalnego</string>
+    <string name="settings_tts_rate_label">Tempo mowy</string>
+    <string name="settings_tts_rate_hint">W lewo - wolniej i wyraźniej, w prawo - szybciej</string>
+    <string name="settings_tts_liveliness_label">Żywość intonacji</string>
+    <string name="settings_tts_liveliness_hint">W lewo - równy \"lektor\", w prawo - bardziej wyraziście, ale głos może drżeć</string>
+    <string name="settings_tts_preview_button">Odsłuchaj próbkę</string>
+
+    <!-- Agent identity: name + persona + gender -->
+    <string name="settings_agent_section_header">Agent</string>
+    <string name="settings_agent_name_label">Imię agenta</string>
+    <string name="settings_agent_name_hint">Na przykład: Leo. Lepiej 2-3 sylaby, wyraźne słowo</string>
+    <string name="settings_agent_persona_label">Charakter</string>
+    <string name="settings_persona_snarky">Zgryźliwy kompan</string>
+    <string name="settings_persona_navigator">Pilot</string>
+    <string name="settings_persona_engineer">Inżynier pokładowy</string>
+    <string name="settings_agent_gender_label">Płeć agenta</string>
+    <string name="settings_agent_gender_male">Męska</string>
+    <string name="settings_agent_gender_female">Żeńska</string>
+    <string name="settings_agent_gender_hint">Działa na wszystkie głosy: każde źródło ma wariant męski i żeński</string>
+
+    <!-- Voice agent (Phase 1) -->
+    <string name="agent_enable_title">Głosowy agent AI</string>
+    <string name="agent_enable_desc">Swobodne pytania i komendy przez LLM (OpenRouter). Klucz API brany jest z sekcji „Integracje”.</string>
+    <string name="agent_model_shared_caption">Klucz OpenRouter i model dla agenta ustawia się w sekcji Integracje</string>
+    <string name="agent_chat_open">Czat z agentem (debug)</string>
+    <string name="agent_test_model_button">Test modelu</string>
+    <string name="agent_test_model_running">Sprawdzanie modelu...</string>
+    <string name="agent_test_model_result">%1$s: odpowiedź w %2$.1f s - \"%3$s\"</string>
+    <string name="agent_test_model_disabled">Błąd: agent wyłączony lub nieskonfigurowany</string>
+    <string name="agent_exa_api_key_label">Exa API Key (wyszukiwanie w sieci)</string>
+
+    <!-- Voice agent (Wave J): multi-provider LLM connections -->
+    <string name="settings_conn_not_configured">Połączenie nie jest skonfigurowane</string>
+    <string name="settings_conn_check_ok">Model odpowiedział w %1$.1f s</string>
+
+    <!-- Wave J: AI connections -->
+    <string name="settings_ai_connections_header">Połączenia AI</string>
+    <string name="settings_conn_custom_title">Własne połączenie</string>
+    <string name="settings_conn_configured">Skonfigurowane</string>
+    <string name="settings_conn_api_key_label">Klucz API</string>
+    <string name="settings_conn_name_label">Nazwa</string>
+    <string name="settings_conn_base_url_label">Base URL</string>
+    <string name="settings_conn_model_label">Model (id)</string>
+    <string name="settings_conn_check">Sprawdź</string>
+    <string name="settings_conn_checking">Sprawdzam…</string>
+    <string name="settings_zai_hint">Darmowy glm-4.7-flash, zalecany jako podstawowy</string>
+    <string name="settings_custom_hint">Dowolne API zgodne z OpenAI. Ustawienie wstępne podstawia adres i model, klucz jest twój.</string>
+    <!-- Wave O T11: custom model list + human-readable network errors -->
+    <string name="settings_custom_list_models">Lista modeli</string>
+    <string name="settings_error_dns">Serwer niedostępny: internet auta nie widzi tego adresu (DNS)</string>
+    <string name="settings_error_timeout">Serwer nie odpowiedział w wyznaczonym czasie</string>
+    <string name="settings_preset_hint_cloudflare">Zamień ACCOUNT_ID w adresie na ID konta z panelu Cloudflare. Bezpłatnie około 450 zapytań dziennie (glm-4.7-flash).</string>
+    <string name="settings_preset_hint_vercel">Kredyt 5$ miesięcznie bez karty. Część modeli w planie darmowym może zwracać błąd 403.</string>
+    <string name="settings_preset_hint_kimi">1000 zapytań dziennie bezpłatnie.</string>
+    <string name="settings_preset_hint_nanogpt">Abonament 8$ miesięcznie, płatność kryptowalutą.</string>
+    <string name="settings_preset_hint_deepseek" formatted="false">Płatność za faktyczne zużycie, 50% taniej nocą czasu moskiewskiego.</string>
+    <string name="settings_preset_hint_mistral">Bezpłatnie po weryfikacji telefonu.</string>
+    <string name="settings_models_header">Wybór modeli</string>
+    <string name="settings_model_primary">Model podstawowy</string>
+    <string name="settings_model_fallback">Model zapasowy</string>
+    <string name="settings_model_none">Brak</string>
+    <string name="settings_models_hint">Model zapasowy włącza się sam, jeśli podstawowy nie odpowiada (po ponownej próbie). Na liście są tylko skonfigurowane połączenia.</string>
+    <string name="settings_search_status_title">Wyszukiwanie w internecie</string>
+    <string name="settings_search_source_exa">Exa</string>
+    <string name="settings_search_source_native">wbudowane wyszukiwanie połączenia</string>
+    <string name="settings_search_source_none">niedostępne</string>
+    <string name="settings_search_status_hint">Bez klucza Exa agent używa wbudowanego wyszukiwania bieżącego połączenia. Jeśli i ono jest niedostępne, agent uczciwie powie, że wyszukiwanie nie działa.</string>
+    <string name="settings_section_service_title">Serwis i dane</string>
+    <string name="settings_battery_capacity_desc">Używana do szacowania zasięgu i kosztu</string>
+    <string name="settings_tariff_home_desc">Koszt 1 kWh przy ładowaniu w domu (AC)</string>
+    <string name="settings_tariff_dc_desc">Koszt 1 kWh na szybkich ładowarkach</string>
+    <string name="settings_tariff_trip_desc">Według jakiej taryfy liczyć koszt przejazdów</string>
+    <string name="settings_consumption_good_desc">Przejazdy z niższym zużyciem są podświetlane na zielono</string>
+    <string name="settings_consumption_bad_desc">Przejazdy z wyższym zużyciem są podświetlane na czerwono</string>
+    <string name="settings_widget_show_desc">Poziom naładowania nad dowolną aplikacją</string>
+    <string name="settings_widget_reset_position_desc">Przywróć widżet na domyślne miejsce</string>
+    <string name="settings_export_csv_desc">Cała historia przejazdów w jednym pliku do folderu Download</string>
+    <string name="settings_log_recording_desc">Szczegółowy dziennik działania do analizy problemów. Włączaj na prośbę dewelopera</string>
+    <string name="settings_config_export_desc">Kopia: historia przejazdów z GPS i klucze API otwartym tekstem, plik w folderze Download</string>
+    <string name="settings_config_restore_desc">Bieżące dane i ustawienia zostaną całkowicie zastąpione zawartością kopii</string>
+    <string name="settings_autostart_header">Autostart</string>
+    <string name="settings_autostart_desc">BYDMate startuje razem z autem. Jeśli po aktualizacji oprogramowania autostart się wyłączył, włącz go w ustawieniu systemowym</string>
+    <string name="settings_places_inline_hint">Punkt dodaje się z mapy albo z bieżącego położenia auta</string>
+    <string name="settings_agent_debug_row_title">Sprawdzanie i debug</string>
+    <string name="settings_agent_debug_row_desc">Test modelu sprawdza połączenie, czat pokazuje rozmowę z agentem tekstem</string>
+
+    <!-- Donation dialog + support card -->
+    <string name="donate_auto_title">Dziękujemy, że jesteś z BYDMate</string>
+    <string name="donate_auto_body">Projekt jest niekomercyjny i całkowicie darmowy, rozwija się na czystym entuzjazmie. Jeśli BYDMate okazał się przydatny i chcesz powiedzieć dziękuję, wesprzyj rozwój przelewem USDT w dowolnej z sieci poniżej.</string>
+    <string name="donate_settings_title">Wesprzyj projekt</string>
+    <string name="donate_settings_body">BYDMate jest niekomercyjny i darmowy. Jeśli chcesz wesprzeć rozwój, wyślij USDT na adres poniżej w dowolnej sieci EVM.</string>
+    <string name="donate_qr_hint">Skieruj aparat telefonu na kod</string>
+    <string name="donate_address_label">Adres USDT · sieci EVM</string>
+    <string name="donate_copy_button">Skopiuj adres</string>
+    <string name="donate_copied_toast">Adres skopiowany</string>
+    <string name="donate_networks">Sieci: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
+    <string name="donate_warning">Nie wysyłaj przez TON, TRON (TRC-20) ani Solana. Środki zostaną utracone.</string>
+    <string name="donate_later_button">Później</string>
+    <string name="donate_already_button">Już wsparłem</string>
+    <string name="donate_close_button">Zamknij</string>
+    <string name="settings_donate_header">Wsparcie</string>
+    <string name="settings_donate_card_body">BYDMate jest darmowy i niekomercyjny. Jeśli jest ci przydatny, możesz wesprzeć rozwój.</string>
+    <string name="settings_donate_button">Wesprzyj projekt</string>
+
+    <!-- HUD navigation -->
+    <string name="settings_hud_header">HUD (wyświetlacz przezierny)</string>
+    <string name="settings_hud_title">Nawigacja na HUD</string>
+    <string name="settings_hud_desc">Wskazówki Yandex Nawigatora na wyświetlaczu przeziernym: manewr, dystans, ulica, przyjazd</string>
+    <string name="settings_hud_speed_sign_title">Znak prędkości pod strzałką</string>
+    <string name="settings_hud_speed_sign_desc">Czerwony znak ograniczenia prędkości w dolnym polu HUD</string>
+    <string name="settings_hud_status_unsupported">Nie znaleziono magistrali SOME/IP: w tym aucie wyświetlanie na HUD jest niedostępne</string>
+    <string name="settings_hud_status_connecting">Łączenie z magistralą…</string>
+    <string name="settings_hud_status_on">Przesyłanie na HUD aktywne</string>
+    <string name="settings_hud_status_bind_failed">Nie udało się połączyć z magistralą SOME/IP</string>
+    <string name="settings_hud_hint">Potrzebna wersja wyposażenia z wyświetlaczem przeziernym. Dane brane są z okna Yandex Nawigatora</string>
+    <!-- Blind-spot cameras -->
+    <string name="settings_blindspot_header">Martwe pola</string>
+    <string name="settings_blindspot_title">Kamera przy kierunkowskazie</string>
+    <string name="settings_blindspot_desc">Lewy kierunkowskaz - lewa kamera na wskaźnikach, prawy - okienko na ekranie głównym. Domyślnie wyłączone.</string>
+    <string name="settings_blindspot_threshold_title">Próg prędkości</string>
+    <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
+    <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
+    <string name="settings_blindspot_pip_width_desc">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
+    <string name="settings_blindspot_position_title">Położenie okienka</string>
+    <string name="settings_blindspot_position_desc">Pokazuje puste okienko nad ekranem: przeciągnij je palcem tam, gdzie ma być kamera</string>
+    <string name="settings_blindspot_position_button">Ustaw położenie</string>
+    <string name="settings_blindspot_position_done">Gotowe</string>
+    <string name="settings_blindspot_position_drag">Przeciągnij okienko</string>
+    <string name="settings_blindspot_glow_title">Podświetlenie, gdy obiekt jest w martwym polu</string>
+    <string name="settings_blindspot_glow_desc">Pomarańczowa ramka wokół okna, gdy czujnik widzi auto obok</string>
+    <string name="settings_blindspot_hint">Potrzebna wersja wyposażenia z kamerami 360°. Jeśli nie da się wyświetlić projekcji na wskaźnikach, okienko działa na ekranie głównym.</string>
+    <string name="settings_secret_show">Pokaż klucz</string>
+    <string name="settings_secret_hide">Ukryj klucz</string>
+
+    <!-- Split-screen pill menu -->
+    <string name="split_menu_mirror">Zamień strony</string>
+    <string name="split_menu_swap">Zamień aplikacje</string>
+    <string name="split_menu_pick_left">Aplikacja po lewej…</string>
+    <string name="split_menu_pick_right">Aplikacja po prawej…</string>
+    <string name="split_menu_exit">Wyjście</string>
+    <string name="split_picker_title_change">Wybierz aplikację</string>
+    <string name="split_picker_title_left">Wybierz aplikację do lewego panelu</string>
+    <string name="split_picker_title_right">Wybierz aplikację do prawego panelu</string>
+    <string name="split_picker_title_wide">Wybierz aplikację do szerokiego panelu (2/3)</string>
+    <string name="split_picker_title_narrow">Wybierz aplikację do wąskiego panelu (1/3)</string>
+    <string name="split_freeform_reboot_hint">Podział ekranu włączy się po restarcie auta</string>
+    <string name="split_launch_failed">Nie udało się uruchomić podziału ekranu</string>
+    <!-- Automation action: split_screen -->
+    <string name="automation_action_split_screen">Podział ekranu</string>
+    <string name="auto_act_split_screen">Podział ekranu</string>
+    <!-- Automation actions: split_screen_close / split_screen_toggle (no payload) -->
+    <string name="automation_action_split_screen_close">Zamknij podział ekranu</string>
+    <string name="auto_act_split_screen_close">Zamknij podział ekranu</string>
+    <string name="automation_action_split_screen_toggle">Przełącz podział ekranu</string>
+    <string name="auto_act_split_screen_toggle">Przełącz podział ekranu</string>
+    <string name="split_action_narrow_label">Aplikacja 1/3</string>
+    <string name="split_action_wide_label">Aplikacja 2/3</string>
+    <string name="split_action_side_left">1/3 po lewej</string>
+    <string name="split_action_side_right">1/3 po prawej</string>
+    <string name="split_action_tap_to_configure">Wybierz aplikacje</string>
+    <string name="auto_msg_split_narrow_empty">Akcja #%1$d: nie wybrano aplikacji 1/3</string>
+    <string name="auto_msg_split_wide_empty">Akcja #%1$d: nie wybrano aplikacji 2/3</string>
+    <string name="auto_msg_split_same_package">Akcja #%1$d: obie aplikacje muszą być różne</string>
+    <string name="auto_msg_split_invalid_side">Akcja #%1$d: nieprawidłowa strona (left/right)</string>
+    <string name="settings_widget_left_tap_mode_label">Akcja lewego dotknięcia</string>
+    <string name="settings_widget_left_tap_mode_app">Uruchamiaj aplikację</string>
+    <string name="settings_widget_left_tap_mode_split">Uruchamiaj podział ekranu</string>
+    <!-- Split-screen settings section -->
+    <string name="settings_section_split_title">Podział ekranu</string>
+    <string name="settings_split_enable_title">Podział ekranu 1/3 + 2/3</string>
+    <string name="settings_split_enable_desc">Dwa okna freeform: jedno na jedną trzecią ekranu, drugie na dwie trzecie. Domyślnie wyłączone.</string>
+    <string name="settings_split_clear_pair_title">Zresetuj ostatnią parę</string>
+    <string name="settings_split_clear_pair_desc">Usuń zapisaną parę aplikacji. Następne uruchomienie otworzy okno wyboru.</string>
+    <string name="settings_split_pair_cleared">Para zresetowana</string>
+    <string name="settings_split_wide_app_title">Szeroka część (2/3)</string>
+    <string name="settings_split_narrow_app_title">Wąska część (1/3)</string>
+    <string name="settings_split_app_not_selected">nie wybrano</string>
+    <string name="settings_split_howto_body">Podział ekranu można włączyć na trzy sposoby.\nNajprościej: dotknięcie lewej jednej trzeciej pływającego widżetu. W tym celu w sekcji „Dotknięcie widżetu” włącz „Strefy dotknięć”, a w pozycji „Akcja lewego dotknięcia” wybierz „Uruchamiaj podział ekranu”.\nPrzez automatyzacje: dodaj do reguły akcję „Podział ekranu”. Obok są „Zamknij podział ekranu” i „Przełącz podział ekranu”.\nGłosem: po prostu poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
+</resources>

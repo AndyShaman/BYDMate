@@ -10,6 +10,9 @@ import javax.inject.Singleton
  * companion app's BYD Atto 3 reference data (BatteryTemperatureCompensation /
  * RangeCompensator). Selected via SettingsRepository.KEY_RANGE_CALC_METHOD = "manual"
  * for users who'd rather tune a fixed table than rely on the learned average.
+ *
+ * Only usable when the battery temperature is known; [RangeCalculator] gates the call
+ * and falls back to its own estimate otherwise.
  */
 @Singleton
 class ManualRangeCalculator @Inject constructor() {
@@ -55,18 +58,19 @@ class ManualRangeCalculator @Inject constructor() {
 
     /**
      * Mirrors RangeCalculator.estimateDetailed's shape so callers can treat both
-     * calculators interchangeably. [fallbackCapacityKwh] is the user's plain battery
-     * capacity setting, used only when the table has no range-at-100%-SOC data point
-     * to derive an effective capacity from at this temperature.
+     * calculators interchangeably. [temperatureC] is required: the caller only reaches
+     * this calculator once the battery temperature is actually known. [fallbackCapacityKwh]
+     * is the user's plain battery capacity setting, used only when the table has no
+     * range-at-100%-SOC data point to derive an effective capacity from at this temperature.
      */
     fun estimateDetailed(
         soc: Int?,
-        temperatureC: Int?,
+        temperatureC: Int,
         table: List<ManualRangePoint>,
         fallbackCapacityKwh: Double,
     ): RangeEstimate? {
         if (soc == null || soc <= 0 || soc > 100) return null
-        val temp = (temperatureC ?: 20).toDouble()
+        val temp = temperatureC.toDouble()
 
         val consumption = interpolatedConsumption(temp, table)
         if (!consumption.isFinite() || consumption <= 0.0) return null

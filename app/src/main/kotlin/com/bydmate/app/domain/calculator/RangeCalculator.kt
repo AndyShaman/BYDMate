@@ -36,19 +36,21 @@ class RangeCalculator(
      * When SettingsRepository.KEY_RANGE_CALC_METHOD is "manual", delegates to
      * [ManualRangeCalculator] (a user-edited temperature table) instead of the
      * historical/live consumption blend below. [batteryTempC] is only consulted
-     * in that mode.
+     * in that mode, and the table can only be applied when it is known: without a
+     * battery temperature (or with a table the manual calculator rejects) we fall
+     * back to the automatic estimate silently rather than guessing a temperature.
      *
      *   remaining_kwh = SOC * cap / 100 - socInterpolator.carryOver(totalElec, soc)
      *   range_km      = remaining_kwh / recent_avg * 100
      */
     suspend fun estimateDetailed(soc: Int?, totalElecKwh: Double?, batteryTempC: Int? = null): RangeEstimate? {
-        if (methodProvider() == SettingsRepository.RANGE_CALC_MANUAL) {
-            return manualCalculator.estimateDetailed(
+        if (methodProvider() == SettingsRepository.RANGE_CALC_MANUAL && batteryTempC != null) {
+            manualCalculator.estimateDetailed(
                 soc = soc,
                 temperatureC = batteryTempC,
                 table = manualTableProvider(),
                 fallbackCapacityKwh = capacityProvider(),
-            )
+            )?.let { return it }
         }
 
         if (soc == null || soc <= 0 || soc > 100) return null

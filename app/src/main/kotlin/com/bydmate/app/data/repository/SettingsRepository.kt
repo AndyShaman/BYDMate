@@ -129,14 +129,17 @@ open class SettingsRepository @Inject constructor(
         const val RANGE_CALC_MANUAL = "manual"
         const val DEFAULT_RANGE_CALC_METHOD = RANGE_CALC_AUTO
 
-        /** Ported defaults from the nordpool1hprices companion app's BYD Atto 3 reference table
-         *  (kWh/km converted to kWh/100km to match this app's existing consumption unit). */
+        /** Consumption defaults ported from the nordpool1hprices companion app's BYD Atto 3
+         *  reference table (kWh/km converted to kWh/100km to match this app's existing
+         *  consumption unit). The range-at-100%-SOC column is left empty on purpose: the
+         *  Atto 3 figures imply a ~57 kWh pack and would silently override the user's own
+         *  battery capacity setting on every other vehicle. */
         fun defaultManualRangeTable(): List<ManualRangePoint> = listOf(
-            ManualRangePoint(20, 16.3, 350.0),
-            ManualRangePoint(10, 18.5, 250.0),
-            ManualRangePoint(0, 20.6, 200.0),
-            ManualRangePoint(-10, 25.0, 180.0),
-            ManualRangePoint(-20, 27.2, 161.0),
+            ManualRangePoint(20, 16.3),
+            ManualRangePoint(10, 18.5),
+            ManualRangePoint(0, 20.6),
+            ManualRangePoint(-10, 25.0),
+            ManualRangePoint(-20, 27.2),
         )
 
         val CURRENCIES = listOf(
@@ -146,6 +149,7 @@ open class SettingsRepository @Inject constructor(
             Currency("KZT", "₸"),
             Currency("USD", "$"),
             Currency("EUR", "€"),
+            Currency("PLN", "zł"),
             Currency("CNY", "¥"),
             Currency("UZS", "UZS"),
         )
