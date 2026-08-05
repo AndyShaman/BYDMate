@@ -94,8 +94,8 @@
     <string name="range_table_dialog_title">Battery temperature consumption table</string>
     <string name="range_table_dialog_note1">Consumption (kWh/100km) is required; range at 100% charge is optional and used to derive a more accurate effective capacity.</string>
     <string name="range_table_dialog_col_temp">°C</string>
-    <string name="range_table_dialog_col_consumption">Consumption</string>
-    <string name="range_table_dialog_col_range">Range</string>
+    <string name="range_table_dialog_col_consumption">Consumption, kWh/100km</string>
+    <string name="range_table_dialog_col_range">Range, km</string>
     <string name="range_table_dialog_reset">Reset to defaults</string>
     <string name="range_table_dialog_cancel">Cancel</string>
     <string name="range_table_dialog_save">Save</string>

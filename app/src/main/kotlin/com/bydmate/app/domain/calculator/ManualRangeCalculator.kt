@@ -37,10 +37,16 @@ class ManualRangeCalculator @Inject constructor() {
         return below.consumptionKwhPer100Km + (above.consumptionKwhPer100Km - below.consumptionKwhPer100Km) * ratio
     }
 
-    /** Same interpolation for the optional "range at 100% SOC" column. Null if no row has one. */
+    /**
+     * Same interpolation for the optional "range at 100% SOC" column, which is all-or-none:
+     * a partially filled column is treated as absent. Interpolating over the filled rows alone
+     * would clamp their values across the whole temperature span — a single summer entry of
+     * 350 km would then also claim 350 km at -20 C.
+     */
     fun interpolatedRangeAt100Soc(temperatureC: Double, table: List<ManualRangePoint>): Double? {
+        if (table.isEmpty()) return null
         val withRange = table.filter { it.rangeKmAt100Soc != null }
-        if (withRange.isEmpty()) return null
+        if (withRange.size != table.size) return null
         val sorted = withRange.sortedBy { it.temperatureC }
         val temp = temperatureC.coerceIn(sorted.first().temperatureC.toDouble(), sorted.last().temperatureC.toDouble())
 
@@ -60,8 +66,8 @@ class ManualRangeCalculator @Inject constructor() {
      * Mirrors RangeCalculator.estimateDetailed's shape so callers can treat both
      * calculators interchangeably. [temperatureC] is required: the caller only reaches
      * this calculator once the battery temperature is actually known. [fallbackCapacityKwh]
-     * is the user's plain battery capacity setting, used only when the table has no
-     * range-at-100%-SOC data point to derive an effective capacity from at this temperature.
+     * is the user's plain battery capacity setting, used unless the range-at-100%-SOC column
+     * is filled in for every row and can supply an effective capacity at this temperature.
      */
     fun estimateDetailed(
         soc: Int?,
@@ -70,6 +76,8 @@ class ManualRangeCalculator @Inject constructor() {
         fallbackCapacityKwh: Double,
     ): RangeEstimate? {
         if (soc == null || soc <= 0 || soc > 100) return null
+        // Same sanity bound as the automatic path: a capacity outside it is a typo, not a battery.
+        if (fallbackCapacityKwh !in RangeCalculator.CAPACITY_SANE_KWH) return null
         val temp = temperatureC.toDouble()
 
         val consumption = interpolatedConsumption(temp, table)
@@ -81,7 +89,7 @@ class ManualRangeCalculator @Inject constructor() {
         } else {
             fallbackCapacityKwh
         }
-        if (!effectiveCapacityKwh.isFinite() || effectiveCapacityKwh <= 0.0) return null
+        if (effectiveCapacityKwh !in RangeCalculator.CAPACITY_SANE_KWH) return null
 
         val remainingKwh = (soc / 100.0) * effectiveCapacityKwh
         if (!remainingKwh.isFinite() || remainingKwh <= 0.0) return null

@@ -373,7 +373,7 @@ fun ChargeCard(
                     Text(text = "bat %.0f°C".format(charge.batTempAvg), color = TextSecondary, fontSize = 14.sp)
                 }
 
-                val costText = charge.cost?.let { "$currencySymbol%.2f".format(it) } ?: ""
+                val costText = charge.cost?.let { "%.2f %s".format(it, currencySymbol) } ?: ""
                 if (costText.isNotEmpty()) {
                     Text(text = costText, color = AccentGreen, fontSize = 14.sp)
                 }

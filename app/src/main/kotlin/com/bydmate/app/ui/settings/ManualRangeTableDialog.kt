@@ -33,6 +33,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.R
 import com.bydmate.app.data.repository.SettingsRepository.ManualRangePoint
+import com.bydmate.app.data.repository.parseNumericSetting
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.NavyDark
@@ -43,7 +44,8 @@ import com.bydmate.app.ui.theme.TextPrimary
  * Editable temperature -> consumption table for RangeCalcMethod.MANUAL, ported from the
  * nordpool1hprices companion app's BatteryConsumptionSettingsDialog. Fixed rows at the same
  * five reference temperatures; consumption is required, the 100%-SOC range column is optional
- * (ManualRangeCalculator derives effective capacity from it when present).
+ * but all-or-none (ManualRangeCalculator derives effective capacity from it only when every
+ * row has it).
  */
 @Composable
 fun ManualRangeTableDialog(
@@ -70,18 +72,21 @@ fun ManualRangeTableDialog(
     }
 
     val parsedPoints = rows.mapNotNull { row ->
-        val consumption = row.consumption.toDoubleOrNull()
-        if (consumption != null) {
-            ManualRangePoint(
-                temperatureC = row.temperature,
-                consumptionKwhPer100Km = consumption,
-                rangeKmAt100Soc = row.range.toDoubleOrNull(),
-            )
-        } else {
-            null
-        }
+        val consumption = row.consumption.parseNumericSetting()
+        if (consumption == null || !consumption.isFinite() || consumption <= 0.0) return@mapNotNull null
+        val rangeText = row.range.trim()
+        val range = rangeText.parseNumericSetting()
+        if (rangeText.isNotEmpty() && (range == null || !range.isFinite() || range <= 0.0)) return@mapNotNull null
+        ManualRangePoint(
+            temperatureC = row.temperature,
+            consumptionKwhPer100Km = consumption,
+            rangeKmAt100Soc = if (rangeText.isEmpty()) null else range,
+        )
     }
-    val canSave = parsedPoints.size == rows.size
+    // ManualRangeCalculator ignores a half-filled range column, so saving one would silently
+    // do nothing: require the column to be empty everywhere or filled everywhere.
+    val filledRanges = parsedPoints.count { it.rangeKmAt100Soc != null }
+    val canSave = parsedPoints.size == rows.size && (filledRanges == 0 || filledRanges == rows.size)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Card(
@@ -176,7 +181,7 @@ private fun RangeTableRow(
         Text("${row.temperature}°", color = TextPrimary, fontSize = 13.sp, modifier = Modifier.width(40.dp))
         OutlinedTextField(
             value = row.consumption,
-            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) onConsumptionChange(it) },
+            onValueChange = { if (it.isEmpty() || it.parseNumericSetting() != null) onConsumptionChange(it) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.weight(1f),
@@ -188,7 +193,7 @@ private fun RangeTableRow(
         )
         OutlinedTextField(
             value = row.range,
-            onValueChange = { if (it.isEmpty() || it.toDoubleOrNull() != null) onRangeChange(it) },
+            onValueChange = { if (it.isEmpty() || it.parseNumericSetting() != null) onRangeChange(it) },
             singleLine = true,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
             modifier = Modifier.weight(0.8f),

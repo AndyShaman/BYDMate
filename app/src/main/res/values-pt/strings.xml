@@ -95,8 +95,8 @@
     <string name="range_table_dialog_title">Tabela de consumo por temperatura da bateria</string>
     <string name="range_table_dialog_note1">O consumo (kWh/100km) é obrigatório; a autonomia com 100% de carga é opcional e serve para obter uma capacidade efetiva mais precisa.</string>
     <string name="range_table_dialog_col_temp">°C</string>
-    <string name="range_table_dialog_col_consumption">Consumo</string>
-    <string name="range_table_dialog_col_range">Autonomia</string>
+    <string name="range_table_dialog_col_consumption">Consumo, kWh/100 km</string>
+    <string name="range_table_dialog_col_range">Autonomia, km</string>
     <string name="range_table_dialog_reset">Restaurar padrão</string>
     <string name="range_table_dialog_cancel">Cancelar</string>
     <string name="range_table_dialog_save">Salvar</string>

@@ -101,8 +101,8 @@
     <string name="range_table_dialog_title">Таблица расхода по температуре батареи</string>
     <string name="range_table_dialog_note1">Расход (кВт·ч/100км) обязателен; запас хода на 100% заряда — опционален и используется для точнее рассчитанной ёмкости.</string>
     <string name="range_table_dialog_col_temp">°C</string>
-    <string name="range_table_dialog_col_consumption">Расход</string>
-    <string name="range_table_dialog_col_range">Запас</string>
+    <string name="range_table_dialog_col_consumption">Расход, кВт·ч/100км</string>
+    <string name="range_table_dialog_col_range">Запас, км</string>
     <string name="range_table_dialog_reset">Сбросить по умолчанию</string>
     <string name="range_table_dialog_cancel">Отмена</string>
     <string name="range_table_dialog_save">Сохранить</string>
