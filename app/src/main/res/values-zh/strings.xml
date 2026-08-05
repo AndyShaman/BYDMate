@@ -78,7 +78,7 @@
     <string name="settings_range_calc_edit_table_button">能耗表</string>
     <string name="settings_range_calc_edit_table_desc">5 个点：电池温度 → 能耗（可选：100% 电量下的续航里程）</string>
     <string name="range_table_dialog_title">按电池温度的能耗表</string>
-    <string name="range_table_dialog_note1">能耗（kWh/100km）为必填项；100% 电量下的续航里程为可选，用于更精确地推算可用容量。</string>
+    <string name="range_table_dialog_note1">能耗（kWh/100km）为必填项；100% 电量下的续航里程为可选，但要么每一行都填，要么全部留空。</string>
     <string name="range_table_dialog_col_temp">°C</string>
     <string name="range_table_dialog_col_consumption">能耗 (kWh/100km)</string>
     <string name="range_table_dialog_col_range">续航 (km)</string>

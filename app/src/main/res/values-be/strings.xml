@@ -99,7 +99,7 @@
     <string name="settings_range_calc_edit_table_button">Табліца расходу</string>
     <string name="settings_range_calc_edit_table_desc">5 пунктаў: тэмпература батарэі → расход (і, апцыянальна, запас ходу на 100% зараду)</string>
     <string name="range_table_dialog_title">Табліца расходу па тэмпературы батарэі</string>
-    <string name="range_table_dialog_note1">Расход (кВт·гадз/100км) абавязковы; запас ходу на 100% зараду — апцыянальны і выкарыстоўваецца для дакладнейшага разліку ёмістасці.</string>
+    <string name="range_table_dialog_note1">Расход (кВт·гадз/100км) абавязковы; запас ходу на 100% зараду — апцыянальны, але запаўняецца або ва ўсіх радках, або ні ў водным.</string>
     <string name="range_table_dialog_col_temp">°C</string>
     <string name="range_table_dialog_col_consumption">Расход, кВт·гадз/100км</string>
     <string name="range_table_dialog_col_range">Запас, км</string>

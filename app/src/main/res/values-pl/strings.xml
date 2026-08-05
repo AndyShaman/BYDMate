@@ -99,7 +99,7 @@
     <string name="settings_range_calc_edit_table_button">Tabela zużycia</string>
     <string name="settings_range_calc_edit_table_desc">5 punktów: temperatura akumulatora → zużycie (opcjonalnie także zasięg przy 100% naładowania)</string>
     <string name="range_table_dialog_title">Tabela zużycia według temperatury akumulatora</string>
-    <string name="range_table_dialog_note1">Zużycie (kWh/100 km) jest wymagane; zasięg przy 100% naładowania jest opcjonalny i służy do dokładniejszego wyliczenia pojemności.</string>
+    <string name="range_table_dialog_note1">Zużycie (kWh/100 km) jest wymagane; zasięg przy 100% naładowania jest opcjonalny, ale trzeba go podać we wszystkich wierszach albo w żadnym.</string>
     <string name="range_table_dialog_col_temp">°C</string>
     <string name="range_table_dialog_col_consumption">Zużycie, kWh/100 km</string>
     <string name="range_table_dialog_col_range">Zasięg, km</string>
