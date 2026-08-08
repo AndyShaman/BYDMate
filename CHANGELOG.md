@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.2] - 2026-08-08
+
 ### Исправления
 - HUD: на круговых перекрёстках анимированная стрелка больше не показывает поворот налево — на подъезде к кольцу теперь передаётся правильный код «въезд на кольцо», номер съезда сохраняется (#94)
 - Вывод на приборку в Расширенном режиме: устранено «падение» навигатора при повторном выводе — приложение теперь дожидается, пока пересозданное системой окно станет видимым, вместо преждевременного отката (из-за отката также гас HUD, так как запасной путь вывода невидим для чтения подсказок; Sea Lion 07, #134)
@@ -861,7 +863,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.2...HEAD
+[3.11.2]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...v3.11.2
 [3.11.1]: https://github.com/AndyShaman/BYDMate/compare/v3.11...v3.11.1
 [3.11]: https://github.com/AndyShaman/BYDMate/compare/v3.10...v3.11
 [3.10]: https://github.com/AndyShaman/BYDMate/compare/v3.9.3...v3.10
