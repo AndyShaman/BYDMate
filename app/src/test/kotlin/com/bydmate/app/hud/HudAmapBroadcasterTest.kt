@@ -158,9 +158,9 @@ class HudAmapBroadcasterTest {
         assertEquals(9, HudAmapBroadcaster.gaodeToAmapIcon(12))   // STRAIGHT_DOTTED
         assertEquals(11, HudAmapBroadcaster.gaodeToAmapIcon(13))  // ROUNDABOUT_ENTER
         assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(24))  // ROUNDABOUT_EXIT
-        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(25))  // NUMBERED_ROUNDABOUT_EXIT (exit 1)
-        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(27))  // NUMBERED_ROUNDABOUT_EXIT (exit 3)
-        assertEquals(12, HudAmapBroadcaster.gaodeToAmapIcon(34))  // NUMBERED_ROUNDABOUT_EXIT (exit 10)
+        assertEquals(11, HudAmapBroadcaster.gaodeToAmapIcon(25))  // NUMBERED_ROUNDABOUT_ENTER (exit 1)
+        assertEquals(11, HudAmapBroadcaster.gaodeToAmapIcon(27))  // NUMBERED_ROUNDABOUT_ENTER (exit 3)
+        assertEquals(11, HudAmapBroadcaster.gaodeToAmapIcon(34))  // NUMBERED_ROUNDABOUT_ENTER (exit 10)
         assertEquals(10, HudAmapBroadcaster.gaodeToAmapIcon(45))  // WAYPOINT
         assertEquals(13, HudAmapBroadcaster.gaodeToAmapIcon(46))  // SERVICE_AREA
         assertEquals(14, HudAmapBroadcaster.gaodeToAmapIcon(47))  // TOLLBOOTH
@@ -178,24 +178,24 @@ class HudAmapBroadcasterTest {
         installAmapService()
         val b = HudAmapBroadcaster(context)
 
-        // code=27 -> icon=12, ROUNG_ABOUT_NUM=3
+        // code=27 -> icon=11, ROUNG_ABOUT_NUM=3
         b.onSnapshot(snapshot(maneuverGaode = 27))
         var i = shadowApp.broadcastIntents[0]
-        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(11, i.getIntExtra("NEW_ICON", -99))
         assertEquals(3, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
         shadowApp.clearBroadcastIntents()
 
-        // code=25 -> icon=12, ROUNG_ABOUT_NUM=1
+        // code=25 -> icon=11, ROUNG_ABOUT_NUM=1
         b.onSnapshot(snapshot(maneuverGaode = 25))
         i = shadowApp.broadcastIntents[0]
-        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(11, i.getIntExtra("NEW_ICON", -99))
         assertEquals(1, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
         shadowApp.clearBroadcastIntents()
 
-        // code=34 -> icon=12, ROUNG_ABOUT_NUM=10
+        // code=34 -> icon=11, ROUNG_ABOUT_NUM=10
         b.onSnapshot(snapshot(maneuverGaode = 34))
         i = shadowApp.broadcastIntents[0]
-        assertEquals(12, i.getIntExtra("NEW_ICON", -99))
+        assertEquals(11, i.getIntExtra("NEW_ICON", -99))
         assertEquals(10, i.getIntExtra("ROUNG_ABOUT_NUM", -99))
         shadowApp.clearBroadcastIntents()
 

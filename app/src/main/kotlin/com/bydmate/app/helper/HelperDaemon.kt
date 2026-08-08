@@ -35,6 +35,22 @@ private const val FAILURE_STACK_FRAMES = 4
 // Guard against a pathological cause cycle while unwrapping reflection wrappers.
 private const val MAX_CAUSE_HOPS = 4
 
+// Budget for the placement part of a TX_LAUNCH_FREEFORM, measured from before the launch retry
+// loop. The client starts its FORCE_TIMEOUT_MS = 15s only once it holds the channel, so the whole
+// TX has 15s of daemon time. Worst case inside it: resolveOrLaunchTask ~9.5s on a cold start, the
+// pin loop, the grace poll (cut off here), and — only when placement fails — a fullscreen restore
+// that runs outside the deadline and costs ~2.5-3s on the shell compat path. 11.5s + 3s = ~14.5s
+// leaves ~0.5s for the binder return and for the unbudgeted tail of the last grace poll.
+private const val GRACE_DEADLINE_MS = 11_500L
+
+// One mid-relaunch grace poll: sleep, re-resolve, re-read. The deadline check reserves the sleep,
+// so a sleep never straddles GRACE_DEADLINE_MS; the tail after it (re-resolve, at most one re-pin,
+// re-read) is bounded but not budgeted — see GRACE_DEADLINE_MS for the slack it comes out of.
+private const val GRACE_POLL_MS = 500L
+
+/** Monotonic milliseconds: currentTimeMillis jumps when the head unit syncs its clock mid-launch. */
+private fun monotonicMs(): Long = System.nanoTime() / 1_000_000
+
 /**
  * SELinux context of this process, or a marker when the attr file cannot be read.
  * [path] is a parameter so the JVM unit test can point it at a temp file.
@@ -1780,6 +1796,14 @@ internal fun setWindowingModeCompat(
  * task. Default: keep the incoming id (a caller that cannot re-resolve keeps the legacy
  * behaviour); a resolver returning <= 0 (task momentarily invisible mid-relaunch) is ignored in
  * favour of the last known id.
+ *
+ * Time budget: the mid-relaunch grace poll runs only while its sleep still fits before
+ * [deadlineMs] — the TX shares the client's 15s timeout with the launch retry loop, the shell
+ * setMode spawns and the failure-path fullscreen restore, and an unconditional extra 3s here can
+ * push the reply past it. What each poll does after the sleep (re-resolve, at most one re-pin,
+ * re-read) is bounded but not budgeted; it comes out of the slack [GRACE_DEADLINE_MS] leaves. [now] must be monotonic (see [monotonicMs]); a wall clock that jumps
+ * backwards mid-launch would stretch the poll past the client's budget. Default: no deadline
+ * (tests and callers that do not care).
  */
 internal fun launchFreeformCore(
     taskId: Int,
@@ -1794,6 +1818,8 @@ internal fun launchFreeformCore(
     getActivityType: (Int) -> Int = { -1 },
     log: (String, Throwable?) -> Unit = { _, _ -> },
     resolveCurrentTaskId: () -> Int = { taskId },
+    deadlineMs: Long = Long.MAX_VALUE,
+    now: () -> Long = { monotonicMs() },
     sleep: (Long) -> Unit,
 ): Int {
     if (taskId <= 0) return FreeformResultCodes.FAILED
@@ -1856,13 +1882,43 @@ internal fun launchFreeformCore(
     }
     // Phase 2: reparent to the target display and pin (move is retried; bounds/focus best-effort).
     var movedByCall = false
+    fun pin(t: Int) {
+        if (runCatching { move(t, displayId) }.isSuccess) movedByCall = true
+        runCatching { bounds(t, left, top, right, bottom) }
+        runCatching { focus(t) }
+    }
     repeat(2) {
-        if (runCatching { move(liveTaskId, displayId) }.isSuccess) movedByCall = true
-        runCatching { bounds(liveTaskId, left, top, right, bottom) }
-        runCatching { focus(liveTaskId) }
+        pin(liveTaskId)
         sleep(200L)
     }
-    val final = runCatching { state(liveTaskId) }.getOrNull()
+    var pinnedTaskId = liveTaskId
+    // Mid-relaunch grace: the compat setMode applies mode AND target display in one `am start`,
+    // which RECREATES the task — it can still be absent from getTasks when the pin loop ends
+    // (Sea Lion 07 journals, issue #134). Treating that null as failure restored fullscreen and
+    // dropped the client to the VD fallback, killing a launch that was about to succeed. Re-resolve
+    // by package and re-read, up to 3s — but only within [deadlineMs]: everything before this point
+    // (launch retry loop, shell setMode spawns) already spent part of the client's 15s budget, and
+    // the poll's sleep must fit before the deadline, so an exhausted budget skips the poll entirely
+    // and falls straight through to the movedByCall trust path.
+    // A task that surfaces here under a NEW id was never pinned: the shell relaunch restores mode,
+    // type and display but not our bounds, and phase 2 addressed the id that is now gone — so pin
+    // the new id once, before reading the state that decides the verdict.
+    var final = runCatching { state(liveTaskId) }.getOrNull()
+    var graceAttempt = 0
+    while (final == null && graceAttempt < 6 && now() + GRACE_POLL_MS <= deadlineMs) {
+        graceAttempt++
+        sleep(GRACE_POLL_MS)
+        refreshTaskId()
+        if (liveTaskId != pinnedTaskId) {
+            log("re-pinning task $liveTaskId found mid-grace (was $pinnedTaskId)", null)
+            // The task phase 2 moved is gone: its success says nothing about this one, and the
+            // trust path below must not answer OK for a task whose own move failed.
+            movedByCall = false
+            pin(liveTaskId)
+            pinnedTaskId = liveTaskId
+        }
+        final = runCatching { state(liveTaskId) }.getOrNull()
+    }
     val placed = when {
         final != null -> final.displayId == displayId && final.windowingMode == WINDOWING_MODE_FREEFORM
         else -> movedByCall
@@ -1882,7 +1938,9 @@ internal fun launchFreeformCore(
 /**
  * Direct freeform launch used by cluster projection: find-or-launch [packageName], switch its
  * task to freeform, move it to [displayId], apply the window bounds and focus it. Blocking
- * (launch retry loop) — binder threadpool thread; the app side uses a 15s timeout.
+ * (launch retry loop) — binder threadpool thread; the app side gives this TX 15s counted from the
+ * moment it holds the channel, which [GRACE_DEADLINE_MS] splits between the placement and the
+ * failure-path fullscreen restore.
  */
 private fun launchFreeform(
     packageName: String,
@@ -1890,6 +1948,8 @@ private fun launchFreeform(
     left: Int, top: Int, right: Int, bottom: Int,
     activityType: Int,
 ): Int {
+    // The budget starts before the launch retry loop: it, not just the core, eats the client's 15s.
+    val startMs = monotonicMs()
     val taskId = resolveOrLaunchTask(packageName, WINDOWING_MODE_FREEFORM, displayId, activityType)
     return launchFreeformCore(
         taskId, displayId, left, top, right, bottom, activityType,
@@ -1918,5 +1978,7 @@ private fun launchFreeform(
         log = { msg, t -> android.util.Log.w("bydmate_helper", msg, t) },
         // setMode recreates a STANDARD task (new id) — re-resolve by package, never by the old id.
         resolveCurrentTaskId = { findTaskState(packageName)?.taskId ?: -1 },
+        deadlineMs = startMs + GRACE_DEADLINE_MS,
+        now = { monotonicMs() },
     ) { Thread.sleep(it) }
 }

@@ -36,7 +36,10 @@ class HudAmapBroadcaster(private val context: Context) {
             11, 12 -> 9    // STRAIGHT (solid, dotted)
             13 -> 11       // ROUNDABOUT_ENTER
             24 -> 12       // ROUNDABOUT_EXIT
-            in 25..34 -> 12 // NUMBERED_ROUNDABOUT_EXIT (exit number = code-24, sent as ROUNG_ABOUT_NUM extra)
+            // Codes 25..34 arrive while approaching/entering the roundabout, so the canonical
+            // icon is 11 (ENTER); 12 on approach rendered as an animated left turn on-car
+            // (issue #94). The exit number is still carried by the ROUNG_ABOUT_NUM extra.
+            in 25..34 -> 11 // NUMBERED_ROUNDABOUT_ENTER (exit number = code-24, sent as ROUNG_ABOUT_NUM extra)
             45 -> 10       // WAYPOINT
             46 -> 13       // SERVICE_AREA
             47 -> 14       // TOLLBOOTH

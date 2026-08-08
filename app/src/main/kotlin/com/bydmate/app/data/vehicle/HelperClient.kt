@@ -413,24 +413,40 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     override suspend fun setHotspot(enable: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_HOTSPOT) { it.writeInt(if (enable) 1 else 0) }
 
-    // FORCE_TIMEOUT_MS, not the default 2s: mirrors launchAndForce (launch retry loop in the
-    // daemon can take up to ~9.5s on a cold start before the pin loop even begins).
+    // Two-stage budget instead of the single transactParsed timeout: the daemon plans its own work
+    // against FORCE_TIMEOUT_MS (~9.5s cold-start launch retry loop, then the pin loop, the grace
+    // poll and a fullscreen restore), so the queue wait behind another slow call must not eat into
+    // it — a launch that waited 4s for the channel would otherwise leave the daemon 11s and time
+    // out mid-placement. Waiting for the channel gets MUTEX_WAIT_MS, the transact gets the full
+    // FORCE_TIMEOUT_MS from the moment the daemon can start; worst case for the caller is the sum.
     override suspend fun launchFreeform(
         packageName: String, displayId: Int, left: Int, top: Int, right: Int, bottom: Int,
         activityType: Int,
     ): FreeformLaunchResult =
-        transactParsed(HelperBinderProtocol.TX_LAUNCH_FREEFORM, { d ->
-            d.writeString(packageName); d.writeInt(displayId)
-            d.writeInt(left); d.writeInt(top); d.writeInt(right); d.writeInt(bottom)
-            d.writeInt(activityType)
-        }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
-            if (reply.dataAvail() < 4) return@transactParsed FreeformLaunchResult.FAILED
-            when (reply.readInt()) {
-                0 -> FreeformLaunchResult.OK
-                -2 -> FreeformLaunchResult.UNAVAILABLE
-                else -> FreeformLaunchResult.FAILED
+        withContext(Dispatchers.IO) {
+            if (withTimeoutOrNull(MUTEX_WAIT_MS) { mutex.lock() } == null) {
+                Log.w(TAG, "launchFreeform: helper channel busy for ${MUTEX_WAIT_MS}ms, giving up")
+                return@withContext FreeformLaunchResult.FAILED
             }
-        } ?: FreeformLaunchResult.FAILED
+            try {
+                withTimeoutOrNull(FORCE_TIMEOUT_MS) {
+                    transactBodyUnlocked(HelperBinderProtocol.TX_LAUNCH_FREEFORM, { d ->
+                        d.writeString(packageName); d.writeInt(displayId)
+                        d.writeInt(left); d.writeInt(top); d.writeInt(right); d.writeInt(bottom)
+                        d.writeInt(activityType)
+                    }) { reply ->
+                        if (reply.dataAvail() < 4) return@transactBodyUnlocked FreeformLaunchResult.FAILED
+                        when (reply.readInt()) {
+                            0 -> FreeformLaunchResult.OK
+                            -2 -> FreeformLaunchResult.UNAVAILABLE
+                            else -> FreeformLaunchResult.FAILED
+                        }
+                    }
+                } ?: FreeformLaunchResult.FAILED
+            } finally {
+                mutex.unlock()
+            }
+        }
 
     override suspend fun setDisplayDensity(displayId: Int, density: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_DISPLAY_DENSITY) {
@@ -640,30 +656,40 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     ): T? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(timeoutMs) {
-                mutex.withLock {
-                    repeat(2) { attempt ->
-                        val binder = ensureBinder() ?: return@withLock null
-                        val data = Parcel.obtain()
-                        val reply = Parcel.obtain()
-                        try {
-                            data.writeInterfaceToken(HelperBinderProtocol.DESCRIPTOR)
-                            writeArgs(data)
-                            val ok = binder.transact(code, data, reply, 0)
-                            if (!ok) return@withLock null           // uid gate rejected / not handled
-                            return@withLock parse(reply)
-                        } catch (e: DeadObjectException) {
-                            cached = null                            // stale binder; loop re-resolves once
-                            if (attempt == 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return@withLock null }
-                        } catch (e: Exception) {
-                            Log.w(TAG, "transact failed: ${e.message}"); return@withLock null
-                        } finally {
-                            data.recycle(); reply.recycle()
-                        }
-                    }
-                    null
-                }
+                mutex.withLock { transactBodyUnlocked(code, writeArgs, parse) }
             }
         }
+
+    /**
+     * Shared transact body. Assumes [mutex] is already held by the caller.
+     * Returns the parsed reply or null on any failure; retries ONCE on a dead cached binder.
+     */
+    private fun <T> transactBodyUnlocked(
+        code: Int,
+        writeArgs: (Parcel) -> Unit,
+        parse: (Parcel) -> T?,
+    ): T? {
+        repeat(2) { attempt ->
+            val binder = ensureBinder() ?: return null
+            val data = Parcel.obtain()
+            val reply = Parcel.obtain()
+            try {
+                data.writeInterfaceToken(HelperBinderProtocol.DESCRIPTOR)
+                writeArgs(data)
+                val ok = binder.transact(code, data, reply, 0)
+                if (!ok) return null                          // uid gate rejected / not handled
+                return parse(reply)
+            } catch (e: DeadObjectException) {
+                cached = null                                 // stale binder; loop re-resolves once
+                if (attempt == 1) { Log.w(TAG, "binder dead after retry: ${e.message}"); return null }
+            } catch (e: Exception) {
+                Log.w(TAG, "transact failed: ${e.message}"); return null
+            } finally {
+                data.recycle(); reply.recycle()
+            }
+        }
+        return null
+    }
 
     /** (status, value) wrapper used by read/write/ping. */
     private suspend fun transact(code: Int, writeArgs: (Parcel) -> Unit): Pair<Int, Int>? =
@@ -705,7 +731,17 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
 
         private const val TAG = "HelperClient"
         private const val REQ_TIMEOUT_MS = 2000L
+        /** Budget for one daemon-side forcing op. For TX_LAUNCH_FREEFORM it is counted from the
+         *  moment the channel is held, and the daemon spends it as: launch retry loop (~9.5s on a
+         *  cold start) + pin loop + grace poll sleeps, capped by its GRACE_DEADLINE_MS = 11.5s, plus
+         *  a ~3s fullscreen restore on the failure path — ~14.5s worst case; the remaining ~0.5s
+         *  covers the reply and the bounded, unbudgeted tail of the last poll (re-resolve, at most
+         *  one re-pin, re-read). */
         private const val FORCE_TIMEOUT_MS = 15000L
+        /** How long [launchFreeform] waits for the channel before giving up. Separate from
+         *  FORCE_TIMEOUT_MS so a queued launch still gets the full daemon budget; the caller's
+         *  worst case is the sum (20s), which the split/cluster callers absorb fail-soft. */
+        private const val MUTEX_WAIT_MS = 5_000L
         /** TX_READ_BATCH budget: 58 in-process transacts typically take ~100 ms; 5 s is a 50× margin. */
         const val BATCH_TIMEOUT_MS = 5_000L
         /** TX_RAISE_FREEFORM_TASK budget: two shell spawns (resolve-activity + am start).

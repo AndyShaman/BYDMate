@@ -53,12 +53,12 @@ class HudManeuverJournalTest {
                 .endsWith("gaode=13 dist=400m f28=0 amap=11 suppress=false"))
     }
 
-    @Test fun `numbered roundabout exit is recorded next to the icon`() {
+    @Test fun `numbered roundabout maneuver is recorded next to the enter icon`() {
         journal().append(
             maneuverGaode = 27, distanceMeters = 120, f28 = 0,
-            amapIcon = 12, roundaboutNum = 3, suppressArrow = false,
+            amapIcon = 11, roundaboutNum = 3, suppressArrow = false,
         )
-        assertTrue(journal().lines().single().endsWith("f28=0 amap=12 rab=3 suppress=false"))
+        assertTrue(journal().lines().single().endsWith("f28=0 amap=11 rab=3 suppress=false"))
     }
 
     @Test fun `a silent amap channel is visible as off`() {
@@ -100,11 +100,11 @@ class HudManeuverJournalTest {
 
         val lines = journal().lines()
         assertEquals(2, lines.size)
-        // f28 = the SOME/IP arrow, amap = the broadcast icon: on the third exit of a roundabout
-        // the arrow field is suppressed (0) while the Amap channel carries exit 3 of
-        // NUMBERED_ROUNDABOUT_EXIT (12) — exactly the comparison #94 needs.
+        // f28 = the SOME/IP arrow, amap = the broadcast icon: approaching the third exit of a
+        // roundabout the arrow field is suppressed (0) while the Amap channel carries
+        // ROUNDABOUT_ENTER (11) plus exit 3 — exactly the comparison #94 needs.
         assertTrue(lines[0].endsWith("gaode=2 dist=250m f28=2 amap=3 suppress=false"))
-        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=0 amap=12 rab=3 suppress=false"))
+        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=0 amap=11 rab=3 suppress=false"))
     }
 
     @Test fun `camera takeover is recorded as a suppression change of the same maneuver`() {
