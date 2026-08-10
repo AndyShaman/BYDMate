@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.6] - 2026-08-10
+
 ### Исправления
 - HUD: коды анимированной стрелки на стекле приведены к заводским значениям. Раньше «налево» отправлялось кодом «слегка налево», а конец маршрута - кодом «налево»; на кольцевых развязках и у финиша анимированная стрелка теперь корректно гасится вместо ложного «поворота налево» (#94)
 - HUD: знак ограничения скорости передаётся числом через штатное поле кадра вместо встраивания картинки - надёжнее на разных прошивках; включается прежним тумблером
@@ -887,7 +889,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.5...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.6...HEAD
+[3.11.6]: https://github.com/AndyShaman/BYDMate/compare/v3.11.5...v3.11.6
 [3.11.5]: https://github.com/AndyShaman/BYDMate/compare/v3.11.3...v3.11.5
 [3.11.3]: https://github.com/AndyShaman/BYDMate/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...v3.11.2
