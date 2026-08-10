@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.3] - 2026-08-10
+
 ### Исправления
 - Проекция на HUD больше не гаснет при сворачивании навигатора: недоступное для чтения окно перестало считаться завершением маршрута, подсказки на стекле держатся до реального конца ведения (#144)
 - Перевод навигатора на приборку на прошивках без поддержки нужного оконного режима (DiLink 5.1) больше не сбрасывает активное ведение: приложение сначала проверяет режим безопасным способом и не пересоздаёт окно навигатора впустую (#139)
@@ -868,7 +870,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.3...HEAD
+[3.11.3]: https://github.com/AndyShaman/BYDMate/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...v3.11.2
 [3.11.1]: https://github.com/AndyShaman/BYDMate/compare/v3.11...v3.11.1
 [3.11]: https://github.com/AndyShaman/BYDMate/compare/v3.10...v3.11
