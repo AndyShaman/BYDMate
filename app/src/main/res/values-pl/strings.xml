@@ -1280,7 +1280,7 @@
     <string name="settings_blindspot_threshold_title">Próg prędkości</string>
     <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
-    <string name="settings_blindspot_pip_width_desc">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
+    <string name="settings_blindspot_pip_width_desc" formatted="false">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
     <string name="settings_blindspot_position_title">Położenie okienka</string>
     <string name="settings_blindspot_position_desc">Pokazuje puste okienko nad ekranem: przeciągnij je palcem tam, gdzie ma być kamera</string>
     <string name="settings_blindspot_position_button">Ustaw położenie</string>

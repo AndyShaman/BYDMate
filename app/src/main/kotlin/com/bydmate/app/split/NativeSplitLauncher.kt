@@ -1,5 +1,6 @@
 package com.bydmate.app.split
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.util.Log
@@ -59,6 +60,9 @@ class NativeSplitLauncher(
         }
     }
 
+    // THIRDS_FLAGS is a proprietary BYD flag combination, not part of the platform's Intent flag
+    // set, so lint cannot recognise it — the suppression is deliberate.
+    @SuppressLint("WrongConstant")
     private suspend fun launchThirds(pair: SplitPair, wideIntent: Intent, evidence: String): Boolean {
         val narrowIntent = context.packageManager.getLaunchIntentForPackage(pair.narrowPkg)
             ?: return failed("no launch intent for ${pair.narrowPkg}")
