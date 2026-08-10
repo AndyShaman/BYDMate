@@ -17,7 +17,7 @@
 
 **English** | [中文](README.zh.md) | [Русский](README.md)
 
-[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [AI Insights](#ai-insights) | [ABRP](#abrp--live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Sponsor](SUPPORT.md)
+[Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [AI Insights](#ai-insights) | [ABRP](#abrp--live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Sponsor](SUPPORT.md)
 
 </div>
 
@@ -33,27 +33,19 @@ Core features (trips, charges, automations, local insights, offline voice agent)
 
 ---
 
-## What's new in v3.5
+## What's new
 
-**Russian offline voice AI assistant.** A full voice agent whose speech recognition runs on-device (no cloud) and understands spoken Russian: it reads live car data, controls the body (windows, climate, seats, locks, sunroof, trunk, fridge, lights), builds routes, plays music, runs and creates automations, and replies by voice with neural TTS. An LLM (OpenRouter / free z.ai / your own server) drives the agent; simple commands run instantly offline with no network.
+The main things BYDMate gained after version 3.0.
 
-The assistant is **Russian-only by design** — the stock BYD assistant already covers English and Chinese, so BYDMate fills the language the car lacks. It is documented in full in the [Russian README](README.md#голосовой-ai-агент).
+**Navigation guidance on the windshield (HUD).** The maneuver, the distance to it, the street name, the arrival time and the speed limit sign are drawn on the factory head-up display. Guidance keeps running even when the navigator is minimized or projected to the cluster. Requires a car equipped with a HUD. See the "HUD" section.
 
-Also in 3.5: voice-driven Yandex Navigator projection to the cluster, a new "spoken phrase" automation trigger, and weekly/monthly insights computed on-device.
+**Split screen 1/3 + 2/3.** Two apps on screen at once: the navigator on the wide side, music or a messenger on the narrow one. Launched from the widget, from automations, or by voice. If BYDMate windows are not available on your firmware, there is a "Native split" mode that lets the firmware itself do the split. See the "Split screen" section.
 
----
+**Blind-spot cameras.** With the turn signal on, the side camera picture appears by itself on the cluster or in a small window on the screen. If a car is detected behind and to the side, the window is highlighted with an orange frame.
 
-## What's new in v3.0.0
+**Russian voice AI agent.** Speech recognition runs right in the car, with no internet. Simple commands run instantly; everything else goes to the AI agent, which reads car data, controls the body and climate, builds routes, runs automations and answers by voice. The agent is **Russian-only by design** - the stock BYD assistant already covers English and Chinese, so BYDMate fills the language the car lacks. It is documented in full in the [Russian README](README.md#голосовой-ai-агент).
 
-A major update. BYDMate moved to its own data stack and learned to mirror navigation onto the instrument cluster.
-
-**Own data stack, no D+.** Earlier BYDMate relied on the third-party D+ (迪加) app to reach car data. Now everything is read and every command is sent directly through the car's system service, with no middleman. After installing and verifying BYDMate, D+ can be removed from DiLink. SOC, power, temperatures, capacity, voltage, charge-gun state, SoH and mileage are read from the source. Lights, climate, windows, mirrors and the trunk are controlled directly too.
-
-**Yandex Navigator on the cluster.** The right steering-wheel star moves navigation onto the instrument cluster and back to the center screen. Yandex Navigator is the default, but any app can be picked. See the "Projection to cluster" section.
-
-**Sleep charging.** A charge that finished while the car was fully asleep and the app was off is now reconstructed correctly from two SOC points. Such a session could previously be lost.
-
-**Widget and automation.** The widget now shows kilometers per 1% of charge and cabin, battery and 12V temperatures. Automation gained a trigger by exact time and time range with weekday selection, and the rule editor gained a "Run now" button.
+**Manual range calculation.** If the automatic estimate from trip history does not suit you, the battery settings let you enter your own consumption table by battery temperature.
 
 ---
 
@@ -70,6 +62,10 @@ A major update. BYDMate moved to its own data stack and learned to mirror naviga
 | **Map** | Route map | osmdroid (OpenStreetMap) inside trip detail |
 | **Rules** | Automation | WHEN→THEN rules: parameter triggers → vehicle commands |
 | **Cluster** | Projection to cluster | Mirror the selected app onto the instrument cluster via a steering-wheel button (right star by default) |
+| **HUD** | Head-up display | Maneuvers, distance and the speed limit sign from Yandex Navigator on the factory head-up display |
+| **Split** | Split screen | Two apps at once: BYDMate windows in a 1/3 and 2/3 layout, or the firmware's own split |
+| **Cam** | Blind-spot cameras | The camera of the matching side while the turn signal is on: on the cluster or in a small window on the screen |
+| **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (29 tools), neural TTS |
 | **Widget** | Floating widget | 7-field overlay above other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V |
 | **Auto** | Autostart | WorkManager, starts on boot |
 | **CSV** | Data export | Trips and charges export to CSV |
@@ -137,7 +133,7 @@ Examples:
 |---|-------------|
 | **Triggers** | SOC, speed, temperature, doors, windows, tire pressure, drive mode, geofence places, time of day, exact time and time range with weekdays, etc. |
 | **Commands** | Windows (including individual driver and passenger), climate, lights, locks, sunroof, mirrors. Directly through the car's system interface |
-| **8 action kinds** | Vehicle command, silent or sound notification, app launch, phone call, navigation, URL, Yandex Music |
+| **17 action kinds** | Vehicle command, notification, app launch, phone call, route in Yandex Navigator, open URL, Yandex Music, pause, media volume, sentry mode, Wi-Fi hotspot, speak text, agent query, projection to cluster, split screen (start, close, toggle) |
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
 | **Cooldown** | Configurable delay between firings |
 | **Overlay confirmation** | "Cancel / Run" popup before action. 15-second timeout → auto-cancel |
@@ -206,6 +202,22 @@ The projection runs in one of the two modes described above. In Factory mode BYD
 
 ---
 
+## HUD
+
+If the car has a factory head-up display, BYDMate draws Yandex Navigator guidance on the windshield: the maneuver icon, the distance to it, the street name and the arrival time. A separate toggle adds the speed limit sign, sent as a number. While the Navigator warns about a speed camera, the camera icon and the distance to it replace the maneuver arrow. Guidance keeps running even when the Navigator is minimized or projected to the cluster; Yandex Maps works as a guidance source alongside the Navigator.
+
+Enable it in **Settings → Display**, section "HUD (head-up display)": the "Navigation on HUD" toggle and, separately, "Speed sign under the arrow". Guidance travels over the HUD's own factory channel, so a car equipped with a head-up display is required. If the car has no such channel, the app says so in Settings and does not enable the feature.
+
+---
+
+## Blind-spot cameras
+
+With the turn signal on, BYDMate shows the side camera picture by itself: the left turn signal puts the left camera on the cluster, the right one shows a small window on the main screen. If the sensor sees a car behind and to the side, the window is highlighted with an orange frame.
+
+Enable it in **Settings → Display**, section "Blind spots" (off by default). The same place holds the speed threshold below which the camera is not shown, the window width and its position: the "Set position" button shows an empty window that you drag with a finger to wherever the camera should appear. Requires a car equipped with a surround-view system.
+
+---
+
 ## Floating widget
 
 A compact 260×108 dp overlay above other apps. Visible on the map, in media players, and inside BYD apps.
@@ -239,6 +251,8 @@ The number on the right is current trip consumption in kWh/100km. It is the ener
 
 **Range** `~N km` is a weighted blend: 50% from the last completed trip, 30% from the trip before that, and 20% from the one before that (short trips under 3 km are excluded — they are not representative). On longer drives, consumption over the last 10 km of the current trip is added to the mix: its share grows from zero at the first 3 km to half by 25 km. This way the estimate quickly picks up a style change (city tail before a highway, highway back to city), but does not jitter on short trips or AC-on standstills.
 
+This is the automatic estimate. If it does not suit you, **Settings → Battery → "Range calculation method"** offers a "Manual" method: your own 5-point table of battery temperature from +20 to -20 °C and the consumption at it, optionally with the range at 100% charge.
+
 **The trend arrow** appears after 2 km and compares a 25 km rolling average against your usual style (mean of the last 10 trips):
 
 - **↓ green** — driving more economically than usual
@@ -268,6 +282,13 @@ Two apps on screen at once: one takes two thirds, the other one third. A typical
 2. If a note about rebooting appears under the toggle, reboot the head unit once (long-press the volume wheel). If you already use the "Extended" projection mode, no reboot is needed - everything required is already active.
 
 While the feature is off, the app does not touch any system settings. Turning the toggle off restores the setting to its factory value - unless the "Extended" projection mode also needs it: in that case the setting returns to factory once you turn that mode off too.
+
+### Split mechanism
+
+Under the toggle you choose what splits the screen: "BYDMate windows" (default) or "Native split".
+
+- **BYDMate windows** - the 1/3 and 2/3 layout with the control pill described below.
+- **Native split** - the car firmware splits the screen itself. This works even where BYDMate windows are unavailable (DiLink 5.1). The look depends on the firmware: where thirds are supported it opens 1/3 and 2/3 panes, elsewhere it splits the screen in half and the second app is picked in a system window.
 
 ### Launching
 
@@ -506,7 +527,7 @@ Everything is computed from the local Room database — **no GPS, routes, or per
 2. **Dynamics** — week-over-week table: consumption, trips, % short trips, avg distance, engine-on idle, night idle (local mode only).
 3. **Recommendations** — up to 5 bullets from matching rules, sorted by priority.
 
-Local logic lives in `LocalInsightEngine.kt`: deterministic thresholds + string templates (`local_insight_*`). Localized in ru / en / zh.
+Local logic lives in `LocalInsightEngine.kt`: deterministic thresholds + string templates (`local_insight_*`). Localized into 6 languages (ru / en / zh / pt / pl / be).
 
 ### Title priority (local mode)
 
