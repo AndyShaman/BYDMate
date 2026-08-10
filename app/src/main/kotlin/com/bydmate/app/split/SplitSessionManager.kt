@@ -240,6 +240,13 @@ class SplitSessionManager(
      */
     private val journal: SplitJournal = NoSplitJournal,
     /**
+     * Persistent "this firmware ignores the freeform flag" verdict (#139). Once latched, [start]
+     * returns [SplitStartResult.FREEFORM_UNAVAILABLE] without touching a single task — except for
+     * the one retry per boot [SplitFreeformVerdict.suppressStart] allows. Null (default) keeps
+     * existing tests unchanged — every start is attempted.
+     */
+    private val verdict: SplitFreeformVerdict? = null,
+    /**
      * Firmware gate for the pane activityType (#130). Read once here and used for every pane
      * launch / raise / mode flip in this session; the cluster projection keeps its own RECENTS.
      */
@@ -463,6 +470,12 @@ class SplitSessionManager(
     }
 
     /**
+     * True when this firmware is proven to ignore the freeform flag (#139) — callers use it to
+     * pick the hint text, since telling the user to reboot the car is wrong on such a head unit.
+     */
+    fun freeformUnsupported(): Boolean = verdict?.unsupported() == true
+
+    /**
      * Re-raises both panes after the backdrop resurfaced above them (hotfix 390-2).
      *
      * Opening a fullscreen Activity of our own package (e.g. BYDMate from the widget) hides the
@@ -546,6 +559,13 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 if (!prefs.isFeatureEnabled()) return@withLock SplitStartResult.DISABLED
+                // #139: this firmware is proven to ignore the freeform flag. Bail out before the
+                // backdrop and before any force-stop — retrying only kills the pane apps again.
+                // One attempt per real boot is still let through so a false latch can heal.
+                if (verdict?.suppressStart() == true) {
+                    journal.append("start ${pair.label()} suppressed: freeform unsupported on this firmware")
+                    return@withLock SplitStartResult.FREEFORM_UNAVAILABLE
+                }
                 val now = nowMs()
                 // Time-window guard: suppress same-pair restart within DOUBLE_TAP_WINDOW_MS of
                 // the last successful start. Unlike a state-keyed guard, this expires on its own
@@ -808,7 +828,8 @@ class SplitSessionManager(
      *    shell path `am start --windowingMode 5 --display 0 -n <cmp>` — low-cost, process-safe.
      *    Re-query getTaskState: if mode is now 5, the flip landed → proceed, no force-stop.
      * 2. Fallback: if the flip did not land (mode still != 5 or re-query failed) → forceStop(pkg)
-     *    so launchFreeform gets a fresh task that accepts freeform windowing.
+     *    so launchFreeform gets a fresh task that accepts freeform windowing. Skipped while the
+     *    [SplitFreeformVerdict] is latched — see the guard below.
      *
      * Fast-path (no flip, no force-stop): task does not exist (taskId == -1) OR is already
      * freeform (windowingMode == 5) OR the task does not live on the split display. Fail-soft:
@@ -842,7 +863,11 @@ class SplitSessionManager(
             val afterFlip = helper.getTaskState(pkg)
             if (afterFlip != null && afterFlip.windowingMode == WINDOWING_FREEFORM) return@runCatching
             // Step 2: flip did not land — force-stop so launchFreeform creates a fresh task.
-            helper.forceStop(pkg)
+            // EXCEPT under a latched verdict (#139): there the firmware is proven to ignore the
+            // freeform flag, so the flip can never land, and killing the app process (navigator
+            // guidance, music session) as the opening act of the once-per-boot self-healing retry
+            // buys nothing. Pre-latch attempts keep the historic behaviour.
+            if (verdict?.unsupported() != true) helper.forceStop(pkg)
         }
     }
 
@@ -974,9 +999,22 @@ class SplitSessionManager(
      * guard exists for, so null is terminal too — the launch proceeds only on a snapshot that
      * positively reports no task.
      *
+     * A latched [SplitFreeformVerdict] short-circuits the whole function (see the guard below), so
+     * the once-per-boot self-healing retry is non-destructive end to end and not just before the
+     * placement attempt.
+     *
      * Must hold [mutex].
      */
     private suspend fun relaunchPaneLocked(pkg: String, bounds: SplitBounds, reason: String): FreeformLaunchResult {
+        // Under a latched verdict (#139) a pane can never come up freeform — the placement not
+        // landing IS the expected unsupported outcome, so answer UNAVAILABLE honestly instead of
+        // killing the app to relaunch it into the same wall. Inert on healthy fleet devices: the
+        // verdict never latches there.
+        if (verdict?.unsupported() == true) {
+            Log.i(TAG, "placePane: $reason for $pkg — relaunch suppressed, freeform unsupported here")
+            journal.append("relaunch $pkg suppressed: freeform unsupported on this firmware")
+            return FreeformLaunchResult.UNAVAILABLE
+        }
         Log.w(TAG, "placePane: $reason for $pkg — force-stopping and relaunching")
         journal.append("relaunch $pkg: $reason")
         if (!helper.forceStop(pkg)) {
@@ -1027,6 +1065,13 @@ class SplitSessionManager(
         return relaunchPaneLocked(pkg, bounds, "raise did not land in $PANE_RAISE_MAX_ATTEMPTS attempts")
     }
 
+    /** Feeds one FREEFORM_UNAVAILABLE outcome to the verdict, journaling the latch transition. */
+    private fun noteFreeformUnavailable() {
+        if (verdict?.noteUnavailable() == true) {
+            journal.append("freeform unavailable again after reboot - latching unsupported verdict")
+        }
+    }
+
     private suspend fun startLocked(pair: SplitPair): SplitStartResult {
         val (wideBounds, narrowBounds) = boundsFor(pair.narrowSide)
         // try/finally starts HERE — before backdrop.show() — so that cancellation landing
@@ -1042,7 +1087,10 @@ class SplitSessionManager(
 
             // Wide pane launches first.
             val wideResult = placePaneLocked(pair.widePkg, wideBounds)
-            if (wideResult == FreeformLaunchResult.UNAVAILABLE) return SplitStartResult.FREEFORM_UNAVAILABLE
+            if (wideResult == FreeformLaunchResult.UNAVAILABLE) {
+                noteFreeformUnavailable()
+                return SplitStartResult.FREEFORM_UNAVAILABLE
+            }
             if (wideResult == FreeformLaunchResult.FAILED) return SplitStartResult.LAUNCH_FAILED
 
             // Force-stop any stale fullscreen task for the narrow pane before launching (Bug A fix).
@@ -1051,6 +1099,7 @@ class SplitSessionManager(
             // Narrow pane launches second. Wide launched OK — revert it on any subsequent failure.
             val narrowResult = placePaneLocked(pair.narrowPkg, narrowBounds)
             if (narrowResult == FreeformLaunchResult.UNAVAILABLE) {
+                noteFreeformUnavailable()
                 revertFreeformToFullscreen(pair.widePkg)
                 return SplitStartResult.FREEFORM_UNAVAILABLE
             }
@@ -1076,8 +1125,10 @@ class SplitSessionManager(
             prefs.saveLastPair(pair)
             _state.value = SplitSessionState.Active(pair, narrowTaskId, wideTaskId)
             startWatchdogLocked()
-            // Freeform is confirmed live: clear the reboot hint in settings.
+            // Freeform is confirmed live: clear the reboot hint in settings, and drop any
+            // unsupported verdict — a working start disproves it whatever latched it (#139).
             onFreeformLive()
+            verdict?.clearOnSuccess()
             return SplitStartResult.OK
         } finally {
             // Belt: hide backdrop if the session did not reach Active — covers explicit

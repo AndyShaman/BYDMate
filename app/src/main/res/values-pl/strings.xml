@@ -30,6 +30,7 @@
     <string name="settings_cluster_auto_container_title">Od razu pokazuj na wskaźnikach</string>
     <string name="settings_cluster_auto_container_desc">Automatycznie przełączaj wskaźniki w tryb projekcji</string>
     <string name="settings_cluster_direct_reboot_hint">Aby asystent głosowy widział nawigację na wskaźnikach, raz zrestartuj DiLink: naciśnij i przytrzymaj pokrętło głośności. Samo zgaszenie silnika nie wystarczy. Do restartu projekcja działa, ale agent nie widzi trasy.</string>
+    <string name="cluster_direct_unsupported_hint">Bezpośredni tryb jest niedostępny w oprogramowaniu tego auta, używany jest tryb zgodności</string>
     <string name="settings_projection_mode_title">Tryb projekcji</string>
     <string name="settings_projection_mode_direct">Rozszerzony</string>
     <string name="settings_projection_mode_vd">Fabryczny</string>
@@ -1303,6 +1304,7 @@
     <string name="split_picker_title_wide">Wybierz aplikację do szerokiego panelu (2/3)</string>
     <string name="split_picker_title_narrow">Wybierz aplikację do wąskiego panelu (1/3)</string>
     <string name="split_freeform_reboot_hint">Podział ekranu włączy się po restarcie auta</string>
+    <string name="split_freeform_unsupported_hint">Podział ekranu jest niedostępny w oprogramowaniu tego auta</string>
     <string name="split_launch_failed">Nie udało się uruchomić podziału ekranu</string>
     <string name="split_launch_failed_adb">Nie udało się uruchomić podziału ekranu: wymagany jest odblokowany ADB</string>
     <!-- Automation action: split_screen -->

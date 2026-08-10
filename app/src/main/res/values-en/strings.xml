@@ -26,6 +26,7 @@
     <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
     <string name="settings_cluster_auto_container_desc">Switch the cluster into projection mode automatically</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
+    <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
     <string name="settings_projection_mode_title">Projection mode</string>
     <string name="settings_projection_mode_direct">Extended</string>
     <string name="settings_projection_mode_vd">Factory</string>
@@ -1150,6 +1151,7 @@
     <string name="split_picker_title_wide">Choose an app for the wide pane (2/3)</string>
     <string name="split_picker_title_narrow">Choose an app for the narrow pane (1/3)</string>
     <string name="split_freeform_reboot_hint">Split screen will activate after restarting the car</string>
+    <string name="split_freeform_unsupported_hint">Split screen is not available on this car\'s firmware</string>
     <string name="split_launch_failed">Failed to launch split screen</string>
     <string name="split_launch_failed_adb">Failed to launch split screen: unlocked ADB is required</string>
     <!-- Automation action: split_screen -->

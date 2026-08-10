@@ -1753,8 +1753,13 @@ class AgentTools @Inject constructor(
     /** Maps [SplitStartResult] to a terse tool-result JSON string. */
     private fun splitStartResultJson(result: SplitStartResult): String = when (result) {
         SplitStartResult.OK -> OK
+        // #139: a reboot never enables freeform on firmwares that ignore the flag.
         SplitStartResult.FREEFORM_UNAVAILABLE ->
-            """{"error":"разделение экрана будет доступно после перезагрузки машины"}"""
+            if (splitMgr?.freeformUnsupported() == true) {
+                """{"error":"разделение экрана недоступно на прошивке этой машины"}"""
+            } else {
+                """{"error":"разделение экрана будет доступно после перезагрузки машины"}"""
+            }
         SplitStartResult.LAUNCH_FAILED ->
             """{"error":"не удалось запустить приложение"}"""
         SplitStartResult.DISABLED ->

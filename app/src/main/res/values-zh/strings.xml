@@ -30,6 +30,7 @@
     <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
     <string name="settings_cluster_auto_container_desc">自动将仪表盘切换到投屏模式</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
+    <string name="cluster_direct_unsupported_hint">此车机固件不支持直连输出，已使用兼容模式</string>
     <string name="settings_projection_mode_title">投影模式</string>
     <string name="settings_projection_mode_direct">扩展</string>
     <string name="settings_projection_mode_vd">出厂</string>
@@ -1265,6 +1266,7 @@
     <string name="split_picker_title_wide">选择宽屏区域 (2/3) 的应用</string>
     <string name="split_picker_title_narrow">选择窄屏区域 (1/3) 的应用</string>
     <string name="split_freeform_reboot_hint">重启车机后将启用分屏</string>
+    <string name="split_freeform_unsupported_hint">此车机固件不支持分屏</string>
     <string name="split_launch_failed">启动分屏失败</string>
     <string name="split_launch_failed_adb">启动分屏失败：需要已解锁的 ADB</string>
     <!-- Automation action: split_screen -->

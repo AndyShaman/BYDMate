@@ -712,7 +712,10 @@ object WidgetController {
         when (manager.startLastPair()) {
             null -> onNoPair()
             SplitStartResult.OK -> Unit
-            SplitStartResult.FREEFORM_UNAVAILABLE -> onError(R.string.split_freeform_reboot_hint)
+            SplitStartResult.FREEFORM_UNAVAILABLE -> onError(
+                if (manager.freeformUnsupported()) R.string.split_freeform_unsupported_hint
+                else R.string.split_freeform_reboot_hint
+            )
             SplitStartResult.LAUNCH_FAILED -> onError(
                 if (adbBlocked()) R.string.split_launch_failed_adb else R.string.split_launch_failed
             )

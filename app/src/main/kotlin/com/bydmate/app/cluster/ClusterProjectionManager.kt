@@ -22,6 +22,7 @@ import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.helper.HelperBinderProtocol
 import com.bydmate.app.split.DisabledSplitPreferences
+import com.bydmate.app.split.SplitFreeformVerdict
 import com.bydmate.app.split.SplitPreferences
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import kotlinx.coroutines.CancellationException
@@ -390,10 +391,15 @@ object ClusterProjectionManager {
             .edit().putBoolean(KEY_SPLIT_FREEFORM_REBOOT_PENDING, true).apply()
     }
 
-    /** Clears [KEY_SPLIT_FREEFORM_REBOOT_PENDING]; called when the split feature is disabled. */
+    /**
+     * Clears [KEY_SPLIT_FREEFORM_REBOOT_PENDING]; called when the split feature is disabled.
+     * Disarming ends the reboot-and-retry cycle, so the verdict's seen-marker goes with it —
+     * see [SplitFreeformVerdict.clearSeenMarker].
+     */
     fun clearSplitRebootHint(context: Context) {
-        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_SPLIT_FREEFORM_REBOOT_PENDING, false).apply()
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_SPLIT_FREEFORM_REBOOT_PENDING, false).apply()
+        SplitFreeformVerdict.clearSeenMarker(prefs)
     }
 
     /**
@@ -408,10 +414,12 @@ object ClusterProjectionManager {
         context: Context, enabled: Boolean, helper: HelperClient, bootstrap: HelperBootstrap,
     ) {
         val appContext = context.applicationContext
-        val edit = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-            .edit().putBoolean(KEY_DIRECT_PROJECTION, enabled)
+        val prefs = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val edit = prefs.edit().putBoolean(KEY_DIRECT_PROJECTION, enabled)
         if (!enabled) edit.putBoolean(KEY_FREEFORM_REBOOT_PENDING, false)
         edit.apply()
+        // Disarming the hint ends the reboot-and-retry cycle the verdict measures.
+        if (!enabled) SplitFreeformVerdict.clearSeenMarker(prefs)
         scope.launch {
             if (!bootstrap.ensureRunning()) {
                 Log.e(TAG, "helper daemon not running; freeform flag not updated"); return@launch
@@ -1059,6 +1067,26 @@ object ClusterProjectionManager {
         val pkg = targetPackage(context)
         val bounds = freeformBounds(geo)
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        // #139: on firmwares proven to ignore the freeform flag every attempt destroys the
+        // navigator task before falling back, so skip straight to the VD pipeline, which covers
+        // the user fully (field-confirmed on DiLink 5.1). No hint: there is nothing to reboot for.
+        val verdict = SplitFreeformVerdict(
+            prefs,
+            bootCount = {
+                runCatching {
+                    Settings.Global.getInt(context.contentResolver, Settings.Global.BOOT_COUNT, -1)
+                }.getOrDefault(-1)
+            },
+        )
+        // One attempt per real boot still goes through, so a latch set by mistake can heal.
+        // unsupported() is a cheap prefs read — safe on Main. The IO hop is only for the latched
+        // case, where suppressStart() may commit() the retry stamp to disk.
+        val suppressed = verdict.unsupported() && withContext(Dispatchers.IO) { verdict.suppressStart() }
+        if (suppressed) {
+            Log.i(TAG, "direct projection: freeform unsupported on this firmware; VD fallback")
+            log("direct suppressed: freeform unsupported on this firmware; VD fallback")
+            return false
+        }
         // Write-ahead marker (mirrors KEY_COMPOSITOR_POWERED): persisted BEFORE the daemon call,
         // so a death between the daemon-side move and our handling of the reply still leaves a
         // marker for boot recovery to find. commit() on Dispatchers.IO, not apply(): the
@@ -1093,6 +1121,7 @@ object ClusterProjectionManager {
             FreeformLaunchResult.OK -> {
                 directDisplayId = display.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
+                verdict.clearOnSuccess()
                 @Suppress("KotlinConstantConditions")
                 if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, display.displayId, plan)
                 projectedPackage = pkg
@@ -1116,6 +1145,10 @@ object ClusterProjectionManager {
                     .apply()
                 Log.i(TAG, "direct projection: freeform unavailable (reboot pending); VD fallback")
                 log("direct UNAVAILABLE: freeform not active yet (reboot pending); VD fallback")
+                // After the edit above: the verdict pairs this outcome with the armed hint.
+                if (verdict.noteUnavailable()) {
+                    log("freeform unavailable again after reboot - latching unsupported verdict")
+                }
                 // One-time overlay on the FIRST fallback after install/update: the settings hint
                 // alone is only seen if the user opens Settings. Silent (no ringtone) — this is
                 // informational, not an alarm. Cleared-then-failed-again cycles show it again,

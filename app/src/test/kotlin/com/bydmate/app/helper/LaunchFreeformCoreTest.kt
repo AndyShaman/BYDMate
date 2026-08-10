@@ -510,6 +510,41 @@ class LaunchFreeformCoreTest {
         assertEquals(0, ops.count { it == "sleep:500" })
     }
 
+    // --- DiLink 5.1: a firmware without freeform must not cost the user their navigation ---
+
+    @Test
+    fun `freeform off - the whole production chain reports UNAVAILABLE without removing the task`() {
+        // End-to-end through the real setWindowingModeCompat + ensureTypedFreeform wiring
+        // (the shell compat path: reflectSet is absent on this ROM). The live navigator task is
+        // STANDARD, the cluster wants RECENTS — legacy code removed the task and only then learned
+        // from the readback that freeform never activates, killing the guidance session for nothing.
+        val shellCmds = mutableListOf<String>()
+        val coerced = { _: Int -> TaskModeState(WINDOWING_MODE_FULLSCREEN, 0) }
+        val result = run(
+            setMode = { t, m ->
+                setWindowingModeCompat(
+                    t, m, 4, ACTIVITY_TYPE_RECENTS,
+                    reflectSet = { _, _ -> throw NoSuchMethodException("setTaskWindowingMode") },
+                    resolveComponent = { "ru.yandex.yandexnavi/.core.NavigatorActivity" },
+                    shell = { script, args ->
+                        shellCmds += args.foldIndexed(script) { i, s, a -> s.replace("\"\$${i + 1}\"", a) }
+                        ""
+                    },
+                    getActivityType = { ACTIVITY_TYPE_STANDARD },
+                    stateOf = coerced,
+                    sleep = { },
+                )
+            },
+            state = coerced,
+        )
+        assertEquals(FreeformResultCodes.UNAVAILABLE, result)
+        assertFalse("the navigator task must survive", shellCmds.any { "am stack remove" in it })
+        assertTrue(
+            "the probe start must have run",
+            shellCmds.any { it == "am start --windowingMode 5 --display 4 -n ru.yandex.yandexnavi/.core.NavigatorActivity" },
+        )
+    }
+
     @Test
     fun `an unresolvable id mid-relaunch keeps the last known task`() {
         // The resolver can momentarily see no task while it relaunches; -1 must not become the

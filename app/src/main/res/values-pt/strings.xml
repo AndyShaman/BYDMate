@@ -27,6 +27,7 @@
     <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
     <string name="settings_cluster_auto_container_desc">Ativar o modo de projeção do painel automaticamente</string>
     <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
+    <string name="cluster_direct_unsupported_hint">A saída direta não está disponível no firmware deste carro, um modo compatível é usado</string>
     <string name="settings_projection_mode_title">Modo de projeção</string>
     <string name="settings_projection_mode_direct">Estendido</string>
     <string name="settings_projection_mode_vd">De fábrica</string>
@@ -1147,6 +1148,7 @@
     <string name="split_picker_title_wide">Escolha um aplicativo para o painel largo (2/3)</string>
     <string name="split_picker_title_narrow">Escolha um aplicativo para o painel estreito (1/3)</string>
     <string name="split_freeform_reboot_hint">A tela dividida será ativada após reiniciar o carro</string>
+    <string name="split_freeform_unsupported_hint">A tela dividida não está disponível no firmware deste carro</string>
     <string name="split_launch_failed">Falha ao iniciar a tela dividida</string>
     <string name="split_launch_failed_adb">Falha ao iniciar a tela dividida: é necessário ADB desbloqueado</string>
     <!-- Automation action: split_screen -->

@@ -596,6 +596,20 @@ object AppModule {
             com.bydmate.app.cluster.ClusterProjectionManager.endProjectionForPkg(pkg, ctx, helper, bootstrap)
         },
         journal = journal,
+        // #139: BOOT_COUNT only moves on a real boot, so it is what proves the reboot the hint
+        // asked for has happened and freeform is still unavailable. -1 keeps the verdict inert.
+        verdict = com.bydmate.app.split.SplitFreeformVerdict(
+            ctx.getSharedPreferences(
+                com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE,
+            ),
+            bootCount = {
+                runCatching {
+                    android.provider.Settings.Global.getInt(
+                        ctx.contentResolver, android.provider.Settings.Global.BOOT_COUNT, -1,
+                    )
+                }.getOrDefault(-1)
+            },
+        ),
     ).also { mgr ->
         // Wire departure-grace callback so ClusterProjectionManager can notify SplitSessionManager
         // before a direct-projection cluster send (Q1 / F-1). onBeforeClusterSend lives on the

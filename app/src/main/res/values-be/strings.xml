@@ -30,6 +30,7 @@
     <string name="settings_cluster_auto_container_title">Адразу паказваць на прыборцы</string>
     <string name="settings_cluster_auto_container_desc">Аўтаматычна пераводзіць прыборку ў рэжым праекцыі</string>
     <string name="settings_cluster_direct_reboot_hint">Каб галасавы агент бачыў навігатар на прыборцы, адзін раз перазагрузіце DiLink: заціскайце і ўтрымлівайце колца гучнасці. Проста заглушыць машыну недастаткова. Да перазагрузкі праекцыя працуе, але агент не бачыць маршрут.</string>
+    <string name="cluster_direct_unsupported_hint">Прамы вывад недаступны на прашыўцы гэтай машыны, выкарыстоўваецца сумяшчальны рэжым</string>
     <string name="settings_projection_mode_title">Рэжым праекцыі</string>
     <string name="settings_projection_mode_direct">Пашыраны</string>
     <string name="settings_projection_mode_vd">Заводскі</string>
@@ -1303,6 +1304,7 @@
     <string name="split_picker_title_wide">Выберыце праграму для шырокай панэлі (2/3)</string>
     <string name="split_picker_title_narrow">Выберыце праграму для вузкай панэлі (1/3)</string>
     <string name="split_freeform_reboot_hint">Падзел экрана ўключыцца пасля перазагрузкі машыны</string>
+    <string name="split_freeform_unsupported_hint">Падзел экрана недаступны на прашыўцы гэтай машыны</string>
     <string name="split_launch_failed">Не ўдалося запусціць падзел экрана</string>
     <string name="split_launch_failed_adb">Не ўдалося запусціць падзел экрана: патрэбны разблакаваны ADB</string>
     <!-- Automation action: split_screen -->

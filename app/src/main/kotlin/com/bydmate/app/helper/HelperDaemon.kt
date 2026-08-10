@@ -272,6 +272,8 @@ fun main(args: Array<String>) {
                         shell = amShell,
                         getActivityType = { ti -> taskActivityType(ti) },
                         sleep = { Thread.sleep(it) },
+                        // Enables the non-destructive freeform probe before a retype remove.
+                        stateOf = { ti -> taskModeState(ti) },
                     )
                     reply?.writeInt(0); reply?.writeInt(0)
                     true
@@ -491,6 +493,8 @@ fun main(args: Array<String>) {
                         taskIdForPackage = { p -> findTaskState(p)?.taskId ?: -1 },
                         getActivityType = ::taskActivityType,
                         sleep = { ms -> Thread.sleep(ms) },
+                        // Enables the non-destructive freeform probe before a retype remove.
+                        stateOf = { ti -> taskModeState(ti) },
                     )
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
@@ -1370,7 +1374,8 @@ private fun launchApp(packageName: String): Boolean =
  * Its [IllegalStateException] is mapped back to this function's Boolean contract.
  *
  * NOTE: the defaults of [taskIdForPackage] / [getActivityType] report "no task / unknown type",
- * which disables the STANDARD handling. Production call sites must pass real implementations.
+ * which disables the STANDARD handling; the default [stateOf] disables the non-destructive freeform
+ * probe. Production call sites must pass real implementations.
  *
  * Follows the launchAppCore/setWindowingModeCompat lambda-injection idiom so tests can
  * assert the exact shell command without spawning a real shell.
@@ -1384,13 +1389,14 @@ internal fun raiseFreeformTaskCore(
     taskIdForPackage: (String) -> Int = { _ -> -1 },
     getActivityType: (Int) -> Int = { _ -> -1 },
     sleep: (Long) -> Unit = { _ -> },
+    stateOf: (Int) -> TaskModeState? = { _ -> null },
 ): Boolean {
     if (!packageName.matches(Regex("[A-Za-z0-9_.]+"))) return false
     val component = resolveComponent(packageName) ?: return false
     val taskId = taskIdForPackage(packageName)
     val activityType = if (taskId != -1) getActivityType(taskId) else -1
     return try {
-        ensureTypedFreeform(taskId, activityType, desiredActivityType, displayId, component, shell, sleep)
+        ensureTypedFreeform(taskId, activityType, desiredActivityType, displayId, component, shell, sleep, stateOf)
         true
     } catch (e: IllegalStateException) {
         false
@@ -1412,19 +1418,30 @@ internal fun raiseFreeformTaskCore(
  * Three cases, by [liveActivityType]:
  * - Already the desired type: light path — the single `am start` with the freeform flags re-uses
  *   the existing task and applies mode+display to it (validated on-car; the task id survives).
- * - The other half of the STANDARD/RECENTS pair: `am stack remove` → settle → the same `am start`,
- *   which recreates the task with the desired type. The app PROCESS and its services survive the
- *   remove (only activities die), so media keeps playing and the navigator restores its own
- *   guidance session.
+ * - The other half of the STANDARD/RECENTS pair: freeform probe (below) → `am stack remove` →
+ *   settle → the same `am start`, which recreates the task with the desired type. The app PROCESS
+ *   and its services survive the remove (only activities die), so media keeps playing and the
+ *   navigator restores its own guidance session.
  * - No task ([taskId] == -1), unknown type (-1: reflection broken, task not found) or an exotic
  *   type (HOME/ASSISTANT/DREAM): the same single `am start`, which creates the task with the flags
  *   applied. Nothing is removed on a guess — killing activities blindly is worse than a mistyped
  *   task, and there may be no task at all.
  *
- * Throws [IllegalStateException] when the remove or the start fails. A swallowed remove failure
- * would let the relaunch deliver its intent to the still-alive task and report success with the
- * pane left un-retyped (codex pre-release audit 2026-07-16); "Exception occurred while
- * executing" is the am wording for an in-process throw, while a missing task prints nothing and
+ * The remove is DESTRUCTIVE, so the retype branch asks first: on firmwares where freeform never
+ * activates the recreate can never succeed, and until now every cluster-send press killed the
+ * user's live navigation session before [launchFreeformCore] discovered that from the state
+ * readback (field journals DiLink 5.1: "task recreated by setMode", guidance lost). [stateOf]
+ * enables the probe — the same light `am start` WITHOUT `--activityType`, which applies mode+display
+ * to the EXISTING task and keeps its id. If the mode does not become freeform, this throws an
+ * [isFreeformUnsupported]-shaped message (→ UNAVAILABLE) with the task untouched. The post-probe
+ * read is repeated up to twice more, each after a settle pause, so a slow-but-working firmware is
+ * not misread as unsupported, and an unreadable state (null, including the default [stateOf]) takes
+ * the legacy remove path — an unknown must not change fleet behavior.
+ *
+ * Throws [IllegalStateException] when the probe, the remove or the start fails. A swallowed
+ * remove failure would let the relaunch deliver its intent to the still-alive task and report
+ * success with the pane left un-retyped (codex pre-release audit 2026-07-16); "Exception occurred
+ * while executing" is the am wording for an in-process throw, while a missing task prints nothing and
  * the relaunch then correctly creates a fresh task.
  */
 internal fun ensureTypedFreeform(
@@ -1435,6 +1452,7 @@ internal fun ensureTypedFreeform(
     component: String,
     shell: (String, List<String>) -> String,
     sleep: (Long) -> Unit,
+    stateOf: (Int) -> TaskModeState? = { _ -> null },
 ) {
     // Only the STANDARD <-> RECENTS pair is ever retyped. Exotic live types (HOME/ASSISTANT/DREAM)
     // and the unknown -1 are left untouched: nothing this daemon places into freeform is supposed
@@ -1442,6 +1460,34 @@ internal fun ensureTypedFreeform(
     // that v3.9 never made (fleet safety).
     val retypable = liveActivityType == ACTIVITY_TYPE_STANDARD || liveActivityType == ACTIVITY_TYPE_RECENTS
     if (taskId != -1 && retypable && liveActivityType != desiredActivityType) {
+        // Non-destructive probe before the remove (see KDoc). A null pre-read means the state is
+        // unreadable (or the caller passed no reader): no probe, legacy sequence unchanged.
+        if (stateOf(taskId) != null) {
+            // The light path — mode+display applied to the EXISTING task, no --activityType, so
+            // the task keeps its id and the navigator keeps its guidance session.
+            val probe = shell(
+                "am start --windowingMode $WINDOWING_MODE_FREEFORM --display $displayId -n \"\$1\"",
+                listOf(component),
+            )
+            if (probe.contains("Error") || probe.contains("Exception")) {
+                throw IllegalStateException("am start freeform failed: ${probe.take(200)}")
+            }
+            // Settle tolerance: a slow-but-working firmware can still report the old mode on the
+            // first reads — only a third stale read means freeform is really off. The loop stops
+            // at the first read that already shows freeform.
+            var after: TaskModeState? = null
+            for (attempt in 0 until 3) {
+                sleep(500L)
+                after = stateOf(taskId)
+                if (after?.windowingMode == WINDOWING_MODE_FREEFORM) break
+            }
+            if (after != null && after.windowingMode != WINDOWING_MODE_FREEFORM) {
+                // Wording matches [isFreeformUnsupported] so launchFreeformCore reports UNAVAILABLE.
+                throw IllegalStateException(
+                    "freeform not supported: probe start coerced task=$taskId to mode=${after.windowingMode}"
+                )
+            }
+        }
         // taskId is an internal Int — safe to inline; no user/PM input involved.
         val removed = shell("am stack remove $taskId", emptyList())
         if (removed.contains("Error") || removed.contains("Exception")) {
@@ -1678,8 +1724,9 @@ internal fun handleSetWindowingModeTx(
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int,
     sleep: (Long) -> Unit,
+    stateOf: (Int) -> TaskModeState? = { _ -> null },
 ) = setWindowingModeCompat(
-    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, sleep,
+    taskId, mode, 0, desiredActivityType, reflectSet, resolveComponent, shell, getActivityType, stateOf, sleep,
 )
 
 /**
@@ -1702,9 +1749,11 @@ internal fun handleSetWindowingModeTx(
  * [raiseFreeformTaskCore]; the type read here is handed to it. For the fullscreen direction the
  * type check is irrelevant ([skipReflect] stays false) and that branch is untouched.
  * Default [getActivityType] returns -1 (unknown) — the conservative path (skip reflectSet, plain
- * relaunch).
+ * relaunch). [stateOf] is handed to [ensureTypedFreeform] as well: it enables the non-destructive
+ * freeform probe that keeps a live task alive on firmwares without freeform.
  * NOTE: omitting [getActivityType] silently disables the reflectSet fast path for the freeform
- * direction. Every production call site must pass a real implementation.
+ * direction, and omitting [stateOf] disables the probe. Every production call site must pass real
+ * implementations.
  */
 internal fun setWindowingModeCompat(
     taskId: Int,
@@ -1715,6 +1764,7 @@ internal fun setWindowingModeCompat(
     resolveComponent: () -> String?,
     shell: (String, List<String>) -> String,
     getActivityType: (Int) -> Int = { _ -> -1 },
+    stateOf: (Int) -> TaskModeState? = { _ -> null },
     sleep: (Long) -> Unit,
 ) {
     // Skip reflectSet when placing into freeform and the task's activityType is not the desired
@@ -1747,7 +1797,9 @@ internal fun setWindowingModeCompat(
         ?: throw IllegalStateException("setWindowingModeCompat: no launcher component for task=$taskId")
     if (windowingMode == WINDOWING_MODE_FREEFORM) {
         // The typing invariant lives in one place for both freeform entry points.
-        ensureTypedFreeform(taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep)
+        ensureTypedFreeform(
+            taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep, stateOf,
+        )
     } else {
         // A swallowed remove failure would let the relaunch deliver its intent to the
         // still-alive freeform task and report success with the task stranded on the
@@ -1964,6 +2016,9 @@ private fun launchFreeform(
                 // prior fullscreen exit relaunch, or created by an older version) is recreated
                 // with the desired one via the shell path.
                 getActivityType = { ti -> taskActivityType(ti) },
+                // Same reader launchFreeformCore verifies with: it lets ensureTypedFreeform probe
+                // freeform on the live task instead of removing the navigator to find out.
+                stateOf = { ti -> taskModeState(ti) },
             ) { Thread.sleep(it) }
         },
         move = ::moveTaskToDisplayReflect,

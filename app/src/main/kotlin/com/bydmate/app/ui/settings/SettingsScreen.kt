@@ -130,6 +130,7 @@ import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.TtsVoiceCatalog
 import com.bydmate.app.voice.online.TtsRouter
 import com.bydmate.app.hud.HudController
+import com.bydmate.app.split.SplitFreeformVerdict
 import com.bydmate.app.split.SplitRole
 import com.bydmate.app.split.applyPick
 import java.util.Locale
@@ -953,6 +954,11 @@ private fun DisplaySection() {
     var rebootPending by remember {
         mutableStateOf(prefs.getBoolean(ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false))
     }
+    // Latched by the projection runtime, never from this screen, so a read on entering composition
+    // is enough. bootCount is only consulted by noteUnavailable(), hence the stub.
+    val freeformUnsupported = remember {
+        SplitFreeformVerdict(prefs, bootCount = { -1 }).unsupported()
+    }
     var directProjection by remember {
         mutableStateOf(ClusterProjectionManager.isDirectProjectionEnabled(context))
     }
@@ -1073,8 +1079,13 @@ private fun DisplaySection() {
                 },
             )
         }
-        if (rebootPending && directProjection) {
-            SettingHint(text = stringResource(R.string.settings_cluster_direct_reboot_hint))
+        // Once the firmware is proven to ignore the freeform flag (#139) the reboot advice is
+        // wrong — say so instead.
+        if (directProjection && (freeformUnsupported || rebootPending)) {
+            SettingHint(text = stringResource(
+                if (freeformUnsupported) R.string.cluster_direct_unsupported_hint
+                else R.string.settings_cluster_direct_reboot_hint
+            ))
         }
         // Trigger-button row — only meaningful while the feature (and thus the a11y service) is on.
         if (enabled) {
@@ -1415,6 +1426,11 @@ private fun SplitSection() {
     var splitRebootPending by remember {
         mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false))
     }
+    // Latched by the split runtime, never from this screen, so a read on entering composition is
+    // enough. bootCount is only consulted by noteUnavailable(), hence the stub.
+    val splitFreeformUnsupported = remember {
+        SplitFreeformVerdict(clusterPrefs, bootCount = { -1 }).unsupported()
+    }
     var clearStatus by remember { mutableStateOf<String?>(null) }
     // "?" badge on the section header; the text it toggles is the first block inside the card.
     var howToOpen by remember { mutableStateOf(false) }
@@ -1467,9 +1483,13 @@ private fun SplitSection() {
                 },
             )
             // Reboot hint: shown when split was enabled while freeform was not yet active.
-            // enable_freeform_support is read once at boot, so a restart is required.
-            if (splitRebootPending && splitEnabled) {
-                SettingHint(text = stringResource(R.string.split_freeform_reboot_hint))
+            // enable_freeform_support is read once at boot, so a restart is required. Once the
+            // firmware is proven to ignore the flag (#139) the reboot advice is wrong — say so.
+            if (splitEnabled && (splitFreeformUnsupported || splitRebootPending)) {
+                SettingHint(text = stringResource(
+                    if (splitFreeformUnsupported) R.string.split_freeform_unsupported_hint
+                    else R.string.split_freeform_reboot_hint
+                ))
             }
             if (splitEnabled) {
                 SettingDivider()

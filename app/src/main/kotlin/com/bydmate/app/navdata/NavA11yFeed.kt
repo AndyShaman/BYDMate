@@ -24,16 +24,20 @@ object NavA11yFeed {
         val nowMs = System.currentTimeMillis()
         if (!shouldProcess(event?.packageName?.toString(), event?.eventType ?: 0, nowMs, lastProcessMs)) return
         lastProcessMs = nowMs
-        // A Navigator event with no reachable window is a route-ended signal too: the
-        // guidance widgets are gone. Start the no-guidance streak so the hub deadline
-        // can expire even if no further events arrive (Codex audit fix 2).
+        // An unreachable window says NOTHING about the route: the navigator may be
+        // minimized, covered by another pane, or projected onto a private VirtualDisplay
+        // while guidance keeps running (field-confirmed, issue #144). Only a REACHABLE
+        // window without guidance widgets means "route ended", so this branch must
+        // neither arm nor cancel the no-guidance streak. A navigator that really closed
+        // is still caught reader-side: an armed streak expires in snapshot(),
+        // ACTIVE_TIMEOUT_MS drops active when no source refreshes, MANEUVER_TIMEOUT_MS
+        // expires the arrow, and the notification lane's removal grace deactivates too.
         val root = runCatching { service.findNavigatorRoot() }.getOrNull()
             ?: run {
                 if (rootReachable) {
                     rootReachable = false
                     Log.w(TAG, "Navigator events flowing but window unreachable (a11y feed blind)")
                 }
-                NavGuidanceHub.markNoGuidance(nowMs)
                 return
             }
         if (!rootReachable) {

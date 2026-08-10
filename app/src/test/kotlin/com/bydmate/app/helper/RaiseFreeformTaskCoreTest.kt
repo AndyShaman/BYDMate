@@ -32,9 +32,10 @@ class RaiseFreeformTaskCoreTest {
         taskIdForPackage: (String) -> Int = { _ -> -1 },
         getActivityType: (Int) -> Int = { _ -> -1 },
         sleep: (Long) -> Unit = { shellCmds += "sleep:$it" },
+        stateOf: (Int) -> TaskModeState? = { _ -> null },
     ) = raiseFreeformTaskCore(
         packageName, displayId, desiredActivityType, resolveComponent, shell, taskIdForPackage,
-        getActivityType, sleep,
+        getActivityType, sleep, stateOf,
     )
 
     // --- flag correctness ---
@@ -202,6 +203,21 @@ class RaiseFreeformTaskCoreTest {
         )
         assertFalse("a failed remove must not be followed by a blind raise", ok)
         assertFalse("no am start after a failed remove", shellCmds.any { "am start" in it })
+    }
+
+    // --- the state reader reaches ensureTypedFreeform (non-destructive probe wiring) ---
+
+    @Test
+    fun `raise on a firmware without freeform fails without removing the live task`() {
+        // Anti-vacuity: drop the stateOf forwarding and the probe never runs — the live task is
+        // removed and this assertion fails.
+        val ok = run(
+            taskIdForPackage = { 42 },
+            getActivityType = { ACTIVITY_TYPE_STANDARD },
+            stateOf = { TaskModeState(WINDOWING_MODE_FULLSCREEN, 0) },
+        )
+        assertFalse("a coerced probe must fail the raise", ok)
+        assertFalse("the live task must survive", shellCmds.any { "am stack remove" in it })
     }
 
     // --- P1: component with '$' arrives verbatim in args (anti-vacuity mutation check) ---

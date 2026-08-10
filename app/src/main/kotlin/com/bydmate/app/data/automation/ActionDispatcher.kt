@@ -358,7 +358,7 @@ class ActionDispatcher @Inject constructor(
         return when (splitSessionManager.start(SplitPair(narrow, wide, side))) {
             SplitStartResult.OK -> DispatchResult(true)
             SplitStartResult.FREEFORM_UNAVAILABLE ->
-                DispatchResult(false, context.getString(R.string.split_freeform_reboot_hint))
+                DispatchResult(false, freeformUnavailableHint())
             SplitStartResult.LAUNCH_FAILED ->
                 DispatchResult(false, context.getString(R.string.split_launch_failed))
             SplitStartResult.DISABLED ->
@@ -391,13 +391,22 @@ class ActionDispatcher @Inject constructor(
             null -> DispatchResult(false, "пара для разделения экрана не сохранена")
             SplitStartResult.OK -> DispatchResult(true)
             SplitStartResult.FREEFORM_UNAVAILABLE ->
-                DispatchResult(false, context.getString(R.string.split_freeform_reboot_hint))
+                DispatchResult(false, freeformUnavailableHint())
             SplitStartResult.LAUNCH_FAILED ->
                 DispatchResult(false, context.getString(R.string.split_launch_failed))
             SplitStartResult.DISABLED ->
                 DispatchResult(false, context.getString(R.string.split_feature_disabled))
         }
     }
+
+    /**
+     * Hint for FREEFORM_UNAVAILABLE: on firmwares proven to ignore the freeform flag (#139)
+     * a reboot never helps, so promising one would be a lie.
+     */
+    private fun freeformUnavailableHint(): String = context.getString(
+        if (splitSessionManager.freeformUnsupported()) R.string.split_freeform_unsupported_hint
+        else R.string.split_freeform_reboot_hint
+    )
 
     private suspend fun dispatchDelay(action: ActionDef): DispatchResult {
         val ms = action.payload?.toLongOrNull()

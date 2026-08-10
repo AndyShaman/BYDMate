@@ -30,6 +30,7 @@
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
     <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
+    <string name="cluster_direct_unsupported_hint">Прямой вывод недоступен на прошивке этой машины, используется совместимый режим</string>
     <string name="settings_projection_mode_title">Режим проекции</string>
     <string name="settings_projection_mode_direct">Расширенный</string>
     <string name="settings_projection_mode_vd">Заводской</string>
@@ -1305,6 +1306,7 @@
     <string name="split_picker_title_wide">Выберите приложение для широкой панели (2/3)</string>
     <string name="split_picker_title_narrow">Выберите приложение для узкой панели (1/3)</string>
     <string name="split_freeform_reboot_hint">Разделение экрана включится после перезагрузки машины</string>
+    <string name="split_freeform_unsupported_hint">Разделение экрана недоступно на прошивке этой машины</string>
     <string name="split_launch_failed">Не удалось запустить разделение экрана</string>
     <string name="split_launch_failed_adb">Не удалось запустить разделение экрана: требуется разблокированный ADB</string>
     <!-- Automation action: split_screen -->

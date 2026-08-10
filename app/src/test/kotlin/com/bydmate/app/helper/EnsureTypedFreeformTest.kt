@@ -1,6 +1,7 @@
 package com.bydmate.app.helper
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -21,8 +22,10 @@ class EnsureTypedFreeformTest {
         desiredActivityType: Int = ACTIVITY_TYPE_RECENTS,
         displayId: Int = 0,
         shell: (String, List<String>) -> String = { script, args -> ops += effectiveCmd(script, args); "" },
+        stateOf: (Int) -> TaskModeState? = { _ -> null },
     ) = ensureTypedFreeform(
         taskId, activityType, desiredActivityType, displayId, COMPONENT, shell, { ms -> ops += "sleep:$ms" },
+        stateOf,
     )
 
     private fun effectiveCmd(script: String, args: List<String>): String {
@@ -32,6 +35,7 @@ class EnsureTypedFreeformTest {
     }
 
     private val startCmd = "am start --windowingMode 5 --activityType 3 --display 0 -n $COMPONENT"
+    private val probeCmd = "am start --windowingMode 5 --display 0 -n $COMPONENT"
 
     @Test
     fun `STANDARD task is recreated - remove then start`() {
@@ -80,6 +84,100 @@ class EnsureTypedFreeformTest {
             })
         }
         assertTrue(thrown.message!!.contains("am start freeform failed"))
+    }
+
+    // --- non-destructive freeform probe before the retype remove (field bug, DiLink 5.1) ---
+
+    @Test
+    fun `probe that never becomes freeform throws before removing the live task`() {
+        // Firmware with freeform off silently coerces the mode away. Removing the navigator task
+        // first (legacy) killed the user's guidance session for a launch that could never succeed.
+        // Three stale post-probe reads are the full settle budget before that verdict.
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            run(
+                taskId = 7,
+                activityType = ACTIVITY_TYPE_STANDARD,
+                stateOf = { TaskModeState(WINDOWING_MODE_FULLSCREEN, 0) },
+            )
+        }
+        assertTrue(
+            "message must classify as UNAVAILABLE for launchFreeformCore: ${thrown.message}",
+            isFreeformUnsupported(thrown),
+        )
+        assertFalse("the live task must survive a failed probe", ops.any { "am stack remove" in it })
+        assertEquals(listOf(probeCmd, "sleep:500", "sleep:500", "sleep:500"), ops)
+    }
+
+    @Test
+    fun `a successful probe falls through to the recreating remove`() {
+        run(
+            taskId = 7,
+            activityType = ACTIVITY_TYPE_STANDARD,
+            stateOf = { TaskModeState(WINDOWING_MODE_FREEFORM, 0) },
+        )
+        assertEquals(listOf(probeCmd, "sleep:500", "am stack remove 7", "sleep:500", startCmd), ops)
+    }
+
+    @Test
+    fun `a slow firmware reporting freeform only on the second read is a success`() {
+        // Settle tolerance: one stale read must not be mistaken for "freeform is off".
+        var reads = 0
+        run(
+            taskId = 7,
+            activityType = ACTIVITY_TYPE_STANDARD,
+            stateOf = {
+                reads++
+                // 1st read = the pre-probe gate, 2nd = still stale, 3rd = settled.
+                if (reads >= 3) TaskModeState(WINDOWING_MODE_FREEFORM, 0)
+                else TaskModeState(WINDOWING_MODE_FULLSCREEN, 0)
+            },
+        )
+        assertEquals(
+            listOf(probeCmd, "sleep:500", "sleep:500", "am stack remove 7", "sleep:500", startCmd),
+            ops,
+        )
+    }
+
+    @Test
+    fun `a slow firmware reporting freeform only on the third read is a success`() {
+        // Full settle budget: two stale post-probe reads must not be mistaken for "freeform is off".
+        var reads = 0
+        run(
+            taskId = 7,
+            activityType = ACTIVITY_TYPE_STANDARD,
+            stateOf = {
+                reads++
+                // 1st read = the pre-probe gate, 2nd and 3rd = still stale, 4th = settled.
+                if (reads >= 4) TaskModeState(WINDOWING_MODE_FREEFORM, 0)
+                else TaskModeState(WINDOWING_MODE_FULLSCREEN, 0)
+            },
+        )
+        assertEquals(
+            listOf(probeCmd, "sleep:500", "sleep:500", "sleep:500", "am stack remove 7", "sleep:500", startCmd),
+            ops,
+        )
+    }
+
+    @Test
+    fun `unreadable task state keeps the legacy remove path`() {
+        // Default stateOf (production sites that cannot read state): byte-identical legacy sequence.
+        run(taskId = 7, activityType = ACTIVITY_TYPE_STANDARD)
+        assertEquals(listOf("am stack remove 7", "sleep:500", startCmd), ops)
+        assertFalse("no probe start without a state reader", ops.any { it == probeCmd })
+    }
+
+    @Test
+    fun `a failing probe start is reported, not swallowed`() {
+        val thrown = assertThrows(IllegalStateException::class.java) {
+            run(
+                taskId = 7,
+                activityType = ACTIVITY_TYPE_STANDARD,
+                shell = { script, args -> ops += effectiveCmd(script, args); "Error: Activity not started" },
+                stateOf = { TaskModeState(WINDOWING_MODE_FULLSCREEN, 0) },
+            )
+        }
+        assertTrue(thrown.message!!.contains("am start freeform failed"))
+        assertEquals(listOf(probeCmd), ops)
     }
 
     // --- desired = STANDARD: the split-pane direction (392) ---
