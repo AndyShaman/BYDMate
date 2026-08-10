@@ -1338,5 +1338,10 @@
     <string name="settings_split_narrow_app_title">Вузкая частка (1/3)</string>
     <string name="settings_split_app_not_selected">не выбрана</string>
     <string name="settings_split_howto_body">Падзел экрана можна ўключыць трыма спосабамі.\nСамы просты: тап па левай трэці плаваючага віджэта. Для гэтага ў раздзеле «Тап па віджэце» уключыце «Занаванне тапаў», а ў пункце «Дзеянне левага тапа» выберыце «Запускаць падзел экрана».\nПраз аўтаматызацыі: дадайце ў правіла дзеянне «Падзел экрана». Побач ёсць «Закрыць падзел экрана» і «Пераключыць падзел экрана».\nГоласам: проста папрасіце голас-агента ўключыць падзел экрана.</string>
+    <string name="settings_split_mechanism_title">Механізм падзелу</string>
+    <string name="settings_split_mechanism_freeform">Вокны BYDMate</string>
+    <string name="settings_split_mechanism_native">Родны падзел</string>
+    <string name="settings_split_mechanism_native_hint">Падзел выконвае прашыўка машыны. Выгляд залежыць ад прашыўкі: дзве панэлі 1/3 і 2/3 або папалам з выбарам другой праграмы на экране.</string>
+    <string name="settings_split_try_native_hint">Паспрабуйце рэжым Родны падзел.</string>
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
 </resources>

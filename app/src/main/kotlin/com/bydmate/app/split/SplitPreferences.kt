@@ -30,6 +30,17 @@ interface SplitPreferences {
 
     /** Persists the master switch state. */
     fun setFeatureEnabled(enabled: Boolean)
+
+    /**
+     * True when a start must hand the pair to the FIRMWARE's own split instead of our freeform
+     * layout (#139 firmwares where the freeform flag is gated and our split cannot run at all).
+     *
+     * Defaults to false everywhere — the whole fleet keeps the freeform path byte-identical.
+     */
+    fun isNativeModeEnabled(): Boolean = false
+
+    /** Persists the native-mode switch state. */
+    fun setNativeModeEnabled(enabled: Boolean) {}
 }
 
 /**
@@ -43,6 +54,8 @@ internal object DisabledSplitPreferences : SplitPreferences {
     override fun clearLastPair() {}
     override fun isFeatureEnabled(): Boolean = false
     override fun setFeatureEnabled(enabled: Boolean) {}
+    override fun isNativeModeEnabled(): Boolean = false
+    override fun setNativeModeEnabled(enabled: Boolean) {}
 }
 
 /** SharedPreferences-backed production implementation of [SplitPreferences]. */
@@ -84,12 +97,20 @@ class SplitPreferencesImpl(context: Context) : SplitPreferences {
         prefs.edit().putBoolean(KEY_FEATURE_ENABLED, enabled).apply()
     }
 
+    override fun isNativeModeEnabled(): Boolean =
+        prefs.getBoolean(KEY_NATIVE_MODE, false)
+
+    override fun setNativeModeEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_NATIVE_MODE, enabled).apply()
+    }
+
     companion object {
         const val PREFS_NAME = "bydmate_split"
         const val KEY_NARROW_PKG = "narrow_pkg"
         const val KEY_WIDE_PKG = "wide_pkg"
         const val KEY_NARROW_SIDE = "narrow_side"
         const val KEY_FEATURE_ENABLED = "feature_enabled"
+        const val KEY_NATIVE_MODE = "native_mode"
         const val DEFAULT_SIDE = "right"
     }
 }

@@ -1338,5 +1338,10 @@
     <string name="settings_split_narrow_app_title">Wąska część (1/3)</string>
     <string name="settings_split_app_not_selected">nie wybrano</string>
     <string name="settings_split_howto_body">Podział ekranu można włączyć na trzy sposoby.\nNajprościej: dotknięcie lewej jednej trzeciej pływającego widżetu. W tym celu w sekcji „Dotknięcie widżetu” włącz „Strefy dotknięć”, a w pozycji „Akcja lewego dotknięcia” wybierz „Uruchamiaj podział ekranu”.\nPrzez automatyzacje: dodaj do reguły akcję „Podział ekranu”. Obok są „Zamknij podział ekranu” i „Przełącz podział ekranu”.\nGłosem: po prostu poproś asystenta głosowego o włączenie podziału ekranu.</string>
+    <string name="settings_split_mechanism_title">Mechanizm podziału</string>
+    <string name="settings_split_mechanism_freeform">Okna BYDMate</string>
+    <string name="settings_split_mechanism_native">Podział systemowy</string>
+    <string name="settings_split_mechanism_native_hint">Podziałem zajmuje się oprogramowanie auta. Wygląd zależy od oprogramowania: dwa panele 1/3 i 2/3 albo pół na pół z wyborem drugiej aplikacji na ekranie.</string>
+    <string name="settings_split_try_native_hint">Spróbuj trybu Podział systemowy.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
 </resources>

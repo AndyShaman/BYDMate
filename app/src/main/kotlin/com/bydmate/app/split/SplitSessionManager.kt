@@ -251,6 +251,12 @@ class SplitSessionManager(
      * launch / raise / mode flip in this session; the cluster projection keeps its own RECENTS.
      */
     paneTypePolicy: PaneTypePolicy = PaneTypePolicy(),
+    /**
+     * Firmware-native split launcher, consulted by [start] only while
+     * [SplitPreferences.isNativeModeEnabled] is on (#139). Null (default) means no native launcher
+     * is wired and every start takes the freeform path — the whole fleet behaves as before.
+     */
+    private val nativeLauncher: NativeSplitLauncher? = null,
 ) {
     /** activityType for PANES on this firmware — see [PaneTypePolicy]. */
     private val paneType: Int = paneTypePolicy.paneType
@@ -559,6 +565,24 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 if (!prefs.isFeatureEnabled()) return@withLock SplitStartResult.DISABLED
+                // Native mode (#139): the firmware owns the layout, so none of our machinery runs
+                // — no backdrop, no freeform, no verdict, no watchdog, no session state. The pair
+                // is still saved, so the widget's "restore last pair" keeps working. A freeform
+                // session left running from before the switch is not torn down here: its watchdog
+                // sees the native split-screen windowing modes and ends it (W6-F3).
+                if (prefs.isNativeModeEnabled()) {
+                    val launched = nativeLauncher?.launch(pair) ?: false
+                    if (launched) prefs.saveLastPair(pair)
+                    journal.append(
+                        "start ${pair.label()} -> native " +
+                            when {
+                                launched -> "OK"
+                                nativeLauncher == null -> "failed (no launcher wired)"
+                                else -> "failed"
+                            }
+                    )
+                    return@withLock if (launched) SplitStartResult.OK else SplitStartResult.LAUNCH_FAILED
+                }
                 // #139: this firmware is proven to ignore the freeform flag. Bail out before the
                 // backdrop and before any force-stop — retrying only kills the pane apps again.
                 // One attempt per real boot is still let through so a false latch can heal.

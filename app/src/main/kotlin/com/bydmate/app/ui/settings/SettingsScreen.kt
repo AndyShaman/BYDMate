@@ -1422,6 +1422,7 @@ private fun SplitSection() {
     }
 
     var splitEnabled by remember { mutableStateOf(splitPrefs.isFeatureEnabled()) }
+    var nativeMode by remember { mutableStateOf(splitPrefs.isNativeModeEnabled()) }
     var hasLastPair by remember { mutableStateOf(splitPrefs.getLastPair() != null) }
     var splitRebootPending by remember {
         mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false))
@@ -1482,14 +1483,42 @@ private fun SplitSection() {
                         force = !enabled)
                 },
             )
+            if (splitEnabled) {
+                SettingDivider()
+                // Mechanism selector: our own freeform panes vs handing the pair to the
+                // firmware's split. Native is the fallback for firmwares that gate freeform.
+                SettingChipRow(
+                    title = stringResource(R.string.settings_split_mechanism_title),
+                    options = listOf(
+                        stringResource(R.string.settings_split_mechanism_freeform),
+                        stringResource(R.string.settings_split_mechanism_native),
+                    ),
+                    selectedIndex = if (nativeMode) 1 else 0,
+                    onSelect = { index ->
+                        val native = index == 1
+                        if (native != nativeMode) {
+                            splitPrefs.setNativeModeEnabled(native)
+                            nativeMode = native
+                        }
+                    },
+                )
+                if (nativeMode) {
+                    SettingHint(text = stringResource(R.string.settings_split_mechanism_native_hint))
+                }
+            }
             // Reboot hint: shown when split was enabled while freeform was not yet active.
             // enable_freeform_support is read once at boot, so a restart is required. Once the
-            // firmware is proven to ignore the flag (#139) the reboot advice is wrong — say so.
-            if (splitEnabled && (splitFreeformUnsupported || splitRebootPending)) {
-                SettingHint(text = stringResource(
-                    if (splitFreeformUnsupported) R.string.split_freeform_unsupported_hint
-                    else R.string.split_freeform_reboot_hint
-                ))
+            // firmware is proven to ignore the flag (#139) the reboot advice is wrong — say so,
+            // and point at the native mechanism, which does not depend on that flag. Both hints
+            // are about freeform only, so the native mechanism hides them.
+            if (splitEnabled && !nativeMode && (splitFreeformUnsupported || splitRebootPending)) {
+                val hint = if (splitFreeformUnsupported) {
+                    stringResource(R.string.split_freeform_unsupported_hint) + " " +
+                        stringResource(R.string.settings_split_try_native_hint)
+                } else {
+                    stringResource(R.string.split_freeform_reboot_hint)
+                }
+                SettingHint(text = hint)
             }
             if (splitEnabled) {
                 SettingDivider()

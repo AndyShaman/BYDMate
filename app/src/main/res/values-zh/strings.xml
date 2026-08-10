@@ -1300,5 +1300,10 @@
     <string name="settings_split_narrow_app_title">窄屏区域 (1/3)</string>
     <string name="settings_split_app_not_selected">未选择</string>
     <string name="settings_split_howto_body">打开分屏有三种方式。\n最简单的一种：点击悬浮小组件左侧三分之一的区域。先在“点击小组件”里开启“点击区域”，再把“左侧点击操作”设为“启动分屏”。\n用自动化：在规则里添加“分屏”动作，旁边还有“关闭分屏”和“切换分屏”。\n用语音：直接让语音智能体打开分屏就行。</string>
+    <string name="settings_split_mechanism_title">分屏方式</string>
+    <string name="settings_split_mechanism_freeform">BYDMate 窗口</string>
+    <string name="settings_split_mechanism_native">系统分屏</string>
+    <string name="settings_split_mechanism_native_hint">分屏由车机固件完成。显示效果取决于固件：可能是 1/3 和 2/3 两个窗口，也可能是左右对半并在屏幕上选择第二个应用。</string>
+    <string name="settings_split_try_native_hint">试试“系统分屏”方式。</string>
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
 </resources>
