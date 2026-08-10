@@ -281,6 +281,48 @@ class SplitFreeformVerdictTest {
         assertFalse(sharedPrefs.contains(SplitFreeformVerdict.KEY_RETRY_BOOT))
     }
 
+    /**
+     * The latch signature is only evidence on firmware we have never seen freeform work on. On
+     * eng.build.20260106 it has been running for releases, so the same signature means the reboot
+     * proof is wrong (a quickboot bumped BOOT_COUNT), not that the firmware ignores the flag (#147).
+     */
+    @Test fun `the latch signature never latches on a known-good firmware`() {
+        val sharedPrefs = prefs()
+        sharedPrefs.armRebootPending()
+        var boot = 7
+        val verdict = SplitFreeformVerdict(sharedPrefs, bootCount = { boot }, fingerprint = { KNOWN_GOOD_FP })
+
+        assertFalse(verdict.noteUnavailable())
+        boot = 8
+        assertFalse("freeform is proven on this build", verdict.noteUnavailable())
+
+        assertFalse(verdict.unsupported())
+        assertFalse(sharedPrefs.getBoolean(SplitFreeformVerdict.KEY_UNSUPPORTED, false))
+        assertFalse(verdict.suppressStart())
+    }
+
+    /** #147: the field unit already carries a latch written by an older build. */
+    @Test fun `a latch already written on a known-good firmware stops being honoured`() {
+        val sharedPrefs = prefs()
+        sharedPrefs.armRebootPending()
+        var boot = 7
+        val latched = SplitFreeformVerdict(sharedPrefs, bootCount = { boot }, fingerprint = { KNOWN_GOOD_FP })
+        // Written the way the old build did: the gate did not exist, so the signature latched.
+        sharedPrefs.edit()
+            .putInt(SplitFreeformVerdict.KEY_SCHEMA, SplitFreeformVerdict.SCHEMA_VERSION)
+            .putString(SplitFreeformVerdict.KEY_FP, KNOWN_GOOD_FP)
+            .putBoolean(SplitFreeformVerdict.KEY_UNSUPPORTED, true)
+            .commit()
+
+        assertFalse("the hint text must stop calling a working firmware unsupported", latched.unsupported())
+        repeat(3) { assertFalse("every start reaches the firmware", latched.suppressStart()) }
+
+        // The next unavailable outcome also scrubs the stale flag out of the prefs.
+        boot = 8
+        assertFalse(latched.noteUnavailable())
+        assertFalse(sharedPrefs.getBoolean(SplitFreeformVerdict.KEY_UNSUPPORTED, false))
+    }
+
     @Test fun `a latch with an unreadable boot count keeps suppressing`() {
         val sharedPrefs = prefs()
         sharedPrefs.armRebootPending()
@@ -292,5 +334,11 @@ class SplitFreeformVerdictTest {
 
         boot = -1
         repeat(3) { assertTrue("no way to tell one boot from the next", verdict.suppressStart()) }
+    }
+
+    private companion object {
+        /** The acceptance build of [PaneTypePolicy.KNOWN_GOOD_BUILDS], as the field unit reports it. */
+        const val KNOWN_GOOD_FP =
+            "BYD-AUTO/DiLink5.0/DiLink5.0:12/SP1A.210812.016/eng.build.20260106.201352:user/release-keys"
     }
 }

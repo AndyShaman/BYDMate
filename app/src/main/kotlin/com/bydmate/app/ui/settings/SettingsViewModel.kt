@@ -1730,6 +1730,31 @@ class SettingsViewModel @Inject constructor(
             appendLine("--- split ---")
             try {
                 appendLine("feature_enabled: ${splitPreferences.isFeatureEnabled()}")
+                // The freeform flag is read once at boot, so its value next to BOOT_COUNT and the
+                // verdict state is what tells a firmware that ignores the flag apart from one that
+                // simply has not been rebooted yet (#147).
+                val freeformFlag = android.provider.Settings.Global.getInt(
+                    appContext.contentResolver, "enable_freeform_support", -1)
+                appendLine("enable_freeform_support: " + if (freeformFlag < 0) "unset" else "$freeformFlag")
+                appendLine("boot_count: ${android.provider.Settings.Global.getInt(
+                    appContext.contentResolver, android.provider.Settings.Global.BOOT_COUNT, -1)}")
+                val verdictPrefs = appContext.getSharedPreferences(
+                    com.bydmate.app.cluster.ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+                val unsupported = verdictPrefs.getBoolean(
+                    com.bydmate.app.split.SplitFreeformVerdict.KEY_UNSUPPORTED, false)
+                val seenBoot = verdictPrefs.getInt(
+                    com.bydmate.app.split.SplitFreeformVerdict.KEY_SEEN_BOOT, 0)
+                val retryBoot = verdictPrefs.getInt(
+                    com.bydmate.app.split.SplitFreeformVerdict.KEY_RETRY_BOOT, 0)
+                val splitHint = verdictPrefs.getBoolean(
+                    com.bydmate.app.cluster.ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false)
+                val clusterHint = verdictPrefs.getBoolean(
+                    com.bydmate.app.cluster.ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING, false)
+                appendLine(
+                    "freeform_verdict: known_good=${com.bydmate.app.split.PaneTypePolicy().knownGood} " +
+                        "unsupported=$unsupported seen_boot=$seenBoot retry_boot=$retryBoot " +
+                        "split_hint=$splitHint cluster_hint=$clusterHint"
+                )
                 val lastPair = splitPreferences.getLastPair()
                 appendLine("last_pair: " + if (lastPair == null) "(none)" else
                     "narrow=${lastPair.narrowPkg} wide=${lastPair.widePkg} side=${lastPair.narrowSide}")

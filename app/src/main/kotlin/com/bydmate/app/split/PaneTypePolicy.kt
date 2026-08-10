@@ -26,7 +26,7 @@ import com.bydmate.app.helper.HelperBinderProtocol
 class PaneTypePolicy(fingerprint: String = Build.FINGERPRINT ?: "") {
 
     /** True when this firmware is on the STANDARD known-good list. */
-    val knownGood: Boolean = KNOWN_GOOD_PATTERNS.any { it.containsMatchIn(fingerprint) }
+    val knownGood: Boolean = isKnownGood(fingerprint)
 
     /** activityType handed to the daemon for pane launches / raises / mode flips. */
     val paneType: Int =
@@ -48,5 +48,13 @@ class PaneTypePolicy(fingerprint: String = Build.FINGERPRINT ?: "") {
          */
         private val KNOWN_GOOD_PATTERNS =
             KNOWN_GOOD_BUILDS.map { Regex(Regex.escape(it) + """(?![0-9A-Za-z])""") }
+
+        /**
+         * Whether [fingerprint] is one of the builds where freeform split passed on-car
+         * acceptance. Shared with [SplitFreeformVerdict], which must never conclude "this firmware
+         * ignores the freeform flag" about a build we have run freeform on ourselves (#147).
+         */
+        fun isKnownGood(fingerprint: String): Boolean =
+            KNOWN_GOOD_PATTERNS.any { it.containsMatchIn(fingerprint) }
     }
 }

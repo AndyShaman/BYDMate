@@ -2,6 +2,7 @@ package com.bydmate.app.split
 
 import android.util.Log
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.cluster.freeformFlagValue
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.RaiseOutcome
@@ -71,6 +72,17 @@ private const val PANE_RAISE_MAX_ATTEMPTS = 2
  */
 private const val PANE_DISPLAY_REREADS = 2
 private const val PANE_DISPLAY_REREAD_DELAY_MS = 150L
+
+/**
+ * Pause before the single retry of a confirming task-state read at the end of [SplitSessionManager.startLocked].
+ *
+ * The two reads that resolve the pane task ids land right behind the placement round-trips, and every
+ * daemon call shares one channel through HelperClient's mutex with a 2 s request timeout — so a
+ * getTaskState that queues behind a slow re-typing can time out on a split that is standing on
+ * screen (#139: first tap after an EXIT teardown reported LAUNCH_FAILED, second tap worked). Long
+ * enough for the re-typing sleeps in the daemon to drain, short enough to stay inside the widget tap.
+ */
+private const val CONFIRM_READ_RETRY_DELAY_MS = 500L
 
 /**
  * Retry delay for failed setFocusedTask calls inside [SplitSessionManager.dismissReplacedTask].
@@ -169,6 +181,9 @@ internal fun boundsFor(side: SplitSide): Pair<SplitBounds, SplitBounds> = when (
 }
 
 private fun SplitTaskState.toBounds() = SplitBounds(left, top, right, bottom)
+
+/** Compact task-state description for the journal. */
+private fun SplitTaskState.describe() = "task=$taskId mode=$windowingMode display=$displayId"
 
 /** Compact pair description for the journal. */
 private fun SplitPair.label() = "narrow=$narrowPkg wide=$widePkg side=$narrowSide"
@@ -1089,6 +1104,41 @@ class SplitSessionManager(
         return relaunchPaneLocked(pkg, bounds, "raise did not land in $PANE_RAISE_MAX_ATTEMPTS attempts")
     }
 
+    /**
+     * Resolves the task id of the [pane] pane ([pkg]) after its placement reported OK.
+     * Returns null when the task is not confirmed — the caller reverts and fails the start.
+     *
+     * A null from [HelperClient.getTaskState] means the channel did not answer, NOT that the task is
+     * missing (only `taskId == -1` means that). Both confirming reads run right after the placement
+     * round-trips, on the same daemon channel, under a shared 2 s request timeout — a live split can
+     * therefore be reported [SplitStartResult.LAUNCH_FAILED] purely from contention, and the revert
+     * that follows no-ops on that same busy channel, leaving the panes standing under a "failed"
+     * verdict (#139: the first tap after an EXIT teardown failed, the second worked). Hence one
+     * retry, but only on silence: `taskId == -1` is an answer and is taken at face value.
+     *
+     * Must be called from within [mutex].
+     */
+    private suspend fun confirmPaneTaskIdLocked(pane: String, pkg: String): Int? {
+        val first = helper.getTaskState(pkg)
+        if (first != null) {
+            if (first.taskId != -1) return first.taskId
+            journal.append("start $pane $pkg -> no task after launch (${first.describe()})")
+            return null
+        }
+        delay(CONFIRM_READ_RETRY_DELAY_MS)
+        val retried = helper.getTaskState(pkg)
+        if (retried == null) {
+            journal.append("start $pane $pkg -> no task state reply (retried once)")
+            return null
+        }
+        if (retried.taskId == -1) {
+            journal.append("start $pane $pkg -> no task after launch (${retried.describe()})")
+            return null
+        }
+        journal.append("start $pane task state confirmed on retry (pkg=$pkg)")
+        return retried.taskId
+    }
+
     /** Feeds one FREEFORM_UNAVAILABLE outcome to the verdict, journaling the latch transition. */
     private fun noteFreeformUnavailable() {
         if (verdict?.noteUnavailable() == true) {
@@ -1097,6 +1147,35 @@ class SplitSessionManager(
     }
 
     private suspend fun startLocked(pair: SplitPair): SplitStartResult {
+        // #147: re-assert enable_freeform_support before probing freeform. The flag is otherwise
+        // only written when a toggle is flipped (ClusterProjectionManager.realignFreeformFlag /
+        // setDirectProjectionEnabled), and that write is silently lost when the daemon is
+        // unreachable at that moment (ADB enabled later) — the flag then stays 0 through every
+        // reboot, and the user ends up at a verdict that blames the firmware.
+        //
+        // The feature flag is re-read HERE rather than inherited from start()'s gate: the implicit
+        // teardown between the two can suspend for seconds on dead task ids, and a toggle-off
+        // landing in that window has already written the flag back to 0 through the settings path.
+        // Asserting 1 afterwards would leave system-wide freeform on against the user's last word,
+        // so a start that lost its feature mid-flight abandons the panes too.
+        val splitEnabled = prefs.isFeatureEnabled()
+        if (!splitEnabled) {
+            journal.append("start aborted: feature disabled during teardown")
+            return SplitStartResult.DISABLED
+        }
+        // directEnabled = false: this is the split consumer asserting its own need. Direct
+        // projection can only ask for the same 1 (freeformFlagValue ORs the two), and its side
+        // belongs to ClusterProjectionManager — SSM never writes 0, so it cannot overrule it.
+        // Idempotent: on a healthy car this is one settings put that changes nothing. A failed
+        // write does not stop the attempt — the probe below reports the real state either way.
+        runCatching {
+            helper.putGlobalSetting(
+                "enable_freeform_support",
+                freeformFlagValue(directEnabled = false, splitEnabled = splitEnabled),
+            )
+        }
+            .onFailure { journal.append("freeform flag write threw: ${it.message}") }
+            .onSuccess { if (!it) journal.append("freeform flag write failed") }
         val (wideBounds, narrowBounds) = boundsFor(pair.narrowSide)
         // try/finally starts HERE — before backdrop.show() — so that cancellation landing
         // inside show()'s suspend (the field-confirmed widget bug vector) is also covered.
@@ -1115,7 +1194,10 @@ class SplitSessionManager(
                 noteFreeformUnavailable()
                 return SplitStartResult.FREEFORM_UNAVAILABLE
             }
-            if (wideResult == FreeformLaunchResult.FAILED) return SplitStartResult.LAUNCH_FAILED
+            if (wideResult == FreeformLaunchResult.FAILED) {
+                journal.append("start wide ${pair.widePkg} -> placement FAILED")
+                return SplitStartResult.LAUNCH_FAILED
+            }
 
             // Force-stop any stale fullscreen task for the narrow pane before launching (Bug A fix).
             forceStopIfNeeded(pair.narrowPkg, splitDisplayOnly = true)
@@ -1128,18 +1210,19 @@ class SplitSessionManager(
                 return SplitStartResult.FREEFORM_UNAVAILABLE
             }
             if (narrowResult == FreeformLaunchResult.FAILED) {
+                journal.append("start narrow ${pair.narrowPkg} -> placement FAILED, reverting wide")
                 revertFreeformToFullscreen(pair.widePkg)
                 return SplitStartResult.LAUNCH_FAILED
             }
 
             // Both launched OK. Resolve task ids; revert both on failure.
-            val wideTaskId = helper.getTaskState(pair.widePkg)?.taskId?.takeIf { it != -1 }
+            val wideTaskId = confirmPaneTaskIdLocked("wide", pair.widePkg)
                 ?: run {
                     revertFreeformToFullscreen(pair.widePkg)
                     revertFreeformToFullscreen(pair.narrowPkg)
                     return SplitStartResult.LAUNCH_FAILED
                 }
-            val narrowTaskId = helper.getTaskState(pair.narrowPkg)?.taskId?.takeIf { it != -1 }
+            val narrowTaskId = confirmPaneTaskIdLocked("narrow", pair.narrowPkg)
                 ?: run {
                     runCatching { helper.setTaskWindowingMode(wideTaskId, WINDOWING_FULLSCREEN) }
                     revertFreeformToFullscreen(pair.narrowPkg)

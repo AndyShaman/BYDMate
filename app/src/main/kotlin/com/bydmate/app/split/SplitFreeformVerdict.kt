@@ -29,6 +29,14 @@ import com.bydmate.app.cluster.ClusterProjectionManager
  * whatever the reason it was latched — and [suppressStart] lets one attempt per real boot through
  * so that escape hatch stays reachable.
  *
+ * On the builds of [PaneTypePolicy.isKnownGood] the verdict is inert entirely: we have run freeform
+ * split on those firmwares ourselves, so "this firmware ignores the flag" is false by construction
+ * and any latch there is a misread of the boot counter — a field report on eng.build.20260106 showed
+ * both "unavailable" samples 73 s apart, i.e. a quickboot that bumped BOOT_COUNT without the cold
+ * start the hint asked for (#147). Nothing latches there, and a latch an older build already wrote
+ * stops being honoured. The reboot hint itself is untouched: the flag really is off until the head
+ * unit picks it up, and the user still has to reboot for it.
+ *
  * @param prefs     [ClusterProjectionManager.PREFS_NAME] — the same file that holds the reboot hint.
  * @param bootCount current BOOT_COUNT, -1 (or 0) when unreadable; the verdict stays inert then.
  */
@@ -41,7 +49,7 @@ class SplitFreeformVerdict(
 
     /** True once this firmware is proven to ignore the freeform flag. */
     fun unsupported(): Boolean = synchronized(LOCK) {
-        guardsPass() && prefs.getBoolean(KEY_UNSUPPORTED, false)
+        !knownGood() && guardsPass() && prefs.getBoolean(KEY_UNSUPPORTED, false)
     }
 
     /**
@@ -85,6 +93,15 @@ class SplitFreeformVerdict(
     fun noteUnavailable(): Boolean {
         return synchronized(LOCK) {
             if (!guardsPass()) reset()
+            // Freeform is proven to work on this build, so an unavailable result describes this
+            // boot, not the firmware. Clear what an older build may have latched here so the
+            // diagnostic dump shows the state the verdict actually acts on.
+            if (knownGood()) {
+                if (prefs.contains(KEY_UNSUPPORTED) || prefs.contains(KEY_SEEN_BOOT)) {
+                    stamped().remove(KEY_UNSUPPORTED).remove(KEY_SEEN_BOOT).apply()
+                }
+                return false
+            }
             val boot = bootCount()
             // Unknown boot count: no proof is obtainable, so nothing is recorded either.
             if (boot <= 0) return false
@@ -110,6 +127,8 @@ class SplitFreeformVerdict(
     fun clearOnSuccess() = synchronized(LOCK) {
         prefs.edit().remove(KEY_SEEN_BOOT).remove(KEY_UNSUPPORTED).remove(KEY_RETRY_BOOT).apply()
     }
+
+    private fun knownGood(): Boolean = PaneTypePolicy.isKnownGood(fingerprint())
 
     private fun rebootHintArmed(): Boolean =
         prefs.getBoolean(ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING, false) ||

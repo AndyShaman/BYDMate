@@ -1780,7 +1780,9 @@ internal fun setWindowingModeCompat(
             type == -1                  -> "shell coerce (activityType unknown, reflection broken or task not found; desired=$desiredActivityType)"
             else                        -> "shell coerce (activityType=$type, desired=$desiredActivityType)"
         }
-        android.util.Log.d("bydmate_helper", "setWindowingModeCompat task=$taskId mode=$windowingMode → $branch")
+        // Log.i, not Log.d: this branch decision is the only record of why a pane was re-typed
+        // (or not), and release dumps carry nothing below INFO.
+        android.util.Log.i("bydmate_helper", "setWindowingModeCompat task=$taskId mode=$windowingMode → $branch")
         skipReflect = type != desiredActivityType
     } else {
         skipReflect = false

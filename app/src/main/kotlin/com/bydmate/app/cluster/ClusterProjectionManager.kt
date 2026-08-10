@@ -29,6 +29,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -68,6 +69,11 @@ object ClusterProjectionManager {
     private const val OVERLAY_TYPE = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY  // 2038, minSdk 29
     private const val OVERLAY_FLAGS = 264                     // FLAG_NOT_FOCUSABLE(8) | FLAG_LAYOUT_IN_SCREEN(256)
     private const val SURFACE_TIMEOUT_MS = 3000L              // give up if the overlay Surface never gets created
+    // #134: how long after a successful direct launch we keep watching the projected task, and
+    // how often. The reported death happens a few seconds after the move, i.e. after the daemon
+    // has already answered OK (see [armDirectDeathWatch]).
+    private const val DIRECT_DEATH_CHECK_INTERVAL_MS = 2000L
+    private const val DIRECT_DEATH_CHECKS = 3
 
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
@@ -179,6 +185,8 @@ object ClusterProjectionManager {
     private var projectedPackage: String? = null
     /** Cluster display id while direct (freeform) projection is active; -1 otherwise. */
     private var directDisplayId = -1
+    /** Post-move liveness watch of the direct projection (#134); see [armDirectDeathWatch]. */
+    private var directDeathWatchJob: Job? = null
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
     // so we grant both via the daemon once per process the first time we project.
     private var projectionPermissionsGranted = false
@@ -677,6 +685,12 @@ object ClusterProjectionManager {
     private suspend fun applyModeLocked(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
     ) {
+        // Every mode transition makes a pending post-move recovery obsolete: an OFF must not be
+        // followed by a relaunch onto a cluster we just gave up, and a re-projection arms its own
+        // watch below. cancel() without join — this runs while holding [mutex], which the watch
+        // takes for each check (a join would deadlock).
+        directDeathWatchJob?.cancel()
+        directDeathWatchJob = null
         when (mode) {
             ClusterMode.OFF -> {
                 pullBackToMain(context, helper, focus = true)
@@ -1129,6 +1143,7 @@ object ClusterProjectionManager {
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
                 log("direct OK: $pkg display=${display.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
+                armDirectDeathWatch(helper, pkg, display.displayId, bounds)
                 true
             }
             FreeformLaunchResult.UNAVAILABLE -> {
@@ -1170,6 +1185,70 @@ object ClusterProjectionManager {
                 Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
                 log("direct FAILED: launchFreeform rejected pkg=$pkg display=${display.displayId}; VD fallback")
                 false
+            }
+        }
+    }
+
+    /**
+     * #134 (Sea Lion 07, DiLink 5.0 eng build): the navigator renders a slice of the map on the
+     * cluster and its process dies a few seconds later — long after [HelperClient.launchFreeform]
+     * answered OK, so the daemon's own relaunch-once check (2GIS fix, commit 527682c2) has already
+     * run and seen a live task. This watch polls the task for a short window afterwards and, when
+     * the cluster has lost it, relaunches it ONCE through that same call: with no live task left,
+     * the daemon's resolveOrLaunchTask starts the app with `--windowingMode 5 --display N`, so it
+     * is BORN on the cluster display and the killing cross-display move never happens.
+     *
+     * "Lost" means gone OR living on another display: the system restarts a killed foreground app
+     * on the main screen, and a task read without its display id would report that restart as a
+     * healthy projection while the cluster stays empty (Codex audit). Both cases take the same
+     * recovery, with their own journal wording.
+     *
+     * One relaunch only — a second loss is journaled and the watch ends, no retry loop.
+     *
+     * The caller holds [mutex]; each check takes it too, so a concurrent setMode is serialized
+     * against a relaunch instead of racing it, and the state guard is read under the same lock
+     * that writes it. [applyModeLocked] cancels the watch on every mode transition.
+     *
+     * Healthy fleet (Leopard 3, where the navigator survives the move): three
+     * [HelperClient.getTaskState] reads and nothing else — no journal lines, no daemon writes.
+     */
+    private fun armDirectDeathWatch(helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray) {
+        directDeathWatchJob?.cancel()
+        directDeathWatchJob = scope.launch {
+            var relaunched = false
+            repeat(DIRECT_DEATH_CHECKS) {
+                delay(DIRECT_DEATH_CHECK_INTERVAL_MS)
+                mutex.withLock {
+                    // Anything but our own live direct session ends the watch: an OFF, a rebuild or
+                    // a switch of the projected app already owns the cluster.
+                    if (currentMode != ClusterMode.FULLSCREEN ||
+                        projectedPackage != pkg || directDisplayId != displayId) return@launch
+                    // The channel the split watchdog reads tasks with: null = the daemon could not
+                    // answer, and an unreachable daemon must not be read as a lost projection.
+                    val state = helper.getTaskState(pkg) ?: return@withLock
+                    // Alive ON THE CLUSTER, not just alive: the daemon answers with the package's
+                    // first task regardless of display, so a task the system auto-restarted on the
+                    // main screen (taskId > 0, displayId 0) would otherwise mask the death and leave
+                    // the cluster empty for the rest of the session.
+                    if (state.taskId > 0 && state.displayId == displayId) return@withLock
+                    val what = if (state.taskId > 0) "fled to display ${state.displayId}" else "died post-move"
+                    if (relaunched) {
+                        Log.w(TAG, "direct projection: relaunched $pkg $what again; giving up")
+                        log("direct: born-on-display relaunch did not hold ($what) pkg=$pkg display=$displayId")
+                        return@launch
+                    }
+                    relaunched = true
+                    Log.w(TAG, "direct projection: $pkg $what; relaunching on display $displayId")
+                    log("direct task $what; relaunching on display $displayId (pkg=$pkg)")
+                    // With no task left this births the app on the cluster display; with a task that
+                    // fled to the main screen it moves that task back — the same operation project()
+                    // performs on every star press, so a healthy machine sees nothing new here.
+                    val result = helper.launchFreeform(
+                        pkg, displayId, bounds[0], bounds[1], bounds[2], bounds[3],
+                        HelperBinderProtocol.PANE_TYPE_RECENTS,
+                    )
+                    log("direct: recovery relaunch result=$result")
+                }
             }
         }
     }

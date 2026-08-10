@@ -25,6 +25,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -172,6 +173,141 @@ class SplitSessionManagerTest {
         assertEquals(SplitStartResult.LAUNCH_FAILED, result)
         assertEquals(SplitSessionState.Idle, mgr.state.value)
         assertEquals(false, backdrop.shown)
+    }
+
+    // ── startLocked: confirming task-state reads (#139) ───────────────────────
+
+    /**
+     * The two reads that resolve the pane task ids queue behind the placement round-trips on the
+     * daemon's single channel, so a null there says "the channel did not answer", not "there is no
+     * task": a split standing on screen was reported LAUNCH_FAILED that way, and the revert that
+     * follows no-oped on the same busy channel. One retry, and the start must land.
+     */
+    @Test fun `a silent confirming read is retried once and the start still lands`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        // Two pre-launch reads see no task (clean-start path), the confirming read is swallowed by
+        // the busy channel, and the retry sees the live freeform pane.
+        coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(
+            null, null, null,
+            SplitTaskState(10, 5, wide.left, wide.top, wide.right, wide.bottom),
+        )
+        helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+        val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
+        val startedAt = currentTime
+
+        val result = mgr.start(pair)
+
+        assertEquals(SplitStartResult.OK, result)
+        assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
+        assertEquals("only the single retry pause may elapse", 500L, currentTime - startedAt)
+        assertTrue(
+            "the retry is what the field log has to show, journal was ${store.value}",
+            store.value.contains("start wide task state confirmed on retry (pkg=pkg.wide)"),
+        )
+    }
+
+    @Test fun `two silent confirming reads fail the start and name the silence`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val backdrop = FakeSplitBackdrop()
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        coEvery { helper.getTaskState(any()) } returns null
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), backdrop, backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+
+        val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
+
+        assertEquals(SplitStartResult.LAUNCH_FAILED, result)
+        assertEquals(SplitSessionState.Idle, mgr.state.value)
+        assertFalse(backdrop.shown)
+        assertTrue(
+            "journal was ${store.value}",
+            store.value.contains("start wide pkg.wide -> no task state reply (retried once)"),
+        )
+    }
+
+    /** `taskId == -1` is an answer from a live channel — retrying it would only add latency. */
+    @Test fun `a confirmed absent task fails the start without a retry`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (_, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        coEvery { helper.getTaskState("pkg.wide") } returns SplitTaskState(-1, 0, 0, 0, 0, 0)
+        helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+        val startedAt = currentTime
+
+        val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
+
+        assertEquals(SplitStartResult.LAUNCH_FAILED, result)
+        assertEquals("an answered read must not cost a retry pause", startedAt, currentTime)
+        assertTrue(
+            "the observed state is the diagnosis, journal was ${store.value}",
+            store.value.contains("start wide pkg.wide -> no task after launch (task=-1 mode=0 display=0)"),
+        )
+    }
+
+    @Test fun `a failed wide placement names the pane in the journal`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        helper.stubLaunch("pkg.wide", result = FreeformLaunchResult.FAILED)
+        coEvery { helper.getTaskState(any()) } returns null
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+
+        assertEquals(
+            SplitStartResult.LAUNCH_FAILED,
+            mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)),
+        )
+        assertTrue(
+            "journal was ${store.value}",
+            store.value.contains("start wide pkg.wide -> placement FAILED"),
+        )
+    }
+
+    @Test fun `a failed narrow placement names the pane in the journal`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        helper.stubLaunch("pkg.wide")
+        helper.stubLaunch("pkg.narrow", result = FreeformLaunchResult.FAILED)
+        coEvery { helper.getTaskState(any()) } returns null
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+
+        assertEquals(
+            SplitStartResult.LAUNCH_FAILED,
+            mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)),
+        )
+        assertTrue(
+            "journal was ${store.value}",
+            store.value.contains("start narrow pkg.narrow -> placement FAILED"),
+        )
     }
 
     // ── startLastPair() ───────────────────────────────────────────────────────
