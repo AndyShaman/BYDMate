@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.5] - 2026-08-10
+
 ### Новое
 - Режим «Родное разделение»: в настройках разделения экрана можно выбрать механизм - окна BYDMate (1/3+2/3) или штатное разделение прошивки. Родное работает и там, где наш вариант недоступен (DiLink 5.1): на прошивках с поддержкой третей открывает панели 1/3+2/3, на остальных делит пополам с системным выбором второго приложения (#139)
 
@@ -876,7 +878,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.3...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.5...HEAD
+[3.11.5]: https://github.com/AndyShaman/BYDMate/compare/v3.11.3...v3.11.5
 [3.11.3]: https://github.com/AndyShaman/BYDMate/compare/v3.11.2...v3.11.3
 [3.11.2]: https://github.com/AndyShaman/BYDMate/compare/v3.11.1...v3.11.2
 [3.11.1]: https://github.com/AndyShaman/BYDMate/compare/v3.11...v3.11.1
