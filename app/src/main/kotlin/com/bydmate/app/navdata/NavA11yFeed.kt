@@ -14,6 +14,14 @@ object NavA11yFeed {
     private const val DEBOUNCE_MS = 500L
     /** Cycle guard for the parent climb: a stale tree can hand back a looping chain. */
     private const val MAX_PARENT_HOPS = 64
+    /** Lane-widget research dump: bounded so a deep tree cannot stall the a11y thread
+     *  or flood logcat. Fires once per maneuver, i.e. about once a minute while driving. */
+    private const val TREE_DUMP_MAX_NODES = 300
+    private const val TREE_DUMP_MAX_CHARS = 3500
+    /** Floor between two walks, independent of the maneuver code: the extractor can
+     *  alternate codes faster than the driver passes intersections. */
+    private const val TREE_DUMP_MIN_INTERVAL_MS = 30_000L
+    private const val NO_MANEUVER = Int.MIN_VALUE
 
     /** Re-enabling starts a fresh diagnostic episode: the transition-only flags below
      *  would otherwise survive a HUD off/on cycle and swallow the first edge log. */
@@ -22,9 +30,14 @@ object NavA11yFeed {
             if (value && !field) {
                 rootReachable = true
                 sourceFallbackWorking = false
+                lastDumpedGaode = NO_MANEUVER
+                lastDumpMs = 0L
             }
             field = value
         }
+
+    /** Where the tree dump goes; logcat in production, a collector in tests. */
+    internal var treeDumpSink: (String) -> Unit = { Log.i(TAG, it) }
 
     @Volatile internal var lastProcessMs = 0L
     // Transition-only log guard: "events flowing but window unreachable" is exactly the
@@ -33,6 +46,9 @@ object NavA11yFeed {
     // Same edge discipline for the event-source fallback, tracked separately so the
     // field logs say which of the two paths is feeding the hub.
     @Volatile private var sourceFallbackWorking = false
+    // Maneuver the tree was last dumped for; NO_MANEUVER means "nothing dumped yet".
+    @Volatile private var lastDumpedGaode = NO_MANEUVER
+    @Volatile internal var lastDumpMs = 0L
 
     fun onEvent(service: SteeringWheelKeyService, event: AccessibilityEvent?) {
         if (!enabled) return
@@ -69,8 +85,10 @@ object NavA11yFeed {
         }
         try {
             when (val result = NavA11yExtractor.read(root)) {
-                is NavA11yExtractor.ReadResult.Guidance ->
+                is NavA11yExtractor.ReadResult.Guidance -> {
                     NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
+                    dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
+                }
                 is NavA11yExtractor.ReadResult.NoGuidance ->
                     NavGuidanceHub.markNoGuidance(nowMs)
                 is NavA11yExtractor.ReadResult.NotNavigator -> Unit
@@ -96,6 +114,7 @@ object NavA11yFeed {
             val result = NavA11yExtractor.read(root)
             if (result !is NavA11yExtractor.ReadResult.Guidance) return false
             NavGuidanceHub.update(result.data, NavGuidanceHub.Source.A11Y, nowMs)
+            dumpTreeOnManeuverChange(root, result.data.maneuverGaode, nowMs)
             return true
         } finally {
             @Suppress("DEPRECATION")
@@ -114,6 +133,51 @@ object NavA11yFeed {
             current = parent
         }
         return current
+    }
+
+    /** Research probe for the lane-guidance widget: on a new maneuver, list the ids the
+     *  Navigator exposes to accessibility so a recorded log shows whether the lane hint is
+     *  in the tree at all. [root] belongs to the caller and is never recycled here. */
+    private fun dumpTreeOnManeuverChange(
+        root: AccessibilityNodeInfo,
+        maneuverGaode: Int,
+        nowMs: Long,
+    ) {
+        // A blinked-out maneuver description reads as 0 while the route keeps running, so
+        // it is neither dumped nor remembered: 2 -> 0 -> 2 must stay one dump.
+        if (maneuverGaode <= 0) return
+        if (maneuverGaode == lastDumpedGaode) return
+        if (nowMs - lastDumpMs < TREE_DUMP_MIN_INTERVAL_MS) return
+        lastDumpedGaode = maneuverGaode
+        lastDumpMs = nowMs
+        runCatching {
+            val ids = StringBuilder()
+            appendIds(root, ids, intArrayOf(TREE_DUMP_MAX_NODES))
+            treeDumpSink("nav tree [gaode=$maneuverGaode]:${ids.take(TREE_DUMP_MAX_CHARS)}")
+        }
+    }
+
+    /** Depth-first, [budget] nodes at most; only ids are collected, text is reduced to its
+     *  length (screen text is the driver's route, not diagnostic data). */
+    private fun appendIds(node: AccessibilityNodeInfo, out: StringBuilder, budget: IntArray) {
+        if (budget[0] <= 0) return
+        budget[0]--
+        runCatching { node.viewIdResourceName }.getOrNull()?.let { id ->
+            out.append(' ').append(id.substringAfter(":id/"))
+            val textLength = runCatching { node.text?.length }.getOrNull() ?: 0
+            if (textLength > 0) out.append(":t").append(textLength)
+        }
+        val children = runCatching { node.childCount }.getOrDefault(0)
+        for (i in 0 until children) {
+            if (budget[0] <= 0) return
+            val child = runCatching { node.getChild(i) }.getOrNull() ?: continue
+            try {
+                appendIds(child, out, budget)
+            } finally {
+                @Suppress("DEPRECATION")
+                runCatching { child.recycle() }
+            }
+        }
     }
 
     /** Pure gate, unit-tested separately from the framework-bound onEvent. */

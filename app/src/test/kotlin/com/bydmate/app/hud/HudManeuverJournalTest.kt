@@ -101,10 +101,10 @@ class HudManeuverJournalTest {
         val lines = journal().lines()
         assertEquals(2, lines.size)
         // f28 = the SOME/IP arrow, amap = the broadcast icon: approaching the third exit of a
-        // roundabout the arrow field is suppressed (0) while the Amap channel carries
+        // roundabout the arrow field is blank (99) while the Amap channel carries
         // ROUNDABOUT_ENTER (11) plus exit 3 — exactly the comparison #94 needs.
         assertTrue(lines[0].endsWith("gaode=2 dist=250m f28=2 amap=3 suppress=false"))
-        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=0 amap=11 rab=3 suppress=false"))
+        assertTrue(lines[1].endsWith("gaode=27 dist=300m f28=99 amap=11 rab=3 suppress=false"))
     }
 
     @Test fun `camera takeover is recorded as a suppression change of the same maneuver`() {
