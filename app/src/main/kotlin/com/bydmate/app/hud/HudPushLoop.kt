@@ -12,8 +12,8 @@ import kotlinx.coroutines.launch
 
 /** 300 ms push loop: NavGuidanceHub snapshot -> protobuf frame -> SOME/IP fireEvent.
  *  When guidance ends (hub goes inactive) exactly one clear frame wipes the HUD.
- *  [speedSignEnabled] gates the speed limit (f11) and is read every tick, so the
- *  settings toggle applies within one period without restarting the loop. */
+ *  [speedSignEnabled] gates the rendered speed-limit sign (f7) and is read every tick,
+ *  so the settings toggle applies within one period without restarting the loop. */
 class HudPushLoop(
     private val sink: HudEventSink,
     private val speedSignEnabled: () -> Boolean = { true },
@@ -72,9 +72,7 @@ class HudPushLoop(
             journalledGaode = NO_MANEUVER
             return false
         }
-        // The glass draws its own speed-limit sign from the f11 number, so the toggle
-        // decides whether the limit is sent at all.
-        val speedLimit = if (speedSignEnabled()) s.speedLimit else 0
+        val signPng = if (speedSignEnabled() && s.speedLimit > 0) HudSpeedSign.render(s.speedLimit) else null
         // Camera takeover (donor LoopRunner): while a camera alert is active the icon
         // slot (f8) shows the camera, f9 counts down to the camera, and the reference
         // arrow (f28) is suppressed so the HUD doesn't draw a stale maneuver arrow.
@@ -86,8 +84,9 @@ class HudPushLoop(
             road = runningLine(s),
             etaString = etaString(s.etaSeconds),
             totalDistMeters = s.totalDistMeters,
-            speedLimit = speedLimit,
+            speedLimit = s.speedLimit,
             maneuverIconPng = if (cameraActive) s.cameraIconPng ?: baseIcon else baseIcon,
+            speedSignPng = signPng,
             suppressArrow = cameraActive,
         )
         val rc = sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame)

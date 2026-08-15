@@ -5,10 +5,17 @@ import com.bydmate.app.navdata.NavGuidanceHub
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import org.junit.runner.RunWith
+import org.robolectric.RobolectricTestRunner
 
+// Robolectric, because the frames the loop builds carry a real speed-sign PNG (f7):
+// with the plain JVM Bitmap stub HudSpeedSign.render() returns null and the sign
+// assertions compare two identical sign-less frames.
+@RunWith(RobolectricTestRunner::class)
 class HudPushLoopTest {
 
     private class FakeSink : HudEventSink {
@@ -45,7 +52,7 @@ class HudPushLoopTest {
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = HudIconLoader.iconFor(2),
+            maneuverIconPng = HudIconLoader.iconFor(2), speedSignPng = null,
         )
         assertArrayEquals(expected, sink.events.single().second)
     }
@@ -62,7 +69,7 @@ class HudPushLoopTest {
         assertArrayEquals(HudProtobufBuilder.buildClearFrame(0), sink.events[1].second)
     }
 
-    @Test fun `speed sign toggle off drops the speed limit from the frame`() {
+    @Test fun `speed sign toggle off builds frame without sign`() {
         NavGuidanceHub.update(
             NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = "A", speedLimit = 60),
             NavGuidanceHub.Source.A11Y, nowMs = 1000L,
@@ -70,15 +77,16 @@ class HudPushLoopTest {
         val sink = FakeSink()
         val loop = HudPushLoop(sink, speedSignEnabled = { false }, nowMsProvider = { 1000L })
         loop.tick(wasActive = false)
+        // The limit itself (f11) still travels; only the rendered sign (f7) is gated.
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
-            etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = HudIconLoader.iconFor(2),
+            etaString = null, totalDistMeters = 0, speedLimit = 60,
+            maneuverIconPng = HudIconLoader.iconFor(2), speedSignPng = null,
         )
         assertArrayEquals(expected, sink.events.single().second)
     }
 
-    @Test fun `speed sign toggle on keeps the speed limit in the frame`() {
+    @Test fun `speed sign toggle on puts the rendered sign in the frame`() {
         NavGuidanceHub.update(
             NavGuidance(maneuverGaode = 2, distanceMeters = 250, road = "A", speedLimit = 60),
             NavGuidanceHub.Source.A11Y, nowMs = 1000L,
@@ -86,10 +94,12 @@ class HudPushLoopTest {
         val sink = FakeSink()
         val loop = HudPushLoop(sink, speedSignEnabled = { true }, nowMsProvider = { 1000L })
         loop.tick(wasActive = false)
+        val sign = HudSpeedSign.render(60)
+        assertNotNull(sign)   // guards against a vacuous comparison of two sign-less frames
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 60,
-            maneuverIconPng = HudIconLoader.iconFor(2),
+            maneuverIconPng = HudIconLoader.iconFor(2), speedSignPng = sign,
         )
         assertArrayEquals(expected, sink.events.single().second)
     }
@@ -113,7 +123,7 @@ class HudPushLoopTest {
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 400, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = byteArrayOf(7),
+            maneuverIconPng = byteArrayOf(7), speedSignPng = null,
             suppressArrow = true,
         )
         assertArrayEquals(expected, sink.events.single().second)
@@ -132,7 +142,7 @@ class HudPushLoopTest {
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 900, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = HudIconLoader.iconFor(2),
+            maneuverIconPng = HudIconLoader.iconFor(2), speedSignPng = null,
             suppressArrow = true,
         )
         assertArrayEquals(expected, sink.events.single().second)
@@ -149,7 +159,7 @@ class HudPushLoopTest {
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 0, distanceMeters = 300, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = byteArrayOf(5),
+            maneuverIconPng = byteArrayOf(5), speedSignPng = null,
         )
         assertArrayEquals(expected, sink.events.single().second)
     }
@@ -170,7 +180,7 @@ class HudPushLoopTest {
         val expected = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 0, distanceMeters = 250, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 60,
-            maneuverIconPng = null,
+            maneuverIconPng = null, speedSignPng = HudSpeedSign.render(60),
         )
         assertArrayEquals(expected, sink.events.single().second)
     }

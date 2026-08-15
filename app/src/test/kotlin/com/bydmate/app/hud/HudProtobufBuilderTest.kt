@@ -69,7 +69,7 @@ class HudProtobufBuilderTest {
         val payload = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
             etaString = "10:10", totalDistMeters = 1000, speedLimit = 60,
-            maneuverIconPng = byteArrayOf(0x01),
+            maneuverIconPng = byteArrayOf(0x01), speedSignPng = null,
         )
         assertEquals(
             "0a271002300142010148fa01520141583c800102d2010531303a3130e001028902000000000000e83f",
@@ -83,15 +83,17 @@ class HudProtobufBuilderTest {
 
     @Test fun `frame fields and order`() {
         val icon = byteArrayOf(1, 2, 3)
+        val sign = byteArrayOf(9, 8)
         val payload = HudProtobufBuilder.buildFrame(
             maneuverGaode = 1, distanceMeters = 250, road = "ул. Ленина",
             etaString = "18:40", totalDistMeters = 5000, speedLimit = 60,
-            maneuverIconPng = icon,
+            maneuverIconPng = icon, speedSignPng = sign,
         )
         val f = unwrap(payload)
         assertEquals(2L, (f[2]!![0] as Long))
-        assertEquals(1L, (f[6]!![0] as Long))           // no lane data -> plain render class
-        assertNull(f[5]); assertNull(f[7]); assertNull(f[29])   // lane bank stays reserved
+        assertEquals(6L, (f[6]!![0] as Long))           // with speed sign -> render class 6
+        assertTrue((f[7]!![0] as ByteArray).contentEquals(sign))
+        assertNull(f[5]); assertNull(f[29])             // rest of the lane bank stays reserved
         assertTrue((f[8]!![0] as ByteArray).contentEquals(icon))
         assertEquals(250L, (f[9]!![0] as Long))
         assertEquals("ул. Ленина", String(f[10]!![0] as ByteArray, Charsets.UTF_8))
@@ -109,9 +111,10 @@ class HudProtobufBuilderTest {
         val f = unwrap(HudProtobufBuilder.buildFrame(
             maneuverGaode = 2, distanceMeters = 100, road = "",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = byteArrayOf(1),
+            maneuverIconPng = byteArrayOf(1), speedSignPng = null,
         ))
         assertEquals(1L, (f[6]!![0] as Long))
+        assertNull(f[7])    // no sign -> render class 1 and no f7
         assertNull(f[10])   // empty road omitted
         assertNull(f[11])   // zero speed limit omitted
         assertNull(f[26])   // null eta omitted
@@ -150,7 +153,7 @@ class HudProtobufBuilderTest {
         val f = unwrap(HudProtobufBuilder.buildFrame(
             maneuverGaode = 0, distanceMeters = 250, road = "A",
             etaString = null, totalDistMeters = 0, speedLimit = 60,
-            maneuverIconPng = null,
+            maneuverIconPng = null, speedSignPng = null,
         ))
         assertEquals(0L, (f[28]!![0] as Long))
         assertNull(f[8])
@@ -163,22 +166,26 @@ class HudProtobufBuilderTest {
         }
     }
 
-    @Test fun `large maneuver icon is never dropped`() {
+    @Test fun `oversize payload drops speed sign but never maneuver icon`() {
         val bigIcon = ByteArray(40_000) { 1 }
+        val bigSign = ByteArray(40_000) { 2 }
         val payload = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 100, road = "x",
             etaString = null, totalDistMeters = 0, speedLimit = 60,
-            maneuverIconPng = bigIcon,
+            maneuverIconPng = bigIcon, speedSignPng = bigSign,
         )
         assertTrue(payload.size <= HudProtobufBuilder.MAX_PAYLOAD_BYTES)
-        assertTrue((unwrap(payload)[8]!![0] as ByteArray).contentEquals(bigIcon))
+        val f = unwrap(payload)
+        assertNull(f[7])
+        assertTrue((f[8]!![0] as ByteArray).contentEquals(bigIcon))
+        assertEquals(1L, (f[6]!![0] as Long))   // sign dropped -> render class back to 1
     }
 
     @Test fun `oversized road text cannot overflow the payload limit`() {
         val frame = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 500, road = "х".repeat(100_000),
             etaString = "12:34", totalDistMeters = 10_000, speedLimit = 60,
-            maneuverIconPng = null)
+            maneuverIconPng = null, speedSignPng = null)
         assertTrue(frame.size <= HudProtobufBuilder.MAX_PAYLOAD_BYTES)
     }
 
@@ -187,7 +194,7 @@ class HudProtobufBuilderTest {
             val f = unwrap(HudProtobufBuilder.buildFrame(
                 maneuverGaode = 2, distanceMeters = distanceMeters, road = "x",
                 etaString = null, totalDistMeters = 0, speedLimit = 0,
-                maneuverIconPng = null,
+                maneuverIconPng = null, speedSignPng = null,
             ))
             return f[9]!![0] as Long
         }
@@ -204,7 +211,7 @@ class HudProtobufBuilderTest {
             val f = unwrap(HudProtobufBuilder.buildFrameSafe(
                 maneuverGaode = 2, distanceMeters = cameraDistanceMeters, road = "A",
                 etaString = null, totalDistMeters = 0, speedLimit = 0,
-                maneuverIconPng = byteArrayOf(7), suppressArrow = true,
+                maneuverIconPng = byteArrayOf(7), speedSignPng = null, suppressArrow = true,
             ))
             return f[9]!![0] as Long
         }
@@ -217,7 +224,7 @@ class HudProtobufBuilderTest {
         val f = unwrap(HudProtobufBuilder.buildFrame(
             maneuverGaode = 2, distanceMeters = 100, road = "x",
             etaString = null, totalDistMeters = 0, speedLimit = 0,
-            maneuverIconPng = byteArrayOf(1),
+            maneuverIconPng = byteArrayOf(1), speedSignPng = null,
             suppressArrow = true,
         ))
         assertEquals(0L, (f[28]!![0] as Long))
@@ -229,22 +236,34 @@ class HudProtobufBuilderTest {
         val omitted = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
             etaString = "10:10", totalDistMeters = 1000, speedLimit = 60,
-            maneuverIconPng = byteArrayOf(0x01),
+            maneuverIconPng = byteArrayOf(0x01), speedSignPng = null,
         )
         val explicit = HudProtobufBuilder.buildFrameSafe(
             maneuverGaode = 2, distanceMeters = 250, road = "A",
             etaString = "10:10", totalDistMeters = 1000, speedLimit = 60,
-            maneuverIconPng = byteArrayOf(0x01),
+            maneuverIconPng = byteArrayOf(0x01), speedSignPng = null,
             suppressArrow = false,
         )
         assertArrayEquals(omitted, explicit)
+    }
+
+    @Test fun `suppress arrow survives oversize speed sign fallback`() {
+        val payload = HudProtobufBuilder.buildFrameSafe(
+            maneuverGaode = 2, distanceMeters = 100, road = "x",
+            etaString = null, totalDistMeters = 0, speedLimit = 60,
+            maneuverIconPng = ByteArray(40_000) { 1 }, speedSignPng = ByteArray(40_000) { 2 },
+            suppressArrow = true,
+        )
+        val f = unwrap(payload)
+        assertEquals(0L, (f[28]!![0] as Long))
+        assertNull(f[7])
     }
 
     @Test fun `progress clamped to 0-1`() {
         val f = unwrap(HudProtobufBuilder.buildFrame(
             maneuverGaode = 2, distanceMeters = 9000, road = "",
             etaString = null, totalDistMeters = 5000, speedLimit = 0,
-            maneuverIconPng = null,
+            maneuverIconPng = null, speedSignPng = null,
         ))
         val progress = Double.fromBits(f[33]!![0] as Long)
         assertEquals(0.0, progress, 1e-9)

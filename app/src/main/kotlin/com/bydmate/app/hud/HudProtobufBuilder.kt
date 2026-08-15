@@ -4,10 +4,12 @@ import java.io.ByteArrayOutputStream
 
 /** Hand-rolled protobuf encoder for the BYD HUD frame (discope reference, donor stage 6).
  *  Field ORDER inside the inner message is significant for the HUD firmware:
- *  f2 -> f6 -> f8 -> f9 -> f10 -> f11 -> f16 -> f26 -> f28 -> f33.
- *  f5 (lane count), f7 (lane-band PNG) and f29 (lane markup) are the lane bank and stay
- *  reserved until a real lane source exists: both donors treat f6=6 as "this frame carries
- *  lane data", so f6 stays 1 while the bank is empty.
+ *  f2 -> f6 -> f7 -> f8 -> f9 -> f10 -> f11 -> f16 -> f26 -> f28 -> f33.
+ *  f7 carries the speed-limit sign PNG and f6 switches to 6 while it is present: byd-hud
+ *  reads f7 as a lane band instead, but the field says otherwise - the glass draws nothing
+ *  from the f11 number alone (v3.11.6 regression, both Sea Lion 07 and Leopard 3), while
+ *  the v3.11.5 PNG rendered on both. f5 (lane count) and f29 (lane markup) are the rest of
+ *  the lane bank and stay reserved until a real lane source exists.
  *  Never emit f3/f4/f12/f17/f18/f21..f25/f30/f31 (verified to glitch the HUD).
  *  Outer wrapper: 0x0A + varint(len) + inner bytes. */
 object HudProtobufBuilder {
@@ -57,13 +59,15 @@ object HudProtobufBuilder {
         totalDistMeters: Int,
         speedLimit: Int,
         maneuverIconPng: ByteArray?,
+        speedSignPng: ByteArray?,
         suppressArrow: Boolean = false,
     ): ByteArray {
         val inner = ByteArrayOutputStream()
         // f2 is the constant 2 in every reference guidance frame (donor stage 6,
         // 1779/1779 discope events); only the clear frame carries a counter here.
         writeVarintField(inner, 2, 2L)
-        writeVarintField(inner, 6, 1L)
+        writeVarintField(inner, 6, if (speedSignPng != null) 6L else 1L)
+        if (speedSignPng != null) writeBytesField(inner, 7, speedSignPng)
         if (maneuverIconPng != null) writeBytesField(inner, 8, maneuverIconPng)
         writeVarintField(inner, 9, displayDistance(distanceMeters).toLong())
         if (road.isNotEmpty()) writeBytesField(inner, 10, road.toByteArray(Charsets.UTF_8))
@@ -76,7 +80,8 @@ object HudProtobufBuilder {
         return wrap(inner.toByteArray())
     }
 
-    /** buildFrame with the road cap that keeps the frame under MAX_PAYLOAD_BYTES. */
+    /** buildFrame with the road cap and the donor's size fallback: past MAX_PAYLOAD_BYTES the
+     *  speed-sign PNG (f7) is dropped first; the maneuver icon (f8) is never dropped. */
     fun buildFrameSafe(
         maneuverGaode: Int,
         distanceMeters: Int,
@@ -85,13 +90,18 @@ object HudProtobufBuilder {
         totalDistMeters: Int,
         speedLimit: Int,
         maneuverIconPng: ByteArray?,
+        speedSignPng: ByteArray?,
         suppressArrow: Boolean = false,
     ): ByteArray {
         // The road string is the only unbounded input (a11y screen text); cap it so a
         // corrupted read can never push the frame past MAX_PAYLOAD_BYTES (Codex audit fix 4).
         val safeRoad = if (road.length > MAX_ROAD_CHARS) road.take(MAX_ROAD_CHARS) else road
+        val full = buildFrame(maneuverGaode, distanceMeters, safeRoad, etaString,
+            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng, suppressArrow)
+        if (full.size <= MAX_PAYLOAD_BYTES || speedSignPng == null) return full
         return buildFrame(maneuverGaode, distanceMeters, safeRoad, etaString,
-            totalDistMeters, speedLimit, maneuverIconPng, suppressArrow)
+            totalDistMeters, speedLimit, maneuverIconPng, speedSignPng = null,
+            suppressArrow = suppressArrow)
     }
 
     /** Clear frame: render class 255 + f16=1 wipes the HUD navigation area. */
