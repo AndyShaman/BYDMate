@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.8] - 2026-08-15
+
 ### Исправления
 - HUD: возвращён значок ограничения скорости на стекле (#150). В 3.11.6 знак стали передавать числом через штатное поле кадра, но стекло из числа ничего не рисует - значок пропал; рисованный знак вернулся, как было в 3.11.5
 
@@ -902,7 +904,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.7...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.8...HEAD
+[3.11.8]: https://github.com/AndyShaman/BYDMate/compare/v3.11.7...v3.11.8
 [3.11.7]: https://github.com/AndyShaman/BYDMate/compare/v3.11.6...v3.11.7
 [3.11.6]: https://github.com/AndyShaman/BYDMate/compare/v3.11.5...v3.11.6
 [3.11.5]: https://github.com/AndyShaman/BYDMate/compare/v3.11.3...v3.11.5
