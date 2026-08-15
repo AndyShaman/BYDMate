@@ -18,7 +18,9 @@ object HudSpeedSign {
     fun render(limit: Int): ByteArray? {
         if (limit <= 0) return null
         if (limit == cachedLimit) return cachedPng
-        val png = runCatching { draw(limit) }.getOrNull()
+        // Cache only successful renders: a one-off draw failure must not pin null
+        // for this limit until the limit changes (codex audit, v3.11.8).
+        val png = runCatching { draw(limit) }.getOrNull() ?: return null
         cachedLimit = limit
         cachedPng = png
         return png
