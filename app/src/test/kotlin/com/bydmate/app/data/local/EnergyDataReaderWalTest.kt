@@ -3,7 +3,9 @@ package com.bydmate.app.data.local
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -61,6 +63,30 @@ class EnergyDataReaderWalTest {
         // Simulate WAL-only growth: main file is not touched, only the sidecar grows.
         File(dir, "EC_database.db-wal").appendBytes(ByteArray(64))
         assertTrue("wal sidecar growth must be detected", reader.peekSourceChanged(context))
+    }
+
+    // sourceLastModifiedMs — wall-clock age of the DB for the dead-leftover detector (#148).
+    // Unlike the fingerprint (a SUM of both mtimes) this must be a real timestamp.
+    @Test
+    fun `sourceLastModifiedMs takes the newer of db and wal`() {
+        val dbFile = createSourceDb()
+        val wal = File(dir, "EC_database.db-wal").apply { writeBytes(ByteArray(64)) }
+        dbFile.setLastModified(1_600_000_000_000L)
+        wal.setLastModified(1_700_000_000_000L)
+
+        assertEquals(1_700_000_000_000L, reader.sourceLastModifiedMs())
+    }
+
+    @Test
+    fun `sourceLastModifiedMs falls back to the db mtime without a wal`() {
+        createSourceDb().setLastModified(1_600_000_000_000L)
+
+        assertEquals(1_600_000_000_000L, reader.sourceLastModifiedMs())
+    }
+
+    @Test
+    fun `sourceLastModifiedMs is null without a db`() {
+        assertNull(reader.sourceLastModifiedMs())
     }
 
     // Read test — fallback variant: assert that copyToLocal physically copies WAL/SHM sidecars

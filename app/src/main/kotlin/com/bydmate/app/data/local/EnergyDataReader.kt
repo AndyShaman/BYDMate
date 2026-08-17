@@ -320,6 +320,22 @@ open class EnergyDataReader @Inject constructor(
         return (db.lastModified() + wal.lastModified()) to (db.length() + wal.length())
     }
 
+    /**
+     * Wall-clock mtime of the energydata DB on disk (the newer of the main file and its WAL
+     * sidecar), or null when no DB is present. Consumed by the dead-leftover detector (#148).
+     *
+     * Deliberately separate from [sourceFingerprint]: that pair's first component is the SUM of the
+     * two mtimes — a fine change marker, but meaningless against System.currentTimeMillis(), so it
+     * must never be used to judge how old the file is.
+     */
+    fun sourceLastModifiedMs(): Long? {
+        val dir = energyDataDir()
+        if (!dir.exists() || !dir.isDirectory) return null
+        val db = findDbViaListFiles(dir) ?: findDbViaKnownNames(dir) ?: return null
+        val wal = File(dir, db.name + "-wal")
+        return maxOf(db.lastModified(), wal.lastModified())
+    }
+
     private fun findDbViaListFiles(dir: File): File? {
         val allFiles = dir.listFiles() ?: return null
         return allFiles

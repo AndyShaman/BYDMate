@@ -85,6 +85,17 @@ private const val PANE_DISPLAY_REREAD_DELAY_MS = 150L
 private const val CONFIRM_READ_RETRY_DELAY_MS = 500L
 
 /**
+ * Bounded confirming reads before a pane is declared task-less (#139, cold-launch branch).
+ *
+ * `taskId == -1` right after a placement that reported OK is not a failure but a "not yet": on a
+ * cold app start the process is still coming up and has not created its task when the first read
+ * lands, which is exactly why the user's second tap always worked (the process was already up by
+ * then). Six reads [CONFIRM_READ_RETRY_DELAY_MS] apart cover the cold-start window observed in the
+ * field without hanging the widget tap on a pane that genuinely never launched.
+ */
+private const val CONFIRM_TASK_APPEAR_ATTEMPTS = 6
+
+/**
  * Retry delay for failed setFocusedTask calls inside [SplitSessionManager.dismissReplacedTask].
  *
  * setTaskWindowingMode(oldTaskId, FULLSCREEN) triggers the daemon's am-stack-remove + am-start
@@ -1114,29 +1125,41 @@ class SplitSessionManager(
      * therefore be reported [SplitStartResult.LAUNCH_FAILED] purely from contention, and the revert
      * that follows no-ops on that same busy channel, leaving the panes standing under a "failed"
      * verdict (#139: the first tap after an EXIT teardown failed, the second worked). Hence one
-     * retry, but only on silence: `taskId == -1` is an answer and is taken at face value.
+     * retry on silence — a second null is terminal.
+     *
+     * `taskId == -1` is an answer, but not a verdict either: on a cold app start the daemon
+     * truthfully reports no task because the launched process has not created one yet (#139: "no
+     * task after launch (task=-1 mode=0 display=0)" on the first tap, while the second tap always
+     * worked because the process was already up). So -1 means "not yet" and is polled up to
+     * [CONFIRM_TASK_APPEAR_ATTEMPTS] reads before the pane is failed. The two budgets are
+     * independent: silence still costs at most one retry however it interleaves with -1 answers.
      *
      * Must be called from within [mutex].
      */
     private suspend fun confirmPaneTaskIdLocked(pane: String, pkg: String): Int? {
-        val first = helper.getTaskState(pkg)
-        if (first != null) {
-            if (first.taskId != -1) return first.taskId
-            journal.append("start $pane $pkg -> no task after launch (${first.describe()})")
-            return null
+        var reads = 0
+        var silenceRetried = false
+        var lastAbsent: String? = null
+        while (reads < CONFIRM_TASK_APPEAR_ATTEMPTS) {
+            if (reads > 0) delay(CONFIRM_READ_RETRY_DELAY_MS)
+            val state = helper.getTaskState(pkg)
+            reads++
+            if (state == null) {
+                if (silenceRetried) {
+                    journal.append("start $pane $pkg -> no task state reply (retried once)")
+                    return null
+                }
+                silenceRetried = true
+                continue
+            }
+            if (state.taskId != -1) {
+                if (reads > 1) journal.append("start $pane task state confirmed on retry (pkg=$pkg)")
+                return state.taskId
+            }
+            lastAbsent = state.describe()
         }
-        delay(CONFIRM_READ_RETRY_DELAY_MS)
-        val retried = helper.getTaskState(pkg)
-        if (retried == null) {
-            journal.append("start $pane $pkg -> no task state reply (retried once)")
-            return null
-        }
-        if (retried.taskId == -1) {
-            journal.append("start $pane $pkg -> no task after launch (${retried.describe()})")
-            return null
-        }
-        journal.append("start $pane task state confirmed on retry (pkg=$pkg)")
-        return retried.taskId
+        journal.append("start $pane $pkg -> no task after launch ($lastAbsent, waited $reads reads)")
+        return null
     }
 
     /** Feeds one FREEFORM_UNAVAILABLE outcome to the verdict, journaling the latch transition. */

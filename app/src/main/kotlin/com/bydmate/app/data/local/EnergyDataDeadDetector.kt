@@ -12,6 +12,13 @@ import android.util.Log
  * frozen forever, the streak reaches [DEAD_STREAK_THRESHOLD] and the device is switched
  * to native trip recording until reset (Settings button) or auto-heal (file changes).
  *
+ * A file frozen for months (#148: energydata stuck since Nov 2025 on a driving car) does not
+ * need three spaced sessions to be judged — one driving session over a DB older than
+ * [STALE_FILE_AGE_MS] is already conclusive, so the verdict lands on the first evaluate instead
+ * of days later. The age is checked ONLY in the pendingDriving branch: a car parked for a month
+ * has an equally old file and would false-positive on the first-fingerprint branch, while on a
+ * live car the fingerprint-change branch is evaluated earlier and heals/resets anyway.
+ *
  * All calls come from TripRecorder on the polling collector — no internal locking needed.
  * The "drove this session" marker is persisted mid-session, the moment the distance
  * threshold is crossed, rather than on the ignition-off edge: in the field the head unit
@@ -110,6 +117,17 @@ class EnergyDataDeadDetector(
             }
             store.pendingDriving() -> {
                 store.setPendingDriving(false)
+                val ageMs = reader.sourceLastModifiedMs()?.let { now() - it }
+                if (ageMs != null && ageMs >= STALE_FILE_AGE_MS) {
+                    Log.i(
+                        TAG,
+                        "driving session over energydata frozen for ${ageMs / 86_400_000L}d " +
+                            "— marking DEAD immediately"
+                    )
+                    store.setDead()
+                    cachedDead = true
+                    return
+                }
                 if (now() - store.lastIncrementTs() < MIN_INCREMENT_SPACING_MS) return
                 val streak = store.streak() + 1
                 store.setStreak(streak)
@@ -130,5 +148,6 @@ class EnergyDataDeadDetector(
         internal const val DEAD_STREAK_THRESHOLD = 3
         internal const val MIN_SESSION_KM = 1.0
         internal const val MIN_INCREMENT_SPACING_MS = 30 * 60_000L
+        internal const val STALE_FILE_AGE_MS = 30L * 24 * 60 * 60_000L
     }
 }
