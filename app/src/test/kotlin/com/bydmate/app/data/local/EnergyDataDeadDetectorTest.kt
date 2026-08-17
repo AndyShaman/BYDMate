@@ -217,18 +217,34 @@ class EnergyDataDeadDetectorTest {
         assertFalse(store.pendingDriving())
     }
 
-    // #148: energydata frozen since Nov 2025 on a driving car — three spaced sessions would keep
-    // the trip list empty for days, so one session over a months-old file is already conclusive.
+    // #148: energydata frozen since Nov 2025 on a driving car — the full streak keeps the trip
+    // list empty for days, so a months-old file shortens the verdict to two driving sessions.
     @Test
-    fun `one driving session over a months-old file marks dead immediately`() {
+    fun `two driving sessions over a months-old file mark dead`() {
         nowMs = 1_800_000_000_000L
         fileMtime = nowMs - 270 * day
-        store.lastTs = nowMs   // inside the spacing window: the age verdict must ignore it
+        val d = detector()
+        d.session(1000.0, 1010.0)
+        d.onTick(true, 1010.0)                 // 1st anomaly: streak path, no verdict yet
+        assertFalse("one anomaly is never enough", d.isDead())
+        assertEquals(1, store.streakV)
+        d.onTick(false, 1020.0); nowMs += 5 * 60_000L
+        store.lastTs = nowMs                   // inside the spacing window: the age branch ignores it
+        d.onTick(true, 1020.0)                 // 2nd anomaly: age branch flips dead
+        assertTrue(d.isDead())
+    }
+
+    // The RTC can boot forward-jumped, and evaluate() runs before time sync — a single age
+    // reading must never be the whole verdict.
+    @Test
+    fun `an old mtime alone does not mark dead on the first anomaly`() {
+        nowMs = 1_800_000_000_000L
+        fileMtime = nowMs - 270 * day
         val d = detector()
         d.session(1000.0, 1010.0)
         d.onTick(true, 1010.0)
-        assertTrue(d.isDead())
-        assertEquals("the age verdict does not go through the streak", 0, store.streakV)
+        assertFalse(d.isDead())
+        assertEquals(1, store.streakV)
     }
 
     @Test

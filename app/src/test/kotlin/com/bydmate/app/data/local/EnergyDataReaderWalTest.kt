@@ -89,6 +89,16 @@ class EnergyDataReaderWalTest {
         assertNull(reader.sourceLastModifiedMs())
     }
 
+    // lastModified() answers 0 when the stat fails. Reported as a date that is 1970, i.e. the
+    // oldest file imaginable — the dead detector must see "unknown", not "ancient".
+    @Test
+    fun `sourceLastModifiedMs is null when the mtime is unreadable`() {
+        val dbFile = createSourceDb()
+        assertTrue("test FS must accept a zeroed mtime", dbFile.setLastModified(0L))
+
+        assertNull(reader.sourceLastModifiedMs())
+    }
+
     // Read test — fallback variant: assert that copyToLocal physically copies WAL/SHM sidecars
     // alongside the main DB. Called directly (copyToLocal is internal) so SQLite does not get
     // a chance to repair/truncate the intentionally-fake WAL bytes before the assertion.

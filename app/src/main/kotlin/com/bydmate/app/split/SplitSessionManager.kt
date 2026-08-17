@@ -1131,8 +1131,9 @@ class SplitSessionManager(
      * truthfully reports no task because the launched process has not created one yet (#139: "no
      * task after launch (task=-1 mode=0 display=0)" on the first tap, while the second tap always
      * worked because the process was already up). So -1 means "not yet" and is polled up to
-     * [CONFIRM_TASK_APPEAR_ATTEMPTS] reads before the pane is failed. The two budgets are
-     * independent: silence still costs at most one retry however it interleaves with -1 answers.
+     * [CONFIRM_TASK_APPEAR_ATTEMPTS] reads before the pane is failed. A silence spends one of those
+     * read slots, but -1 answers never spend the silence budget: however the two interleave, the
+     * second silence is still terminal and the first one still costs exactly one retry.
      *
      * Must be called from within [mutex].
      */
@@ -1146,7 +1147,8 @@ class SplitSessionManager(
             reads++
             if (state == null) {
                 if (silenceRetried) {
-                    journal.append("start $pane $pkg -> no task state reply (retried once)")
+                    val seen = lastAbsent?.let { ", last answer $it" } ?: ""
+                    journal.append("start $pane $pkg -> no task state reply (2 silences in $reads reads$seen)")
                     return null
                 }
                 silenceRetried = true
@@ -1158,7 +1160,7 @@ class SplitSessionManager(
             }
             lastAbsent = state.describe()
         }
-        journal.append("start $pane $pkg -> no task after launch ($lastAbsent, waited $reads reads)")
+        journal.append("start $pane $pkg -> no task after launch (${lastAbsent ?: "no state"}, waited $reads reads)")
         return null
     }
 

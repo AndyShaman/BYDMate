@@ -235,7 +235,7 @@ class SplitSessionManagerTest {
         assertFalse(backdrop.shown)
         assertTrue(
             "journal was ${store.value}",
-            store.value.contains("start wide pkg.wide -> no task state reply (retried once)"),
+            store.value.contains("start wide pkg.wide -> no task state reply (2 silences in 2 reads)"),
         )
     }
 
@@ -307,6 +307,83 @@ class SplitSessionManagerTest {
         assertTrue(
             "the observed state is the diagnosis, journal was ${store.value}",
             store.value.contains("start wide pkg.wide -> no task after launch (task=-1 mode=0 display=0, waited 6 reads)"),
+        )
+    }
+
+    /**
+     * A busy daemon channel does not produce clean runs of one answer: silences arrive between the
+     * cold-launch -1s. The silence budget is spent by silences only, so the second one is terminal
+     * however far apart they land — and the journal has to carry both facts (how many reads, what
+     * the last answer was) for triage.
+     */
+    @Test fun `silence interleaved with absent answers still fails on the second silence`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (_, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        // Two pre-launch reads (clean-start path), then confirm: silence, -1, -1, silence.
+        coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(
+            null, null,
+            null,
+            SplitTaskState(-1, 0, 0, 0, 0, 0),
+            SplitTaskState(-1, 0, 0, 0, 0, 0),
+            null,
+        )
+        helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
+        val store = CountingJournalStore()
+        val backdrop = FakeSplitBackdrop()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), backdrop, backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+
+        val result = mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
+
+        assertEquals(SplitStartResult.LAUNCH_FAILED, result)
+        assertEquals(SplitSessionState.Idle, mgr.state.value)
+        assertFalse(backdrop.shown)
+        coVerify { helper.setTaskWindowingMode(11, 1) }
+        assertTrue(
+            "journal was ${store.value}",
+            store.value.contains(
+                "start wide pkg.wide -> no task state reply " +
+                    "(2 silences in 4 reads, last answer task=-1 mode=0 display=0)"
+            ),
+        )
+    }
+
+    /** One silence among the cold-launch -1s must not cost the pane its appearance window. */
+    @Test fun `one silence among absent answers still lands the start`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val (wide, narrow) = boundsFor(SplitSide.RIGHT)
+        helper.stubLaunch("pkg.wide", "pkg.narrow")
+        // Two pre-launch reads (clean-start path), then confirm: -1, silence, -1, live task.
+        coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(
+            null, null,
+            SplitTaskState(-1, 0, 0, 0, 0, 0),
+            null,
+            SplitTaskState(-1, 0, 0, 0, 0, 0),
+            SplitTaskState(10, 5, wide.left, wide.top, wide.right, wide.bottom),
+        )
+        helper.stubTask("pkg.narrow", taskId = 11, mode = 5, b = narrow)
+        val store = CountingJournalStore()
+
+        val mgr = SplitSessionManager(
+            helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope,
+            tickDelayMs = 60_000,
+            journal = SplitJournalImpl(store) { 1_700_000_000_000L },
+        )
+        val pair = SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT)
+
+        val result = mgr.start(pair)
+
+        assertEquals(SplitStartResult.OK, result)
+        assertEquals(SplitSessionState.Active(pair, 11, 10), mgr.state.value)
+        coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), 1) }
+        assertTrue(
+            "journal was ${store.value}",
+            store.value.contains("start wide task state confirmed on retry (pkg=pkg.wide)"),
         )
     }
 

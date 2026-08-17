@@ -12,12 +12,20 @@ import android.util.Log
  * frozen forever, the streak reaches [DEAD_STREAK_THRESHOLD] and the device is switched
  * to native trip recording until reset (Settings button) or auto-heal (file changes).
  *
- * A file frozen for months (#148: energydata stuck since Nov 2025 on a driving car) does not
- * need three spaced sessions to be judged — one driving session over a DB older than
- * [STALE_FILE_AGE_MS] is already conclusive, so the verdict lands on the first evaluate instead
- * of days later. The age is checked ONLY in the pendingDriving branch: a car parked for a month
- * has an equally old file and would false-positive on the first-fingerprint branch, while on a
- * live car the fingerprint-change branch is evaluated earlier and heals/resets anyway.
+ * A file frozen for months (#148: energydata stuck since Nov 2025 on a driving car) does not need
+ * the full [DEAD_STREAK_THRESHOLD] to be judged: a driving session over a DB older than
+ * [STALE_FILE_AGE_MS] shortens the verdict to two sessions instead of days of an empty trip list.
+ * It shortens it, never skips it — the age branch also requires an already-standing streak, so the
+ * verdict still rests on two independent anomalies. The head unit's RTC is not trustworthy on its
+ * own: it can boot with a forward-jumped clock and evaluate() runs at ignition-on, before time
+ * sync, so a single age reading on a live car whose latest record had not landed yet could mark it
+ * dead. That verdict is effectively irreversible in its consequences — auto-heal flips the mode
+ * back, but HistoryImporter's dedup cleanup is one-shot, so the trips recorded natively in the
+ * meantime stay duplicated.
+ *
+ * The age is checked ONLY in the pendingDriving branch: a car parked for a month has an equally
+ * old file and would false-positive on the first-fingerprint branch, while on a live car the
+ * fingerprint-change branch is evaluated earlier and heals/resets anyway.
  *
  * All calls come from TripRecorder on the polling collector — no internal locking needed.
  * The "drove this session" marker is persisted mid-session, the moment the distance
@@ -118,7 +126,7 @@ class EnergyDataDeadDetector(
             store.pendingDriving() -> {
                 store.setPendingDriving(false)
                 val ageMs = reader.sourceLastModifiedMs()?.let { now() - it }
-                if (ageMs != null && ageMs >= STALE_FILE_AGE_MS) {
+                if (ageMs != null && ageMs >= STALE_FILE_AGE_MS && store.streak() >= 1) {
                     Log.i(
                         TAG,
                         "driving session over energydata frozen for ${ageMs / 86_400_000L}d " +
