@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.11.9] - 2026-08-17
+
 ### Исправления
 - Разделение экрана: устранён сбой первой попытки запуска после включения зажигания (#139). Приложению при холодном старте нужно время на создание окна, а подтверждающая проверка объявляла неудачу слишком рано; теперь панели ждут появления окна до 3 секунд, вторая попытка больше не нужна
 - Поездки: на машинах с давно «замершей» штатной базой поездок (файл не обновлялся больше месяца) встроенная запись поездок включается уже после пары первых поездок, а не через несколько дней (#148)
@@ -908,7 +910,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.8...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.11.9...HEAD
+[3.11.9]: https://github.com/AndyShaman/BYDMate/compare/v3.11.8...v3.11.9
 [3.11.8]: https://github.com/AndyShaman/BYDMate/compare/v3.11.7...v3.11.8
 [3.11.7]: https://github.com/AndyShaman/BYDMate/compare/v3.11.6...v3.11.7
 [3.11.6]: https://github.com/AndyShaman/BYDMate/compare/v3.11.5...v3.11.6
