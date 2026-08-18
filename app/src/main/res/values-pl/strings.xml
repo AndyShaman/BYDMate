@@ -72,6 +72,15 @@
     <string name="learn_button_save">Zapisz</string>
     <string name="learn_button_again">Od nowa</string>
     <string name="learn_button_cancel">Anuluj</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">Pokrętło głośności na kierownicy</string>
+    <string name="settings_knob_play_pause_desc">Naciśnięcie wstrzymuje i wznawia odtwarzanie zamiast przełączać źródło dźwięku. Potrzebne po aktualizacji oprogramowania, w której naciśnięcie zaczęło zmieniać źródło.</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">System samochodu</string>
+    <string name="settings_car_language_title">Język interfejsu samochodu</string>
+    <string name="settings_car_language_desc">Tylko dla oprogramowania UI7. Przycisk otwiera ukryte fabryczne okno BYD z pełną listą języków. Aby włączyć rosyjski: wybierz „Русский язык”, potem OK. Aby wrócić: ten sam przycisk, „English”, OK. Uwaga: przy rosyjskim u części właścicieli przestaje działać automatyczne parkowanie. Jeśli korzystasz z automatycznego parkowania, zostaw English.</string>
+    <string name="settings_car_language_button">Otwórz wybór języka</string>
+    <string name="settings_car_language_unavailable">Okno wyboru języka jest niedostępne w tym oprogramowaniu</string>
     <string name="settings_section_places_title">Miejsca</string>
     <string name="settings_section_application_title">Aplikacja</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
@@ -1342,6 +1351,7 @@
     <string name="settings_split_mechanism_freeform">Okna BYDMate</string>
     <string name="settings_split_mechanism_native">Podział systemowy</string>
     <string name="settings_split_mechanism_native_hint">Podziałem zajmuje się oprogramowanie auta. Wygląd zależy od oprogramowania: dwa panele 1/3 i 2/3 albo pół na pół z wyborem drugiej aplikacji na ekranie.</string>
+    <string name="settings_split_mechanism_platformized_hint">Na tym oprogramowaniu ekran dzieli samo auto: panele 1/3 i 2/3, separator oraz gest zamiany są systemowe. BYDMate tylko uruchamia wybraną parę i przywraca aplikację do jej panelu.</string>
     <string name="settings_split_try_native_hint">Spróbuj trybu Podział systemowy.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
 </resources>

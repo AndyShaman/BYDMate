@@ -96,6 +96,15 @@ private const val CONFIRM_READ_RETRY_DELAY_MS = 500L
 private const val CONFIRM_TASK_APPEAR_ATTEMPTS = 6
 
 /**
+ * Consecutive [Split37Engine.tick] passes reporting "the split is gone" before the native-pane
+ * session is ended.
+ *
+ * The firmware answers area mode 4 (fullscreen) for a moment during its own pane animations, so a
+ * single reading is not the user closing the split — two in a row is.
+ */
+private const val SPLIT37_END_TICKS = 2
+
+/**
  * Retry delay for failed setFocusedTask calls inside [SplitSessionManager.dismissReplacedTask].
  *
  * setTaskWindowingMode(oldTaskId, FULLSCREEN) triggers the daemon's am-stack-remove + am-start
@@ -159,6 +168,13 @@ sealed class SplitSessionState {
         val pair: SplitPair,
         val narrowTaskId: Int,
         val wideTaskId: Int,
+        /**
+         * True when the panes are the FIRMWARE's own 3:7 windows ([Split37Engine]), not our
+         * freeform ones: there is no backdrop and no pill of ours under them, and every
+         * freeform task operation is somebody else's layout. Default false = the freeform
+         * session the whole fleet runs.
+         */
+        val nativePanes: Boolean = false,
     ) : SplitSessionState()
 }
 
@@ -283,6 +299,13 @@ class SplitSessionManager(
      * is wired and every start takes the freeform path — the whole fleet behaves as before.
      */
     private val nativeLauncher: NativeSplitLauncher? = null,
+    /**
+     * Engine of the vehicle's OWN 3:7 split, used on "platformized" firmware (OTA V1.6) where our
+     * freeform panes cannot come up. Consulted first by [start]; on every other firmware
+     * [Split37Engine.isApplicable] is false and not a single path below changes. Null (default)
+     * means no engine is wired — the whole fleet takes the freeform path.
+     */
+    private val split37: Split37Engine? = null,
 ) {
     /** activityType for PANES on this firmware — see [PaneTypePolicy]. */
     private val paneType: Int = paneTypePolicy.paneType
@@ -302,6 +325,12 @@ class SplitSessionManager(
     /** Serialises all state transitions between the public API and the watchdog tick. */
     internal val mutex = Mutex()
     private var watchdogJob: Job? = null
+
+    // Native 3:7 session state (platformized firmware). Non-null session ⇔ Active.nativePanes.
+    // All accesses happen inside [mutex].
+    private var split37Session: Split37Engine.Session? = null
+    private var split37EndTicks = 0
+    private var watchdog37Job: Job? = null
 
     // Media-key reroute poll. Runs ONLY while Active; null when idle or feature disabled.
     // All accesses happen inside [mutex] (cancel/assign) or are initiated from a locked context.
@@ -442,6 +471,11 @@ class SplitSessionManager(
                 Log.d(TAG, "beginClusterSend: no active session; grace skipped for $pkg")
                 return
             }
+            // Native panes never take the departure path: no freeform bounds, no calibration.
+            if (current.nativePanes) {
+                Log.d(TAG, "beginClusterSend: native panes own the layout; grace skipped for $pkg")
+                return
+            }
             val role = when {
                 current.pair.narrowPkg == pkg -> "narrow"
                 current.pair.widePkg == pkg -> "wide"
@@ -531,6 +565,9 @@ class SplitSessionManager(
      */
     suspend fun onBackdropResurfaced() = mutex.withLock {
         val current = _state.value as? SplitSessionState.Active ?: return@withLock
+        // No backdrop stands under native panes, and a freeform raise would drag the firmware's
+        // windows out of their roots.
+        if (current.nativePanes) return@withLock
         val (wideBounds, narrowBounds) = boundsFor(current.pair.narrowSide)
         reassertPaneLocked(current.pair.widePkg, wideBounds, widePaneDepartedEmitted)
         reassertPaneLocked(current.pair.narrowPkg, narrowBounds, narrowPaneDepartedEmitted)
@@ -591,6 +628,13 @@ class SplitSessionManager(
         scope.async {
             mutex.withLock {
                 if (!prefs.isFeatureEnabled()) return@withLock SplitStartResult.DISABLED
+                // Platformized firmware (OTA V1.6) has a real 3:7 split of its own and refuses our
+                // freeform layout, so the engine owns the whole session there. A null answer means
+                // the engine could not enter (outdated daemon, no split surface) — the paths below
+                // then run exactly as they always did.
+                if (split37?.isApplicable() == true) {
+                    start37Locked(pair)?.let { return@withLock it }
+                }
                 // Native mode (#139): the firmware owns the layout, so none of our machinery runs
                 // — no backdrop, no freeform, no verdict, no watchdog, no session state. The pair
                 // is still saved, so the widget's "restore last pair" keeps working. A freeform
@@ -695,6 +739,20 @@ class SplitSessionManager(
      */
     suspend fun mirror() = mutex.withLock {
         val current = _state.value as? SplitSessionState.Active ?: return@withLock
+        // Native panes: the firmware owns the geometry, so the sides change through its own swap
+        // and none of the freeform bounds / grace machinery below applies.
+        if (current.nativePanes) {
+            val session = split37Session ?: return@withLock
+            val swapped = split37?.swap(session) ?: return@withLock
+            val newSide = if (current.pair.narrowSide == SplitSide.LEFT) SplitSide.RIGHT else SplitSide.LEFT
+            val newPair = current.pair.copy(narrowSide = newSide)
+            // The engine reads the sides off the session it is handed, so its pair must follow the
+            // state — a stale one would make the next place/tick work off the old geometry.
+            split37Session = swapped.copy(pair = newPair)
+            prefs.saveLastPair(newPair)
+            _state.value = current.copy(pair = newPair)
+            return@withLock
+        }
         // Full no-op while any departure grace is active OR calibration is pending (D-1-R1):
         // the departing task is mid-REMOVE+RELAUNCH or its cluster geometry is unconfirmed;
         // stamping main-screen bounds onto the wrong task id would corrupt calibration.
@@ -730,6 +788,18 @@ class SplitSessionManager(
      */
     suspend fun swapApps() = mutex.withLock {
         val current = _state.value as? SplitSessionState.Active ?: return@withLock
+        // Native panes: roles change by placing the reversed pair again — the tasks cannot be
+        // re-bounded, they belong to the firmware's roots.
+        if (current.nativePanes) {
+            replace37Locked(
+                SplitPair(
+                    narrowPkg = current.pair.widePkg,
+                    widePkg = current.pair.narrowPkg,
+                    narrowSide = current.pair.narrowSide,
+                )
+            )
+            return@withLock
+        }
         // Full no-op when a departure is in flight (grace active), calibration is pending
         // (D-1-R1), or already confirmed. Swapping during grace/pending: the departing task
         // is mid-REMOVE+RELAUNCH or its cluster geometry is unconfirmed; setTaskBounds on
@@ -777,6 +847,16 @@ class SplitSessionManager(
                         journal.append("changeApp ${pane.name} $newPkg -> no active session")
                         return@withLock SplitStartResult.LAUNCH_FAILED
                     }
+                // Native panes: the engine re-places the pair with the new package; nothing here
+                // may touch bounds, z-order or the replaced task.
+                if (current.nativePanes) {
+                    val newPair = if (pane == Pane.NARROW) {
+                        current.pair.copy(narrowPkg = newPkg)
+                    } else {
+                        current.pair.copy(widePkg = newPkg)
+                    }
+                    return@withLock replace37Locked(newPair)
+                }
                 val (wideBounds, narrowBounds) = boundsFor(current.pair.narrowSide)
                 val paneBounds = if (pane == Pane.NARROW) narrowBounds else wideBounds
                 val oldTaskId = if (pane == Pane.NARROW) current.narrowTaskId else current.wideTaskId
@@ -863,6 +943,13 @@ class SplitSessionManager(
      */
     suspend fun exit() = mutex.withLock {
         val current = _state.value as? SplitSessionState.Active ?: return@withLock
+        // Native panes: the engine hands both tasks back to the fullscreen root. tearDownLocked is
+        // deliberately skipped — its setTaskWindowingMode / backdrop.hide are freeform machinery.
+        if (current.nativePanes) {
+            split37Session?.let { split37?.exit(it) }
+            end37Locked(EndReason.EXIT, emit = true)
+            return@withLock
+        }
         tearDownLocked(current, emitExit = true)
     }
 
@@ -1506,6 +1593,8 @@ class SplitSessionManager(
      */
     private suspend fun reactToMediaCenterLocked() {
         val current = _state.value as? SplitSessionState.Active ?: return
+        // The reroute re-asserts a freeform z-order; native panes have none.
+        if (current.nativePanes) return
 
         // Re-validate inside the lock using the queuing variant (getTopTaskPackage, not OrSkip):
         // if HelperClient's mutex is contended (e.g. a 5 s readBatch from TrackingService), the
@@ -1551,6 +1640,176 @@ class SplitSessionManager(
         )
         // Forward the play/pause toggle to the pane's media session.
         controller.dispatchPlayPause()
+    }
+
+    // ── Native 3:7 split (platformized firmware) ──────────────────────────────
+
+    /**
+     * Runs [pair] through [Split37Engine]. Returns null when the engine could not enter the native
+     * split at all — the caller then falls through to the paths that serve the rest of the fleet.
+     *
+     * Nothing of the freeform session is set up here: no backdrop, no media poll, no verdict, no
+     * double-tap guard. The panes are the firmware's, and the only thing we keep is the pair.
+     *
+     * Must be called from within [mutex].
+     */
+    private suspend fun start37Locked(pair: SplitPair): SplitStartResult? {
+        val engine = split37 ?: return null
+        val existing = _state.value as? SplitSessionState.Active
+        // A native session is replaced in place — ending it first would drop the panes the new pair
+        // is about to reuse and emit a SessionEnded the user never asked for.
+        if (existing != null && existing.nativePanes) return replace37Locked(pair)
+        if (existing != null) tearDownLocked(existing, emitExit = true)
+        return when (val outcome = engine.place(pair)) {
+            // The engine journals its own reason; the caller retries on the legacy paths.
+            is Split37Engine.PlaceOutcome.Unavailable -> null
+            is Split37Engine.PlaceOutcome.Failed -> {
+                journal.append("start ${pair.label()} -> split37 failed: ${outcome.reason}")
+                SplitStartResult.LAUNCH_FAILED
+            }
+            is Split37Engine.PlaceOutcome.Placed -> {
+                val session = outcome.session
+                split37Session = session
+                split37EndTicks = 0
+                prefs.saveLastPair(pair)
+                _state.value = SplitSessionState.Active(
+                    pair, session.narrowTaskId, session.wideTaskId, nativePanes = true,
+                )
+                journal.append(
+                    "start ${pair.label()} -> split37 OK " +
+                        "narrow=${session.narrowTaskId} wide=${session.wideTaskId}"
+                )
+                startWatchdog37Locked()
+                SplitStartResult.OK
+            }
+        }
+    }
+
+    /**
+     * Places [newPair] into the panes of a session that is already standing, without ending it:
+     * the state keeps its identity, no [SplitEvent.SessionEnded] is emitted and the watchdog keeps
+     * running (its next tick reads the session this function stored).
+     *
+     * Known limitation (backlog): the task of a replaced pane is left in the same root, underneath
+     * the new one — the engine does not evict it. It surfaces again if the new app dies.
+     *
+     * Must be called from within [mutex] with a native session active.
+     */
+    private suspend fun replace37Locked(newPair: SplitPair): SplitStartResult {
+        val engine = split37 ?: return SplitStartResult.LAUNCH_FAILED
+        val current = _state.value as? SplitSessionState.Active ?: return SplitStartResult.LAUNCH_FAILED
+        return when (val outcome = engine.place(newPair)) {
+            is Split37Engine.PlaceOutcome.Placed -> {
+                val session = outcome.session
+                split37Session = session
+                split37EndTicks = 0
+                prefs.saveLastPair(newPair)
+                _state.value = current.copy(
+                    pair = newPair,
+                    narrowTaskId = session.narrowTaskId,
+                    wideTaskId = session.wideTaskId,
+                )
+                journal.append("split37 replace ${newPair.label()} OK")
+                SplitStartResult.OK
+            }
+            is Split37Engine.PlaceOutcome.Failed -> {
+                journal.append(
+                    "split37 replace ${newPair.label()} failed: ${outcome.reason} " +
+                        "(state kept; panes may be partially replaced)"
+                )
+                SplitStartResult.LAUNCH_FAILED
+            }
+            is Split37Engine.PlaceOutcome.Unavailable -> {
+                journal.append("split37 replace ${newPair.label()} -> unavailable")
+                SplitStartResult.LAUNCH_FAILED
+            }
+        }
+    }
+
+    /**
+     * Drops our bookkeeping of a native session. The pane tasks are left exactly where the firmware
+     * has them — whoever wanted them elsewhere ([exit]) has already asked the engine.
+     *
+     * The watchdog is cancelled LAST because [tick37Locked] calls this from inside that very
+     * coroutine: cancelling first would cut the emit below off (the self-cancellation trap
+     * [tearDownLocked] warns about).
+     *
+     * Must be called from within [mutex].
+     */
+    private suspend fun end37Locked(reason: EndReason, emit: Boolean) {
+        split37Session = null
+        split37EndTicks = 0
+        _state.value = SplitSessionState.Idle
+        if (emit) _events.emit(SplitEvent.SessionEnded(reason))
+        watchdog37Job?.cancel()
+        watchdog37Job = null
+    }
+
+    private fun startWatchdog37Locked() {
+        watchdog37Job?.cancel()
+        watchdog37Job = scope.launch { watchdog37Loop() }
+    }
+
+    /** Native-pane counterpart of [watchdogLoop]; same cadence, same "false = stop" contract. */
+    private suspend fun watchdog37Loop() {
+        while (true) {
+            delay(tickDelayMs)
+            val continueLoop = mutex.withLock { tick37Locked() }
+            if (!continueLoop) break
+        }
+    }
+
+    /**
+     * One native-pane watchdog pass: the engine drags escaped apps back and reports what it saw,
+     * this decides whether the session is still there.
+     *
+     * Deliberately NOT [tickLocked]: that one classifies freeform placements (MAXIMIZED, COVERED,
+     * the native-split modes, the cluster departure) and every one of those readings is a false
+     * alarm on windows the firmware owns.
+     *
+     * Must be called from within [mutex].
+     */
+    private suspend fun tick37Locked(): Boolean {
+        val current = _state.value as? SplitSessionState.Active ?: return false
+        if (!current.nativePanes) return false
+        val engine = split37 ?: return false
+        val session = split37Session ?: return false
+
+        val outcome = engine.tick(session)
+        split37Session = outcome.session
+        if (outcome.session.narrowTaskId != current.narrowTaskId ||
+            outcome.session.wideTaskId != current.wideTaskId
+        ) {
+            // The app recreated its task behind our back; the pane is that task now.
+            _state.value = current.copy(
+                narrowTaskId = outcome.session.narrowTaskId,
+                wideTaskId = outcome.session.wideTaskId,
+            )
+        }
+
+        if (outcome.sessionEnded) {
+            split37EndTicks++
+            if (split37EndTicks >= SPLIT37_END_TICKS) {
+                journal.append(
+                    "end split37: firmware left split (area mode 4, $SPLIT37_END_TICKS ticks)"
+                )
+                end37Locked(EndReason.EXIT, emit = true)
+                return false
+            }
+            return true
+        }
+        split37EndTicks = 0
+
+        // One dead pane is left standing, exactly as the freeform session does — but no PaneClosed
+        // is emitted: the pill and its picker do not exist over native panes.
+        if (outcome.narrow == Split37Engine.PaneState.GONE &&
+            outcome.wide == Split37Engine.PaneState.GONE
+        ) {
+            journal.append("end split37: both panes gone")
+            end37Locked(EndReason.EXIT, emit = true)
+            return false
+        }
+        return true
     }
 
     // ── Watchdog ──────────────────────────────────────────────────────────────
@@ -1601,6 +1860,9 @@ class SplitSessionManager(
 
     private suspend fun tickLocked(): Boolean {
         val current = _state.value as? SplitSessionState.Active ?: return false
+        // Native panes have their own watchdog; this one classifies freeform placements and would
+        // read the firmware's windows as maximised or natively split.
+        if (current.nativePanes) return false
 
         val narrowState = helper.getTaskState(current.pair.narrowPkg)
         val wideState = helper.getTaskState(current.pair.widePkg)

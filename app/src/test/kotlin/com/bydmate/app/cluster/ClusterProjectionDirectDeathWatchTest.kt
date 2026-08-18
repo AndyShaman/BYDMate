@@ -325,6 +325,9 @@ class ClusterProjectionDirectDeathWatchTest {
      */
     private fun resetSharedJournal() {
         field("journal").set(ClusterProjectionManager, null)
+        // Same static-cache problem for the UI7 cluster frame, installed next to the journal: it
+        // keeps the prefs of whichever test asked for it first, and its re-assert job outlives it.
+        field("frame").set(ClusterProjectionManager, null)
         ClusterJournal::class.java.getDeclaredField("instance")
             .apply { isAccessible = true }
             .set(null, null)

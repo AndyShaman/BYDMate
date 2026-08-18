@@ -21,6 +21,7 @@ import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
+import com.bydmate.app.cluster.ClusterFrameUi7
 import com.bydmate.app.cluster.ClusterGeometry
 import com.bydmate.app.cluster.ClusterJournal
 import com.bydmate.app.cluster.ClusterMode
@@ -32,6 +33,7 @@ import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExecutorCoroutineDispatcher
@@ -495,6 +497,10 @@ class BlindSpotController @Inject constructor(
         // after a blind-spot alert, and the compositor switches of both owners have to be
         // readable on one timeline.
         if (!on && ClusterProjectionManager.isProjectionActive()) {
+            // The camera stops needing the cluster right here even though the compositor stays
+            // powered for the projection; the frame's own owner set decides whether that writes
+            // anything back to the car.
+            holdClusterFrame(false)
             Log.i(TAG, "compositor stays up: projection active")
             clusterJournal.append("camera: compositor power-down skipped (projection active)")
             compositorPowered = false
@@ -507,6 +513,26 @@ class BlindSpotController @Inject constructor(
         if (ok) compositorPowered = on else compositorTarget = compositorPowered
         Log.i(TAG, "compositor power-${if (on) "up" else "down"} ok=$ok")
         clusterJournal.append("camera: compositor power-${if (on) "up" else "down"} ok=$ok")
+        // The frame follows the CONFIRMED outcome in both directions: an unpowered cluster has
+        // nothing of ours to frame, and a power-down that did not land leaves the camera still on
+        // the cluster, so the frame has to stay until the next transition retries.
+        if (ok) holdClusterFrame(on)
+    }
+
+    /**
+     * Takes or releases the platformized firmware's cluster frame (OTA V1.6) for the camera, on the
+     * instance the navigation projection uses: a second one would race its re-assert job. A no-op
+     * on every other firmware, and fail-soft: a frame problem must never break the camera flow.
+     */
+    private suspend fun holdClusterFrame(hold: Boolean) {
+        runCatching {
+            val frame = ClusterProjectionManager.frameFor(context)
+            if (hold) frame.apply(helper, ClusterFrameUi7.Owner.CAMERA)
+            else frame.restore(helper, ClusterFrameUi7.Owner.CAMERA)
+        }.onFailure {
+            if (it is CancellationException) throw it
+            Log.w(TAG, "cluster frame ${if (hold) "apply" else "restore"} failed: ${it.message}")
+        }
     }
 
     /** Runs the teardown in [ownScope] (so a cancelled fast loop cannot abandon a half-closed

@@ -72,6 +72,15 @@
     <string name="learn_button_save">Захаваць</string>
     <string name="learn_button_again">Нанова</string>
     <string name="learn_button_cancel">Скасаваць</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">Кола гучнасці на рулі</string>
+    <string name="settings_knob_play_pause_desc">Націсканне ставіць на паўзу і працягвае прайграванне, а не пераключае крыніцу гуку. Патрэбна пасля абнаўлення прашыўкі, дзе націсканне стала мяняць крыніцу.</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">Сістэма машыны</string>
+    <string name="settings_car_language_title">Мова інтэрфейсу машыны</string>
+    <string name="settings_car_language_desc">Толькі для прашыўкі UI7. Кнопка адкрывае схаваны штатны дыялог BYD з поўным спісам моў. Уключыць рускую: выберыце «Русский язык», потым OK. Вярнуць назад: тая ж кнопка, «English», OK. Увага: на рускай мове ў часткі ўладальнікаў перастае працаваць аўтапаркоўка. Калі карыстаецеся аўтапаркоўкай, пакіньце English.</string>
+    <string name="settings_car_language_button">Адкрыць выбар мовы</string>
+    <string name="settings_car_language_unavailable">Дыялог выбару мовы недаступны на гэтай прашыўцы</string>
     <string name="settings_section_places_title">Месцы</string>
     <string name="settings_section_application_title">Праграма</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
@@ -1342,6 +1351,7 @@
     <string name="settings_split_mechanism_freeform">Вокны BYDMate</string>
     <string name="settings_split_mechanism_native">Родны падзел</string>
     <string name="settings_split_mechanism_native_hint">Падзел выконвае прашыўка машыны. Выгляд залежыць ад прашыўкі: дзве панэлі 1/3 і 2/3 або папалам з выбарам другой праграмы на экране.</string>
+    <string name="settings_split_mechanism_platformized_hint">На гэтай прашыўцы экран дзеліць сама машына: панэлі 1/3 і 2/3, падзяляльнік і жэст абмену родныя. BYDMate толькі запускае абраную пару і вяртае праграму ў яе панэль.</string>
     <string name="settings_split_try_native_hint">Паспрабуйце рэжым Родны падзел.</string>
     <string name="split_feature_disabled">Падзел экрана выключаны ў наладах</string>
 </resources>

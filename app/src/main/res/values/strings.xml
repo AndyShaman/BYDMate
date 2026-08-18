@@ -72,6 +72,15 @@
     <string name="learn_button_save">Сохранить</string>
     <string name="learn_button_again">Заново</string>
     <string name="learn_button_cancel">Отмена</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
+    <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">Система машины</string>
+    <string name="settings_car_language_title">Язык интерфейса машины</string>
+    <string name="settings_car_language_desc">Только для прошивки UI7. Кнопка открывает скрытый штатный диалог BYD с полным списком языков. Включить русский: выберите «Русский язык», затем OK. Вернуть обратно: та же кнопка, «English», OK. Внимание: на русском языке у части владельцев перестаёт работать автопарковка. Если пользуетесь автопарковкой, оставьте English.</string>
+    <string name="settings_car_language_button">Открыть выбор языка</string>
+    <string name="settings_car_language_unavailable">Диалог выбора языка недоступен на этой прошивке</string>
     <string name="settings_section_places_title">Места</string>
     <string name="settings_section_application_title">Приложение</string>
     <!-- Smart Home section nav label stays Russian per design spec (hidden section) -->
@@ -1344,6 +1353,7 @@
     <string name="settings_split_mechanism_freeform">Окна BYDMate</string>
     <string name="settings_split_mechanism_native">Родное разделение</string>
     <string name="settings_split_mechanism_native_hint">Разделение выполняет прошивка машины. Вид зависит от прошивки: две панели 1/3 и 2/3 или пополам с выбором второго приложения на экране.</string>
+    <string name="settings_split_mechanism_platformized_hint">На этой прошивке экран делит сама машина: панели 1/3 и 2/3, разделитель и жест обмена родные. BYDMate только запускает выбранную пару и возвращает приложение в его панель.</string>
     <string name="settings_split_try_native_hint">Попробуйте режим Родное разделение.</string>
     <string name="split_feature_disabled">Разделение экрана выключено в настройках</string>
 </resources>

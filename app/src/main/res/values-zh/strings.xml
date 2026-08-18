@@ -762,6 +762,15 @@
     <string name="automation_action_media_volume_label">音量</string>
     <string name="learn_button_again">重新学习</string>
     <string name="learn_button_cancel">取消</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">方向盘音量旋钮</string>
+    <string name="settings_knob_play_pause_desc">按下旋钮暂停和继续播放，而不是切换音源。固件更新后按下变为切换音源时需要开启。</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">车机系统</string>
+    <string name="settings_car_language_title">车机界面语言</string>
+    <string name="settings_car_language_desc">仅适用于 UI7 固件。按钮会打开比亚迪隐藏的原厂语言对话框，其中有完整语言列表。切换到俄语：选择“Русский язык”，然后点 OK。切回来：同一个按钮，选择“English”，点 OK。注意：部分车主在俄语下自动泊车会失效。如果您使用自动泊车，请保留 English。</string>
+    <string name="settings_car_language_button">打开语言选择</string>
+    <string name="settings_car_language_unavailable">此固件不支持语言选择对话框</string>
     <string name="learn_button_captured">已识别按键：</string>
     <string name="learn_button_dialog_title">分配按键</string>
     <string name="learn_button_rejected">无法分配此按键，请按其他按键。</string>
@@ -1304,6 +1313,7 @@
     <string name="settings_split_mechanism_freeform">BYDMate 窗口</string>
     <string name="settings_split_mechanism_native">系统分屏</string>
     <string name="settings_split_mechanism_native_hint">分屏由车机固件完成。显示效果取决于固件：可能是 1/3 和 2/3 两个窗口，也可能是左右对半并在屏幕上选择第二个应用。</string>
+    <string name="settings_split_mechanism_platformized_hint">在该固件上由车机自己分屏：1/3 和 2/3 两个窗口、分隔条和左右交换手势都是原生的。BYDMate 只负责启动所选的应用组合，并把跑出去的应用送回它的窗口。</string>
     <string name="settings_split_try_native_hint">试试“系统分屏”方式。</string>
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
 </resources>

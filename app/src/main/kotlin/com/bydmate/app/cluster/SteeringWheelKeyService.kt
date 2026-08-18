@@ -8,6 +8,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.navdata.NavA11yFeed
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,7 +19,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * button (keycode in [ClusterProjectionManager.KEY_TRIGGER_KEYCODE], default
  * [DEFAULT_TRIGGER_KEYCODE] = the right star) toggles Yandex Navi between the cluster and the centre
  * screen and is consumed; every other key (switch OFF, a non-trigger button, the right-star
- * long-press that opens the native action menu) passes through untouched.
+ * long-press that opens the native action menu) passes through untouched. A separate switch
+ * ([ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE]) makes a volume-knob press play/pause the active
+ * MediaSession instead of letting the firmware switch the audio source.
  *
  * Inert unless enabled in secure settings (self-enabled via the daemon when the switch turns on —
  * no Accessibility UI on DiLink) AND the settings switch is on, so it does nothing for users who
@@ -78,6 +81,19 @@ class SteeringWheelKeyService : AccessibilityService() {
             // native BYD assistant, which owns the same hardware keycode (Finding 2).
             VoiceKeyDecision.CONSUME -> return true
             VoiceKeyDecision.IGNORE -> {}
+        }
+        // Volume-knob press: runs before the star decision, own switch, default off. The key is
+        // consumed whenever the feature is on — even when no MediaSession answers — because the
+        // alternative is the firmware's source switch, which is exactly what the user turned this
+        // on to avoid (pre-V1.6 firmware behaved the same: first controller or nothing).
+        val knobEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false)
+        when (knobDecision(event.keyCode, isDown, knobEnabled)) {
+            KnobDecision.CONSUME_AND_PLAY_PAUSE -> {
+                KnobPlayPause.dispatch(applicationContext)
+                return true
+            }
+            KnobDecision.CONSUME -> return true
+            KnobDecision.PASS_THROUGH -> {}
         }
         val enabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
         val trigger = prefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE)

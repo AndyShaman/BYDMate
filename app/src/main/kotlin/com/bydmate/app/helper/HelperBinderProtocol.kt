@@ -201,6 +201,72 @@ object HelperBinderProtocol {
      */
     val TX_GET_TOP_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 32            // 33
 
+    /**
+     * Enters the vehicle's native 3:7 split via IActivityTaskManager.enterSplitMode() (BYD
+     * extension, present only on platformized firmware — ro.build.ui_platformized=1, OTA V1.6).
+     *
+     * (no args) -> [int status (see SPLIT37_*), int areaMode]
+     * areaMode is re-read with getScreenAreaInfoForMulti() AFTER the call: 3 = split on screen,
+     * 4 = fullscreen (the split did not come up), -1 = unreadable.
+     *
+     * An old daemon without this handler makes transact return false → client returns null,
+     * which the split engine reads as "daemon outdated", never as a firmware verdict.
+     */
+    val TX_SPLIT37_ENTER: Int = IBinder.FIRST_CALL_TRANSACTION + 33          // 34
+
+    /**
+     * Geometry of the native split areas: area 1 (narrow pane), 2 (wide pane), 4 (fullscreen),
+     * in that order. Root ids come from getRootTaskIdByAreaId(areaId), bounds from the matching
+     * entry of getAllRootTaskInfos().
+     *
+     * (no args) -> [int status (see SPLIT37_*), int areaMode,
+     *               then 3 × (int rootTaskId, int left, int top, int right, int bottom)]
+     * A root that has no id or is not listed by getAllRootTaskInfos is reported as
+     * rootTaskId -1 with zero bounds.
+     */
+    val TX_SPLIT37_AREA_INFO: Int = IBinder.FIRST_CALL_TRANSACTION + 34      // 35
+
+    /**
+     * Reparents a task into a native split root: `am stack move-task <taskId> <rootTaskId> true`
+     * (= activity_task tx 54 moveTaskToRootTask; MANAGE_ACTIVITY_TASKS is held by shell uid),
+     * followed by a resize to the given bounds when the rect is non-empty (right>left && bottom>top).
+     *
+     * Request: [int taskId, int rootTaskId, int left, int top, int right, int bottom]
+     * Reply:   [int status (see SPLIT37_*), int 0]
+     */
+    val TX_SPLIT37_MOVE_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 35      // 36
+
+    /**
+     * Area a task currently lives in, via getTaskAreaIdForMulti(taskId): 1 = narrow pane,
+     * 2 = wide pane, 4 = fullscreen (the task escaped the split).
+     *
+     * Request: [int taskId] -> [int status (see SPLIT37_*), int areaId (-1 when unreadable)]
+     */
+    val TX_SPLIT37_TASK_AREA: Int = IBinder.FIRST_CALL_TRANSACTION + 36      // 37
+
+    /**
+     * Swaps the two split sides via SwapSplitPosition() (exact name, capital S). The root tasks
+     * keep their sizes — the narrow root stays narrow and moves to the other edge.
+     *
+     * (no args) -> [int status (see SPLIT37_*), int 0]
+     */
+    val TX_SPLIT37_SWAP: Int = IBinder.FIRST_CALL_TRANSACTION + 37           // 38
+
+    /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
+     *  convention: 2 says the firmware has no native split surface at all (methods absent on the
+     *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is
+     *  visible in the daemon's log only: HelperClient collapses every non-OK status (and every
+     *  transport failure) into null/false, so callers cannot tell 1 from 2. */
+    const val SPLIT37_OK = 0
+    const val SPLIT37_FAILED = 1
+    const val SPLIT37_UNSUPPORTED = 2
+
+    /** Area ids of the native split, in the order TX_SPLIT37_AREA_INFO reports them:
+     *  narrow pane, wide pane, fullscreen root. */
+    const val SPLIT37_AREA_NARROW = 1
+    const val SPLIT37_AREA_WIDE = 2
+    const val SPLIT37_AREA_FULL = 4
+
     /** Hard cap on items per TX_READ_BATCH call (FidMap is 58 today; 128 leaves headroom). */
     const val MAX_BATCH_ITEMS: Int = 128
 

@@ -68,6 +68,15 @@
     <string name="learn_button_save">Save</string>
     <string name="learn_button_again">Again</string>
     <string name="learn_button_cancel">Cancel</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
+    <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">Car system</string>
+    <string name="settings_car_language_title">Car interface language</string>
+    <string name="settings_car_language_desc">For UI7 firmware only. The button opens the hidden factory BYD dialog with the full list of languages. To switch to Russian: pick \"Русский язык\", then OK. To switch back: same button, \"English\", OK. Note: with Russian selected, automatic parking stops working for some owners. If you use automatic parking, keep English.</string>
+    <string name="settings_car_language_button">Open language picker</string>
+    <string name="settings_car_language_unavailable">The language dialog is not available on this firmware</string>
     <string name="settings_section_places_title">Places</string>
     <string name="settings_section_application_title">Application</string>
     <string name="settings_smart_home_section_title">Smart home</string>
@@ -1190,6 +1199,7 @@
     <string name="settings_split_mechanism_freeform">BYDMate windows</string>
     <string name="settings_split_mechanism_native">Native split</string>
     <string name="settings_split_mechanism_native_hint">The split is done by the car\'s firmware. The look depends on the firmware: either two panes at one-third and two-thirds, or half and half with the second app picked on screen.</string>
+    <string name="settings_split_mechanism_platformized_hint">On this firmware the car itself splits the screen: the 1/3 and 2/3 panes, the divider and the swap gesture are native. BYDMate only starts the chosen pair and returns an app to its pane.</string>
     <string name="settings_split_try_native_hint">Try the Native split mode.</string>
     <string name="split_feature_disabled">Split screen is disabled in settings</string>
 </resources>

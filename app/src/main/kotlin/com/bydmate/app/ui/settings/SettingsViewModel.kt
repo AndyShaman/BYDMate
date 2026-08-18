@@ -1763,7 +1763,8 @@ class SettingsViewModel @Inject constructor(
                     is com.bydmate.app.split.SplitSessionState.Active -> {
                         appendLine(
                             "session: active narrow=${session.pair.narrowPkg}#${session.narrowTaskId} " +
-                                "wide=${session.pair.widePkg}#${session.wideTaskId} side=${session.pair.narrowSide}"
+                                "wide=${session.pair.widePkg}#${session.wideTaskId} " +
+                                "side=${session.pair.narrowSide} native=${session.nativePanes}"
                         )
                         val departed = splitSessionManager.departedPanePkgs()
                         appendLine("departed_panes: " + if (departed.isEmpty()) "(none)" else departed.joinToString(","))

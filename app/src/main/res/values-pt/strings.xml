@@ -69,6 +69,15 @@
     <string name="learn_button_save">Salvar</string>
     <string name="learn_button_again">Novamente</string>
     <string name="learn_button_cancel">Cancelar</string>
+    <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
+    <string name="settings_knob_play_pause_title">Botão giratório de volume no volante</string>
+    <string name="settings_knob_play_pause_desc">Pressionar pausa e retoma a reprodução em vez de trocar a fonte de áudio. Necessário após a atualização de firmware em que o toque passou a mudar a fonte.</string>
+    <!-- Car system section: BYD head unit settings, not app settings -->
+    <string name="settings_car_system_header">Sistema do carro</string>
+    <string name="settings_car_language_title">Idioma da interface do carro</string>
+    <string name="settings_car_language_desc">Apenas para o firmware UI7. O botão abre a caixa de diálogo de fábrica oculta da BYD com a lista completa de idiomas. Para ativar o russo: escolha \"Русский язык\" e depois OK. Para voltar: o mesmo botão, \"English\", OK. Atenção: com o russo, o estacionamento automático deixa de funcionar para alguns proprietários. Se usa o estacionamento automático, mantenha English.</string>
+    <string name="settings_car_language_button">Abrir seleção de idioma</string>
+    <string name="settings_car_language_unavailable">A caixa de diálogo de idioma não está disponível neste firmware</string>
     <string name="settings_section_places_title">Locais</string>
     <string name="settings_section_application_title">Aplicativo</string>
     <string name="settings_smart_home_section_title">Casa inteligente</string>
@@ -1186,6 +1195,7 @@
     <string name="settings_split_mechanism_freeform">Janelas do BYDMate</string>
     <string name="settings_split_mechanism_native">Divisão nativa</string>
     <string name="settings_split_mechanism_native_hint">A divisão é feita pelo firmware do carro. O resultado depende do firmware: dois painéis de 1/3 e 2/3 ou metade a metade, escolhendo o segundo aplicativo na tela.</string>
+    <string name="settings_split_mechanism_platformized_hint">Neste firmware o próprio carro divide a tela: os painéis de 1/3 e 2/3, o divisor e o gesto de troca são nativos. O BYDMate apenas inicia o par escolhido e devolve o aplicativo ao seu painel.</string>
     <string name="settings_split_try_native_hint">Experimente o modo Divisão nativa.</string>
     <string name="split_feature_disabled">Tela dividida desativada nas configurações</string>
 </resources>

@@ -78,6 +78,8 @@ object ClusterProjectionManager {
     const val PREFS_NAME = "cluster_projection"
     // Master enable for star-controlled projection (settings switch). Read by SteeringWheelKeyService.
     const val KEY_MIRROR_ENABLED = "mirror_enabled"
+    // Read by SteeringWheelKeyService: volume-knob press = play/pause instead of source switch.
+    const val KEY_KNOB_PLAY_PAUSE = "knob_play_pause"
     // Steering-wheel keycode that toggles projection. Default = right star (DEFAULT_TRIGGER_KEYCODE).
     // Stored independently of the master switch so the choice survives turning the feature off.
     const val KEY_TRIGGER_KEYCODE = "trigger_keycode"
@@ -208,10 +210,36 @@ object ClusterProjectionManager {
     @Volatile
     private var journal: ClusterJournal? = null
 
+    /**
+     * Cluster frame of the platformized firmware (OTA V1.6); installed alongside [journal] because
+     * it needs the same prefs the manager keeps its markers in. A no-op on every other firmware.
+     */
+    @Volatile
+    private var frame: ClusterFrameUi7? = null
+
+    // Synchronized: two entry points racing here would build two ClusterFrameUi7 instances, and
+    // the loser's re-assert job would keep writing our frame back with nobody left to restore it.
+    @Synchronized
     private fun installJournal(context: Context) {
         if (journal == null) {
             journal = ClusterJournal.shared(context)
         }
+        if (frame == null) {
+            frame = ClusterFrameUi7(
+                prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+                journal = ::log,
+                scope = scope,
+            )
+        }
+    }
+
+    /**
+     * The process-wide cluster frame, for the second owner (the blind-spot camera): a second
+     * instance would race this one's re-assert job and outlive its restore.
+     */
+    internal fun frameFor(context: Context): ClusterFrameUi7 {
+        installJournal(context.applicationContext)
+        return requireNotNull(frame)
     }
 
     private fun log(payload: String) {
@@ -698,6 +726,7 @@ object ClusterProjectionManager {
                 projectedPackage = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
+                frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
                 if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
             }
             ClusterMode.FULLSCREEN -> {
@@ -725,6 +754,7 @@ object ClusterProjectionManager {
                     projectedPackage = null
                     currentMode = ClusterMode.OFF
                     lastFailure = failure
+                    frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
                     if (autoContainerEnabled(context)) powerDownCompositor(context, helper)
                 }
             }
@@ -759,6 +789,9 @@ object ClusterProjectionManager {
      * boots BLACK — the compositor sits in projection mode with nobody drawing. Sends the missing
      * power-down and clears the marker. No-op when a projection is live in THIS process (it owns
      * the compositor), when no marker is set, or when auto-container is off.
+     *
+     * Also restores the platformized firmware's cluster frame ([ClusterFrameUi7.recoverStale]) left
+     * behind by the same kind of death; it carries its own marker and is skipped independently.
      */
     fun recoverStaleCompositor(context: Context, helper: HelperClient, bootstrap: HelperBootstrap) {
         val appContext = context.applicationContext
@@ -767,14 +800,27 @@ object ClusterProjectionManager {
             mutex.withLock {
                 val marker = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
                     .getBoolean(KEY_COMPOSITOR_POWERED, false)
-                if (!shouldRecoverCompositor(marker, currentMode, autoContainerEnabled(appContext))) return@withLock
+                val compositorStale =
+                    shouldRecoverCompositor(marker, currentMode, autoContainerEnabled(appContext))
+                // Same class of recovery, own marker: the UI7 cluster frame must be put back even
+                // when auto-container is off, and it has nothing to put back on any firmware but
+                // the platformized one — so no other car reaches ensureRunning() through this.
+                val frameStale = frame?.hasStalePair() == true
+                if (!compositorStale && !frameStale) return@withLock
                 if (!bootstrap.ensureRunning()) {
-                    Log.w(TAG, "recoverStaleCompositor: daemon unreachable; keeping marker for next start")
+                    val stale = listOfNotNull(
+                        "compositor".takeIf { compositorStale },
+                        "ui7 frame".takeIf { frameStale },
+                    ).joinToString("+")
+                    Log.w(TAG, "recoverStaleCompositor: daemon unreachable; keeping $stale marker for next start")
                     return@withLock
                 }
-                Log.i(TAG, "recoverStaleCompositor: powering down compositor left on by a prior session")
-                log("recovery: compositor power-down (marker from a prior session)")
-                powerDownCompositor(appContext, helper)
+                if (frameStale) frame?.recoverStale(helper)
+                if (compositorStale) {
+                    Log.i(TAG, "recoverStaleCompositor: powering down compositor left on by a prior session")
+                    log("recovery: compositor power-down (marker from a prior session)")
+                    powerDownCompositor(appContext, helper)
+                }
             }
         }
     }
@@ -986,7 +1032,12 @@ object ClusterProjectionManager {
                     freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
             }
             if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
-            if (tryDirectProjection(context, helper, display, geo, plan)) return null
+            if (tryDirectProjection(context, helper, display, geo, plan)) {
+                // Platformized firmware only: open the cluster's Map frame now that something of
+                // ours is actually on it. Fail-soft — a projection is never failed by the frame.
+                frame?.apply(helper, ClusterFrameUi7.Owner.PROJECTION)
+                return null
+            }
         }
 
         // F-1 fix (Round 8): hoist pkg so all VD terminal failure paths can call onClusterSendFailed.
@@ -1006,7 +1057,7 @@ object ClusterProjectionManager {
         // again just before launchAndForce is always safe. The first re-arm covers surface→createVd;
         // the second re-arm covers the launchAndForce window specifically.
         onBeforeClusterSend?.invoke(pkg)
-        return try {
+        val failure = try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
                 addOverlayAndAwaitSurface(context, display, geo, plan, helper)
             }
@@ -1069,6 +1120,11 @@ object ClusterProjectionManager {
             onClusterSendFailed?.invoke(pkg)
             hideOverlay(helper); "projection"
         }
+        // Same fail-soft frame hook as the direct path above, outside the try: a cancellation
+        // thrown inside apply() is a cancelled projection, not a failed one, and must not be
+        // swallowed into a "projection threw" verdict.
+        if (failure == null) frame?.apply(helper, ClusterFrameUi7.Owner.PROJECTION)
+        return failure
     }
 
     /**

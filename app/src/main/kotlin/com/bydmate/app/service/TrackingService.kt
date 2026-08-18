@@ -1416,9 +1416,12 @@ class TrackingService : Service(), LocationListener {
         // itself); without this, enabling Voice alone never re-binds the service (Finding 3).
         val voiceEnabled = getSharedPreferences("voice", Context.MODE_PRIVATE)
             .getBoolean(SettingsRepository.KEY_VOICE_ENABLED, false)
+        // The volume-knob play/pause interception lives in the same a11y filter: without the
+        // service bound the knob falls back to the firmware's audio-source switch.
+        val knobEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false)
         // HUD guidance also reads Navigator via this a11y service; gate on CONFIRMED
         // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
-        if (!mirrorEnabled && !voiceEnabled && !hudController.requiresA11y()) return
+        if (!mirrorEnabled && !voiceEnabled && !knobEnabled && !hudController.requiresA11y()) return
         starGrant.ensure(reason)
     }
 

@@ -127,7 +127,7 @@ class ProductionMediaSessionSource(private val context: Context) : MediaSessionS
     }
 }
 
-private class RealMediaControllerHandle(
+internal class RealMediaControllerHandle(
     private val controller: android.media.session.MediaController,
 ) : MediaControllerHandle {
 

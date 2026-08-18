@@ -173,8 +173,10 @@ class SplitOverlayController @Inject constructor(
         ownAppForegrounded = foreground
         if (foreground) {
             tearDownPill()
-        } else if (sessionManager.state.value is SplitSessionState.Active) {
-            ensurePillAttached(junctionXFromCurrentState())
+        } else {
+            // A native 3:7 session is drawn by the firmware and has no pill of ours to restore.
+            val active = sessionManager.state.value as? SplitSessionState.Active
+            if (active != null && !active.nativePanes) ensurePillAttached(junctionXFromCurrentState())
         }
     }
 
@@ -200,24 +202,32 @@ class SplitOverlayController @Inject constructor(
                     clearAppCache()
                 }
                 is SplitSessionState.Active -> {
-                    val junctionX = junctionXForSide(state.pair.narrowSide)
                     // Session is now Active: the pill is owned by the session, not the
                     // first-pair picker. Unregister the Idle-picker receiver if it was armed.
                     unregisterCloseSystemDialogsReceiver()
-                    // Keep pill at the correct junction when narrowSide changes. While our own
-                    // app is in the foreground the pill stays away (390-4): a state emission
-                    // there (mirror, pane change) must not float it back over our UI.
-                    if (!ownAppForegrounded) {
-                        pillView?.setJunctionX(junctionX) ?: ensurePillAttached(junctionX)
-                    }
-                    // mirror() flips narrowSide while a picker may be open (the pill menu or the
-                    // voice agent can mirror at any time). The ChangePane header names a screen
-                    // side, so it must be recomputed from the new state — otherwise the picker
-                    // keeps saying «left» for a pane that has just moved to the right.
-                    if (logic.pickerMode != null) syncLogicToView()
-                    // Load app list for the picker (once per session).
-                    if (!appListReady) {
-                        controllerScope.launch { loadAppsIfNeeded() }
+                    if (state.nativePanes) {
+                        // The firmware draws these panes with its own divider: there is no
+                        // junction of ours to sit on and no pane we could change from a menu.
+                        // A pill left over from the first-pair picker — or from a legacy session
+                        // replaced in place, with no Idle in between — goes away here.
+                        tearDownPill()
+                    } else {
+                        val junctionX = junctionXForSide(state.pair.narrowSide)
+                        // Keep pill at the correct junction when narrowSide changes. While our own
+                        // app is in the foreground the pill stays away (390-4): a state emission
+                        // there (mirror, pane change) must not float it back over our UI.
+                        if (!ownAppForegrounded) {
+                            pillView?.setJunctionX(junctionX) ?: ensurePillAttached(junctionX)
+                        }
+                        // mirror() flips narrowSide while a picker may be open (the pill menu or the
+                        // voice agent can mirror at any time). The ChangePane header names a screen
+                        // side, so it must be recomputed from the new state — otherwise the picker
+                        // keeps saying «left» for a pane that has just moved to the right.
+                        if (logic.pickerMode != null) syncLogicToView()
+                        // Load app list for the picker (once per session).
+                        if (!appListReady) {
+                            controllerScope.launch { loadAppsIfNeeded() }
+                        }
                     }
                 }
             }

@@ -540,6 +540,108 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); true }
 
+                HelperBinderProtocol.TX_SPLIT37_ENTER -> runCatching {
+                    val iAtm = activityTaskManager()
+                    val enter = splitMethod(iAtm, "enterSplitMode", 0)
+                    if (enter == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_ENTER: enterSplitMode absent")
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_UNSUPPORTED); reply?.writeInt(-1)
+                    } else {
+                        enter.invoke(iAtm)
+                        // Read the area mode BEFORE the first write: a throw here must land in
+                        // getOrElse with an untouched reply, not append a second status to it.
+                        val areaMode = screenAreaMode(iAtm)
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                        reply?.writeInt(areaMode)
+                    }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_ENTER failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(-1); true
+                }
+
+                HelperBinderProtocol.TX_SPLIT37_AREA_INFO -> runCatching {
+                    val iAtm = activityTaskManager()
+                    val byAreaId = splitMethod(iAtm, "getRootTaskIdByAreaId", 1)
+                    if (byAreaId == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_AREA_INFO: getRootTaskIdByAreaId absent")
+                        writeAreaInfoFailure(reply, HelperBinderProtocol.SPLIT37_UNSUPPORTED)
+                    } else {
+                        val areaMode = screenAreaMode(iAtm)
+                        // One getAllRootTaskInfos() call per request: the watchdog polls this verb
+                        // once a second, and all three areas are matched against the same snapshot.
+                        val infos = rootTaskInfosSnapshot(iAtm)
+                        val areas = SPLIT37_AREA_IDS.map { areaId ->
+                            val rootTaskId = byAreaId.invoke(iAtm, areaId) as? Int ?: -1
+                            // A root without readable bounds is reported as absent (id -1): the engine
+                            // must not resize a pane to a rect it never read.
+                            val bounds = if (rootTaskId > 0 && infos != null) rootTaskBounds(infos, rootTaskId) else null
+                            if (bounds == null) intArrayOf(-1, 0, 0, 0, 0)
+                            else intArrayOf(rootTaskId, bounds.left, bounds.top, bounds.right, bounds.bottom)
+                        }
+                        // Everything is read BEFORE the first write: a throw mid-reflection must land
+                        // in getOrElse with an untouched reply, not leave a half-written one that the
+                        // client would parse as real geometry.
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                        reply?.writeInt(areaMode)
+                        areas.forEach { area -> area.forEach { reply?.writeInt(it) } }
+                    }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_AREA_INFO failed", e)
+                    writeAreaInfoFailure(reply, HelperBinderProtocol.SPLIT37_FAILED); true
+                }
+
+                HelperBinderProtocol.TX_SPLIT37_MOVE_TASK -> runCatching {
+                    val taskId = data.readInt(); val rootTaskId = data.readInt()
+                    val l = data.readInt(); val t = data.readInt(); val r = data.readInt(); val b = data.readInt()
+                    val status = split37MoveTaskCore(
+                        taskId, rootTaskId, l, t, r, b, amShell, ::setTaskBoundsReflect,
+                    )
+                    reply?.writeInt(status); reply?.writeInt(0)
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_MOVE_TASK failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(0); true
+                }
+
+                HelperBinderProtocol.TX_SPLIT37_TASK_AREA -> runCatching {
+                    val taskId = data.readInt()
+                    val iAtm = activityTaskManager()
+                    val forTask = splitMethod(iAtm, "getTaskAreaIdForMulti", 1)
+                    if (forTask == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_TASK_AREA: getTaskAreaIdForMulti absent")
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_UNSUPPORTED); reply?.writeInt(-1)
+                    } else {
+                        // Invoke before the first write — see TX_SPLIT37_ENTER.
+                        val areaId = forTask.invoke(iAtm, taskId) as? Int ?: -1
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                        reply?.writeInt(areaId)
+                    }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_TASK_AREA failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(-1); true
+                }
+
+                HelperBinderProtocol.TX_SPLIT37_SWAP -> runCatching {
+                    val iAtm = activityTaskManager()
+                    // Exact vendor spelling, capital S — not a typo.
+                    val swap = splitMethod(iAtm, "SwapSplitPosition", 0)
+                    if (swap == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_SWAP: SwapSplitPosition absent")
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_UNSUPPORTED)
+                    } else {
+                        swap.invoke(iAtm)
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                    }
+                    reply?.writeInt(0)
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_SWAP failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(0); true
+                }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -989,6 +1091,101 @@ private fun setTaskBoundsReflect(taskId: Int, left: Int, top: Int, right: Int, b
 private fun setFocusedTaskReflect(taskId: Int) {
     val iAtm = activityTaskManager()
     iAtm.javaClass.getMethod("setFocusedRootTask", Int::class.javaPrimitiveType).invoke(iAtm, taskId)
+}
+
+// --- Native 3:7 split surface (BYD extension of IActivityTaskManager, platformized firmware) ---
+
+/** Area ids reported by TX_SPLIT37_AREA_INFO, in reply order: narrow pane, wide pane, fullscreen. */
+private val SPLIT37_AREA_IDS = intArrayOf(
+    HelperBinderProtocol.SPLIT37_AREA_NARROW,
+    HelperBinderProtocol.SPLIT37_AREA_WIDE,
+    HelperBinderProtocol.SPLIT37_AREA_FULL,
+)
+
+/**
+ * Looks up a BYD split method by [name] and [paramCount] on the IActivityTaskManager proxy.
+ * Returns null on firmware without the platformized split surface (pre-OTA image), so the caller
+ * answers SPLIT37_UNSUPPORTED instead of turning a missing method into a generic failure.
+ */
+private fun splitMethod(iAtm: Any, name: String, paramCount: Int): java.lang.reflect.Method? =
+    iAtm.javaClass.methods.firstOrNull { it.name == name && it.parameterTypes.size == paramCount }
+
+/** getScreenAreaInfoForMulti(): 3 = split on screen, 4 = fullscreen; -1 when the method is absent. */
+private fun screenAreaMode(iAtm: Any): Int =
+    splitMethod(iAtm, "getScreenAreaInfoForMulti", 0)?.invoke(iAtm) as? Int ?: -1
+
+/**
+ * One getAllRootTaskInfos() snapshot, taken once per TX_SPLIT37_AREA_INFO request and shared by
+ * all three areas. Null when the method is absent (firmware without the platformized split).
+ */
+private fun rootTaskInfosSnapshot(iAtm: Any): List<Any>? =
+    (splitMethod(iAtm, "getAllRootTaskInfos", 0)?.invoke(iAtm) as? List<*>)?.filterNotNull()
+
+/**
+ * Bounds of the root task [rootTaskId], taken from the [infos] entry whose taskId matches.
+ * Null when the root is not listed or the bounds field is missing. Both fields go through
+ * [fieldByName], which walks the superclass chain: on API 32 RootTaskInfo declares `bounds`
+ * itself but inherits `taskId` from TaskInfo.
+ */
+private fun rootTaskBounds(infos: List<Any>, rootTaskId: Int): Rect? {
+    for (info in infos) {
+        val idField = fieldByName(info, "taskId") ?: continue
+        idField.isAccessible = true
+        if (idField.getInt(info) != rootTaskId) continue
+        val boundsField = fieldByName(info, "bounds") ?: return null
+        boundsField.isAccessible = true
+        return boundsField.get(info) as? Rect
+    }
+    return null
+}
+
+/**
+ * Writes a complete TX_SPLIT37_AREA_INFO reply for the failure paths: [status], an unreadable
+ * area mode and three absent roots. The client parses a fixed-length reply, so a short one on
+ * the failure path would read as a transport error ("daemon outdated") rather than a status.
+ */
+private fun writeAreaInfoFailure(reply: Parcel?, status: Int) {
+    reply?.writeInt(status)
+    reply?.writeInt(-1)
+    SPLIT37_AREA_IDS.forEach { _ ->
+        reply?.writeInt(-1)              // rootTaskId = absent
+        repeat(4) { reply?.writeInt(0) } // bounds
+    }
+}
+
+/**
+ * Testable core of TX_SPLIT37_MOVE_TASK: reparents [taskId] into the native split root
+ * [rootTaskId] with `am stack move-task` (= activity_task tx 54 moveTaskToRootTask; shell uid
+ * holds MANAGE_ACTIVITY_TASKS), then resizes it to the pane rect when that rect is non-empty.
+ * The move is the load-bearing step — a resize failure throws out to the caller's runCatching.
+ * `am stack move-task` prints `Error: ...` or an exception trace when it refuses and stays silent
+ * on success, so the outcome is read with the daemon-wide substring convention (see launchAppCore).
+ * Returns a HelperBinderProtocol.SPLIT37_* status.
+ */
+internal fun split37MoveTaskCore(
+    taskId: Int,
+    rootTaskId: Int,
+    left: Int,
+    top: Int,
+    right: Int,
+    bottom: Int,
+    shell: (String, List<String>) -> String,
+    resize: (Int, Int, Int, Int, Int) -> Unit,
+): Int {
+    // Ids are internal Ints but still go through positional args — nothing is interpolated.
+    val out = shell(
+        "am stack move-task \"\$1\" \"\$2\" true",
+        listOf(taskId.toString(), rootTaskId.toString()),
+    )
+    if (out.contains("Error") || out.contains("Exception")) {
+        android.util.Log.w(
+            "bydmate_helper",
+            "split37 move-task task=$taskId root=$rootTaskId failed: ${out.take(200)}",
+        )
+        return HelperBinderProtocol.SPLIT37_FAILED
+    }
+    if (right > left && bottom > top) resize(taskId, left, top, right, bottom)
+    return HelperBinderProtocol.SPLIT37_OK
 }
 
 /**

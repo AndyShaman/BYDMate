@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
+import android.widget.Toast
 import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
@@ -130,6 +131,7 @@ import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.TtsVoiceCatalog
 import com.bydmate.app.voice.online.TtsRouter
 import com.bydmate.app.hud.HudController
+import com.bydmate.app.split.Split37Engine
 import com.bydmate.app.split.SplitFreeformVerdict
 import com.bydmate.app.split.SplitRole
 import com.bydmate.app.split.applyPick
@@ -1432,6 +1434,9 @@ private fun SplitSection() {
     val splitFreeformUnsupported = remember {
         SplitFreeformVerdict(clusterPrefs, bootCount = { -1 }).unsupported()
     }
+    // Platformized firmware (OTA V1.6): the native 3:7 split is the only mechanism there, so the
+    // screen states the fact instead of offering a choice that has one outcome.
+    val split37Firmware = remember { Split37Engine.isPlatformizedFirmware() }
     var clearStatus by remember { mutableStateOf<String?>(null) }
     // "?" badge on the section header; the text it toggles is the first block inside the card.
     var howToOpen by remember { mutableStateOf(false) }
@@ -1483,7 +1488,10 @@ private fun SplitSection() {
                         force = !enabled)
                 },
             )
-            if (splitEnabled) {
+            if (splitEnabled && split37Firmware) {
+                SettingDivider()
+                SettingHint(text = stringResource(R.string.settings_split_mechanism_platformized_hint))
+            } else if (splitEnabled) {
                 SettingDivider()
                 // Mechanism selector: our own freeform panes vs handing the pair to the
                 // firmware's split. Native is the fallback for firmwares that gate freeform.
@@ -1510,8 +1518,10 @@ private fun SplitSection() {
             // enable_freeform_support is read once at boot, so a restart is required. Once the
             // firmware is proven to ignore the flag (#139) the reboot advice is wrong — say so,
             // and point at the native mechanism, which does not depend on that flag. Both hints
-            // are about freeform only, so the native mechanism hides them.
-            if (splitEnabled && !nativeMode && (splitFreeformUnsupported || splitRebootPending)) {
+            // are about freeform only, so the native mechanism — and a firmware that only has
+            // the native one — hides them.
+            if (splitEnabled && !nativeMode && !split37Firmware &&
+                (splitFreeformUnsupported || splitRebootPending)) {
                 val hint = if (splitFreeformUnsupported) {
                     stringResource(R.string.split_freeform_unsupported_hint) + " " +
                         stringResource(R.string.settings_split_try_native_hint)
@@ -1748,6 +1758,12 @@ private fun ServiceSection(
     viewModel: SettingsViewModel,
 ) {
     val context = LocalContext.current
+    val clusterPrefs = remember {
+        context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    }
+    val clusterEntryPoint = remember {
+        EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
+    }
 
     // SAF picker for restore — must be declared at composable top level
     val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -1832,6 +1848,67 @@ private fun ServiceSection(
             },
             containerColor = CardSurfaceElevated,
         )
+    }
+
+    // Car system: settings that change the head unit itself, not the app.
+    SectionHeader(text = stringResource(R.string.settings_car_system_header))
+
+    // Volume-knob press → play/pause. The interception lives in the a11y key filter, so turning
+    // the switch on self-enables it via the daemon, exactly like the projection card.
+    var knobPlayPause by remember {
+        mutableStateOf(clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false))
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_knob_play_pause_title),
+                description = stringResource(R.string.settings_knob_play_pause_desc),
+                checked = knobPlayPause,
+                onCheckedChange = {
+                    knobPlayPause = it
+                    clusterPrefs.edit().putBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, it).apply()
+                    if (it) {
+                        ClusterProjectionManager.enableStarControl(
+                            clusterEntryPoint.helperClient(), clusterEntryPoint.helperBootstrap())
+                    }
+                },
+            )
+        }
+    }
+
+    // Hidden BYD language dialog (UI7 only). We never write the locale ourselves — the button just
+    // opens the factory dialog, and the card stays hidden on firmwares that do not ship it.
+    val localeIntent = remember { Intent("android.settings.LOCALE_SETTINGS1") }
+    val localeDialogAvailable = remember {
+        context.packageManager.resolveActivity(localeIntent, 0) != null
+    }
+    if (localeDialogAvailable) {
+        val localeUnavailableToast = stringResource(R.string.settings_car_language_unavailable)
+        Card(
+            shape = RoundedCornerShape(12.dp),
+            colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(modifier = Modifier.padding(12.dp)) {
+                SettingActionRow(
+                    title = stringResource(R.string.settings_car_language_title),
+                    description = stringResource(R.string.settings_car_language_desc),
+                    buttonLabel = stringResource(R.string.settings_car_language_button),
+                    onClick = {
+                        runCatching {
+                            context.startActivity(
+                                Intent(localeIntent).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                        }.onFailure {
+                            Toast.makeText(context, localeUnavailableToast, Toast.LENGTH_LONG).show()
+                        }
+                    },
+                )
+            }
+        }
     }
 
     // Autostart status card
