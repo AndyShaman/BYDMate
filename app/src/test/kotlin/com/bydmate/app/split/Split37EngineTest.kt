@@ -4,6 +4,7 @@ import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.Split37AreaInfo
 import com.bydmate.app.data.vehicle.Split37Root
 import com.bydmate.app.data.vehicle.SplitTaskState
+import com.bydmate.app.data.vehicle.TopTaskInfo
 import android.graphics.Rect
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -45,6 +46,8 @@ class Split37EngineTest {
     private val wideLeft = Split37Root(102, 18, 84, 1260, 984)
     private val fullRoot = Split37Root(100, 0, 0, 1920, 1080)
 
+    private val ourPkg = "com.bydmate.app"
+
     private val helper = mockk<HelperClient>(relaxed = true)
     private val journal = Split37RecordingJournal()
     private var now = 1_000L
@@ -54,6 +57,16 @@ class Split37EngineTest {
         journal = journal,
         systemProperty = { name -> platformized.takeIf { name == "ro.build.ui_platformized" } },
         nowMs = { now },
+    )
+
+    /** Engine wired the way production is: every package is on a launcher, ours is known. */
+    private fun adoptingEngine(isLauncherApp: (String) -> Boolean = { true }) = Split37Engine(
+        helper = helper,
+        journal = journal,
+        systemProperty = { "1" },
+        nowMs = { now },
+        isLauncherApp = isLauncherApp,
+        ownPackage = ourPkg,
     )
 
     private fun splitInfo(narrow: Split37Root? = narrowLeft, wide: Split37Root? = wideRight) =
@@ -66,6 +79,24 @@ class Split37EngineTest {
     private fun fullscreenInfo() = Split37AreaInfo(4, narrowLeft, wideRight, fullRoot)
 
     private fun rectOf(root: Split37Root) = Rect(root.left, root.top, root.right, root.bottom)
+
+    private fun topTask(
+        pkg: String,
+        taskId: Int,
+        activityType: Int = 1,
+        displayId: Int = 0,
+        visible: Boolean? = true,
+    ) = TopTaskInfo(pkg, taskId, 1, activityType, displayId, visible)
+
+    /** A standing session with both panes readable, so a tick only has the adoption to do. */
+    private fun stubPanesInPlace() {
+        coEvery { helper.split37AreaInfo() } returns splitInfo()
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.split37TaskArea(20) } returns 2
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+    }
 
     /** Split is up, both moves and launches succeed; task states are stubbed per test. */
     private fun stubSplitUp(vararg info: Split37AreaInfo) {
@@ -86,6 +117,13 @@ class Split37EngineTest {
             wideRoot = wideRight,
             fullRootId = fullRootId,
         )
+
+    /** The session as it stands after an adoption: com.foreign in the wide pane, pkg.wide behind. */
+    private fun adopted() = session().copy(
+        pair = SplitPair("pkg.narrow", "com.foreign", SplitSide.LEFT),
+        wideTaskId = 55,
+        displacedWidePkg = "pkg.wide",
+    )
 
     // ── isApplicable ──────────────────────────────────────────────────────────
 
@@ -159,6 +197,97 @@ class Split37EngineTest {
         coVerify(exactly = 1) { helper.split37MoveTask(21, 101, rectOf(narrowLeft)) }
     }
 
+    @Test fun `place bounces a task that already stands in its target root`() = runTest {
+        // A move into the root a task already lives in does not raise it, so the firmware's own
+        // widget stays on top of our pane; the bounce through the fullscreen root gives it order.
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(20) } returns 2
+        coEvery { helper.split37TaskArea(21) } returns 4
+
+        val outcome = engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        assertTrue(outcome is Split37Engine.PlaceOutcome.Placed)
+        coVerifyOrder {
+            helper.split37MoveTask(20, 100, null, false)
+            helper.split37MoveTask(20, 102, rectOf(wideRight))
+        }
+        // The narrow task is out in fullscreen — the ordinary move already raises it.
+        coVerify(exactly = 0) { helper.split37MoveTask(21, 100, null, false) }
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any {
+                it.contains("split37 place wide pkg.wide task=20 already in root 102 - bounced")
+            },
+        )
+    }
+
+    @Test fun `place does not bounce a task it has just launched`() = runTest {
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returnsMany listOf(absent(), task(20))
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(any()) } returns 2
+
+        engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        // A freshly launched task cannot be sitting under the widget of a previous session.
+        coVerify(exactly = 0) { helper.split37TaskArea(20) }
+        coVerify(exactly = 0) { helper.split37MoveTask(20, 100, null, false) }
+    }
+
+    @Test fun `place does not bounce a task that stands in the other pane`() = runTest {
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        // Both tasks are in the narrow area: only the narrow pane's own task is already home.
+        coEvery { helper.split37TaskArea(any()) } returns 1
+
+        engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        coVerify(exactly = 0) { helper.split37MoveTask(20, 100, null, false) }
+        coVerify(exactly = 1) { helper.split37MoveTask(21, 100, null, false) }
+    }
+
+    @Test fun `place cannot bounce without a fullscreen root and moves the task anyway`() = runTest {
+        stubSplitUp(Split37AreaInfo(3, narrowLeft, wideRight, null))
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(any()) } returns 2
+
+        val outcome = engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        assertTrue(outcome is Split37Engine.PlaceOutcome.Placed)
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), null, false) }
+        coVerify(exactly = 1) { helper.split37MoveTask(20, 102, rectOf(wideRight)) }
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any {
+                it.contains("split37 place wide pkg.wide task=20 already in root 102 - no full root, no bounce")
+            },
+        )
+    }
+
+    @Test fun `place still moves a task whose bounce the daemon refused`() = runTest {
+        stubSplitUp(splitInfo())
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        coEvery { helper.split37MoveTask(20, 100, null, false) } returns false
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(20) } returns 2
+        coEvery { helper.split37TaskArea(21) } returns 4
+
+        val outcome = engine().place(SplitPair("pkg.narrow", "pkg.wide", SplitSide.LEFT))
+
+        assertTrue(outcome is Split37Engine.PlaceOutcome.Placed)
+        coVerify(exactly = 1) { helper.split37MoveTask(20, 102, rectOf(wideRight)) }
+        assertTrue(journal.lines.any { it.contains("already in root 102 - bounce failed") })
+    }
+
     @Test fun `place reports Unavailable when the daemon does not answer the enter verb`() = runTest {
         // A silent area read says nothing (transport or non-OK status alike), so the verdict is
         // the enter verb's: no reply there = the mechanism is not available through this daemon.
@@ -169,7 +298,7 @@ class Split37EngineTest {
 
         assertEquals(Split37Engine.PlaceOutcome.Unavailable, outcome)
         coVerify(exactly = 0) { helper.launchApp(any()) }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
         assertTrue(journal.lines.any { it.contains("split37 enter -> no reply") })
     }
 
@@ -184,7 +313,7 @@ class Split37EngineTest {
             (outcome as Split37Engine.PlaceOutcome.Failed).reason,
         )
         coVerify(exactly = 0) { helper.launchApp(any()) }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
     }
 
     @Test fun `place waits out the enter animation instead of failing on the first reading`() = runTest {
@@ -243,7 +372,7 @@ class Split37EngineTest {
 
         val reason = (outcome as Split37Engine.PlaceOutcome.Failed).reason
         assertTrue(reason, reason.contains("no task after launch") && reason.contains("display 2"))
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
     }
 
     @Test fun `place fails on a silent area info read`() = runTest {
@@ -276,7 +405,7 @@ class Split37EngineTest {
         assertTrue(reason, reason.contains("no task after launch"))
         // One pre-launch read plus the six confirming ones.
         coVerify(exactly = 7) { helper.getTaskState("pkg.wide") }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
     }
 
     @Test fun `place fails after two silent task-state reads in a row`() = runTest {
@@ -343,7 +472,7 @@ class Split37EngineTest {
         assertEquals(Split37Engine.PaneState.GONE, outcome.narrow)
         assertEquals(Split37Engine.PaneState.UNKNOWN, outcome.wide)
         coVerify(exactly = 0) { helper.split37TaskArea(any()) }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
     }
 
     @Test fun `tick leaves a task that stands on another display alone`() = runTest {
@@ -358,7 +487,7 @@ class Split37EngineTest {
         assertEquals(Split37Engine.PaneState.UNKNOWN, outcome.narrow)
         assertEquals(21, outcome.session.narrowTaskId)
         coVerify(exactly = 0) { helper.split37TaskArea(70) }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
         // The line is evidence for a field dump, but a watchdog must not repeat it every tick.
         engine.tick(outcome.session)
         assertEquals(
@@ -431,15 +560,445 @@ class Split37EngineTest {
     }
 
     @Test fun `tick ends the session when the firmware left the split`() = runTest {
-        coEvery { helper.split37AreaInfo() } returns Split37AreaInfo(4, narrowLeft, wideRight, fullRoot)
+        // Area mode 4 with a firmware surface on top, and both pane tasks out of the pane roots:
+        // nothing to adopt, nothing of ours escaped, nothing left standing.
+        coEvery { helper.split37AreaInfo() } returns fullscreenInfo()
+        coEvery { helper.getTopTask() } returns topTask("com.byd.avc", 70)
+        coEvery { helper.split37TaskArea(21) } returns 4
+        coEvery { helper.split37TaskArea(20) } returns -1
 
-        val outcome = engine().tick(session())
+        val outcome = adoptingEngine().tick(session())
 
         assertTrue(outcome.sessionEnded)
         assertEquals(Split37Engine.PaneState.UNKNOWN, outcome.narrow)
         assertEquals(Split37Engine.PaneState.UNKNOWN, outcome.wide)
+        assertTrue(journal.lines.any { it.contains("split37 tick: area mode 4 - split closed") })
         coVerify(exactly = 0) { helper.getTaskState(any()) }
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+    }
+
+    @Test fun `tick ends the session when area mode 4 has no window of ours on top`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns fullscreenInfo()
+        coEvery { helper.split37TaskArea(any()) } returns 4
+        val engine = adoptingEngine()
+
+        // No answer at all (a task list the daemon could not read).
+        coEvery { helper.getTopTask() } returns null
+        assertTrue(engine.tick(session()).sessionEnded)
+
+        // Our own pane app, but the MRU task is not the window on screen.
+        coEvery { helper.getTopTask() } returns topTask("pkg.wide", 20, visible = false)
+        assertTrue(engine.tick(session()).sessionEnded)
+
+        assertEquals(
+            2,
+            journal.lines.count { it.contains("split37 tick: area mode 4 - split closed") },
+        )
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+    }
+
+
+    // ── tick(): adoption ──────────────────────────────────────────────────────
+
+    @Test fun `tick adopts a foreign app the firmware threw over the panes`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        // Fullscreen when it is spotted, in the wide pane once it has been moved there.
+        coEvery { helper.split37TaskArea(55) } returnsMany listOf(4, 2)
+        coEvery { helper.getTaskState("com.foreign") } returns task(55)
+
+        val outcome = adoptingEngine().tick(session())
+
+        coVerify(exactly = 1) { helper.split37MoveTask(55, 102, rectOf(wideRight)) }
+        assertTrue(outcome.pairChanged)
+        assertEquals("com.foreign", outcome.session.pair.widePkg)
+        assertEquals(55, outcome.session.wideTaskId)
+        assertEquals("pkg.wide", outcome.session.displacedWidePkg)
+        assertEquals(Split37Engine.PaneState.IN_PANE, outcome.wide)
+        assertTrue(
+            journal.lines.any {
+                it.contains("split37 adopt: com.foreign task=55 -> wide root 102 (moved), displaced pkg.wide")
+            },
+        )
+    }
+
+    @Test fun `tick adopts an app the firmware itself put in the wide pane, without moving it`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        coEvery { helper.split37TaskArea(55) } returns 2
+        coEvery { helper.getTaskState("com.foreign") } returns task(55)
+
+        val outcome = adoptingEngine().tick(session())
+
+        coVerify(exactly = 0) { helper.split37MoveTask(55, any(), any(), any()) }
+        assertTrue(outcome.pairChanged)
+        assertEquals("com.foreign", outcome.session.pair.widePkg)
+        assertEquals(55, outcome.session.wideTaskId)
+        assertEquals("pkg.wide", outcome.session.displacedWidePkg)
+        assertTrue(
+            journal.lines.any {
+                it.contains("-> wide root 102 (already there), displaced pkg.wide")
+            },
+        )
+        // The firmware's grid left com.byd.sr over our narrow task; the bounce puts it back on top.
+        coVerifyOrder {
+            helper.split37MoveTask(21, 100, null, false)
+            helper.split37MoveTask(21, 101, rectOf(narrowLeft), true)
+        }
+        assertTrue(
+            journal.lines.any { it.contains("split37 adopt: narrow pkg.narrow task=21 re-raised") },
+        )
+    }
+
+    @Test fun `tick adopts the app the firmware started fullscreen over the standing panes`() = runTest {
+        // Field dump 2026-08-19: a non-whitelisted app started from the firmware's own grid lands
+        // fullscreen, the area reads 4 while both pane roots still hold our tasks, and the single
+        // move into the wide root brings the split back by itself.
+        coEvery { helper.split37AreaInfo() } returnsMany listOf(fullscreenInfo(), splitInfo())
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        coEvery { helper.split37TaskArea(55) } returns 4
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+
+        val outcome = adoptingEngine().tick(session())
+
+        assertFalse("the split came back, so the session stands", outcome.sessionEnded)
+        assertTrue(outcome.pairChanged)
+        assertEquals("com.foreign", outcome.session.pair.widePkg)
+        assertEquals(55, outcome.session.wideTaskId)
+        assertEquals(Split37Engine.PaneState.IN_PANE, outcome.wide)
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any {
+                it.contains(
+                    "split37 adopt: com.foreign task=55 -> wide root 102 (moved, split back), " +
+                        "displaced pkg.wide"
+                )
+            },
+        )
+        coVerify(exactly = 1) { helper.split37MoveTask(55, 102, rectOf(wideRight), true) }
+        coVerifyOrder {
+            helper.split37MoveTask(21, 100, null, false)
+            helper.split37MoveTask(21, 101, rectOf(narrowLeft), true)
+        }
+    }
+
+    @Test fun `an adoption that did not bring the split back ends the session and is not retried`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns fullscreenInfo()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        coEvery { helper.split37TaskArea(any()) } returns 4
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+        val engine = adoptingEngine()
+
+        val outcome = engine.tick(session())
+
+        assertTrue(outcome.sessionEnded)
+        assertFalse(outcome.pairChanged)
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any {
+                it.contains(
+                    "split37 adopt: com.foreign task=55 moved to wide root 102 but split did " +
+                        "not come back (area=4)"
+                )
+            },
+        )
+        // The same doomed move must not run again on the tick after it.
+        journal.lines.clear()
+        assertTrue(engine.tick(session()).sessionEnded)
+        coVerify(exactly = 1) { helper.split37MoveTask(55, 102, rectOf(wideRight), true) }
+        assertTrue(journal.lines.none { it.contains("adopt") })
+    }
+
+    @Test fun `a fullscreen lid over standing panes does not end the session`() = runTest {
+        // The user opened BYDMate itself over the split (to save the journal): the area reads 4,
+        // but both pane tasks are still in their roots and the split comes back when it closes.
+        coEvery { helper.split37AreaInfo() } returnsMany listOf(
+            fullscreenInfo(), fullscreenInfo(), fullscreenInfo(), splitInfo(), fullscreenInfo(),
+        )
+        coEvery { helper.getTopTask() } returns topTask(ourPkg, 60)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.split37TaskArea(20) } returns 2
+        val engine = adoptingEngine()
+
+        repeat(3) {
+            val outcome = engine.tick(session())
+            assertFalse("tick $it", outcome.sessionEnded)
+            assertEquals(Split37Engine.PaneState.IN_PANE, outcome.narrow)
+            assertEquals(Split37Engine.PaneState.IN_PANE, outcome.wide)
+        }
+
+        val line = "split37 tick: area mode 4 - covered by $ourPkg, panes standing"
+        assertEquals(
+            journal.lines.toString(),
+            1,
+            journal.lines.count { it.contains(line) },
+        )
+        assertTrue(journal.lines.none { it.contains("split closed") })
+
+        // The lid is gone: the episode is over and a new one is journalled again.
+        assertFalse(engine.tick(session()).sessionEnded)
+        assertEquals(1, journal.lines.count { it.contains(line) })
+        assertFalse(engine.tick(session()).sessionEnded)
+        assertEquals(2, journal.lines.count { it.contains(line) })
+
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+    }
+
+    @Test fun `a fullscreen window over panes that left their roots ends the session`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns fullscreenInfo()
+        coEvery { helper.getTopTask() } returns topTask("com.byd.avc", 70)
+        // The narrow task went fullscreen with the lid, the wide one has no readable area at all.
+        coEvery { helper.split37TaskArea(21) } returns 4
+        coEvery { helper.split37TaskArea(20) } returns -1
+
+        val outcome = adoptingEngine().tick(session())
+
+        assertTrue(outcome.sessionEnded)
+        assertTrue(journal.lines.any { it.contains("split37 tick: area mode 4 - split closed") })
+        assertTrue(journal.lines.none { it.contains("panes standing") })
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+    }
+
+    @Test fun `area mode 4 with our own pane app on top is an escape, not a closed split`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns fullscreenInfo()
+        coEvery { helper.getTopTask() } returns topTask("pkg.wide", 20)
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.split37TaskArea(20) } returns 4
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
+
+        val outcome = adoptingEngine().tick(session())
+
+        assertFalse(outcome.sessionEnded)
+        assertEquals(Split37Engine.PaneState.RETURNED, outcome.wide)
+        assertEquals(Split37Engine.PaneState.IN_PANE, outcome.narrow)
+        coVerify(exactly = 1) { helper.split37MoveTask(20, 102, rectOf(wideRight), true) }
+        assertTrue(
+            journal.lines.any {
+                it.contains("split37 tick: pkg.wide escaped to fullscreen - returned to root 102")
+            },
+        )
+        assertTrue(journal.lines.none { it.contains("split closed") })
+    }
+
+    @Test fun `tick adopts neither the panes' own apps, nor ours, nor a firmware surface`() = runTest {
+        // Fullscreen over the panes: the whole firmware class stays out, not the named surfaces
+        // alone - one of its windows on top is never the user picking an app.
+        stubPanesInPlace()
+        coEvery { helper.split37TaskArea(55) } returns 4
+        val engine = adoptingEngine()
+
+        for (pkg in listOf(
+            "pkg.narrow", "pkg.wide", ourPkg, "com.byd.sr", "com.android.launcher3",
+            "com.byd.launchermap",
+            // The whole firmware class, not the named surfaces alone: the reversing camera comes
+            // up as an ordinary fullscreen app when the user selects reverse.
+            "com.byd.avc", "com.byd.cdr", "com.byd.carsettings", "com.android.settings",
+        )) {
+            coEvery { helper.getTopTask() } returns topTask(pkg, 55)
+
+            val outcome = engine.tick(session())
+
+            assertFalse(pkg, outcome.pairChanged)
+            assertEquals(pkg, "pkg.wide", outcome.session.pair.widePkg)
+        }
+        coVerify(exactly = 0) { helper.split37MoveTask(55, any(), any(), any()) }
+    }
+
+    @Test fun `tick adopts the BYD app the firmware itself put into the wide root`() = runTest {
+        // Field dump 2026-08-19: starting a whitelisted BYD app from the grid runs startSplitWindow,
+        // so it arrives in the wide root already. The firmware has decided it is a pane app; the
+        // launcher and system-package gates of the fullscreen path do not apply to it.
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.byd.bluetoothcall", 55)
+        coEvery { helper.split37TaskArea(55) } returns 2
+        coEvery { helper.getTaskState("com.byd.bluetoothcall") } returns task(55)
+
+        val outcome = adoptingEngine(isLauncherApp = { false }).tick(session())
+
+        assertTrue(outcome.pairChanged)
+        assertEquals("com.byd.bluetoothcall", outcome.session.pair.widePkg)
+        assertEquals(55, outcome.session.wideTaskId)
+        assertEquals("pkg.wide", outcome.session.displacedWidePkg)
+        coVerify(exactly = 0) { helper.split37MoveTask(55, any(), any(), any()) }
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any {
+                it.contains(
+                    "split37 adopt: com.byd.bluetoothcall task=55 -> wide root 102 " +
+                        "(already there), displaced pkg.wide"
+                )
+            },
+        )
+        coVerifyOrder {
+            helper.split37MoveTask(21, 100, null, false)
+            helper.split37MoveTask(21, 101, rectOf(narrowLeft), true)
+        }
+    }
+
+    @Test fun `a BYD app lying fullscreen over the panes is not adopted`() = runTest {
+        // The same package the wide root would hand us, but on top of the split it is the camera
+        // class: a surface the firmware raised, not an app the user put there.
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.byd.bluetoothcall", 55)
+        coEvery { helper.split37TaskArea(55) } returns 4
+
+        val outcome = adoptingEngine().tick(session())
+
+        assertFalse(outcome.pairChanged)
+        assertEquals("pkg.wide", outcome.session.pair.widePkg)
+        coVerify(exactly = 0) { helper.split37MoveTask(55, any(), any(), any()) }
+    }
+
+    @Test fun `the split's own scaffolding is not adopted out of the wide root either`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.split37TaskArea(55) } returns 2
+        val engine = adoptingEngine()
+
+        for (pkg in listOf(
+            // The app grid raises com.byd.sr over the narrow pane on every launch.
+            "com.byd.sr", "com.android.launcher3", "com.byd.launchermap", "com.byd.avc",
+            "com.byd.cdr", "pkg.narrow", "pkg.wide", ourPkg,
+        )) {
+            coEvery { helper.getTopTask() } returns topTask(pkg, 55)
+
+            val outcome = engine.tick(session())
+
+            assertFalse(pkg, outcome.pairChanged)
+            assertEquals(pkg, "pkg.wide", outcome.session.pair.widePkg)
+        }
+        assertTrue(journal.lines.none { it.contains("adopt") })
+    }
+
+    @Test fun `tick adopts nothing that is not a launchable app of the main screen`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.split37TaskArea(55) } returns 4
+
+        // Home, recents and the like: activityType != STANDARD.
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55, activityType = 2)
+        assertFalse(adoptingEngine().tick(session()).pairChanged)
+
+        // Somebody else's screen (the cluster projection).
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55, displayId = 2)
+        assertFalse(adoptingEngine().tick(session()).pairChanged)
+
+        // A service-only package the user could not have started from a launcher.
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        assertFalse(adoptingEngine(isLauncherApp = { false }).tick(session()).pairChanged)
+
+        // The daemon reports the MRU task: this one is not on screen, so nobody picked it.
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55, visible = false)
+        assertFalse(adoptingEngine().tick(session()).pairChanged)
+
+        // A daemon too old to report visibility at all: unknown is not "visible" (fail-safe).
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55, visible = null)
+        assertFalse(adoptingEngine().tick(session()).pairChanged)
+
+        // Already in the narrow pane: not ours to take.
+        coEvery { helper.split37TaskArea(55) } returns 1
+        assertFalse(adoptingEngine().tick(session()).pairChanged)
+
+        coVerify(exactly = 0) { helper.split37MoveTask(55, any(), any(), any()) }
+    }
+
+    @Test fun `a foreign app that could not be moved into the pane is not adopted`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        coEvery { helper.split37TaskArea(55) } returns 4
+        coEvery { helper.split37MoveTask(55, 102, rectOf(wideRight)) } returns false
+
+        val outcome = adoptingEngine().tick(session())
+
+        assertFalse(outcome.pairChanged)
+        assertEquals("pkg.wide", outcome.session.pair.widePkg)
+        assertNull(outcome.session.displacedWidePkg)
+        assertTrue(
+            journal.lines.any {
+                it.contains("split37 adopt: com.foreign task=55 move to wide root 102 failed")
+            },
+        )
+    }
+
+    @Test fun `an adoption the firmware refused is not tried again on the next tick`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        coEvery { helper.split37TaskArea(55) } returns 4
+        coEvery { helper.split37MoveTask(55, 102, rectOf(wideRight)) } returns false
+        val engine = adoptingEngine()
+
+        engine.tick(session())
+        journal.lines.clear()
+        val second = engine.tick(session())
+
+        assertFalse(second.pairChanged)
+        coVerify(exactly = 1) { helper.split37MoveTask(55, 102, rectOf(wideRight)) }
+        assertTrue("a tick a second says nothing new", journal.lines.none { it.contains("adopt") })
+    }
+
+    @Test fun `the tick that adopts an app spends no escape return on its pane`() = runTest {
+        stubPanesInPlace()
+        coEvery { helper.getTopTask() } returns topTask("com.foreign", 55)
+        // The move is asynchronous: the area read of this very tick can still answer "fullscreen".
+        coEvery { helper.split37TaskArea(55) } returns 4
+        coEvery { helper.getTaskState("com.foreign") } returns task(55)
+        val engine = adoptingEngine()
+
+        val adoption = engine.tick(session())
+
+        assertEquals(Split37Engine.PaneState.IN_PANE, adoption.wide)
+        coVerify(exactly = 1) { helper.split37MoveTask(55, 102, rectOf(wideRight)) }
+
+        // The budget is untouched: three real escapes are still returned, the fourth gives up.
+        var live = adoption.session
+        repeat(3) {
+            val tick = engine.tick(live)
+            assertEquals(Split37Engine.PaneState.RETURNED, tick.wide)
+            live = tick.session
+        }
+        assertEquals(Split37Engine.PaneState.ESCAPED_GAVE_UP, engine.tick(live).wide)
+        coVerify(exactly = 4) { helper.split37MoveTask(55, 102, rectOf(wideRight)) }
+    }
+
+    @Test fun `the wide pane goes back to the app an adoption displaced`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns splitInfo()
+        coEvery { helper.getTopTask() } returns null
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.getTaskState("com.foreign") } returns absent()
+        coEvery { helper.getTaskState("pkg.wide") } returns task(20)
+        coEvery { helper.split37TaskArea(20) } returns 2
+
+        val outcome = adoptingEngine().tick(adopted())
+
+        assertTrue(outcome.pairChanged)
+        assertEquals(Split37Engine.PaneState.IN_PANE, outcome.wide)
+        assertEquals("pkg.wide", outcome.session.pair.widePkg)
+        assertEquals(20, outcome.session.wideTaskId)
+        assertNull(outcome.session.displacedWidePkg)
+        assertTrue(
+            journal.lines.any { it.contains("split37 adopt: com.foreign gone, wide back to pkg.wide") },
+        )
+    }
+
+    @Test fun `an adopted app that is gone leaves the pane gone when the displaced one died too`() = runTest {
+        coEvery { helper.split37AreaInfo() } returns splitInfo()
+        coEvery { helper.getTopTask() } returns null
+        coEvery { helper.getTaskState("pkg.narrow") } returns task(21)
+        coEvery { helper.split37TaskArea(21) } returns 1
+        coEvery { helper.getTaskState("com.foreign") } returns absent()
+        coEvery { helper.getTaskState("pkg.wide") } returns absent()
+
+        val outcome = adoptingEngine().tick(adopted())
+
+        assertFalse(outcome.pairChanged)
+        assertEquals(Split37Engine.PaneState.GONE, outcome.wide)
+        assertEquals("com.foreign", outcome.session.pair.widePkg)
+        assertNull("the one-level memory is spent", outcome.session.displacedWidePkg)
     }
 
     // ── swap() ────────────────────────────────────────────────────────────────
@@ -465,8 +1024,52 @@ class Split37EngineTest {
 
     // ── exit() ────────────────────────────────────────────────────────────────
 
-    @Test fun `exit hands both tasks to the full root without a resize, narrow first`() = runTest {
-        coEvery { helper.split37MoveTask(any(), any(), any()) } returns true
+    @Test fun `exit leaves the split through the change-mode verb, touching no task`() = runTest {
+        coEvery { helper.split37ChangeMode(102) } returns 2
+
+        assertTrue(engine().exit(session()))
+
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+        assertTrue(journal.lines.any { it.contains("split37 exit -> mode 102 area=2") })
+    }
+
+    @Test fun `exit accepts a plain fullscreen reading as having left the split`() = runTest {
+        coEvery { helper.split37ChangeMode(102) } returns 4
+
+        assertTrue(engine().exit(session()))
+
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+        assertTrue(journal.lines.any { it.contains("split37 exit -> mode 102 area=4") })
+    }
+
+    @Test fun `exit waits out the change-mode animation instead of calling it a refusal`() = runTest {
+        // The verb reads the mode the instant it returns, while the container is still growing.
+        coEvery { helper.split37ChangeMode(102) } returns 3
+        coEvery { helper.split37AreaInfo() } returnsMany
+            listOf(splitInfo(), Split37AreaInfo(2, narrowLeft, wideRight, fullRoot))
+
+        assertTrue(engine().exit(session()))
+
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+        assertTrue(journal.lines.any { it.contains("split37 exit -> mode 102 area=2") })
+    }
+
+    @Test fun `exit reports a refusal instead of moving the tasks out by hand`() = runTest {
+        // The split is still on screen after the settle reads: the hand-move path is exactly what
+        // left a pane empty, so a refusal must not fall through to it.
+        coEvery { helper.split37ChangeMode(102) } returns 3
+        coEvery { helper.split37AreaInfo() } returns splitInfo()
+
+        assertFalse(engine().exit(session()))
+
+        coVerify(exactly = 3) { helper.split37AreaInfo() }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
+        assertTrue(journal.lines.any { it.contains("split37 exit -> mode 102 refused, area=3") })
+    }
+
+    @Test fun `exit falls back to the full root moves on a daemon without the verb`() = runTest {
+        coEvery { helper.split37ChangeMode(102) } returns null
+        coEvery { helper.split37MoveTask(any(), any(), any(), any()) } returns true
 
         assertTrue(engine().exit(session()))
 
@@ -474,21 +1077,29 @@ class Split37EngineTest {
             helper.split37MoveTask(21, 100, null)
             helper.split37MoveTask(20, 100, null)
         }
+        assertTrue(journal.lines.any { it.contains("split37 exit fallback (no change-mode verb)") })
     }
 
     @Test fun `exit still moves the wide task after the narrow move failed`() = runTest {
+        coEvery { helper.split37ChangeMode(102) } returns null
         coEvery { helper.split37MoveTask(21, 100, null) } returns false
         coEvery { helper.split37MoveTask(20, 100, null) } returns true
 
         assertFalse(engine().exit(session()))
 
         coVerify(exactly = 1) { helper.split37MoveTask(20, 100, null) }
-        assertTrue(journal.lines.any { it.contains("split37 exit -> narrow=fail wide=ok") })
+        assertTrue(
+            journal.lines.any {
+                it.contains("split37 exit fallback (no change-mode verb) -> narrow=fail wide=ok")
+            },
+        )
     }
 
     @Test fun `exit fails without a full root and moves nothing`() = runTest {
+        coEvery { helper.split37ChangeMode(102) } returns null
+
         assertFalse(engine().exit(session(fullRootId = null)))
 
-        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any()) }
+        coVerify(exactly = 0) { helper.split37MoveTask(any(), any(), any(), any()) }
     }
 }

@@ -542,6 +542,13 @@ class SplitSessionManager(
     fun freeformUnsupported(): Boolean = verdict?.unsupported() == true
 
     /**
+     * True on "platformized" firmware (OTA V1.6), where the panes belong to the vehicle and the
+     * split has no pill of ours — the gate for the widget tap, which must not offer an exit there.
+     * False on every earlier firmware, so their tap keeps toggling as before.
+     */
+    fun isNativePanesFirmware(): Boolean = split37?.isApplicable() == true
+
+    /**
      * Re-raises both panes after the backdrop resurfaced above them (hotfix 390-2).
      *
      * Opening a fullscreen Activity of our own package (e.g. BYDMate from the widget) hides the
@@ -946,7 +953,13 @@ class SplitSessionManager(
         // Native panes: the engine hands both tasks back to the fullscreen root. tearDownLocked is
         // deliberately skipped — its setTaskWindowingMode / backdrop.hide are freeform machinery.
         if (current.nativePanes) {
-            split37Session?.let { split37?.exit(it) }
+            split37Session?.let { live ->
+                // The session ends either way (the user asked for it); a refusal only means the
+                // firmware kept its panes on screen, which the journal must say out loud.
+                if (split37?.exit(live) == false) {
+                    journal.append("exit split37: engine refused, session ended anyway")
+                }
+            }
             end37Locked(EndReason.EXIT, emit = true)
             return@withLock
         }
@@ -1777,7 +1790,17 @@ class SplitSessionManager(
 
         val outcome = engine.tick(session)
         split37Session = outcome.session
-        if (outcome.session.narrowTaskId != current.narrowTaskId ||
+        if (outcome.pairChanged) {
+            // The engine took a foreign app into a pane (or gave the pane back to the one it
+            // displaced). The pair standing on screen is the one a widget tap must bring back, so
+            // it is what the state and the prefs carry from now on.
+            _state.value = current.copy(
+                pair = outcome.session.pair,
+                narrowTaskId = outcome.session.narrowTaskId,
+                wideTaskId = outcome.session.wideTaskId,
+            )
+            prefs.saveLastPair(outcome.session.pair)
+        } else if (outcome.session.narrowTaskId != current.narrowTaskId ||
             outcome.session.wideTaskId != current.wideTaskId
         ) {
             // The app recreated its task behind our back; the pane is that task now.

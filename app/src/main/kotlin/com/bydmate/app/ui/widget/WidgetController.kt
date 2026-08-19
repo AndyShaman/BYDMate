@@ -683,6 +683,7 @@ object WidgetController {
     /**
      * Split-mode left tap, as an inverse toggle: no session → restore the last pair
      * ([onNoPair] when nothing has been saved yet), session → [SplitSessionManager.exit].
+     * With [alwaysStart] the toggle loses its exit half — see below.
      *
      * A zombie session (state is Active but the panes are already dead) still routes to
      * exit: exit() tears such a session down fail-soft, so the tap doubles as the manual
@@ -698,14 +699,20 @@ object WidgetController {
      * [adbBlocked] is consulted only on a launch failure: every window op goes through the helper
      * daemon, which cannot be (re)spawned without the on-device ADB channel, so a user whose ADB
      * grant is gone needs to hear that instead of a bare "could not launch" (#133).
+     *
+     * [alwaysStart] drops the exit half of the toggle: on "platformized" firmware (UI7) the tap
+     * only ever starts or restores the pair, because a start over a live native session reshuffles
+     * the panes in place. Leaving the split there is the firmware's own slider, an automation
+     * split_screen_close or the voice agent — never this tap.
      */
     internal suspend fun runSplitTap(
         manager: SplitSessionManager,
         onNoPair: () -> Unit,
         onError: suspend (Int) -> Unit,
         adbBlocked: suspend () -> Boolean = { false },
+        alwaysStart: Boolean = false,
     ) {
-        if (manager.state.value is SplitSessionState.Active) {
+        if (!alwaysStart && manager.state.value is SplitSessionState.Active) {
             manager.exit()
             return
         }
@@ -938,8 +945,9 @@ object WidgetController {
                         context.applicationContext,
                         SplitWidgetEntryPoint::class.java,
                     )
+                    val manager = ep.splitSessionManager()
                     runSplitTap(
-                        manager = ep.splitSessionManager(),
+                        manager = manager,
                         onNoPair = { ep.splitOverlayController().showFirstPairPicker() },
                         onError = { res ->
                             OverlayNotificationManager.show(
@@ -956,6 +964,7 @@ object WidgetController {
                             !bootstrap.isHealthy() && bootstrap.lastSpawnFailure()?.reason ==
                                 HelperBootstrap.SpawnFailReason.ADB_UNREACHABLE
                         },
+                        alwaysStart = manager.isNativePanesFirmware(),
                     )
                 } catch (e: Exception) {
                     Log.w(TAG, "launchSplit failed: ${e.message}")

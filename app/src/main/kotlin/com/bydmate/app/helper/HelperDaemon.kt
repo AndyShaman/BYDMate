@@ -536,6 +536,8 @@ fun main(args: Array<String>) {
                         reply?.writeInt(info.windowingMode)
                         reply?.writeInt(info.activityType)
                         reply?.writeInt(info.displayId)
+                        // Last: a client that predates the field stops reading before it.
+                        reply?.writeInt(info.visible)
                     }
                     true
                 }.getOrElse { reply?.writeInt(-1); true }
@@ -595,8 +597,9 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_SPLIT37_MOVE_TASK -> runCatching {
                     val taskId = data.readInt(); val rootTaskId = data.readInt()
                     val l = data.readInt(); val t = data.readInt(); val r = data.readInt(); val b = data.readInt()
+                    val toTop = readTrailingToTop(data)
                     val status = split37MoveTaskCore(
-                        taskId, rootTaskId, l, t, r, b, amShell, ::setTaskBoundsReflect,
+                        taskId, rootTaskId, l, t, r, b, toTop, amShell, ::setTaskBoundsReflect,
                     )
                     reply?.writeInt(status); reply?.writeInt(0)
                     true
@@ -642,6 +645,26 @@ fun main(args: Array<String>) {
                     reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(0); true
                 }
 
+                HelperBinderProtocol.TX_SPLIT37_CHANGE_MODE -> runCatching {
+                    val mode = data.readInt()
+                    val iAtm = activityTaskManager()
+                    val change = splitMethod(iAtm, "changeSplitScreenMode", 1)
+                    if (change == null) {
+                        android.util.Log.w("bydmate_helper", "TX_SPLIT37_CHANGE_MODE: changeSplitScreenMode absent")
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_UNSUPPORTED); reply?.writeInt(-1)
+                    } else {
+                        change.invoke(iAtm, mode)
+                        // Read the area mode BEFORE the first write — see TX_SPLIT37_ENTER.
+                        val areaMode = screenAreaMode(iAtm)
+                        reply?.writeInt(HelperBinderProtocol.SPLIT37_OK)
+                        reply?.writeInt(areaMode)
+                    }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("bydmate_helper", "TX_SPLIT37_CHANGE_MODE failed", e)
+                    reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(-1); true
+                }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -676,6 +699,13 @@ internal fun readTrailingPaneType(data: Parcel): Int {
     val raw = if (data.dataAvail() > 0) data.readInt() else ACTIVITY_TYPE_RECENTS
     return if (raw == ACTIVITY_TYPE_STANDARD) ACTIVITY_TYPE_STANDARD else ACTIVITY_TYPE_RECENTS
 }
+
+/**
+ * Trailing toTop int of TX_SPLIT37_MOVE_TASK: absent when the caller predates the bounce (A-2) →
+ * onTop, the behavior every move had before it.
+ */
+internal fun readTrailingToTop(data: Parcel): Boolean =
+    if (data.dataAvail() > 0) data.readInt() != 0 else true
 
 /**
  * Performs a single autoservice Binder transact and returns (status, retInt).
@@ -848,6 +878,8 @@ private fun topTaskPackage(): String? = runCatching {
 /**
  * Snapshot of the top root task returned by TX_GET_TOP_TASK (Q3 / F-3 COVERED detection).
  * [displayId] mirrors the TaskInfo.displayId convention: 0 = main display, 2 = cluster fission.
+ * [visible] is RunningTaskInfo.isVisible as 1/0, or -1 when the ROM has no such field: the MRU
+ * ordering of getTasks() lists tasks nobody can see, and the split adoption must tell them apart.
  */
 private data class TopTaskInfo(
     val pkg: String,
@@ -855,6 +887,7 @@ private data class TopTaskInfo(
     val windowingMode: Int,
     val activityType: Int,
     val displayId: Int,
+    val visible: Int,
 )
 
 /**
@@ -906,7 +939,14 @@ private fun topTaskInfo(): TopTaskInfo? = runCatching {
     val displayId = runCatching {
         fieldByName(task, "displayId")?.let { f -> f.isAccessible = true; f.getInt(task) } ?: 0
     }.getOrDefault(0)
-    TopTaskInfo(pkg, taskId, windowingMode, activityType, displayId)
+    // -1 (unknown) rather than a guess: the client treats anything but 1 as "not visible".
+    val visible = runCatching {
+        fieldByName(task, "isVisible")?.let { f ->
+            f.isAccessible = true
+            if (f.getBoolean(task)) 1 else 0
+        } ?: -1
+    }.getOrDefault(-1)
+    TopTaskInfo(pkg, taskId, windowingMode, activityType, displayId, visible)
 }.getOrNull()
 
 /**
@@ -1157,6 +1197,8 @@ private fun writeAreaInfoFailure(reply: Parcel?, status: Int) {
  * Testable core of TX_SPLIT37_MOVE_TASK: reparents [taskId] into the native split root
  * [rootTaskId] with `am stack move-task` (= activity_task tx 54 moveTaskToRootTask; shell uid
  * holds MANAGE_ACTIVITY_TASKS), then resizes it to the pane rect when that rect is non-empty.
+ * [toTop] is the onTop argument of the move: false parks the task at the bottom of the root, which
+ * is how the engine bounces a task out of a root it already lives in before raising it again.
  * The move is the load-bearing step — a resize failure throws out to the caller's runCatching.
  * `am stack move-task` prints `Error: ...` or an exception trace when it refuses and stays silent
  * on success, so the outcome is read with the daemon-wide substring convention (see launchAppCore).
@@ -1169,12 +1211,13 @@ internal fun split37MoveTaskCore(
     top: Int,
     right: Int,
     bottom: Int,
+    toTop: Boolean,
     shell: (String, List<String>) -> String,
     resize: (Int, Int, Int, Int, Int) -> Unit,
 ): Int {
     // Ids are internal Ints but still go through positional args — nothing is interpolated.
     val out = shell(
-        "am stack move-task \"\$1\" \"\$2\" true",
+        "am stack move-task \"\$1\" \"\$2\" $toTop",
         listOf(taskId.toString(), rootTaskId.toString()),
     )
     if (out.contains("Error") || out.contains("Exception")) {

@@ -227,12 +227,15 @@ object HelperBinderProtocol {
     val TX_SPLIT37_AREA_INFO: Int = IBinder.FIRST_CALL_TRANSACTION + 34      // 35
 
     /**
-     * Reparents a task into a native split root: `am stack move-task <taskId> <rootTaskId> true`
+     * Reparents a task into a native split root: `am stack move-task <taskId> <rootTaskId> true|false`
      * (= activity_task tx 54 moveTaskToRootTask; MANAGE_ACTIVITY_TASKS is held by shell uid),
      * followed by a resize to the given bounds when the rect is non-empty (right>left && bottom>top).
      *
-     * Request: [int taskId, int rootTaskId, int left, int top, int right, int bottom]
+     * Request: [int taskId, int rootTaskId, int left, int top, int right, int bottom, int toTop]
      * Reply:   [int status (see SPLIT37_*), int 0]
+     * toTop = trailing int (1 = onTop, 0 = to the bottom of the root), absent on old clients → 1.
+     * A move into the root the task already lives in does not change its order, so the engine
+     * bounces such a task through the fullscreen root with toTop = 0 before moving it back on top.
      */
     val TX_SPLIT37_MOVE_TASK: Int = IBinder.FIRST_CALL_TRANSACTION + 35      // 36
 
@@ -251,6 +254,21 @@ object HelperBinderProtocol {
      * (no args) -> [int status (see SPLIT37_*), int 0]
      */
     val TX_SPLIT37_SWAP: Int = IBinder.FIRST_CALL_TRANSACTION + 37           // 38
+
+    /**
+     * Switches the split container mode via changeSplitScreenMode(mode): 101 = the narrow (primary)
+     * container takes the whole screen, 102 = the wide (second) one does, i.e. the split leaves the
+     * screen with the firmware's own slider handle at the edge. This is how a session ends — moving
+     * the tasks out by hand leaves the firmware in the split with one empty pane.
+     *
+     * Request: [int mode] -> [int status (see SPLIT37_*), int areaMode]
+     * areaMode is re-read with getScreenAreaInfoForMulti() AFTER the call: 1 = only the narrow
+     * container on screen, 2 = only the wide one, 3 = split, 4 = fullscreen, -1 = unreadable.
+     *
+     * An old daemon without this handler makes transact return false → client returns null, which
+     * the split engine reads as "daemon outdated" and falls back to the move-to-fullscreen-root path.
+     */
+    val TX_SPLIT37_CHANGE_MODE: Int = IBinder.FIRST_CALL_TRANSACTION + 38    // 39
 
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the

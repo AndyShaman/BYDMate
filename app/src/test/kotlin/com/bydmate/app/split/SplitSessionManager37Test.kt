@@ -22,11 +22,19 @@ import org.junit.Test
 private class Fake37Preferences(featureEnabled: Boolean = true) : SplitPreferences {
     private var saved: SplitPair? = null
     private var featureEnabled = featureEnabled
+    var saves = 0
+        private set
     override fun getLastPair(): SplitPair? = saved
-    override fun saveLastPair(pair: SplitPair) { saved = pair }
+    override fun saveLastPair(pair: SplitPair) { saved = pair; saves++ }
     override fun clearLastPair() { saved = null }
     override fun isFeatureEnabled(): Boolean = featureEnabled
     override fun setFeatureEnabled(enabled: Boolean) { featureEnabled = enabled }
+}
+
+private class Fake37Journal : SplitJournal {
+    val lines = mutableListOf<String>()
+    override fun append(payload: String) { lines += payload }
+    override fun read(): List<String> = lines
 }
 
 private class Fake37Backdrop : SplitBackdrop {
@@ -216,6 +224,30 @@ class SplitSessionManager37Test {
         coVerify(exactly = 1) { engine.exit(live) }
         // The freeform teardown must not run over the firmware's windows.
         coVerify(exactly = 0) { helper.setTaskWindowingMode(any(), any()) }
+    }
+
+    @Test fun `an exit the engine refused ends the session and says so in the journal`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val engine = engineMock()
+        val journal = Fake37Journal()
+        val live = session()
+        coEvery { engine.place(pair) } returns Split37Engine.PlaceOutcome.Placed(live)
+        // The firmware kept its panes on screen; the user still asked for the session to end.
+        coEvery { engine.exit(live) } returns false
+
+        val mgr = SplitSessionManager(
+            helper, Fake37Preferences(), Fake37Backdrop(), backgroundScope,
+            tickDelayMs = 60_000, split37 = engine, journal = journal,
+        )
+        mgr.start(pair)
+
+        mgr.exit()
+
+        assertEquals(SplitSessionState.Idle, mgr.state.value)
+        assertTrue(
+            journal.lines.toString(),
+            journal.lines.any { it.contains("exit split37: engine refused, session ended anyway") },
+        )
     }
 
     @Test fun `mirror swaps the sides through the engine`() = runTest {
@@ -491,6 +523,58 @@ class SplitSessionManager37Test {
         assertEquals("the first tick gets the session the placement produced", live, ticked[0])
         assertTrue("the second tick must carry the adopted task id", ticked.size >= 2)
         assertEquals(recreated, ticked[1])
+    }
+
+
+    @Test fun `an adopted pair becomes the pair of the session and the one a tap brings back`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val prefs = Fake37Preferences()
+        val engine = engineMock()
+        val live = session()
+        val adoptedPair = pair.copy(widePkg = "com.foreign")
+        val adopted = live.copy(pair = adoptedPair, wideTaskId = 55, displacedWidePkg = "pkg.wide")
+        coEvery { engine.place(pair) } returns Split37Engine.PlaceOutcome.Placed(live)
+        coEvery { engine.tick(any()) } returns Split37Engine.TickOutcome(
+            false, Split37Engine.PaneState.IN_PANE, Split37Engine.PaneState.IN_PANE, adopted,
+            pairChanged = true,
+        )
+
+        val mgr = SplitSessionManager(
+            helper, prefs, Fake37Backdrop(), backgroundScope,
+            tickDelayMs = 100, split37 = engine,
+        )
+        mgr.start(pair)
+
+        advanceTimeBy(150)
+        runCurrent()
+
+        assertEquals(
+            SplitSessionState.Active(adoptedPair, 11, 55, nativePanes = true),
+            mgr.state.value,
+        )
+        assertEquals(adoptedPair, prefs.getLastPair())
+    }
+
+    @Test fun `an ordinary tick does not rewrite the saved pair`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val prefs = Fake37Preferences()
+        val engine = engineMock()
+        val live = session()
+        coEvery { engine.place(pair) } returns Split37Engine.PlaceOutcome.Placed(live)
+        coEvery { engine.tick(any()) } returns Split37Engine.TickOutcome(
+            false, Split37Engine.PaneState.IN_PANE, Split37Engine.PaneState.IN_PANE, live,
+        )
+
+        val mgr = SplitSessionManager(
+            helper, prefs, Fake37Backdrop(), backgroundScope,
+            tickDelayMs = 100, split37 = engine,
+        )
+        mgr.start(pair)
+
+        advanceTimeBy(250)
+        runCurrent()
+
+        assertEquals("only the start saved the pair", 1, prefs.saves)
     }
 
     // ── No engine wired ───────────────────────────────────────────────────────

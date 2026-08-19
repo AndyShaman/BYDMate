@@ -20,6 +20,8 @@ import org.junit.Test
  * Widget left-tap in SPLIT mode is an inverse toggle (W6-F5):
  * no session -> start the last pair, session -> exit (including a zombie Active,
  * whose panes are already dead — the tap is the manual recovery path).
+ * On firmware whose panes are the vehicle's own (UI7) the exit half is dropped: the tap
+ * always starts or restores the pair.
  */
 class WidgetSplitTapTest {
 
@@ -33,12 +35,13 @@ class WidgetSplitTapTest {
         every { manager.state } returns MutableStateFlow(s)
     }
 
-    private fun tap(adbBlocked: Boolean = false) = runTest {
+    private fun tap(adbBlocked: Boolean = false, alwaysStart: Boolean = false) = runTest {
         WidgetController.runSplitTap(
             manager = manager,
             onNoPair = { noPairCalls++ },
             onError = { errors += it },
             adbBlocked = { adbBlocked },
+            alwaysStart = alwaysStart,
         )
     }
 
@@ -61,6 +64,29 @@ class WidgetSplitTapTest {
         tap()
         coVerify(exactly = 1) { manager.exit() }
         coVerify(exactly = 0) { manager.startLastPair() }
+        assertTrue(errors.isEmpty())
+    }
+
+    // ── alwaysStart (native panes, UI7) ─────────────────────────────────────────
+
+    @Test fun `tap on native panes restores the pair instead of exiting`() {
+        // On "platformized" firmware the tap has no exit half: a start over a live session
+        // reshuffles the panes in place, and leaving the split is the firmware's own slider.
+        stateIs(SplitSessionState.Active(pair, narrowTaskId = 11, wideTaskId = 10, nativePanes = true))
+        coEvery { manager.startLastPair() } returns SplitStartResult.OK
+        tap(alwaysStart = true)
+        coVerify(exactly = 1) { manager.startLastPair() }
+        coVerify(exactly = 0) { manager.exit() }
+        assertEquals(0, noPairCalls)
+        assertTrue(errors.isEmpty())
+    }
+
+    @Test fun `tap on native panes without a session still starts the last pair`() {
+        stateIs(SplitSessionState.Idle)
+        coEvery { manager.startLastPair() } returns SplitStartResult.OK
+        tap(alwaysStart = true)
+        coVerify(exactly = 1) { manager.startLastPair() }
+        coVerify(exactly = 0) { manager.exit() }
         assertTrue(errors.isEmpty())
     }
 

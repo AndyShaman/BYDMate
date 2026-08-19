@@ -605,6 +605,15 @@ object AppModule {
             helper = helper,
             journal = journal,
             nowMs = android.os.SystemClock::elapsedRealtime,
+            // Only an app the user could have started from a launcher is adopted into a pane. The
+            // engine asks on every tick for as long as a foreign package sits on top of the panes,
+            // so the PackageManager answer is remembered per package.
+            isLauncherApp = java.util.concurrent.ConcurrentHashMap<String, Boolean>().let { cache ->
+                { pkg: String ->
+                    cache.getOrPut(pkg) { ctx.packageManager.getLaunchIntentForPackage(pkg) != null }
+                }
+            },
+            ownPackage = ctx.packageName,
         ),
         // #139: BOOT_COUNT only moves on a real boot, so it is what proves the reboot the hint
         // asked for has happened and freeform is still unavailable. -1 keeps the verdict inert.

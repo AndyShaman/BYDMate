@@ -689,6 +689,44 @@ class HelperClientBinderTest {
         )
     }
 
+    /**
+     * TC-40: getTopTask() carries the trailing visibility flag of the daemon, and every answer
+     * that is not a plain 1/0 leaves it unknown: a daemon that predates the field writes nothing
+     * after displayId, and a ROM without RunningTaskInfo.isVisible makes the daemon write -1.
+     * The split adoption acts on `true` only, so "unknown" must never arrive as visible.
+     *
+     * Anti-vacuity: parsing the trailing int unconditionally makes the absent case read past the
+     * end of the parcel; mapping -1 to `!= 0` makes the third assertion fail with `true`.
+     */
+    @Test
+    fun `getTopTask reads the trailing visible flag and tolerates its absence`() = runBlocking {
+        fun topTaskFake(trailing: Int?): IBinder = object : FakeIBinder() {
+            override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                reply!!.writeInt(0)                 // status
+                reply.writeString("com.example.top")
+                reply.writeInt(99)                  // taskId
+                reply.writeInt(1 /* FULLSCREEN */)  // windowingMode
+                reply.writeInt(1 /* STANDARD */)    // activityType
+                reply.writeInt(0)                   // displayId
+                if (trailing != null) reply.writeInt(trailing)
+                reply.setDataPosition(0)
+                return true
+            }
+        }
+        assertEquals(true, clientWith(topTaskFake(1)).getTopTask()?.visible)
+        assertEquals(false, clientWith(topTaskFake(0)).getTopTask()?.visible)
+        assertNull(
+            "a ROM without isVisible answers -1 - not a visible task",
+            clientWith(topTaskFake(-1)).getTopTask()?.visible,
+        )
+        assertNull(
+            "a daemon that predates the field writes no flag at all",
+            clientWith(topTaskFake(null)).getTopTask()?.visible,
+        )
+        // The fields before the flag are read exactly as they were.
+        assertEquals(99, clientWith(topTaskFake(null)).getTopTask()?.taskId)
+    }
+
     // dumpFids null-bytes guard (C-3-R1)
 
     /**

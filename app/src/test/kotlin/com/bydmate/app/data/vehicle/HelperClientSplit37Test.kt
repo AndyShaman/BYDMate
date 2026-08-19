@@ -16,7 +16,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /**
- * Wire tests of the five TX_SPLIT37_* verbs: request layout and reply parsing against a fake
+ * Wire tests of the six TX_SPLIT37_* verbs: request layout and reply parsing against a fake
  * IBinder. Every non-OK status and every transport failure must collapse into null/false.
  */
 @RunWith(RobolectricTestRunner::class)
@@ -139,12 +139,12 @@ class HelperClientSplit37Test {
     // --- split37MoveTask ---
 
     @Test
-    fun `split37MoveTask writes task, root and bounds in that order`() = runBlocking {
+    fun `split37MoveTask writes task, root, bounds and toTop in that order`() = runBlocking {
         val captured = mutableListOf<Int>()
         val ok = clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK, 0, captured = captured))
             .split37MoveTask(42, 7, Rect(0, 84, 576, 990))
         assertTrue(ok)
-        assertEquals(listOf(42, 7, 0, 84, 576, 990), captured)
+        assertEquals(listOf(42, 7, 0, 84, 576, 990, 1), captured)
     }
 
     @Test
@@ -152,7 +152,17 @@ class HelperClientSplit37Test {
         val captured = mutableListOf<Int>()
         clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK, 0, captured = captured))
             .split37MoveTask(42, 7, null)
-        assertEquals(listOf(42, 7, 0, 0, 0, 0), captured)
+        assertEquals(listOf(42, 7, 0, 0, 0, 0, 1), captured)
+    }
+
+    @Test
+    fun `split37MoveTask writes toTop false as a trailing zero`() = runBlocking {
+        // The bounce half of a re-placement: an old daemon never reads this int and keeps
+        // moving tasks on top, which is the pre-bounce behavior.
+        val captured = mutableListOf<Int>()
+        clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK, 0, captured = captured))
+            .split37MoveTask(42, 7, null, toTop = false)
+        assertEquals(listOf(42, 7, 0, 0, 0, 0, 0), captured)
     }
 
     @Test
@@ -194,4 +204,28 @@ class HelperClientSplit37Test {
         assertFalse(clientWith(replyFake(HelperBinderProtocol.SPLIT37_UNSUPPORTED, 0)).split37Swap())
         assertFalse(clientWith(rejectingFake).split37Swap())
     }
+
+    // --- split37ChangeMode ---
+
+    @Test
+    fun `split37ChangeMode passes the mode and returns the area mode read after the call`() =
+        runBlocking {
+            val captured = mutableListOf<Int>()
+            val area = clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK, 2, captured = captured))
+                .split37ChangeMode(102)
+            assertEquals(2, area)
+            assertEquals(listOf(102), captured)
+        }
+
+    @Test
+    fun `split37ChangeMode returns null on a non-OK status, a truncated reply and a rejected transact`() =
+        runBlocking {
+            assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_FAILED, -1)).split37ChangeMode(102))
+            assertNull(
+                clientWith(replyFake(HelperBinderProtocol.SPLIT37_UNSUPPORTED, -1)).split37ChangeMode(102),
+            )
+            assertNull(clientWith(replyFake(HelperBinderProtocol.SPLIT37_OK)).split37ChangeMode(102))
+            // An old daemon does not know the verb at all.
+            assertNull(clientWith(rejectingFake).split37ChangeMode(102))
+        }
 }
