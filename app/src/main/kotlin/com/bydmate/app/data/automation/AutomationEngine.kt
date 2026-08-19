@@ -29,6 +29,8 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import org.json.JSONArray
 import org.json.JSONObject
@@ -58,6 +60,11 @@ class AutomationEngine @Inject constructor(
         // How long after the first evaluate() the service_start trigger stays
         // armed, giving cold-start params a few polls to warm up.
         const val SERVICE_START_WINDOW_MS = 30_000L
+
+        // Steering-wheel key trigger: manual only, like button_press. Fires from
+        // the a11y key filter through onSteeringKey(), never from the poll.
+        const val TRIGGER_KIND_STEERING_KEY = "steering_key"
+        const val TRIGGER_PARAM_STEERING_KEY = "steering_key"
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -83,6 +90,12 @@ class AutomationEngine @Inject constructor(
     @Volatile private var serviceStartWindowEnd = 0L
     private val serviceStartConsumed = ConcurrentHashMap.newKeySet<Long>()
 
+    // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
+    // live cache so the a11y key filter can answer "is this key mine?" on the
+    // key event itself — a DB read there would run on the input path.
+    private val _steeringKeyCodes = MutableStateFlow<Set<Int>>(emptySet())
+    val steeringKeyCodes: StateFlow<Set<Int>> = _steeringKeyCodes
+
     private data class PendingAction(
         val rule: RuleEntity,
         val actions: List<ActionDef>,
@@ -94,6 +107,21 @@ class AutomationEngine @Inject constructor(
     init {
         createConfirmChannel()
         registerConfirmReceiver()
+        observeSteeringKeyCodes()
+    }
+
+    // Rule edits reach the engine only through the DAO flow (the poll re-reads
+    // getEnabled() every tick), so the same flow keeps the keycode cache fresh.
+    private fun observeSteeringKeyCodes() {
+        scope.launch {
+            ruleDao.getAll().collect { rules ->
+                _steeringKeyCodes.value = rules
+                    .filter { it.enabled }
+                    .flatMap { TriggerDef.listFromJson(it.triggers) }
+                    .filter { it.kind == TRIGGER_KIND_STEERING_KEY }
+                    .mapNotNullTo(HashSet()) { it.value.toIntOrNull() }
+            }
+        }
     }
 
     // Called every 3s from TrackingService poll loop.
@@ -258,8 +286,27 @@ class AutomationEngine @Inject constructor(
     /**
      * Direct, explicit entry point for a widget button press. Runs every ENABLED
      * rule whose button_press trigger value equals [buttonId] immediately —
-     * independent of the 3-second poll. The button press is an explicit user
-     * command, so:
+     * independent of the 3-second poll. See [fireManualTrigger] for the semantics.
+     *
+     * Returns the number of rules matched by button number (0 ⇒ caller shows the
+     * "no rules for button N" toast).
+     */
+    suspend fun onButtonPress(buttonId: Int): Int =
+        fireManualTrigger("button_press", buttonId.toString())
+
+    /**
+     * Direct entry point for a steering-wheel key bound to a rule, called from the
+     * a11y key filter. Same manual semantics as [onButtonPress].
+     *
+     * Returns the number of rules matched by keycode (0 ⇒ nothing was bound to it).
+     */
+    suspend fun onSteeringKey(keyCode: Int): Int =
+        fireManualTrigger(TRIGGER_KIND_STEERING_KEY, keyCode.toString())
+
+    /**
+     * Shared body of the manual (event) trigger paths. Runs every ENABLED rule
+     * carrying a [kind] trigger whose value equals [value]. The press is an
+     * explicit user command, so:
      *  - co-triggers on the matched rule are NOT evaluated (the press alone is
      *    enough to run the rule),
      *  - cooldownSeconds and fireOncePerTrip are bypassed (a repeatable manual
@@ -268,14 +315,13 @@ class AutomationEngine @Inject constructor(
      *    ActionDispatcher safety gate stays in force (it reads the same snapshot).
      * Safety snapshot is the latest TrackingService.lastData.value.
      *
-     * Returns the number of rules matched by button number (0 ⇒ caller shows the
-     * "no rules for button N" toast). A matched-but-park-gated rule still counts,
-     * so the caller does not falsely report "no rules".
+     * Returns the number of matched rules. A matched-but-park-gated rule still
+     * counts, so the caller does not falsely report "no rules".
      */
-    suspend fun onButtonPress(buttonId: Int): Int {
+    private suspend fun fireManualTrigger(kind: String, value: String): Int {
         val matching = ruleDao.getEnabled().filter { rule ->
             TriggerDef.listFromJson(rule.triggers).any {
-                it.kind == "button_press" && it.value.toIntOrNull() == buttonId
+                it.kind == kind && it.value == value
             }
         }
         if (matching.isEmpty()) return 0
@@ -330,7 +376,7 @@ class AutomationEngine @Inject constructor(
                     executeAndLog(rule, actions, snapshot, data)
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "onButtonPress error for rule '${rule.name}': ${e.message}")
+                Log.e(TAG, "$kind error for rule '${rule.name}': ${e.message}")
             }
         }
         return matching.size
@@ -357,6 +403,9 @@ class AutomationEngine @Inject constructor(
             // fire only through the explicit onButtonPress() entry point, so a
             // rule built around a widget button can't be triggered by polling.
             "button_press" -> false
+            // Same for steering-wheel keys: only the a11y filter fires them,
+            // through onSteeringKey().
+            TRIGGER_KIND_STEERING_KEY -> false
             "voice" -> false   // event trigger; fired on demand via fireVoiceRule, never polled
             else -> { // "param" (default)
                 val actual = getParamValue(data, trigger.param) ?: return@map false
@@ -605,6 +654,7 @@ class AutomationEngine @Inject constructor(
                 "service_start" -> json.put("service_start", true)
                 "network_available" -> json.put("network_available", true)
                 "button_press" -> json.put("button_press", t.value)
+                TRIGGER_KIND_STEERING_KEY -> json.put(TRIGGER_KIND_STEERING_KEY, t.value)
                 else -> json.put(t.param, getParamValue(data, t.param) ?: JSONObject.NULL)
             }
         }

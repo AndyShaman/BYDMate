@@ -112,4 +112,32 @@ class SteeringWheelKeyDecisionTest {
     @Test fun `knob keycode is KEYCODE_AUTO_MEDIA_PLAY_PAUSE`() {
         assertEquals(353, VOLUME_KNOB_PRESS_KEYCODE)
     }
+
+    @Test fun `assigned key down fires the bound rules`() {
+        assertEquals(
+            SteeringKeyDecision.FIRE,
+            steeringKeyDecision(305, isDown = true, assigned = true),
+        )
+    }
+
+    @Test fun `assigned key up is consumed so the native action never fires`() {
+        assertEquals(
+            SteeringKeyDecision.CONSUME,
+            steeringKeyDecision(305, isDown = false, assigned = true),
+        )
+    }
+
+    @Test fun `unassigned key down passes through`() {
+        assertEquals(
+            SteeringKeyDecision.PASS_THROUGH,
+            steeringKeyDecision(305, isDown = true, assigned = false),
+        )
+    }
+
+    @Test fun `unassigned key up passes through`() {
+        assertEquals(
+            SteeringKeyDecision.PASS_THROUGH,
+            steeringKeyDecision(305, isDown = false, assigned = false),
+        )
+    }
 }

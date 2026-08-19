@@ -102,3 +102,18 @@ fun knobDecision(keyCode: Int, isDown: Boolean, enabled: Boolean): KnobDecision 
     if (!enabled || keyCode != VOLUME_KNOB_PRESS_KEYCODE) return KnobDecision.PASS_THROUGH
     return if (isDown) KnobDecision.CONSUME_AND_PLAY_PAUSE else KnobDecision.CONSUME
 }
+
+/** What the a11y filter should do with a key bound to an automation rule. */
+enum class SteeringKeyDecision { FIRE, CONSUME, PASS_THROUGH }
+
+/**
+ * Pure gate for a steering-wheel key the user bound to an automation rule (trigger kind
+ * `steering_key`). [assigned] comes from the engine's cached keycode set.
+ * - not assigned → PASS_THROUGH (native function intact).
+ * - assigned: FIRE on the DOWN edge (run the rules once), CONSUME on the UP edge so the
+ *   native short action never fires — same edge split as [starDecision].
+ */
+fun steeringKeyDecision(keyCode: Int, isDown: Boolean, assigned: Boolean): SteeringKeyDecision {
+    if (!assigned) return SteeringKeyDecision.PASS_THROUGH
+    return if (isDown) SteeringKeyDecision.FIRE else SteeringKeyDecision.CONSUME
+}

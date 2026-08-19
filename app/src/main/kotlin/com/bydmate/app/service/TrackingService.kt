@@ -398,6 +398,36 @@ class TrackingService : Service(), LocationListener {
             }
         }
 
+        /**
+         * A11y key filter → engine bridge for a steering-wheel key bound to a rule.
+         * Same shape as [fireAutomationButton]; matched count is diagnostics only
+         * (the key was already consumed by the time the rules run).
+         */
+        fun fireSteeringKey(keyCode: Int, onResult: (matched: Int) -> Unit) {
+            val svc = instance
+            if (svc == null) {
+                onResult(0)
+                return
+            }
+            svc.serviceScope.launch {
+                val matched = try {
+                    svc.automationEngine.onSteeringKey(keyCode)
+                } catch (e: Exception) {
+                    Log.w(TAG, "fireSteeringKey failed: ${e.message}")
+                    0
+                }
+                onResult(matched)
+            }
+        }
+
+        /**
+         * Synchronous "is this steering-wheel key bound to an enabled rule?" — answered
+         * off the engine's cached keycode set, so it is safe on the key-event path. No
+         * running service ⇒ false, and the key passes through to its native function.
+         */
+        fun steeringKeyAssigned(keyCode: Int): Boolean =
+            instance?.automationEngine?.steeringKeyCodes?.value?.contains(keyCode) == true
+
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
             context.startForegroundService(intent)

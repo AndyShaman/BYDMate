@@ -10,6 +10,7 @@ import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
 import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.navdata.NavA11yFeed
+import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -104,7 +105,20 @@ class SteeringWheelKeyService : AccessibilityService() {
                 true
             }
             StarDecision.CONSUME -> true
-            StarDecision.PASS_THROUGH -> false
+            // Automation rules bound to a key run LAST: projection, voice and the knob keep
+            // priority over a user assignment, and the settings UI warns about occupied keys.
+            StarDecision.PASS_THROUGH -> when (
+                steeringKeyDecision(event.keyCode, isDown, TrackingService.steeringKeyAssigned(event.keyCode))
+            ) {
+                SteeringKeyDecision.FIRE -> {
+                    TrackingService.fireSteeringKey(event.keyCode) { matched ->
+                        Log.d(TAG, "steering key ${event.keyCode}: $matched rule(s)")
+                    }
+                    true
+                }
+                SteeringKeyDecision.CONSUME -> true
+                SteeringKeyDecision.PASS_THROUGH -> false
+            }
         }
     }
 
