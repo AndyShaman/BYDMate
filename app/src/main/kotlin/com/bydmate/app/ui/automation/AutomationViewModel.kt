@@ -9,6 +9,7 @@ import androidx.annotation.StringRes
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
+import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.RuleDraftValidator
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.local.dao.RuleDao
@@ -905,4 +906,19 @@ fun newButtonPressTrigger(buttonId: Int): TriggerDef = TriggerDef(
     value = buttonId.toString(),
     displayName = "Кнопка $buttonId",
     kind = "button_press",
+)
+
+/**
+ * Builds the "steering-wheel key" trigger. Shaped like [newButtonPressTrigger]: value holds the
+ * Android keycode as a string, displayName is the internal log label (the UI renders the localized
+ * button name). keyCode 0 means "not assigned yet" — the engine's keycode cache skips it, so a
+ * freshly added trigger claims no key until the user learns one.
+ */
+fun newSteeringKeyTrigger(keyCode: Int): TriggerDef = TriggerDef(
+    param = AutomationEngine.TRIGGER_PARAM_STEERING_KEY,
+    chineseName = "",
+    operator = "==",
+    value = keyCode.toString(),
+    displayName = "Клавиша $keyCode",
+    kind = AutomationEngine.TRIGGER_KIND_STEERING_KEY,
 )

@@ -9,6 +9,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.ui.automation.newButtonPressTrigger
+import com.bydmate.app.ui.automation.newSteeringKeyTrigger
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -107,6 +108,15 @@ class AutomationEngineSteeringKeyTest {
                 rule(2, steeringKeyTrigger(306), enabled = false),
                 rule(3, newButtonPressTrigger(1)),
             )
+        )
+        assertEquals(setOf(305), awaitKeyCodes(engine, setOf(305)))
+    }
+
+    // A trigger added from the menu starts at keycode 0 ("not assigned"): it must claim no key
+    // until the user learns one, otherwise the a11y filter would swallow KEYCODE_UNKNOWN.
+    @Test fun `an unassigned trigger claims no keycode`() = runBlocking {
+        val (engine, _, _) = setup(
+            listOf(rule(1, newSteeringKeyTrigger(0)), rule(2, steeringKeyTrigger(305)))
         )
         assertEquals(setOf(305), awaitKeyCodes(engine, setOf(305)))
     }

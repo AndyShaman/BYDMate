@@ -383,6 +383,13 @@
     <string name="automation_trigger_type_button_press">Націсканне кнопкі</string>
     <string name="automation_trigger_button_label">Кнопка %1$d</string>
     <string name="automation_trigger_button_picker_label">Кнопка</string>
+    <string name="automation_trigger_type_steering_key">Клавіша руля</string>
+    <string name="automation_trigger_steering_key_picker_label">Клавіша руля</string>
+    <string name="automation_trigger_steering_key_unassigned">Клавіша не прызначана</string>
+    <string name="automation_trigger_steering_key_assign">прызначыць</string>
+    <string name="automation_steering_key_occupied_projection">Гэтая клавіша ўключае навігацыю на прыборнай панэлі. Вызваліце яе ў Наладах, раздзел Дысплей, або выберыце іншую.</string>
+    <string name="automation_steering_key_occupied_voice">Гэтая клавіша выклікае галасавога памочніка BYDMate. Змяніце клавішу ў Наладах, раздзел Голас-агент, або выберыце іншую.</string>
+    <string name="automation_steering_key_occupied_knob">Націсканне кола занята функцыяй play/pause. Выключыце яе ў Наладах, раздзел Дысплей, або выберыце іншую клавішу.</string>
     <string name="automation_trigger_type_voice">Голас</string>
     <string name="automation_trigger_voice_phrase_label">Фраза-трыгер</string>
     <string name="automation_voice_phrase_empty">Галасавая фраза пустая</string>

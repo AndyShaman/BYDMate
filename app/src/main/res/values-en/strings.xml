@@ -330,6 +330,13 @@
     <string name="automation_trigger_type_button_press">Button press</string>
     <string name="automation_trigger_button_label">Button %1$d</string>
     <string name="automation_trigger_button_picker_label">Button</string>
+    <string name="automation_trigger_type_steering_key">Steering-wheel key</string>
+    <string name="automation_trigger_steering_key_picker_label">Steering-wheel key</string>
+    <string name="automation_trigger_steering_key_unassigned">Key not assigned</string>
+    <string name="automation_trigger_steering_key_assign">assign</string>
+    <string name="automation_steering_key_occupied_projection">This key turns navigation on the instrument cluster on. Free it up in Settings, Display section, or pick another one.</string>
+    <string name="automation_steering_key_occupied_voice">This key calls the BYDMate voice assistant. Change the key in Settings, Voice agent section, or pick another one.</string>
+    <string name="automation_steering_key_occupied_knob">The knob press is taken by play/pause. Turn it off in Settings, Display section, or pick another key.</string>
     <string name="automation_trigger_type_voice">Voice</string>
     <string name="automation_trigger_voice_phrase_label">Trigger phrase</string>
     <string name="automation_voice_phrase_empty">Voice phrase is empty</string>

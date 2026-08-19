@@ -35,6 +35,7 @@ import androidx.compose.material.icons.outlined.Close
 import androidx.compose.material.icons.outlined.ContentCopy
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Link
@@ -95,6 +96,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
+import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.DEFAULT_TRIGGER_KEYCODE
+import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
+import com.bydmate.app.cluster.VOLUME_KNOB_PRESS_KEYCODE
+import com.bydmate.app.cluster.knownButtonNameRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.minuteToHHmm
@@ -104,6 +110,7 @@ import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
+import com.bydmate.app.ui.settings.LearnButtonDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 import org.json.JSONArray
@@ -318,6 +325,17 @@ private fun RuleCard(
                                     append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
                                 }
                             }
+                            "steering_key" -> {
+                                // Same rule as button_press: the label comes from the stored
+                                // keycode, so it follows the UI language.
+                                val code = t.value.toIntOrNull() ?: 0
+                                withStyle(SpanStyle(color = AccentBlue)) {
+                                    append(
+                                        if (code > 0) steeringKeyLabel(summaryCtx, code)
+                                        else summaryCtx.getString(R.string.automation_trigger_steering_key_unassigned)
+                                    )
+                                }
+                            }
                             else -> {
                                 withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
                                 append(" ")
@@ -485,6 +503,9 @@ private fun EditorDialog(
                             },
                             onAddButtonPress = {
                                 onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
+                            },
+                            onAddSteeringKey = {
+                                onUpdate { copy(triggers = triggers + newSteeringKeyTrigger(0)) }
                             },
                             onAddVoice = {
                                 onUpdate { copy(triggers = triggers + newVoiceTrigger(context)) }
@@ -737,6 +758,7 @@ private fun TriggerRow(
             "service_start" -> ServiceStartTriggerControls()
             "network_available" -> NetworkAvailableTriggerControls()
             "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
+            "steering_key" -> SteeringKeyTriggerControls(trigger, onUpdate)
             "voice" -> VoiceTriggerControls(trigger, onUpdate)
             else -> ParamTriggerControls(trigger, onUpdate)
         }
@@ -1229,6 +1251,86 @@ private fun ButtonPressTriggerControls(
                     },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun SteeringKeyTriggerControls(
+    trigger: TriggerDef,
+    onUpdate: (TriggerDef) -> Unit,
+) {
+    val context = LocalContext.current
+    Icon(
+        Icons.Outlined.Gamepad,
+        contentDescription = null,
+        tint = AccentGreen,
+        modifier = Modifier.size(16.dp),
+    )
+    Spacer(Modifier.width(6.dp))
+    Text(
+        stringResource(R.string.automation_trigger_steering_key_picker_label),
+        fontSize = 13.sp,
+        color = AccentGreen,
+        fontWeight = FontWeight.Bold,
+    )
+    Spacer(Modifier.width(6.dp))
+
+    var learning by remember { mutableStateOf(false) }
+    val code = trigger.value.toIntOrNull() ?: 0
+    Text(
+        if (code > 0) "${steeringKeyLabel(context, code)} ($code)"
+        else stringResource(R.string.automation_trigger_steering_key_assign),
+        fontSize = 13.sp, color = AccentGreen, fontWeight = FontWeight.Bold,
+        modifier = Modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+            .clickable { learning = true }
+            .padding(8.dp, 6.dp),
+    )
+
+    if (learning) {
+        LearnButtonDialog(
+            onSave = { learned ->
+                onUpdate(trigger.copy(value = learned.toString(), displayName = "Клавиша $learned"))
+                learning = false
+            },
+            onDismiss = { learning = false },
+            occupiedReason = steeringKeyOccupiedReason(context),
+        )
+    }
+}
+
+/** Human label for a steering-wheel keycode, e.g. "Левая звезда" or "Кнопка (код 383)". */
+private fun steeringKeyLabel(context: Context, keyCode: Int): String {
+    val res = knownButtonNameRes(keyCode)
+    return if (res != 0) context.getString(res)
+    else context.getString(R.string.steering_button_unknown, keyCode)
+}
+
+/**
+ * Keys already owned by another BYDMate feature. SteeringWheelKeyService handles projection, the
+ * voice button and the volume knob BEFORE automation rules, so a rule bound to one of those keys
+ * would never fire — the learn dialog says so instead of saving a dead binding.
+ */
+private fun steeringKeyOccupiedReason(context: Context): (Int) -> String? {
+    val clusterPrefs = context.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+    val voicePrefs = context.getSharedPreferences("voice", Context.MODE_PRIVATE)
+    return { keyCode ->
+        when {
+            clusterPrefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false) &&
+                keyCode == clusterPrefs.getInt(ClusterProjectionManager.KEY_TRIGGER_KEYCODE, DEFAULT_TRIGGER_KEYCODE) ->
+                context.getString(R.string.automation_steering_key_occupied_projection)
+
+            voicePrefs.getBoolean("voice_enabled", false) &&
+                keyCode == voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE) ->
+                context.getString(R.string.automation_steering_key_occupied_voice)
+
+            clusterPrefs.getBoolean(ClusterProjectionManager.KEY_KNOB_PLAY_PAUSE, false) &&
+                keyCode == VOLUME_KNOB_PRESS_KEYCODE ->
+                context.getString(R.string.automation_steering_key_occupied_knob)
+
+            else -> null
         }
     }
 }
@@ -3117,6 +3219,7 @@ private fun AddTriggerButton(
     onAddServiceStart: () -> Unit,
     onAddNetworkAvailable: () -> Unit,
     onAddButtonPress: () -> Unit,
+    onAddSteeringKey: () -> Unit,
     onAddVoice: () -> Unit,
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -3189,6 +3292,13 @@ private fun AddTriggerButton(
                 onClick = {
                     menuExpanded = false
                     onAddButtonPress()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_trigger_type_steering_key), fontSize = 13.sp) },
+                onClick = {
+                    menuExpanded = false
+                    onAddSteeringKey()
                 }
             )
             DropdownMenuItem(

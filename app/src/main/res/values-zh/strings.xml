@@ -349,6 +349,13 @@
     <string name="automation_trigger_type_button_press">按钮按下</string>
     <string name="automation_trigger_button_label">按钮 %1$d</string>
     <string name="automation_trigger_button_picker_label">按钮</string>
+    <string name="automation_trigger_type_steering_key">方向盘按键</string>
+    <string name="automation_trigger_steering_key_picker_label">方向盘按键</string>
+    <string name="automation_trigger_steering_key_unassigned">未分配按键</string>
+    <string name="automation_trigger_steering_key_assign">分配</string>
+    <string name="automation_steering_key_occupied_projection">该按键用于开启仪表盘导航。请在设置的显示部分释放该按键，或选择其他按键。</string>
+    <string name="automation_steering_key_occupied_voice">该按键用于呼出 BYDMate 语音助手。请在设置的语音智能体部分更改按键，或选择其他按键。</string>
+    <string name="automation_steering_key_occupied_knob">旋钮按下已被播放/暂停功能占用。请在设置的显示部分关闭该功能，或选择其他按键。</string>
     <string name="automation_trigger_type_voice">语音</string>
     <string name="automation_trigger_voice_phrase_label">触发短语</string>
     <string name="automation_voice_phrase_empty">语音短语为空</string>

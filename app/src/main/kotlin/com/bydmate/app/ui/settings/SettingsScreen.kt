@@ -1638,22 +1638,28 @@ private fun SplitSection() {
     }
 }
 
-private sealed interface LearnUiState {
+internal sealed interface LearnUiState {
     data object Waiting : LearnUiState
     data class Rejected(val keyCode: Int) : LearnUiState
+    /** Assignable key, but already taken by another feature; [reason] explains which one. */
+    data class Occupied(val keyCode: Int, val reason: String) : LearnUiState
     data class Captured(val keyCode: Int) : LearnUiState
     data object TimedOut : LearnUiState
 }
 
 /**
  * Learn-the-button dialog. Puts SteeringWheelKeyService into learn mode while open and collects the
- * captured key from its StateFlow (same process). States: Waiting → (Rejected loops) → Captured
- * (confirm) / TimedOut. learnMode is always cleared on dispose.
+ * captured key from its StateFlow (same process). States: Waiting → (Rejected/Occupied loop) →
+ * Captured (confirm) / TimedOut. learnMode is always cleared on dispose.
+ *
+ * [occupiedReason] lets a caller veto an otherwise assignable key: a non-null text means "this key
+ * already does something else" and is shown while the dialog keeps waiting for another key.
  */
 @Composable
-private fun LearnButtonDialog(
+internal fun LearnButtonDialog(
     onSave: (Int) -> Unit,
     onDismiss: () -> Unit,
+    occupiedReason: (Int) -> String? = { null },
 ) {
     var state by remember { mutableStateOf<LearnUiState>(LearnUiState.Waiting) }
 
@@ -1674,20 +1680,27 @@ private fun LearnButtonDialog(
         SteeringWheelKeyService.capturedKey
             .filterNotNull()
             .collect { r ->
-                state = if (r.assignable) {
-                    SteeringWheelKeyService.learnMode = false
-                    LearnUiState.Captured(r.keyCode)
-                } else {
-                    LearnUiState.Rejected(r.keyCode)
+                val occupied = if (r.assignable) occupiedReason(r.keyCode) else null
+                state = when {
+                    !r.assignable -> LearnUiState.Rejected(r.keyCode)
+                    // The service clears learn mode on capture; re-arm so the next press is caught.
+                    occupied != null -> {
+                        SteeringWheelKeyService.learnMode = true
+                        LearnUiState.Occupied(r.keyCode, occupied)
+                    }
+                    else -> {
+                        SteeringWheelKeyService.learnMode = false
+                        LearnUiState.Captured(r.keyCode)
+                    }
                 }
             }
     }
 
     // Timeout while still waiting/rejected (no assignable capture yet).
     LaunchedEffect(state) {
-        if (state is LearnUiState.Waiting || state is LearnUiState.Rejected) {
+        if (state.isWaitingForKey()) {
             delay(10_000)
-            if (state is LearnUiState.Waiting || state is LearnUiState.Rejected) {
+            if (state.isWaitingForKey()) {
                 SteeringWheelKeyService.learnMode = false
                 state = LearnUiState.TimedOut
             }
@@ -1716,6 +1729,13 @@ private fun LearnButtonDialog(
                 is LearnUiState.Rejected -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_rejected))
                     Text(steeringButtonLabel(s.keyCode), color = TextSecondary, fontSize = 12.sp)
+                }
+                is LearnUiState.Occupied -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(s.reason)
+                    Text(
+                        "${steeringButtonLabel(s.keyCode)} (${s.keyCode})",
+                        color = TextSecondary, fontSize = 12.sp,
+                    )
                 }
                 is LearnUiState.Captured -> Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(stringResource(R.string.learn_button_captured))
@@ -1750,6 +1770,10 @@ private fun LearnButtonDialog(
         },
     )
 }
+
+/** True while the dialog is still expecting a key press (nothing accepted yet). */
+private fun LearnUiState.isWaitingForKey(): Boolean =
+    this is LearnUiState.Waiting || this is LearnUiState.Rejected || this is LearnUiState.Occupied
 
 
 @Composable

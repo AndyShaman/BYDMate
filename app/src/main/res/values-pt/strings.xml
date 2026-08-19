@@ -327,6 +327,13 @@
     <string name="automation_trigger_type_button_press">Pressionamento de botão</string>
     <string name="automation_trigger_button_label">Botão %1$d</string>
     <string name="automation_trigger_button_picker_label">Botão</string>
+    <string name="automation_trigger_type_steering_key">Tecla do volante</string>
+    <string name="automation_trigger_steering_key_picker_label">Tecla do volante</string>
+    <string name="automation_trigger_steering_key_unassigned">Tecla não atribuída</string>
+    <string name="automation_trigger_steering_key_assign">atribuir</string>
+    <string name="automation_steering_key_occupied_projection">Esta tecla liga a navegação no painel de instrumentos. Libere-a em Configurações, seção Tela, ou escolha outra.</string>
+    <string name="automation_steering_key_occupied_voice">Esta tecla chama o assistente de voz do BYDMate. Altere a tecla em Configurações, seção Agente de voz, ou escolha outra.</string>
+    <string name="automation_steering_key_occupied_knob">O toque no botão giratório está ocupado pela função play/pause. Desative-a em Configurações, seção Tela, ou escolha outra tecla.</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Exato</string>

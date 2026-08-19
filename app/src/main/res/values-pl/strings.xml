@@ -383,6 +383,13 @@
     <string name="automation_trigger_type_button_press">Naciśnięcie przycisku</string>
     <string name="automation_trigger_button_label">Przycisk %1$d</string>
     <string name="automation_trigger_button_picker_label">Przycisk</string>
+    <string name="automation_trigger_type_steering_key">Klawisz kierownicy</string>
+    <string name="automation_trigger_steering_key_picker_label">Klawisz kierownicy</string>
+    <string name="automation_trigger_steering_key_unassigned">Klawisz nieprzypisany</string>
+    <string name="automation_trigger_steering_key_assign">przypisz</string>
+    <string name="automation_steering_key_occupied_projection">Ten klawisz włącza nawigację na zestawie wskaźników. Zwolnij go w Ustawieniach, sekcja Ekran, albo wybierz inny.</string>
+    <string name="automation_steering_key_occupied_voice">Ten klawisz wywołuje asystenta głosowego BYDMate. Zmień klawisz w Ustawieniach, sekcja Asystent głosowy, albo wybierz inny.</string>
+    <string name="automation_steering_key_occupied_knob">Naciśnięcie pokrętła jest zajęte przez funkcję play/pause. Wyłącz ją w Ustawieniach, sekcja Ekran, albo wybierz inny klawisz.</string>
     <string name="automation_trigger_type_voice">Głos</string>
     <string name="automation_trigger_voice_phrase_label">Fraza wyzwalająca</string>
     <string name="automation_voice_phrase_empty">Fraza głosowa jest pusta</string>

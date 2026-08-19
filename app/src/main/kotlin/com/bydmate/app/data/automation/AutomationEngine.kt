@@ -119,7 +119,9 @@ class AutomationEngine @Inject constructor(
                     .filter { it.enabled }
                     .flatMap { TriggerDef.listFromJson(it.triggers) }
                     .filter { it.kind == TRIGGER_KIND_STEERING_KEY }
-                    .mapNotNullTo(HashSet()) { it.value.toIntOrNull() }
+                    // 0 = "not assigned yet" (a trigger just added from the menu); it must never
+                    // claim a key, so the filter never sees it.
+                    .mapNotNullTo(HashSet()) { it.value.toIntOrNull()?.takeIf { code -> code > 0 } }
             }
         }
     }
