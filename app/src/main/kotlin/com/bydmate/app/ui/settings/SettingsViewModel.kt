@@ -173,6 +173,8 @@ data class SettingsUiState(
     val agentName: String = "",
     val agentPersona: String = AgentPersona.NAVIGATOR.id,
     val agentGender: String = "m",
+    /** Long-term facts the agent remembered about the driver (DriverMemory). */
+    val agentMemoryFacts: List<String> = emptyList(),
     // Wave J: multi-provider LLM connections (OpenRouter / z.ai / custom)
     val zaiApiKey: String = "",
     val customName: String = "",
@@ -238,6 +240,7 @@ class SettingsViewModel @Inject constructor(
     private val splitPreferences: com.bydmate.app.split.SplitPreferences,
     private val splitSessionManager: com.bydmate.app.split.SplitSessionManager,
     private val splitJournal: com.bydmate.app.split.SplitJournal,
+    private val driverMemory: com.bydmate.app.agent.DriverMemory,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -444,6 +447,7 @@ class SettingsViewModel @Inject constructor(
                     agentName = agentName,
                     agentPersona = agentPersona,
                     agentGender = agentGender,
+                    agentMemoryFacts = driverMemory.facts(),
                     zaiApiKey = zaiApiKey,
                     customName = customName,
                     customBaseUrl = customBaseUrl,
@@ -1359,6 +1363,21 @@ class SettingsViewModel @Inject constructor(
         if (currentVoice.gender != wantGender) {
             setTtsVoice(TtsVoiceCatalog.counterpart(currentVoice).id)
         }
+    }
+
+    /**
+     * Re-reads the driver facts the agent keeps in DriverMemory. The agent can remember or
+     * forget things while Settings is closed, so the card asks for a fresh list on entry
+     * instead of trusting what was loaded with the rest of the state.
+     */
+    fun refreshAgentMemory() {
+        _uiState.update { it.copy(agentMemoryFacts = driverMemory.facts()) }
+    }
+
+    /** Drops every remembered fact. No confirmation: the driver can tell them to the agent again. */
+    fun forgetAgentMemory() {
+        driverMemory.forgetAll()
+        _uiState.update { it.copy(agentMemoryFacts = emptyList()) }
     }
 
     /**

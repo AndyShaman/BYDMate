@@ -2273,6 +2273,36 @@ private fun VoiceSettingsContent(
         }
     }
 
+    // Driver memory: what the agent remembered about the driver, plus a way to wipe it
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Facts can appear or vanish while Settings is closed -- reload them on entry.
+            LaunchedEffect(Unit) { viewModel.refreshAgentMemory() }
+            SettingActionRow(
+                title = stringResource(R.string.settings_agent_memory_title),
+                description = stringResource(R.string.settings_agent_memory_hint),
+                buttonLabel = stringResource(R.string.settings_agent_memory_forget_all),
+                onClick = { viewModel.forgetAgentMemory() },
+                enabled = state.agentMemoryFacts.isNotEmpty(),
+            )
+            if (state.agentMemoryFacts.isEmpty()) {
+                Text(
+                    stringResource(R.string.settings_agent_memory_empty),
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                )
+            } else {
+                state.agentMemoryFacts.forEach { fact ->
+                    Text("\u2022 $fact", color = TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
+                }
+            }
+        }
+    }
+
     // Agent debug tools
     Card(
         shape = RoundedCornerShape(12.dp),

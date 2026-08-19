@@ -1193,6 +1193,10 @@
     <string name="settings_agent_gender_male">Męska</string>
     <string name="settings_agent_gender_female">Żeńska</string>
     <string name="settings_agent_gender_hint">Działa na wszystkie głosy: każde źródło ma wariant męski i żeński</string>
+    <string name="settings_agent_memory_title">Pamięć o kierowcy</string>
+    <string name="settings_agent_memory_hint">Agent zapamiętuje imię i stałe preferencje, gdy mu o tym powiesz. Powiedz „zapomnij …”, aby usunąć jeden fakt</string>
+    <string name="settings_agent_memory_empty">Na razie nic nie zapamiętano</string>
+    <string name="settings_agent_memory_forget_all">Zapomnij wszystko</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Głosowy agent AI</string>

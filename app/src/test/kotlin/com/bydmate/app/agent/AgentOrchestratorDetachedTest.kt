@@ -21,12 +21,16 @@ class AgentOrchestratorDetachedTest {
         var configured: Boolean = true,
         val reply: Result<AgentReply>? = null,
     ) : AgentBackend {
+        val requests = mutableListOf<List<AgentMessage>>()
         override suspend fun isConfigured() = configured
         override suspend fun chat(
             messages: List<AgentMessage>,
             tools: JSONArray?,
             onDelta: ((String) -> Unit)?,
-        ): Result<AgentReply> = reply ?: Result.failure(IllegalStateException("no scripted reply"))
+        ): Result<AgentReply> {
+            requests += messages
+            return reply ?: Result.failure(IllegalStateException("no scripted reply"))
+        }
     }
 
     private fun answer(text: String) = Result.success(AgentReply(text, emptyList()))
@@ -40,11 +44,29 @@ class AgentOrchestratorDetachedTest {
         agentEnabled: Boolean = true,
         configured: Boolean = true,
         tools: AgentTools = defaultTools(),
+        backend: FakeBackend = FakeBackend(configured = configured, reply = reply),
     ): AgentOrchestrator {
         val repo = mockk<SettingsRepository>()
         coEvery { repo.isAgentEnabled() } returns agentEnabled
-        val backend = FakeBackend(configured = configured, reply = reply)
-        return AgentOrchestrator(backend, tools, repo)
+        return AgentOrchestrator(backend, tools, repo, isMoving = { moving })
+    }
+
+    private var moving = false
+
+    // A detached turn talks to an automation rule, not the driver: the memory tools are
+    // withheld there, and the driver facts must not ride in its system prompt either.
+    @Test
+    fun `detached prompt carries no driver memory block`() = runTest {
+        val backend = FakeBackend(reply = answer("ок"))
+        val repo = mockk<SettingsRepository>()
+        coEvery { repo.isAgentEnabled() } returns true
+        val orch = AgentOrchestrator(
+            backend, defaultTools(), repo, isMoving = { false },
+            memoryBlock = { "\nО ВОДИТЕЛЕ (факты):\n- Водителя зовут Андрей" },
+        )
+        orch.askDetached("сводка")
+        val sys = (backend.requests.single().first() as AgentMessage.System).content
+        assertFalse(sys.contains("Водителя зовут Андрей"))
     }
 
     @Test
@@ -78,6 +100,17 @@ class AgentOrchestratorDetachedTest {
     @Test
     fun `blank prompt returns Disabled`() = runTest {
         assertEquals(AgentResult.Disabled, makeOrchestrator(reply = answer("x")).askDetached("   "))
+    }
+
+    // An automation prompt is not the driver talking: the moving tag would be a lie about who
+    // is asking, and it would push the answer to a single word.
+    @Test
+    fun `detached prompt is not tagged while the car moves`() = runTest {
+        moving = true
+        val backend = FakeBackend(reply = answer("Погода солнечная"))
+        makeOrchestrator(backend = backend).askDetached("сводка погоды")
+        val user = backend.requests.single().last() as AgentMessage.User
+        assertEquals("сводка погоды", user.content)
     }
 
     @Test

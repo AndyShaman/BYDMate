@@ -1,5 +1,6 @@
 package com.bydmate.app.agent
 
+import android.util.Log
 import com.bydmate.app.data.remote.LlmHttpException
 import com.bydmate.app.data.remote.OpenRouterClient
 import org.json.JSONArray
@@ -14,12 +15,18 @@ class LlmError(val userMessage: String, cause: Throwable? = null) : Exception(us
  * OpenAI-compatible [AgentBackend] over configurable connections (OpenRouter / z.ai /
  * custom). The primary connection is retried once on transient failures (timeout, 429,
  * 5xx); any remaining failure hands over to the fallback connection when one is set.
+ * Both extra attempts are budgeted from the start of the turn ([RETRY_BUDGET_MS] /
+ * [FALLBACK_BUDGET_MS]): an attempt that already burned its call timeout means a dead
+ * network, and the driver must hear an honest failure instead of minutes of silence.
  */
 @Singleton
 class LlmAgentBackend @Inject constructor(
     private val client: OpenRouterClient,
     private val connections: LlmConnectionResolver,
 ) : AgentBackend {
+
+    /** Test seam — deterministic clock for the retry/fallback budgets. */
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
     override suspend fun isConfigured(): Boolean = connections.primary() != null
 
@@ -34,19 +41,31 @@ class LlmAgentBackend @Inject constructor(
         var forwarded = false
         val guarded: ((String) -> Unit)? = onDelta?.let { cb -> { d -> forwarded = true; cb(d) } }
 
-        var result = call(primary, wire, tools, guarded)
+        val startedAt = nowMs()
+
+        // The provider extras (reasoning off etc.) are a latency optimisation, not a
+        // requirement: a model or upstream that rejects them with 400 gets the plain request
+        // once, so a field the provider does not know can never silence the agent.
+        suspend fun attempt(conn: LlmConnection): Result<AgentReply> {
+            val first = call(conn, wire, tools, guarded, withExtras = true)
+            if (first.isSuccess || forwarded || !rejectedExtras(conn, first, guarded != null)) return first
+            Log.w(TAG, "provider ${conn.id} rejected request extras (HTTP 400), retrying plain")
+            return call(conn, wire, tools, guarded, withExtras = false)
+        }
+
+        var result = attempt(primary)
         if (result.isSuccess) return result
         // Once a delta reached the caller the user has heard the beginning: replaying the
         // request (retry or fallback) would speak it twice. Fail fast instead.
         if (forwarded) return interrupted(result)
-        if (isTransient(result.exceptionOrNull())) {
-            result = call(primary, wire, tools, guarded)
+        if (isTransient(result.exceptionOrNull()) && nowMs() - startedAt < RETRY_BUDGET_MS) {
+            result = attempt(primary)
             if (result.isSuccess) return result
             if (forwarded) return interrupted(result)
         }
         val fallback = connections.fallback()
-        if (fallback != null) {
-            result = call(fallback, wire, tools, guarded)
+        if (fallback != null && nowMs() - startedAt < FALLBACK_BUDGET_MS) {
+            result = attempt(fallback)
             if (result.isSuccess) return result
             if (forwarded) return interrupted(result)
         }
@@ -62,10 +81,22 @@ class LlmAgentBackend @Inject constructor(
         wire: JSONArray,
         tools: JSONArray?,
         onDelta: ((String) -> Unit)?,
+        withExtras: Boolean,
     ): Result<AgentReply> = (
-        if (onDelta != null) client.chatStream(conn.baseUrl, conn.apiKey, conn.model, wire, tools, onDelta)
-        else client.chatRaw(conn.baseUrl, conn.apiKey, conn.model, wire, tools)
+        if (onDelta != null) client.chatStream(
+            conn.baseUrl, conn.apiKey, conn.model, wire, tools,
+            if (withExtras) providerExtras(conn, streaming = true) else null, onDelta,
+        )
+        else client.chatRaw(
+            conn.baseUrl, conn.apiKey, conn.model, wire, tools,
+            if (withExtras) providerExtras(conn, streaming = false) else null,
+        )
     ).map { parseReply(it) }
+
+    private fun rejectedExtras(conn: LlmConnection, result: Result<AgentReply>, streaming: Boolean): Boolean {
+        val e = result.exceptionOrNull()
+        return e is LlmHttpException && e.code == 400 && providerExtras(conn, streaming) != null
+    }
 
     private fun isTransient(e: Throwable?): Boolean = when {
         e is LlmHttpException -> e.code == 429 || e.code >= 500
@@ -82,6 +113,28 @@ class LlmAgentBackend @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "LlmAgentBackend"
+        /** A retry only pays off while the turn is still young; past this the network is the
+         *  problem, not the request. */
+        internal const val RETRY_BUDGET_MS = 10_000L
+        /** Hard cap for starting a fallback attempt, counted from the start of the turn. */
+        internal const val FALLBACK_BUDGET_MS = 20_000L
+
+        /** Provider-specific payload fields that cut latency: reasoning off where the provider
+         *  supports switching it off, usage stats in the stream to check prompt caching in the
+         *  field. A custom endpoint speaks an unknown dialect — send it nothing extra. */
+        internal fun providerExtras(conn: LlmConnection, streaming: Boolean): JSONObject? = when (conn.id) {
+            // "none" is rejected by models with mandatory reasoning (Gemini 3 Flash), "minimal" is not.
+            LlmConnectionResolver.ID_OPENROUTER -> JSONObject()
+                .put("reasoning", JSONObject().put("effort", "minimal").put("exclude", true))
+                // stream_options is only legal alongside stream=true; a non-streaming request
+                // carrying it is rejected as an invalid request by OpenAI-compatible endpoints.
+                .also { if (streaming) it.put("stream_options", JSONObject().put("include_usage", true)) }
+            LlmConnectionResolver.ID_ZAI -> JSONObject()
+                .put("thinking", JSONObject().put("type", "disabled"))
+            else -> null
+        }
+
         /** OpenRouter wire encoding of the message history. */
         internal fun toWire(messages: List<AgentMessage>): JSONArray = JSONArray().apply {
             messages.forEach { m ->

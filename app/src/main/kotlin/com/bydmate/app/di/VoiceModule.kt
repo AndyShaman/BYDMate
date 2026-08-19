@@ -142,6 +142,8 @@ object VoiceModule {
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
                 .getBoolean("voice_enabled", false)
         override fun vehicleSnapshot(): DiParsData? = TrackingService.lastData.value
+        override fun snapshotAgeMs(): Long? =
+            TrackingService.lastDataAtMs.takeIf { it > 0L }?.let { System.currentTimeMillis() - it }
         // Fix D: read the language override mirrored by SettingsViewModel.setVoiceLanguage().
         override fun preferredLang(): VoiceLang? =
             when (ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("voice_lang", "")) {

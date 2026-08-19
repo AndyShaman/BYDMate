@@ -1031,6 +1031,10 @@
     <string name="settings_agent_gender_male">Masculino</string>
     <string name="settings_agent_gender_female">Feminino</string>
     <string name="settings_agent_gender_hint">Aplica-se a todas as vozes: cada fonte tem uma opção masculina e feminina</string>
+    <string name="settings_agent_memory_title">Memória sobre o motorista</string>
+    <string name="settings_agent_memory_hint">O agente memoriza o nome e as preferências constantes quando você lhe diz isso. Diga “esqueça …” para remover um fato</string>
+    <string name="settings_agent_memory_empty">Nada memorizado ainda</string>
+    <string name="settings_agent_memory_forget_all">Esquecer tudo</string>
     <string name="settings_voice_button_mic_header">Botão e microfone</string>
     <string name="settings_section_service_title">Serviço e dados</string>
     <string name="settings_battery_capacity_desc">Usado para estimar autonomia e custo</string>

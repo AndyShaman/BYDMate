@@ -1195,6 +1195,10 @@
     <string name="settings_agent_gender_male">Мужской</string>
     <string name="settings_agent_gender_female">Женский</string>
     <string name="settings_agent_gender_hint">Действует на все голоса: у каждого источника есть мужской и женский вариант</string>
+    <string name="settings_agent_memory_title">Память о водителе</string>
+    <string name="settings_agent_memory_hint">Агент запоминает имя и устойчивые предпочтения, когда вы ему об этом говорите. Скажите «забудь …», чтобы убрать один факт</string>
+    <string name="settings_agent_memory_empty">Пока ничего не запомнено</string>
+    <string name="settings_agent_memory_forget_all">Забыть всё</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Голосовой AI-агент</string>

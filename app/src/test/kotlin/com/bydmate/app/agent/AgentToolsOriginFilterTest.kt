@@ -17,6 +17,8 @@ import com.bydmate.app.voice.VoiceGate
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.json.JSONArray
+import org.json.JSONObject
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -63,7 +65,7 @@ class AgentToolsOriginFilterTest {
     }
 
     @Test
-    fun `schemas without automation tools exclude exactly the three`() = runTest {
+    fun `schemas without automation tools exclude exactly the gated set`() = runTest {
         val tools = makeTools()
         val full = toolNames(tools.schemas())
         val filtered = toolNames(tools.schemas(includeAutomationTools = false))
@@ -89,5 +91,58 @@ class AgentToolsOriginFilterTest {
         val res = makeTools().execute(AgentToolCall(id = "1", name = "list_places", arguments = "{}"),
             allowAutomationTools = false)
         assertFalse(res.contains("недоступен"))
+    }
+
+    // --- driver memory tools ---
+
+    private fun toolsWithMemory(memory: DriverMemory) = makeTools().also { it.injectDriverMemory(memory) }
+
+    @Test
+    fun `remember_fact stores the fact and reports it back`() = runTest {
+        val memory = DriverMemory(prefs = null)
+        val res = toolsWithMemory(memory).execute(AgentToolCall(id = "1", name = "remember_fact",
+            arguments = """{"fact":"Водителя зовут Андрей"}"""))
+        val json = JSONObject(res)
+        assertTrue(json.getBoolean("ok"))
+        assertEquals("Водителя зовут Андрей", json.getString("fact"))
+        assertEquals(listOf("Водителя зовут Андрей"), memory.facts())
+    }
+
+    @Test
+    fun `remember_fact without a fact returns an error`() = runTest {
+        val res = toolsWithMemory(DriverMemory(prefs = null))
+            .execute(AgentToolCall(id = "1", name = "remember_fact", arguments = "{}"))
+        assertTrue(JSONObject(res).has("error"))
+    }
+
+    @Test
+    fun `forget_fact with all wipes the memory`() = runTest {
+        val memory = DriverMemory(prefs = null)
+        memory.remember("Водителя зовут Андрей")
+        memory.remember("Любит 22 градуса в салоне")
+        val res = toolsWithMemory(memory).execute(AgentToolCall(id = "1", name = "forget_fact",
+            arguments = """{"all":true}"""))
+        assertEquals(2, JSONObject(res).getInt("forgotten_all"))
+        assertTrue(memory.facts().isEmpty())
+    }
+
+    @Test
+    fun `forget_fact without arguments returns an error`() = runTest {
+        val res = toolsWithMemory(DriverMemory(prefs = null))
+            .execute(AgentToolCall(id = "1", name = "forget_fact", arguments = "{}"))
+        assertTrue(JSONObject(res).getString("error").contains("не указано"))
+    }
+
+    // An automation-origin session talks to a rule, not to the driver: it must not rewrite facts.
+    @Test
+    fun `memory tools are hidden and refused for automation-origin sessions`() = runTest {
+        val tools = toolsWithMemory(DriverMemory(prefs = null))
+        val filtered = toolNames(tools.schemas(includeAutomationTools = false))
+        assertFalse(filtered.contains("remember_fact"))
+        assertFalse(filtered.contains("forget_fact"))
+        assertTrue(toolNames(tools.schemas()).contains("remember_fact"))
+        val res = tools.execute(AgentToolCall(id = "1", name = "remember_fact",
+            arguments = """{"fact":"Водителя зовут Андрей"}"""), allowAutomationTools = false)
+        assertTrue(res.contains("недоступен в сессии, запущенной автоматизацией"))
     }
 }

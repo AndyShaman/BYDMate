@@ -281,4 +281,26 @@ class AgentToolsControlTest {
         assertTrue(out.has("error"))
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
+
+    // --- set_hotspot ---
+
+    @Test fun set_hotspot_on_true_dispatches_hotspot_payload_1() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":true}""")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "1" }, null) }
+    }
+
+    @Test fun set_hotspot_on_false_dispatches_hotspot_payload_0() = runTest {
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(tools().execute(call("set_hotspot", """{"on":false}""")))
+        assertTrue(out.getBoolean("ok"))
+        coVerify { dispatcher.dispatch(match { it.kind == "hotspot" && it.payload == "0" }, null) }
+    }
+
+    @Test fun set_hotspot_without_on_reports_russian_error_and_does_not_dispatch() = runTest {
+        val out = JSONObject(tools().execute(call("set_hotspot", """{}""")))
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+    }
 }

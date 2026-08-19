@@ -30,6 +30,11 @@ class AgentCommandCatalogTest {
         assertEquals("车窗关闭", AgentCommandCatalog.resolve("windows_close_all", null))
     }
 
+    @Test fun `resolve returns chinese string for hazard commands`() {
+        assertEquals("双闪打开", AgentCommandCatalog.resolve("hazard_on", null))
+        assertEquals("双闪关闭", AgentCommandCatalog.resolve("hazard_off", null))
+    }
+
     @Test fun `resolve applies value for ranged command`() {
         assertEquals("设置温度22", AgentCommandCatalog.resolve("ac_set_temp", 22))
     }

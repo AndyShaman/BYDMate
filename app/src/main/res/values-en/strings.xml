@@ -1041,6 +1041,10 @@
     <string name="settings_agent_gender_male">Male</string>
     <string name="settings_agent_gender_female">Female</string>
     <string name="settings_agent_gender_hint">Applies to all voices: each source has a male and a female option</string>
+    <string name="settings_agent_memory_title">Driver memory</string>
+    <string name="settings_agent_memory_hint">The agent remembers your name and lasting preferences when you tell it to. Say “forget …” to drop a single fact</string>
+    <string name="settings_agent_memory_empty">Nothing remembered yet</string>
+    <string name="settings_agent_memory_forget_all">Forget everything</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Voice AI agent</string>

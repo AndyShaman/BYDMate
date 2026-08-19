@@ -1156,6 +1156,10 @@
     <string name="settings_agent_gender_male">男声</string>
     <string name="settings_agent_gender_female">女声</string>
     <string name="settings_agent_gender_hint">对所有语音生效：每种音色都有男声和女声版本</string>
+    <string name="settings_agent_memory_title">驾驶员记忆</string>
+    <string name="settings_agent_memory_hint">当你告诉智能体时，它会记住你的名字和长期偏好。说“忘记……”即可删除某一条</string>
+    <string name="settings_agent_memory_empty">暂无记忆内容</string>
+    <string name="settings_agent_memory_forget_all">全部忘记</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">语音AI助手</string>

@@ -75,6 +75,12 @@ class TtsRouter(
 
     override fun reload() = delegate.reload()
 
+    /** Only the offline delegate holds a model worth pre-loading; online backends are stateless
+     *  HTTP clients. */
+    /** Loads the offline model ahead of time only when it is the engine that will speak;
+     *  with an online source selected the sherpa model would sit in memory unused. */
+    override fun warmUp() { if (onlineBackend() == null) delegate.warmUp() }
+
     override fun audible(): Boolean = delegate.audible()
 
     override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean = delegate.playPcm(samples, sampleRate)

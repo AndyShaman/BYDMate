@@ -32,7 +32,8 @@ import org.junit.Test
 
 class AgentToolsReadTest {
 
-    private val gate = mockk<VoiceGate>()
+    // snapshotAgeMs defaults to "unknown" so existing vehicle_state tests stay age-agnostic.
+    private val gate = mockk<VoiceGate>().also { every { it.snapshotAgeMs() } returns null }
     private val battery = mockk<BatteryStateRepository>()
     private val range = mockk<RangeCalculator>()
     private val tripDao = mockk<TripDao>()
@@ -90,6 +91,25 @@ class AgentToolsReadTest {
         assertEquals(2, out.getInt("seat_heat_driver_level"))
         assertEquals(321, out.getInt("range_km"))
         assertEquals(100.0, out.getDouble("soh_percent"), 0.01)
+    }
+
+    @Test fun vehicle_state_reports_snapshot_age_in_seconds() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
+        every { gate.snapshotAgeMs() } returns 7_400L
+        coEvery { battery.refresh() } returns
+            BatteryState(50f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimateDetailed(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertEquals(7L, out.getLong("age_s"))
+    }
+
+    @Test fun vehicle_state_omits_age_when_unknown() = runTest {
+        every { gate.vehicleSnapshot() } returns snapshot(soc = 50)
+        coEvery { battery.refresh() } returns
+            BatteryState(50f, 12.5f, 100f, null, null, autoserviceAvailable = true)
+        coEvery { range.estimateDetailed(any(), any()) } returns null
+        val out = JSONObject(tools().execute(AgentToolCall("1", "get_vehicle_state", "{}")))
+        assertTrue(!out.has("age_s"))
     }
 
     @Test fun vehicle_state_survives_battery_refresh_failure() = runTest {

@@ -230,22 +230,32 @@ class AgentOrchestratorTest {
         assertTrue(system.content.contains("Сегодня 5 июля 2026 года"))
     }
 
-    @Test fun moving_true_adds_terse_instruction_to_system_prompt() = runTest {
+    // The driving hint rides on the user turn, not on the system prompt: system + tools must
+    // stay a byte-identical prefix across turns or the provider's prompt cache never hits.
+    @Test fun moving_true_tags_the_user_message_not_the_system_prompt() = runTest {
         coEvery { repo.isAgentEnabled() } returns true
         coEvery { tools.schemas() } returns JSONArray()
-        val backend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
-        val orch = AgentOrchestrator(backend, tools, repo, isMoving = { true }).also { it.nowMs = { clock } }
-        orch.ask("что там с зарядом")
-        val system = backend.requests.single().first() as AgentMessage.System
-        assertTrue(system.content.contains("движется"))
+        val movingBackend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
+        val moving = AgentOrchestrator(movingBackend, tools, repo, isMoving = { true }).also { it.nowMs = { clock } }
+        moving.ask("что там с зарядом")
+        val parkedBackend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
+        val parked = AgentOrchestrator(parkedBackend, tools, repo, isMoving = { false }).also { it.nowMs = { clock } }
+        parked.ask("что там с зарядом")
+
+        val movingSystem = movingBackend.requests.single().first() as AgentMessage.System
+        val parkedSystem = parkedBackend.requests.single().first() as AgentMessage.System
+        assertEquals(parkedSystem.content, movingSystem.content)
+
+        val user = movingBackend.requests.single().last() as AgentMessage.User
+        assertEquals("что там с зарядом ${AgentOrchestrator.MOVING_TAG}", user.content)
     }
 
-    @Test fun moving_false_by_default_no_terse_instruction() = runTest {
+    @Test fun moving_false_by_default_leaves_the_user_message_untagged() = runTest {
         val backend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
         val orch = orchestrator(backend)
         orch.ask("что там с зарядом")
-        val system = backend.requests.single().first() as AgentMessage.System
-        assertTrue(!system.content.contains("движется"))
+        val user = backend.requests.single().last() as AgentMessage.User
+        assertEquals("что там с зарядом", user.content)
     }
 
     // --- Task 9: tool outcomes journal ---
@@ -433,5 +443,24 @@ class AgentOrchestratorTest {
         assertTrue(sys.content.contains("Тебя зовут Лео"))
         assertTrue(sys.content.contains("шутку или анекдот"))
         assertFalse(AgentOrchestrator.SYSTEM_PROMPT.contains("ХАРАКТЕР"))
+    }
+
+    // Driver facts go last, after the persona block: the static prompt and the persona are the
+    // cacheable prefix, the memory block is the part that changes when the driver tells us something.
+    @Test
+    fun `system prompt appends driver memory after the persona block`() = runTest {
+        coEvery { repo.isAgentEnabled() } returns true
+        coEvery { tools.schemas() } returns JSONArray()
+        val backend = FakeBackend(replies = ArrayDeque(listOf(answer("Готово"))))
+        val memory = DriverMemory(prefs = null).also { it.remember("Водителя зовут Андрей") }
+        val orch = AgentOrchestrator(backend, tools, repo, memoryBlock = { memory.promptBlock() })
+            .also { it.nowMs = { clock } }
+        orch.ask("привет")
+        val sys = (backend.requests.single().first() as AgentMessage.System).content
+        assertTrue(sys.contains("- Водителя зовут Андрей"))
+        assertTrue(sys.indexOf("ХАРАКТЕР:") > sys.indexOf(AgentOrchestrator.SYSTEM_PROMPT))
+        // "О ВОДИТЕЛЕ" also occurs inside SYSTEM_PROMPT (the rule that points the model at the
+        // section), so pin the section header itself, not the bare words.
+        assertTrue(sys.indexOf("О ВОДИТЕЛЕ (факты") > sys.indexOf("ХАРАКТЕР:"))
     }
 }

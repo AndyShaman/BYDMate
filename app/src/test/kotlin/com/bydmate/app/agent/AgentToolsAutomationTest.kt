@@ -580,6 +580,42 @@ class AgentToolsAutomationTest {
         coVerify(exactly = 0) { ruleDao.insert(any()) }
     }
 
+    @Test fun create_automation_hotspot_on_persists_payload_1() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"hotspot","on":true}]""")))
+
+        val action = ActionDef.listFromJson(slot.captured.actions).first()
+        assertEquals("hotspot", action.kind)
+        assertEquals("1", action.payload)
+    }
+
+    @Test fun create_automation_hotspot_missing_on_reports_error_no_insert() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+
+        val out = JSONObject(tools().execute(call("create_automation",
+            createArgs(actions = """[{"kind":"hotspot"}]"""))))
+
+        assertTrue(out.has("error"))
+        coVerify(exactly = 0) { ruleDao.insert(any()) }
+    }
+
+    @Test fun create_automation_split_screen_close_and_toggle_persist_kinds_without_payload() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"split_screen_close"},{"kind":"split_screen_toggle"}]""")))
+
+        val actions = ActionDef.listFromJson(slot.captured.actions)
+        assertEquals(listOf("split_screen_close", "split_screen_toggle"), actions.map { it.kind })
+        assertEquals(listOf(null, null), actions.map { it.payload })
+    }
+
     @Test fun create_automation_speak_persists_text_in_payload() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         val slot = slot<RuleEntity>()

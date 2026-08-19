@@ -19,6 +19,7 @@ class TtsRouterTest {
         val queueEnqueued = mutableListOf<String>()
         var queueFinished = false
         var stopCalls = 0
+        var warmUpCalls = 0
         var playPcmResult = true
 
         override fun isReady() = ready
@@ -27,6 +28,7 @@ class TtsRouterTest {
             return true
         }
         override fun stop() { stopCalls++ }
+        override fun warmUp() { warmUpCalls++ }
         override val speaking: StateFlow<Boolean> = MutableStateFlow(false)
         override fun playPcm(samples: FloatArray, sampleRate: Int): Boolean {
             playPcmCalls += samples to sampleRate
@@ -333,6 +335,26 @@ class TtsRouterTest {
         val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
         router.reload()
         assertFalse(router.audible())
+    }
+
+    @Test
+    fun `warmUp skips the offline engine when an online source is selected`() {
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(
+            delegate = delegate,
+            backends = listOf(FakeBackend()),
+            selectedSource = { "gemini" },
+        )
+        router.warmUp()
+        assertEquals(0, delegate.warmUpCalls)
+    }
+
+    @Test
+    fun `warmUp reaches the offline engine when offline is selected`() {
+        val delegate = FakeTtsEngine()
+        val router = TtsRouter(delegate = delegate, selectedSource = { TtsRouter.OFFLINE })
+        router.warmUp()
+        assertEquals(1, delegate.warmUpCalls)
     }
 
     @Test

@@ -36,6 +36,7 @@ import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.media.NaviRouteHolder
 import com.bydmate.app.media.NaviScreenReader
+import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.automation.OPERATORS
 import com.bydmate.app.ui.automation.TRIGGER_PARAMS
@@ -105,6 +106,16 @@ class AgentTools @Inject constructor(
     internal fun injectSplit(prefs: SplitPreferences, mgr: SplitSessionManager) {
         splitPrefs = prefs
         splitMgr = mgr
+    }
+
+    // Same method-injection reason as splitPrefs above: keeps every existing test constructor
+    // call intact. The default is an in-memory instance, so remember_fact never crashes.
+    private var driverMemory: DriverMemory = DriverMemory(prefs = null)
+
+    /** Called by Hilt after construction; call manually in unit tests that test the memory tools. */
+    @Inject
+    internal fun injectDriverMemory(memory: DriverMemory) {
+        driverMemory = memory
     }
 
     /** Test seam — deterministic time for period queries. */
@@ -194,7 +205,8 @@ class AgentTools @Inject constructor(
     suspend fun schemas(includeAutomationTools: Boolean = true): JSONArray = JSONArray().apply {
         put(tool(
             "get_vehicle_state",
-            "Текущее состояние машины: заряд, запас хода, скорость, температуры, климат, окна, двери, шины, свет, подогрев сидений, GPS-позиция и название сохранённого Места, если машина в нём.",
+            "Текущее состояние машины: заряд, запас хода, скорость, температуры, климат, окна, двери, шины, свет, подогрев сидений, GPS-позиция и название сохранённого Места, если машина в нём. " +
+                "Поле age_s = сколько секунд назад получены данные; если больше 60, предупреди, что данные могли устареть.",
             JSONObject(), emptyList(),
         ))
         put(tool(
@@ -344,6 +356,31 @@ class AgentTools @Inject constructor(
                     .put("description", "Радиус в метрах, 20..500, по умолчанию 100")),
             listOf("name"),
         ))
+        // Memory tools live behind the automation gate: a session started BY an automation
+        // talks to a rule, not to the driver, and must not rewrite what we know about them.
+        if (includeAutomationTools) {
+            put(tool(
+                "remember_fact",
+                "Запомнить устойчивый факт о водителе на будущее: имя, как обращаться, " +
+                    "предпочтения (температура, музыка, маршруты), семья. Одна короткая фраза, " +
+                    "например \"Водителя зовут Андрей\", \"Любит 22 градуса в салоне\". " +
+                    "Не сохранять разовые команды и состояние машины.",
+                JSONObject().put("fact", JSONObject().put("type", "string")
+                    .put("description", "Факт одной короткой фразой")),
+                listOf("fact"),
+            ))
+            put(tool(
+                "forget_fact",
+                "Забыть сохранённый факт о водителе. fact = часть текста факта; " +
+                    "all = true чтобы забыть всё.",
+                JSONObject()
+                    .put("fact", JSONObject().put("type", "string")
+                        .put("description", "Часть текста факта, который нужно забыть"))
+                    .put("all", JSONObject().put("type", "boolean")
+                        .put("description", "true = забыть все факты о водителе")),
+                emptyList(),
+            ))
+        }
         put(tool(
             "navigate_to",
             "Построить маршрут в Навигаторе от текущей позиции. Команды поехали домой, до дома, " +
@@ -450,8 +487,9 @@ class AgentTools @Inject constructor(
         put(tool(
             "launch_app",
             "Запустить установленное приложение по названию. Понимает русские названия штатных " +
-                "приложений машины: навигатор, музыка, камера, видеорегистратор, браузер, ютуб, " +
-                "настройки машины, файлы, режимы вождения, часовой, АБРП.",
+                "приложений машины: навигатор, яндекс карты, музыка, камера, видеорегистратор, " +
+                "браузер, ютуб, настройки машины, файлы, режимы вождения, часовой, АБРП, " +
+                "медиацентр, телефон.",
             JSONObject().put("name", JSONObject().put("type", "string")
                 .put("description", "Название приложения, как на домашнем экране")),
             listOf("name"),
@@ -473,6 +511,15 @@ class AgentTools @Inject constructor(
                 "\"сними с охраны\", \"выключи охрану\" = off.",
             JSONObject().put("on", JSONObject().put("type", "boolean")
                 .put("description", "true = включить охранный режим, false = выключить")),
+            listOf("on"),
+        ))
+        put(tool(
+            "set_hotspot",
+            "Включить или выключить точку доступа Wi-Fi (раздачу интернета с машины). " +
+                "\"включи раздачу интернета\", \"включи точку доступа\" = on; " +
+                "\"выключи раздачу\" = off.",
+            JSONObject().put("on", JSONObject().put("type", "boolean")
+                .put("description", "true = включить точку доступа, false = выключить")),
             listOf("on"),
         ))
         put(tool(
@@ -566,10 +613,12 @@ class AgentTools @Inject constructor(
                                     .put("enum", JSONArray(listOf(
                                         "param", "delay", "media_volume", "notification",
                                         "call", "navigate", "url",
-                                        "yandex_music", "sentry", "app_launch",
+                                        "yandex_music", "sentry", "hotspot", "app_launch",
                                         "cluster_projection", "speak", "agent_query",
-                                        "split_screen")))
-                                    .put("description", "Тип действия"))
+                                        "split_screen", "split_screen_close",
+                                        "split_screen_toggle")))
+                                    .put("description", "Тип действия. split_screen_close и " +
+                                        "split_screen_toggle дополнительных полей не требуют"))
                                 .put("command_id", JSONObject()
                                     .put("type", "string")
                                     .put("enum", JSONArray(AgentCommandCatalog.ALL.map { it.id }))
@@ -595,7 +644,7 @@ class AgentTools @Inject constructor(
                                 .put("mode", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=yandex_music: режим, например mybeat"))
                                 .put("on", JSONObject().put("type", "boolean")
-                                    .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать"))
+                                    .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi"))
                                 .put("app", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=app_launch: название приложения, как на домашнем экране"))
                                 .put("narrow_app", JSONObject().put("type", "string")
@@ -661,6 +710,8 @@ class AgentTools @Inject constructor(
                 "list_automations" -> listAutomations()
                 "list_places" -> listPlaces()
                 "create_place" -> createPlace(args)
+                "remember_fact" -> rememberFact(args)
+                "forget_fact" -> forgetFact(args)
                 "navigate_to" -> navigateTo(args)
                 "search_on_map" -> searchOnMap(args)
                 "show_point_on_map" -> showPointOnMap(args)
@@ -673,6 +724,7 @@ class AgentTools @Inject constructor(
                 "launch_app" -> launchAppTool(args)
                 "set_cluster_projection" -> setClusterProjection(args)
                 "set_sentry" -> setSentry(args)
+                "set_hotspot" -> setHotspot(args)
                 "split_screen" -> splitScreen(args)
                 "set_automation_enabled" -> setAutomationEnabled(args)
                 "create_automation" -> createAutomation(args)
@@ -692,6 +744,9 @@ class AgentTools @Inject constructor(
             ?: return """{"error":"нет данных с машины (нет связи или машина спит)"}"""
         val o = JSONObject()
         fun putIf(key: String, v: Any?) { if (v != null) o.put(key, v) }
+        // The snapshot is never cleared on transport loss, so the model needs its age to
+        // tell a live reading from a stale one (see TrackingService.lastDataAtMs).
+        putIf("age_s", gate.snapshotAgeMs()?.let { it / 1000L })
         putIf("soc_percent", d.soc)
         putIf("speed_kmh", d.speed)
         putIf("power_kw", d.power)
@@ -1222,6 +1277,28 @@ class AgentTools @Inject constructor(
         return JSONObject().put("ok", true).put("name", name).put("radius_m", radius).toString()
     }
 
+    // --- driver memory ---
+
+    private fun rememberFact(args: JSONObject): String =
+        when (val result = driverMemory.remember(args.optString("fact"))) {
+            is RememberResult.Stored -> JSONObject().put("ok", true)
+                .put("fact", result.fact)
+                .apply { result.evicted?.let { put("evicted", it) } }
+                .toString()
+            RememberResult.Duplicate -> """{"ok":true,"duplicate":true}"""
+            is RememberResult.Rejected -> JSONObject().put("error", result.reason).toString()
+        }
+
+    private fun forgetFact(args: JSONObject): String {
+        if (requireBoolArg(args, "all") == true) {
+            return JSONObject().put("ok", true).put("forgotten_all", driverMemory.forgetAll()).toString()
+        }
+        val query = args.optString("fact").trim()
+        if (query.isEmpty()) return """{"error":"не указано, что забыть"}"""
+        return JSONObject().put("ok", true)
+            .put("forgotten", JSONArray(driverMemory.forget(query))).toString()
+    }
+
     // --- navigation ---
 
     private suspend fun navigateTo(args: JSONObject): String {
@@ -1621,6 +1698,21 @@ class AgentTools @Inject constructor(
         val action = ActionDef(command = "sentry",
             displayName = if (on) "Включить охрану" else "Выключить охрану",
             kind = "sentry", payload = if (on) "1" else "0")
+        if (ActionDispatcher.isDangerousAction(action)) {
+            return confirmDangerous(action, action.displayName)
+        }
+        val result = actionDispatcher.dispatch(action, data = null)
+        return dispatchJson(result)
+    }
+
+    // Immediate Wi-Fi hotspot toggle: same ActionDispatcher path as a "hotspot" automation
+    // action, so the reported result is the real one.
+    private suspend fun setHotspot(args: JSONObject): String {
+        val on = requireBoolArg(args, "on")
+            ?: return """{"error":"не указано, включить или выключить точку доступа"}"""
+        val action = ActionDef(command = "hotspot",
+            displayName = if (on) "Включить точку доступа" else "Выключить точку доступа",
+            kind = "hotspot", payload = if (on) "1" else "0")
         if (ActionDispatcher.isDangerousAction(action)) {
             return confirmDangerous(action, action.displayName)
         }
@@ -2066,6 +2158,12 @@ class AgentTools @Inject constructor(
                     displayName = if (on) "Включить охрану" else "Выключить охрану",
                     kind = "sentry", payload = if (on) "1" else "0"))
             }
+            "hotspot" -> {
+                val on = requireBoolArg(a, "on") ?: return Built.Error("для hotspot укажи on: true или false")
+                Built.Value(ActionDef(command = "hotspot",
+                    displayName = if (on) "Включить точку доступа" else "Выключить точку доступа",
+                    kind = "hotspot", payload = if (on) "1" else "0"))
+            }
             "app_launch" -> {
                 val name = a.optString("app").trim()
                 if (name.isEmpty()) return Built.Error("не указано приложение (поле app)")
@@ -2118,6 +2216,16 @@ class AgentTools @Inject constructor(
                         .put("side", side).toString(),
                 ))
             }
+            // Both target the running session, so they carry no payload (mirrors
+            // newSplitScreenCloseAction/newSplitScreenToggleAction in AutomationViewModel).
+            "split_screen_close" -> Built.Value(ActionDef(
+                command = "", displayName = "Закрыть разделённый экран",
+                kind = "split_screen_close", payload = null,
+            ))
+            "split_screen_toggle" -> Built.Value(ActionDef(
+                command = "", displayName = "Переключить разделённый экран",
+                kind = "split_screen_toggle", payload = null,
+            ))
             else -> Built.Error("недопустимый тип действия: $kind")
         }
     }
@@ -2193,10 +2301,13 @@ class AgentTools @Inject constructor(
     private fun round1(v: Double): Double = Math.round(v * 10.0) / 10.0
 
     companion object {
-        /** Tools that manage automations. Excluded for automation-origin sessions: run_automation
-         *  reaches fireVoiceRule (which bypasses cooldown by design), so a rule whose agent_query
-         *  action calls it could recurse into itself with no engine-level brake. */
-        internal val AUTOMATION_TOOLS = setOf("run_automation", "create_automation", "set_automation_enabled")
+        /** Tools withheld from automation-origin sessions. run_automation reaches fireVoiceRule
+         *  (which bypasses cooldown by design), so a rule whose agent_query action calls it could
+         *  recurse into itself with no engine-level brake; the memory tools are withheld because
+         *  such a session talks to a rule, not to the driver, and must not rewrite driver facts. */
+        internal val AUTOMATION_TOOLS = setOf(
+            "run_automation", "create_automation", "set_automation_enabled",
+            "remember_fact", "forget_fact")
 
         private const val DAY_MS = 24L * 3600_000
         private const val PERIOD_ERROR =
@@ -2215,6 +2326,10 @@ class AgentTools @Inject constructor(
         // Any wheel below this is clearly deflated (Leopard 3 cold placard ~250 kPa).
         private const val TIRE_WARN_MIN_KPA = 210
 
+        // Yandex Maps ships under several package names; reuse the navigation list so the
+        // alias never drifts from the guidance-source set.
+        private val YANDEX_MAPS_PACKAGES = NavPackages.YANDEX_MAPS.toList()
+
         // RU aliases for stock DiLink apps whose launcher labels are Chinese/English and thus
         // unreachable by label match. Values are candidate packages in priority order; an alias
         // fires only when one of them is actually installed on this car (fleet cars differ).
@@ -2222,6 +2337,8 @@ class AgentTools @Inject constructor(
         internal val APP_ALIASES: Map<String, List<String>> = mapOf(
             "навигатор" to listOf("ru.yandex.yandexnavi"),
             "яндекс навигатор" to listOf("ru.yandex.yandexnavi"),
+            "яндекс карты" to YANDEX_MAPS_PACKAGES,
+            "карты" to YANDEX_MAPS_PACKAGES,
             "музыка" to listOf("ru.yandex.music"),
             "яндекс музыка" to listOf("ru.yandex.music"),
             "камера" to listOf("com.byd.avc"),
@@ -2242,6 +2359,11 @@ class AgentTools @Inject constructor(
             "охранный режим" to listOf("com.byd.sentrymode"),
             "абрп" to listOf("com.iternio.abrpapp"),
             "маршрутный планировщик" to listOf("com.iternio.abrpapp"),
+            "медиацентр" to listOf("com.byd.mediacenter"),
+            "медиа центр" to listOf("com.byd.mediacenter"),
+            "плеер" to listOf("com.byd.mediacenter"),
+            "телефон" to listOf("com.byd.bluetoothcall"),
+            "звонки" to listOf("com.byd.bluetoothcall"),
         )
     }
 }

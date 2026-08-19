@@ -3,6 +3,7 @@ package com.bydmate.app.voice
 import android.media.AudioTrack
 import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -844,5 +845,100 @@ class SherpaTtsEngineTest {
         val guard = mockk<AsrLoadGuard> { every { isTripped() } returns false }
         val engine = SherpaTtsEngine(mm, loadGuard = guard)
         assertTrue(engine.isReady())
+    }
+
+    // --- Wave 2a: engine pre-warm at service start ---
+
+    @Test
+    fun `warmUp is a no-op when model not ready`() {
+        val mm = mockk<TtsModelManager> { every { isReady(any()) } returns false }
+        val engine = SherpaTtsEngine(mm)
+        val gen = engine.generationForTest()
+        engine.warmUp()
+        Thread.sleep(100)   // a queued worker job would have run by now
+        verify(exactly = 0) { mm.modelDirPath(any()) }   // createTts() never attempted
+        assertEquals(gen, engine.generationForTest())
+        assertFalse(engine.speaking.value)
+    }
+
+    // --- Wave 2b: PCM cache for short fixed phrases. speak() never reaches real synthesis on the
+    // JVM (no native sherpa-onnx lib), so the cache is filled through primePcmCacheForTest and the
+    // key/eligibility rules are pinned on their pure companion seams. ---
+
+    @Test
+    fun `pcmCacheable accepts short phrases up to the char limit`() {
+        assertTrue(SherpaTtsEngine.pcmCacheable("Готово."))
+        assertTrue(SherpaTtsEngine.pcmCacheable("a".repeat(SherpaTtsEngine.PCM_CACHE_MAX_CHARS)))
+    }
+
+    @Test
+    fun `pcmCacheable rejects text longer than the char limit`() {
+        assertFalse(SherpaTtsEngine.pcmCacheable("a".repeat(SherpaTtsEngine.PCM_CACHE_MAX_CHARS + 1)))
+    }
+
+    @Test
+    fun `pcmCacheKey is stable for identical synthesis inputs`() {
+        assertEquals(
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 33, 22_050, "Гот+ово."),
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 33, 22_050, "Гот+ово."),
+        )
+    }
+
+    @Test
+    fun `pcmCacheKey changes when any synthesis input changes`() {
+        val base = SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 33, 22_050, "Гот+ово.")
+        val variants = listOf(
+            SherpaTtsEngine.pcmCacheKey("irina", 0, 1.0f, 33, 22_050, "Гот+ово."),   // voice
+            SherpaTtsEngine.pcmCacheKey("alena", 1, 1.0f, 33, 22_050, "Гот+ово."),   // speaker
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.2f, 33, 22_050, "Гот+ово."),   // speed
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 70, 22_050, "Гот+ово."),   // liveliness
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 33, 24_000, "Гот+ово."),   // sample rate
+            SherpaTtsEngine.pcmCacheKey("alena", 0, 1.0f, 33, 22_050, "Готово."),    // unmarked text
+        )
+        assertEquals(variants.size, variants.filterNot { it == base }.toSet().size)
+    }
+
+    @Test
+    fun `pcm cache never grows past the entry cap`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        repeat(SherpaTtsEngine.PCM_CACHE_MAX_ENTRIES + 5) {
+            engine.primePcmCacheForTest("key$it", floatArrayOf(1f))
+        }
+        assertEquals(SherpaTtsEngine.PCM_CACHE_MAX_ENTRIES, engine.pcmCacheSizeForTest())
+    }
+
+    @Test
+    fun `reload clears the pcm cache so a voice switch cannot replay the old voice`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        engine.primePcmCacheForTest("k", floatArrayOf(1f, 2f))
+        assertEquals(1, engine.pcmCacheSizeForTest())
+        engine.reload()
+        Thread.sleep(200)   // let the single worker drain its job
+        assertEquals(0, engine.pcmCacheSizeForTest())
+    }
+
+    @Test
+    fun `stop leaves the pcm cache intact`() {
+        // A barge-in invalidates the in-flight utterance, not the synthesized samples.
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        engine.primePcmCacheForTest("k", floatArrayOf(1f, 2f))
+        engine.stop()
+        Thread.sleep(100)
+        assertEquals(1, engine.pcmCacheSizeForTest())
+    }
+
+    @Test
+    fun `warmUp creates the engine on the worker without claiming speech`() {
+        val mm = mockk<TtsModelManager>(relaxed = true) { every { isReady(any()) } returns true }
+        val engine = SherpaTtsEngine(mm)
+        val gen = engine.generationForTest()
+        engine.warmUp()     // createTts() itself fails on the JVM -- only the attempt is observable
+        Thread.sleep(200)   // let the single worker drain its job
+        verify { mm.modelDirPath(any()) }
+        assertEquals(gen, engine.generationForTest())   // warming is not speech: no supersession
+        assertFalse(engine.speaking.value)
     }
 }

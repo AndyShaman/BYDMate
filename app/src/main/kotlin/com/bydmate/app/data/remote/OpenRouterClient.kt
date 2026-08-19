@@ -144,6 +144,25 @@ class OpenRouterClient @Inject constructor(
     /** Test seam: overrides the OpenRouter base URL. Production leaves it null. */
     internal var baseUrlForTest: String? = null
 
+    /** Shared request body for [chatRaw] and [chatStream]. [extras] carries provider-specific
+     *  fields (reasoning/thinking switches, stream_options) and is applied last, so a provider
+     *  can override a base field too. */
+    private fun buildPayload(
+        modelId: String,
+        messages: JSONArray,
+        tools: JSONArray?,
+        stream: Boolean,
+        extras: JSONObject?,
+    ): JSONObject = JSONObject().apply {
+        put("model", modelId)
+        put("messages", messages)
+        if (tools != null && tools.length() > 0) put("tools", tools)
+        put("temperature", 0.2)
+        put("max_tokens", 1024)
+        if (stream) put("stream", true)
+        extras?.keys()?.forEach { put(it, extras.get(it)) }
+    }
+
     /**
      * Raw chat-completions call for the voice agent: full message history plus optional
      * tool schemas, against any OpenAI-compatible [baseUrl] (OpenRouter, z.ai, or a custom
@@ -156,15 +175,10 @@ class OpenRouterClient @Inject constructor(
         modelId: String,
         messages: JSONArray,
         tools: JSONArray?,
+        extras: JSONObject? = null,
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
-            val payload = JSONObject().apply {
-                put("model", modelId)
-                put("messages", messages)
-                if (tools != null && tools.length() > 0) put("tools", tools)
-                put("temperature", 0.2)
-                put("max_tokens", 1024)
-            }
+            val payload = buildPayload(modelId, messages, tools, stream = false, extras = extras)
             val base = baseUrlForTest ?: baseUrl
             val request = Request.Builder()
                 .url("$base/chat/completions")
@@ -204,17 +218,11 @@ class OpenRouterClient @Inject constructor(
         modelId: String,
         messages: JSONArray,
         tools: JSONArray?,
+        extras: JSONObject? = null,
         onDelta: (String) -> Unit,
     ): Result<JSONObject> = withContext(Dispatchers.IO) {
         runCatching {
-            val payload = JSONObject().apply {
-                put("model", modelId)
-                put("messages", messages)
-                if (tools != null && tools.length() > 0) put("tools", tools)
-                put("temperature", 0.2)
-                put("max_tokens", 1024)
-                put("stream", true)
-            }
+            val payload = buildPayload(modelId, messages, tools, stream = true, extras = extras)
             val base = baseUrlForTest ?: baseUrl
             val request = Request.Builder()
                 .url("$base/chat/completions")
@@ -274,6 +282,9 @@ class OpenRouterClient @Inject constructor(
             chunkJson.optJSONObject("error")?.let { err ->
                 throw IOException("LLM stream error: ${err.optString("message", "unknown")}")
             }
+            // Last chunk when stream_options.include_usage is set: carries prompt_tokens_details
+            // .cached_tokens, the only field that tells whether the provider reused the prompt cache.
+            chunkJson.optJSONObject("usage")?.let { Log.i(TAG, "usage: $it") }
             val choices = chunkJson.optJSONArray("choices") ?: continue
             if (choices.length() == 0) continue
             val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue

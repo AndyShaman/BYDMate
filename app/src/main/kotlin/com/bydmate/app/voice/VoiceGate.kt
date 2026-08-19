@@ -10,6 +10,10 @@ interface VoiceGate {
     fun isEnabled(): Boolean
     fun vehicleSnapshot(): DiParsData?
 
+    /** Age of [vehicleSnapshot] in milliseconds, or null when unknown (no snapshot yet).
+     *  Default null keeps plain fakes honest: "unknown" rather than "fresh". */
+    fun snapshotAgeMs(): Long? = null
+
     /**
      * Override language selected in Settings ("RU" or "EN"), or null to
      * follow the app locale. Read from SharedPreferences("voice") so

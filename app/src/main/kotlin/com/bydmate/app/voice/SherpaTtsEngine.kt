@@ -53,6 +53,16 @@ class SherpaTtsEngine(
     @Volatile private var track: AudioTrack? = null
     private val generation = AtomicInteger(0)
 
+    /** LRU of already-synthesized PCM for the short fixed phrases speak() keeps repeating
+     *  ("Готово.", "Не понял", persona lines): synthesis costs 0.3-0.8 s on DiLink, a hit costs
+     *  nothing. Worker-thread-confined like [tts]/[track] -- only speak()/reload() touch it, both
+     *  from the single tts worker, so no synchronization is needed. Only speak() caches: queued
+     *  sentences of a streamed reply are unique text and would only evict the useful entries. */
+    private val pcmCache = object : LinkedHashMap<String, FloatArray>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>): Boolean =
+            size > PCM_CACHE_MAX_ENTRIES
+    }
+
     // Cumulative frames written into [track] over its whole lifetime (worker-thread-confined,
     // reset when a fresh track is created). This -- not "head position at write start + own
     // samples" -- is the frame the head must reach for the track to be truly drained: the
@@ -97,7 +107,8 @@ class SherpaTtsEngine(
     /** Drops the cached engine/track so the next speak() re-initializes createTts()
      *  against the currently selected voice. Runs on the worker thread since tts/track
      *  are only ever touched there; bumps generation first so any job already queued
-     *  against the old engine is dropped instead of speaking mid-switch. */
+     *  against the old engine is dropped instead of speaking mid-switch. The PCM cache goes
+     *  with them: a voice/model switch invalidates every synthesized sample. */
     override fun reload() {
         generation.incrementAndGet()
         marker.preload()
@@ -106,6 +117,24 @@ class SherpaTtsEngine(
             tts = null
             runCatching { track?.release() }
             track = null
+            pcmCache.clear()
+        }
+    }
+
+    /** Pre-creates the engine so the first speak() does not pay the model load. Runs on the
+     *  worker thread since tts is only ever touched there (see reload()); the generation counter
+     *  is deliberately untouched -- warming is not speech and must not supersede anything. A
+     *  reload() queued behind this task simply drops the warmed engine again and the next
+     *  speak() re-creates it. No track is created here: its sample rate follows the engine and
+     *  is settled by ensureTrackForRate() at speak() time. */
+    override fun warmUp() {
+        if (!isReady()) return
+        worker.execute {
+            if (tts != null) return@execute
+            createTts()?.also {
+                tts = it
+                Log.i(TAG, "engine warmed: voice=${selectedVoice().id} engineRate=${it.sampleRate()}")
+            }
         }
     }
 
@@ -134,16 +163,24 @@ class SherpaTtsEngine(
                     val voice = selectedVoice()
                     val out = ensureTrackForRate(engine.sampleRate())
                     val synthesisText = textForSynthesis(voice.engine, text, marker::mark)
-                    val samples = accumulateSentence(
+                    val speed = TtsTuning.speed(rate())
+                    val cacheKey = if (pcmCacheable(text)) {
+                        pcmCacheKey(voice.id, voice.speakerId, speed, liveliness(), engine.sampleRate(), synthesisText)
+                    } else null
+                    val cached = cacheKey?.let { pcmCache[it] }
+                    if (cached != null) Log.i(TAG, "pcm cache hit: len=${text.length}")
+                    val samples = cached ?: accumulateSentence(
                         generate = { onChunk ->
                             engine.generateWithCallback(
-                                synthesisText, sid = voice.speakerId, speed = TtsTuning.speed(rate()), TtsSamplesCallback(onChunk),
+                                synthesisText, sid = voice.speakerId, speed = speed, TtsSamplesCallback(onChunk),
                             )
                         },
                         stillCurrent = { generation.get() == myGen },
-                    )
-                    Log.i(TAG, "synth done: samples=${samples?.size} generation ok=${generation.get() == myGen}")
+                    ).also { Log.i(TAG, "synth done: samples=${it?.size} generation ok=${generation.get() == myGen}") }
                     if (samples != null && samples.isNotEmpty() && generation.get() == myGen) {
+                        // Only a complete, still-current sentence goes into the cache: accumulateSentence
+                        // returns null when superseded, and a partial buffer would be replayed forever.
+                        if (cached == null && cacheKey != null) pcmCache[cacheKey] = samples.copyOf()
                         // Start playback only now that the sentence is in hand: a track left
                         // ACTIVE and starving through multi-second synthesis gets underrun-
                         // disabled by AudioFlinger (BUFFER TIMEOUT), and this HAL never
@@ -377,6 +414,16 @@ class SherpaTtsEngine(
 
     /** Test seam: queue tests pin that enqueue() must not bump the generation. */
     internal fun generationForTest(): Int = generation.get()
+
+    /** Test seam: speak() never reaches real synthesis on the JVM (createTts() fails without the
+     *  native sherpa-onnx lib), so the PCM cache can only be filled directly. Call it with the
+     *  worker idle -- the map is worker-thread-confined in production. */
+    internal fun primePcmCacheForTest(key: String, samples: FloatArray) {
+        pcmCache[key] = samples
+    }
+
+    /** Test seam: entry count of the worker-confined PCM cache. */
+    internal fun pcmCacheSizeForTest(): Int = pcmCache.size
 
     /** Test seam: drain/audible target of the in-flight write, or null when drained. */
     internal fun pendingTargetFramesForTest(): Long? = pendingTarget?.frames
@@ -685,6 +732,32 @@ class SherpaTtsEngine(
          *  and barged in -- so it is never treated as failure. */
         internal fun playbackOutcome(written: Int, expected: Int, interrupted: Boolean): Boolean =
             interrupted || written >= expected
+
+        // PCM cache bounds: short fixed phrases only ("Готово.", "Не понял", persona lines). A
+        // 40-char phrase is ~2-3 s of float mono audio (~200 KB at 22050 Hz), so the full 32
+        // entries cost a few MB at worst -- affordable on a 12 GB head unit, and the LRU keeps
+        // only what is actually being repeated.
+        internal const val PCM_CACHE_MAX_ENTRIES = 32
+        internal const val PCM_CACHE_MAX_CHARS = 40
+
+        /** Only short utterances are cached: long ones are one-off answers, not the repeated
+         *  fixed phrases the cache exists for, and each costs hundreds of kilobytes. */
+        internal fun pcmCacheable(text: String): Boolean = text.length <= PCM_CACHE_MAX_CHARS
+
+        /** Every input the synthesized samples depend on: the voice model and its speaker, the
+         *  synthesis speed, liveliness (noiseScale/noiseScaleW, baked into the engine by
+         *  createTts) and the engine's output rate. Keyed on the ALREADY stress-marked text, not
+         *  the raw one -- [RuStressMarker] returns text unchanged until its dictionary finishes
+         *  loading, so a phrase synthesized in that window must not be replayed for the marked
+         *  pronunciation later. Pure so it is unit-testable without JNI. */
+        internal fun pcmCacheKey(
+            voiceId: String,
+            speakerId: Int,
+            speed: Float,
+            liveliness: Int,
+            sampleRate: Int,
+            synthesisText: String,
+        ): String = "$voiceId|$speakerId|$speed|$liveliness|$sampleRate|$synthesisText"
 
         /** PIPER archives need espeak-ng-data/ for phonemization; the VITS_MULTI archive ships
          *  no espeak data and errors if pointed at a non-existent dir, so pass "" for it. */

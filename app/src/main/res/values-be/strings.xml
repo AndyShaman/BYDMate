@@ -1193,6 +1193,10 @@
     <string name="settings_agent_gender_male">Мужчынскі</string>
     <string name="settings_agent_gender_female">Жаночы</string>
     <string name="settings_agent_gender_hint">Дзейнічае на ўсе галасы: у кожнай крыніцы ёсць мужчынскі і жаночы варыянт</string>
+    <string name="settings_agent_memory_title">Памяць пра кіроўцу</string>
+    <string name="settings_agent_memory_hint">Агент запамінае імя і ўстойлівыя перавагі, калі вы яму пра гэта кажаце. Скажыце «забудзь …», каб прыбраць адзін факт</string>
+    <string name="settings_agent_memory_empty">Пакуль нічога не запомнена</string>
+    <string name="settings_agent_memory_forget_all">Забыць усё</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Галасавы AI-агент</string>

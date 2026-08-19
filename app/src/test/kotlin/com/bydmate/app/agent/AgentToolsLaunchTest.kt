@@ -331,6 +331,42 @@ class AgentToolsLaunchTest {
         coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
+    // (e2) alias "яндекс карты" picks the first installed candidate of the Maps package list.
+    @Test fun launch_app_alias_yandex_maps_resolves_installed_package() = runTest {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        val fixture = listOf("Яндекс Карты" to "ru.yandex.yandexmaps.rustore")
+        val t = tools().apply { launcherAppsProvider = { fixture } }
+        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"яндекс карты"}""")))
+        assertTrue(out.getBoolean("ok"))
+        val payload = JSONObject(captured.captured.payload!!)
+        assertEquals("ru.yandex.yandexmaps.rustore", payload.getString("packageName"))
+    }
+
+    // (f2) alias "телефон" points at the BYD bluetooth dialer, not at a label match.
+    @Test fun launch_app_alias_phone_resolves_byd_dialer() = runTest {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        val fixture = listOf("Телефон" to "com.android.dialer", "蓝牙电话" to "com.byd.bluetoothcall")
+        val t = tools().apply { launcherAppsProvider = { fixture } }
+        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"телефон"}""")))
+        assertTrue(out.getBoolean("ok"))
+        val payload = JSONObject(captured.captured.payload!!)
+        assertEquals("com.byd.bluetoothcall", payload.getString("packageName"))
+    }
+
+    // (g2) alias "медиацентр" resolves the stock media app.
+    @Test fun launch_app_alias_mediacenter_resolves_stock_player() = runTest {
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
+        val fixture = listOf("多媒体" to "com.byd.mediacenter")
+        val t = tools().apply { launcherAppsProvider = { fixture } }
+        val out = JSONObject(t.execute(AgentToolCall("1", "launch_app", """{"name":"медиацентр"}""")))
+        assertTrue(out.getBoolean("ok"))
+        val payload = JSONObject(captured.captured.payload!!)
+        assertEquals("com.byd.mediacenter", payload.getString("packageName"))
+    }
+
     // --- set_cluster_projection ---
 
     // (a) on=true, before=OFF, after=FULLSCREEN -> apply(true), ok:true with app label.

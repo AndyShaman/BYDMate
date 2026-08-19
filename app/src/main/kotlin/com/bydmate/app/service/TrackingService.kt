@@ -98,6 +98,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var voiceGate: com.bydmate.app.voice.VoiceGate
     @Named("ttsLoadGuard") @Inject lateinit var ttsLoadGuard: com.bydmate.app.voice.AsrLoadGuard
     @Inject lateinit var ttsModelManager: com.bydmate.app.voice.TtsModelManager
+    @Inject lateinit var ttsEngine: com.bydmate.app.voice.TtsEngine
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
     @Inject lateinit var fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager
@@ -295,6 +296,11 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
+        /** Wall-clock of the last [lastData] update (0 = never). The snapshot itself carries no
+         *  timestamp and is never cleared on transport loss, so consumers that voice it to the
+         *  driver (agent get_vehicle_state) need this to tell fresh data from stale. */
+        @Volatile var lastDataAtMs: Long = 0L
+            private set
 
         private val _lastRangeKm = MutableStateFlow<Double?>(null)
         val lastRangeKm: StateFlow<Double?> = _lastRangeKm
@@ -606,6 +612,12 @@ class TrackingService : Service(), LocationListener {
                     val modelDirId = com.bydmate.app.voice.TtsVoiceCatalog.byId(voiceId).modelDirId
                     ttsModelManager.delete(modelDirId)
                     ttsLoadGuard.reset()
+                } else if (voiceGate.isEnabled() && voiceGate.ttsEnabled()) {
+                    // Same pre-warm reasoning as the recognizer above: creating the synthesis
+                    // engine now, off the main thread, keeps the first reply from waiting on the
+                    // model load. Gated on both toggles so a driver who never speaks (or muted
+                    // the replies) does not pay the memory.
+                    ttsEngine.warmUp()
                 }
             }
         }
@@ -1076,6 +1088,7 @@ class TrackingService : Service(), LocationListener {
             sharedAdaptiveLoop.flow.collect { data ->
                 try {
                     _lastData.value = data
+                    lastDataAtMs = System.currentTimeMillis()
                     fidSubscriptionManager.onPollSnapshot(data)
                     blindSpotController.onPollSnapshot(data)
                     alicePollingManager.latestData = data

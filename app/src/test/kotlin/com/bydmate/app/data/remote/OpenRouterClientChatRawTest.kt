@@ -48,6 +48,32 @@ class OpenRouterClientChatRawTest {
         assertEquals(1, body.getJSONArray("tools").length())
     }
 
+    @Test fun extras_are_merged_into_payload() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""))
+        val extras = JSONObject()
+            .put("reasoning", JSONObject().put("effort", "minimal").put("exclude", true))
+            .put("stream_options", JSONObject().put("include_usage", true))
+        client.chatRaw("https://openrouter.ai/api/v1", "key", "m", messages(), null, extras).getOrThrow()
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("minimal", body.getJSONObject("reasoning").getString("effort"))
+        assertTrue(body.getJSONObject("reasoning").getBoolean("exclude"))
+        assertTrue(body.getJSONObject("stream_options").getBoolean("include_usage"))
+        // Base fields survive the merge.
+        assertEquals("m", body.getString("model"))
+        assertEquals(1024, body.getInt("max_tokens"))
+    }
+
+    @Test fun without_extras_payload_has_no_provider_fields() = runTest {
+        server.enqueue(MockResponse().setBody(
+            """{"choices":[{"message":{"role":"assistant","content":"ok"}}]}"""))
+        client.chatRaw("https://openrouter.ai/api/v1", "key", "m", messages(), null).getOrThrow()
+        val body = JSONObject(server.takeRequest().body.readUtf8())
+        assertTrue(!body.has("reasoning"))
+        assertTrue(!body.has("thinking"))
+        assertTrue(!body.has("stream"))
+    }
+
     @Test fun http_error_returns_failure() = runTest {
         server.enqueue(MockResponse().setResponseCode(500))
         assertTrue(client.chatRaw("https://openrouter.ai/api/v1", "key", "m", messages(), null).isFailure)

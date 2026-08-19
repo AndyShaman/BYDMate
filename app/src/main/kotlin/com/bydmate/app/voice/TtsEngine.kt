@@ -25,6 +25,10 @@ interface TtsEngine {
      *  No-op for engines with nothing to reload. */
     fun reload() {}
 
+    /** Pre-creates the synthesis engine off the caller thread so the first speak() does not pay
+     *  the model load; no-op when not ready or already created. */
+    fun warmUp() {}
+
     /** True from the moment an utterance actually starts playing until its audio has fully
      *  drained from the output device (or stop() cuts it short). The continuous voice
      *  session mutes its mic off this real signal instead of guessing speech duration. */

@@ -270,6 +270,9 @@ class SettingsViewModelConnectionsTest {
             splitPreferences = mockk(relaxed = true),
             splitSessionManager = mockk(relaxed = true),
             splitJournal = com.bydmate.app.split.NoSplitJournal,
+            driverMemory = com.bydmate.app.agent.DriverMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
         )
     }
 

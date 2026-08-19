@@ -55,6 +55,38 @@ class OpenRouterClientChatStreamTest {
     }
 
     @Test
+    fun `extras are merged into the streaming payload`() = runTest {
+        server.enqueue(sse(chunk("Ок."), "data: [DONE]"))
+        val extras = JSONObject().put("thinking", JSONObject().put("type", "disabled"))
+        client.chatStream("u", "k", "m", messages(), null, extras) {}.getOrThrow()
+        val sent = JSONObject(server.takeRequest().body.readUtf8())
+        assertEquals("disabled", sent.getJSONObject("thinking").getString("type"))
+        assertTrue(sent.getBoolean("stream"))
+    }
+
+    @Test
+    fun `without extras the streaming payload has no provider fields`() = runTest {
+        server.enqueue(sse(chunk("Ок."), "data: [DONE]"))
+        client.chatStream("u", "k", "m", messages(), null) {}.getOrThrow()
+        val sent = JSONObject(server.takeRequest().body.readUtf8())
+        assertTrue(!sent.has("reasoning"))
+        assertTrue(!sent.has("thinking"))
+    }
+
+    @Test
+    fun `usage chunk does not disturb the assembled message`() = runTest {
+        server.enqueue(sse(
+            chunk("Ок."),
+            """data: {"choices":[],"usage":{"prompt_tokens":900,"prompt_tokens_details":{"cached_tokens":850}}}""",
+            "data: [DONE]",
+        ))
+        val deltas = mutableListOf<String>()
+        val msg = client.chatStream("u", "k", "m", messages(), null) { deltas += it }.getOrThrow()
+        assertEquals(listOf("Ок."), deltas)
+        assertEquals("Ок.", msg.getString("content"))
+    }
+
+    @Test
     fun `comment keepalive lines are ignored`() = runTest {
         server.enqueue(sse(": OPENROUTER PROCESSING", chunk("Ок."), "data: [DONE]"))
         val deltas = mutableListOf<String>()

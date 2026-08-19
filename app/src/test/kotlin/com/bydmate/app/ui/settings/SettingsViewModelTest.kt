@@ -295,6 +295,9 @@ class SettingsViewModelTest {
             splitPreferences = mockk(relaxed = true),
             splitSessionManager = mockk(relaxed = true),
             splitJournal = com.bydmate.app.split.NoSplitJournal,
+            driverMemory = com.bydmate.app.agent.DriverMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
         )
     }
 
@@ -474,6 +477,25 @@ class SettingsViewModelTest {
         assertEquals("snarky", vm.agentPersona.value)
         assertEquals("Лео", vm.uiState.value.agentName)
         assertEquals("snarky", vm.uiState.value.agentPersona)
+    }
+
+    @Test fun `driver memory facts land in state and forgetAgentMemory clears storage`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val prefs = ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        val memory = com.bydmate.app.agent.DriverMemory(prefs)
+        memory.remember("зовут Андрей")
+        memory.remember("любит 22 градуса в салоне")
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(2, vm.uiState.value.agentMemoryFacts.size)
+
+        vm.forgetAgentMemory()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(emptyList<String>(), vm.uiState.value.agentMemoryFacts)
+        assertEquals(emptyList<String>(), com.bydmate.app.agent.DriverMemory(prefs).facts())
     }
 
     // Final review fix, finding 3: a legacy "denis"/"dmitri" id read verbatim into state left no
