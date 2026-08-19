@@ -43,7 +43,9 @@ class BlindSpotPreferences @Inject constructor(
         const val DEFAULT_THRESHOLD_KMH = 20
         const val DEFAULT_PIP_WIDTH_PCT = 36
 
-        const val MIN_THRESHOLD_KMH = 5
+        /** 0 = show from standstill: the fast loop and the warm camera then stay armed whenever the
+         *  car is on and out of reverse, which is what a driver who picks 0 is asking for. */
+        const val MIN_THRESHOLD_KMH = 0
         const val MAX_THRESHOLD_KMH = 60
         const val MIN_PIP_WIDTH_PCT = 20
         const val MAX_PIP_WIDTH_PCT = 60
