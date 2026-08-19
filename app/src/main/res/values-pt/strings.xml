@@ -153,7 +153,7 @@
     <string name="orb_agent">Agente:</string>
     <string name="settings_voice_native_assistant_header">Assistente de voz nativo da BYD</string>
     <string name="settings_voice_disable_native_label">Desativar o assistente de voz integrado</string>
-    <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. Reversível.</string>
+    <string name="settings_voice_disable_native_description">Oculta o assistente de voz nativo da BYD para que ele não interrompa. O app Shortcuts (comandos rápidos) desaparece junto, ele faz parte do assistente. Reversível: desligue o botão e reinicie a central multimídia, os dois voltam.</string>
     <string name="settings_voice_native_assistant_reboot_note">Entra em vigor após reiniciar a central multimídia.</string>
     <string name="settings_widget_opacity_label">Opacidade</string>
     <string name="settings_widget_scale_label">Tamanho</string>

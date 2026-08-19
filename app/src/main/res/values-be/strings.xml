@@ -169,7 +169,7 @@
     <string name="orb_agent">Агент:</string>
     <string name="settings_voice_native_assistant_header">Штатны галасавы памочнік BYD</string>
     <string name="settings_voice_disable_native_label">Адключыць штатны галасавы памочнік</string>
-    <string name="settings_voice_disable_native_description">Хавае ўбудаваны галасавы асістэнт BYD, каб ён не перабіваў. Зваротна.</string>
+    <string name="settings_voice_disable_native_description">Хавае ўбудаваны галасавы асістэнт BYD, каб ён не перабіваў. Разам з ім знікае і праграма Shortcuts (хуткія каманды), гэта яго частка. Зваротна: выключыце тумблер і перазагрузіце мультымедыя, абодва вернуцца.</string>
     <string name="settings_voice_native_assistant_reboot_note">Змена набудзе сілу пасля перазагрузкі галаўной прылады.</string>
     <string name="settings_widget_opacity_label">Празрыстасць</string>
     <string name="settings_widget_scale_label">Памер</string>

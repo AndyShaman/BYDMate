@@ -169,7 +169,7 @@
     <string name="orb_agent">Agent:</string>
     <string name="settings_voice_native_assistant_header">Fabryczny asystent głosowy BYD</string>
     <string name="settings_voice_disable_native_label">Wyłącz fabrycznego asystenta głosowego</string>
-    <string name="settings_voice_disable_native_description">Ukrywa wbudowanego asystenta głosowego BYD, żeby nie przerywał. Odwracalne.</string>
+    <string name="settings_voice_disable_native_description">Ukrywa wbudowanego asystenta głosowego BYD, żeby nie przerywał. Razem z nim znika aplikacja Shortcuts (szybkie polecenia), to jego część. Odwracalne: wyłącz przełącznik i zrestartuj multimedia, oba wrócą.</string>
     <string name="settings_voice_native_assistant_reboot_note">Zmiana zadziała po restarcie jednostki centralnej.</string>
     <string name="settings_widget_opacity_label">Przezroczystość</string>
     <string name="settings_widget_scale_label">Rozmiar</string>
