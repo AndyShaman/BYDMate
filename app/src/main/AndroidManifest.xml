@@ -139,6 +139,15 @@
             </intent-filter>
         </receiver>
 
+        <!-- UI7 cluster probe (test builds): driven from a Mac with `am broadcast`, see ClusterProbeRunner -->
+        <receiver
+            android:name=".cluster.ClusterProbeReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.bydmate.app.CLUSTER_PROBE" />
+            </intent-filter>
+        </receiver>
+
         <!-- Disable default WorkManager initializer (using Hilt custom config) -->
         <provider
             android:name="androidx.startup.InitializationProvider"
