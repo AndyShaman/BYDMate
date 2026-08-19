@@ -160,13 +160,14 @@ class ClusterFrameUi7Test {
             helper.read(DEV_INSTRUMENT, FID_LEFT)
             helper.read(DEV_INSTRUMENT, FID_MENU_STATUS)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, CENTER_MAP)
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, MENU_HIDDEN)
         }
+        // The menu register clears the left zone as well; see the LEFT fallback tests below.
+        coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD) }
         assertEquals(stockCenter, prefs.getInt(KEY_SAVED_CENTER, -1))
         assertEquals(stockLeft, prefs.getInt(KEY_SAVED_LEFT, -1))
         assertEquals(stockMenu, prefs.getInt(KEY_SAVED_MENU, -1))
-        assertEquals(listOf("ui7 frame: center 7->2 left 0->1 menu 1->2 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: center 7->2 menu 1->2 ok=true"), journal)
     }
 
     @Test fun `apply hides the side cards after opening the frame and persists the stock menu status`() = runTest {
@@ -294,7 +295,7 @@ class ClusterFrameUi7Test {
         assertEquals(listOf("ui7 frame: save failed, skipped"), journal)
     }
 
-    @Test fun `restore writes LEFT then CENTER with the stock values and drops the pair`() = runTest {
+    @Test fun `restore writes the stock values back and drops the pair`() = runTest {
         stubStockRead(); stubWrites()
         val frame = frame(backgroundScope)
         frame.apply(helper, PROJECTION)
@@ -304,11 +305,10 @@ class ClusterFrameUi7Test {
         frame.restore(helper, PROJECTION)
 
         coVerifyOrder {
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=true"), journal)
         assertFalse("the saved pair must be gone after a confirmed restore", prefs.contains(KEY_SAVED_CENTER))
         assertFalse(prefs.contains(KEY_SAVED_LEFT))
         assertFalse(prefs.contains(KEY_SAVED_MENU))
@@ -325,9 +325,9 @@ class ClusterFrameUi7Test {
 
         frame.restore(helper, PROJECTION)
 
-        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft) }
+        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu) }
         coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter) }
-        assertEquals(listOf("ui7 frame: restored left=0 center kept=1 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center kept=1 menu=1 ok=true"), journal)
         assertFalse(frame.hasStalePair())
     }
 
@@ -356,11 +356,65 @@ class ClusterFrameUi7Test {
 
         frame.restore(helper, PROJECTION)
 
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=false"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=false"), journal)
         assertEquals(stockCenter, prefs.getInt(KEY_SAVED_CENTER, -1))
         assertEquals(stockLeft, prefs.getInt(KEY_SAVED_LEFT, -1))
         assertEquals(stockMenu, prefs.getInt(KEY_SAVED_MENU, -1))
         assertTrue("an unconfirmed restore is exactly what recovery is for", frame.hasStalePair())
+    }
+
+    @Test fun `an unreadable menu status keeps LEFT as the fallback`() = runTest {
+        // No menu register to hide the cards with: clearing the left zone by hand is the only way
+        // the map shows through there, so LEFT stays ours from the write to the restore.
+        stubStockRead()
+        coEvery { helper.read(DEV_INSTRUMENT, FID_MENU_STATUS) } returns null
+        stubWrites()
+        val frame = frame(backgroundScope)
+        assertTrue(frame.apply(helper, PROJECTION))
+
+        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD) }
+
+        // Re-asserted like CENTER: the firmware takes the left zone back on a cluster mode change.
+        clearMocks(helper, answers = false)
+        stubOurFrameRead()
+        coEvery { helper.read(DEV_INSTRUMENT, FID_LEFT) } returns stockLeft.toLong()
+        journal.clear()
+        frame.reassertOnce(helper)
+
+        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD) }
+        assertEquals(listOf("ui7 frame: reasserted left=0->1 ok=true"), journal)
+
+        stubOurFrameRead()
+        journal.clear()
+        frame.restore(helper, PROJECTION)
+
+        coVerifyOrder {
+            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
+            helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
+        }
+        coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, any()) }
+        assertEquals(listOf("ui7 frame: restored left=0 center=7 ok=true"), journal)
+        assertFalse(frame.hasStalePair())
+    }
+
+    @Test fun `with the menu register owned LEFT is neither written nor re-asserted nor restored`() = runTest {
+        // MENU takes the left card off screen too, and a LEFT=1 of ours would hold it off through
+        // the ~15 s the wheel button gives the driver both cards back.
+        stubStockRead(); stubWrites()
+        val frame = frame(backgroundScope)
+        frame.apply(helper, PROJECTION)
+
+        coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD) }
+
+        clearMocks(helper, answers = false)
+        stubOurFrameRead()
+        // Drifted back to the stock value: a pass that still read the left zone would rewrite it.
+        coEvery { helper.read(DEV_INSTRUMENT, FID_LEFT) } returns stockLeft.toLong()
+        frame.reassertOnce(helper)
+        frame.restore(helper, PROJECTION)
+
+        coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, any()) }
+        coVerify(exactly = 0) { helper.read(DEV_INSTRUMENT, FID_LEFT) }
     }
 
     @Test fun `restore puts the stock menu status back verbatim`() = runTest {
@@ -377,7 +431,7 @@ class ClusterFrameUi7Test {
         frame.restore(helper, PROJECTION)
 
         coVerify(exactly = 2) { helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, MENU_HIDDEN) }
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=2 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=2 ok=true"), journal)
         assertFalse(frame.hasStalePair())
     }
 
@@ -391,7 +445,7 @@ class ClusterFrameUi7Test {
 
         frame.restore(helper, PROJECTION)
 
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=false"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=false"), journal)
         assertEquals(stockCenter, prefs.getInt(KEY_SAVED_CENTER, -1))
         assertEquals(stockLeft, prefs.getInt(KEY_SAVED_LEFT, -1))
         assertEquals(stockMenu, prefs.getInt(KEY_SAVED_MENU, -1))
@@ -465,17 +519,17 @@ class ClusterFrameUi7Test {
         frame.recoverStale(helper)
 
         coVerifyOrder {
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
+        coVerify(exactly = 0) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, any()) }
         assertFalse(prefs.contains(KEY_SAVED_CENTER))
         assertFalse(prefs.contains(KEY_SAVED_LEFT))
         assertFalse(prefs.contains(KEY_SAVED_MENU))
         assertEquals(
             listOf(
                 "ui7 frame: recovering frame left by a prior session",
-                "ui7 frame: restored left=0 center=7 menu=1 ok=true",
+                "ui7 frame: restored center=7 menu=1 ok=true",
             ),
             journal,
         )
@@ -530,7 +584,7 @@ class ClusterFrameUi7Test {
         assertTrue(frame.apply(helper, CAMERA))
 
         coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, CENTER_MAP) }
-        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD) }
+        coVerify(exactly = 1) { helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, MENU_HIDDEN) }
         coVerify(exactly = 1) { helper.read(DEV_INSTRUMENT, FID_CENTER) }
         assertTrue("the joining owner must not stop the re-assert job", frame.isReassertRunning())
         assertEquals(listOf("ui7 frame: joined by camera"), journal)
@@ -557,12 +611,11 @@ class ClusterFrameUi7Test {
         frame.restore(helper, PROJECTION)
 
         coVerifyOrder {
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
         assertFalse(frame.isReassertRunning())
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=true"), journal)
     }
 
     @Test fun `a restore by an owner that never applied writes nothing`() = runTest {
@@ -602,13 +655,12 @@ class ClusterFrameUi7Test {
         frame.restore(helper, PROJECTION)
 
         coVerifyOrder {
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
         assertFalse(frame.isReassertRunning())
         assertFalse(frame.hasStalePair())
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=true"), journal)
     }
 
     @Test fun `the camera alone round-trips the frame`() = runTest {
@@ -626,15 +678,13 @@ class ClusterFrameUi7Test {
 
         coVerifyOrder {
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, CENTER_MAP)
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, LEFT_CARD)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, MENU_HIDDEN)
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
             helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
         assertFalse(frame.isReassertRunning())
         assertFalse(frame.hasStalePair())
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=true"), journal)
     }
 
     @Test fun `a cancellation inside the restore still hands the cluster back`() = runTest {
@@ -649,7 +699,7 @@ class ClusterFrameUi7Test {
 
         val inFirstWrite = CompletableDeferred<Unit>()
         val releaseWrite = CompletableDeferred<Unit>()
-        coEvery { helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft) } coAnswers {
+        coEvery { helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter) } coAnswers {
             inFirstWrite.complete(Unit)
             releaseWrite.await()
             statusReal
@@ -661,10 +711,10 @@ class ClusterFrameUi7Test {
         restoring.join()
 
         coVerifyOrder {
-            helper.writeStatus(DEV_INSTRUMENT, FID_LEFT, stockLeft)
             helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, stockCenter)
+            helper.writeStatus(DEV_INSTRUMENT, FID_MENU_SET, stockMenu)
         }
-        assertEquals(listOf("ui7 frame: restored left=0 center=7 menu=1 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: restored center=7 menu=1 ok=true"), journal)
         assertFalse(frame.hasStalePair())
 
         // The frame is really released, not just half written: the next owner opens it again
@@ -674,7 +724,7 @@ class ClusterFrameUi7Test {
         assertTrue(frame.apply(helper, CAMERA))
 
         coVerify(exactly = 2) { helper.writeStatus(DEV_INSTRUMENT, FID_CENTER, CENTER_MAP) }
-        assertEquals(listOf("ui7 frame: center 7->2 left 0->1 menu 1->2 ok=true"), journal)
+        assertEquals(listOf("ui7 frame: center 7->2 menu 1->2 ok=true"), journal)
     }
 
     @Test fun `a joining owner restarts a re-assert job that had given up`() = runTest {

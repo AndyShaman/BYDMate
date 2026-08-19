@@ -40,6 +40,11 @@ private const val TAG = "ClusterFrameUi7"
  * The stock values on that car were CENTER=7 / LEFT=0, but other cars and cluster modes answer 1 or
  * 0, so the pair is READ at runtime and written back verbatim on [restore] — never assumed.
  *
+ * LEFT is the fallback path only ([ownsLeft]): where MENU answers, it takes the left card off screen
+ * by itself and hands it back for the wheel-button window, while a LEFT=1 of ours would hold that
+ * card off through it (verified on the car 2026-08-19: the right card came back, the left one never
+ * did). So LEFT is written, re-asserted and restored only on cars whose menu status will not read.
+ *
  * The firmware rewrites CENTER whenever the driver cycles the cluster mode with the wheel knob,
  * which is why [apply] leaves a re-assert job behind.
  *
@@ -76,6 +81,13 @@ class ClusterFrameUi7(
      */
     private data class Frame(val center: Int, val left: Int, val menu: Int?)
 
+    /**
+     * True while the left zone is ours to clear by hand — only where the menu register is not
+     * available. With MENU working it hides the left card too, and our LEFT would only get in the
+     * way of the firmware showing it again.
+     */
+    private fun Frame.ownsLeft() = menu == null
+
     private val mutex = Mutex()
 
     /** Who currently holds the frame; guarded by [mutex]. Empty at process start, which is what
@@ -95,15 +107,18 @@ class ClusterFrameUi7(
     /**
      * Opens the Map frame for a projection that is already up. Saves the stock pair first (write
      * ahead: committed to prefs BEFORE the car is touched, so a power cut mid-projection still
-     * leaves the pair for [recoverStale]), then writes CENTER then LEFT.
+     * leaves the pair for [recoverStale]), then writes CENTER, the menu register, and LEFT where it
+     * is still ours ([ownsLeft]).
      *
-     * Returns true when CENTER really moved ([WriteOutcome.REAL]) and LEFT was at least accepted.
+     * Returns true when CENTER really moved ([WriteOutcome.REAL]) and LEFT, where we write it at
+     * all, was at least accepted.
      * A CENTER no-op means the fid is inert on this trim: nothing moved, so nothing is saved,
      * re-asserted or restored. A re-apply (reproject / resize) keeps the pair saved by the first
      * one — re-reading would save OUR values as the stock pair.
      *
      * The native side cards are hidden in the same pass, but never at the frame's expense: a menu
-     * register that will not read or will not take the write costs us the cards, not the frame.
+     * register that will not read or will not take the write costs us the cards, not the frame —
+     * and where it does read, it is also what leaves LEFT alone.
      *
      * A second [owner] arriving on an already open frame only joins it: the registers are ours
      * already, and re-reading them would save OUR values as the stock pair.
@@ -159,17 +174,19 @@ class ClusterFrameUi7(
                     journal("ui7 frame: center write no-op, frame unsupported here")
                     return@withContext false
                 }
-                val leftOutcome = writeRegister(helper, FID_LEFT, LEFT_CARD)
+                val leftOk = !stock.ownsLeft() ||
+                    writeRegister(helper, FID_LEFT, LEFT_CARD).accepted()
                 val menuOk = stock.menu == null ||
                     writeRegister(helper, FID_MENU_SET, MENU_HIDDEN).accepted()
                 // Applied even on a failed write: a half-written pair still has to be restored, and
                 // the re-assert job is what retries the write.
                 applied = true
                 owners += owner
-                val frameOk = centerOutcome == WriteOutcome.REAL && leftOutcome.accepted()
+                val frameOk = centerOutcome == WriteOutcome.REAL && leftOk
                 // The journal's ok covers the cards too, the return value deliberately does not:
                 // cards that stayed on screen are not a reason to fail a projection that is up.
-                journal("ui7 frame: center ${stock.center}->$CENTER_MAP left ${stock.left}->$LEFT_CARD " +
+                journal("ui7 frame: center ${stock.center}->$CENTER_MAP " +
+                    (if (stock.ownsLeft()) "left ${stock.left}->$LEFT_CARD " else "") +
                     (if (stock.menu != null) "menu ${stock.menu}->$MENU_HIDDEN " else "") +
                     "ok=${frameOk && menuOk}")
                 startReassert(helper)
@@ -240,13 +257,14 @@ class ClusterFrameUi7(
         // An unreadable CENTER is restored anyway: without a verdict, putting the stock value back
         // is the safer of the two guesses (the alternative leaves the cluster in our frame).
         val restoreCenter = center == null || center == CENTER_MAP
-        val leftOk = writeRegister(helper, FID_LEFT, stock.left).accepted()
+        val leftOk = !stock.ownsLeft() || writeRegister(helper, FID_LEFT, stock.left).accepted()
         val centerOk = !restoreCenter || writeRegister(helper, FID_CENTER, stock.center).accepted()
         // Verbatim like the pair, no verdict of our own: a stock 2 is a driver who already hid the
         // cards with the native toggle, and the write is then a no-op.
         val menuOk = stock.menu == null || writeRegister(helper, FID_MENU_SET, stock.menu).accepted()
         applied = false
-        journal("ui7 frame: restored left=${stock.left} " +
+        journal("ui7 frame: restored " +
+            (if (stock.ownsLeft()) "left=${stock.left} " else "") +
             (if (restoreCenter) "center=${stock.center}" else "center kept=$center") +
             (if (stock.menu != null) " menu=${stock.menu}" else "") +
             " ok=${leftOk && centerOk && menuOk}")
@@ -307,14 +325,17 @@ class ClusterFrameUi7(
     /** Caller holds [mutex]. Returns false when the pass could not read or could not write. */
     private suspend fun reassertPass(helper: HelperClient): Boolean {
         if (!applied) return true
+        // [saved] cannot change under us: the caller holds [mutex]. On a car with a working menu
+        // register the left zone is the firmware's, so a pass neither reads nor rewrites it.
+        val ownsLeft = saved?.ownsLeft() == true
         val center = readRegister(helper, FID_CENTER)
-        val left = readRegister(helper, FID_LEFT)
-        if (center == null || left == null) return false
+        val left = if (ownsLeft) readRegister(helper, FID_LEFT) else null
+        if (center == null || (ownsLeft && left == null)) return false
         // Between the reads and the writes: a restore() that cancelled us while the reads were in
         // flight must not be followed by our writes putting the frame straight back.
         currentCoroutineContext().ensureActive()
         val centerDrifted = center != CENTER_MAP
-        val leftDrifted = left != LEFT_CARD
+        val leftDrifted = ownsLeft && left != LEFT_CARD
         if (!centerDrifted && !leftDrifted) return true
         val centerOk = !centerDrifted || writeRegister(helper, FID_CENTER, CENTER_MAP).accepted()
         val leftOk = !leftDrifted || writeRegister(helper, FID_LEFT, LEFT_CARD).accepted()
