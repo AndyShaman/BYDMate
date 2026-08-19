@@ -32,7 +32,11 @@ private const val TAG = "ClusterFrameUi7"
  *   - CENTER [FID_CENTER] = [CENTER_MAP] makes the cluster draw the Map frame, i.e. our projected
  *     content becomes visible instead of the native center widget;
  *   - LEFT [FID_LEFT] = [LEFT_CARD] removes the native tire-pressure car widget from the left zone,
- *     so the map shows through there too.
+ *     so the map shows through there too;
+ *   - (verified 2026-08-19) MENU [FID_MENU_SET] = [MENU_HIDDEN] hides both native side cards (left
+ *     tire/car card, right compass/clock/music card) for the projection; the status register
+ *     [FID_MENU_STATUS] is what we read and put back. The firmware still shows the cards for ~15 s
+ *     on a wheel-button press, by design.
  * The stock values on that car were CENTER=7 / LEFT=0, but other cars and cluster modes answer 1 or
  * 0, so the pair is READ at runtime and written back verbatim on [restore] — never assumed.
  *
@@ -65,8 +69,12 @@ class ClusterFrameUi7(
         CAMERA("camera"),
     }
 
-    /** Stock values of the two registers, as read from the car before we touched them. */
-    private data class Frame(val center: Int, val left: Int)
+    /**
+     * Stock values of the registers, as read from the car before we touched them. [menu] is null
+     * when the menu status could not be read, and on a pair persisted before this register was
+     * known: either way the side cards are not ours and stay untouched, apply and restore alike.
+     */
+    private data class Frame(val center: Int, val left: Int, val menu: Int?)
 
     private val mutex = Mutex()
 
@@ -94,6 +102,9 @@ class ClusterFrameUi7(
      * re-asserted or restored. A re-apply (reproject / resize) keeps the pair saved by the first
      * one — re-reading would save OUR values as the stock pair.
      *
+     * The native side cards are hidden in the same pass, but never at the frame's expense: a menu
+     * register that will not read or will not take the write costs us the cards, not the frame.
+     *
      * A second [owner] arriving on an already open frame only joins it: the registers are ours
      * already, and re-reading them would save OUR values as the stock pair.
      */
@@ -117,7 +128,11 @@ class ClusterFrameUi7(
                     journal("ui7 frame: read failed, skipped")
                     return@withLock false
                 }
-                val read = Frame(center, left)
+                // Cosmetic register: unlike the pair, an unreadable one is not a reason to leave the
+                // cluster alone. null keeps it out of the write below and out of the restore.
+                val menu = readRegister(helper, FID_MENU_STATUS)
+                if (menu == null) journal("ui7 frame: menu status unreadable, side cards left alone")
+                val read = Frame(center, left, menu)
                 if (!persist(read)) {
                     Log.w(TAG, "cluster frame pair not persisted; skipping the write")
                     journal("ui7 frame: save failed, skipped")
@@ -145,14 +160,20 @@ class ClusterFrameUi7(
                     return@withContext false
                 }
                 val leftOutcome = writeRegister(helper, FID_LEFT, LEFT_CARD)
+                val menuOk = stock.menu == null ||
+                    writeRegister(helper, FID_MENU_SET, MENU_HIDDEN).accepted()
                 // Applied even on a failed write: a half-written pair still has to be restored, and
                 // the re-assert job is what retries the write.
                 applied = true
                 owners += owner
+                val frameOk = centerOutcome == WriteOutcome.REAL && leftOutcome.accepted()
+                // The journal's ok covers the cards too, the return value deliberately does not:
+                // cards that stayed on screen are not a reason to fail a projection that is up.
                 journal("ui7 frame: center ${stock.center}->$CENTER_MAP left ${stock.left}->$LEFT_CARD " +
-                    "ok=${centerOutcome == WriteOutcome.REAL && leftOutcome.accepted()}")
+                    (if (stock.menu != null) "menu ${stock.menu}->$MENU_HIDDEN " else "") +
+                    "ok=${frameOk && menuOk}")
                 startReassert(helper)
-                centerOutcome == WriteOutcome.REAL && leftOutcome.accepted()
+                frameOk
             }
         }
     }
@@ -221,11 +242,15 @@ class ClusterFrameUi7(
         val restoreCenter = center == null || center == CENTER_MAP
         val leftOk = writeRegister(helper, FID_LEFT, stock.left).accepted()
         val centerOk = !restoreCenter || writeRegister(helper, FID_CENTER, stock.center).accepted()
+        // Verbatim like the pair, no verdict of our own: a stock 2 is a driver who already hid the
+        // cards with the native toggle, and the write is then a no-op.
+        val menuOk = stock.menu == null || writeRegister(helper, FID_MENU_SET, stock.menu).accepted()
         applied = false
         journal("ui7 frame: restored left=${stock.left} " +
             (if (restoreCenter) "center=${stock.center}" else "center kept=$center") +
-            " ok=${leftOk && centerOk}")
-        if (leftOk && centerOk) {
+            (if (stock.menu != null) " menu=${stock.menu}" else "") +
+            " ok=${leftOk && centerOk && menuOk}")
+        if (leftOk && centerOk && menuOk) {
             saved = null
             clearPersisted()
         } else {
@@ -249,6 +274,9 @@ class ClusterFrameUi7(
      * One re-assert pass: the firmware rewrites CENTER when the driver cycles the cluster mode with
      * the wheel knob, which would drop our frame for the rest of the session. Silent while both
      * registers still hold our values — a healthy session writes nothing and journals nothing.
+     *
+     * The menu register is left out on purpose: the firmware itself brings the side cards back for
+     * ~15 s on a wheel-button press, and a pass would fight that.
      *
      * Deliberate trade-off: while a projection is on, the driver cannot leave the map frame with the
      * wheel knob — every other frame is taken back within [REASSERT_INTERVAL_MS] (product decision,
@@ -318,10 +346,11 @@ class ClusterFrameUi7(
     @Suppress("ApplySharedPref")
     private suspend fun persist(frame: Frame): Boolean = runCatching {
         withContext(Dispatchers.IO) {
-            prefs.edit()
+            val editor = prefs.edit()
                 .putInt(KEY_SAVED_CENTER, frame.center)
                 .putInt(KEY_SAVED_LEFT, frame.left)
-                .commit()
+            if (frame.menu != null) editor.putInt(KEY_SAVED_MENU, frame.menu)
+            editor.commit()
         }
     }.onFailure { if (it is CancellationException) throw it }.getOrDefault(false)
 
@@ -329,14 +358,23 @@ class ClusterFrameUi7(
     private suspend fun clearPersisted() {
         runCatching {
             withContext(Dispatchers.IO) {
-                prefs.edit().remove(KEY_SAVED_CENTER).remove(KEY_SAVED_LEFT).commit()
+                prefs.edit()
+                    .remove(KEY_SAVED_CENTER)
+                    .remove(KEY_SAVED_LEFT)
+                    .remove(KEY_SAVED_MENU)
+                    .commit()
             }
         }.onFailure { if (it is CancellationException) throw it }
     }
 
     private fun loadPersisted(): Frame? =
         if (prefs.contains(KEY_SAVED_CENTER) && prefs.contains(KEY_SAVED_LEFT)) {
-            Frame(prefs.getInt(KEY_SAVED_CENTER, 0), prefs.getInt(KEY_SAVED_LEFT, 0))
+            Frame(
+                center = prefs.getInt(KEY_SAVED_CENTER, 0),
+                left = prefs.getInt(KEY_SAVED_LEFT, 0),
+                // Absent on a pair saved before this register was known: nothing to put back there.
+                menu = if (prefs.contains(KEY_SAVED_MENU)) prefs.getInt(KEY_SAVED_MENU, 0) else null,
+            )
         } else {
             null
         }
@@ -354,11 +392,21 @@ class ClusterFrameUi7(
         /** Left zone of the cluster: the native car/tire-pressure widget. */
         internal const val FID_LEFT = 1086373907
 
+        /** Cluster menu status: 1 = the native side cards are on screen, 2 = hidden. Read only. */
+        internal const val FID_MENU_STATUS = 683679769
+
+        /** Cluster menu setting, the register behind the native "hide the instrument menu" toggle.
+         *  Not the same fid as [FID_MENU_STATUS] — this one only takes writes. */
+        internal const val FID_MENU_SET = 1324691472
+
         /** Center zone value that draws the Map frame our projection lands in. */
         internal const val CENTER_MAP = 2
 
         /** Left zone value that clears the native widget. */
         internal const val LEFT_CARD = 1
+
+        /** Menu value that takes both native side cards off the cluster. */
+        internal const val MENU_HIDDEN = 2
 
         internal const val REASSERT_INTERVAL_MS = 5000L
 
@@ -371,6 +419,9 @@ class ClusterFrameUi7(
         // have nothing on the cluster to put back.
         internal const val KEY_SAVED_CENTER = "ui7_frame_saved_center"
         internal const val KEY_SAVED_LEFT = "ui7_frame_saved_left"
+
+        // Written only when the menu status was readable; absent = the side cards are not ours.
+        internal const val KEY_SAVED_MENU = "ui7_frame_saved_menu"
 
         /** Reflective system-property read; the answer is fixed for the life of the boot. */
         private val platformizedFirmware: Boolean by lazy { Split37Engine.isPlatformizedFirmware() }
