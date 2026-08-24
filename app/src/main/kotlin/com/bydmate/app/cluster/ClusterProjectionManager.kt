@@ -180,6 +180,13 @@ object ClusterProjectionManager {
         private set
 
     private var overlayView: View? = null
+
+    /** Bumped every time the projection overlay view is (re)added to the cluster display.
+     *  The blind-spot camera compares it between ticks: its windows share the display and
+     *  the window type, so an overlay added after them covers them and they must re-attach. */
+    @Volatile private var overlayEpochCounter: Int = 0
+    fun overlayEpoch(): Int = overlayEpochCounter
+
     private var remoteDisplayId: Int = -1
     // Package actually pinned on the cluster (the one we launchAndForce'd). pullBackToMain tugs THIS
     // back, not the live settings target — the two differ when the user switches the projection app
@@ -1449,6 +1456,9 @@ object ClusterProjectionManager {
             )
             wm.addView(container, overlayParams)
             overlayView = container
+            // Also covers swapToNewSize, which re-adds through here: a re-added overlay lands
+            // above the camera windows again, so the camera has to know about it too.
+            overlayEpochCounter++
         }
         return ready.await()
     }
