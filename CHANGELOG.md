@@ -8,6 +8,12 @@
 
 ## [Unreleased]
 
+## [3.12.1] - 2026-08-24
+
+### Исправления
+- Камера слепых зон по поворотнику снова видна поверх карты, спроецированной на приборку: окно проекции могло перекрывать окно камеры (они живут на одном экране, и порядок определяется очерёдностью создания), теперь камера замечает пересоздание проекции и заново поднимается поверх неё
+- При выключении камеры слепых зон на приборке водитель больше не видит чёрный экран приборки около секунды: штатная рамка приборки возвращается до отключения нашего слоя, и момент гашения не заметен
+
 ## [3.12] - 2026-08-19
 
 ### Новое
@@ -929,7 +935,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.12...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.12.1...HEAD
+[3.12.1]: https://github.com/AndyShaman/BYDMate/compare/v3.12...v3.12.1
 [3.12]: https://github.com/AndyShaman/BYDMate/compare/v3.11.9...v3.12
 [3.11.9]: https://github.com/AndyShaman/BYDMate/compare/v3.11.8...v3.11.9
 [3.11.8]: https://github.com/AndyShaman/BYDMate/compare/v3.11.7...v3.11.8
