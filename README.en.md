@@ -15,6 +15,10 @@
 
 **Real consumption, GPS routes, automation, AI analytics. Local-first; cloud features are optional.**
 
+Split screen 1/3 and 2/3, navigation on the instrument cluster, Yandex Navigator guidance on the windshield, turn-signal blind-spot cameras, a Russian voice assistant, ABRP telemetry.
+
+Tested on Leopard 3 (Fangchengbao Tai 3), with support for Sea Lion 07, Song, Atto 3, Seal, Han. DiLink 3.0, 5.0, 5.1, and firmware with the new UI7 interface (OTA V1.6).
+
 **English** | [中文](README.zh.md) | [Русский](README.md)
 
 [Features](#features) | [Screenshots](#screenshots) | [Automation](#automation) | [Projection to cluster](#projection-to-cluster) | [HUD](#hud) | [Split screen](#split-screen) | [AI Insights](#ai-insights) | [ABRP](#abrp--live-telemetry) | [Install](#install) | [Build](#build-from-source) | [Sponsor](SUPPORT.md)
@@ -36,6 +40,10 @@ Core features (trips, charges, automations, local insights, offline voice agent)
 ## What's new
 
 The main things BYDMate gained after version 3.0.
+
+**Split screen on UI7 firmware.** After a firmware update, the car itself splits the screen: the 1/3 and 2/3 panes, the divider, and the swap gesture are native. BYDMate only launches the chosen pair of apps. On such firmware the mechanism choice does not appear in Settings - there is only one.
+
+**"Steering-wheel key" trigger.** Any steering-wheel key can be mapped to its own action: Automation, add trigger, "Steering-wheel key", press the key you want in learning mode. Disable or delete the rule and the key goes back to its factory function.
 
 **Navigation guidance on the windshield (HUD).** The maneuver, the distance to it, the street name, the arrival time and the speed limit sign are drawn on the factory head-up display. Guidance keeps running even when the navigator is minimized or projected to the cluster. Requires a car equipped with a HUD. See the "HUD" section.
 
@@ -65,7 +73,7 @@ The main things BYDMate gained after version 3.0.
 | **HUD** | Head-up display | Maneuvers, distance and the speed limit sign from Yandex Navigator on the factory head-up display |
 | **Split** | Split screen | Two apps at once: BYDMate windows in a 1/3 and 2/3 layout, or the firmware's own split |
 | **Cam** | Blind-spot cameras | The camera of the matching side while the turn signal is on: on the cluster or in a small window on the screen |
-| **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (29 tools), neural TTS |
+| **Voice** | Voice agent | Russian offline assistant: on-device speech recognition, AI agent (32 tools), neural TTS |
 | **Widget** | Floating widget | 7-field overlay above other apps: SOC, range, consumption + trend, time, cabin t°, battery t°, 12V |
 | **Auto** | Autostart | WorkManager, starts on boot |
 | **CSV** | Data export | Trips and charges export to CSV |
@@ -102,7 +110,7 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 
 ### Automation
 
-<img src="docs/screenshots/automation.jpg" alt="Automation" width="800">
+<img src="docs/screenshots/automation-en.jpg" alt="Automation" width="800">
 
 *WHEN→THEN rules, condition and action editor, trigger configuration*
 
@@ -111,6 +119,20 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 <img src="docs/screenshots/settings.jpg" alt="Settings" width="800">
 
 *Battery, tariffs, currency, insight source (local / OpenRouter), data export*
+
+
+### Split screen
+
+<img src="docs/screenshots/split-screen.jpg" alt="Split screen: Yandex Music left, Yandex Navigator right" width="800">
+
+*Two panes, 1/3 and 2/3, with the BYDMate widget on top*
+
+
+### Blind-spot camera on the cluster
+
+<img src="docs/screenshots/blindspot-cluster.jpg" alt="Left camera on the instrument cluster with the left turn signal on" width="800">
+
+*Left turn signal: the left camera feed on the instrument cluster*
 
 ---
 
@@ -131,7 +153,7 @@ Examples:
 
 | | Description |
 |---|-------------|
-| **Triggers** | SOC, speed, temperature, doors, windows, tire pressure, drive mode, geofence places, time of day, exact time and time range with weekdays, etc. |
+| **Triggers** | SOC, speed, temperature, doors, windows, sunroof, tire pressure, drive mode, geofence places, time of day, exact time and time range with weekdays, steering-wheel key, widget tap, voice phrase, service start, internet available, etc. |
 | **Commands** | Windows (including individual driver and passenger), climate, lights, locks, sunroof, mirrors. Directly through the car's system interface |
 | **17 action kinds** | Vehicle command, notification, app launch, phone call, route in Yandex Navigator, open URL, Yandex Music, pause, media volume, sentry mode, Wi-Fi hotspot, speak text, agent query, projection to cluster, split screen (start, close, toggle) |
 | **Edge trigger** | Fires only on a false→true transition (not every 3 seconds) |
@@ -172,9 +194,11 @@ Before the first use, set up the stock navigation output to the cluster once, ot
 
 <img src="docs/screenshots/cluster-projection-ipc-full.jpg" alt="The IPC button switches the cluster to full-screen mode" width="800">
 
-**3.** In BYDMate, open **Settings → Display** and turn on "Projection to cluster via wheel button". The app enables the required service itself (ADB activation done during install is required, see "Install"), no manual setup needed.
+**3.** In BYDMate, open **Settings → Display** and turn on "Cluster projection". The app enables the required service itself (ADB activation done during install is required, see "Install"), no manual setup needed.
 
 After that, a short press of the chosen steering-wheel button (right star by default) moves the selected app to the cluster and back.
+
+<img src="docs/screenshots/settings-display-en.jpg" alt="Settings → Display: cluster projection, what each option does" width="800">
 
 ### Projection modes: Factory and Extended
 
@@ -192,9 +216,28 @@ If you used the projection in versions before 3.7, your previous behavior is kep
 
 Yandex Navigator is projected by default. Below the enable toggle there is an app picker: choose any installed app (another navigator, a media player, etc.). The new choice applies on the next star press.
 
-### Window size
+### Window size and position
 
-In **Settings → Display → "Cluster window size"** two sliders (width and height, 50% to 100%) set the projection size. A smaller window is centered, and the native cluster shows through around it.
+**Settings → Display → "Cluster window size"** has five sliders. If the projection already fills the whole cluster on your car (Leopard 3, for example), there is nothing to adjust: the defaults give the same full-screen behavior as before.
+
+- **Width** and **Height** (20-100%) - the window size as a percentage of the cluster. A smaller window frees up space, and the native cluster shows through around it.
+- **Horizontal offset** (0-100%) - window position: 0 = left edge, 50 = center, 100 = right edge. Only applies when width is below 100%.
+- **Vertical offset** (0-100%) - the same for the vertical axis: 0 = top, 50 = center, 100 = bottom.
+- **Scale** (50-150%) - the size of the projected app's interface: the lower the value, the smaller the text and the more of the map fits in the window.
+
+Changes apply immediately, right during the projection - move a slider and watch the cluster.
+
+### Cars with a mini cluster window (Sea Lion 07 and similar)
+
+On some models the stock cluster shows the projection not full-screen but in a fixed zone (on Sea Lion 07 - the right third). A full-screen window gets cropped there. Fix: shrink the window and move it into the visible zone with the sliders above.
+
+Values confirmed by a Sea Lion 07 owner: **width 32%, height 92%, horizontal offset 100%, vertical offset 6%, scale 90%**.
+
+<img src="docs/screenshots/cluster-mini-settings.jpg" alt="Window settings for Sea Lion 07" width="800">
+
+<img src="docs/screenshots/cluster-mini-view.jpg" alt="Yandex Navigator in the Sea Lion 07 mini cluster zone" width="800">
+
+You cannot make the window fill the whole cluster on these cars: the display zone is set by the cluster's own firmware and cannot be controlled.
 
 ### How it works
 
@@ -213,6 +256,8 @@ Enable it in **Settings → Display**, section "HUD (head-up display)": the "Nav
 ## Blind-spot cameras
 
 With the turn signal on, BYDMate shows the side camera picture by itself: the left turn signal puts the left camera on the cluster, the right one shows a small window on the main screen. If the sensor sees a car behind and to the side, the window is highlighted with an orange frame.
+
+<img src="docs/screenshots/blindspot-cluster.jpg" alt="Blind-spot camera on the cluster" width="800">
 
 Enable it in **Settings → Display**, section "Blind spots" (off by default). The same place holds the speed threshold below which the camera is not shown, the window width and its position: the "Set position" button shows an empty window that you drag with a finger to wherever the camera should appear. Requires a car equipped with a surround-view system.
 
@@ -251,7 +296,7 @@ The number on the right is current trip consumption in kWh/100km. It is the ener
 
 **Range** `~N km` is a weighted blend: 50% from the last completed trip, 30% from the trip before that, and 20% from the one before that (short trips under 3 km are excluded — they are not representative). On longer drives, consumption over the last 10 km of the current trip is added to the mix: its share grows from zero at the first 3 km to half by 25 km. This way the estimate quickly picks up a style change (city tail before a highway, highway back to city), but does not jitter on short trips or AC-on standstills.
 
-This is the automatic estimate. If it does not suit you, **Settings → Battery → "Range calculation method"** offers a "Manual" method: your own 5-point table of battery temperature from +20 to -20 °C and the consumption at it, optionally with the range at 100% charge.
+This is the automatic estimate. If it does not suit you, **Settings → Auto & Battery → "Range calculation method"** offers a "Manual" method: your own 5-point table of battery temperature from +20 to -20 °C and the consumption at it, optionally with the range at 100% charge.
 
 **The trend arrow** appears after 2 km and compares a 25 km rolling average against your usual style (mean of the last 10 trips):
 
@@ -268,13 +313,15 @@ The arrow does not jump at every red light — it has light inertia: to change c
 - **Tap** — open BYDMate
 - **Long press (1.5 s)** — hide until BYDMate is opened again
 - **Drag to trash** — turn off completely
-- Enable, transparency, reset position — in **Settings → Floating widget**
+- Enable, transparency, reset position — in **Settings → Widget**
 
 ---
 
 ## Split screen
 
 Two apps on screen at once: one takes two thirds, the other one third. A typical pair is a navigator on the wide side and music or a messenger on the narrow one. Sides can be swapped, apps can be changed on the fly, and the chosen pair is remembered.
+
+<img src="docs/screenshots/split-screen.jpg" alt="Split screen 1/3 + 2/3" width="800">
 
 ### Enabling
 
@@ -283,12 +330,16 @@ Two apps on screen at once: one takes two thirds, the other one third. A typical
 
 While the feature is off, the app does not touch any system settings. Turning the toggle off restores the setting to its factory value - unless the "Extended" projection mode also needs it: in that case the setting returns to factory once you turn that mode off too.
 
+<img src="docs/screenshots/settings-split-en.jpg" alt="Settings → Split screen" width="800">
+
 ### Split mechanism
 
 Under the toggle you choose what splits the screen: "BYDMate windows" (default) or "Native split".
 
 - **BYDMate windows** - the 1/3 and 2/3 layout with the control pill described below.
 - **Native split** - the car firmware splits the screen itself. This works even where BYDMate windows are unavailable (DiLink 5.1). The look depends on the firmware: where thirds are supported it opens 1/3 and 2/3 panes, elsewhere it splits the screen in half and the second app is picked in a system window.
+
+On firmware with the new UI7 interface the mechanism choice does not appear: the car itself performs the split there, the 1/3 and 2/3 panes are native, and no head-unit reboot is needed to turn it on.
 
 ### Launching
 
@@ -377,12 +428,12 @@ On cars without onboard-system access (older firmware, non-DiLink) the app falls
 BYDMate is developed and tested on BYD Leopard 3 (Fangchengbao Tai 3). On other BYD models most features still work, with some differences. Before the first launch, check:
 
 - **Trip logging**: on Leopard 3 trips come from the built-in BMS `energydata` database. On models without it (Song, Yuan and similar) BYDMate records trips natively from the live data stream, so the Trips list fills up on its own. Consumption from the SOC delta is a bit coarser than the BMS figure, but the list is no longer empty.
-- **Battery capacity**: defaults to 72.9 kWh (Leopard 3). Go to **Settings → Battery** and set your own. For example: Atto 3 = 60.5 kWh, Seal AWD = 82.5 kWh, Han EV = 85.4 kWh. Without this, range and trip-cost calculations will be off.
+- **Battery capacity**: defaults to 72.9 kWh (Leopard 3). Go to **Settings → Auto & Battery** and set your own. For example: Atto 3 = 60.5 kWh, Seal AWD = 82.5 kWh, Han EV = 85.4 kWh. Without this, range and trip-cost calculations will be off.
 - **SoH**: shown only on Leopard 3. On other models the "Battery health" card works without the SoH field.
 - **Charges**: the AC/DC algorithm was tuned for Leopard 3. On other models records may appear with delay or wrong power, especially for DC. Use manual add and edit when automation misses.
 - **Automation and floating widget**: work the same on every model since they use the car's system service.
 
-If something does not work or shows strange values, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your car model and DiLink firmware version - and attach your car's parameter catalog: **Settings → Data → "Save fid catalog"**. A `fid-dump-….txt` file will appear in the Download folder. It contains technical parameter identifiers only - no VIN, no location, no personal data.
+If something does not work or shows strange values, open an [Issue](https://github.com/AndyShaman/BYDMate/issues) with your car model and DiLink firmware version - and attach your car's parameter catalog: **Settings → Service & Data → "Save fid catalog"**. A `fid-dump-….txt` file will appear in the Download folder. It contains technical parameter identifiers only - no VIN, no location, no personal data.
 
 Why this matters. Different BYD models use different parameter sets: a command that turns on seat ventilation on a Leopard 3 may have a different number on a Song, or not exist at all. That is exactly why some functions fail on other cars. The catalog from your car shows how the parameters are named and numbered on your exact firmware - so we fix things using your car's data instead of guessing.
 
@@ -435,6 +486,7 @@ autoservice (command writes) ←  AutomationEngine   ←  Rules (Room DB)
 | Trip detail map | OpenStreetMap tile servers (or Amap, if selected in settings) | Coordinates of the visible map area | When the trip map or place editor is opened |
 | Update check | GitHub API | Nothing (fetches release list; version comparison is local) | Automatically |
 | ABRP live telemetry | abetterrouteplanner.com | SOC, power, speed, temperatures, odometer, tire pressures, charging status, battery capacity, SoH, kWh charged in current session, car model (GPS is intentionally not sent) | Only after entering a token |
+| Telemetry webhook | Settings → Integrations → Webhook | The same JSON as ABRP, POST to your URL every 1/8/30 s (driving/charging/parked); GPS coordinates only via a separate toggle | Off by default |
 
 Without any keys configured, only the update check (GitHub) and map tiles when viewing a trip route leave the device, as well as voice model downloads on explicit user request (github.com). API keys are stored locally in the app's database and are never sent anywhere other than the provider itself.
 
@@ -444,13 +496,9 @@ Without any keys configured, only the update check (GitHub) and map tiles when v
 
 ### 1. Enable ADB
 
-Without ADB, BYDMate runs in basic mode. ADB debugging is required for these features:
+Without ADB, BYDMate works as an offline trip logger: history from the stock database, the route map, CSV export, AI insights on data already collected.
 
-- **Battery health (SoH)** — precise BMS value instead of a dash.
-- **Automatic charge journal** — the app records session start and end. Without ADB, charges can only be added manually.
-- **Automation** — triggers and actions (window, climate, light control, etc.). Without ADB the Automation tab does not work.
-
-Without ADB you still get: trip and mileage tracking, energy consumption, widget, AI insights.
+Enabled ADB debugging is required for everything that reads or writes vehicle parameters: live figures in the widget and dashboard (SOC, range, temperatures, 12V), SoH, automatic charge logging, automation, projection to cluster, split screen, HUD guidance, blind-spot cameras, voice control of the car, and log recording.
 
 These features are on by default, with no switch to flip. The first time the app reaches the onboard system, DiLink shows an "Allow ADB debugging" dialog once, tap **Allow** and check **"Always allow from this computer"**.
 
@@ -474,7 +522,7 @@ If you used earlier versions and installed D+, you can remove it from DiLink onc
 ### 4. First launch
 
 1. Open BYDMate — the setup wizard appears
-2. Grant **location** and **storage** permissions (for GPS and reading energydata)
+2. Grant **location** and **storage** permissions. As you turn features on, the app will also ask for: the microphone for the voice agent, the camera for blind-spot cameras, contacts for calling by name, display-over-other-apps for the widget and notifications, and usage-access for detecting the active app
 3. Set **electricity tariffs** (for trip cost calculation)
 
 ### 5. Background work
@@ -491,6 +539,16 @@ In **Settings** you can change:
 - **Battery capacity** — default 72.9 kWh (Leopard 3)
 - **Tariffs** — home (AC) and fast charging (DC), currency
 - **Consumption thresholds** — bounds for color coding (green/yellow/red)
+
+---
+
+## Vehicle System
+
+**Settings → Service & Data → Vehicle System** has two items that change the car's own behavior, not the app's.
+
+**Steering-wheel volume knob.** A toggle that makes a press pause and resume playback instead of switching the audio source. Needed after a firmware update that changed the press to switch source. Off by default.
+
+**Car interface language.** UI7 firmware only. The button opens BYD's hidden stock language dialog with the full list, including Russian, Ukrainian, and Polish. The firmware itself changes the language; the app writes nothing. On some cars, auto-parking stops working in Russian - switch back to English with the same button if that happens.
 
 ---
 
@@ -586,6 +644,8 @@ In cloud mode only **aggregated statistics** are sent (same metrics as local rul
 
 BYDMate can send live vehicle data to [A Better Route Planner](https://abetterrouteplanner.com/) (ABRP) via the official Iternio Telemetry API. ABRP uses this data so that the route plan and remaining-range estimate update from your real battery state, instead of average book values.
 
+<img src="docs/screenshots/settings-integrations-en.jpg" alt="Settings → Integrations: ABRP" width="800">
+
 The feature is **optional**, off by default, and enabled manually in Settings.
 
 ### How to get the token
@@ -601,7 +661,7 @@ ABRP uses a "Generic Live Data Token" — one token per car in the garage:
 
 ### Setup in BYDMate
 
-1. **Settings** → **"ABRP — telemetry"** block.
+1. **Settings → Integrations** → **"ABRP — telemetry"** block.
 2. Paste the token into the **"Live data token from ABRP"** field.
 3. Optional: ABRP model code (if you know your car's exact code in the ABRP library) and the send interval (5–120 s, default 12 s — Iternio's recommended value).
 4. Tap **"Save ABRP"**, then toggle **"Live data → A Better Route Planner"** on. Without a saved token the toggle stays disabled.
@@ -630,6 +690,8 @@ Only aggregated vehicle metrics, no identifiers:
 ### How ABRP computes remaining range
 
 ABRP picks a forecast from its model library plus telemetry: current SOC, battery temperature, driving speed, wind, road profile, elevation. BYDMate does not send its own "estimated range" — ABRP has its own, more accurate route-aware estimate that also factors in weather and elevation.
+
+The same data sent to ABRP can also be posted to your own server: see the telemetry webhook under Settings → Integrations.
 
 ---
 
