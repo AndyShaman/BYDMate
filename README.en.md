@@ -179,19 +179,11 @@ BYDMate can mirror the selected app (navigation by default) onto the instrument 
 
 ### Enabling
 
-Before the first use, set up the stock navigation output to the cluster once, otherwise the system has nowhere to render the projection.
-
-**1.** On the head unit's home screen, tap the cluster-projection icon (bottom-left, below the star icon). The stock navigation map appears on the cluster.
-
-<img src="docs/screenshots/cluster-projection-icon.jpg" alt="Cluster-projection icon on the home screen" width="800">
-
-**2.** On the map that appears, tap the **IPC** button in the bottom bar until the cluster switches to full-screen mode.
-
-<img src="docs/screenshots/cluster-projection-ipc-full.jpg" alt="The IPC button switches the cluster to full-screen mode" width="800">
-
-**3.** In BYDMate, open **Settings → Display** and turn on "Cluster projection". The app enables the required service itself (ADB activation done during install is required, see "Install"), no manual setup needed.
+Open **Settings → Display** and turn on "Cluster projection". The app enables the required service itself (ADB activation done during install is required, see "Install") and switches the cluster into projection mode on its own: that is the "Show on the cluster right away" toggle, on by default. Nothing needs to be set up on the head unit by hand.
 
 After that, a short press of the chosen steering-wheel button (right star by default) moves the selected app to the cluster and back.
+
+If you turn "Show on the cluster right away" off, you will have to put the cluster into projection mode once yourself: the projection icon on the head unit's home screen, then the **IPC** button on the map that appears.
 
 <img src="docs/screenshots/settings-display-en.jpg" alt="Settings → Display: cluster projection, what each option does" width="800">
 
