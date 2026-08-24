@@ -121,6 +121,7 @@ class AlicePollingManager @Inject constructor(
             Log.i(TAG, "Executing: '$command' (id=$id)")
             // Alice bypasses ActionDispatcher (raw vehicleApi), so the door-unlock
             // speed gate is applied here explicitly. Ack anyway so VPS won't retry.
+            // Log-only path — the BlockReason is never shown to a user, so it is not localized.
             val unlockBlock = ActionDispatcher.unlockGateBlockReason(command, latestData?.speed)
             if (unlockBlock != null) {
                 Log.w(TAG, "Blocked: '$command' → $unlockBlock")

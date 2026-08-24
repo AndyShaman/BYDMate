@@ -1,6 +1,8 @@
 package com.bydmate.app.data.automation
 
+import com.bydmate.app.data.automation.ActionDispatcher.BlockReason
 import com.bydmate.app.data.remote.diParsData
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Test
@@ -16,29 +18,29 @@ class ActionDispatcherSafetyGateTest {
         ActionDispatcher.safetyBlockReason(cmd, diParsData(speed = speed))
 
     @Test fun `blocked pattern is rejected regardless of speed`() {
-        assertNotNull(ActionDispatcher.safetyBlockReason("发送CAN123", null))
+        assertEquals(BlockReason.Forbidden, ActionDispatcher.safetyBlockReason("发送CAN123", null))
     }
 
     @Test fun `window open blocked above 120`() {
-        assertNotNull(gate("车窗全开", 121))
+        assertEquals(BlockReason.WindowsSpeed(121), gate("车窗全开", 121))
         assertNull(gate("车窗全开", 120))
     }
 
     @Test fun `sunroof open blocked above 80`() {
-        assertNotNull(gate("天窗全开", 81))
+        assertEquals(BlockReason.SunroofSpeed(81), gate("天窗全开", 81))
         assertNull(gate("天窗全开", 80))
     }
 
     @Test fun `frunk open only when parked and fails closed`() {
-        assertNotNull(gate("前备箱打开", 1))
+        assertEquals(BlockReason.FrunkMoving(1), gate("前备箱打开", 1))
         assertNull(gate("前备箱打开", 0))
-        assertNotNull(ActionDispatcher.safetyBlockReason("前备箱打开", null))
+        assertEquals(BlockReason.FrunkSpeedUnknown, ActionDispatcher.safetyBlockReason("前备箱打开", null))
     }
 
     @Test fun `unlock blocked above 30 and fails closed`() {
-        assertNotNull(gate("车门解锁", 31))
+        assertEquals(BlockReason.UnlockSpeed(31), gate("车门解锁", 31))
         assertNull(gate("车门解锁", 30))
-        assertNotNull(ActionDispatcher.safetyBlockReason("车门解锁", null))
+        assertEquals(BlockReason.UnlockSpeedUnknown, ActionDispatcher.safetyBlockReason("车门解锁", null))
     }
 
     @Test fun `window open allowed when whole snapshot missing - existing semantics`() {

@@ -950,6 +950,15 @@
     <string name="auto_a11y_move_up">Move up</string>
     <string name="auto_a11y_move_down">Move down</string>
     <string name="auto_a11y_run_now">Run now</string>
+    <!-- safety gate block reasons (ActionDispatcher.BlockReason) -->
+    <string name="gate_speed_unknown">Speed unknown</string>
+    <string name="gate_sunroof_speed">Sunroof opening blocked at %1$d km/h (&gt;80)</string>
+    <string name="gate_windows_speed">Window opening blocked at %1$d km/h (&gt;120)</string>
+    <string name="gate_unlock_speed_unknown">Speed unknown, doors stay locked</string>
+    <string name="gate_unlock_speed">Door unlocking blocked at %1$d km/h (&gt;30)</string>
+    <string name="gate_forbidden_command">Forbidden command</string>
+    <string name="gate_frunk_speed_unknown">Speed unknown, cannot open the front trunk</string>
+    <string name="gate_frunk_moving">The front trunk opens only when parked (speed %1$d km/h)</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Voice agent</string>
@@ -961,6 +970,7 @@
     <string name="voice_thinking">Thinking</string>
     <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
     <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. Set Voice language to Russian in Settings.</string>
+    <string name="voice_block_park_required">Park required</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Speech recognition</string>

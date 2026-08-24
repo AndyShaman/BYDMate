@@ -11,6 +11,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.ui.overlay.ListeningOverlay
+import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -515,7 +516,7 @@ class VoiceController @Inject constructor(
                 ActionDispatcher.isWindowOpenCommand(it) || ActionDispatcher.isSunroofOpenCommand(it)
             }) {
             earcon.fail()
-            val reason = "Скорость неизвестна"
+            val reason = ActionDispatcher.BlockReason.SpeedUnknown.toText(context)
             _state.value = VoiceUiState.Blocked(reason)
             record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
                 "NLU blocked (speed unknown): cmd=$cmdLog transcript=\"$transcript\"")
@@ -621,14 +622,16 @@ class VoiceController @Inject constructor(
                 scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
             }
             VoiceFireResult.ParkRequired -> {
-                val reason = "Требуется паркинг"
+                // Same app-locale resolution as BlockReason.toText — the application
+                // context follows the head unit's system locale, not the app language (#162).
+                val reason = context.appLocalizedContext().getString(R.string.voice_block_park_required)
                 earcon.fail(); _state.value = VoiceUiState.Blocked(reason)
                 record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
                     "NLU automation blocked (park required): ruleId=$ruleId transcript=\"$transcript\"")
                 announce("Голос", "Услышал: «$transcript». Отказ: $reason", "Не получилось")
             }
             VoiceFireResult.SpeedUnknown -> {
-                val reason = "Скорость неизвестна"
+                val reason = ActionDispatcher.BlockReason.SpeedUnknown.toText(context)
                 earcon.fail(); _state.value = VoiceUiState.Blocked(reason)
                 record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.BLOCKED, reason,
                     "NLU automation blocked (speed unknown): ruleId=$ruleId transcript=\"$transcript\"")

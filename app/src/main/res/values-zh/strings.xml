@@ -1065,6 +1065,15 @@
     <string name="auto_a11y_move_up">上移</string>
     <string name="auto_a11y_move_down">下移</string>
     <string name="auto_a11y_run_now">立即执行</string>
+    <!-- safety gate block reasons (ActionDispatcher.BlockReason) -->
+    <string name="gate_speed_unknown">车速未知</string>
+    <string name="gate_sunroof_speed">车速 %1$d 公里/小时（&gt;80），禁止打开天窗</string>
+    <string name="gate_windows_speed">车速 %1$d 公里/小时（&gt;120），禁止打开车窗</string>
+    <string name="gate_unlock_speed_unknown">车速未知，不解锁车门</string>
+    <string name="gate_unlock_speed">车速 %1$d 公里/小时（&gt;30），禁止解锁车门</string>
+    <string name="gate_forbidden_command">禁止的命令</string>
+    <string name="gate_frunk_speed_unknown">车速未知，无法打开前备箱</string>
+    <string name="gate_frunk_moving">前备箱仅在停车时可打开（车速 %1$d 公里/小时）</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">语音智能体</string>
@@ -1076,6 +1085,7 @@
     <string name="voice_thinking">思考中</string>
     <string name="voice_error_model_missing">语音模型尚未下载。请在设置的语音助手部分下载。</string>
     <string name="voice_error_lang_not_ru">语音命令目前仅支持俄语。请在设置中将语音语言设为俄语。</string>
+    <string name="voice_block_park_required">需要挂入 P 挡</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">语音识别</string>

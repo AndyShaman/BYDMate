@@ -1,7 +1,8 @@
 package com.bydmate.app.data.automation
 
+import com.bydmate.app.data.automation.ActionDispatcher.BlockReason
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -179,7 +180,7 @@ class ActionDispatcherWindowBlockTest {
     // ── speedGateBlockReason: sunroof gate at 80 km/h ────────────────────────
 
     @Test fun `sunroof open at 81 returns block reason`() {
-        assertNotNull(speedGate("天窗全开", 81))
+        assertEquals(BlockReason.SunroofSpeed(81), speedGate("天窗全开", 81))
     }
 
     @Test fun `sunroof open at 80 returns null`() {
@@ -191,7 +192,7 @@ class ActionDispatcherWindowBlockTest {
     }
 
     @Test fun `sunroof open at unknown speed returns block reason`() {
-        assertNotNull(speedGate("天窗全开", null))
+        assertEquals(BlockReason.SpeedUnknown, speedGate("天窗全开", null))
     }
 
     // ── speedGateBlockReason: window gate at 120 km/h ────────────────────────
@@ -205,11 +206,11 @@ class ActionDispatcherWindowBlockTest {
     }
 
     @Test fun `window open at 121 returns block reason`() {
-        assertNotNull(speedGate("车窗全开", 121))
+        assertEquals(BlockReason.WindowsSpeed(121), speedGate("车窗全开", 121))
     }
 
     @Test fun `window open at unknown speed returns block reason`() {
-        assertNotNull(speedGate("车窗全开", null))
+        assertEquals(BlockReason.SpeedUnknown, speedGate("车窗全开", null))
     }
 
     // ── speedGateBlockReason: close commands and non-apertures are never gated ─

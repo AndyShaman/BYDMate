@@ -1104,6 +1104,15 @@
     <string name="auto_a11y_move_up">выше</string>
     <string name="auto_a11y_move_down">ниже</string>
     <string name="auto_a11y_run_now">выполнить сейчас</string>
+    <!-- safety gate block reasons (ActionDispatcher.BlockReason) -->
+    <string name="gate_speed_unknown">Скорость неизвестна</string>
+    <string name="gate_sunroof_speed">Открытие люка заблокировано на скорости %1$d км/ч (&gt;80)</string>
+    <string name="gate_windows_speed">Открытие окон заблокировано на скорости %1$d км/ч (&gt;120)</string>
+    <string name="gate_unlock_speed_unknown">Скорость неизвестна, двери не отпираю</string>
+    <string name="gate_unlock_speed">Отпирание дверей заблокировано на скорости %1$d км/ч (&gt;30)</string>
+    <string name="gate_forbidden_command">Запрещённая команда</string>
+    <string name="gate_frunk_speed_unknown">Скорость неизвестна, передний багажник не открыть</string>
+    <string name="gate_frunk_moving">Передний багажник открывается только на стоянке (скорость %1$d км/ч)</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Голос-агент</string>
@@ -1115,6 +1124,7 @@
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент.</string>
     <string name="voice_error_lang_not_ru">Голосовые команды понимают только русскую речь. В Настройках выберите Язык голоса: Русский.</string>
+    <string name="voice_block_park_required">Требуется паркинг</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Распознавание речи</string>

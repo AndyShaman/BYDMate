@@ -301,7 +301,7 @@ class AutomationViewModel @Inject constructor(
             // same safety gates explicitly (frunk/unlock fail closed on unknown speed).
             val block = ActionDispatcher.safetyBlockReason(command, TrackingService.lastData.value)
             if (block != null) {
-                Toast.makeText(context, block, Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, block.toText(context), Toast.LENGTH_SHORT).show()
                 return@launch
             }
             val result = vehicleApi.dispatch(command)

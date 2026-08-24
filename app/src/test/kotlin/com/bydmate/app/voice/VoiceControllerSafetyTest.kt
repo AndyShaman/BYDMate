@@ -44,6 +44,20 @@ class VoiceControllerSafetyTest {
     // onPttPressed's else-branch; voice_error_lang_not_ru is the other, untested in this file).
     private val modelMissingMsg = "Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент."
 
+    // #162: block reasons are resolved through the app-locale wrapper
+    // (ActionDispatcher.BlockReason.toText), so the injected Context must answer
+    // getString() for the gate strings this suite asserts on.
+    private val speedUnknownMsg = "Скорость неизвестна"
+
+    /** Relaxed Context that survives `appLocalizedContext()` — the wrapper builds a
+     *  configuration context, so the mock returns itself and answers the gate string. */
+    private fun blockReasonContext(): Context {
+        val ctx = mockk<Context>(relaxed = true)
+        every { ctx.createConfigurationContext(any()) } returns ctx
+        every { ctx.getString(R.string.gate_speed_unknown) } returns speedUnknownMsg
+        return ctx
+    }
+
     /** A relaxed TtsEngine mock's `speaking` StateFlow<Boolean> property, being a mocked
      *  interface itself, has no real backing state -- its collect() completes without ever
      *  emitting. VoiceController's scheduleClear() awaits `speaking.first { !it }` after every
@@ -126,7 +140,7 @@ class VoiceControllerSafetyTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
         return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, blockReasonContext(),
             ttsEngine, journal, continuousAsr, agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
@@ -165,7 +179,7 @@ class VoiceControllerSafetyTest {
         coEvery { agentOrchestrator.expectsFollowUp() } returns false
 
         return VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, blockReasonContext(),
             quietTtsEngine(), journal, continuousAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
@@ -578,7 +592,7 @@ class VoiceControllerSafetyTest {
 
         val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, blockReasonContext(),
             quietTtsEngine(), VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
@@ -637,7 +651,7 @@ class VoiceControllerSafetyTest {
 
         val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, blockReasonContext(),
             quietTtsEngine(), VoiceJournal(), fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
@@ -709,7 +723,7 @@ class VoiceControllerSafetyTest {
 
         val fakeAsr = FakeContinuousAsr(ready = true)
         val controller = VoiceController(audioCapture, dispatcher, localePrefs, earcon, gate,
-            automationEngine, automationResolver, agentOrchestrator, mockk<Context>(relaxed = true),
+            automationEngine, automationResolver, agentOrchestrator, blockReasonContext(),
             quietTtsEngine(), journal, fakeAsr,
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),

@@ -1102,6 +1102,15 @@
     <string name="auto_a11y_move_up">вышэй</string>
     <string name="auto_a11y_move_down">ніжэй</string>
     <string name="auto_a11y_run_now">выканаць зараз</string>
+    <!-- safety gate block reasons (ActionDispatcher.BlockReason) -->
+    <string name="gate_speed_unknown">Хуткасць невядомая</string>
+    <string name="gate_sunroof_speed">Адкрыццё люка заблакаванае на хуткасці %1$d км/г (&gt;80)</string>
+    <string name="gate_windows_speed">Адкрыццё вокнаў заблакаванае на хуткасці %1$d км/г (&gt;120)</string>
+    <string name="gate_unlock_speed_unknown">Хуткасць невядомая, дзверы не адмыкаю</string>
+    <string name="gate_unlock_speed">Адмыканне дзвярэй заблакаванае на хуткасці %1$d км/г (&gt;30)</string>
+    <string name="gate_forbidden_command">Забароненая каманда</string>
+    <string name="gate_frunk_speed_unknown">Хуткасць невядомая, пярэдні багажнік не адкрыць</string>
+    <string name="gate_frunk_moving">Пярэдні багажнік адкрываецца толькі на стаянцы (хуткасць %1$d км/г)</string>
 
     <!-- Voice control (Phase 0) -->
     <string name="settings_section_voice_agent">Голас-агент</string>
@@ -1113,6 +1122,7 @@
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Галасавая мадэль не загружана. Спампуйце яе ў Наладах, раздзел Голас-агент.</string>
     <string name="voice_error_lang_not_ru">Галасавыя каманды разумеюць толькі рускую мову. У Наладах выберыце Мову голасу: Русский.</string>
+    <string name="voice_block_park_required">Патрэбны паркінг</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
     <string name="settings_asr_gigaam_title">Распазнаванне маўлення</string>

@@ -1,7 +1,8 @@
 package com.bydmate.app.data.automation
 
+import com.bydmate.app.data.automation.ActionDispatcher.BlockReason
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -32,12 +33,12 @@ class ActionDispatcherUnlockGateTest {
     }
 
     @Test fun `unlock blocked above 30 kmh`() {
-        assertNotNull(gate("车门解锁", 31))
-        assertNotNull(gate("车门解锁", 90))
+        assertEquals(BlockReason.UnlockSpeed(31), gate("车门解锁", 31))
+        assertEquals(BlockReason.UnlockSpeed(90), gate("车门解锁", 90))
     }
 
     @Test fun `unlock blocked when speed unknown`() {
-        assertNotNull(gate("车门解锁", null))
+        assertEquals(BlockReason.UnlockSpeedUnknown, gate("车门解锁", null))
     }
 
     @Test fun `lock is never gated even at speed or unknown speed`() {
