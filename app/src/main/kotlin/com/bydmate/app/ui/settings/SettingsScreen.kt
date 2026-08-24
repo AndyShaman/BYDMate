@@ -584,6 +584,53 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         }
     }
 
+    SectionHeader(text = stringResource(R.string.settings_webhook_section_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingToggleRow(
+                title = stringResource(R.string.settings_webhook_label),
+                description = stringResource(R.string.settings_webhook_description),
+                checked = state.webhookEnabled,
+                onCheckedChange = { viewModel.toggleWebhook(it) },
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_webhook_url_label),
+                value = state.webhookUrl,
+                onValueChange = { viewModel.updateWebhookUrl(it) },
+                keyboardType = KeyboardType.Uri,
+            )
+            SettingsTextField(
+                label = stringResource(R.string.settings_webhook_secret_label),
+                value = state.webhookSecret,
+                onValueChange = { viewModel.updateWebhookSecret(it) },
+                keyboardType = KeyboardType.Password,
+                secret = true
+            )
+            SettingToggleRow(
+                title = stringResource(R.string.settings_webhook_location_label),
+                description = stringResource(R.string.settings_webhook_location_description),
+                checked = state.webhookSendLocation,
+                onCheckedChange = { viewModel.toggleWebhookSendLocation(it) },
+            )
+            SettingActionRow(
+                title = stringResource(R.string.settings_webhook_save_button),
+                buttonLabel = stringResource(R.string.settings_webhook_save_button),
+                onClick = { viewModel.saveWebhookSettings() },
+                style = SettingButtonStyle.Primary,
+            )
+            state.webhookSaveStatus?.let {
+                Text(it, color = AccentGreen, fontSize = 12.sp)
+            }
+        }
+    }
+
     SectionHeader(text = stringResource(R.string.settings_ai_connections_header))
 
     ConnectionCard(

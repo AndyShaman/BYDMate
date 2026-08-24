@@ -73,6 +73,14 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
         /** Отправлять GPS-координаты и курс в телеметрию ABRP (opt-in, по умолчанию выкл). */
         const val KEY_ABRP_SEND_LOCATION = "abrp_send_location"
+        /** Слать тот же JSON телеметрии POST-запросом на свой URL. Работает независимо от ABRP. */
+        const val KEY_WEBHOOK_ENABLED = "webhook_enabled"
+        /** URL вебхука (http/https). Пустой = вебхук выключен, даже если KEY_WEBHOOK_ENABLED="true". */
+        const val KEY_WEBHOOK_URL = "webhook_url"
+        /** Необязательный секрет; уходит заголовком `Authorization: Bearer`. */
+        const val KEY_WEBHOOK_SECRET = "webhook_secret"
+        /** Отправлять GPS-координаты и курс на вебхук (opt-in, по умолчанию выкл). */
+        const val KEY_WEBHOOK_SEND_LOCATION = "webhook_send_location"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"

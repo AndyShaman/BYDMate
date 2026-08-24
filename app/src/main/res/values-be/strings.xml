@@ -142,6 +142,16 @@
     <string name="settings_abrp_location_label">Адпраўляць каардынаты ў ABRP</string>
     <string name="settings_abrp_location_description">Дадае GPS-пазіцыю і курс машыны ў тэлеметрыю. Па змаўчанні выключана: ABRP на DiLink чытае каардынаты сам. Уключыце, калі стрэлка машыны ў ABRP адстае ад рэальнага становішча.</string>
     <string name="settings_abrp_save_button">Захаваць ABRP</string>
+    <string name="settings_webhook_section_header">Вебхук - тэлеметрыя</string>
+    <string name="settings_webhook_label">Жывыя даныя -> свой сервер</string>
+    <string name="settings_webhook_description">Той самы JSON, што ідзе ў ABRP (SOC, магутнасць, тэмпературы, адометр, ціск шын, зарадка), адпраўляецца POST-запытам на ваш URL: раз на секунду ў руху, раз на 8 секунд на зарадцы, раз на 30 секунд на стаянцы. Каардынаты па змаўчанні не перадаюцца.</string>
+    <string name="settings_webhook_url_label">URL (http:// або https://)</string>
+    <string name="settings_webhook_secret_label">Сакрэт (загаловак Authorization: Bearer), неабавязкова</string>
+    <string name="settings_webhook_location_label">Адпраўляць каардынаты на вебхук</string>
+    <string name="settings_webhook_location_description">Дадае GPS-пазіцыю і курс машыны ў JSON.</string>
+    <string name="settings_webhook_save_button">Захаваць вебхук</string>
+    <string name="settings_webhook_saved">Вебхук захаваны</string>
+    <string name="settings_webhook_invalid_url">Няправільны URL</string>
     <string name="settings_openrouter_section_header">OpenRouter</string>
     <string name="settings_openrouter_api_key_label">OpenRouter API Key</string>
     <string name="settings_openrouter_model_selected">Мадэль: %1$s</string>

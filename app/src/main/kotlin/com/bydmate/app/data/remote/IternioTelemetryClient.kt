@@ -107,76 +107,131 @@ class IternioTelemetryClient @Inject constructor(
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = userToken.trim()
         if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
+        val telemetry = try {
+            buildTelemetry(
+                data = data,
+                nominalCapacityKwh = nominalCapacityKwh,
+                battery = battery,
+                charging = charging,
+                carModel = carModel,
+                enginePowerKw = enginePowerKw,
+                sampleTimeMs = sampleTimeMs,
+                latitude = latitude,
+                longitude = longitude,
+                headingDeg = headingDeg,
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "отправка не удалась: ${e.message}")
+            return@withContext Result.failure(e)
+        }
         // Iternio docs: SOC is the one truly required telemetry field. Without
         // it the route planner has nothing to update, so we skip the call.
-        val soc = data.soc ?: return@withContext Result.failure(IllegalStateException("SOC недоступен"))
+        if (telemetry == null) return@withContext Result.failure(IllegalStateException("SOC недоступен"))
+        sendTelemetry(apiKey, token, telemetry)
+    }
 
+    /**
+     * Build the Iternio telemetry payload. Extracted from [send] so the same
+     * JSON can be reused by other sinks (custom webhook) without a second
+     * round of autoservice reads.
+     *
+     * @return null when SOC is missing — the one field Iternio requires.
+     */
+    internal fun buildTelemetry(
+        data: DiParsData,
+        nominalCapacityKwh: Double,
+        battery: BatteryReading?,
+        charging: ChargingReading?,
+        carModel: String?,
+        enginePowerKw: Int? = null,
+        sampleTimeMs: Long? = null,
+        latitude: Double? = null,
+        longitude: Double? = null,
+        headingDeg: Double? = null,
+    ): JSONObject? {
+        val soc = data.soc ?: return null
+
+        val telemetry = JSONObject()
+        val utc = (sampleTimeMs ?: System.currentTimeMillis()) / 1000L
+        telemetry.put("utc", utc)
+        telemetry.put("soc", soc)
+
+        data.speed?.let { telemetry.put("speed", it) }
+        // Power priority: autoservice ENG_POW > DiPars data.power > 0.
+        // ABRP rates data accuracy by samples-per-10s of each field;
+        // dropping `power` when both sources are dead pulls accuracy to
+        // ~12%. We always send the field (0 when sources are unavailable)
+        // and tag the chosen source in logcat so a missing live source
+        // shows up as `power_source=zero_fallback`, distinct from a
+        // genuine 0 kW snapshot during coast/standstill.
+        val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
+        val powerKw: Double = sanePower?.toDouble() ?: data.power ?: 0.0
+        val powerSource = when {
+            sanePower != null -> "autoservice"
+            data.power != null -> "diplus"
+            else -> "zero_fallback"
+        }
+        telemetry.put("power", powerKw)
+        Log.d(TAG, "power=$powerKw source=$powerSource")
+
+        data.avgBatTemp?.let { telemetry.put("batt_temp", it) }
+        data.exteriorTemp?.let { telemetry.put("ext_temp", it) }
+        telemetry.put("capacity", nominalCapacityKwh)
+        data.mileage?.let { telemetry.put("odometer", it) }
+        data.insideTemp?.let { telemetry.put("cabin_temp", it) }
+        data.tirePressFL?.let { telemetry.put("tire_pressure_fl", it) }
+        data.tirePressFR?.let { telemetry.put("tire_pressure_fr", it) }
+        data.tirePressRL?.let { telemetry.put("tire_pressure_rl", it) }
+        data.tirePressRR?.let { telemetry.put("tire_pressure_rr", it) }
+
+        // GPS opt-in: both coordinates or nothing; a lone heading is useless to ABRP.
+        if (latitude != null && longitude != null) {
+            telemetry.put("lat", latitude)
+            telemetry.put("lon", longitude)
+            headingDeg?.let { telemetry.put("heading", it) }
+        }
+
+        telemetry.put("is_charging", if (isCharging(data, charging)) 1 else 0)
+        data.gear?.let { telemetry.put("is_parked", if (it == 1) 1 else 0) }
+
+        // Autoservice-only enrichment — Leopard 3 etc. SoH lets ABRP derate
+        // nominal capacity by battery aging; is_dcfc separates fast-charge
+        // sessions from AC; kwh_charged shows session progress.
+        charging?.let { c ->
+            c.gunConnectState?.let { gun ->
+                telemetry.put("is_dcfc", if (gun in DCFC_GUN_STATES) 1 else 0)
+            }
+            // -1.0f is the autoservice "no value" sentinel — drop it.
+            // .toDouble() is required: Android's JSONObject only exposes
+            // put(String, double) — there is no put(String, float). On JVM
+            // the desktop org.json has the float overload, so this lands as
+            // NoSuchMethodError only at runtime on the device.
+            c.chargingCapacityKwh?.takeIf { it >= 0f }?.let {
+                telemetry.put("kwh_charged", it.toDouble())
+            }
+        }
+        battery?.sohPercent?.takeIf { it in 0f..100f }?.let {
+            telemetry.put("soh", it.toDouble())
+        }
+
+        carModel?.trim()?.takeIf { it.isNotEmpty() }?.let { telemetry.put("car_model", it) }
+
+        return telemetry
+    }
+
+    /**
+     * POST an already-built payload (see [buildTelemetry]). Kept separate from
+     * [send] so a caller that fans the same snapshot out to several sinks
+     * builds the JSON once.
+     */
+    suspend fun sendTelemetry(
+        apiKey: String,
+        userToken: String,
+        telemetry: JSONObject,
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        val token = userToken.trim()
+        if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
         try {
-            val telemetry = JSONObject()
-            val utc = (sampleTimeMs ?: System.currentTimeMillis()) / 1000L
-            telemetry.put("utc", utc)
-            telemetry.put("soc", soc)
-
-            data.speed?.let { telemetry.put("speed", it) }
-            // Power priority: autoservice ENG_POW > DiPars data.power > 0.
-            // ABRP rates data accuracy by samples-per-10s of each field;
-            // dropping `power` when both sources are dead pulls accuracy to
-            // ~12%. We always send the field (0 when sources are unavailable)
-            // and tag the chosen source in logcat so a missing live source
-            // shows up as `power_source=zero_fallback`, distinct from a
-            // genuine 0 kW snapshot during coast/standstill.
-            val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
-            val powerKw: Double = sanePower?.toDouble() ?: data.power ?: 0.0
-            val powerSource = when {
-                sanePower != null -> "autoservice"
-                data.power != null -> "diplus"
-                else -> "zero_fallback"
-            }
-            telemetry.put("power", powerKw)
-            Log.d(TAG, "power=$powerKw source=$powerSource")
-
-            data.avgBatTemp?.let { telemetry.put("batt_temp", it) }
-            data.exteriorTemp?.let { telemetry.put("ext_temp", it) }
-            telemetry.put("capacity", nominalCapacityKwh)
-            data.mileage?.let { telemetry.put("odometer", it) }
-            data.insideTemp?.let { telemetry.put("cabin_temp", it) }
-            data.tirePressFL?.let { telemetry.put("tire_pressure_fl", it) }
-            data.tirePressFR?.let { telemetry.put("tire_pressure_fr", it) }
-            data.tirePressRL?.let { telemetry.put("tire_pressure_rl", it) }
-            data.tirePressRR?.let { telemetry.put("tire_pressure_rr", it) }
-
-            // GPS opt-in: both coordinates or nothing; a lone heading is useless to ABRP.
-            if (latitude != null && longitude != null) {
-                telemetry.put("lat", latitude)
-                telemetry.put("lon", longitude)
-                headingDeg?.let { telemetry.put("heading", it) }
-            }
-
-            telemetry.put("is_charging", if (isCharging(data, charging)) 1 else 0)
-            data.gear?.let { telemetry.put("is_parked", if (it == 1) 1 else 0) }
-
-            // Autoservice-only enrichment — Leopard 3 etc. SoH lets ABRP derate
-            // nominal capacity by battery aging; is_dcfc separates fast-charge
-            // sessions from AC; kwh_charged shows session progress.
-            charging?.let { c ->
-                c.gunConnectState?.let { gun ->
-                    telemetry.put("is_dcfc", if (gun in DCFC_GUN_STATES) 1 else 0)
-                }
-                // -1.0f is the autoservice "no value" sentinel — drop it.
-                // .toDouble() is required: Android's JSONObject only exposes
-                // put(String, double) — there is no put(String, float). On JVM
-                // the desktop org.json has the float overload, so this lands as
-                // NoSuchMethodError only at runtime on the device.
-                c.chargingCapacityKwh?.takeIf { it >= 0f }?.let {
-                    telemetry.put("kwh_charged", it.toDouble())
-                }
-            }
-            battery?.sohPercent?.takeIf { it in 0f..100f }?.let {
-                telemetry.put("soh", it.toDouble())
-            }
-
-            carModel?.trim()?.takeIf { it.isNotEmpty() }?.let { telemetry.put("car_model", it) }
-
             val form = FormBody.Builder()
                 .add("token", token)
                 .add("tlm", telemetry.toString())

@@ -133,6 +133,16 @@
     <string name="settings_abrp_location_label">Enviar coordenadas ao ABRP</string>
     <string name="settings_abrp_location_description">Adiciona a posição GPS e o rumo do carro à telemetria. Desligado por padrão: o ABRP no DiLink lê a localização por conta própria. Ative se a seta do carro no ABRP ficar atrás da posição real.</string>
     <string name="settings_abrp_save_button">Salvar ABRP</string>
+    <string name="settings_webhook_section_header">Webhook - telemetria</string>
+    <string name="settings_webhook_label">Dados ao vivo -&gt; seu próprio servidor</string>
+    <string name="settings_webhook_description">O mesmo JSON que vai para o ABRP (SoC, potência, temperaturas, hodômetro, pressão dos pneus, carregamento) é enviado por requisição POST para a sua URL: uma vez por segundo em movimento, a cada 8 segundos carregando e a cada 30 segundos estacionado. As coordenadas não são enviadas por padrão.</string>
+    <string name="settings_webhook_url_label">URL (http:// ou https://)</string>
+    <string name="settings_webhook_secret_label">Segredo (cabeçalho Authorization: Bearer), opcional</string>
+    <string name="settings_webhook_location_label">Enviar coordenadas ao webhook</string>
+    <string name="settings_webhook_location_description">Adiciona a posição GPS e o rumo do carro ao JSON.</string>
+    <string name="settings_webhook_save_button">Salvar webhook</string>
+    <string name="settings_webhook_saved">Webhook salvo</string>
+    <string name="settings_webhook_invalid_url">URL inválida</string>
     <string name="settings_openrouter_api_key_label">Chave de API do OpenRouter</string>
     <string name="settings_openrouter_model_selected">Modelo: %1$s</string>
     <string name="settings_openrouter_model_pick">Escolher modelo</string>

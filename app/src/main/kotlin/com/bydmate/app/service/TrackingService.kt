@@ -35,6 +35,7 @@ import com.bydmate.app.data.remote.IternioRateLimitException
 import com.bydmate.app.data.remote.IternioServerErrorException
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.remote.IternioTelemetryClient
+import com.bydmate.app.data.remote.WebhookTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
@@ -63,6 +64,7 @@ import kotlinx.coroutines.withTimeout
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Named
+import org.json.JSONObject
 
 @AndroidEntryPoint
 class TrackingService : Service(), LocationListener {
@@ -87,6 +89,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
+    @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
     @Inject lateinit var lastSessionRepository: com.bydmate.app.data.repository.LastSessionRepository
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
@@ -183,8 +186,10 @@ class TrackingService : Service(), LocationListener {
     // live charge (Song reports gun=null) can't split one session into many.
     @Volatile private var socRearmUsed = false
 
-    private val iternioTelemetryLock = Any()
-    @Volatile private var lastIternioTelemetryMs: Long = 0L
+    // Shared by both telemetry sinks (Iternio + custom webhook): they ride the
+    // same snapshot and the same cadence, so one timestamp gates both.
+    private val telemetryLock = Any()
+    @Volatile private var lastTelemetryMs: Long = 0L
     // Prevents two telemetry sends from overlapping: a slow ADB read can take
     // hundreds of ms, and stacking sends would burn the same in-flight ENG_POW
     // read across two parallel coroutines.
@@ -193,6 +198,10 @@ class TrackingService : Service(), LocationListener {
     // (exponential backoff). We refuse to send until `now >= iternioCooldownUntilMs`.
     @Volatile private var iternioCooldownUntilMs: Long = 0L
     @Volatile private var iternioConsecutive5xx: Int = 0
+    // Webhook cooldown: user endpoints go down for days (VPS off, tunnel gone).
+    // Flat 60 s after any failure — a dead URL then costs one request per minute
+    // instead of one per second while driving.
+    @Volatile private var webhookCooldownUntilMs: Long = 0L
 
     // Self-heal engines for daemon-backed grants. Lazy so they capture the service context only
     // after onCreate, and are never instantiated for callers that short-circuit before use.
@@ -840,17 +849,23 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
-     * Отправка в [IternioTelemetryClient] с адаптивной частотой (см.
+     * Отправка живой телеметрии с адаптивной частотой (см.
      * [IternioIntervalPolicy]): 1 с в движении, 8 с при зарядке, 30 с на
      * парковке. Бессмысленно слать с одинаковым ритмом — ABRP калибрует
      * точность по плотности сэмплов за 10 секунд, и единственное окно где
      * нам нужен 1 Гц — это движение.
      *
+     * Получателей два и они независимы: [IternioTelemetryClient] (ABRP) и
+     * [WebhookTelemetryClient] (свой URL пользователя). Включены могут быть
+     * оба, один или ни одного. JSON строится ОДИН раз на тик; координаты
+     * подмешиваются копией на того получателя, у кого включён свой тумблер.
+     *
      * Single-flight на [iternioInFlight] не даёт двум tick'ам пересекаться:
      * сетевая отправка (и, в CHARGING-окне, autoservice-снапшоты battery/charging)
      * может занять несколько сотен мс, а очередь параллельных отправок забила бы
-     * канал и спутала throttle. На 429/5xx взводим [iternioCooldownUntilMs] и тихо
-     * пропускаем тики пока не остынет.
+     * канал и спутала throttle. Остывание раздельное: на 429/5xx взводим
+     * [iternioCooldownUntilMs], на любую ошибку вебхука — [webhookCooldownUntilMs],
+     * и тихо пропускаем тики пока не остынет.
      */
     private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long) {
         if (!iternioInFlight.compareAndSet(false, true)) return
@@ -859,29 +874,39 @@ class TrackingService : Service(), LocationListener {
         val snapshotMs = nowMs
         serviceScope.launch {
             try {
-                if (settingsRepository.getString(
-                        com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_ENABLED,
-                        "false"
-                    ) != "true"
-                ) {
-                    return@launch
-                }
                 val token = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_USER_TOKEN,
                     ""
                 ).trim()
-                if (token.isEmpty()) return@launch
+                val abrpOn = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_ENABLED,
+                    "false"
+                ) == "true" && token.isNotEmpty()
 
-                if (snapshotMs < iternioCooldownUntilMs) {
-                    Log.d(TAG, "Iternio cooldown active, skip (until ${iternioCooldownUntilMs - snapshotMs}ms)")
-                    return@launch
-                }
+                val webhookUrl = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_URL,
+                    ""
+                ).trim()
+                val webhookOn = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_ENABLED,
+                    "false"
+                ) == "true" && webhookUrl.isNotEmpty()
+
+                if (!abrpOn && !webhookOn) return@launch
 
                 val state = IternioIntervalPolicy.classifyFromDiPars(data)
                 val intervalMs = IternioIntervalPolicy.intervalSec(state) * 1000L
-                synchronized(iternioTelemetryLock) {
-                    if (snapshotMs - lastIternioTelemetryMs < intervalMs) return@launch
+                synchronized(telemetryLock) {
+                    if (snapshotMs - lastTelemetryMs < intervalMs) return@launch
                 }
+
+                // Cooldowns are per-target: a dead webhook must not silence ABRP.
+                val sendToIternio = abrpOn && snapshotMs >= iternioCooldownUntilMs
+                if (abrpOn && !sendToIternio) {
+                    Log.d(TAG, "Iternio cooldown active, skip (until ${iternioCooldownUntilMs - snapshotMs}ms)")
+                }
+                val sendToWebhook = webhookOn && snapshotMs >= webhookCooldownUntilMs
+                if (!sendToIternio && !sendToWebhook) return@launch
 
                 val apiKey = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_API_KEY,
@@ -892,11 +917,14 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
-                val sendLocation = settingsRepository.getString(
+                val abrpSendLocation = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_SEND_LOCATION,
                     "false"
                 ) == "true"
-                val location = locationForTelemetry(sendLocation, _lastLocation.value, snapshotMs)
+                val webhookSendLocation = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SEND_LOCATION,
+                    "false"
+                ) == "true"
 
                 // Best-effort autoservice enrichment. Snapshots are heavier
                 // (multiple fids) — only read them in CHARGING window where
@@ -915,9 +943,9 @@ class TrackingService : Service(), LocationListener {
                 // 1 Hz. Null → client falls back to DiPars power.
                 val enginePowerKw: Int? = enginePowerKwFromSnapshot(data)
 
-                iternioTelemetryClient.send(
-                    apiKey = apiKey,
-                    userToken = token,
+                // Built once per tick and shared: the GPS fields are the only
+                // per-target difference, so they go into a copy (see [withLocation]).
+                val telemetry = iternioTelemetryClient.buildTelemetry(
                     data = data,
                     nominalCapacityKwh = settingsRepository.getBatteryCapacity(),
                     battery = battery,
@@ -925,37 +953,72 @@ class TrackingService : Service(), LocationListener {
                     carModel = carModel,
                     enginePowerKw = enginePowerKw,
                     sampleTimeMs = snapshotMs,
-                    latitude = location?.latitude,
-                    longitude = location?.longitude,
-                    headingDeg = location?.takeIf { it.hasBearing() }?.bearing?.toDouble(),
-                ).onSuccess {
-                    synchronized(iternioTelemetryLock) {
-                        lastIternioTelemetryMs = snapshotMs
+                ) ?: return@launch
+
+                // Throttle advances only when at least one sink actually took the
+                // sample, so a failed send still retries on the next tick.
+                var delivered = false
+
+                if (sendToIternio) {
+                    val location = locationForTelemetry(abrpSendLocation, _lastLocation.value, snapshotMs)
+                    iternioTelemetryClient.sendTelemetry(
+                        apiKey = apiKey,
+                        userToken = token,
+                        telemetry = withLocation(telemetry, location),
+                    ).onSuccess {
+                        delivered = true
+                        iternioConsecutive5xx = 0
+                    }.onFailure { e ->
+                        when (e) {
+                            is IternioRateLimitException -> {
+                                // Upstream said wait. Honor Retry-After if present;
+                                // fall back to 5 min when the header was missing —
+                                // long enough that we're not part of the storm,
+                                // short enough that the user gets data back once
+                                // the burst clears.
+                                val backoffSec = e.retryAfterSec ?: 300
+                                iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                                Log.w(TAG, "Iternio 429, cooldown ${backoffSec}s")
+                            }
+                            is IternioServerErrorException -> {
+                                // 5xx exponential backoff: 8 → 16 → 32 → 64 → 128 → 256 s
+                                // (capped at 300 s). We don't bump throttle on success
+                                // failures the user can't influence — wait for the
+                                // CDN to recover.
+                                iternioConsecutive5xx = (iternioConsecutive5xx + 1).coerceAtMost(6)
+                                val backoffSec = (8 shl (iternioConsecutive5xx - 1)).coerceAtMost(300)
+                                iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
+                                Log.w(TAG, "Iternio ${e.httpStatus}, cooldown ${backoffSec}s (n=$iternioConsecutive5xx)")
+                            }
+                            else -> Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                        }
                     }
-                    iternioConsecutive5xx = 0
-                }.onFailure { e ->
-                    when (e) {
-                        is IternioRateLimitException -> {
-                            // Upstream said wait. Honor Retry-After if present;
-                            // fall back to 5 min when the header was missing —
-                            // long enough that we're not part of the storm,
-                            // short enough that the user gets data back once
-                            // the burst clears.
-                            val backoffSec = e.retryAfterSec ?: 300
-                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
-                            Log.w(TAG, "Iternio 429, cooldown ${backoffSec}s")
-                        }
-                        is IternioServerErrorException -> {
-                            // 5xx exponential backoff: 8 → 16 → 32 → 64 → 128 → 256 s
-                            // (capped at 300 s). We don't bump throttle on success
-                            // failures the user can't influence — wait for the
-                            // CDN to recover.
-                            iternioConsecutive5xx = (iternioConsecutive5xx + 1).coerceAtMost(6)
-                            val backoffSec = (8 shl (iternioConsecutive5xx - 1)).coerceAtMost(300)
-                            iternioCooldownUntilMs = snapshotMs + backoffSec * 1000L
-                            Log.w(TAG, "Iternio ${e.httpStatus}, cooldown ${backoffSec}s (n=$iternioConsecutive5xx)")
-                        }
-                        else -> Log.w(TAG, "Телеметрия Iternio: ${e.message}")
+                }
+
+                if (sendToWebhook) {
+                    val location = locationForTelemetry(webhookSendLocation, _lastLocation.value, snapshotMs)
+                    val secret = settingsRepository.getString(
+                        com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SECRET,
+                        ""
+                    )
+                    webhookTelemetryClient.send(
+                        url = webhookUrl,
+                        secret = secret,
+                        telemetry = withLocation(telemetry, location),
+                    ).onSuccess {
+                        delivered = true
+                        webhookCooldownUntilMs = 0L
+                    }.onFailure { e ->
+                        // Flat 60 s: a user endpoint is either up or down, and
+                        // growing backoff would just hide it coming back.
+                        webhookCooldownUntilMs = snapshotMs + 60_000L
+                        Log.w(TAG, "Вебхук: ${e.message}, пауза 60 с")
+                    }
+                }
+
+                if (delivered) {
+                    synchronized(telemetryLock) {
+                        lastTelemetryMs = snapshotMs
                     }
                 }
             } catch (e: Exception) {
@@ -963,6 +1026,19 @@ class TrackingService : Service(), LocationListener {
             } finally {
                 iternioInFlight.set(false)
             }
+        }
+    }
+
+    /**
+     * Копия [telemetry] с GPS-полями. Базовый payload координат не содержит —
+     * тумблер «отправлять координаты» у ABRP и вебхука свой, а объект один на оба.
+     */
+    private fun withLocation(telemetry: JSONObject, location: Location?): JSONObject {
+        if (location == null) return telemetry
+        return JSONObject(telemetry.toString()).apply {
+            put("lat", location.latitude)
+            put("lon", location.longitude)
+            if (location.hasBearing()) put("heading", location.bearing.toDouble())
         }
     }
 
