@@ -312,6 +312,8 @@ Sea Lion 07 车主验证过的数值：**宽度 32%，高度 92%，水平偏移 
 
 <img src="docs/screenshots/blindspot-cluster.jpg" alt="仪表盘上的盲区摄像头" width="800">
 
+<img src="docs/screenshots/settings-blindspot-en.jpg" alt="设置 → 显示 → 盲区" width="800">
+
 在 **设置 → 显示** 的"盲区"栏目中开启（默认关闭）。同一处还可设置低于该速度不显示摄像头的速度阈值、小窗宽度及其位置："设置位置"按钮会显示一个空窗口，用手指把它拖到摄像头画面应该出现的地方。需要配备全景影像的车型。
 
 ---

@@ -259,6 +259,8 @@ With the turn signal on, BYDMate shows the side camera picture by itself: the le
 
 <img src="docs/screenshots/blindspot-cluster.jpg" alt="Blind-spot camera on the cluster" width="800">
 
+<img src="docs/screenshots/settings-blindspot-en.jpg" alt="Settings → Display → Blind spots" width="800">
+
 Enable it in **Settings → Display**, section "Blind spots" (off by default). The same place holds the speed threshold below which the camera is not shown, the window width and its position: the "Set position" button shows an empty window that you drag with a finger to wherever the camera should appear. Requires a car equipped with a surround-view system.
 
 ---
