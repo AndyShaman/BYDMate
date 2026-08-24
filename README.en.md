@@ -90,13 +90,13 @@ Around the SOC ring there are four floating-widget-style fields: trip duration, 
 
 Below the ring: AI insight, a small battery health card (SoH on Leopard 3, temperature, 12V), two TRIP 1 / TRIP 2 counters, recent trips, period filter. Each counter tracks distance, kWh consumption (including parked drain), driving time, and cost since last reset. Long-press a counter to reset it; tap for a details popup.
 
-### AI Insights (expanded)
+### AI Insights
 
 <img src="docs/screenshots/dashboard-insight-expanded.jpg" alt="AI Insight expanded" width="800">
 
 *Driving efficiency analysis — consumption, trends, battery, recommendations (local or LLM)*
 
-### Battery health (expanded)
+### Battery health
 
 <img src="docs/screenshots/dashboard-battery.jpg" alt="Battery health" width="800">
 

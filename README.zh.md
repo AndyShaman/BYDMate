@@ -90,13 +90,13 @@ SOC 圆环周围有四个悬浮窗风格的字段：上方是行程时长、里�
 
 圆环下方：AI 洞察、电池健康小卡片（ 钛3 上的 SoH、温度、12V）、两个 TRIP 1/TRIP 2 计数器、最近行程、周期筛选。每个计数器显示里程、电耗（含停车耗电）、行驶时间和费用，从上次重置起计。长按计数器可重置，点按可查看详情弹窗。
 
-### AI 洞察（展开）
+### AI 洞察
 
 <img src="docs/screenshots/dashboard-insight-expanded.jpg" alt="AI 洞察展开" width="800">
 
 *驾驶效率分析 — 能耗、趋势、电池、建议（本地或 LLM）*
 
-### 电池健康（展开）
+### 电池健康
 
 <img src="docs/screenshots/dashboard-battery.jpg" alt="电池健康" width="800">
 
