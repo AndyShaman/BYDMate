@@ -128,11 +128,6 @@ Below the ring: AI insight, a small battery health card (SoH on Leopard 3, tempe
 *Two panes, 1/3 and 2/3, with the BYDMate widget on top*
 
 
-### Blind-spot camera on the cluster
-
-<img src="docs/screenshots/blindspot-cluster.jpg" alt="Left camera on the instrument cluster with the left turn signal on" width="800">
-
-*Left turn signal: the left camera feed on the instrument cluster*
 
 ---
 
@@ -256,8 +251,6 @@ Enable it in **Settings → Display**, section "HUD (head-up display)": the "Nav
 ## Blind-spot cameras
 
 With the turn signal on, BYDMate shows the side camera picture by itself: the left turn signal puts the left camera on the cluster, the right one shows a small window on the main screen. If the sensor sees a car behind and to the side, the window is highlighted with an orange frame.
-
-<img src="docs/screenshots/blindspot-cluster.jpg" alt="Blind-spot camera on the cluster" width="800">
 
 <img src="docs/screenshots/settings-blindspot-en.jpg" alt="Settings → Display → Blind spots" width="800">
 

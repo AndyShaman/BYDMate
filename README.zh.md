@@ -127,11 +127,6 @@ SOC 圆环周围有四个悬浮窗风格的字段：上方是行程时长、里�
 
 *1/3 与 2/3 两个面板，BYDMate 悬浮窗在上层*
 
-### 仪表盘上的盲区摄像头
-
-<img src="docs/screenshots/blindspot-cluster.jpg" alt="打开左转向灯时仪表盘显示左侧摄像头" width="800">
-
-*左转向灯：左侧摄像头画面显示在仪表盘上*
 
 ---
 
@@ -309,8 +304,6 @@ Sea Lion 07 车主验证过的数值：**宽度 32%，高度 92%，水平偏移 
 ## 盲区摄像头
 
 打开转向灯后，BYDMate 会自动显示侧方摄像头画面：左转向灯将左侧摄像头显示在仪表盘上，右转向灯在主屏幕上显示一个小窗。如果传感器发现侧后方有车辆，窗口会以橙色边框高亮。
-
-<img src="docs/screenshots/blindspot-cluster.jpg" alt="仪表盘上的盲区摄像头" width="800">
 
 <img src="docs/screenshots/settings-blindspot-en.jpg" alt="设置 → 显示 → 盲区" width="800">
 
