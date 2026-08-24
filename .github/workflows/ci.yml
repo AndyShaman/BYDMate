@@ -23,7 +23,11 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
+      # PR-only: пуши в main всегда проходят полный локальный прогон перед релизом,
+      # гонять 3.5k тестов второй раз на медленном раннере — дубль. На PR локального
+      # прогона нет, там тесты обязательны.
       - name: Unit tests
+        if: github.event_name == 'pull_request'
         run: ./gradlew :app:testDebugUnitTest --stacktrace
 
       - name: Android Lint
