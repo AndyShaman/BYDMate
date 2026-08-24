@@ -145,7 +145,7 @@
     <string name="settings_webhook_section_header">Webhook - telemetria</string>
     <string name="settings_webhook_label">Dane na żywo -> własny serwer</string>
     <string name="settings_webhook_description">Ten sam JSON, który trafia do ABRP (SOC, moc, temperatury, licznik, ciśnienie w oponach, ładowanie), jest wysyłany żądaniem POST na Twój URL: raz na sekundę podczas jazdy, raz na 8 sekund podczas ładowania, raz na 30 sekund na postoju. Współrzędne domyślnie nie są wysyłane.</string>
-    <string name="settings_webhook_url_label">URL (http:// lub https://)</string>
+    <string name="settings_webhook_url_label">URL (https://)</string>
     <string name="settings_webhook_secret_label">Sekret (nagłówek Authorization: Bearer), opcjonalnie</string>
     <string name="settings_webhook_location_label">Wysyłaj współrzędne do webhooka</string>
     <string name="settings_webhook_location_description">Dodaje pozycję GPS i kurs auta do JSON-a.</string>

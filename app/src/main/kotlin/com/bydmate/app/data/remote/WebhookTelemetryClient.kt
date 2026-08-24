@@ -3,6 +3,7 @@ package com.bydmate.app.data.remote
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import okhttp3.HttpUrl
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
@@ -28,11 +29,17 @@ class WebhookTelemetryClient @Inject constructor(
     companion object {
         private const val TAG = "WebhookTelemetry"
         private val JSON_MEDIA_TYPE = "application/json; charset=utf-8".toMediaType()
+
+        /** https anywhere; plain http only on loopback (the only cleartext hosts the app allows). */
+        fun isAllowedWebhookUrl(url: HttpUrl): Boolean =
+            url.scheme == "https" ||
+                (url.scheme == "http" && (url.host == "localhost" || url.host == "127.0.0.1"))
     }
 
     /**
-     * @param url Адрес вебхука. Принимаем только http/https — OkHttp иначе
-     *            бросит на любой другой схеме, а пользователь вводит URL руками.
+     * @param url Адрес вебхука. Принимаем https, а http — только на localhost/127.0.0.1:
+     *            network_security_config.xml разрешает cleartext лишь для loopback,
+     *            любой другой http-хост платформа молча заблокирует.
      * @param secret Необязательный секрет; уходит как `Authorization: Bearer`.
      *               Никогда не попадает в лог.
      * @param telemetry Готовый JSON — тот же объект, что уходит в Iternio.
@@ -40,7 +47,7 @@ class WebhookTelemetryClient @Inject constructor(
     suspend fun send(url: String, secret: String?, telemetry: JSONObject): Result<Unit> =
         withContext(Dispatchers.IO) {
             val httpUrl = url.trim().toHttpUrlOrNull()
-            if (httpUrl == null || (httpUrl.scheme != "http" && httpUrl.scheme != "https")) {
+            if (httpUrl == null || !isAllowedWebhookUrl(httpUrl)) {
                 return@withContext Result.failure(IllegalArgumentException("неверный URL вебхука"))
             }
             try {

@@ -678,7 +678,32 @@ Only aggregated vehicle metrics, no identifiers:
 
 ABRP picks a forecast from its model library plus telemetry: current SOC, battery temperature, driving speed, wind, road profile, elevation. BYDMate does not send its own "estimated range" — ABRP has its own, more accurate route-aware estimate that also factors in weather and elevation.
 
-The same data sent to ABRP can also be posted to your own server: see the telemetry webhook under Settings → Integrations.
+### Webhook: the same data to your own server
+
+The same JSON that goes to ABRP can be POSTed to your own endpoint: Home Assistant, Node-RED, a script on a VPS. Nothing is queued: if the server is down, that sample is lost and the next attempt comes a minute later.
+
+**Setup**
+
+1. **Settings → Integrations** → **"Webhook — telemetry"** block.
+2. **URL**: `https://` only. Plain `http://` will not work (Android blocks cleartext traffic, it is allowed only for `localhost`). If your server has no certificate, put Caddy or nginx with Let's Encrypt in front of it, or use a tunnel such as Cloudflare Tunnel.
+3. **Secret** (optional): a string sent in the `Authorization: Bearer <secret>` header so your server can tell your car from random requests.
+4. **"Send coordinates to the webhook"**: off by default. Enable only if the server is yours: `lat`, `lon`, `heading` are added to the JSON.
+5. Tap **"Save webhook"**, then enable **"Live data → your own server"**.
+
+**What arrives**
+
+`POST <your URL>`, `Content-Type: application/json`, one sample in the body:
+
+```json
+{"utc":1756040000,"soc":67,"speed":52.0,"power":18.4,"batt_temp":29.0,"ext_temp":24.5,
+ "capacity":72.9,"odometer":12345.6,"cabin_temp":22.0,
+ "tire_pressure_fl":2.5,"tire_pressure_fr":2.5,"tire_pressure_rl":2.4,"tire_pressure_rr":2.4,
+ "is_charging":0,"is_parked":0,"soh":98.5,"car_model":"byd:leopard3"}
+```
+
+Fields and units follow the Iternio Telemetry API: `utc` in seconds, `power` in kW (as reported by the car), temperatures in °C, tire pressure in bar, `odometer` in km. Fields without data (e.g. `speed` while parked or `kwh_charged` outside a charging session) are simply absent. Cadence: once per second while driving, every 8 seconds while charging, every 30 seconds while parked. The response body is ignored, only a 2xx status matters; after a failure the next attempt is 60 seconds later.
+
+The webhook is independent of ABRP: enable either one or both.
 
 ---
 

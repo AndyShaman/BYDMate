@@ -113,7 +113,7 @@
     <string name="settings_webhook_section_header">Webhook - 遥测</string>
     <string name="settings_webhook_label">实时数据 -> 自己的服务器</string>
     <string name="settings_webhook_description">与发送至 ABRP 相同的 JSON（SOC、功率、温度、里程表、胎压、充电）通过 POST 请求发送到您的 URL：行驶时每秒一次，充电时每 8 秒一次，停车时每 30 秒一次。默认不发送坐标。</string>
-    <string name="settings_webhook_url_label">URL（http:// 或 https://）</string>
+    <string name="settings_webhook_url_label">URL（https://）</string>
     <string name="settings_webhook_secret_label">密钥（Authorization: Bearer 请求头），可选</string>
     <string name="settings_webhook_location_label">向 Webhook 发送坐标</string>
     <string name="settings_webhook_location_description">将车辆的 GPS 位置和航向加入 JSON。</string>

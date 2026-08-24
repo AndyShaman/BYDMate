@@ -135,7 +135,7 @@
     <string name="settings_webhook_section_header">Webhook - telemetry</string>
     <string name="settings_webhook_label">Live data -> your own server</string>
     <string name="settings_webhook_description">The same JSON that goes to ABRP (SOC, power, temperatures, odometer, tire pressure, charging) is sent as a POST request to your URL: once per second while driving, once every 8 seconds while charging, once every 30 seconds while parked. Coordinates are not sent by default.</string>
-    <string name="settings_webhook_url_label">URL (http:// or https://)</string>
+    <string name="settings_webhook_url_label">URL (https://)</string>
     <string name="settings_webhook_secret_label">Secret (Authorization: Bearer header), optional</string>
     <string name="settings_webhook_location_label">Send coordinates to the webhook</string>
     <string name="settings_webhook_location_description">Adds the car GPS position and heading to the JSON.</string>

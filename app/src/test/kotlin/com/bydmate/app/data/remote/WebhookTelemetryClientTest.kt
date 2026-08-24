@@ -78,6 +78,16 @@ class WebhookTelemetryClientTest {
         assertEquals("no request must reach the network", 0, server.requestCount)
     }
 
+    @Test fun `plain http to a non-loopback host fails without a network call`() = runTest {
+        // network_security_config.xml allows cleartext only on localhost/127.0.0.1;
+        // any other http host would be silently blocked by the platform, so reject it up front.
+        val result = client.send("http://192.168.1.10:8123/api/webhook/x", null, telemetry())
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull() is IllegalArgumentException)
+        assertEquals("no request must reach the network", 0, server.requestCount)
+    }
+
     @Test fun `garbage url fails without a network call`() = runTest {
         val result = client.send("not a url", null, telemetry())
 

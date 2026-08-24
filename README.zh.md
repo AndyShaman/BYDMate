@@ -675,7 +675,32 @@ ABRP 使用"通用实时数据 Token（Generic Live Data Token）"— 车库中�
 
 ABRP 结合其车型库模型与遥测数据（当前 SOC、电池温度、行驶速度、风力、道路剖面、海拔）来得出预测。BYDMate 不会发送自己计算的"预估续航"— ABRP 有自己更精确的路线感知估算，还会考虑天气和海拔因素。
 
-发送给 ABRP 的同一份数据，也可以额外推送到你自己的服务器：详见设置 → 集成中的遥测 Webhook。
+### Webhook：把同样的数据发到自己的服务器
+
+发送给 ABRP 的同一份 JSON 可以 POST 到你自己的地址：Home Assistant、Node-RED、VPS 上的脚本。没有队列：服务器不可用时该样本丢失，一分钟后再次尝试。
+
+**设置**
+
+1. **设置 → 集成** → **"Webhook — 遥测"** 区域。
+2. **URL**：仅支持 `https://`。普通的 `http://` 不可用（Android 阻止明文流量，仅 `localhost` 允许）。若服务器没有证书，可在前面放 Caddy 或 nginx 配合 Let's Encrypt，或使用 Cloudflare Tunnel 之类的隧道。
+3. **密钥**（可选）：通过 `Authorization: Bearer <密钥>` 请求头发送，服务器据此区分你的车和其他请求。
+4. **"向 Webhook 发送坐标"**：默认关闭。仅当服务器是你自己的时再开启：JSON 中会加入 `lat`、`lon`、`heading`。
+5. 点击 **"保存 Webhook"**，然后打开 **"实时数据 → 自己的服务器"** 开关。
+
+**收到的内容**
+
+`POST <你的 URL>`，`Content-Type: application/json`，请求体为一条样本：
+
+```json
+{"utc":1756040000,"soc":67,"speed":52.0,"power":18.4,"batt_temp":29.0,"ext_temp":24.5,
+ "capacity":72.9,"odometer":12345.6,"cabin_temp":22.0,
+ "tire_pressure_fl":2.5,"tire_pressure_fr":2.5,"tire_pressure_rl":2.4,"tire_pressure_rr":2.4,
+ "is_charging":0,"is_parked":0,"soh":98.5,"car_model":"byd:leopard3"}
+```
+
+字段和单位与 Iternio Telemetry API 一致：`utc` 为秒，`power` 为 kW（按车辆上报的值），温度为 °C，胎压为 bar，`odometer` 为 km。没有数据的字段（如停车时的 `speed`，非充电时的 `kwh_charged`）直接不出现。频率：行驶时每秒一次，充电时每 8 秒一次，停车时每 30 秒一次。不解析响应内容，只看是否为 2xx 状态；失败后 60 秒再试。
+
+Webhook 与 ABRP 相互独立：可以只开一个，也可以两个都开。
 
 ---
 

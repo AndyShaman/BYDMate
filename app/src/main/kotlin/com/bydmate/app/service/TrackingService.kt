@@ -887,6 +887,12 @@ class TrackingService : Service(), LocationListener {
                     com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_URL,
                     ""
                 ).trim()
+                // Snapshot URL and secret together: the Iternio round-trip below can take
+                // seconds, and a settings edit mid-tick must not pair a stale URL with a fresh secret.
+                val webhookSecret = settingsRepository.getString(
+                    com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SECRET,
+                    ""
+                )
                 val webhookOn = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_ENABLED,
                     "false"
@@ -997,13 +1003,9 @@ class TrackingService : Service(), LocationListener {
 
                 if (sendToWebhook) {
                     val location = locationForTelemetry(webhookSendLocation, _lastLocation.value, snapshotMs)
-                    val secret = settingsRepository.getString(
-                        com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SECRET,
-                        ""
-                    )
                     webhookTelemetryClient.send(
                         url = webhookUrl,
-                        secret = secret,
+                        secret = webhookSecret,
                         telemetry = withLocation(telemetry, location),
                     ).onSuccess {
                         delivered = true
@@ -1011,7 +1013,7 @@ class TrackingService : Service(), LocationListener {
                     }.onFailure { e ->
                         // Flat 60 s: a user endpoint is either up or down, and
                         // growing backoff would just hide it coming back.
-                        webhookCooldownUntilMs = snapshotMs + 60_000L
+                        webhookCooldownUntilMs = System.currentTimeMillis() + 60_000L
                         Log.w(TAG, "Вебхук: ${e.message}, пауза 60 с")
                     }
                 }

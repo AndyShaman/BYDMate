@@ -145,7 +145,7 @@
     <string name="settings_webhook_section_header">Вебхук - телеметрия</string>
     <string name="settings_webhook_label">Живые данные -> свой сервер</string>
     <string name="settings_webhook_description">Тот же JSON, что уходит в ABRP (SOC, мощность, температуры, одометр, давление шин, зарядка), отправляется POST-запросом на ваш URL: раз в секунду в движении, раз в 8 секунд на зарядке, раз в 30 секунд на стоянке. Координаты по умолчанию не передаются.</string>
-    <string name="settings_webhook_url_label">URL (http:// или https://)</string>
+    <string name="settings_webhook_url_label">URL (https://)</string>
     <string name="settings_webhook_secret_label">Секрет (заголовок Authorization: Bearer), необязательно</string>
     <string name="settings_webhook_location_label">Отправлять координаты на вебхук</string>
     <string name="settings_webhook_location_description">Добавляет GPS-позицию и курс машины в JSON.</string>

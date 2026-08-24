@@ -1091,7 +1091,7 @@ class SettingsViewModel @Inject constructor(
             // Reject garbage early: the send path silently drops an unparsable
             // URL, so without this the user would see a working toggle and no data.
             val valid = url.isEmpty() || url.toHttpUrlOrNull()
-                ?.let { it.scheme == "http" || it.scheme == "https" } == true
+                ?.let { com.bydmate.app.data.remote.WebhookTelemetryClient.isAllowedWebhookUrl(it) } == true
             if (!valid) {
                 _uiState.update {
                     it.copy(webhookSaveStatus = appContext.getString(R.string.settings_webhook_invalid_url))
