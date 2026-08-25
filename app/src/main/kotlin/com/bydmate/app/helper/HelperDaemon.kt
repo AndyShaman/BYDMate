@@ -203,6 +203,13 @@ fun main(args: Array<String>) {
             // Uid gate first — only our app may call.
             if (Binder.getCallingUid() != expectedUid) return false
 
+            // IBinder.getInterfaceDescriptor() on the app side is a plain INTERFACE_TRANSACTION
+            // with NO interface token in the parcel, so it must be answered by the base class
+            // BEFORE enforceInterface — otherwise the broadcast-delivered binder (#64/#148) is
+            // rejected as descriptor_mismatch (field log 2026-08-25, storm-1986). Name lookups via
+            // ServiceManager never asked for the descriptor, which is why DiLink 5 never noticed.
+            if (code == IBinder.INTERFACE_TRANSACTION) return super.onTransact(code, data, reply, flags)
+
             data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
 
             return when (code) {
