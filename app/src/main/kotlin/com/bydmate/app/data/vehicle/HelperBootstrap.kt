@@ -143,6 +143,12 @@ class HelperBootstrap @Inject constructor(
             // the right handlers. A spawn that answers a wrong version is treated as failure.
             if (helper.daemonVersion() == want) {
                 prefs.edit().putLong(KEY_SPAWNED_VERSION, want).apply()
+                // The daemon answered — via ServiceManager or via an already-accepted broadcast
+                // (which disarms the token itself). Either way nothing else may claim this
+                // spawn's token any more; leaving it armed would let a later forged intent be
+                // accepted the moment the registered daemon dies and the holder becomes the
+                // fallback.
+                HelperBinderHolder.expectedToken = null
                 return true
             }
         }
