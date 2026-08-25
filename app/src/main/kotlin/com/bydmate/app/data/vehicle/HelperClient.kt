@@ -7,6 +7,7 @@ import android.os.Parcel
 import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
+import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -15,6 +16,22 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Looks the daemon up in ServiceManager by name. Null when it was never registered — which is
+ * the normal state on firmwares that refuse addService to the shell domain (#64/#148), where the
+ * daemon reaches us through [HelperBinderHolder] instead. Shared with the diagnostic dump so both
+ * report the same transport.
+ *
+ * The hidden-API exemption for android.os.ServiceManager is installed in BYDMateApp.onCreate.
+ */
+internal fun helperServiceBinder(): IBinder? = try {
+    val sm = Class.forName("android.os.ServiceManager")
+    (sm.getMethod("getService", String::class.java)
+        .invoke(null, HelperBinderProtocol.SERVICE_NAME) as? IBinder)
+} catch (e: Exception) {
+    Log.w("HelperClient", "getService failed: ${e.message}"); null
+}
 
 /** One autoservice read request for HelperClient.readBatch: transact code (5=getInt, 7=getFloat bits), device, fid. */
 data class BatchReadItem(val tx: Int, val dev: Int, val fid: Int)
@@ -383,6 +400,8 @@ interface HelperClient {
 open class HelperClientImpl @Inject constructor() : HelperClient {
     private val mutex = Mutex()
     @Volatile private var cached: IBinder? = null
+    /** Last transport reported by [noteSource] — kept so the log line is printed only on change. */
+    @Volatile private var lastSource: String? = null
 
     /** Intermediate holder for one TX_DUMP_FIDS chunk reply (chunked transport, Q4). */
     private data class DumpChunkReply(val status: Int, val totalLength: Int, val bytes: ByteArray?)
@@ -880,13 +899,26 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         return resolveBinder()?.also { cached = it }
     }
 
-    /** Production: look the daemon up by name. Overridable so tests can inject a fake IBinder. */
-    internal open fun resolveBinder(): IBinder? = try {
-        val sm = Class.forName("android.os.ServiceManager")
-        (sm.getMethod("getService", String::class.java)
-            .invoke(null, HelperBinderProtocol.SERVICE_NAME) as? IBinder)
-    } catch (e: Exception) {
-        Log.w(TAG, "getService failed: ${e.message}"); null
+    /**
+     * Production: look the daemon up by name, and fall back to the binder it broadcast to us
+     * when the lookup is empty (H2, #64/#148 — on qti/trinket the daemon is never allowed to
+     * register a name). Overridable so tests can inject a fake IBinder.
+     */
+    internal open fun resolveBinder(): IBinder? {
+        serviceManagerBinder()?.let { noteSource("servicemanager"); return it }
+        val fromBroadcast = HelperBinderHolder.binder?.takeIf { it.isBinderAlive } ?: return null
+        noteSource("broadcast")
+        return fromBroadcast
+    }
+
+    /** ServiceManager lookup by name. Separate seam so the broadcast fallback can be tested. */
+    internal open fun serviceManagerBinder(): IBinder? = helperServiceBinder()
+
+    /** One line per change of transport — the daemon is resolved on every reconnect. */
+    private fun noteSource(source: String) {
+        if (lastSource == source) return
+        lastSource = source
+        Log.i(TAG, "binder source: $source")
     }
 
     companion object {

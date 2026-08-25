@@ -2,11 +2,14 @@
 package com.bydmate.app.helper
 
 import com.bydmate.app.BuildConfig
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.graphics.Rect
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.os.Binder
+import android.os.Bundle
 import android.view.Surface
 import java.util.concurrent.ConcurrentHashMap
 import android.os.IBinder
@@ -122,14 +125,16 @@ internal fun acquireSingleOwnerLock(path: String): Pair<FileChannel, FileLock>? 
 /**
  * Shell-uid binder daemon entry point. Spawned by the app via:
  *   CLASSPATH=<apk> app_process /system/bin \
- *     --nice-name=bydmate_helper com.bydmate.app.helper.HelperDaemon <appUid>
+ *     --nice-name=bydmate_helper com.bydmate.app.helper.HelperDaemon <appUid> [<spawnToken>]
  *
  * Lifecycle:
- *   1. Parse expectedUid from args[0].
+ *   1. Parse expectedUid from args[0] and the optional spawn token from args[1].
  *   2. Acquire single-owner file lock — exits with ALREADY_RUNNING if held.
  *   3. Resolve autoservice IBinder reflectively.
- *   4. Register a Binder stub under SERVICE_NAME via ServiceManager.addService.
- *   5. Print READY and keepalive with Looper.loop().
+ *   4. Register a Binder stub under SERVICE_NAME via ServiceManager.addService; on firmwares
+ *      that refuse the registration to the shell domain (#64), fall back to handing the same
+ *      Binder to the app in a broadcast (see [publishBinderByBroadcast]).
+ *   5. Print READY via=<transport> and keepalive with Looper.loop().
  *
  * Hidden-API note: this daemon runs under app_process (tool context), NOT a normal
  * app process. The hidden-API enforcement layer is only active for app processes, so
@@ -142,6 +147,10 @@ fun main(args: Array<String>) {
         // non-daemon threads alive, so a bare `return` from main() would hang the JVM.
         exitProcess(2)
     }
+    // Spawn token of THIS spawn — echoed back to the app in the broadcast fallback so it can
+    // tell our Binder from anything else that reaches the exported receiver. Absent when an
+    // older app version did the spawn (then only the addService path is available).
+    val spawnToken = spawnTokenFrom(args)
 
     // Step 1: single-owner lock — prevents duplicate daemons.
     val lockPair = acquireSingleOwnerLock(LOCK_PATH)
@@ -158,9 +167,11 @@ fun main(args: Array<String>) {
 
     // Identity of the spawned process. addService is only permitted from the shell domain,
     // so a wrong uid or SELinux context explains a registration refusal on its own (#64).
+    // The token itself never reaches the log — it authenticates the broadcast fallback, and the
+    // daemon log is world-readable on the device. Only its presence is diagnostic.
     println(
         "BOOT uid=${android.os.Process.myUid()} pid=${android.os.Process.myPid()} " +
-            "selinux=${readSelinuxContext()}"
+            "selinux=${readSelinuxContext()} token=${if (spawnToken != null) "set" else "absent"}"
     )
     System.out.flush()
 
@@ -671,18 +682,36 @@ fun main(args: Array<String>) {
     }
     helperBinder.attachInterface(null, HelperBinderProtocol.DESCRIPTOR)
 
-    // Step 4: register the stub with ServiceManager.
+    // Step 4: register the stub with ServiceManager, or publish it by broadcast when the
+    // firmware refuses the registration to the shell domain (#64 / #148).
+    var transport = "servicemanager"
     try {
         smCls.getMethod("addService", String::class.java, IBinder::class.java)
             .invoke(null, HelperBinderProtocol.SERVICE_NAME, helperBinder)
     } catch (e: Exception) {
         System.err.println("ERR: addService ${describeBootstrapFailure(e)}")
-        // exitProcess so the OS releases the file lock we hold; a bare return would
-        // leave a hung lock-holding daemon and block every future spawn.
-        exitProcess(4)
+        when (decideRegistrationFallback(systemContext != null, spawnToken != null)) {
+            RegistrationFallback.EXIT_NO_CONTEXT -> {
+                System.err.println("ERR: broadcast fallback unavailable: no system context")
+                // exitProcess so the OS releases the file lock we hold; a bare return would
+                // leave a hung lock-holding daemon and block every future spawn.
+                exitProcess(4)
+            }
+            RegistrationFallback.EXIT_NO_TOKEN -> {
+                System.err.println("ERR: broadcast fallback unavailable: no spawn token")
+                exitProcess(4)
+            }
+            RegistrationFallback.BROADCAST -> try {
+                publishBinderByBroadcast(systemContext!!, helperBinder, spawnToken!!)
+                transport = "broadcast"
+            } catch (be: Exception) {
+                System.err.println("ERR: broadcast ${describeBootstrapFailure(be)}")
+                exitProcess(5)
+            }
+        }
     }
 
-    System.out.println("READY pid=${android.os.Process.myPid()}")
+    System.out.println("READY via=$transport pid=${android.os.Process.myPid()}")
     System.out.flush()
 
     // Keepalive: Looper.loop() blocks this thread indefinitely so main() never returns
@@ -691,6 +720,59 @@ fun main(args: Array<String>) {
     // AppRuntime::onStarted — Looper.loop() plays NO role in transaction dispatch here;
     // it is purely a blocking keepalive for the main thread.
     Looper.loop()
+}
+
+/**
+ * Spawn token passed as args[1]. Absent (or blank) when an app version older than the
+ * broadcast fallback did the spawn — then only the addService path can deliver the Binder.
+ */
+internal fun spawnTokenFrom(args: Array<String>): String? =
+    args.getOrNull(1)?.takeIf { it.isNotBlank() }
+
+/** What to do after ServiceManager.addService refused us — see [decideRegistrationFallback]. */
+internal enum class RegistrationFallback {
+    /** No system Context: nothing can send a broadcast from this process. */
+    EXIT_NO_CONTEXT,
+    /** No spawn token: the app could not authenticate the intent, so we must not send one. */
+    EXIT_NO_TOKEN,
+    /** Hand the Binder to the app in a broadcast. */
+    BROADCAST,
+}
+
+/**
+ * The whole decision after a refused addService, split out from the Android-dependent sender
+ * so it can be unit-tested. Both preconditions are hard: without a Context there is no
+ * sendBroadcast, and without a token the app has no way to tell our intent from a forged one
+ * (the receiver is exported — the sender is the shell uid, not our own process).
+ */
+internal fun decideRegistrationFallback(hasSystemContext: Boolean, hasToken: Boolean): RegistrationFallback =
+    when {
+        !hasSystemContext -> RegistrationFallback.EXIT_NO_CONTEXT
+        !hasToken -> RegistrationFallback.EXIT_NO_TOKEN
+        else -> RegistrationFallback.BROADCAST
+    }
+
+/**
+ * Hands [binder] to the app in an explicit broadcast — the D+ (aps_diplus) recipe for firmwares
+ * where the shell domain may transact with autoservice but may not register a service name.
+ *
+ * Explicit component + package so no other app can receive it, FLAG_INCLUDE_STOPPED_PACKAGES so
+ * a force-stopped app (the state right after an update) is still woken. The token lets the app
+ * authenticate the sender; version and pid are diagnostics for the dump.
+ */
+private fun publishBinderByBroadcast(ctx: Context, binder: IBinder, token: String) {
+    val extras = Bundle().apply {
+        putBinder(HelperBinderProtocol.KEY_BINDER, binder)
+        putString(HelperBinderProtocol.KEY_TOKEN, token)
+        putLong(HelperBinderProtocol.KEY_VERSION, BuildConfig.VERSION_CODE.toLong())
+        putInt(HelperBinderProtocol.KEY_PID, android.os.Process.myPid())
+    }
+    val intent = Intent(HelperBinderProtocol.ACTION_BINDER)
+        .setComponent(ComponentName(HelperBinderProtocol.APP_PACKAGE, HelperBinderProtocol.RECEIVER_CLASS))
+        .setPackage(HelperBinderProtocol.APP_PACKAGE)
+        .addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+        .putExtra(HelperBinderProtocol.EXTRA_BUNDLE, extras)
+    ctx.sendBroadcast(intent)
 }
 
 // Trailing activityType int: absent when the caller predates the split touch fix →

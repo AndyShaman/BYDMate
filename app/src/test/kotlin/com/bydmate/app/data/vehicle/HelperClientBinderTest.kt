@@ -4,6 +4,7 @@ import android.os.DeadObjectException
 import android.os.IBinder
 import android.os.IInterface
 import android.os.Parcel
+import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -759,5 +760,56 @@ class HelperClientBinderTest {
             "status=0 with null byte array must return ReadError, not Success (C-3-R1)",
             result is DumpFidsResult.ReadError,
         )
+    }
+
+    // Broadcast transport (H2, #64/#148)
+
+    /** Client that keeps the real resolveBinder() but fakes only the ServiceManager lookup. */
+    private fun clientWithServiceName(binder: IBinder?): HelperClientImpl = object : HelperClientImpl() {
+        override fun serviceManagerBinder(): IBinder? = binder
+    }
+
+    /** Puts [binder] into the holder the way an authenticated broadcast would. */
+    private fun holdByBroadcast(binder: IBinder) {
+        HelperBinderHolder.expectedToken = "0123456789abcdef0123456789abcdef"
+        val payload = android.os.Bundle().apply {
+            putBinder(HelperBinderProtocol.KEY_BINDER, binder)
+            putString(HelperBinderProtocol.KEY_TOKEN, HelperBinderHolder.expectedToken)
+        }
+        HelperBinderHolder.accept(payload)
+    }
+
+    @org.junit.After
+    fun clearHolder() {
+        HelperBinderHolder.clear()
+        HelperBinderHolder.expectedToken = null
+    }
+
+    /**
+     * TC-40: on firmwares that refuse addService (#64/#148) the daemon never owns a service name,
+     * so an empty getService must fall through to the binder it broadcast to us.
+     */
+    @Test
+    fun `an empty service lookup falls back to the broadcast binder`() = runBlocking {
+        holdByBroadcast(liveFake(status = 0, value = 42))
+
+        assertEquals(42L, clientWithServiceName(null).read(dev = 1014, fid = 1246777400))
+    }
+
+    /** TC-41: the registered service stays authoritative — DiLink 5 must not change behaviour. */
+    @Test
+    fun `the registered service wins over a broadcast binder`() = runBlocking {
+        holdByBroadcast(liveFake(status = 0, value = 9))
+
+        assertEquals(7L, clientWithServiceName(liveFake(status = 0, value = 7))
+            .read(dev = 1014, fid = 1246777400))
+    }
+
+    /** TC-42: a dead broadcast binder is not handed out (no service name can invalidate it). */
+    @Test
+    fun `a dead broadcast binder is not used`() = runBlocking {
+        holdByBroadcast(deadFake)
+
+        assertNull(clientWithServiceName(null).read(dev = 1014, fid = 1246777400))
     }
 }

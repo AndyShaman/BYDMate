@@ -139,7 +139,7 @@ class AdbOnDeviceClientTest {
         val client = newClient(fake)
 
         client.connect()
-        val result = client.spawnHelper()
+        val result = client.spawnHelper(TOKEN)
 
         assertTrue("spawnHelper should return true on successful dispatch", result)
         assertEquals("exactly one exec call should be made", 1, fake.execCalls.size)
@@ -162,6 +162,11 @@ class AdbOnDeviceClientTest {
             "must keep spawning shell alive until daemon registers (poll-loop)",
             cmd.contains("service list") && cmd.contains("sleep")
         )
+        // A daemon that had to publish its Binder by broadcast (#64/#148) never shows up in
+        // `service list`, so the loop must also break on READY in the daemon log.
+        assertTrue("must also wait on READY in the daemon log", cmd.contains("grep -q READY"))
+        // The spawn token is the daemon's second argument.
+        assertTrue("must pass the spawn token to the daemon", cmd.contains(TOKEN))
 
         // Prove no dex push artifacts
         assertFalse("must not contain base64", cmd.contains("base64"))
@@ -200,7 +205,7 @@ class AdbOnDeviceClientTest {
         val client = newClient(fake)
 
         client.connect()
-        val result = client.spawnHelper()
+        val result = client.spawnHelper(TOKEN)
 
         assertFalse("spawnHelper must not claim success when exec returns null", result)
     }
@@ -214,5 +219,28 @@ class AdbOnDeviceClientTest {
         val result = client.killHelper()
 
         assertFalse("killHelper must not claim success when exec returns null", result)
+    }
+
+    /**
+     * The spawn token is interpolated into the shell command line, so anything but
+     * [A-Za-z0-9] must be refused before it can break out of it (#64/#148).
+     */
+    @Test
+    fun `spawnHelper refuses a token that is not plain alphanumeric`() = runTest {
+        val fake = FakeProtocol(connectResult = true)
+        val client = newClient(fake)
+        client.connect()
+
+        for (bad in listOf("short", "", "abcd;id;abcdefghijkl", "abcdef01-2345-6789-abcd")) {
+            try {
+                client.spawnHelper(bad)
+                fail("Expected IllegalArgumentException for token \"$bad\"")
+            } catch (_: IllegalArgumentException) { /* expected */ }
+        }
+        assertEquals("a refused token must never reach the shell", 0, fake.execCalls.size)
+    }
+
+    private companion object {
+        const val TOKEN = "0123456789abcdef0123456789abcdef"
     }
 }

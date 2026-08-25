@@ -4,10 +4,12 @@ import android.content.Context
 import android.os.Build
 import android.util.Log
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
+import com.bydmate.app.helper.HelperBinderHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -120,8 +122,17 @@ class HelperBootstrap @Inject constructor(
         // If the spawn dispatch itself failed, do NOT fall through to the poll: a stale daemon (or
         // any leftover process) answering daemonVersion() would otherwise get the current
         // versionCode persisted against it, masking that no fresh daemon was actually launched.
-        if (!adb.spawnHelper()) {
+        // Token for THIS spawn: the daemon echoes it back if it has to publish its Binder by
+        // broadcast (#64/#148). It must be in the holder BEFORE the spawn — the daemon can
+        // broadcast within milliseconds, and an intent that arrives with no expected token set
+        // is rejected.
+        val token = newSpawnToken()
+        HelperBinderHolder.expectedToken = token
+        if (!adb.spawnHelper(token)) {
             Log.w(TAG, "spawnHelper dispatch failed; not persisting version")
+            // No daemon is coming for this token — leaving it armed would keep the receiver open
+            // to it for the rest of the process lifetime.
+            HelperBinderHolder.expectedToken = null
             recordSpawnFailure(adbAwareReason(SpawnFailReason.SPAWN_DISPATCH_FAILED),
                 "app_process spawn could not be dispatched")
             return false
@@ -141,8 +152,22 @@ class HelperBootstrap @Inject constructor(
             ?.joinToString("\n")
             ?.takeIf { it.isNotEmpty() }
             ?: "(daemon log unavailable)"
-        recordSpawnFailure(SpawnFailReason.DAEMON_SILENT, tail)
+        // On a firmware that refuses addService the whole story is in the holder: whether an
+        // intent arrived at all, and why it was turned away if it did.
+        val holderState = "holder: transport=${HelperBinderHolder.transport} " +
+            "lastReject=${HelperBinderHolder.lastReject ?: "(none)"}"
+        // The spawn window is over: disarm the token so a late or forged intent carrying it
+        // cannot install a binder we are no longer waiting for.
+        HelperBinderHolder.expectedToken = null
+        recordSpawnFailure(SpawnFailReason.DAEMON_SILENT, "$tail\n$holderState")
         return false
+    }
+
+    /** Spawn token: 32 hex characters from SecureRandom, matching AdbOnDeviceClient's shape gate. */
+    private fun newSpawnToken(): String {
+        val bytes = ByteArray(SPAWN_TOKEN_BYTES)
+        SecureRandom().nextBytes(bytes)
+        return bytes.joinToString("") { "%02x".format(it) }
     }
 
     /** Cheap reachability check — no side effects. */
@@ -225,5 +250,6 @@ class HelperBootstrap @Inject constructor(
         // Kill-then-wait rounds before giving up on a stale daemon (the initial kill counts as
         // round 1; one extra kill is re-dispatched before round 2 if it is still alive).
         private const val KILL_ROUNDS = 2
+        private const val SPAWN_TOKEN_BYTES = 16
     }
 }

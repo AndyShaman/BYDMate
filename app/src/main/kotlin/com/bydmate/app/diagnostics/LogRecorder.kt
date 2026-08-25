@@ -251,7 +251,7 @@ class LogRecorder internal constructor(
             // Direct projection wave: helper daemon (freeform switch diagnostics; visible
             // only once READ_LOGS is granted AND the app process restarted - the daemon
             // runs under the shell uid), guidance feed transitions, grant self-heal.
-            "bydmate_helper:*", "HudIconLoader:*",
+            "bydmate_helper:*", "HelperBinderRx:*", "HudIconLoader:*",
             "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",

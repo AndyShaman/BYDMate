@@ -1807,6 +1807,13 @@ class SettingsViewModel @Inject constructor(
             appendLine("--- helper daemon ---")
             try {
                 appendLine("alive: ${helperDiag.alive?.toString() ?: "(unknown — probe timed out)"}")
+                // How the daemon is reachable: a registered service name, or the Binder it
+                // broadcast to us on firmwares that refuse addService (#64/#148).
+                val registered = com.bydmate.app.data.vehicle.helperServiceBinder() != null
+                appendLine("transport: " + if (registered) "servicemanager"
+                    else com.bydmate.app.helper.HelperBinderHolder.transport)
+                appendLine("broadcast_last_reject: " +
+                    (com.bydmate.app.helper.HelperBinderHolder.lastReject ?: "(none)"))
                 val failure = helperBootstrap.lastSpawnFailure()
                 if (failure == null) {
                     appendLine("last_spawn_failure: (none)")

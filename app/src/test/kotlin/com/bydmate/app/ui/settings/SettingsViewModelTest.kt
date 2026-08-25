@@ -202,7 +202,7 @@ class SettingsViewModelTest {
         override suspend fun isConnected(): Boolean = false
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
-        override suspend fun spawnHelper(): Boolean = false
+        override suspend fun spawnHelper(token: String): Boolean = false
         override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null
         override suspend fun helperHeartbeat(): Boolean = false

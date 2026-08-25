@@ -69,6 +69,27 @@ object HelperBinderProtocol {
     const val PROCESS_NAME = "bydmate_helper"   // app_process --nice-name + ps lookup
     const val DESCRIPTOR = "com.bydmate.app.helper.IHelper"
 
+    /**
+     * Broadcast delivery of the daemon's IBinder — the H2 fallback for firmwares where
+     * ServiceManager.addService is refused for the shell domain (qti/trinket, DiLink 3.0,
+     * #64/#148). Same channel D+ (aps_diplus) uses on those cars: the daemon never registers
+     * a service name, it hands its Binder to the app in a broadcast extra.
+     *
+     * The receiver must stay exported (the sender is the shell uid, not us), so the app
+     * authenticates the intent by three independent facts: the spawn token it generated for
+     * THIS spawn, the binder's interface descriptor, and — afterwards — the version the daemon
+     * reports over TX_GET_VERSION.
+     */
+    const val ACTION_BINDER = "com.bydmate.app.helper.BINDER"
+    const val RECEIVER_CLASS = "com.bydmate.app.helper.HelperBinderReceiver"
+
+    /** Extras of [ACTION_BINDER]: one Bundle (a Binder cannot be an Intent extra directly). */
+    const val EXTRA_BUNDLE = "helper"
+    const val KEY_BINDER = "binder"
+    const val KEY_TOKEN = "token"
+    const val KEY_VERSION = "version"   // Long — BuildConfig.VERSION_CODE of the spawning APK
+    const val KEY_PID = "pid"
+
     const val TX_PING = IBinder.FIRST_CALL_TRANSACTION       // 1
     const val TX_READ = IBinder.FIRST_CALL_TRANSACTION + 1   // 2
     const val TX_WRITE = IBinder.FIRST_CALL_TRANSACTION + 2  // 3

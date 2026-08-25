@@ -148,6 +148,17 @@
             </intent-filter>
         </receiver>
 
+        <!-- Helper daemon binder delivery on firmwares that refuse addService to the shell
+             domain (#64/#148). Exported by necessity: the sender is the shell uid, not us —
+             HelperBinderHolder authenticates by spawn token + interface descriptor. -->
+        <receiver
+            android:name=".helper.HelperBinderReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.bydmate.app.helper.BINDER" />
+            </intent-filter>
+        </receiver>
+
         <!-- Disable default WorkManager initializer (using Hilt custom config) -->
         <provider
             android:name="androidx.startup.InitializationProvider"

@@ -3,9 +3,11 @@ package com.bydmate.app.data.vehicle
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
+import com.bydmate.app.helper.HelperBinderHolder
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -29,6 +31,10 @@ class HelperBootstrapTest {
     @Before
     fun reset() {
         prefs().edit().clear().apply()
+        // The broadcast holder is a process-wide object; a leftover binder or reject reason
+        // from another test would make the recorded holder state non-deterministic.
+        HelperBinderHolder.clear()
+        HelperBinderHolder.expectedToken = null
     }
 
     /** Records kill/spawn calls; spawn can flip the helper alive via [onSpawn]. processAlive is
@@ -37,6 +43,10 @@ class HelperBootstrapTest {
     private class FakeAdb : AdbOnDeviceClient {
         var killCalls = 0
         var spawnCalls = 0
+        // Tokens spawnHelper was called with, plus the holder's expectedToken as it stood at that
+        // moment — the ordering guarantee the broadcast fallback depends on.
+        val spawnTokens = mutableListOf<String>()
+        val holderTokensAtSpawn = mutableListOf<String?>()
         @Volatile var processAlive = false
         // When false, killHelper() does NOT clear processAlive — simulates a process that
         // refuses to die, so the bail-out guard can be exercised.
@@ -59,7 +69,12 @@ class HelperBootstrapTest {
         override suspend fun isConnected() = connected
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String) = true
-        override suspend fun spawnHelper(): Boolean { spawnCalls++; return onSpawn() }
+        override suspend fun spawnHelper(token: String): Boolean {
+            spawnCalls++
+            spawnTokens += token
+            holderTokensAtSpawn += HelperBinderHolder.expectedToken
+            return onSpawn()
+        }
         override suspend fun killHelper(): Boolean {
             killCalls++
             if (killCalls >= failDispatchFromCall) return false
@@ -342,9 +357,10 @@ class HelperBootstrapTest {
         assertTrue("timestamp must be set", failure!!.ts > 0L)
         assertEquals(HelperBootstrap.SpawnFailReason.DAEMON_SILENT, failure.reason)
         val lines = failure.detail.lines()
-        assertEquals("only the last 10 lines are kept", 10, lines.size)
+        assertEquals("only the last 10 lines are kept, plus the holder state", 11, lines.size)
         assertEquals("line3", lines.first())
-        assertEquals("line12", lines.last())
+        assertEquals("line12", lines[9])
+        assertTrue("holder state is appended last", lines.last().startsWith("holder: "))
     }
 
     @Test
@@ -353,7 +369,10 @@ class HelperBootstrapTest {
         val boot = HelperBootstrap(adb, FakeHelper(alive = false, version = null), ctx())
 
         assertFalse(boot.ensureRunning())
-        assertEquals("(daemon log unavailable)", boot.lastSpawnFailure()?.detail)
+        assertEquals(
+            "(daemon log unavailable)",
+            boot.lastSpawnFailure()?.detail?.lines()?.first(),
+        )
     }
 
     // ── #133: every bail-out records WHY, and names the ADB channel when it is down ──
@@ -424,6 +443,74 @@ class HelperBootstrapTest {
 
         assertTrue(boot.ensureRunning())
         assertEquals(null, boot.lastSpawnFailure())
+    }
+
+    // Broadcast fallback plumbing (H2, #64/#148)
+
+    @Test
+    fun `spawn gets a token and the holder expects it before the daemon can answer`() = runTest {
+        val adb = FakeAdb()
+        val helper = FakeHelper(alive = false)
+        adb.onSpawn = { helper.alive = true; helper.version = baselineVersion(); true }
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        assertTrue(boot.ensureRunning())
+        val token = adb.spawnTokens.single()
+        // Same shape AdbOnDeviceClient.spawnHelper enforces before it reaches a shell line.
+        assertTrue("token must be 32 hex chars, got: $token", token.matches(Regex("^[0-9a-f]{32}$")))
+        // The daemon can broadcast within milliseconds of the spawn: an intent arriving before
+        // the holder knows the token would be rejected as not_expected.
+        assertEquals(token, adb.holderTokensAtSpawn.single())
+    }
+
+    @Test
+    fun `every spawn gets a fresh token`() = runTest {
+        val adb = FakeAdb()
+        val helper = FakeHelper(alive = false)
+        val boot = HelperBootstrap(adb, helper, ctx())
+
+        // Both attempts fail the version poll, so each one goes through the spawn path.
+        boot.ensureRunning()
+        boot.ensureRunning()
+
+        assertEquals(2, adb.spawnTokens.size)
+        assertNotEquals("a replayed token would let a stale intent back in",
+            adb.spawnTokens[0], adb.spawnTokens[1])
+    }
+
+    @Test
+    fun `a spawn that never answers disarms its token`() = runTest {
+        val adb = FakeAdb()
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
+
+        assertFalse(boot.ensureRunning())
+        // The spawn window is closed: a late intent carrying that token must no longer be taken.
+        assertEquals(null, HelperBinderHolder.expectedToken)
+    }
+
+    @Test
+    fun `a spawn that cannot be dispatched disarms its token`() = runTest {
+        val adb = FakeAdb()
+        adb.onSpawn = { false }
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
+
+        assertFalse(boot.ensureRunning())
+        // No daemon was ever launched for this token, so nothing may present it later.
+        assertEquals(null, HelperBinderHolder.expectedToken)
+    }
+
+    @Test
+    fun `a silent daemon records the holder state next to the log tail`() = runTest {
+        val adb = FakeAdb()
+        adb.helperLog = "BOOT uid=2000 pid=1 selinux=u:r:shell:s0 token=set\n" +
+            "ERR: addService java.lang.SecurityException"
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
+
+        assertFalse(boot.ensureRunning())
+        val detail = boot.lastSpawnFailure()!!.detail
+        assertTrue("log tail must survive, got: $detail", detail.contains("ERR: addService"))
+        assertTrue("holder state must be recorded, got: $detail",
+            detail.contains("holder: transport=none lastReject=(none)"))
     }
 
     companion object {
