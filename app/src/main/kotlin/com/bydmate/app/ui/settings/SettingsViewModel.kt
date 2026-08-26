@@ -35,6 +35,7 @@ import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.service.TrackingService
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.util.CrashLog
 import com.bydmate.app.util.appLocalizedContext
@@ -1581,6 +1582,17 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 appendLine("(failed to gather charging catch-up state: ${e.message})")
+            }
+
+            // Live poll snapshot (#64: DiLink 3.0 park/gear triggers cannot be diagnosed
+            // without the raw gear value; nothing else in the dump or the log carries it).
+            appendLine("--- live snapshot ---")
+            val live = TrackingService.lastData.value
+            if (live == null) {
+                appendLine("(no poll yet)")
+            } else {
+                val ageS = (System.currentTimeMillis() - TrackingService.lastDataAtMs) / 1000
+                appendLine("age_s=$ageS gear=${live.gear} speed=${live.speed} powerState=${live.powerState} soc=${live.soc}")
             }
 
             appendLine("--- vehicle data sources ---")
