@@ -69,6 +69,25 @@ fun blindSpotArmed(enabled: Boolean, gear: Int?, speedKmh: Int?, thresholdKmh: I
     enabled && gear != BLIND_SPOT_GEAR_REVERSE && speedKmh != null &&
         speedKmh >= thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH
 
+/** A shown window whose vendor stream has been silent this long is frozen, not idle. */
+const val BLIND_SPOT_STALL_MS = 1_500L
+
+/**
+ * True when a window is shown, has already delivered honest frames, and the vendor stream has
+ * gone silent for [stallMs]. The vendor stack can stop filling the surface mid-drive while the
+ * camera stays open (field 2026-08-25): the TextureView then holds the last buffer, so every
+ * following blinker shows a frozen picture until the pipeline is torn down and reopened.
+ * Only a SHOWN window is evidence — a hidden one is off screen and may legitimately not be
+ * redrawn.
+ */
+fun blindSpotFrameStalled(
+    shown: Boolean,
+    hasValidFrame: Boolean,
+    lastFrameAt: Long,
+    now: Long,
+    stallMs: Long = BLIND_SPOT_STALL_MS,
+): Boolean = shown && hasValidFrame && lastFrameAt > 0L && now - lastFrameAt >= stallMs
+
 /** One decoded fast-loop read; a field is null when the fid answered a sentinel or the read failed. */
 data class BlindSpotSample(val blink: Int?, val speedKmh: Float?, val gear: Int?) {
     /** All three signals present. A missing gear is NOT "not reverse", so a snapshot without

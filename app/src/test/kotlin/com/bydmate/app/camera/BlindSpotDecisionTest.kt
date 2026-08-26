@@ -88,6 +88,38 @@ class BlindSpotArmedTest {
     }
 }
 
+class BlindSpotFrameStallTest {
+
+    private fun stalled(
+        shown: Boolean = true,
+        hasValidFrame: Boolean = true,
+        lastFrameAt: Long = 1_000L,
+        now: Long = 2_500L,
+    ) = blindSpotFrameStalled(shown, hasValidFrame, lastFrameAt, now)
+
+    @Test fun `a shown window silent for the stall window is stalled`() {
+        assertTrue(stalled())
+    }
+
+    @Test fun `a hidden window is never stalled`() {
+        // Off screen it may legitimately stop being redrawn.
+        assertFalse(stalled(shown = false))
+    }
+
+    @Test fun `before the first honest frame the first-frame timeout owns the case`() {
+        assertFalse(stalled(hasValidFrame = false))
+    }
+
+    @Test fun `a window that never delivered an update is not stalled`() {
+        assertFalse(stalled(lastFrameAt = 0L))
+    }
+
+    @Test fun `just under the stall window is still alive`() {
+        assertFalse(stalled(now = 2_499L))
+        assertTrue(stalled(now = 2_500L))
+    }
+}
+
 class BlindSpotTelemetryGateTest {
 
     private val valid = BlindSpotSample(blink = 2, speedKmh = 40f, gear = 4)

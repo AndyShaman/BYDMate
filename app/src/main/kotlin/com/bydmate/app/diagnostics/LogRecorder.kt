@@ -256,7 +256,7 @@ class LogRecorder internal constructor(
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
             // Blindspot wave: observe-mode fid subscriptions + AVM camera probe.
-            "FidSubscription:*", "CameraProbe:*",
+            "FidSubscription:*", "CameraProbe:*", "BlindSpot:*",
             // Split-screen wave: session/watchdog decisions, pill+picker overlay, widget tap.
             "SplitSessionMgr:*", "SplitOverlayCtrl:*", "SplitPillView:*",
             "WidgetController:*"

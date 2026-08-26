@@ -110,6 +110,8 @@ class BlindSpotController @Inject constructor(
     private val pendingDetach = mutableListOf<PreviewWindow>()
 
     private var shownSide = BlindSpotSide.NONE
+    /** elapsedRealtime of the last transition to a shown side; the stall watchdog counts from here. */
+    private var shownAt = 0L
     private var lastRequestedSide = BlindSpotSide.NONE
     private var cameraOpen = false
     private var compositorPowered = false   // last CONFIRMED compositor state
@@ -301,16 +303,36 @@ class BlindSpotController @Inject constructor(
             cameraOpen = true
             cameraOpenedAt = now
             Log.i(TAG, "camera warm on indexes ${surfaces.keys.joinToString()}")
+            clusterJournal.append("camera: open indexes=${surfaces.keys.joinToString()}")
             return
         }
 
         // The first update after open carries a stale buffer, so #2 is the first honest frame.
         val gotFrame = clusterWindow?.hasValidFrame == true || pipWindow?.hasValidFrame == true
-        if (!gotFrame && now - cameraOpenedAt >= FIRST_FRAME_TIMEOUT_MS) failCamera("no frame", now)
+        if (!gotFrame) {
+            if (now - cameraOpenedAt >= FIRST_FRAME_TIMEOUT_MS) failCamera("no frame", now)
+            return
+        }
+
+        // The vendor stream can go quiet while the camera stays open (field 2026-08-25): the
+        // TextureView keeps the last buffer, so every following blinker shows a frozen picture.
+        // Only the shown window proves it — a hidden one is off screen and may not be redrawn.
+        // Measured from the show, not from the last frame: a window parked off screen may have
+        // stopped updating long ago, and the stream needs a moment to catch up once it is shown.
+        val clusterStalled = clusterWindow?.let {
+            blindSpotFrameStalled(
+                shownSide == BlindSpotSide.LEFT, it.hasValidFrame, maxOf(it.lastFrameAt, shownAt), now)
+        } ?: false
+        val pipStalled = pipWindow?.let {
+            blindSpotFrameStalled(
+                shownSide == BlindSpotSide.RIGHT, it.hasValidFrame, maxOf(it.lastFrameAt, shownAt), now)
+        } ?: false
+        if (clusterStalled || pipStalled) failCamera("frame stall", now)
     }
 
     private suspend fun failCamera(reason: String, now: Long) {
         Log.w(TAG, "camera error: $reason; retry in ${RETRY_DELAY_MS / 1000} s")
+        clusterJournal.append("camera: error $reason, retry in ${RETRY_DELAY_MS / 1000} s")
         awaitTeardown(reason)
         retryAt = now + RETRY_DELAY_MS
     }
@@ -485,6 +507,7 @@ class BlindSpotController @Inject constructor(
         }
         val previous = shownSide
         shownSide = side
+        if (side != BlindSpotSide.NONE) shownAt = SystemClock.elapsedRealtime()
         Log.i(TAG, "show $previous -> $side")
         if (side == BlindSpotSide.LEFT) {
             requestCompositor(true)
@@ -579,6 +602,7 @@ class BlindSpotController @Inject constructor(
         try {
             // Camera first: nothing may write into a surface that is about to be released.
             if (cameraOpen) {
+                clusterJournal.append("camera: teardown $reason")
                 withContext(cameraDispatcher()) { probe.close() }
                 cameraOpen = false
             }
@@ -636,6 +660,10 @@ class BlindSpotController @Inject constructor(
         private var glow: View? = null
         private var glowAnimator: ValueAnimator? = null
         private var frames = 0
+
+        /** elapsedRealtime of the last surface update; read from the fast loop, written on Main. */
+        @Volatile var lastFrameAt = 0L
+            private set
 
         private var shownX = 0
         private var hiddenX = 0
@@ -778,6 +806,7 @@ class BlindSpotController @Inject constructor(
             params = null
             wm = null
             frames = 0
+            lastFrameAt = 0L
             shown = false
             Log.i(TAG, "$label window removed")
             return true
@@ -787,6 +816,7 @@ class BlindSpotController @Inject constructor(
             surface?.release()
             surface = Surface(texture)
             frames = 0
+            lastFrameAt = 0L
             applyCrop(width, height)
         }
 
@@ -806,6 +836,7 @@ class BlindSpotController @Inject constructor(
 
         override fun onSurfaceTextureUpdated(texture: SurfaceTexture) {
             if (frames < 2) frames++
+            lastFrameAt = SystemClock.elapsedRealtime()
         }
 
         /** Centered crop of the side buffer to the window's own aspect, scaled to fill it —
