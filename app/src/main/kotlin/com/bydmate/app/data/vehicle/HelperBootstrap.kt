@@ -142,7 +142,14 @@ class HelperBootstrap @Inject constructor(
             // daemonVersion() == want confirms both liveness and that the fresh daemon carries
             // the right handlers. A spawn that answers a wrong version is treated as failure.
             if (helper.daemonVersion() == want) {
-                prefs.edit().putLong(KEY_SPAWNED_VERSION, want).apply()
+                // A successful spawn clears the last failure, or the diagnostic dump keeps
+                // showing a stale `last_spawn_failure` next to a healthy daemon.
+                prefs.edit()
+                    .putLong(KEY_SPAWNED_VERSION, want)
+                    .remove(KEY_LAST_FAIL_TS)
+                    .remove(KEY_LAST_FAIL_REASON)
+                    .remove(KEY_LAST_FAIL_LOG)
+                    .apply()
                 // The daemon answered — via ServiceManager or via an already-accepted broadcast
                 // (which disarms the token itself). Either way nothing else may claim this
                 // spawn's token any more; leaving it armed would let a later forged intent be
