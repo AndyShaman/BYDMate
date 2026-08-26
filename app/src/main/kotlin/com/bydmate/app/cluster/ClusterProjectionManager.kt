@@ -288,6 +288,12 @@ object ClusterProjectionManager {
     fun isProjectionActive(): Boolean =
         overlayView != null || directDisplayId != -1 || projectionAttemptInProgress
 
+    /** True while this app's projection holds the cluster compositor (write-ahead marker set at
+     *  power-up, cleared on a confirmed power-down). False with auto-container off. */
+    fun ownsCompositor(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_COMPOSITOR_POWERED, false)
+
     /**
      * Drive the projection to [mode], serialized under [mutex]. Idempotent — a no-op when already
      * in [mode]. Auto-launch is delegated to the daemon's [launchAndForce] (it [launchApp]s Navi

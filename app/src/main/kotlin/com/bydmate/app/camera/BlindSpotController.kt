@@ -26,6 +26,7 @@ import com.bydmate.app.cluster.ClusterGeometry
 import com.bydmate.app.cluster.ClusterJournal
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.cluster.shouldSkipCameraPowerDown
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.geometryFor
 import com.bydmate.app.data.remote.DiParsData
@@ -545,7 +546,10 @@ class BlindSpotController @Inject constructor(
         // Journal into the cluster ring, not a camera one: #135 is about what the cluster shows
         // after a blind-spot alert, and the compositor switches of both owners have to be
         // readable on one timeline.
-        if (!on && ClusterProjectionManager.isProjectionActive()) {
+        if (!on && shouldSkipCameraPowerDown(
+                ClusterProjectionManager.isProjectionActive(),
+                ClusterProjectionManager.ownsCompositor(context))
+        ) {
             // The camera stops needing the cluster right here even though the compositor stays
             // powered for the projection; the frame's own owner set decides whether that writes
             // anything back to the car.

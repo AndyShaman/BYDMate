@@ -152,6 +152,23 @@ class ClusterProjectionStateTest {
         assertEquals(false, shouldRecoverCompositor(markerSet = true, mode = ClusterMode.OFF, autoContainer = false))
     }
 
+    // --- shouldSkipCameraPowerDown (camera hands the compositor back unless projection holds it) ---
+    @Test
+    fun `camera keeps compositor up only for a projection that powered it`() {
+        assertEquals(true, shouldSkipCameraPowerDown(projectionActive = true, projectionOwnsCompositor = true))
+    }
+
+    @Test
+    fun `camera powers down under a projection running with auto-container off`() {
+        assertEquals(false, shouldSkipCameraPowerDown(projectionActive = true, projectionOwnsCompositor = false))
+    }
+
+    @Test
+    fun `camera powers down when no projection is live regardless of a stale marker`() {
+        assertEquals(false, shouldSkipCameraPowerDown(projectionActive = false, projectionOwnsCompositor = true))
+        assertEquals(false, shouldSkipCameraPowerDown(projectionActive = false, projectionOwnsCompositor = false))
+    }
+
     // --- shouldPowerDownCompositor (#85/#62: no ИПЦ write on cars we never powered up) ---
 
     @Test fun `power-down is owed only when our write-ahead marker is set`() {

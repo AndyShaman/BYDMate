@@ -128,6 +128,16 @@ fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer
  */
 fun shouldPowerDownCompositor(markerSet: Boolean): Boolean = markerSet
 
+/**
+ * The blind-spot camera powers the compositor up for its own window and must hand it back on
+ * hide UNLESS a live projection is the one holding it (the marker above). A projection that runs
+ * with auto-container off never powered the compositor and does not need it: leaving the camera's
+ * power-up behind switches the cluster away from its native ADAS view until the driver restarts
+ * the projection (field 2026-08-25, DiLink 5.0 with the navigator in a side window).
+ */
+fun shouldSkipCameraPowerDown(projectionActive: Boolean, projectionOwnsCompositor: Boolean): Boolean =
+    projectionActive && projectionOwnsCompositor
+
 /** Direct-task crash recovery fires only when a marker survives AND no projection is live. */
 fun shouldRecoverDirectTask(markerDisplayId: Int, mode: ClusterMode): Boolean =
     markerDisplayId != -1 && mode == ClusterMode.OFF
