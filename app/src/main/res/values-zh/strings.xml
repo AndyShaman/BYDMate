@@ -676,7 +676,7 @@
     <string name="update_downloading_paused">已暂停...</string>
     <string name="update_download_error">下载错误（代码 %1$d）</string>
     <string name="update_download_notification_description">BYDMate 更新</string>
-    <string name="update_downloading_start">下载中：0%%</string>
+    <string name="update_downloading_start" formatted="false">下载中：0%</string>
 
     <!-- Charges: day group labels -->
     <string name="charges_day_today">今天（%1$s）</string>

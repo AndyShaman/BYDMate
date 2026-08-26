@@ -608,7 +608,7 @@
     <string name="update_downloading_paused">Paused...</string>
     <string name="update_download_error">Download error (code %1$d)</string>
     <string name="update_download_notification_description">BYDMate update</string>
-    <string name="update_downloading_start">Downloading: 0%%</string>
+    <string name="update_downloading_start" formatted="false">Downloading: 0%</string>
     <string name="charges_day_today">today (%1$s)</string>
     <string name="charges_day_yesterday">yesterday</string>
 

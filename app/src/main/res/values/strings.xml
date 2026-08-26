@@ -758,7 +758,7 @@
     <string name="update_download_error">Ошибка скачивания (код %1$d)</string>
     <string name="update_download_notification_description">Обновление BYDMate</string>
     <!-- Initial 0% progress string -->
-    <string name="update_downloading_start">Скачивание: 0%%</string>
+    <string name="update_downloading_start" formatted="false">Скачивание: 0%</string>
 
     <!-- Charges: day group labels -->
     <!-- %1$s = day-of-week abbreviation -->
