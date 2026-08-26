@@ -759,19 +759,21 @@ private fun TriggerRow(
         Text("${index + 1}", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted,
             modifier = Modifier.width(16.dp))
 
-        when (trigger.kind) {
-            "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
-            "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
-            "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
-            "service_start" -> ServiceStartTriggerControls()
-            "network_available" -> NetworkAvailableTriggerControls()
-            "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
-            "steering_key" -> SteeringKeyTriggerControls(trigger, onUpdate)
-            "voice" -> VoiceTriggerControls(trigger, onUpdate)
-            else -> ParamTriggerControls(trigger, onUpdate)
+        // Bounded like ActionRow: wide controls (parameter + operator + value + unit) used to push
+        // the arrows and the delete button past the card edge (#165).
+        Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
+            when (trigger.kind) {
+                "place_enter", "place_exit" -> PlaceTriggerControls(trigger, places, onUpdate)
+                "time_of_day" -> TimeOfDayTriggerControls(trigger, onUpdate)
+                "time_range" -> ScheduleTriggerControls(trigger, onUpdate)
+                "service_start" -> ServiceStartTriggerControls()
+                "network_available" -> NetworkAvailableTriggerControls()
+                "button_press" -> ButtonPressTriggerControls(trigger, onUpdate)
+                "steering_key" -> SteeringKeyTriggerControls(trigger, onUpdate)
+                "voice" -> VoiceTriggerControls(trigger, onUpdate)
+                else -> ParamTriggerControls(trigger, onUpdate)
+            }
         }
-
-        Spacer(Modifier.weight(1f))
 
         ReorderArrows(onMoveUp = onMoveUp, onMoveDown = onMoveDown)
         IconButton(onClick = onDelete, modifier = Modifier.size(24.dp)) {
