@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.13.1] - 2026-08-26
+
 ### Исправления
 - DiLink 3.0 (Yuan Plus, Song PRO и другие машины на Android 10): команды в машину снова работают. Прошивка запрещает служебному процессу регистрироваться в системе, теперь он передаёт канал приложению напрямую; заодно ушёл цикл перезапусков, из-за которого виджет стартовал по 20-30 секунд (#64, #148)
 - В дампе диагностики после успешного запуска служебного процесса больше не висит старая запись об ошибке запуска
@@ -955,7 +957,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.13...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.13.1...HEAD
+[3.13.1]: https://github.com/AndyShaman/BYDMate/compare/v3.13...v3.13.1
 [3.13]: https://github.com/AndyShaman/BYDMate/compare/v3.12.1...v3.13
 [3.12.1]: https://github.com/AndyShaman/BYDMate/compare/v3.12...v3.12.1
 [3.12]: https://github.com/AndyShaman/BYDMate/compare/v3.11.9...v3.12
