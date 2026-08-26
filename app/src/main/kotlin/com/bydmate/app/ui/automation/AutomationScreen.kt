@@ -620,10 +620,18 @@ private fun EditorDialog(
 
                     // Cooldown
                     SettingRow(stringResource(R.string.automation_setting_cooldown)) {
+                        // The field owns its text: binding it to cooldownSeconds.toString() made an
+                        // empty field unrepresentable, so Backspace on the last digit was reverted
+                        // and the caret jumped to the start (#163). Empty commits as 0.
+                        var cooldownText by remember(editing.id) {
+                            mutableStateOf(editing.cooldownSeconds.toString())
+                        }
                         OutlinedTextField(
-                            value = editing.cooldownSeconds.toString(),
+                            value = cooldownText,
                             onValueChange = { v ->
-                                v.toIntOrNull()?.let { sec -> onUpdate { copy(cooldownSeconds = sec) } }
+                                val digits = v.filter { it.isDigit() }
+                                cooldownText = digits
+                                onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
                             },
                             modifier = Modifier.width(70.dp),
                             colors = OutlinedTextFieldDefaults.colors(
