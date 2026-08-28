@@ -102,6 +102,7 @@ object WidgetController {
     private lateinit var prefsAlphaFlow: kotlinx.coroutines.flow.Flow<Float>
     private lateinit var prefsScaleFlow: kotlinx.coroutines.flow.Flow<Float>
     private lateinit var prefsHideOnYoutubeFlow: kotlinx.coroutines.flow.Flow<Boolean>
+    private lateinit var prefsHideInAppsFlow: kotlinx.coroutines.flow.Flow<Set<String>>
 
     // Compose state for the widget data
     private var socState = mutableStateOf<Int?>(null)
@@ -152,6 +153,7 @@ object WidgetController {
         prefsAlphaFlow = prefs.alphaFlow()
         prefsScaleFlow = prefs.scaleFlow()
         prefsHideOnYoutubeFlow = prefs.hideOnYoutubeFlow()
+        prefsHideInAppsFlow = prefs.hideInAppsFlow()
         val metrics = viewCtx.resources.displayMetrics
 
         val initialScale = prefs.getScale()
@@ -331,12 +333,14 @@ object WidgetController {
         val scope = CoroutineScope(Dispatchers.Main)
         dataScope = scope
         // Camera surface always hides the widget; YouTube hides it only when the user
-        // opted in through the Settings toggle.
+        // opted in through the Settings toggle, and so does any app in the user-picked list.
         val hideFlow = combine(
             TrackingService.cameraActive,
             TrackingService.youtubeForeground,
             prefsHideOnYoutubeFlow,
-        ) { cam, yt, hideYt -> shouldHideOverlay(cam, yt, hideYt) }
+            TrackingService.foregroundPackage,
+            prefsHideInAppsFlow,
+        ) { cam, yt, hideYt, fgPkg, hideApps -> shouldHideOverlay(cam, yt, hideYt, fgPkg, hideApps) }
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
         // alpha + scale + hideOverlay into one UiBundle so we stay under the limit.
         val uiFlow = combine(
@@ -676,9 +680,20 @@ object WidgetController {
     private fun dpFromMetrics(metrics: DisplayMetrics, dp: Int): Int =
         (dp * metrics.density).toInt()
 
-    /** Pure visibility decision, unit-tested: camera always hides, YouTube only by opt-in. */
-    fun shouldHideOverlay(cameraActive: Boolean, youtubeForeground: Boolean, hideOnYoutube: Boolean): Boolean =
-        cameraActive || (youtubeForeground && hideOnYoutube)
+    /**
+     * Pure visibility decision, unit-tested: camera always hides, YouTube only by opt-in,
+     * plus any package the user put on the "hide in these apps" list.
+     */
+    fun shouldHideOverlay(
+        cameraActive: Boolean,
+        youtubeForeground: Boolean,
+        hideOnYoutube: Boolean,
+        foregroundPkg: String?,
+        hideInApps: Set<String>,
+    ): Boolean =
+        cameraActive ||
+            (youtubeForeground && hideOnYoutube) ||
+            (foregroundPkg != null && foregroundPkg in hideInApps)
 
     /**
      * Split-mode left tap, as an inverse toggle: no session → restore the last pair

@@ -170,6 +170,10 @@
     <string name="settings_widget_hints">• Доўгі тап па віджэце - схаваць да наступнага адкрыцця BYDMate.\n• Перацягнуць у сметніцу ўнізе - выключыць зусім.\n• Звычайны тап - адкрыць BYDMate.</string>
     <string name="settings_widget_hide_youtube_label">Хаваць пры YouTube</string>
     <string name="settings_widget_hide_youtube_description">Панэль кнопак хаваецца, пакуль YouTube на экране</string>
+    <string name="settings_widget_hide_apps_label">Хаваць у праграмах</string>
+    <string name="settings_widget_hide_apps_description">Панэль кнопак хаваецца, пакуль выбраная праграма на экране</string>
+    <string name="settings_widget_hide_apps_none">Не выбрана</string>
+    <string name="settings_widget_hide_apps_count">Выбрана: %1$d</string>
     <string name="settings_widget_reset_position_button">Скінуць пазіцыю</string>
     <string name="settings_reset_seat_channel">Скінуць канал сядзенняў</string>
     <string name="settings_reset_seat_channel_hint">Калі падагрэў ці вентыляцыя сядзенняў не спрацоўваюць пасля змены машыны</string>

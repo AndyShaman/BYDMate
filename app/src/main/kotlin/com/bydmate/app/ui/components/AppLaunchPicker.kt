@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -157,6 +158,116 @@ fun AppLaunchPickerDialog(
         },
         confirmButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(R.string.applauncher_close_button), color = TextSecondary) }
+        },
+    )
+}
+
+/**
+ * Multi-select sibling of [AppLaunchPickerDialog] — same installed-app list, but with a
+ * checkbox per row and an explicit confirm. Selection is only committed through [onConfirm],
+ * so Cancel leaves the stored set untouched.
+ */
+@Composable
+fun MultiAppPickerDialog(
+    title: String,
+    selectedPackages: Set<String>,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<String>) -> Unit,
+) {
+    val context = LocalContext.current
+    val apps = remember { queryLaunchableApps(context) }
+    var search by remember { mutableStateOf("") }
+    val selection = remember { mutableStateListOf<String>().apply { addAll(selectedPackages) } }
+
+    val filtered = remember(search, apps) {
+        val q = search.trim().lowercase()
+        if (q.isEmpty()) apps
+        else apps.filter { it.label.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
+    }
+
+    val fieldColors = OutlinedTextFieldDefaults.colors(
+        focusedTextColor = TextPrimary,
+        unfocusedTextColor = TextPrimary,
+        focusedBorderColor = AccentGreen,
+        unfocusedBorderColor = CardBorder,
+        focusedLabelColor = AccentGreen,
+        unfocusedLabelColor = TextSecondary,
+        cursorColor = AccentGreen,
+    )
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurface,
+        title = { Text(title, color = TextPrimary, fontSize = 16.sp) },
+        text = {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    label = { Text(stringResource(R.string.applauncher_search_label)) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(8.dp),
+                    colors = fieldColors,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(8.dp))
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(320.dp),
+                ) {
+                    items(filtered, key = { it.packageName }) { app ->
+                        val checked = app.packageName in selection
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    if (checked) selection.remove(app.packageName)
+                                    else selection.add(app.packageName)
+                                }
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = checked,
+                                onCheckedChange = {
+                                    if (it) selection.add(app.packageName)
+                                    else selection.remove(app.packageName)
+                                },
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = AccentGreen,
+                                    uncheckedColor = CardBorder,
+                                    checkmarkColor = TextPrimary,
+                                ),
+                            )
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(app.label, fontSize = 14.sp, color = TextPrimary, maxLines = 1)
+                                Text(app.packageName, fontSize = 11.sp, color = TextMuted, maxLines = 1)
+                            }
+                        }
+                    }
+                    if (filtered.isEmpty()) {
+                        item {
+                            Text(
+                                stringResource(R.string.applauncher_empty),
+                                color = TextMuted,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(8.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selection.toSet()) }) {
+                Text(stringResource(R.string.settings_datasource_done), color = AccentGreen)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
+            }
         },
     )
 }

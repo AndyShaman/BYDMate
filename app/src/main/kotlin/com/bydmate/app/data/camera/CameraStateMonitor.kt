@@ -39,6 +39,10 @@ class CameraStateMonitor @Inject constructor(
     private val _youtubeForeground = MutableStateFlow(false)
     val youtubeForeground: StateFlow<Boolean> = _youtubeForeground.asStateFlow()
 
+    /** Raw foreground package, for the user-configurable "hide in these apps" list. */
+    private val _foregroundPackage = MutableStateFlow<String?>(null)
+    val foregroundPackage: StateFlow<String?> = _foregroundPackage.asStateFlow()
+
     private var scope: CoroutineScope? = null
     private var job: Job? = null
 
@@ -66,6 +70,7 @@ class CameraStateMonitor @Inject constructor(
                 ensureActive()
                 _active.value = lastForegroundPkg == CAMERA_PACKAGE
                 _youtubeForeground.value = isYoutubePackage(lastForegroundPkg)
+                _foregroundPackage.value = lastForegroundPkg
                 delay(POLL_INTERVAL_MS)
             }
         }
@@ -78,6 +83,7 @@ class CameraStateMonitor @Inject constructor(
         scope = null
         _active.value = false
         _youtubeForeground.value = false
+        _foregroundPackage.value = null
         lastForegroundPkg = null
         lastEventTs = 0L
     }

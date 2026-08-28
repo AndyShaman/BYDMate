@@ -385,6 +385,10 @@ class TrackingService : Service(), LocationListener {
         private val _youtubeForeground = MutableStateFlow(false)
         val youtubeForeground: StateFlow<Boolean> = _youtubeForeground
 
+        /** Raw foreground package — widget hides itself in the user-picked apps. */
+        private val _foregroundPackage = MutableStateFlow<String?>(null)
+        val foregroundPackage: StateFlow<String?> = _foregroundPackage
+
         // Live reference to the running service so the floating widget can reach
         // the singleton AutomationEngine without binding. Mirrors how widget data
         // flows out through this companion. Set in onCreate, cleared in onDestroy.
@@ -1077,6 +1081,7 @@ class TrackingService : Service(), LocationListener {
         cameraStateMonitor.stop()
         _cameraActive.value = false
         _youtubeForeground.value = false
+        _foregroundPackage.value = null
         networkAvailableMonitor.stop()
         try {
             unregisterReceiver(screenWakeReceiver)
@@ -1433,6 +1438,9 @@ class TrackingService : Service(), LocationListener {
         }
         serviceScope.launch {
             cameraStateMonitor.youtubeForeground.collect { _youtubeForeground.value = it }
+        }
+        serviceScope.launch {
+            cameraStateMonitor.foregroundPackage.collect { _foregroundPackage.value = it }
         }
     }
 

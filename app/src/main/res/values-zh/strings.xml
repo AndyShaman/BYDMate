@@ -138,6 +138,10 @@
     <string name="settings_widget_hints">• 长按小组件 - 隐藏至下次打开 BYDMate。\n• 拖到底部垃圾桶 - 完全关闭。\n• 普通点击 - 打开 BYDMate。</string>
     <string name="settings_widget_hide_youtube_label">YouTube 时隐藏</string>
     <string name="settings_widget_hide_youtube_description">YouTube 在屏幕上时按钮面板自动隐藏</string>
+    <string name="settings_widget_hide_apps_label">在应用中隐藏</string>
+    <string name="settings_widget_hide_apps_description">所选应用在屏幕上时按钮面板自动隐藏</string>
+    <string name="settings_widget_hide_apps_none">未选择</string>
+    <string name="settings_widget_hide_apps_count">已选择：%1$d</string>
     <string name="settings_widget_reset_position_button">重置位置</string>
     <string name="settings_reset_seat_channel">重置座椅通道</string>
     <string name="settings_reset_seat_channel_hint">更换车辆后座椅加热或通风失效时使用</string>

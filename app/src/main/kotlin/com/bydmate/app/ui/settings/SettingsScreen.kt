@@ -119,6 +119,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
+import com.bydmate.app.ui.components.MultiAppPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
 import android.Manifest
@@ -808,7 +809,10 @@ private fun WidgetSection() {
     )
     val hideOnYoutube by prefs.hideOnYoutubeFlow()
         .collectAsStateWithLifecycle(initialValue = prefs.isHideOnYoutube())
+    val hideInApps by prefs.hideInAppsFlow()
+        .collectAsStateWithLifecycle(initialValue = prefs.getHideInApps())
     var showLeftTapPicker by remember { mutableStateOf(false) }
+    var showHideInAppsPicker by remember { mutableStateOf(false) }
 
     SectionHeader(text = stringResource(R.string.settings_widget_section_header))
     Card(
@@ -848,6 +852,16 @@ private fun WidgetSection() {
                 description = stringResource(R.string.settings_widget_hide_youtube_description),
                 checked = hideOnYoutube,
                 onCheckedChange = { prefs.setHideOnYoutube(it) },
+            )
+            SettingValueRow(
+                title = stringResource(R.string.settings_widget_hide_apps_label),
+                description = stringResource(R.string.settings_widget_hide_apps_description),
+                value = if (hideInApps.isEmpty()) {
+                    stringResource(R.string.settings_widget_hide_apps_none)
+                } else {
+                    stringResource(R.string.settings_widget_hide_apps_count, hideInApps.size)
+                },
+                onClick = { showHideInAppsPicker = true },
             )
             SettingSliderRow(
                 title = stringResource(R.string.settings_widget_opacity_label),
@@ -946,6 +960,18 @@ private fun WidgetSection() {
                 showLeftTapPicker = false
             },
             showMinimizeToggle = false,
+        )
+    }
+
+    if (showHideInAppsPicker) {
+        MultiAppPickerDialog(
+            title = stringResource(R.string.settings_widget_hide_apps_label),
+            selectedPackages = hideInApps,
+            onDismiss = { showHideInAppsPicker = false },
+            onConfirm = { picked ->
+                prefs.setHideInApps(picked)
+                showHideInAppsPicker = false
+            },
         )
     }
 }

@@ -190,6 +190,27 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    /**
+     * Packages the widget hides itself over, chosen by the user in Settings.
+     * SharedPreferences hands out its own live Set instance — copy on read and
+     * on write so callers can never mutate the stored value.
+     */
+    fun getHideInApps(): Set<String> =
+        prefs.getStringSet(KEY_HIDE_IN_APPS, null)?.toSet() ?: emptySet()
+
+    fun setHideInApps(packages: Set<String>) {
+        prefs.edit().putStringSet(KEY_HIDE_IN_APPS, packages.toSet()).apply()
+    }
+
+    fun hideInAppsFlow(): Flow<Set<String>> = callbackFlow {
+        val listener = SharedPreferences.OnSharedPreferenceChangeListener { _, changedKey ->
+            if (changedKey == KEY_HIDE_IN_APPS) trySend(getHideInApps())
+        }
+        trySend(getHideInApps())
+        prefs.registerOnSharedPreferenceChangeListener(listener)
+        awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
+
     private fun migrateLegacyLeftTapKey() {
         if (!prefs.contains(LEGACY_KEY_LEFT_TAP_NAVIGATOR)) return
         val editor = prefs.edit().remove(LEGACY_KEY_LEFT_TAP_NAVIGATOR)
@@ -218,6 +239,7 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_LEFT_TAP_MODE = "widget_left_tap_mode"
         const val KEY_BUTTONS_ENABLED = "widget_buttons_enabled"
         const val KEY_HIDE_ON_YOUTUBE = "widget_hide_on_youtube"
+        const val KEY_HIDE_IN_APPS = "widget_hide_in_apps"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
         const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
         const val SCALE_MIN = 0.7f

@@ -170,6 +170,10 @@
     <string name="settings_widget_hints">• Długie dotknięcie widżetu - ukryj do następnego otwarcia BYDMate.\n• Przeciągnij do kosza na dole - wyłącz całkiem.\n• Zwykłe dotknięcie - otwórz BYDMate.</string>
     <string name="settings_widget_hide_youtube_label">Ukrywaj przy YouTube</string>
     <string name="settings_widget_hide_youtube_description">Panel przycisków chowa się, dopóki YouTube jest na ekranie</string>
+    <string name="settings_widget_hide_apps_label">Ukrywaj w aplikacjach</string>
+    <string name="settings_widget_hide_apps_description">Panel przycisków chowa się, dopóki wybrana aplikacja jest na ekranie</string>
+    <string name="settings_widget_hide_apps_none">Nie wybrano</string>
+    <string name="settings_widget_hide_apps_count">Wybrano: %1$d</string>
     <string name="settings_widget_reset_position_button">Zresetuj pozycję</string>
     <string name="settings_reset_seat_channel">Zresetuj kanał foteli</string>
     <string name="settings_reset_seat_channel_hint">Jeśli podgrzewanie lub wentylacja foteli nie działa po zmianie auta</string>

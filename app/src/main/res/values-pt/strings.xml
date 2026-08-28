@@ -154,6 +154,10 @@
     <string name="settings_widget_hints">- Toque longo no widget - oculta até o BYDMate ser aberto na próxima vez.\n- Arraste para a lixeira na parte inferior - desliga completamente.\n- Toque normal - abre o BYDMate.</string>
     <string name="settings_widget_hide_youtube_label">Ocultar sobre o YouTube</string>
     <string name="settings_widget_hide_youtube_description">O painel de botões fica oculto enquanto o YouTube está na tela</string>
+    <string name="settings_widget_hide_apps_label">Ocultar em aplicativos</string>
+    <string name="settings_widget_hide_apps_description">O painel de botões fica oculto enquanto o app escolhido está na tela</string>
+    <string name="settings_widget_hide_apps_none">Não selecionado</string>
+    <string name="settings_widget_hide_apps_count">Selecionados: %1$d</string>
     <string name="settings_widget_reset_position_button">Redefinir posição</string>
     <string name="settings_reset_seat_channel">Redefinir canal dos bancos</string>
     <string name="settings_reset_seat_channel_hint">Se o aquecimento ou a ventilação dos bancos parar após trocar de carro</string>

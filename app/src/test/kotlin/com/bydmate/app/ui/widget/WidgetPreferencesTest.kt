@@ -193,6 +193,35 @@ class WidgetPreferencesTest {
         assertEquals(LeftTapMode.APP, fresh.getLeftTapMode())
     }
 
+    // --- hide-in-apps tests ---
+
+    @Test fun `hideInApps defaults to empty`() {
+        assertTrue(prefs.getHideInApps().isEmpty())
+    }
+
+    @Test fun `setHideInApps round-trips the package set`() {
+        prefs.setHideInApps(setOf("com.android.chrome", "anddea.youtube"))
+        assertEquals(setOf("com.android.chrome", "anddea.youtube"), prefs.getHideInApps())
+    }
+
+    @Test fun `setHideInApps empty clears the selection`() {
+        prefs.setHideInApps(setOf("com.android.chrome"))
+        prefs.setHideInApps(emptySet())
+        assertTrue(prefs.getHideInApps().isEmpty())
+    }
+
+    @Test fun `setHideInApps copies so later caller mutation does not leak in`() {
+        val picked = mutableSetOf("com.android.chrome")
+        prefs.setHideInApps(picked)
+        picked.add("ru.yandex.yandexnavi")
+        assertEquals(setOf("com.android.chrome"), prefs.getHideInApps())
+    }
+
+    @Test fun `getHideInApps does not hand out the stored instance`() {
+        prefs.setHideInApps(setOf("com.android.chrome"))
+        assertFalse(prefs.getHideInApps() === store[WidgetPreferences.KEY_HIDE_IN_APPS])
+    }
+
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---
     private fun fakeSharedPrefs(backing: MutableMap<String, Any?>): SharedPreferences {
         return object : SharedPreferences {
