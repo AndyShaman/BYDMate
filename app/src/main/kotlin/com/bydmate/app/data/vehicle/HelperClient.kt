@@ -217,6 +217,14 @@ interface HelperClient {
     /** Powers the cluster compositor on/off via auto_container (Wave P). True on daemon status 0. */
     suspend fun setClusterContainerMode(on: Boolean): Boolean
 
+    /**
+     * Detaches our layer from the cluster compositor (auto_container 18) WITHOUT cutting its power:
+     * the follow-up 0 of [setClusterContainerMode]`(false)` is what tears a running projection's
+     * window down as well. Used when the blind-spot camera leaves a cluster the projection still
+     * lives on. True on daemon status 0; false on an old daemon that reads the payload as "on".
+     */
+    suspend fun detachClusterContainer(): Boolean
+
     /** Enable or disable the Wi-Fi hotspot (TETHERING_WIFI) via the daemon (shell uid holds
      *  TETHER_PRIVILEGED). True on daemon status 0. Needs on-car validation. */
     suspend fun setHotspot(enable: Boolean): Boolean
@@ -517,7 +525,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         }
 
     override suspend fun setClusterContainerMode(on: Boolean): Boolean =
-        statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }
+        statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) {
+            it.writeInt(
+                if (on) HelperBinderProtocol.CLUSTER_MODE_ON else HelperBinderProtocol.CLUSTER_MODE_OFF
+            )
+        }
+
+    override suspend fun detachClusterContainer(): Boolean =
+        statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) {
+            it.writeInt(HelperBinderProtocol.CLUSTER_MODE_DETACH_ONLY)
+        }
 
     override suspend fun setHotspot(enable: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_HOTSPOT) { it.writeInt(if (enable) 1 else 0) }

@@ -36,7 +36,9 @@ import android.os.IBinder
  *   TX_SET_APP_HIDDEN : writeString(packageName), writeInt(hidden: 1=disable 0=enable)
  *       -> reply: writeInt(status), writeInt(0)   // status 0 = ok; -1 = not whitelisted / failed
  *   TX_ENABLE_NOTIFICATION_LISTENER : (no args)           -> reply: writeInt(status), writeInt(0)  // status 0 = our listener stub enabled
- *   TX_SET_CLUSTER_MODE: [int on(0|1)] -> [int status]; status 0 = ok.
+ *   TX_SET_CLUSTER_MODE: [int mode(0|1|2)] -> [int status]; status 0 = ok.
+ *       1 = power up (16), 0 = power down (18, pause, 0), 2 = detach only (18 alone).
+ *       An old daemon reads any mode != 0 as "on" — the app gates 2 on the daemon version.
  *   TX_GET_TASK_STATE : writeString(packageName)
  *       -> reply: writeInt(status), then on status 0:
  *          writeInt(taskId)   // -1 = no running task
@@ -109,8 +111,14 @@ object HelperBinderProtocol {
     const val TX_PUT_GLOBAL_SETTING = IBinder.FIRST_CALL_TRANSACTION + 16       // 17
     const val TX_SET_APP_HIDDEN = IBinder.FIRST_CALL_TRANSACTION + 17           // 18
     const val TX_ENABLE_NOTIFICATION_LISTENER = IBinder.FIRST_CALL_TRANSACTION + 18  // 19
-    /** Cluster compositor power via the auto_container service (Wave P). [int on] -> [int status]. */
+    /** Cluster compositor power via the auto_container service (Wave P). [int mode] -> [int status].
+     *  mode 0 = power down, 1 = power up, 2 = detach only (see the parcel layout above). */
     val TX_SET_CLUSTER_MODE = IBinder.FIRST_CALL_TRANSACTION + 19
+
+    /** [TX_SET_CLUSTER_MODE] payload values. */
+    const val CLUSTER_MODE_OFF = 0
+    const val CLUSTER_MODE_ON = 1
+    const val CLUSTER_MODE_DETACH_ONLY = 2
 
     /**
      * Batched autoservice read. Request: int count, then count × (int tx, int dev, int fid).

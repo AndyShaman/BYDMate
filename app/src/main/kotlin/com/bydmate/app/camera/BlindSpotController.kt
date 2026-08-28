@@ -533,7 +533,8 @@ class BlindSpotController @Inject constructor(
      * The cluster only shows our window while its compositor is powered (on-car 2026-07-31).
      * The projection check happens HERE, immediately before the call: a navigation projection
      * that started while this was queued owns the compositor, and powering it down would black
-     * out the cluster under it.
+     * out the cluster under it. When the projection did NOT power the compositor itself
+     * (auto-container off) the camera detaches instead of skipping, so ADAS comes back.
      *
      * The two directions are deliberately asymmetric. Powering UP first and framing after keeps
      * the frame off a cluster that has nothing of ours on it. On the way DOWN the frame is
@@ -550,6 +551,18 @@ class BlindSpotController @Inject constructor(
             // powered for the projection; the frame's own owner set decides whether that writes
             // anything back to the car.
             holdClusterFrame(false)
+            if (!ClusterProjectionManager.ownsCompositor(context)) {
+                // Auto-container off: the projection found the compositor already powered (the user
+                // powers it by hand), so the power is not its to lose. Detaching alone (18, no 0)
+                // hands the cluster back to ADAS without the power cut that would take the
+                // projection's own window down with it. State follows the confirmed result, like
+                // the power-down below: a failed detach retries on the next transition.
+                val ok = runCatching { helper.detachClusterContainer() }.getOrDefault(false)
+                if (ok) compositorPowered = false else compositorTarget = compositorPowered
+                Log.i(TAG, "compositor detach-only ok=$ok")
+                clusterJournal.append("camera: compositor detach-only ok=$ok")
+                return
+            }
             Log.i(TAG, "compositor stays up: projection active")
             clusterJournal.append("camera: compositor power-down skipped (projection active)")
             compositorPowered = false

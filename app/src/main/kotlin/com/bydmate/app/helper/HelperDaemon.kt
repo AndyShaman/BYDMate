@@ -420,18 +420,7 @@ fun main(args: Array<String>) {
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
                 HelperBinderProtocol.TX_SET_CLUSTER_MODE -> {
-                    val on = data.readInt() != 0
-                    // Cluster compositor power (validated on Leopard 3, 2026-07-06): cmd 16 turns the
-                    // compositor on; 18 then, after a beat, 0 turns it off. The whole off-sequence runs
-                    // inside this one transaction so the client never has to sequence or sleep. The
-                    // whitelist below is the ONLY set of auto_container commands this daemon will issue.
-                    val ok = if (on) {
-                        autoContainerCall(16)
-                    } else {
-                        val detached = autoContainerCall(18)
-                        Thread.sleep(1000L)
-                        autoContainerCall(0) && detached
-                    }
+                    val ok = clusterModeCore(data.readInt(), ::autoContainerCall) { Thread.sleep(it) }
                     reply?.writeInt(if (ok) 0 else -1)
                     reply?.writeInt(0)
                     true
@@ -1400,6 +1389,26 @@ internal fun shExecMerged(script: String, vararg args: String): String {
  *  by tests — reverting any site back to shExec would break [ShExecMergedTest.amShell]. */
 internal val amShell: (String, List<String>) -> String =
     { script, args -> shExecMerged(script, *args.toTypedArray()) }
+
+/**
+ * Testable core of TX_SET_CLUSTER_MODE. Cluster compositor power (validated on Leopard 3,
+ * 2026-07-06): cmd 16 turns the compositor on; 18 then, after a beat, 0 turns it off. The whole
+ * off-sequence runs inside this one transaction so the client never has to sequence or sleep.
+ * Mode 2 sends 18 alone: it detaches our layer without cutting the compositor's power, which is
+ * what a car keeps a navigation projection alive on while the blind-spot camera leaves the cluster.
+ * [call] is the auto_container verb (whitelist {16, 18, 0} lives in autoContainerCall), [sleep]
+ * the pause between 18 and 0.
+ */
+internal fun clusterModeCore(mode: Int, call: (Int) -> Boolean, sleep: (Long) -> Unit): Boolean =
+    when (mode) {
+        HelperBinderProtocol.CLUSTER_MODE_ON -> call(16)
+        HelperBinderProtocol.CLUSTER_MODE_DETACH_ONLY -> call(18)
+        else -> {
+            val detached = call(18)
+            sleep(1000L)
+            call(0) && detached
+        }
+    }
 
 /** The single gateway for auto_container: hard whitelist {16, 18, 0}, device id fixed
  *  at 1000. Anything else is a programming error, not a runtime input. */

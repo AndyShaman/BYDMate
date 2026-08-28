@@ -289,6 +289,16 @@ object ClusterProjectionManager {
         overlayView != null || directDisplayId != -1 || projectionAttemptInProgress
 
     /**
+     * True when the compositor under a live projection was powered up by US — i.e. auto-container
+     * is on and the projection sent the 16 itself. With auto-container off the compositor was
+     * already up when the projection started (the user powers it by hand), so a foreign owner
+     * leaving the cluster may detach its own layer without taking the projection's window with it.
+     */
+    fun ownsCompositor(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_COMPOSITOR_POWERED, false)
+
+    /**
      * Drive the projection to [mode], serialized under [mutex]. Idempotent — a no-op when already
      * in [mode]. Auto-launch is delegated to the daemon's [launchAndForce] (it [launchApp]s Navi
      * when its task is absent), so a press with Navi closed launches it onto the cluster.

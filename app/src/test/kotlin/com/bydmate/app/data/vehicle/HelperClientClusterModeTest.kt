@@ -51,6 +51,28 @@ class HelperClientClusterModeTest {
         assertEquals(1, seenOn)
     }
 
+    @Test fun `detachClusterContainer marshals 2 and returns true on status 0`() = runBlocking {
+        var seenCode = -1
+        var seenMode = -1
+        val fake = object : FakeIBinder() {
+            override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                seenCode = code
+                data.setDataPosition(0)
+                data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+                seenMode = data.readInt()
+                reply!!.writeInt(0); reply.writeInt(0)
+                reply.setDataPosition(0)
+                return true
+            }
+        }
+        val client = object : HelperClientImpl() { override fun resolveBinder(): IBinder = fake }
+
+        val ok = client.detachClusterContainer()
+        assertTrue(ok)
+        assertEquals(HelperBinderProtocol.TX_SET_CLUSTER_MODE, seenCode)
+        assertEquals(HelperBinderProtocol.CLUSTER_MODE_DETACH_ONLY, seenMode)
+    }
+
     @Test fun `setClusterContainerMode false marshals 0 and returns false on status -1`() = runBlocking {
         var seenOn = -1
         val fake = object : FakeIBinder() {
