@@ -20,8 +20,8 @@ class LlmAgentBackendTest {
     private val resolver = mockk<LlmConnectionResolver>()
     private val backend = LlmAgentBackend(client, resolver)
 
-    private fun conn(id: String, base: String = "https://$id/v1") =
-        LlmConnection(id, id, base, "key-$id", "model-$id")
+    private fun conn(id: String, base: String = "https://$id/v1", extraJson: String = "") =
+        LlmConnection(id, id, base, "key-$id", "model-$id", extraJson)
     private fun okMessage() = JSONObject("""{"content":"привет"}""")
 
     @Test
@@ -126,6 +126,35 @@ class LlmAgentBackendTest {
     @Test
     fun `providerExtras sends nothing extra to a custom endpoint`() {
         assertNull(LlmAgentBackend.providerExtras(conn(LlmConnectionResolver.ID_CUSTOM), streaming = true))
+    }
+
+    // #167: the custom slot sends whatever the user typed, so a DeepSeek-style endpoint can be
+    // told to skip reasoning.
+    @Test
+    fun `providerExtras forwards user extras for a custom endpoint`() {
+        val extras = LlmAgentBackend.providerExtras(
+            conn(LlmConnectionResolver.ID_CUSTOM, extraJson = """{"thinking": false, "top_p": 0.5}"""),
+            streaming = true,
+        )!!
+        assertFalse(extras.getBoolean("thinking"))
+        assertEquals(0.5, extras.getDouble("top_p"), 0.0001)
+    }
+
+    @Test
+    fun `parseExtraJson returns null for blank and malformed input`() {
+        assertNull(LlmAgentBackend.parseExtraJson(""))
+        assertNull(LlmAgentBackend.parseExtraJson("   \n  "))
+        assertNull(LlmAgentBackend.parseExtraJson("{\"thinking\": "))
+        assertNull(LlmAgentBackend.parseExtraJson("не json"))
+        // A bare array is valid JSON but cannot be merged into the request body.
+        assertNull(LlmAgentBackend.parseExtraJson("[1, 2]"))
+    }
+
+    @Test
+    fun `parseExtraJson keeps every field of a valid object`() {
+        val o = LlmAgentBackend.parseExtraJson("""  {"thinking": false, "nested": {"a": 1}}  """)!!
+        assertFalse(o.getBoolean("thinking"))
+        assertEquals(1, o.getJSONObject("nested").getInt("a"))
     }
 
     @Test

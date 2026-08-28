@@ -56,6 +56,9 @@ open class SettingsRepository @Inject constructor(
         const val KEY_CUSTOM_BASE_URL = "custom_llm_base_url"
         const val KEY_CUSTOM_API_KEY = "custom_llm_api_key"
         const val KEY_CUSTOM_MODEL = "custom_llm_model"
+        /** Optional JSON object merged into every chat-completions body of the custom connection
+         *  (e.g. {"thinking": false} to switch off reasoning). Blank = nothing extra. */
+        const val KEY_CUSTOM_EXTRA_JSON = "custom_llm_extra_json"
         /** "openrouter" | "zai" | "custom"; blank = openrouter (pre-wave-J default). */
         const val KEY_AGENT_PRIMARY_CONN = "agent_primary_conn"
         /** Same values; blank = no fallback. */

@@ -1097,6 +1097,9 @@
     <string name="settings_conn_checking">Checking…</string>
     <string name="settings_zai_hint">Free glm-4.7-flash, recommended as the primary model</string>
     <string name="settings_custom_hint">Any OpenAI-compatible API. A preset fills in the URL and model, bring your own key.</string>
+    <string name="settings_custom_extra_json_label">Extra request parameters (JSON)</string>
+    <string name="settings_custom_extra_json_hint">Merged into every request to this server, for example {\"thinking\": false} to switch reasoning off</string>
+    <string name="settings_custom_extra_json_invalid">Invalid JSON</string>
     <string name="settings_custom_list_models">Model list</string>
     <string name="settings_error_dns">Server unreachable: the car\'s internet cannot resolve this address (DNS)</string>
     <string name="settings_error_timeout">Server did not respond in time</string>

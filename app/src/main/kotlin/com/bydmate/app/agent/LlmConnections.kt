@@ -11,6 +11,8 @@ data class LlmConnection(
     val baseUrl: String,
     val apiKey: String,
     val model: String,
+    /** Raw JSON object merged into every request body; only the custom slot fills it (#167). */
+    val extraJson: String = "",
 )
 
 /**
@@ -44,6 +46,7 @@ class LlmConnectionResolver @Inject constructor(
                 ID_CUSTOM,
                 str(SettingsRepository.KEY_CUSTOM_NAME).ifBlank { DEFAULT_CUSTOM_LABEL },
                 url, key, model,
+                str(SettingsRepository.KEY_CUSTOM_EXTRA_JSON),
             )
         }
         else -> null

@@ -1249,6 +1249,9 @@
     <string name="settings_conn_checking">Правяраю…</string>
     <string name="settings_zai_hint">Бясплатная glm-4.7-flash, рэкамендуецца як асноўная</string>
     <string name="settings_custom_hint">Любы OpenAI-сумяшчальны API. Прэсет падстаўляе адрас і мадэль, ключ свой.</string>
+    <string name="settings_custom_extra_json_label">Дадатковыя параметры запыту (JSON)</string>
+    <string name="settings_custom_extra_json_hint">Дадаюцца ў кожны запыт да гэтага сервера, напрыклад {\"thinking\": false} каб выключыць разважанні</string>
+    <string name="settings_custom_extra_json_invalid">Няправільны JSON</string>
     <!-- Wave O T11: custom model list + human-readable network errors -->
     <string name="settings_custom_list_models">Спіс мадэляў</string>
     <string name="settings_error_dns">Сервер недаступны: інтэрнэт машыны не бачыць гэты адрас (DNS)</string>

@@ -982,6 +982,9 @@
     <string name="settings_conn_checking">Verificando…</string>
     <string name="settings_zai_hint">glm-4.7-flash gratuita, recomendada como principal</string>
     <string name="settings_custom_hint">Qualquer API compatível com OpenAI. A predefinição preenche o endereço e o modelo, a chave é sua.</string>
+    <string name="settings_custom_extra_json_label">Parâmetros extra do pedido (JSON)</string>
+    <string name="settings_custom_extra_json_hint">Adicionados a cada pedido a este servidor, por exemplo {\"thinking\": false} para desativar o raciocínio</string>
+    <string name="settings_custom_extra_json_invalid">JSON inválido</string>
     <string name="settings_custom_list_models">Lista de modelos</string>
     <string name="settings_error_dns">Servidor inacessivel: a internet do carro nao consegue resolver este endereco (DNS)</string>
     <string name="settings_error_timeout">O servidor nao respondeu a tempo</string>

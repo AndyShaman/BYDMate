@@ -188,6 +188,8 @@ data class SettingsUiState(
     val customBaseUrl: String = "",
     val customApiKey: String = "",
     val customModel: String = "",
+    /** Raw JSON merged into every request to the custom connection (#167); blank = nothing extra. */
+    val customExtraJson: String = "",
     val primaryConn: String = "openrouter",
     val fallbackConn: String = "",
     val connTestRunning: String? = null,
@@ -411,6 +413,7 @@ class SettingsViewModel @Inject constructor(
             val customBaseUrl = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_BASE_URL, "")
             val customApiKey = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_API_KEY, "")
             val customModel = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_MODEL, "")
+            val customExtraJson = settingsRepository.getString(SettingsRepository.KEY_CUSTOM_EXTRA_JSON, "")
             val primaryConn = settingsRepository.getString(SettingsRepository.KEY_AGENT_PRIMARY_CONN, "openrouter")
             val fallbackConn = settingsRepository.getString(SettingsRepository.KEY_AGENT_FALLBACK_CONN, "")
 
@@ -469,6 +472,7 @@ class SettingsViewModel @Inject constructor(
                     customBaseUrl = customBaseUrl,
                     customApiKey = customApiKey,
                     customModel = customModel,
+                    customExtraJson = customExtraJson,
                     primaryConn = primaryConn,
                     fallbackConn = fallbackConn,
                 )
@@ -831,6 +835,7 @@ class SettingsViewModel @Inject constructor(
     fun saveCustomBaseUrl(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_BASE_URL) { s, v -> s.copy(customBaseUrl = v, customModelList = emptyList(), customModelsError = null) }
     fun saveCustomApiKey(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_API_KEY) { s, v -> s.copy(customApiKey = v) }
     fun saveCustomModel(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_MODEL) { s, v -> s.copy(customModel = v) }
+    fun saveCustomExtraJson(value: String) = saveConnField(value, SettingsRepository.KEY_CUSTOM_EXTRA_JSON) { s, v -> s.copy(customExtraJson = v) }
 
     private fun saveConnField(
         value: String,

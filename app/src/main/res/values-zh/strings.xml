@@ -1212,6 +1212,9 @@
     <string name="settings_conn_checking">检查中…</string>
     <string name="settings_zai_hint">免费 glm-4.7-flash，推荐设为主模型</string>
     <string name="settings_custom_hint">任何兼容 OpenAI 的 API。预设会填入地址和模型，密钥需自备。</string>
+    <string name="settings_custom_extra_json_label">附加请求参数 (JSON)</string>
+    <string name="settings_custom_extra_json_hint">会加入发送到该服务器的每个请求，例如 {\"thinking\": false} 可关闭推理</string>
+    <string name="settings_custom_extra_json_invalid">JSON 格式无效</string>
     <string name="settings_custom_list_models">模型列表</string>
     <string name="settings_error_dns">服务器不可达：车机网络无法解析该地址 (DNS)</string>
     <string name="settings_error_timeout">服务器未在规定时间内响应</string>

@@ -116,6 +116,7 @@ import com.bydmate.app.cluster.SteeringWheelKeyService
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filterNotNull
 import com.bydmate.app.R
+import com.bydmate.app.agent.LlmAgentBackend
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
@@ -732,6 +733,22 @@ private fun IntegrationsSection(state: SettingsUiState, viewModel: SettingsViewM
         )
         state.customModelsError?.let {
             Text(it, color = SocRed, fontSize = 12.sp, lineHeight = 16.sp)
+        }
+        SettingsTextField(
+            label = stringResource(R.string.settings_custom_extra_json_label),
+            value = state.customExtraJson,
+            onValueChange = { viewModel.saveCustomExtraJson(it) },
+            keyboardType = KeyboardType.Text,
+            singleLine = false
+        )
+        SettingHint(stringResource(R.string.settings_custom_extra_json_hint))
+        if (state.customExtraJson.isNotBlank() &&
+            LlmAgentBackend.parseExtraJson(state.customExtraJson) == null
+        ) {
+            Text(
+                stringResource(R.string.settings_custom_extra_json_invalid),
+                color = SocRed, fontSize = 12.sp, lineHeight = 16.sp
+            )
         }
     }
 
@@ -3096,7 +3113,8 @@ private fun SettingsTextField(
     value: String,
     onValueChange: (String) -> Unit,
     keyboardType: KeyboardType,
-    secret: Boolean = false
+    secret: Boolean = false,
+    singleLine: Boolean = true
 ) {
     // Secret fields (API keys, tokens) are masked so screenshots and over-the-shoulder
     // looks do not leak them; the eye icon reveals the value while editing.
@@ -3105,7 +3123,8 @@ private fun SettingsTextField(
         value = value,
         onValueChange = onValueChange,
         label = { Text(label) },
-        singleLine = true,
+        singleLine = singleLine,
+        minLines = if (singleLine) 1 else 2,
         visualTransformation = if (secret && !revealed) PasswordVisualTransformation() else VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
         trailingIcon = if (secret) {

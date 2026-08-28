@@ -1249,6 +1249,9 @@
     <string name="settings_conn_checking">Sprawdzam…</string>
     <string name="settings_zai_hint">Darmowy glm-4.7-flash, zalecany jako podstawowy</string>
     <string name="settings_custom_hint">Dowolne API zgodne z OpenAI. Ustawienie wstępne podstawia adres i model, klucz jest twój.</string>
+    <string name="settings_custom_extra_json_label">Dodatkowe parametry żądania (JSON)</string>
+    <string name="settings_custom_extra_json_hint">Dodawane do każdego żądania do tego serwera, na przykład {\"thinking\": false} aby wyłączyć rozumowanie</string>
+    <string name="settings_custom_extra_json_invalid">Nieprawidłowy JSON</string>
     <!-- Wave O T11: custom model list + human-readable network errors -->
     <string name="settings_custom_list_models">Lista modeli</string>
     <string name="settings_error_dns">Serwer niedostępny: internet auta nie widzi tego adresu (DNS)</string>

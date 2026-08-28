@@ -122,7 +122,8 @@ class LlmAgentBackend @Inject constructor(
 
         /** Provider-specific payload fields that cut latency: reasoning off where the provider
          *  supports switching it off, usage stats in the stream to check prompt caching in the
-         *  field. A custom endpoint speaks an unknown dialect — send it nothing extra. */
+         *  field. A custom endpoint speaks an unknown dialect — it sends only what the user
+         *  typed into the extra-parameters field (#167). */
         internal fun providerExtras(conn: LlmConnection, streaming: Boolean): JSONObject? = when (conn.id) {
             // "none" is rejected by models with mandatory reasoning (Gemini 3 Flash), "minimal" is not.
             LlmConnectionResolver.ID_OPENROUTER -> JSONObject()
@@ -132,7 +133,22 @@ class LlmAgentBackend @Inject constructor(
                 .also { if (streaming) it.put("stream_options", JSONObject().put("include_usage", true)) }
             LlmConnectionResolver.ID_ZAI -> JSONObject()
                 .put("thinking", JSONObject().put("type", "disabled"))
+            LlmConnectionResolver.ID_CUSTOM -> parseExtraJson(conn.extraJson).also {
+                if (it == null && conn.extraJson.isNotBlank()) Log.w(TAG, "custom extra params ignored: not a JSON object")
+            }
             else -> null
+        }
+
+        /** User-typed extra request fields; anything but a JSON object is ignored (the field is
+         *  edited by hand, so a half-typed value must not break the turn). */
+        internal fun parseExtraJson(raw: String): JSONObject? {
+            val text = raw.trim()
+            if (text.isEmpty()) return null
+            return try {
+                JSONObject(text)
+            } catch (e: org.json.JSONException) {
+                null
+            }
         }
 
         /** OpenRouter wire encoding of the message history. */
