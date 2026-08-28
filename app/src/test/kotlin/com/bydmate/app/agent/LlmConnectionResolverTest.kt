@@ -76,6 +76,25 @@ class LlmConnectionResolverTest {
     }
 
     @Test
+    fun `primary falls back to the only configured slot when the chosen one is unset (#172)`() = runTest {
+        stub(
+            SettingsRepository.KEY_CUSTOM_BASE_URL to "https://routerai.ru/v1",
+            SettingsRepository.KEY_CUSTOM_API_KEY to "k",
+            SettingsRepository.KEY_CUSTOM_MODEL to "m",
+        )
+        assertEquals(LlmConnectionResolver.ID_CUSTOM, resolver.primary()!!.id)
+    }
+
+    @Test
+    fun `primary falls back when the chosen slot is not configured`() = runTest {
+        stub(
+            SettingsRepository.KEY_AGENT_PRIMARY_CONN to LlmConnectionResolver.ID_OPENROUTER,
+            SettingsRepository.KEY_ZAI_API_KEY to "z",
+        )
+        assertEquals(LlmConnectionResolver.ID_ZAI, resolver.primary()!!.id)
+    }
+
+    @Test
     fun `fallback null when same as primary or unconfigured`() = runTest {
         stub(
             SettingsRepository.KEY_AGENT_PRIMARY_CONN to "zai",

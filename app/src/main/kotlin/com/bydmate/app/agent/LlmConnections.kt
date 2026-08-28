@@ -52,12 +52,18 @@ class LlmConnectionResolver @Inject constructor(
     suspend fun configured(): List<LlmConnection> =
         listOf(ID_OPENROUTER, ID_ZAI, ID_CUSTOM).mapNotNull { get(it) }
 
-    suspend fun primary(): LlmConnection? = get(primaryId())
+    /**
+     * The chosen primary slot, or — when it is unset or not fully configured — the first
+     * configured slot. Users who fill in only the custom connection rarely open the
+     * primary selector (#172), so the agent must not report "not configured" while a
+     * usable connection exists.
+     */
+    suspend fun primary(): LlmConnection? = get(primaryId()) ?: configured().firstOrNull()
 
     /** Fallback connection, or null when unset, unconfigured, or same as primary. */
     suspend fun fallback(): LlmConnection? {
         val id = str(SettingsRepository.KEY_AGENT_FALLBACK_CONN)
-        if (id.isBlank() || id == primaryId()) return null
+        if (id.isBlank() || id == primary()?.id) return null
         return get(id)
     }
 

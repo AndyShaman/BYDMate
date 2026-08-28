@@ -47,7 +47,7 @@ class AgentOrchestrator @Inject constructor(
             if (!backend.isConfigured()) {
                 // Close the follow-up window: a disabled/unconfigured agent must not swallow NLU traffic.
                 lastAnswerAt = 0L
-                return AgentResult.Error("Агент не настроен: нужен API-ключ и модель")
+                return AgentResult.Error("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции")
             }
             val text = userText.trim()
             // Blank transcript: nothing to ask — degrade like a disabled agent.
@@ -105,7 +105,7 @@ class AgentOrchestrator @Inject constructor(
         if (!mutex.tryLock()) return AgentResult.Error("агент занят")
         try {
             if (!settingsRepository.isAgentEnabled()) return AgentResult.Disabled
-            if (!backend.isConfigured()) return AgentResult.Error("Агент не настроен: нужен API-ключ и модель")
+            if (!backend.isConfigured()) return AgentResult.Error("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции")
             val text = userText.trim()
             if (text.isEmpty()) return AgentResult.Disabled
             val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
