@@ -141,6 +141,19 @@ class LlmAgentBackendTest {
     }
 
     @Test
+    fun `parseExtraJson strips reserved request fields but keeps provider knobs`() {
+        val obj = LlmAgentBackend.parseExtraJson(
+            """{"model":"x","messages":[],"tools":[],"stream":false,"thinking":false,"top_p":0.5}"""
+        )!!
+        assertFalse(obj.has("model"))
+        assertFalse(obj.has("messages"))
+        assertFalse(obj.has("tools"))
+        assertFalse(obj.has("stream"))
+        assertEquals(false, obj.getBoolean("thinking"))
+        assertEquals(0.5, obj.getDouble("top_p"), 0.0)
+    }
+
+    @Test
     fun `parseExtraJson returns null for blank and malformed input`() {
         assertNull(LlmAgentBackend.parseExtraJson(""))
         assertNull(LlmAgentBackend.parseExtraJson("   \n  "))

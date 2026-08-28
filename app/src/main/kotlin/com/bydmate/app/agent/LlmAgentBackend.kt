@@ -141,11 +141,15 @@ class LlmAgentBackend @Inject constructor(
 
         /** User-typed extra request fields; anything but a JSON object is ignored (the field is
          *  edited by hand, so a half-typed value must not break the turn). */
+        private val RESERVED_EXTRA_KEYS = listOf("model", "messages", "tools", "stream")
+
         internal fun parseExtraJson(raw: String): JSONObject? {
             val text = raw.trim()
             if (text.isEmpty()) return null
             return try {
-                JSONObject(text)
+                // Extras are merged last in buildPayload, so the core request fields must
+                // stay ours — a typo like {"model": ...} would silently reroute the turn.
+                JSONObject(text).also { obj -> RESERVED_EXTRA_KEYS.forEach { obj.remove(it) } }
             } catch (e: org.json.JSONException) {
                 null
             }
