@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.13.2] - 2026-08-28
+
 ### Новое
 - Виджет: настройка «Скрывать в приложениях» со списком установленных приложений, в которых плавающая панель прячется (например, браузер во время видео). Тумблер «Скрывать при YouTube» работает как раньше (#171)
 - Интеграции, подключение «Своё»: поле «Доп. параметры запроса (JSON)», содержимое подмешивается в каждый запрос к серверу, например {"thinking": false}, чтобы выключить рассуждения у DeepSeek-подобных моделей (#167)
@@ -964,7 +966,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.13.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.13.2...HEAD
+[3.13.2]: https://github.com/AndyShaman/BYDMate/compare/v3.13.1...v3.13.2
 [3.13.1]: https://github.com/AndyShaman/BYDMate/compare/v3.13...v3.13.1
 [3.13]: https://github.com/AndyShaman/BYDMate/compare/v3.12.1...v3.13
 [3.12.1]: https://github.com/AndyShaman/BYDMate/compare/v3.12...v3.12.1
