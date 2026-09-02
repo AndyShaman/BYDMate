@@ -27,6 +27,7 @@ import com.bydmate.app.cluster.ClusterJournal
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
+import com.bydmate.app.cluster.cameraNeedsCompositor
 import com.bydmate.app.cluster.geometryFor
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
@@ -537,9 +538,14 @@ class BlindSpotController @Inject constructor(
     /** Fire-and-forget compositor switch for the show path; one job at a time. */
     private fun requestCompositor(on: Boolean) {
         if (on == compositorTarget) return
-        // Only the window that actually sits on the projection display needs the compositor;
-        // the mirrored main-screen fallback must never touch a cluster that has none.
-        if (on && (clusterWindow == null || clusterOnMainScreen)) return
+        // Only the window that actually sits on the projection display needs the compositor, and
+        // only when the user lets us drive it (auto-container on, same gate as the projection);
+        // the mirrored main-screen fallback must never touch a cluster that has none. Skipped on
+        // the way UP, the target never flips, so no power-down runs on the way back either.
+        if (on && !cameraNeedsCompositor(
+                ClusterProjectionManager.autoContainerEnabled(context),
+                clusterWindow != null,
+                clusterOnMainScreen)) return
         compositorTarget = on
         compositorJob?.cancel()
         compositorJob = ownScope.launch { applyCompositor(on) }
