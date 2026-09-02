@@ -128,6 +128,18 @@ fun shouldRecoverCompositor(markerSet: Boolean, mode: ClusterMode, autoContainer
  */
 fun shouldPowerDownCompositor(markerSet: Boolean): Boolean = markerSet
 
+/**
+ * The blind-spot camera drives the cluster compositor (16 on show, 18 -> pause -> 0 on hide) only
+ * when auto-container is ON, exactly like the projection does. With it OFF the user runs the
+ * cluster by hand: on firmware that shows the projection display inside a native widget (VV,
+ * 2026-08-28) the 16 flips the cluster into full projection mode and hides ADAS, and no exit
+ * sequence (18 alone or 18 -> 0) restores the widget without a manual tab switch. The camera
+ * window sits on the same display, in the same crop, so it is visible there without any ИПЦ write.
+ * The mirrored main-screen fallback never needs the compositor either.
+ */
+fun cameraNeedsCompositor(autoContainer: Boolean, clusterWindowAttached: Boolean, clusterOnMainScreen: Boolean): Boolean =
+    autoContainer && clusterWindowAttached && !clusterOnMainScreen
+
 /** Direct-task crash recovery fires only when a marker survives AND no projection is live. */
 fun shouldRecoverDirectTask(markerDisplayId: Int, mode: ClusterMode): Boolean =
     markerDisplayId != -1 && mode == ClusterMode.OFF

@@ -162,6 +162,21 @@ class ClusterProjectionStateTest {
         assertEquals(false, shouldPowerDownCompositor(markerSet = false))
     }
 
+    // --- cameraNeedsCompositor (VV 2026-08-28: auto-container off = camera never sends 16/18/0) ---
+
+    @Test fun `camera drives the compositor only with auto-container on and a real cluster window`() {
+        assertEquals(true, cameraNeedsCompositor(autoContainer = true, clusterWindowAttached = true, clusterOnMainScreen = false))
+    }
+
+    @Test fun `auto-container off - camera leaves the compositor alone`() {
+        assertEquals(false, cameraNeedsCompositor(autoContainer = false, clusterWindowAttached = true, clusterOnMainScreen = false))
+    }
+
+    @Test fun `no cluster window or a mirrored main-screen window never needs the compositor`() {
+        assertEquals(false, cameraNeedsCompositor(autoContainer = true, clusterWindowAttached = false, clusterOnMainScreen = false))
+        assertEquals(false, cameraNeedsCompositor(autoContainer = true, clusterWindowAttached = true, clusterOnMainScreen = true))
+    }
+
     // --- shouldRecoverDirectTask (freeform task stranded on cluster display after crash) ---
 
     @Test fun `no marker means nothing to recover for direct task`() {

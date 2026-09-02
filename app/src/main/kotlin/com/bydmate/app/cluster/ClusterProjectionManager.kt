@@ -687,7 +687,8 @@ object ClusterProjectionManager {
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getString(KEY_TARGET_PACKAGE, NAVI_PACKAGE) ?: NAVI_PACKAGE
 
-    private fun autoContainerEnabled(context: Context): Boolean =
+    /** Wave P setting: the app may drive the cluster compositor (projection AND blind-spot camera). */
+    fun autoContainerEnabled(context: Context): Boolean =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getBoolean(KEY_AUTO_CONTAINER, true)
 
