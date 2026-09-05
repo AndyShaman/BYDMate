@@ -1440,7 +1440,7 @@ private fun ParamActionControls(
 }
 
 // Delay option keys — labels are resolved at runtime via stringResource
-private val DELAY_OPTION_MS = listOf(500L, 1000L, 2000L, 3000L, 5000L, 10000L)
+private val DELAY_OPTION_MS = listOf(500L, 1000L, 2000L, 3000L, 5000L, 10000L, 30000L, 60000L)
 
 @Composable
 private fun DelayActionControls(
@@ -1455,13 +1455,17 @@ private fun DelayActionControls(
     val label3s = stringResource(R.string.automation_delay_3s)
     val label5s = stringResource(R.string.automation_delay_5s)
     val label10s = stringResource(R.string.automation_delay_10s)
+    val label30s = stringResource(R.string.automation_delay_30s)
+    val label60s = stringResource(R.string.automation_delay_60s)
     val delayLabels = listOf(
         500L to label0_5s,
         1000L to label1s,
         2000L to label2s,
         3000L to label3s,
         5000L to label5s,
-        10000L to label10s
+        10000L to label10s,
+        30000L to label30s,
+        60000L to label60s
     )
     // Pre-build display names for onClick lambdas (stringResource cannot be called in non-Composable onClick)
     val delayDisplayNames = delayLabels.associate { (ms, lbl) ->

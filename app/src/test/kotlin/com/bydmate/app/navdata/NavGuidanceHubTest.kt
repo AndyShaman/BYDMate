@@ -237,6 +237,27 @@ class NavGuidanceHubTest {
     }
 
     @Test
+    fun `empty rich update on inactive hub is a no-op`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(), nowMs = 1000)
+        val s = NavGuidanceHub.snapshot(nowMs = 1000)
+        assertFalse(s.active)
+        assertEquals(0L, s.lastUpdateMs)
+    }
+
+    @Test
+    fun `empty rich update on active hub does not deactivate or reset maneuver`() {
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
+            maneuverGaode = 2, distanceMeters = 300, road = "ул. А"), nowMs = 1000)
+        NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(), nowMs = 2000)
+        val s = NavGuidanceHub.snapshot(nowMs = 2000)
+        assertTrue(s.active)
+        assertEquals(2, s.maneuverGaode)
+        assertEquals(300, s.distanceMeters)
+        assertEquals("ул. А", s.road)
+        assertEquals(1000L, s.lastUpdateMs)
+    }
+
+    @Test
     fun `notification grace deactivates only when stale`() {
         NavGuidanceHub.updateFromNotification(NavGuidanceHub.RichUpdate(
             maneuverGaode = 2, road = "x", cameraAlert = "camera"), nowMs = 1000)

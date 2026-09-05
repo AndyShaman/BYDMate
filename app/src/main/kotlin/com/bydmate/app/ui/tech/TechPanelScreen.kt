@@ -215,7 +215,7 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
         )
         Hint(state.openHint, "soh", R.string.tech_hint_soh)
         Hint(state.openHint, "hvVoltage", R.string.tech_hint_hv_voltage)
-        Hint(state.openHint, "power", R.string.tech_hint_power)
+        Hint(state.openHint, "power", R.string.tech_hint_motor_power)
         Hint(state.openHint, "batteryPower", R.string.tech_hint_power)
         Hint(state.openHint, "voltage12v", R.string.tech_hint_12v)
         Hint(state.openHint, "insulation", R.string.tech_hint_insulation)

@@ -141,6 +141,16 @@ object NavGuidanceHub {
      */
     @Synchronized
     fun updateFromNotification(rich: RichUpdate, nowMs: Long = System.currentTimeMillis()) {
+        // #170: the first player notification after Alice interrupts guidance often has
+        // no navigation payload at all (extras fallback returns an all-empty RichUpdate).
+        // Activating the hub on that carries no maneuver/distance, so displayDistance()
+        // clamps 0 up to its 11 m floor and the HUD flashes a bogus "11m". A truly empty
+        // update must be a no-op: leave active/lastUpdateMs/noGuidanceSinceMs untouched.
+        if (rich.maneuverGaode == 0 && rich.distanceMeters == 0 && rich.road.isEmpty() &&
+            rich.etaSeconds == 0 && rich.totalDistMeters == 0 && rich.cameraAlert.isEmpty()
+        ) {
+            return
+        }
         noGuidanceSinceMs = 0L
         val prev = current
         if (!prev.active) Log.i(TAG, "guidance active (source=NOTIFICATION)")

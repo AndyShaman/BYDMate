@@ -35,6 +35,7 @@ fun AgentChatScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
+            .imePadding()
             .padding(16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
