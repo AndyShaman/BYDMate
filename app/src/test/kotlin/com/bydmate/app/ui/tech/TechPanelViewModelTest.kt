@@ -220,4 +220,14 @@ class TechPanelViewModelTest {
         assertFalse(state.showMotors)
         assertTrue(state.hasAnyCard)
     }
+
+    /** Idle reads -1 from the front motor fid; reverse really is negative and must survive. */
+    @Test
+    fun `idle rpm shows as zero and reverse keeps its sign`() {
+        assertEquals("0", rpmForDisplay(-1)?.toString())
+        assertEquals("0", rpmForDisplay(0)?.toString())
+        assertEquals("-370", rpmForDisplay(-370)?.toString())
+        assertEquals("1200", rpmForDisplay(1200)?.toString())
+        assertNull(rpmForDisplay(null))
+    }
 }
