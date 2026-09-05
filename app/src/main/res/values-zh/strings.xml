@@ -622,13 +622,9 @@
     <!-- SOC ring: charging icon content description -->
     <string name="battery_health_charging_cd">充电中</string>
 
-    <!-- Battery health dialog -->
-    <string name="battery_health_dialog_title">电池健康</string>
-    <string name="battery_health_now_header">当前（车辆实时数据）</string>
-    <string name="battery_health_lifetime_header">全生命周期（系统数据）</string>
+    <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">电芯压差</string>
     <string name="battery_health_cell_delta_value">%1$.3f V</string>
-    <string name="battery_health_banks_header">电池组</string>
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">电池温度</string>
     <string name="battery_health_12v_label">车载电源</string>
@@ -637,9 +633,6 @@
     <string name="battery_health_bms_mileage_value">%1$.1f 公里</string>
     <string name="battery_health_pumped_label">累计充入</string>
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
-    <string name="battery_health_disabled_title">系统数据已禁用</string>
-    <string name="battery_health_disabled_hint">在设置中启用"系统数据"，以查看 SoH、BMS 里程和车辆累计充入量。</string>
-    <string name="battery_health_avg_soc_header">平均SOC（BYDMate历史）</string>
     <string name="battery_health_avg_since_charge_label">自上次充电</string>
     <string name="battery_health_avg_all_time_label">全部时间</string>
     <string name="battery_health_avg_soc_hint" formatted="false">按时间加权的平均电量：电池保持高电量的时间越长，该值越高。比亚迪LFP电池长期高电量存放会加速日历老化，建议保持较低水平。参考：65%以下很好，65-85%正常，高于85%建议推迟或减少充电。每1-2周仍需充满一次以平衡电芯。根据BYDMate行程和充电历史计算。</string>
@@ -1354,4 +1347,58 @@
     <string name="settings_split_mechanism_platformized_hint">在该固件上由车机自己分屏：1/3 和 2/3 两个窗口、分隔条和左右交换手势都是原生的。BYDMate 只负责启动所选的应用组合，并把跑出去的应用送回它的窗口。</string>
     <string name="settings_split_try_native_hint">试试“系统分屏”方式。</string>
     <string name="split_feature_disabled">分屏功能已在设置中关闭</string>
+    <!-- Tech panel: compact card cell + full screen -->
+    <string name="dashboard_battery_insulation_label">绝缘</string>
+    <string name="tech_title">技术</string>
+    <string name="tech_status_online">autoservice 在线</string>
+    <string name="tech_status_offline">autoservice 离线</string>
+    <string name="tech_no_data">车辆未提供这些数据</string>
+    <string name="tech_card_battery_now">电池 · 当前</string>
+    <string name="tech_card_limits">BMS 限值</string>
+    <string name="tech_card_cells">电芯</string>
+    <string name="tech_card_motors">电机与逆变器</string>
+    <string name="tech_card_climate">空调</string>
+    <string name="tech_card_tyres">轮胎 · 胎压 / 温度</string>
+    <string name="tech_card_history">电池 · 历史</string>
+    <string name="tech_label_hv_voltage">高压电压</string>
+    <string name="tech_label_power">功率</string>
+    <string name="tech_label_battery_power">电池功率</string>
+    <string name="tech_label_max_charge">最大充电功率</string>
+    <string name="tech_label_max_discharge">最大放电功率</string>
+    <string name="tech_label_motor_temp">电机温度</string>
+    <string name="tech_label_inverter_temp">逆变器温度</string>
+    <string name="tech_label_rpm">转速 rpm</string>
+    <string name="tech_label_pedals">油门 / 刹车踏板</string>
+    <string name="tech_label_front">前</string>
+    <string name="tech_label_rear">后</string>
+    <string name="tech_label_compressor">压缩机</string>
+    <string name="tech_label_climate">空调</string>
+    <string name="tech_label_inside_outside">车内 / 车外</string>
+    <string name="tech_on">开</string>
+    <string name="tech_off">关</string>
+    <string name="tech_tyre_fl">左前</string>
+    <string name="tech_tyre_fr">右前</string>
+    <string name="tech_tyre_rl">左后</string>
+    <string name="tech_tyre_rr">右后</string>
+    <string name="tech_value_mohm">%1$.1f MΩ</string>
+    <string name="tech_value_mv">%1$d mV</string>
+    <string name="tech_value_volt">%1$d V</string>
+    <string name="tech_value_kw">%1$d kW</string>
+    <string name="tech_value_watt">%1$d W</string>
+    <string name="tech_value_percent_per_hour">%1$.2f %%/小时</string>
+    <string name="tech_value_deg">%1$d°</string>
+    <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_percent">%1$d%%</string>
+    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
+    <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_hint_soh" formatted="false">电池健康度：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。该数值由车辆自己计算。</string>
+    <string name="tech_hint_hv_voltage">动力电池的电压。充电时升高，放电时降低，这台车大约在 450…560 V。单看意义不大，结合功率一起看才有用。</string>
+    <string name="tech_hint_power">电池此刻输出多少能量。正值：车辆在消耗（加速、空调）。负值：制动给电池充电，也就是能量回收。</string>
+    <string name="tech_hint_12v">为电子设备供电的普通 12 伏蓄电池电压。车辆启动时为 13…14,5 V。停车时低于 12 V，说明蓄电池在变弱。</string>
+    <string name="tech_hint_insulation">高压电池与车身之间的绝缘电阻。数值越大越好：正常为几兆欧。若降到 0,5 MΩ 及以下，说明某处绝缘受损，该去维修了。</string>
+    <string name="tech_hint_bms_limits">电池控制器此刻允许充电时吸收、以及加速时输出的最大功率。电池偏冷或接近充满时限值更低：所以冬天充电更慢、能量回收更弱。</string>
+    <string name="tech_hint_cells">电池由数百个电芯组成。这里显示最弱的、最强的以及两者之差。差值在 20…30 mV 以内属正常。长期差值偏大，说明某个电芯老化得比其他更快。</string>
+    <string name="tech_hint_motors">电机及其驱动逆变器的温度。日常行驶在 60…80° 以内。长时间加速或拖挂时温度更高，车辆会自行降低功率直到冷却。</string>
+    <string name="tech_hint_compressor">空调与热泵压缩机消耗多少瓦。它是除电机之外的主要用电设备：夏天酷热、冬天严寒时会明显缩短续航。</string>
+    <string name="tech_hint_tyres">来自胎压传感器的每个车轮的压力和温度。行驶中轮胎升温后压力会升高 0,2…0,3 bar，属于正常。若某个车轮明显低于其他，请检查是否漏气。</string>
 </resources>

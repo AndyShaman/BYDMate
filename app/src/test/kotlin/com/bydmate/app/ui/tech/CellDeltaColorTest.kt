@@ -1,4 +1,4 @@
-package com.bydmate.app.ui.battery
+package com.bydmate.app.ui.tech
 
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.SocRed
@@ -33,7 +33,7 @@ class CellDeltaColorTest {
 
     @Test
     fun `real voltage subtraction hits exact boundaries despite fp noise`() {
-        // The dialog feeds max-min directly: 3.43 - 3.34 = 0.0899999… in IEEE 754,
+        // The panel feeds max-min directly: 3.43 - 3.34 = 0.0899999… in IEEE 754,
         // which without rounding would misread a true 90 mV delta as yellow.
         assertEquals(SocRed, cellDeltaColor(3.43 - 3.34, soc = 50))
         assertEquals(SocYellow, cellDeltaColor(3.39 - 3.34, soc = 50))

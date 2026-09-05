@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.entity.TripEntity
-import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
@@ -13,7 +12,6 @@ import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.data.trips.TripCounterMath
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.data.trips.TripResetState
-import com.bydmate.app.domain.battery.AvgSocCalculator
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
@@ -27,7 +25,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filterNotNull
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -63,6 +60,7 @@ data class DashboardUiState(
     val cellVoltageMax: Double? = null,
     val cellVoltageDelta: Double? = null,
     val voltage12v: Double? = null,
+    val insulationKohm: Int? = null,
     val exteriorTemp: Int? = null,
     val batteryHealthStatus: String = "ok",
     val voltage12vStatus: String = "ok",
@@ -75,9 +73,6 @@ data class DashboardUiState(
     val insightDate: String? = null,
     val insightPeriodDays: Int = 7,
     val insightExpanded: Boolean = false,
-    val batteryHealthExpanded: Boolean = false,
-    val avgSocSinceCharge: Int? = null,
-    val avgSocAllTime: Int? = null,
     val estimatedRangeKm: Double? = null,
     val vehicleDataConnected: Boolean = true,
     val adbConnected: Boolean? = null,
@@ -104,7 +99,6 @@ class DashboardViewModel @Inject constructor(
     private val tripRepository: TripRepository,
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao,
-    private val chargeDao: ChargeDao,
     private val insightsManager: InsightsManager,
     private val batteryStateRepository: BatteryStateRepository
 ) : ViewModel() {
@@ -216,6 +210,7 @@ class DashboardViewModel @Inject constructor(
                         cellVoltageDelta = if (data?.maxCellVoltage != null && data.minCellVoltage != null)
                             data.maxCellVoltage - data.minCellVoltage else current.cellVoltageDelta,
                         voltage12v = data?.voltage12v ?: current.voltage12v,
+                        insulationKohm = data?.insulationKohm ?: current.insulationKohm,
                         exteriorTemp = data?.exteriorTemp ?: current.exteriorTemp,
                         batteryHealthStatus = calculateBatteryStatus(data, current),
                         voltage12vStatus = calculate12vStatus(data?.voltage12v ?: current.voltage12v),
@@ -472,44 +467,13 @@ class DashboardViewModel @Inject constructor(
         _uiState.update {
             val t1 = n == 1 && !it.trip1Expanded
             val t2 = n == 2 && !it.trip2Expanded
-            it.copy(trip1Expanded = t1, trip2Expanded = t2,
-                insightExpanded = false, batteryHealthExpanded = false)
+            it.copy(trip1Expanded = t1, trip2Expanded = t2, insightExpanded = false)
         }
-    }
-
-    fun toggleBatteryHealthExpanded() {
-        _uiState.update { it.copy(
-            batteryHealthExpanded = !it.batteryHealthExpanded,
-            insightExpanded = false,
-            trip1Expanded = false,
-            trip2Expanded = false,
-        ) }
-        if (_uiState.value.batteryHealthExpanded) {
-            viewModelScope.launch { computeAvgSoc() }
-        }
-    }
-
-    /** #93: cheap on-open aggregation — a few hundred Room rows, no polling. */
-    private suspend fun computeAvgSoc() {
-        val trips = tripRepository.getAllTrips().first()
-        val charges = chargeDao.getAll().first()
-        val now = System.currentTimeMillis()
-        val points = AvgSocCalculator.buildPoints(trips, charges)
-        val allTime = points.firstOrNull()
-            ?.let { AvgSocCalculator.averageSince(points, it.ts, now) }
-        val lastChargeEnd = charges
-            .filter { it.status == "COMPLETED" && it.endTs != null && it.socEnd != null }
-            .maxByOrNull { it.endTs!! }
-            ?.endTs
-        val sinceCharge = lastChargeEnd
-            ?.let { AvgSocCalculator.averageSince(points, it, now) }
-        _uiState.update { it.copy(avgSocAllTime = allTime, avgSocSinceCharge = sinceCharge) }
     }
 
     fun toggleInsightExpanded() {
         _uiState.update { it.copy(
             insightExpanded = !it.insightExpanded,
-            batteryHealthExpanded = false,
             trip1Expanded = false,
             trip2Expanded = false,
         ) }

@@ -689,14 +689,10 @@
     <!-- SOC ring: charging icon content description -->
     <string name="battery_health_charging_cd">Trwa ładowanie</string>
 
-    <!-- Battery health dialog -->
-    <string name="battery_health_dialog_title">Kondycja akumulatora</string>
-    <string name="battery_health_now_header">Teraz (z auta, na żywo)</string>
-    <string name="battery_health_lifetime_header">Lifetime (dane systemowe)</string>
+    <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">Δ ogniw</string>
     <!-- %1$.3f = delta volts -->
     <string name="battery_health_cell_delta_value">%1$.3f V</string>
-    <string name="battery_health_banks_header">Ogniwa</string>
     <!-- %1$.3f = cell voltage volts -->
     <string name="battery_health_cell_voltage_value">%1$.3f V</string>
     <string name="battery_health_bat_temp_label">temp. akumulatora</string>
@@ -709,9 +705,6 @@
     <string name="battery_health_pumped_label">naładowano</string>
     <!-- %1$.0f = kWh -->
     <string name="battery_health_pumped_value">%1$.0f kWh</string>
-    <string name="battery_health_disabled_title">Dane systemowe są wyłączone</string>
-    <string name="battery_health_disabled_hint">Włącz „Dane systemowe” w Ustawieniach, żeby widzieć SoH, przebieg BMS i łącznie naładowaną energię z auta.</string>
-    <string name="battery_health_avg_soc_header">Średni SOC (historia BYDMate)</string>
     <string name="battery_health_avg_since_charge_label">od ostatniego ładowania</string>
     <string name="battery_health_avg_all_time_label">od początku</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Średni ważony poziom naładowania: im dłużej akumulator stoi naładowany, tym wyższa wartość. Dla akumulatora LFP w BYD warto trzymać ją niżej: przechowywanie przy wysokim naładowaniu przyspiesza starzenie. Orientacyjnie: do 65% świetnie, 65-85% normalnie, powyżej 85% lepiej ładować później lub rzadziej. Ładowanie do 100% raz na 1-2 tygodnie i tak jest potrzebne do balansowania ogniw. Liczone na podstawie historii przejazdów i ładowań w BYDMate.</string>
@@ -1392,4 +1385,58 @@
     <string name="settings_split_mechanism_platformized_hint">Na tym oprogramowaniu ekran dzieli samo auto: panele 1/3 i 2/3, separator oraz gest zamiany są systemowe. BYDMate tylko uruchamia wybraną parę i przywraca aplikację do jej panelu.</string>
     <string name="settings_split_try_native_hint">Spróbuj trybu Podział systemowy.</string>
     <string name="split_feature_disabled">Podział ekranu jest wyłączony w ustawieniach</string>
+    <!-- Tech panel: compact card cell + full screen -->
+    <string name="dashboard_battery_insulation_label">izolacja</string>
+    <string name="tech_title">Technika</string>
+    <string name="tech_status_online">autoservice online</string>
+    <string name="tech_status_offline">autoservice offline</string>
+    <string name="tech_no_data">Samochód nie udostępnia tych danych</string>
+    <string name="tech_card_battery_now">Akumulator · teraz</string>
+    <string name="tech_card_limits">Limity BMS</string>
+    <string name="tech_card_cells">Ogniwa</string>
+    <string name="tech_card_motors">Silniki i falowniki</string>
+    <string name="tech_card_climate">Klimatyzacja</string>
+    <string name="tech_card_tyres">Opony · ciśnienie / temperatura</string>
+    <string name="tech_card_history">Akumulator · historia</string>
+    <string name="tech_label_hv_voltage">napięcie HV</string>
+    <string name="tech_label_power">moc</string>
+    <string name="tech_label_battery_power">moc akumulatora</string>
+    <string name="tech_label_max_charge">maks. moc ładowania</string>
+    <string name="tech_label_max_discharge">maks. moc rozładowania</string>
+    <string name="tech_label_motor_temp">temperatura silnika</string>
+    <string name="tech_label_inverter_temp">temperatura falownika</string>
+    <string name="tech_label_rpm">obroty, obr/min</string>
+    <string name="tech_label_pedals">pedał gazu / hamulca</string>
+    <string name="tech_label_front">przód</string>
+    <string name="tech_label_rear">tył</string>
+    <string name="tech_label_compressor">sprężarka</string>
+    <string name="tech_label_climate">klimatyzacja</string>
+    <string name="tech_label_inside_outside">w kabinie / na zewnątrz</string>
+    <string name="tech_on">wł</string>
+    <string name="tech_off">wył</string>
+    <string name="tech_tyre_fl">PL</string>
+    <string name="tech_tyre_fr">PP</string>
+    <string name="tech_tyre_rl">TL</string>
+    <string name="tech_tyre_rr">TP</string>
+    <string name="tech_value_mohm">%1$.1f MΩ</string>
+    <string name="tech_value_mv">%1$d mV</string>
+    <string name="tech_value_volt">%1$d V</string>
+    <string name="tech_value_kw">%1$d kW</string>
+    <string name="tech_value_watt">%1$d W</string>
+    <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
+    <string name="tech_value_deg">%1$d°</string>
+    <string name="tech_value_temp">%1$d°C</string>
+    <string name="tech_value_percent">%1$d%%</string>
+    <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
+    <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_hint_soh" formatted="false">Kondycja akumulatora: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. Wartość wylicza sam samochód.</string>
+    <string name="tech_hint_hv_voltage">Napięcie akumulatora trakcyjnego. Rośnie podczas ładowania i spada w miarę rozładowania, w tym samochodzie około 450…560 V. Samo w sobie niewiele mówi, przydaje się razem z mocą.</string>
+    <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator ładuje się podczas hamowania, to rekuperacja.</string>
+    <string name="tech_hint_12v">Napięcie zwykłego akumulatora 12 V, który zasila elektronikę. Przy uruchomionym samochodzie 13…14,5 V. Jeśli na postoju spada poniżej 12 V, akumulator słabnie.</string>
+    <string name="tech_hint_insulation">Rezystancja między akumulatorem wysokiego napięcia a nadwoziem. Im większa, tym lepiej: normą są pojedyncze megaomy. Spadek do 0,5 MΩ i niżej oznacza uszkodzoną gdzieś izolację, czas do serwisu.</string>
+    <string name="tech_hint_bms_limits">Ile mocy sterownik akumulatora pozwala w tej chwili przyjąć przy ładowaniu i oddać na przyspieszanie. Przy zimnym lub prawie pełnym akumulatorze limity są niższe: dlatego zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
+    <string name="tech_hint_cells">Akumulator składa się z setek ogniw. Pokazane są najsłabsze, najmocniejsze i różnica między nimi. Różnica do 20…30 mV jest normalna. Stale duża różnica oznacza, że jedno ogniwo starzeje się szybciej niż pozostałe.</string>
+    <string name="tech_hint_motors">Temperatura silników elektrycznych i falowników, które nimi sterują. W zwykłej jeździe do 60…80°. Przy długim przyspieszaniu lub holowaniu grzeją się mocniej, a samochód sam obniża moc, aż ostygną.</string>
+    <string name="tech_hint_compressor">Ile watów pobiera sprężarka klimatyzacji i pompy ciepła. To główny odbiornik poza silnikami: latem w upał i zimą na mrozie zauważalnie zjada zasięg.</string>
+    <string name="tech_hint_tyres">Ciśnienie i temperatura każdego koła z czujników w oponach. Ciśnienie rośnie o 0,2…0,3 bar w miarę nagrzewania się opon w trasie, to normalne. Jeśli jedno koło ma wyraźnie mniej niż pozostałe, sprawdź, czy nie schodzi z niego powietrze.</string>
 </resources>
