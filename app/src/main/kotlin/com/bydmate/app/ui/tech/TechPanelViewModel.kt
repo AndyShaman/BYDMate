@@ -107,6 +107,13 @@ data class TechPanelUiState(
     private fun anyOf(vararg values: Any?): Boolean = values.any { it != null }
 }
 
+/**
+ * Standing still, the front motor's fid answers -1 rather than 0 (seen on two consecutive
+ * frames on the car). That is idle, not motion, so anything in -1..0 reads as a plain 0.
+ * Reverse spins the motors properly negative (hundreds of rpm), which passes through.
+ */
+internal fun rpmForDisplay(raw: Int?): Int? = raw?.let { if (it in -1..0) 0 else it }
+
 @HiltViewModel
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,

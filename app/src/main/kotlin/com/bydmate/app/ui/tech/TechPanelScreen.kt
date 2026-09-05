@@ -7,13 +7,16 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
@@ -81,20 +84,42 @@ fun TechPanelScreen(
             return@Column
         }
 
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(3),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-            modifier = Modifier.fillMaxSize()
+        // Two rows of at most three cards each, grouped by what they describe: the battery
+        // and its numbers on top, the drivetrain and the cabin below. IntrinsicSize.Max makes
+        // every card in a row as tall as the tallest one, so their bottoms line up instead of
+        // leaving holes under the short ones. An open hint grows its whole row, as expected.
+        Column(
+            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (state.showBatteryNow) item { BatteryNowCard(state, viewModel::toggleHint) }
-            if (state.showLimitsAndCells) item { LimitsAndCellsCard(state, viewModel::toggleHint) }
-            if (state.showMotors) item { MotorsCard(state, viewModel::toggleHint) }
-            if (state.showClimate) item { ClimateCard(state, viewModel::toggleHint) }
-            if (state.showTyres) item { TyresCard(state, viewModel::toggleHint) }
-            if (state.showHistory) item { HistoryCard(state, viewModel::toggleHint) }
+            CardRow(state.showBatteryNow, state.showLimitsAndCells, state.showHistory) {
+                if (state.showBatteryNow) BatteryNowCard(state, viewModel::toggleHint, cardModifier())
+                if (state.showLimitsAndCells) LimitsAndCellsCard(state, viewModel::toggleHint, cardModifier())
+                if (state.showHistory) HistoryCard(state, viewModel::toggleHint, cardModifier())
+            }
+            CardRow(state.showMotors, state.showClimate, state.showTyres) {
+                if (state.showMotors) MotorsCard(state, viewModel::toggleHint, cardModifier())
+                if (state.showClimate) ClimateCard(state, viewModel::toggleHint, cardModifier())
+                if (state.showTyres) TyresCard(state, viewModel::toggleHint, cardModifier())
+            }
         }
     }
+}
+
+/** Equal share of the row's width, stretched to the row's (intrinsic) height. */
+@Composable
+private fun RowScope.cardModifier(): Modifier = Modifier.weight(1f).fillMaxHeight()
+
+/** Draws [content] as one row of same-height cards, or nothing when the row is empty.
+ *  A hidden card simply leaves more width to its neighbours. */
+@Composable
+private fun CardRow(vararg visible: Boolean, content: @Composable RowScope.() -> Unit) {
+    if (visible.none { it }) return
+    Row(
+        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        content = content,
+    )
 }
 
 @Composable
@@ -135,9 +160,9 @@ private fun Header(online: Boolean?, onBack: () -> Unit) {
 // ============================================================================
 
 @Composable
-private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit) {
+private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     val insulationMohm = state.insulationKohm?.let { it / 1000.0 }
-    TechCard(stringResource(R.string.tech_card_battery_now)) {
+    TechCard(stringResource(R.string.tech_card_battery_now), modifier = modifier) {
         TechRow("SoC", state.soc?.let { "$it%" } ?: DASH)
         TechRow(
             "SoH",
@@ -198,11 +223,12 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit) {
 }
 
 @Composable
-private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit) {
+private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(
         stringResource(R.string.tech_card_limits),
         hintKey = "bmsLimits",
         onHint = onHint,
+        modifier = modifier,
     ) {
         TechRow(
             stringResource(R.string.tech_label_max_charge),
@@ -240,11 +266,12 @@ private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit
 }
 
 @Composable
-private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit) {
+private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(
         stringResource(R.string.tech_card_motors),
         hintKey = "motors",
         onHint = onHint,
+        modifier = modifier,
     ) {
         PairRow(
             "",
@@ -264,8 +291,8 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit) {
         )
         PairRow(
             stringResource(R.string.tech_label_rpm),
-            state.motorRpmFront?.toString() ?: DASH,
-            state.motorRpmRear?.toString() ?: DASH,
+            rpmForDisplay(state.motorRpmFront)?.toString() ?: DASH,
+            rpmForDisplay(state.motorRpmRear)?.toString() ?: DASH,
         )
         PairRow(
             stringResource(R.string.tech_label_pedals),
@@ -277,8 +304,8 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit) {
 }
 
 @Composable
-private fun ClimateCard(state: TechPanelUiState, onHint: (String) -> Unit) {
-    TechCard(stringResource(R.string.tech_card_climate)) {
+private fun ClimateCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+    TechCard(stringResource(R.string.tech_card_climate), modifier = modifier) {
         TechRow(
             stringResource(R.string.tech_label_compressor),
             state.compressorW?.let { stringResource(R.string.tech_value_watt, it) } ?: DASH,
@@ -302,11 +329,12 @@ private fun ClimateCard(state: TechPanelUiState, onHint: (String) -> Unit) {
 }
 
 @Composable
-private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit) {
+private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(
         stringResource(R.string.tech_card_tyres),
         hintKey = "tyres",
         onHint = onHint,
+        modifier = modifier,
     ) {
         TyreRow(stringResource(R.string.tech_tyre_fl), state.tirePressFL, state.tyreTempFL)
         TyreRow(stringResource(R.string.tech_tyre_fr), state.tirePressFR, state.tyreTempFR)
@@ -317,8 +345,8 @@ private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit) {
 }
 
 @Composable
-private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit) {
-    TechCard(stringResource(R.string.tech_card_history)) {
+private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
+    TechCard(stringResource(R.string.tech_card_history), modifier = modifier) {
         TechRow(
             stringResource(R.string.battery_health_bms_mileage_label),
             state.lifetimeKm?.let { stringResource(R.string.battery_health_bms_mileage_value, it) } ?: DASH,
@@ -351,13 +379,14 @@ private fun TechCard(
     header: String,
     hintKey: String? = null,
     onHint: (String) -> Unit = {},
+    modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
     Card(
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         border = androidx.compose.foundation.BorderStroke(1.dp, CardBorder),
-        modifier = Modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth()
     ) {
         Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
