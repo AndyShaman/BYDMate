@@ -40,6 +40,7 @@ import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -284,7 +285,6 @@ class DashboardViewModelTest {
             tripRepository = tripRepo,
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,
-            chargeDao = chargeDao,
             insightsManager = resolvedInsightsManager,
             batteryStateRepository = batteryStateRepo
         )
@@ -545,30 +545,17 @@ class DashboardViewModelTest {
         coVerify { spySettings.setTripResetState(1, any()) }
     }
 
+    /**
+     * The compact battery card now also shows insulation and the cell delta. With no
+     * autoservice both stay null, which the card renders as «—» rather than a zero.
+     */
     @Test
-    fun `expanding battery health computes average soc from trips and charges`() = runTest {
-        // charge 40->80 ends at t=200, trip 80->60 spans 300..400
-        val vm = buildViewModel(
-            fakeAutoservice = FakeAutoservice(sampleReading, available = true),
-            trips = listOf(TripEntity(startTs = 300L, endTs = 400L, socStart = 80, socEnd = 60)),
-            charges = listOf(
-                com.bydmate.app.data.local.entity.ChargeEntity(
-                    startTs = 100L, endTs = 200L, socStart = 40, socEnd = 80, status = "COMPLETED"
-                )
-            )
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.toggleBatteryHealthExpanded()
+    fun `compact card state exposes insulation and cell delta as null without live data`() = runTest {
+        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(null, available = false))
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = vm.uiState.value
-        assertTrue(state.batteryHealthExpanded)
-        // allTime = 60 + 2000/(now-100), sinceCharge = 60 + 4000/(now-200) -- for any real
-        // wall-clock `now` both terms round to 0, so both windows round to 60. Since-charge
-        // starts at the charge end (soc 80), so it can never average below the all-time
-        // window that also contains the pre-charge soc 40.
-        assertEquals(60, state.avgSocAllTime)
-        assertEquals(60, state.avgSocSinceCharge)
+        assertNull(state.insulationKohm)
+        assertNull(state.cellVoltageDelta)
     }
 }

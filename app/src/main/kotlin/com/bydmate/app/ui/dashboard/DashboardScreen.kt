@@ -80,6 +80,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun DashboardScreen(
+    onOpenTechPanel: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -278,13 +279,29 @@ fun DashboardScreen(
                         val voltageColor = when (state.voltage12vStatus) {
                             "critical" -> SocRed; "warning" -> SocYellow; else -> AccentGreen
                         }
+                        // МОм: ≥1 healthy, 0.5-1 watch, <0.5 the pack is leaking to the body.
+                        val insulationMohm = state.insulationKohm?.let { it / 1000.0 }
+                        val insulationStatus = when {
+                            insulationMohm == null -> "ok"
+                            insulationMohm >= 1.0 -> "ok"
+                            insulationMohm >= 0.5 -> "warning"
+                            else -> "critical"
+                        }
+                        val insulationColor = when (insulationStatus) {
+                            "critical" -> SocRed; "warning" -> SocYellow
+                            else -> if (insulationMohm == null) TextPrimary else AccentGreen
+                        }
+                        // batteryHealthStatus already folds in the cell delta (same 50/90 mV
+                        // thresholds as the cell colour), so the border only gains insulation here.
                         val worstColor = when {
                             sohStatus == "critical" ||
                                 state.batteryHealthStatus == "critical" ||
-                                state.voltage12vStatus == "critical" -> SocRed
+                                state.voltage12vStatus == "critical" ||
+                                insulationStatus == "critical" -> SocRed
                             sohStatus == "warning" ||
                                 state.batteryHealthStatus == "warning" ||
-                                state.voltage12vStatus == "warning" -> SocYellow
+                                state.voltage12vStatus == "warning" ||
+                                insulationStatus == "warning" -> SocYellow
                             else -> AccentGreen
                         }
                         BatteryCompactCard(
@@ -294,8 +311,14 @@ fun DashboardScreen(
                             tempColor = tempColor,
                             voltageText = state.voltage12v?.let { stringResource(R.string.dashboard_voltage_value, it) } ?: "—",
                             voltageColor = voltageColor,
+                            cellDeltaText = state.cellVoltageDelta
+                                ?.let { stringResource(R.string.tech_value_mv, Math.round(it * 1000.0).toInt()) } ?: "—",
+                            cellDeltaColor = com.bydmate.app.ui.tech.cellDeltaColor(state.cellVoltageDelta, state.soc),
+                            insulationText = insulationMohm
+                                ?.let { stringResource(R.string.tech_value_mohm, it) } ?: "—",
+                            insulationColor = insulationColor,
                             borderColor = worstColor,
-                            onClick = { viewModel.toggleBatteryHealthExpanded() }
+                            onClick = onOpenTechPanel
                         )
                         // TRIP 1 / TRIP 2 resettable counters row
                         Row(
@@ -410,33 +433,6 @@ fun DashboardScreen(
                                 Text(stringResource(R.string.dashboard_insight_no_data), color = TextMuted, fontSize = 13.sp)
                             }
                         }
-                    }
-                    if (state.batteryHealthExpanded) {
-                        val sohForColor = state.currentSoh ?: 100f
-                        val color = when {
-                            sohForColor < 80f ||
-                                state.batteryHealthStatus == "critical" ||
-                                state.voltage12vStatus == "critical" -> SocRed
-                            sohForColor < 90f ||
-                                state.batteryHealthStatus == "warning" ||
-                                state.voltage12vStatus == "warning" -> SocYellow
-                            else -> AccentGreen
-                        }
-                        com.bydmate.app.ui.battery.BatteryHealthDialog(
-                            liveSoc = state.soc,
-                            liveCellDelta = state.cellVoltageDelta,
-                            liveCellVoltageMin = state.cellVoltageMin,
-                            liveCellVoltageMax = state.cellVoltageMax,
-                            liveBatTemp = state.avgBatTemp,
-                            liveVoltage12v = state.voltage12v,
-                            liveSoh = state.currentSoh,
-                            liveLifetimeKm = state.currentLifetimeKm,
-                            liveLifetimeKwh = state.currentLifetimeKwh,
-                            avgSocSinceCharge = state.avgSocSinceCharge,
-                            avgSocAllTime = state.avgSocAllTime,
-                            borderColor = color,
-                            onDismiss = { viewModel.toggleBatteryHealthExpanded() },
-                        )
                     }
                     // TRIP 1 popup
                     state.trip1?.let { t ->
@@ -661,6 +657,10 @@ private fun BatteryCompactCard(
     tempColor: Color,
     voltageText: String,
     voltageColor: Color,
+    cellDeltaText: String,
+    cellDeltaColor: Color,
+    insulationText: String,
+    insulationColor: Color,
     borderColor: Color,
     onClick: () -> Unit,
 ) {
@@ -681,6 +681,8 @@ private fun BatteryCompactCard(
             BatteryCell(value = sohText, label = "SoH", color = sohColor)
             BatteryCell(value = tempText, label = stringResource(R.string.dashboard_battery_temp_label), color = tempColor)
             BatteryCell(value = voltageText, label = stringResource(R.string.dashboard_battery_voltage_label), color = voltageColor)
+            BatteryCell(value = cellDeltaText, label = stringResource(R.string.battery_health_cell_delta_label), color = cellDeltaColor)
+            BatteryCell(value = insulationText, label = stringResource(R.string.dashboard_battery_insulation_label), color = insulationColor)
         }
     }
 }

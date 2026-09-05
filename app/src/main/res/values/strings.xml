@@ -691,14 +691,10 @@
     <!-- SOC ring: charging icon content description -->
     <string name="battery_health_charging_cd">Идёт зарядка</string>
 
-    <!-- Battery health dialog -->
-    <string name="battery_health_dialog_title">Здоровье батареи</string>
-    <string name="battery_health_now_header">Сейчас (от машины, live)</string>
-    <string name="battery_health_lifetime_header">Lifetime (системные данные)</string>
+    <!-- Battery readings shared by the compact card and the tech panel -->
     <string name="battery_health_cell_delta_label">Δ ячеек</string>
     <!-- %1$.3f = delta volts -->
     <string name="battery_health_cell_delta_value">%1$.3f В</string>
-    <string name="battery_health_banks_header">Банки</string>
     <!-- %1$.3f = cell voltage volts -->
     <string name="battery_health_cell_voltage_value">%1$.3f В</string>
     <string name="battery_health_bat_temp_label">темп. батареи</string>
@@ -711,9 +707,6 @@
     <string name="battery_health_pumped_label">прокачано</string>
     <!-- %1$.0f = kWh -->
     <string name="battery_health_pumped_value">%1$.0f кВт·ч</string>
-    <string name="battery_health_disabled_title">Системные данные выключены</string>
-    <string name="battery_health_disabled_hint">Включи «Системные данные» в Настройках, чтобы видеть SoH, пробег BMS и прокачано всего от машины.</string>
-    <string name="battery_health_avg_soc_header">Средний SOC (история BYDMate)</string>
     <string name="battery_health_avg_since_charge_label">с последней зарядки</string>
     <string name="battery_health_avg_all_time_label">за всё время</string>
     <string name="battery_health_avg_soc_hint" formatted="false">Средневзвешенный уровень заряда: чем дольше батарея стоит заряженной, тем выше значение. Для LFP-батареи BYD полезно держать его пониже: хранение на высоком заряде ускоряет старение. Ориентир: до 65% отлично, 65-85% нормально, выше 85% лучше заряжать позже или реже. Заряд до 100% раз в 1-2 недели всё равно нужен для балансировки ячеек. Считается по истории поездок и зарядок BYDMate.</string>
@@ -1394,4 +1387,69 @@
     <string name="settings_split_mechanism_platformized_hint">На этой прошивке экран делит сама машина: панели 1/3 и 2/3, разделитель и жест обмена родные. BYDMate только запускает выбранную пару и возвращает приложение в его панель.</string>
     <string name="settings_split_try_native_hint">Попробуйте режим Родное разделение.</string>
     <string name="split_feature_disabled">Разделение экрана выключено в настройках</string>
+    <!-- Tech panel («Техника»): compact card cell + full screen -->
+    <string name="dashboard_battery_insulation_label">изоляция</string>
+    <string name="tech_title">Техника</string>
+    <string name="tech_status_online">autoservice online</string>
+    <string name="tech_status_offline">autoservice offline</string>
+    <string name="tech_no_data">Машина не отдаёт эти данные</string>
+    <string name="tech_card_battery_now">Батарея · сейчас</string>
+    <string name="tech_card_limits">Лимиты BMS</string>
+    <string name="tech_card_cells">Ячейки</string>
+    <string name="tech_card_motors">Моторы и инверторы</string>
+    <string name="tech_card_climate">Климат</string>
+    <string name="tech_card_tyres">Шины · давление / температура</string>
+    <string name="tech_card_history">Батарея · история</string>
+    <string name="tech_label_hv_voltage">напряжение HV</string>
+    <string name="tech_label_power">мощность</string>
+    <string name="tech_label_battery_power">мощность батареи</string>
+    <string name="tech_label_max_charge">макс. мощность заряда</string>
+    <string name="tech_label_max_discharge">макс. мощность разряда</string>
+    <string name="tech_label_motor_temp">температура мотора</string>
+    <string name="tech_label_inverter_temp">температура инвертора</string>
+    <string name="tech_label_rpm">обороты, об/мин</string>
+    <string name="tech_label_pedals">педаль газа / тормоза</string>
+    <string name="tech_label_front">перед</string>
+    <string name="tech_label_rear">зад</string>
+    <string name="tech_label_compressor">компрессор</string>
+    <string name="tech_label_climate">климат</string>
+    <string name="tech_label_inside_outside">в салоне / за бортом</string>
+    <string name="tech_on">вкл</string>
+    <string name="tech_off">выкл</string>
+    <string name="tech_tyre_fl">ПЛ</string>
+    <string name="tech_tyre_fr">ПП</string>
+    <string name="tech_tyre_rl">ЗЛ</string>
+    <string name="tech_tyre_rr">ЗП</string>
+    <!-- %1$.1f = insulation megaohms -->
+    <string name="tech_value_mohm">%1$.1f МОм</string>
+    <!-- %1$d = cell delta millivolts -->
+    <string name="tech_value_mv">%1$d мВ</string>
+    <!-- %1$d = volts -->
+    <string name="tech_value_volt">%1$d В</string>
+    <!-- %1$d = kilowatts -->
+    <string name="tech_value_kw">%1$d кВт</string>
+    <!-- %1$d = watts -->
+    <string name="tech_value_watt">%1$d Вт</string>
+    <!-- %1$.2f = percent of battery per hour -->
+    <string name="tech_value_percent_per_hour">%1$.2f %%/ч</string>
+    <!-- %1$d = degrees celsius, short form -->
+    <string name="tech_value_deg">%1$d°</string>
+    <!-- %1$d = degrees celsius -->
+    <string name="tech_value_temp">%1$d°C</string>
+    <!-- %1$d = percent -->
+    <string name="tech_value_percent">%1$d%%</string>
+    <!-- %1$.2f = bar, %2$d = degrees celsius -->
+    <string name="tech_value_tyre">%1$.2f бар · %2$d°</string>
+    <!-- %1$.2f = bar -->
+    <string name="tech_value_tyre_pressure">%1$.2f бар</string>
+    <string name="tech_hint_soh" formatted="false">Здоровье батареи: сколько ёмкости осталось от новой. 100% у новой машины, медленно снижается с годами. Значение считает сама машина.</string>
+    <string name="tech_hint_hv_voltage">Напряжение тяговой батареи. Растёт при зарядке и падает по мере разряда, у этой машины примерно 450…560 В. Само по себе ни о чём не говорит, полезно вместе с мощностью.</string>
+    <string name="tech_hint_power">Сколько энергии батарея отдаёт прямо сейчас. Плюс: машина тратит (разгон, климат). Минус: батарея заряжается от торможения, это рекуперация.</string>
+    <string name="tech_hint_12v">Напряжение обычного 12-вольтового аккумулятора, который питает электронику. На заведённой машине 13…14,5 В. Если на стоянке ниже 12 В, аккумулятор слабеет.</string>
+    <string name="tech_hint_insulation">Сопротивление между высоковольтной батареей и кузовом. Чем больше, тем лучше: норма единицы мегаом. Падает к 0,5 МОм и ниже: где-то повреждена изоляция, пора на сервис.</string>
+    <string name="tech_hint_bms_limits">Сколько мощности контроллер батареи разрешает прямо сейчас принять на зарядке и отдать на разгон. На холодной или почти полной батарее лимиты ниже: поэтому зимой зарядка медленнее и рекуперация слабее.</string>
+    <string name="tech_hint_cells">Батарея состоит из сотен ячеек. Показаны самая слабая и самая сильная и разница между ними. Разница до 20…30 мВ в норме. Постоянно большая разница: одна из ячеек стареет быстрее других.</string>
+    <string name="tech_hint_motors">Температура электромоторов и инверторов, которые ими управляют. В обычной езде до 60…80°. При долгом разгоне или буксировке греются сильнее, и машина сама снижает мощность, пока не остынут.</string>
+    <string name="tech_hint_compressor">Сколько ватт потребляет компрессор кондиционера и теплового насоса. Это главный потребитель кроме моторов: летом в жару и зимой в мороз он заметно съедает запас хода.</string>
+    <string name="tech_hint_tyres">Давление и температура каждого колеса от датчиков в шинах. Давление растёт на 0,2…0,3 бар по мере прогрева в поездке, это нормально. Одно колесо заметно ниже других: проверьте, не спускает ли.</string>
 </resources>
