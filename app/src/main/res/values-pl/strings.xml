@@ -1431,7 +1431,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_hint_soh" formatted="false">Kondycja akumulatora: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. Wartość wylicza sam samochód.</string>
     <string name="tech_hint_hv_voltage">Napięcie akumulatora trakcyjnego. Rośnie podczas ładowania i spada w miarę rozładowania, w tym samochodzie około 450…560 V. Samo w sobie niewiele mówi, przydaje się razem z mocą.</string>
-    <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator ładuje się podczas hamowania, to rekuperacja.</string>
+    <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator przyjmuje energię: rekuperacja przy hamowaniu albo ładowanie ze stacji.</string>
     <string name="tech_hint_12v">Napięcie zwykłego akumulatora 12 V, który zasila elektronikę. Przy uruchomionym samochodzie 13…14,5 V. Jeśli na postoju spada poniżej 12 V, akumulator słabnie.</string>
     <string name="tech_hint_insulation">Rezystancja między akumulatorem wysokiego napięcia a nadwoziem. Im większa, tym lepiej: normą są pojedyncze megaomy. Spadek do 0,5 MΩ i niżej oznacza uszkodzoną gdzieś izolację, czas do serwisu.</string>
     <string name="tech_hint_bms_limits">Ile mocy sterownik akumulatora pozwala w tej chwili przyjąć przy ładowaniu i oddać na przyspieszanie. Przy zimnym lub prawie pełnym akumulatorze limity są niższe: dlatego zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
