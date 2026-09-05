@@ -15,6 +15,7 @@ enum class Decoder {
     FLOAT_PERCENT,
     FLOAT_KW,
     FLOAT_KWH,
+    FLOAT_AMP,
 }
 
 object ParamDecoder {
@@ -45,7 +46,7 @@ object ParamDecoder {
                 v / 10.0
             }
             Decoder.FLOAT_VOLT, Decoder.FLOAT_PERCENT,
-            Decoder.FLOAT_KW, Decoder.FLOAT_KWH -> {
+            Decoder.FLOAT_KW, Decoder.FLOAT_KWH, Decoder.FLOAT_AMP -> {
                 val f = SentinelDecoder.parseFloatFromShellInt(rawInt) ?: return null
                 f.toDouble()
             }

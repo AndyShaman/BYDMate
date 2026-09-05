@@ -102,5 +102,30 @@ object FidMap {
         FidEntry("keyBatteryStatus", 1014, 402653200,   5, Decoder.INT_ENUM),  // 0=ok, non-zero=low
         FidEntry("wiperRelay",       1046, 1336934438,  5, Decoder.INT_ENUM),  // 0=idle, non-zero=wiping
         FidEntry("autoWipers",       1046, 321912862,   5, Decoder.INT_ENUM),  // 1=rain-sensing wipe enabled
+        // Tech panel wave (2026-09-05). Raw ints; the range checks live in
+        // NativeParsReader.assembleSnapshot (motor/inverter temps exceed the -50..80
+        // envelope INT_TEMP_C enforces). Battery temp extremes and the AC on/off flag
+        // are already mapped above as maxBatTemp/minBatTemp/acStatus.
+        FidEntry("insulationKohm",     1039, 1134559256,  5, Decoder.INT_RAW),   // kΩ between HV pack and body
+        FidEntry("motorTempFront",     1039, 1154482192,  5, Decoder.INT_RAW),
+        FidEntry("motorTempRear",      1039, 1155530768,  5, Decoder.INT_RAW),
+        FidEntry("inverterTempFront",  1039, 1154482184,  5, Decoder.INT_RAW),
+        FidEntry("inverterTempRear",   1039, 1155530760,  5, Decoder.INT_RAW),
+        FidEntry("hvVoltage",          1009, 1145045000,  5, Decoder.INT_RAW),
+        FidEntry("hvCurrent",          1009, 1145045016,  7, Decoder.FLOAT_AMP), // negative = charging (#153)
+        // Unproven on the car (0.0 while parked) — logged only, not surfaced in UI.
+        FidEntry("motorCurrentFront",  1009, 1186988040,  7, Decoder.FLOAT_AMP),
+        FidEntry("motorCurrentRear",   1009, 1186988056,  7, Decoder.FLOAT_AMP),
+        FidEntry("bmsMaxChargeKw",     1014, 877658136,   5, Decoder.INT_SCALED, scale = 0.1),
+        FidEntry("bmsMaxDischargeKw",  1014, 1145045048,  5, Decoder.INT_RAW),
+        FidEntry("motorRpmFront",      1012, 1141899272,  5, Decoder.INT_RAW),
+        FidEntry("motorRpmRear",       1012, 621805576,   5, Decoder.INT_RAW),
+        FidEntry("compressorW",        1000, 1031798840,  5, Decoder.INT_RAW),
+        FidEntry("tyreTempFL",         1007, 1246797848,  5, Decoder.INT_RAW),
+        FidEntry("tyreTempFR",         1007, 1246797860,  5, Decoder.INT_RAW),
+        FidEntry("tyreTempRL",         1007, 1246797872,  5, Decoder.INT_RAW),
+        FidEntry("tyreTempRR",         1007, 1246797884,  5, Decoder.INT_RAW),
+        FidEntry("pedalAccel",         1013, 874512392,   5, Decoder.INT_RAW),
+        FidEntry("pedalBrake",         1013, 874512400,   5, Decoder.INT_RAW),
     )
 }
