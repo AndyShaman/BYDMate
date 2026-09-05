@@ -106,6 +106,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
     @Inject lateinit var fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
+    @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
@@ -256,6 +257,10 @@ class TrackingService : Service(), LocationListener {
         // self-heal run per 10 min at most, so a permanently-failing grant can't
         // hammer the daemon for a whole trip.
         private const val GUIDANCE_GRANT_REARM_MS = 600_000L
+        // Resuming a log recording interrupted by ignition-off: a couple of retries
+        // cover the storage mount lagging the service start, then we stop trying.
+        private const val LOG_RESUME_ATTEMPTS = 3
+        private const val LOG_RESUME_RETRY_DELAY_MS = 20_000L
         // Startup catch-up retries while the autoservice SOC fid is still
         // sentinel/unavailable during the cold-start window. 4 extra tries × 3 s
         // ≈ 12 s of grace before giving up — enough for the fid cache to warm so
@@ -644,6 +649,20 @@ class TrackingService : Service(), LocationListener {
         // (service start, not first recorder use) minimizes the window where the log recorder
         // still cannot see the helper daemon's lines.
         serviceScope.launch { readLogsGrant.ensure("startup") }
+        // A recording the user started before ignition-off continues into the same
+        // file, so the startup itself (launch automations, steering-wheel keys) is
+        // in the log the user sends us.
+        serviceScope.launch {
+            // Retried while nothing is recording: this early the storage holding the
+            // log may still be unmounted, and a resumed logcat can die right away
+            // when the READ_LOGS grant above has not landed yet.
+            repeat(LOG_RESUME_ATTEMPTS) { attempt ->
+                if (attempt > 0) delay(LOG_RESUME_RETRY_DELAY_MS)
+                if (!logRecorder.state.value.isRecording && logRecorder.resumeIfPending()) {
+                    Log.i(TAG, "log recording resumed: ${logRecorder.state.value.filePath}")
+                }
+            }
+        }
         registerScreenWakeReceiver()
 
         // Start the network monitor BEFORE polling so the first evaluate() tick
