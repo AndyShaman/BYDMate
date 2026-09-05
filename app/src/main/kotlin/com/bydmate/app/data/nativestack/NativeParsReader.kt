@@ -38,6 +38,9 @@ class NativeParsReader @Inject constructor(
      */
     @Volatile private var lastDriveMode: Int? = null
 
+    /** Keeps the raw tech-panel line to one per 5 s on the 1 s DRIVE cadence. */
+    private val techLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(5_000L)
+
     override suspend fun fetch(): DiParsData? = when (gate.mode()) {
         BatchMode.ACTIVE -> fetchViaBatch() ?: fetchViaAdb()
         BatchMode.OFF -> fetchViaAdb()
@@ -97,7 +100,41 @@ class NativeParsReader @Inject constructor(
             }
             decoded[entry.field] = value
         }
+        logTechRaw(pairs)
         return decoded
+    }
+
+    /**
+     * One throttled line with the RAW (pre-sentinel) words of every tech-panel fid, so a
+     * single test drive settles the unproven ones (motor currents, battery temp extremes)
+     * without another build. Values the batch failed to read print as "?".
+     */
+    private fun logTechRaw(pairs: List<Pair<Int, Int>>) {
+        if (!techLogThrottle.shouldLog("tech")) return
+        fun raw(field: String): String {
+            val i = FidMap.entries.indexOfFirst { it.field == field }
+            if (i < 0) return "?"
+            val (status, word) = pairs.getOrNull(i) ?: return "?"
+            if (status != 0) return "?"
+            return if (FidMap.entries[i].transact == 7) {
+                java.lang.Float.intBitsToFloat(word).toString()
+            } else {
+                word.toString()
+            }
+        }
+        android.util.Log.i(
+            "TechPanel",
+            "tech: ins=${raw("insulationKohm")} mF=${raw("motorTempFront")} mR=${raw("motorTempRear")} " +
+                "iF=${raw("inverterTempFront")} iR=${raw("inverterTempRear")} " +
+                "V=${raw("hvVoltage")} I=${raw("hvCurrent")} " +
+                "chg=${raw("bmsMaxChargeKw")} dis=${raw("bmsMaxDischargeKw")} " +
+                "tmax=${raw("maxBatTemp")} tmin=${raw("minBatTemp")} " +
+                "rF=${raw("motorRpmFront")} rR=${raw("motorRpmRear")} " +
+                "comp=${raw("compressorW")} ac=${raw("acStatus")} " +
+                "tyT=${raw("tyreTempFL")}/${raw("tyreTempFR")}/${raw("tyreTempRL")}/${raw("tyreTempRR")} " +
+                "acc=${raw("pedalAccel")} brk=${raw("pedalBrake")} " +
+                "cF=${raw("motorCurrentFront")} cR=${raw("motorCurrentRear")}"
+        )
     }
 
     private suspend fun fetchViaAdb(): DiParsData? {
@@ -187,6 +224,14 @@ class NativeParsReader @Inject constructor(
             maxBatTemp != null && minBatTemp != null -> ((maxBatTemp + minBatTemp) / 2.0).roundToInt()
             else -> maxBatTemp ?: minBatTemp
         }
+
+        // Tech panel readings: INT_RAW passes anything the sentinel filter let through,
+        // so each value is held to its physical envelope before it reaches the UI.
+        fun ranged(name: String, range: IntRange): Int? = field<Int>(name)?.takeIf { it in range }
+        val hvVoltage = ranged("hvVoltage", 0..1000)
+        val hvCurrent = field<Double>("hvCurrent")
+        val batteryPowerW =
+            if (hvVoltage != null && hvCurrent != null) hvVoltage * hvCurrent else null
 
         // Indirect rain detection: with rain-sensing auto-wipers enabled the wiper
         // relay only fires when the sensor sees water. In manual wiper mode rain is
@@ -292,6 +337,25 @@ class NativeParsReader @Inject constructor(
             wiperRelay          = wiperRelay,
             autoWipers          = autoWipers,
             bmsState            = bmsState,
+            insulationKohm      = ranged("insulationKohm", 0..65000),
+            motorTempFront      = ranged("motorTempFront", -50..150),
+            motorTempRear       = ranged("motorTempRear", -50..150),
+            inverterTempFront   = ranged("inverterTempFront", -50..150),
+            inverterTempRear    = ranged("inverterTempRear", -50..150),
+            hvVoltage           = hvVoltage,
+            hvCurrent           = hvCurrent,
+            batteryPowerW       = batteryPowerW,
+            bmsMaxChargeKw      = field<Double>("bmsMaxChargeKw")?.takeIf { it in 0.0..1000.0 },
+            bmsMaxDischargeKw   = ranged("bmsMaxDischargeKw", 0..1000),
+            motorRpmFront       = ranged("motorRpmFront", -20000..20000),
+            motorRpmRear        = ranged("motorRpmRear", -20000..20000),
+            compressorW         = ranged("compressorW", 0..20000),
+            tyreTempFL          = ranged("tyreTempFL", -50..150),
+            tyreTempFR          = ranged("tyreTempFR", -50..150),
+            tyreTempRL          = ranged("tyreTempRL", -50..150),
+            tyreTempRR          = ranged("tyreTempRR", -50..150),
+            pedalAccel          = ranged("pedalAccel", 0..100),
+            pedalBrake          = ranged("pedalBrake", 0..100),
         )
     }
 

@@ -502,4 +502,98 @@ class NativeParsReaderBatchTest {
         val reader = NativeParsReader(auto, settings, helper, gate)
         assertNull(reader.fetch())
     }
+
+    /** Tech-panel wave: the new fids decode from the same batch, dead ones stay null, and
+     *  battery power is the product of the HV pair (#153: positive = draw). */
+    @Test
+    fun `tech panel fields decode from the batch and derive battery power`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(43.0f),
+                fid("insulationKohm").field to 6800,
+                fid("motorTempFront").field to 17,
+                fid("inverterTempRear").field to 30,
+                fid("hvVoltage").field to 499,
+                fid("hvCurrent").field to java.lang.Float.floatToRawIntBits(2.4f),
+                fid("bmsMaxChargeKw").field to 1732,
+                fid("bmsMaxDischargeKw").field to 148,
+                fid("motorRpmRear").field to -370,
+                fid("compressorW").field to 576,
+                fid("tyreTempFL").field to 15,
+                fid("pedalBrake").field to 59,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+
+        assertNotNull("fetch() returned null", data)
+        checkNotNull(data)
+        assertEquals(6800, data.insulationKohm)
+        assertEquals(17, data.motorTempFront)
+        assertEquals(30, data.inverterTempRear)
+        assertEquals(499, data.hvVoltage)
+        assertEquals(2.4, data.hvCurrent!!, 0.0001)
+        assertEquals(173.2, data.bmsMaxChargeKw!!, 0.0001)
+        assertEquals(148, data.bmsMaxDischargeKw)
+        assertEquals(-370, data.motorRpmRear)
+        assertEquals(576, data.compressorW)
+        assertEquals(15, data.tyreTempFL)
+        assertEquals(59, data.pedalBrake)
+        assertEquals(499 * 2.4, data.batteryPowerW!!, 0.0001)
+        // -10011 for every other tech fid → null, not a reading.
+        assertNull(data.motorTempRear)
+        assertNull(data.pedalAccel)
+        assertNull(data.tyreTempRR)
+        coVerify(exactly = 0) { auto.isAvailable() }
+    }
+
+    /** A wrong-transact sentinel must null the field, and with no current there is no power. */
+    @Test
+    fun `tech panel sentinels null the fields and suppress battery power`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(43.0f),
+                fid("insulationKohm").field to -10013,
+                fid("hvVoltage").field to 499,
+                fid("hvCurrent").field to java.lang.Float.floatToRawIntBits(-1.0f),
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val data = NativeParsReader(auto, settings, helper, gate).fetch()
+
+        assertNotNull("fetch() returned null", data)
+        checkNotNull(data)
+        assertNull(data.insulationKohm)
+        assertNull(data.hvCurrent)
+        assertNull(data.batteryPowerW)
+        assertEquals(499, data.hvVoltage)
+    }
+
+    /** One transaction for the whole map, tech fids included. */
+    @Test
+    fun `batch carries every FidMap entry in a single readBatch call`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        val items = slot<List<com.bydmate.app.data.vehicle.BatchReadItem>>()
+        coEvery { helper.readBatch(capture(items)) } returns allOkPairs()
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        NativeParsReader(auto, settings, helper, gate).fetch()
+
+        coVerify(exactly = 1) { helper.readBatch(any()) }
+        assertEquals(FidMap.entries.size, items.captured.size)
+    }
 }
