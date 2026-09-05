@@ -1279,7 +1279,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_hint_soh" formatted="false">Battery health: how much of the original capacity is left. 100% on a new car, slowly decreasing over the years. The car itself calculates this value.</string>
     <string name="tech_hint_hv_voltage">Voltage of the traction battery. It rises while charging and falls as the pack discharges, roughly 450…560 V on this car. On its own it says little, it is useful together with power.</string>
-    <string name="tech_hint_power">How much energy the battery is delivering right now. Plus: the car is spending (acceleration, climate). Minus: the battery is being charged by braking, that is regeneration.</string>
+    <string name="tech_hint_power">How much energy the battery is giving out right now. Plus: the car is spending it (acceleration, climate). Minus: the battery is taking energy in, either regeneration while braking or charging from a charger.</string>
     <string name="tech_hint_12v">Voltage of the ordinary 12-volt battery that powers the electronics. With the car running it is 13…14.5 V. If it is below 12 V while parked, the battery is getting weak.</string>
     <string name="tech_hint_insulation">Resistance between the high-voltage battery and the body. The higher the better: a few megaohms is normal. Falling towards 0.5 MΩ and below means insulation is damaged somewhere, time for a service.</string>
     <string name="tech_hint_bms_limits">How much power the battery controller allows right now to take in while charging and to give out for acceleration. On a cold or nearly full battery the limits are lower: that is why charging is slower and regeneration weaker in winter.</string>

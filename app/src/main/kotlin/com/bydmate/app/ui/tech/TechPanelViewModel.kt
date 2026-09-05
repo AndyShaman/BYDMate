@@ -9,6 +9,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -128,56 +129,65 @@ class TechPanelViewModel @Inject constructor(
 
     private fun observeLiveData() {
         viewModelScope.launch {
-            TrackingService.lastData.collect { data ->
-                _uiState.update {
-                    it.copy(
-                        soc = data?.soc,
-                        batTemp = data?.avgBatTemp,
-                        hvVoltage = data?.hvVoltage,
-                        powerKw = data?.power,
-                        batteryPowerW = data?.batteryPowerW,
-                        batteryCapacityKwh = data?.batteryCapacityKwh,
-                        voltage12v = data?.voltage12v,
-                        insulationKohm = data?.insulationKohm,
-                        bmsMaxChargeKw = data?.bmsMaxChargeKw,
-                        bmsMaxDischargeKw = data?.bmsMaxDischargeKw,
-                        cellMin = data?.minCellVoltage,
-                        cellMax = data?.maxCellVoltage,
-                        motorTempFront = data?.motorTempFront,
-                        motorTempRear = data?.motorTempRear,
-                        inverterTempFront = data?.inverterTempFront,
-                        inverterTempRear = data?.inverterTempRear,
-                        motorRpmFront = data?.motorRpmFront,
-                        motorRpmRear = data?.motorRpmRear,
-                        pedalAccel = data?.pedalAccel,
-                        pedalBrake = data?.pedalBrake,
-                        compressorW = data?.compressorW,
-                        acStatus = data?.acStatus,
-                        insideTemp = data?.insideTemp,
-                        exteriorTemp = data?.exteriorTemp,
-                        tirePressFL = data?.tirePressFL,
-                        tirePressFR = data?.tirePressFR,
-                        tirePressRL = data?.tirePressRL,
-                        tirePressRR = data?.tirePressRR,
-                        tyreTempFL = data?.tyreTempFL,
-                        tyreTempFR = data?.tyreTempFR,
-                        tyreTempRL = data?.tyreTempRL,
-                        tyreTempRR = data?.tyreTempRR,
-                    )
+            // The header's online cue must follow the transport, not a single read taken when
+            // the screen opened: a car that drops off the bus keeps showing its last numbers,
+            // and coming back has to be visible too (same pairing DashboardViewModel uses).
+            TrackingService.lastData
+                .combine(TrackingService.vehicleDataConnected) { data, connected -> data to connected }
+                .collect { (data, connected) ->
+                    _uiState.update {
+                        it.copy(
+                            autoserviceOnline = connected,
+                            soc = data?.soc,
+                            batTemp = data?.avgBatTemp,
+                            hvVoltage = data?.hvVoltage,
+                            powerKw = data?.power,
+                            batteryPowerW = data?.batteryPowerW,
+                            batteryCapacityKwh = data?.batteryCapacityKwh,
+                            voltage12v = data?.voltage12v,
+                            insulationKohm = data?.insulationKohm,
+                            bmsMaxChargeKw = data?.bmsMaxChargeKw,
+                            bmsMaxDischargeKw = data?.bmsMaxDischargeKw,
+                            cellMin = data?.minCellVoltage,
+                            cellMax = data?.maxCellVoltage,
+                            motorTempFront = data?.motorTempFront,
+                            motorTempRear = data?.motorTempRear,
+                            inverterTempFront = data?.inverterTempFront,
+                            inverterTempRear = data?.inverterTempRear,
+                            motorRpmFront = data?.motorRpmFront,
+                            motorRpmRear = data?.motorRpmRear,
+                            pedalAccel = data?.pedalAccel,
+                            pedalBrake = data?.pedalBrake,
+                            compressorW = data?.compressorW,
+                            acStatus = data?.acStatus,
+                            insideTemp = data?.insideTemp,
+                            exteriorTemp = data?.exteriorTemp,
+                            tirePressFL = data?.tirePressFL,
+                            tirePressFR = data?.tirePressFR,
+                            tirePressRL = data?.tirePressRL,
+                            tirePressRR = data?.tirePressRR,
+                            tyreTempFL = data?.tyreTempFL,
+                            tyreTempFR = data?.tyreTempFR,
+                            tyreTempRL = data?.tyreTempRL,
+                            tyreTempRR = data?.tyreTempRR,
+                        )
+                    }
                 }
-            }
         }
     }
 
-    /** SoH and the lifetime counters are not in the poller batch — one read on open. */
+    /**
+     * SoH and the lifetime counters are not in the poller batch — one read on open. The read
+     * may only pull the online cue down to false (autoservice did not answer at all); it never
+     * pins it to true, that stays the live transport flag's job.
+     */
     private suspend fun loadBatteryState() {
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
         _uiState.update {
-            if (state == null) {
+            if (state == null || !state.autoserviceAvailable) {
                 it.copy(autoserviceOnline = false)
             } else {
                 it.copy(
-                    autoserviceOnline = state.autoserviceAvailable,
                     soh = state.sohPercent,
                     lifetimeKm = state.lifetimeKm,
                     lifetimeKwh = state.lifetimeKwh,

@@ -4,6 +4,10 @@ import com.bydmate.app.domain.battery.AvgSoc
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.domain.battery.BatteryStateRepository
+import com.bydmate.app.service.TrackingService
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.ViewModelStore
 import io.mockk.coEvery
 import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
@@ -11,6 +15,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -25,8 +30,36 @@ class TechPanelViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
 
+    /** Owns every view model built here so @After cancels their collectors on the static
+     *  TrackingService flows — resetMain() alone would leave them running across tests. */
+    private val store = ViewModelStore()
+
     @Before fun setUp() { Dispatchers.setMain(testDispatcher) }
-    @After fun tearDown() { Dispatchers.resetMain() }
+
+    @After fun tearDown() {
+        store.clear()
+        connectedFlow().value = true
+        Dispatchers.resetMain()
+    }
+
+    /** The service publishes its transport flag from inside the service; tests reach the
+     *  backing MutableStateFlow directly, the way the cluster tests reach their singletons. */
+    private fun connectedFlow(): MutableStateFlow<Boolean> {
+        @Suppress("UNCHECKED_CAST")
+        return TrackingService::class.java
+            .getDeclaredField("_vehicleDataConnected")
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<Boolean>
+    }
+
+    /** Scoped so [store] can clear it; a bare constructor call leaks its viewModelScope. */
+    private fun scoped(vm: TechPanelViewModel): TechPanelViewModel {
+        val factory = object : ViewModelProvider.Factory {
+            @Suppress("UNCHECKED_CAST")
+            override fun <T : ViewModel> create(modelClass: Class<T>): T = vm as T
+        }
+        return ViewModelProvider(store, factory)[TechPanelViewModel::class.java]
+    }
 
     private fun buildViewModel(
         battery: BatteryState? = null,
@@ -38,7 +71,7 @@ class TechPanelViewModelTest {
             )
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns avg
-        return TechPanelViewModel(repo, avgProvider)
+        return scoped(TechPanelViewModel(repo, avgProvider))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -58,7 +91,28 @@ class TechPanelViewModelTest {
         assertFalse(state.showTyres)
         assertFalse(state.showHistory)
         assertFalse(state.hasAnyCard)
-        assertEquals(false, state.autoserviceOnline)
+    }
+
+    /** The header cue follows the live transport flag, both ways — it must not stay on the
+     *  value the on-open autoservice read happened to see. */
+    @Test
+    fun `online flag follows the live connection flag`() = runTest {
+        val vm = buildViewModel(
+            battery = BatteryState(
+                socNow = 43f, voltage12v = 13.9f, sohPercent = 99f,
+                lifetimeKm = 3802f, lifetimeKwh = 1240f, autoserviceAvailable = true,
+            ),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.autoserviceOnline)
+
+        connectedFlow().value = false
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(false, vm.uiState.value.autoserviceOnline)
+
+        connectedFlow().value = true
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.autoserviceOnline)
     }
 
     /** SoH and the lifetime counters come from the one-shot autoservice read on open. */
@@ -88,18 +142,27 @@ class TechPanelViewModelTest {
         assertFalse(state.showTyres)
     }
 
-    /** A failing autoservice read must not blank the screen — it just reports offline. */
+    /**
+     * A failing autoservice read must not blank the screen. It reports offline, and once the
+     * live transport flag speaks that flag has the last word — a read that failed while the
+     * bus is up must not leave the header stuck on «offline».
+     */
     @Test
-    fun `failed battery read reports offline`() = runTest {
+    fun `failed battery read reports offline while the transport is down`() = runTest {
+        connectedFlow().value = false
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } throws IllegalStateException("adb down")
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = TechPanelViewModel(repo, avgProvider)
+        val vm = scoped(TechPanelViewModel(repo, avgProvider))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
+
+        connectedFlow().value = true
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(true, vm.uiState.value.autoserviceOnline)
     }
 
     // --- hints --------------------------------------------------------------
