@@ -73,6 +73,7 @@ class TechPanelI18nTest {
     @Test fun hints_are_translated_in_en_and_zh() {
         val hints = listOf(
             R.string.tech_hint_soh, R.string.tech_hint_hv_voltage, R.string.tech_hint_power,
+            R.string.tech_hint_motor_power,
             R.string.tech_hint_12v, R.string.tech_hint_insulation, R.string.tech_hint_bms_limits,
             R.string.tech_hint_cells, R.string.tech_hint_motors, R.string.tech_hint_compressor,
             R.string.tech_hint_tyres,
