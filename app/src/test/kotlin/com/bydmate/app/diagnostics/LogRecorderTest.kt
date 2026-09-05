@@ -270,4 +270,201 @@ class LogRecorderTest {
         assertTrue(recorder.state.value.isRecording)
         recorder.stop()
     }
+
+    private fun pendingPrefs() = ApplicationProvider.getApplicationContext<Context>()
+        .getSharedPreferences("log_recorder", Context.MODE_PRIVATE)
+
+    @Test
+    fun `start remembers the pending recording and stop forgets it`() = runTest {
+        val recorder = recorder()
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+
+        val prefs = pendingPrefs()
+        assertEquals(started.file.absolutePath, prefs.getString("file_path", null))
+        assertEquals(recorder.state.value.startedAtMs, prefs.getLong("started_at_ms", 0L))
+
+        recorder.stop()
+
+        assertNull(prefs.getString("file_path", null))
+        assertEquals(0L, prefs.getLong("started_at_ms", 0L))
+    }
+
+    @Test
+    fun `resume appends to the same file without clearing the buffer`() = runTest {
+        val file = File.createTempFile("bydmate_logs_", ".txt")
+        file.writeText("header\nold line\n")
+        val startedAtMs = System.currentTimeMillis() - 60_000L
+        pendingPrefs().edit()
+            .putString("file_path", file.absolutePath)
+            .putLong("started_at_ms", startedAtMs)
+            .apply()
+        // A recorder of a fresh process: nothing running, only the prefs left behind.
+        val recorder = recorder()
+
+        assertTrue(recorder.resumeIfPending())
+
+        // Exactly one spawn, and it is the recording itself: no `logcat -c`.
+        assertEquals(1, spawned.size)
+        assertTrue(spawned[0].contains("BootReceiver:*"))
+        val text = file.readText()
+        assertTrue(text.startsWith("header"))
+        assertTrue(text.contains("=== LOG RESUMED after app restart at "))
+        assertTrue(text.contains("uptime "))
+        val state = recorder.state.value
+        assertTrue(state.isRecording)
+        assertEquals(file.absolutePath, state.filePath)
+        assertEquals(startedAtMs, state.startedAtMs)
+
+        recorder.stop()
+        file.delete()
+    }
+
+    @Test
+    fun `resume past the auto stop window does nothing`() = runTest {
+        val file = File.createTempFile("bydmate_logs_", ".txt")
+        file.writeText("header\n")
+        pendingPrefs().edit()
+            .putString("file_path", file.absolutePath)
+            .putLong("started_at_ms", System.currentTimeMillis() - 3 * 60 * 60 * 1000L)
+            .apply()
+        val recorder = recorder()
+
+        assertFalse(recorder.resumeIfPending())
+
+        assertTrue(spawned.isEmpty())
+        assertFalse(recorder.state.value.isRecording)
+        assertEquals("header\n", file.readText())
+        assertNull(pendingPrefs().getString("file_path", null))
+        file.delete()
+    }
+
+    @Test
+    fun `a not yet mounted file keeps the pending recording for the next attempt`() = runTest {
+        val file = File.createTempFile("bydmate_logs_", ".txt")
+        val startedAtMs = System.currentTimeMillis() - 60_000L
+        pendingPrefs().edit()
+            .putString("file_path", file.absolutePath)
+            .putLong("started_at_ms", startedAtMs)
+            .apply()
+        // Storage still unmounted: the file the prefs point at is not there yet.
+        assertTrue(file.delete())
+        val recorder = recorder()
+
+        assertFalse(recorder.resumeIfPending())
+
+        assertTrue(spawned.isEmpty())
+        assertEquals(file.absolutePath, pendingPrefs().getString("file_path", null))
+        assertEquals(startedAtMs, pendingPrefs().getLong("started_at_ms", 0L))
+
+        // Storage came up; the retry picks the same recording back up.
+        file.writeText("header\nold line\n")
+
+        assertTrue(recorder.resumeIfPending())
+
+        assertEquals(1, spawned.size)
+        assertTrue(file.readText().contains("=== LOG RESUMED after app restart at "))
+        val state = recorder.state.value
+        assertTrue(state.isRecording)
+        assertEquals(startedAtMs, state.startedAtMs)
+
+        recorder.stop()
+        file.delete()
+    }
+
+    @Test
+    fun `a resumed logcat dying at once keeps the pending recording`() = runTest {
+        val file = File.createTempFile("bydmate_logs_", ".txt")
+        file.writeText("header\n")
+        val startedAtMs = System.currentTimeMillis() - 60_000L
+        pendingPrefs().edit()
+            .putString("file_path", file.absolutePath)
+            .putLong("started_at_ms", startedAtMs)
+            .apply()
+        // What READ_LOGS missing looks like: logcat starts and is at EOF right away.
+        var stdoutAtEof = true
+        val recorder = recorder(
+            stdout = {
+                if (stdoutAtEof) ByteArrayInputStream(ByteArray(0)) else OpenStream()
+            },
+        )
+
+        assertTrue(recorder.resumeIfPending())
+        recorder.awaitStopped()
+
+        assertFalse(recorder.state.value.isRecording)
+        assertEquals(file.absolutePath, pendingPrefs().getString("file_path", null))
+        assertEquals(startedAtMs, pendingPrefs().getLong("started_at_ms", 0L))
+
+        // The grant landed: the next attempt resumes the very same recording.
+        stdoutAtEof = false
+
+        assertTrue(recorder.resumeIfPending())
+
+        assertEquals(file.absolutePath, recorder.state.value.filePath)
+        assertEquals(startedAtMs, recorder.state.value.startedAtMs)
+        assertEquals(2, file.readText().split("=== LOG RESUMED").size - 1)
+
+        recorder.stop()
+        file.delete()
+    }
+
+    @Test
+    fun `the size limit forgets the pending recording`() = runTest {
+        val line = "x".repeat(200)
+        val recorder = recorder(
+            maxSizeBytes = 2048L,
+            stdout = { ByteArrayInputStream((line + "\n").repeat(500).toByteArray()) },
+        )
+        recorder.startWithHeader()
+
+        recorder.awaitStopped()
+
+        assertNull(pendingPrefs().getString("file_path", null))
+        assertEquals(0L, pendingPrefs().getLong("started_at_ms", 0L))
+    }
+
+    @Test
+    fun `stop after a dead pipe cancels the pending resume`() = runTest {
+        val file = File.createTempFile("bydmate_logs_", ".txt")
+        file.writeText("header\n")
+        pendingPrefs().edit()
+            .putString("file_path", file.absolutePath)
+            .putLong("started_at_ms", System.currentTimeMillis() - 60_000L)
+            .apply()
+        val recorder = recorder(stdout = { ByteArrayInputStream(ByteArray(0)) })
+
+        assertTrue(recorder.resumeIfPending())
+        recorder.awaitStopped()
+
+        // The pipe died on its own, so the recording is still pending a retry.
+        assertFalse(recorder.state.value.isRecording)
+        assertEquals(file.absolutePath, pendingPrefs().getString("file_path", null))
+
+        // The user pressed stop in between: nothing left to stop, nothing left to resume.
+        assertNull(recorder.stop())
+        assertNull(pendingPrefs().getString("file_path", null))
+
+        val spawnsBeforeResume = spawned.size
+        assertFalse(recorder.resumeIfPending())
+        assertEquals(spawnsBeforeResume, spawned.size)
+
+        file.delete()
+    }
+
+    @Test
+    fun `resume while recording is a no-op`() = runTest {
+        val recorder = recorder()
+        val started = recorder.startWithHeader() as LogRecorder.StartResult.Started
+        val running = recorder.state.value
+
+        assertFalse(recorder.resumeIfPending())
+
+        // Still the same session: no extra logcat, no resume marker in the file.
+        assertEquals(2, spawned.size)
+        assertEquals(1, recordings.size)
+        assertEquals(running, recorder.state.value)
+        assertFalse(started.file.readText().contains("LOG RESUMED"))
+
+        recorder.stop()
+    }
 }

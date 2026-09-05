@@ -2,6 +2,7 @@ package com.bydmate.app.diagnostics
 
 import android.content.Context
 import android.os.Environment
+import android.os.SystemClock
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,13 @@ class LogRecorder internal constructor(
     private class Session(val process: Process, val file: File) {
         var pipeJob: Job? = null
         var autoStopJob: Job? = null
+
+        // Distinguishes the two ways the pipe can end: the size limit finishes the
+        // recording for good, while EOF or a read error may be a logcat that could not
+        // start yet (READ_LOGS lands in the process only on the next app start).
+        // Volatile: written by the pipe job, read by the teardown that follows it.
+        @Volatile
+        var endedByLimit = false
     }
 
     // Guards the session field, so start/stop/teardown never interleave: a stop()
@@ -122,31 +130,9 @@ class LogRecorder internal constructor(
             exec(arrayOf("logcat", "-c")).waitFor()
 
             proc = exec(LOGCAT_ARGS)
-            val current = Session(proc, target)
-            session = current
-            published = current
-            _state.value = State(
-                isRecording = true,
-                filePath = target.absolutePath,
-                startedAtMs = System.currentTimeMillis(),
-            )
-
-            current.autoStopJob = scope.launch {
-                delay(autoStopMs)
-                teardown(current)
-            }
-            // The pipe owns the end of the recording: whether it ends on the size
-            // limit, on EOF or on a read error, the same teardown kills logcat and
-            // publishes the stopped state (the UI shows "saved" either way).
-            current.pipeJob = scope.launch {
-                try {
-                    pipeToFile(proc, target, current)
-                } finally {
-                    // Detached: teardown takes the lock this coroutine may be
-                    // cancelled from, and the launch outlives that cancellation.
-                    scope.launch { teardown(current) }
-                }
-            }
+            val startedAtMs = System.currentTimeMillis()
+            published = publishSession(proc, target, startedAtMs, autoStopMs)
+            rememberPending(target, startedAtMs)
             return StartResult.Started(target)
         } catch (e: Exception) {
             // Same single exit path: a failure mid-start leaves neither a live
@@ -157,16 +143,124 @@ class LogRecorder internal constructor(
         }
     }
 
-    /** Stops the recording from any caller; null if nothing was running. */
+    /**
+     * Makes [proc] the current recording: publishes the state, arms the auto-stop
+     * for [autoStopIn] and attaches the pipe. Shared by a fresh start and a resume,
+     * which differ only in the file, the start time and the remaining time.
+     */
+    private fun publishSession(
+        proc: Process,
+        target: File,
+        startedAtMs: Long,
+        autoStopIn: Long,
+    ): Session {
+        val current = Session(proc, target)
+        session = current
+        _state.value = State(
+            isRecording = true,
+            filePath = target.absolutePath,
+            startedAtMs = startedAtMs,
+        )
+
+        current.autoStopJob = scope.launch {
+            delay(autoStopIn)
+            teardown(current)
+        }
+        // The pipe owns the end of the recording: whether it ends on the size
+        // limit, on EOF or on a read error, the same teardown kills logcat and
+        // publishes the stopped state (the UI shows "saved" either way).
+        current.pipeJob = scope.launch {
+            try {
+                pipeToFile(proc, target, current)
+            } finally {
+                // Detached: teardown takes the lock this coroutine may be
+                // cancelled from, and the launch outlives that cancellation.
+                scope.launch { teardown(current, keepPending = !current.endedByLimit) }
+            }
+        }
+        return current
+    }
+
+    /**
+     * Picks up a recording the process death interrupted (ignition off/on), appending
+     * to the same file until the 2h window of the FIRST start runs out. False when
+     * there is nothing to resume, the window expired or a recording is already running.
+     */
+    suspend fun resumeIfPending(): Boolean =
+        scope.async { mutex.withLock { resumeLocked() } }.await()
+
+    private fun resumeLocked(): Boolean {
+        if (session != null) return false
+
+        val prefs = pendingPrefs()
+        val path = prefs.getString(KEY_FILE_PATH, null)
+        val startedAtMs = prefs.getLong(KEY_STARTED_AT_MS, 0L)
+        val now = System.currentTimeMillis()
+        val elapsed = now - startedAtMs
+        val target = path?.let { File(it) }
+        // Finally invalid: nothing to come back to, so the pending record goes away.
+        if (target == null || startedAtMs <= 0L || elapsed < 0L || elapsed >= autoStopMs ||
+            (target.exists() && target.length() >= maxSizeBytes)
+        ) {
+            forgetPending()
+            return false
+        }
+        // Merely not ready yet: external storage is often still unmounted this early
+        // in the service start. Keep the pending record so a later attempt inside the
+        // 2h window still resumes the recording.
+        if (!target.exists()) return false
+
+        var proc: Process? = null
+        return try {
+            // No `logcat -c` on resume: the buffer holds the very first seconds after
+            // the head unit woke up, which is exactly what the recording is for.
+            FileOutputStream(target, /* append = */ true).bufferedWriter().use { writer ->
+                val stamp = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US).format(Date(now))
+                writer.write(
+                    "=== LOG RESUMED after app restart at $stamp " +
+                        "(uptime ${SystemClock.elapsedRealtime() / 1000}s) ==="
+                )
+                writer.newLine()
+            }
+            proc = exec(LOGCAT_ARGS)
+            publishSession(proc, target, startedAtMs, autoStopMs - elapsed)
+            true
+        } catch (_: Exception) {
+            // Same reasoning as the missing file above: a failed append or spawn may
+            // well succeed on the next attempt, so the pending record stays.
+            proc?.let { destroyQuietly(it) }
+            false
+        }
+    }
+
+    private fun pendingPrefs() = appContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    private fun rememberPending(target: File, startedAtMs: Long) {
+        pendingPrefs().edit()
+            .putString(KEY_FILE_PATH, target.absolutePath)
+            .putLong(KEY_STARTED_AT_MS, startedAtMs)
+            .apply()
+    }
+
+    private fun forgetPending() {
+        pendingPrefs().edit().remove(KEY_FILE_PATH).remove(KEY_STARTED_AT_MS).apply()
+    }
+
+    /**
+     * Stops the recording from any caller; null if nothing was running. A user stop
+     * also cancels a pending resume: a pipe that died on its own (EOF) keeps the
+     * pending record for a retry, and the user's "stop" must win over that retry.
+     */
     suspend fun stop(): Stopped? = withContext(Dispatchers.IO) {
         mutex.withLock {
+            forgetPending()
             val current = session ?: return@withLock null
             teardownLocked(current)
         }
     }
 
-    private suspend fun teardown(current: Session) {
-        mutex.withLock { teardownLocked(current) }
+    private suspend fun teardown(current: Session, keepPending: Boolean = false) {
+        mutex.withLock { teardownLocked(current, keepPending) }
     }
 
     /**
@@ -174,9 +268,12 @@ class LogRecorder internal constructor(
      * still the current one is torn down, so a self-terminating pipe and a
      * concurrent stop() cannot both kill (or double-report) it.
      */
-    private fun teardownLocked(current: Session): Stopped? {
+    private fun teardownLocked(current: Session, keepPending: Boolean = false): Stopped? {
         if (session !== current) return null
         session = null
+        // The user, the auto-stop and the size limit end the recording for good. A pipe
+        // that merely died keeps the pending record, so a later attempt resumes it.
+        if (!keepPending) forgetPending()
 
         current.autoStopJob?.cancel()
         current.pipeJob?.cancel()
@@ -211,6 +308,7 @@ class LogRecorder internal constructor(
                     while (line != null && session === current) {
                         // Stop if file exceeds size limit
                         if (target.length() > maxSizeBytes) {
+                            current.endedByLimit = true
                             writer.write("--- LOG STOPPED: file size limit reached (50 MB) ---")
                             writer.newLine()
                             break
@@ -229,6 +327,11 @@ class LogRecorder internal constructor(
         private const val LOG_MAX_DURATION_MS = 2 * 60 * 60 * 1000L // 2 hours auto-stop
         private const val LOG_MAX_SIZE_BYTES = 50 * 1024 * 1024L // 50 MB max
         private const val PROCESS_EXIT_TIMEOUT_MS = 500L // grace period before destroyForcibly
+
+        // Survives process death so a recording interrupted by ignition-off resumes.
+        private const val PREFS_NAME = "log_recorder"
+        private const val KEY_FILE_PATH = "file_path"
+        private const val KEY_STARTED_AT_MS = "started_at_ms"
 
         private val LOGCAT_ARGS = arrayOf(
             "logcat", "-v", "time",
