@@ -1489,6 +1489,10 @@ private fun logA11yFrameworkState(reassertOk: Boolean) {
     }.take(12)
     android.util.Log.i(tag, "a11y state after reassert ok=$reassertOk: sdk=${android.os.Build.VERSION.SDK_INT} lines=${a11y.size}")
     keep.forEach { android.util.Log.i(tag, "a11y: " + it.trim().take(300)) }
+    val pid = shExec("pidof com.bydmate.app").stdout
+    val stopped = shExec("dumpsys package com.bydmate.app").stdout.lines()
+        .firstOrNull { it.contains("stopped=", ignoreCase = true) }?.trim()?.take(200)
+    android.util.Log.i(tag, "pkg: pid=${pid.ifEmpty { "none" }} $stopped")
     val am = shExec("dumpsys activity services com.bydmate.app").stdout.lines()
     val start = am.indexOfFirst { it.contains("SteeringWheelKeyService") }
     if (start < 0) {

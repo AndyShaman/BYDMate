@@ -1571,6 +1571,31 @@ class TrackingService : Service(), LocationListener {
      * that: verify-and-retry, gated on the TRUE liveness signal (SteeringWheelKeyService.isConnected)
      * plus the framework's running list, so a healthy service is never disturbed.
      */
+    // Diagnostic (DiLink 4 / Android 10): once the stuck state is named, poll the service state
+    // for ten minutes so a field log shows WHEN it clears (e.g. after the user taps a third-party
+    // launcher's privilege button) and whether our process survived (pid). Read-only, one at a time.
+    @Volatile private var a11yStuckWatch: kotlinx.coroutines.Job? = null
+    private fun startA11yStuckWatch() {
+        if (a11yStuckWatch?.isActive == true) return
+        a11yStuckWatch = serviceScope.launch {
+            val t0 = System.currentTimeMillis()
+            var wasRunning = false
+            repeat(60) { i ->
+                val running = starServiceRunning()
+                val listHasUs = runCatching {
+                    android.provider.Settings.Secure.getString(contentResolver, "enabled_accessibility_services")
+                        ?.contains(packageName) == true
+                }.getOrDefault(false)
+                Log.i(TAG, "a11y stuck watch +${(System.currentTimeMillis() - t0) / 1000}s: running=$running " +
+                    "enabledListHasUs=$listHasUs pid=${android.os.Process.myPid()}")
+                if (running && !wasRunning && i > 0) Log.w(TAG, "a11y stuck watch: service came back without our re-assert")
+                wasRunning = running
+                if (running) return@launch
+                kotlinx.coroutines.delay(10_000L)
+            }
+        }
+    }
+
     private suspend fun ensureStarServiceRunning(reason: String) {
         val prefs = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
         val mirrorEnabled = prefs.getBoolean(ClusterProjectionManager.KEY_MIRROR_ENABLED, false)
@@ -1597,6 +1622,7 @@ class TrackingService : Service(), LocationListener {
         if (android.os.Build.VERSION.SDK_INT <= 29 && daemonOkButUnbound && !starServiceRunning()) {
             Log.w(TAG, "star a11y stuck in binding state ($reason): daemon re-asserted the setting " +
                 "${last.reasserts.size}x OK but the framework did not bind; likely needs reboot (AOSP Q mBindingServices)")
+            startA11yStuckWatch()
         }
     }
 
