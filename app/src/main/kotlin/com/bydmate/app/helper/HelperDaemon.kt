@@ -365,6 +365,9 @@ fun main(args: Array<String>) {
 
                 HelperBinderProtocol.TX_ENABLE_ACCESSIBILITY -> runCatching {
                     val ok = enableAccessibilityService()
+                    // Only reached when the app found the service NOT running: snapshot the
+                    // framework's own view so a field log names the exact state (#a11y DiLink 4).
+                    runCatching { logA11yFrameworkState(ok) }
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -1468,6 +1471,31 @@ private fun enableAccessibilityService(): Boolean {
     // Verify read-back: our component is now listed AND accessibility is enabled.
     val after = (readSecure("enabled_accessibility_services") ?: return false).split(':').filter { it.isNotEmpty() }
     return after.any { canonicalComponent(it) == target } && readSecure("accessibility_enabled") == "1"
+}
+
+/**
+ * Logs the framework's own accessibility bookkeeping after a re-assert, under the daemon tag the
+ * app's log recorder already captures. `dumpsys accessibility` prints the AOSP UserState sets
+ * (Bound / Enabled / Binding services) on one line each; `dumpsys activity services` shows whether
+ * ActivityManager still holds a ServiceRecord + connection for our key filter. Field evidence for
+ * the Android 10 "stuck in mBindingServices" case that a settings rewrite cannot leave.
+ * Read-only: two dumpsys calls, output trimmed to a handful of lines.
+ */
+private fun logA11yFrameworkState(reassertOk: Boolean) {
+    val tag = "bydmate_helper"
+    val a11y = shExec("dumpsys accessibility").stdout.lines()
+    val keep = a11y.filter { l ->
+        l.contains("User state[") || l.contains("services:{") || l.contains("bydmate", ignoreCase = true)
+    }.take(12)
+    android.util.Log.i(tag, "a11y state after reassert ok=$reassertOk: sdk=${android.os.Build.VERSION.SDK_INT} lines=${a11y.size}")
+    keep.forEach { android.util.Log.i(tag, "a11y: " + it.trim().take(300)) }
+    val am = shExec("dumpsys activity services com.bydmate.app").stdout.lines()
+    val start = am.indexOfFirst { it.contains("SteeringWheelKeyService") }
+    if (start < 0) {
+        android.util.Log.i(tag, "am: no ServiceRecord for SteeringWheelKeyService (lines=${am.size})")
+        return
+    }
+    am.drop(start).take(30).forEach { android.util.Log.i(tag, "am: " + it.trim().take(300)) }
 }
 
 /**
