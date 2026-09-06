@@ -1629,7 +1629,8 @@ class TrackingService : Service(), LocationListener {
             val nowElapsed = android.os.SystemClock.elapsedRealtime()
             if (A11yRecoveryGate.shouldAttempt(prefs, nowElapsed)) {
                 if (A11yRecoveryGate.markAttempt(prefs, nowElapsed)) {
-                    Log.w(TAG, "star a11y recovery: asking daemon to force-stop + re-bind (once per 10 min)")
+                    Log.w(TAG, "star a11y recovery: asking daemon to force-stop + re-bind " +
+                        "(streak=${prefs.getInt(A11yRecoveryGate.KEY_FAIL_STREAK, 0)})")
                     helperClient.recoverAccessibilityService()
                 } else {
                     Log.w(TAG, "star a11y recovery: skipped, could not persist the rate-limit mark")

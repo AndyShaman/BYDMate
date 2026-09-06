@@ -50,6 +50,7 @@ class SteeringWheelKeyService : AccessibilityService() {
         instance = this
         isConnected = true
         Log.d(TAG, "connected; filtering steering-wheel keys")
+        com.bydmate.app.service.A11yRecoveryGate.markBound(prefs)  // ends the Android 10 recovery streak
         // Android 10 (DiLink 3.0/4.0) a11y recovery: the daemon force-stops our package and the
         // framework re-binds this service, which brings the process back without TrackingService.
         // The daemon also broadcasts RECOVER_START, but this path does not depend on it. Idempotent
