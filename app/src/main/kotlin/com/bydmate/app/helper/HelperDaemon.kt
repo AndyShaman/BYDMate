@@ -367,7 +367,9 @@ fun main(args: Array<String>) {
                     val ok = enableAccessibilityService()
                     // Only reached when the app found the service NOT running: snapshot the
                     // framework's own view so a field log names the exact state (#a11y DiLink 4).
-                    runCatching { logA11yFrameworkState(ok) }
+                    // Off the binder thread: a slow dumpsys must not delay the reply (the client
+                    // holds its mutex and a 15 s budget; a late reply would read as reassert=false).
+                    logA11yFrameworkStateAsync(ok)
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
@@ -1458,7 +1460,8 @@ private const val CLUSTER_DIAG_MIN_INTERVAL_MS = 60_000L
  * firmware can print megabytes or hang, and neither may stall the daemon's binder thread. stdout is
  * drained on a background thread into a buffer capped at [maxBytes]; if the process outlives
  * [timeoutMs] it is killed and whatever was read is returned with a `[timeout Nms]` marker line.
- * Used ONLY by [logClusterDisplayDiag] — the production callers stay on [shExec]/[shExecMerged].
+ * Used ONLY by the diagnostic snapshots ([logClusterDisplayDiag], [logA11yFrameworkState]) — the
+ * production callers stay on [shExec]/[shExecMerged].
  */
 private fun shExecBounded(script: String, timeoutMs: Long = 4000L, maxBytes: Int = 64 * 1024): String {
     val process = ProcessBuilder("sh", "-c", script).redirectErrorStream(true).start()
@@ -1674,7 +1677,7 @@ private fun recoverAccessibilityService(): Boolean {
         false
     }
     android.util.Log.i(tag, "a11y recover: reassert=$ok restart=$restarted am=${am.take(200)}")
-    runCatching { logA11yFrameworkState(ok) }  // diagnostics only
+    logA11yFrameworkStateAsync(ok)  // diagnostics only
     return ok && restarted
 }
 
@@ -1686,19 +1689,26 @@ private fun recoverAccessibilityService(): Boolean {
  * the Android 10 "stuck in mBindingServices" case that a settings rewrite cannot leave.
  * Read-only: two dumpsys calls, output trimmed to a handful of lines.
  */
+private fun logA11yFrameworkStateAsync(reassertOk: Boolean) {
+    val t = Thread({ runCatching { logA11yFrameworkState(reassertOk) } }, "bydmate-a11ydiag")
+    t.isDaemon = true
+    t.start()
+}
+
+/** Diagnostics only; every dumpsys is time- and size-bounded so it can never wedge the daemon. */
 private fun logA11yFrameworkState(reassertOk: Boolean) {
     val tag = "bydmate_helper"
-    val a11y = shExec("dumpsys accessibility").stdout.lines()
+    val a11y = shExecBounded("dumpsys accessibility").lines()
     val keep = a11y.filter { l ->
         l.contains("User state[") || l.contains("services:{") || l.contains("bydmate", ignoreCase = true)
     }.take(12)
     android.util.Log.i(tag, "a11y state after reassert ok=$reassertOk: sdk=${android.os.Build.VERSION.SDK_INT} lines=${a11y.size}")
     keep.forEach { android.util.Log.i(tag, "a11y: " + it.trim().take(300)) }
-    val pid = shExec("pidof com.bydmate.app").stdout
-    val stopped = shExec("dumpsys package com.bydmate.app").stdout.lines()
+    val pid = shExecBounded("pidof com.bydmate.app")
+    val stopped = shExecBounded("dumpsys package com.bydmate.app").lines()
         .firstOrNull { it.contains("stopped=", ignoreCase = true) }?.trim()?.take(200)
     android.util.Log.i(tag, "pkg: pid=${pid.ifEmpty { "none" }} $stopped")
-    val am = shExec("dumpsys activity services com.bydmate.app").stdout.lines()
+    val am = shExecBounded("dumpsys activity services com.bydmate.app").lines()
     val start = am.indexOfFirst { it.contains("SteeringWheelKeyService") }
     if (start < 0) {
         android.util.Log.i(tag, "am: no ServiceRecord for SteeringWheelKeyService (lines=${am.size})")

@@ -211,6 +211,11 @@ class TrackingService : Service(), LocationListener {
             name = "star a11y",
             isGranted = ::starServiceRunning,
             reassert = { helperBootstrap.ensureRunning() && helperClient.enableAccessibilityService() },
+            // Android 10 (DiLink 3.0/4.0): a re-assert never clears AOSP Q's stuck mBindingServices
+            // (field logs: 0/12 successes), and a healthy bind lands by try 2; hand over to the
+            // daemon force-stop recovery after ~10 s instead of ~35 s.
+            attempts = if (android.os.Build.VERSION.SDK_INT <= 29) A11Y_ATTEMPTS_ANDROID10
+            else GrantSelfHeal.ATTEMPTS,
         )
     }
 
@@ -239,6 +244,7 @@ class TrackingService : Service(), LocationListener {
     companion object {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
+        private const val A11Y_ATTEMPTS_ANDROID10 = 2
         private const val CHANNEL_ID = "bydmate_tracking"
         // Opt-in "quiet" channel (IMPORTANCE_MIN): the mandatory foreground notification collapses
         // into the shade's silent list with no status-bar icon. Off by default - existing users keep
