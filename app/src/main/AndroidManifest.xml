@@ -134,6 +134,10 @@
                 <action android:name="android.intent.action.QUICKBOOT_POWERON" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.USER_PRESENT" />
+                <!-- Sent by bydmate_helper (shell uid) after the Android 10 a11y recovery force-stop:
+                     TrackingService is not exported, an explicit broadcast to this receiver is the
+                     only way back in. Starting our own service is all it can do. -->
+                <action android:name="com.bydmate.app.action.RECOVER_START" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.HOME" />
             </intent-filter>

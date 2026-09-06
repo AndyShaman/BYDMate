@@ -50,6 +50,18 @@ class SteeringWheelKeyService : AccessibilityService() {
         instance = this
         isConnected = true
         Log.d(TAG, "connected; filtering steering-wheel keys")
+        // Android 10 (DiLink 3.0/4.0) a11y recovery: the daemon force-stops our package and the
+        // framework re-binds this service, which brings the process back without TrackingService.
+        // The daemon also broadcasts RECOVER_START, but this path does not depend on it. Idempotent
+        // (startForegroundService on a running service is a no-op); gated so DiLink 5.x is untouched.
+        if (android.os.Build.VERSION.SDK_INT <= 29 && !TrackingService.isRunning.value) {
+            try {
+                TrackingService.start(this)
+                Log.i(TAG, "a11y connected with TrackingService stopped: started it")
+            } catch (e: Exception) {
+                Log.w(TAG, "a11y connected: TrackingService start failed: ${e.message}")
+            }
+        }
     }
 
     override fun onKeyEvent(event: KeyEvent): Boolean {

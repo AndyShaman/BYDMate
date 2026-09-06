@@ -372,6 +372,12 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_RECOVER_ACCESSIBILITY -> runCatching {
+                    val ok = recoverAccessibilityService()
+                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_PUT_GLOBAL_SETTING -> runCatching {
                     val key = data.readString() ?: ""
                     val value = data.readInt()
@@ -1471,6 +1477,59 @@ private fun enableAccessibilityService(): Boolean {
     // Verify read-back: our component is now listed AND accessibility is enabled.
     val after = (readSecure("enabled_accessibility_services") ?: return false).split(':').filter { it.isNotEmpty() }
     return after.any { canonicalComponent(it) == target } && readSecure("accessibility_enabled") == "1"
+}
+
+/**
+ * Recovers the a11y service on Android 10 after the firmware's quickboot force-stop parked our
+ * component in AccessibilityManagerService's UserState.mBindingServices (AOSP Q: no
+ * ACTION_PACKAGE_RESTARTED broadcast, so AMS re-binds into the dying package and the bind never
+ * completes; updateServicesLocked skips such components forever). A settings rewrite cannot leave
+ * that state — only PackageMonitor.onHandleForceStop clears it, which
+ * IActivityManager.forceStopPackage triggers. So: force-stop ourselves, re-enable, restart.
+ *
+ * The app is killed by step 1, so it never sees the reply; the daemon survives (shell uid, own
+ * process) and finishes the sequence. Kept dumb and logged — the SDK gate lives in the app.
+ */
+private fun recoverAccessibilityService(): Boolean {
+    val tag = "bydmate_helper"
+    val pkg = HelperBinderProtocol.APP_PACKAGE
+    android.util.Log.w(tag, "a11y recover: force-stopping $pkg (AOSP Q stuck binding)")
+    try {
+        forceStopPackage(pkg)
+    } catch (e: Throwable) {
+        android.util.Log.w(tag, "a11y recover: force-stop failed: ${e.javaClass.simpleName}: ${e.message}")
+        return false
+    }
+    Thread.sleep(700L)  // let AccessibilityManagerService process onHandleForceStop
+    // The app is dead from here on, so the restart goes out FIRST and does not depend on anything
+    // else in this function: a hung `settings` must not leave TrackingService stopped until boot.
+    // TrackingService is not exported, so shell uid cannot start it directly; BootReceiver is
+    // (BOOT_COMPLETED needs it) and its WorkManager chain starts the service. Explicit component +
+    // include-stopped-packages: the force-stop just put the package into the stopped state.
+    var am = ""
+    var restarted = false
+    for (attempt in 1..2) {
+        am = runCatching {
+            amShell(
+                "am broadcast --include-stopped-packages -a com.bydmate.app.action.RECOVER_START -n \"\$1\"",
+                listOf("$pkg/com.bydmate.app.service.BootReceiver"),
+            )
+        }.getOrElse { "broadcast failed: ${it.javaClass.simpleName}: ${it.message}" }
+        restarted = am.contains("Broadcast completed")
+        if (restarted) break
+        android.util.Log.w(tag, "a11y recover: restart broadcast attempt $attempt failed: ${am.take(200)}")
+        Thread.sleep(1000L)
+    }
+    // Re-assert the a11y setting: onHandleForceStop removed us from the enabled set as well.
+    val ok = try {
+        enableAccessibilityService()
+    } catch (e: Throwable) {
+        android.util.Log.w(tag, "a11y recover: re-assert failed: ${e.javaClass.simpleName}: ${e.message}")
+        false
+    }
+    android.util.Log.i(tag, "a11y recover: reassert=$ok restart=$restarted am=${am.take(200)}")
+    runCatching { logA11yFrameworkState(ok) }  // diagnostics only
+    return ok && restarted
 }
 
 /**

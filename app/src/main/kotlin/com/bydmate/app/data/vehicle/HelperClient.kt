@@ -198,6 +198,14 @@ interface HelperClient {
      */
     suspend fun enableAccessibilityService(): Boolean
 
+    /**
+     * Android 10 recovery for the a11y service parked in AccessibilityManagerService's
+     * mBindingServices (DiLink 3.0/4.0 quickboot force-stop): the daemon force-stops our package,
+     * re-enables the service and restarts our foreground service. Our own process dies mid-call,
+     * so false (timeout / dead binder) is the normal outcome, not a failure signal.
+     */
+    suspend fun recoverAccessibilityService(): Boolean
+
     /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
      *  Daemon-whitelisted to sentrymode_enabled_switch and enable_freeform_support. */
     suspend fun putGlobalSetting(key: String, value: Int): Boolean
@@ -507,6 +515,14 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // `settings` process spawns, which can outrun REQ_TIMEOUT_MS on a cold device. status 0 = ok.
     override suspend fun enableAccessibilityService(): Boolean =
         transactParsed(HelperBinderProtocol.TX_ENABLE_ACCESSIBILITY, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
+            status == 0
+        } ?: false
+
+    // The daemon force-stops us as its first step, so this call almost never returns: a timeout or
+    // a dead binder is the expected path and needs no logging noise. status 0 = recovery finished.
+    override suspend fun recoverAccessibilityService(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_RECOVER_ACCESSIBILITY, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
         } ?: false

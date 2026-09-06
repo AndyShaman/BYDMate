@@ -1621,8 +1621,20 @@ class TrackingService : Service(), LocationListener {
             last.reasserts.isNotEmpty() && last.reasserts.all { it }
         if (android.os.Build.VERSION.SDK_INT <= 29 && daemonOkButUnbound && !starServiceRunning()) {
             Log.w(TAG, "star a11y stuck in binding state ($reason): daemon re-asserted the setting " +
-                "${last.reasserts.size}x OK but the framework did not bind; likely needs reboot (AOSP Q mBindingServices)")
+                "${last.reasserts.size}x OK but the framework did not bind (AOSP Q mBindingServices)")
             startA11yStuckWatch()
+            // Only in-framework way out: IActivityManager.forceStopPackage on ourselves, which runs
+            // PackageMonitor.onHandleForceStop and clears mBindingServices. The daemon does it and
+            // restarts us, so this call kills our own process - mark the attempt BEFORE it.
+            val nowElapsed = android.os.SystemClock.elapsedRealtime()
+            if (A11yRecoveryGate.shouldAttempt(prefs, nowElapsed)) {
+                if (A11yRecoveryGate.markAttempt(prefs, nowElapsed)) {
+                    Log.w(TAG, "star a11y recovery: asking daemon to force-stop + re-bind (once per 10 min)")
+                    helperClient.recoverAccessibilityService()
+                } else {
+                    Log.w(TAG, "star a11y recovery: skipped, could not persist the rate-limit mark")
+                }
+            }
         }
     }
 
