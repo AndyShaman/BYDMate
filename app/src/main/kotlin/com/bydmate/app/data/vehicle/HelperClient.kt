@@ -206,6 +206,14 @@ interface HelperClient {
      */
     suspend fun recoverAccessibilityService(): Boolean
 
+    /**
+     * Asks the daemon for one read-only cluster-display diagnostic snapshot (props, display lists,
+     * projection services, SurfaceControl visibility) written to the daemon's logcat tag. Used on
+     * cars where the cluster projection display never resolves, so an ordinary user log explains
+     * why. Collection only: the daemon writes nothing and invokes no projection call.
+     */
+    suspend fun logClusterDisplayDiag(): Boolean
+
     /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
      *  Daemon-whitelisted to sentrymode_enabled_switch and enable_freeform_support. */
     suspend fun putGlobalSetting(key: String, value: Int): Boolean
@@ -523,6 +531,14 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
     // a dead binder is the expected path and needs no logging noise. status 0 = recovery finished.
     override suspend fun recoverAccessibilityService(): Boolean =
         transactParsed(HelperBinderProtocol.TX_RECOVER_ACCESSIBILITY, { }, timeoutMs = FORCE_TIMEOUT_MS) { reply ->
+            val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
+            status == 0
+        } ?: false
+
+    // FORCE_TIMEOUT_MS, not the default 2s: the snapshot spawns a handful of dumpsys processes and
+    // can take several seconds on a cold head unit. status 0 = snapshot logged.
+    override suspend fun logClusterDisplayDiag(): Boolean =
+        transactParsed(HelperBinderProtocol.TX_CLUSTER_DISPLAY_DIAG, { }) { reply ->
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
         } ?: false
