@@ -1250,7 +1250,7 @@
     <string name="tech_label_power">potência</string>
     <string name="tech_label_battery_power">potência da bateria</string>
     <string name="tech_label_max_charge">potência máx. de carga</string>
-    <string name="tech_label_max_discharge">potência máx. de descarga</string>
+    <string name="tech_label_max_discharge">potência disponível da bateria</string>
     <string name="tech_label_motor_temp">temperatura do motor</string>
     <string name="tech_label_inverter_temp">temperatura do inversor</string>
     <string name="tech_label_rpm">rotações, rpm</string>
@@ -1277,13 +1277,14 @@
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Saúde da bateria: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. O valor é calculado pelo próprio carro.</string>
     <string name="tech_hint_hv_voltage">Tensão da bateria de tração. Sobe ao carregar e desce à medida que descarrega, neste carro cerca de 450…560 V. Por si só diz pouco, é útil junto com a potência.</string>
     <string name="tech_hint_motor_power">Potência nos motores elétricos agora: quanto o carro está a entregar às rodas ou a receber delas durante a regeneração. Zero quando parado. O valor é calculado pelo próprio carro.</string>
     <string name="tech_hint_power">Quanta energia a bateria está a entregar agora. Positivo: o carro está a gastar (aceleração, climatização). Negativo: a bateria está a receber energia, seja regeneração ao travar seja carregamento num carregador. Segundo número: a que velocidade a carga está a esgotar-se, por cento à hora. Quando parado é o consumo da eletrónica de bordo.</string>
     <string name="tech_hint_12v">Tensão da bateria normal de 12 volts que alimenta a eletrónica. Com o carro ligado fica entre 13…14,5 V. Se estacionado ficar abaixo de 12 V, a bateria está a enfraquecer.</string>
     <string name="tech_hint_insulation">Resistência entre a bateria de alta tensão e a carroçaria. Quanto maior, melhor: o normal são alguns megaohms. Se descer para 0,5 MΩ ou menos, há isolamento danificado nalgum ponto, é hora de ir à oficina.</string>
-    <string name="tech_hint_bms_limits">Quanta potência o controlador da bateria permite neste momento receber ao carregar e entregar na aceleração. Com a bateria fria ou quase cheia os limites são menores: por isso no inverno a carga é mais lenta e a regeneração mais fraca.</string>
+    <string name="tech_hint_bms_limits">O teto que o controlador da bateria permite neste momento: quanto receber ao carregar (a estação pode dar menos) e quanto entregar na aceleração. Com a bateria fria ou quase cheia ambos os valores são menores: por isso no inverno a carga é mais lenta e a regeneração mais fraca.</string>
     <string name="tech_hint_cells">A bateria é feita de centenas de células. São mostradas a mais fraca, a mais forte e a diferença entre elas. Uma diferença até 20…30 mV é normal. Uma diferença sempre grande significa que uma célula envelhece mais depressa do que as outras.</string>
     <string name="tech_hint_motors">Temperatura dos motores elétricos e dos inversores que os comandam. Na condução normal até 60…80°. Em acelerações longas ou a rebocar aquecem mais, e o carro reduz a potência sozinho até arrefecerem.</string>
     <string name="tech_hint_compressor">Quantos watts consome o compressor do ar condicionado e da bomba de calor. É o principal consumidor além dos motores: no calor do verão e no frio do inverno reduz bastante a autonomia.</string>

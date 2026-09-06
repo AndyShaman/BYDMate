@@ -1368,7 +1368,7 @@
     <string name="tech_label_power">功率</string>
     <string name="tech_label_battery_power">电池功率</string>
     <string name="tech_label_max_charge">最大充电功率</string>
-    <string name="tech_label_max_discharge">最大放电功率</string>
+    <string name="tech_label_max_discharge">电池可用功率</string>
     <string name="tech_label_motor_temp">电机温度</string>
     <string name="tech_label_inverter_temp">逆变器温度</string>
     <string name="tech_label_rpm">转速 rpm</string>
@@ -1395,13 +1395,14 @@
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">电池健康度：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。该数值由车辆自己计算。</string>
     <string name="tech_hint_hv_voltage">动力电池的电压。充电时升高，放电时降低，这台车大约在 450…560 V。单看意义不大，结合功率一起看才有用。</string>
     <string name="tech_hint_motor_power">此刻电机的功率：车辆向车轮输出多少动力，或在能量回收时从车轮回收多少。停车时为 0。该数值由车辆自己计算。</string>
     <string name="tech_hint_power">电池此刻输出多少能量。正值：车辆在消耗（加速、空调）。负值：电池在吸收能量，可能是制动能量回收，也可能是在充电桩充电。第二个数值：电量下降的速度，每小时百分比。停车时代表车载电子设备的耗电。</string>
     <string name="tech_hint_12v">为电子设备供电的普通 12 伏蓄电池电压。车辆启动时为 13…14,5 V。停车时低于 12 V，说明蓄电池在变弱。</string>
     <string name="tech_hint_insulation">高压电池与车身之间的绝缘电阻。数值越大越好：正常为几兆欧。若降到 0,5 MΩ 及以下，说明某处绝缘受损，该去维修了。</string>
-    <string name="tech_hint_bms_limits">电池控制器此刻允许充电时吸收、以及加速时输出的最大功率。电池偏冷或接近充满时限值更低：所以冬天充电更慢、能量回收更弱。</string>
+    <string name="tech_hint_bms_limits">电池控制器此刻允许的上限：充电时能吸收多少（充电桩可能给得更少），以及加速时能输出多少。电池偏冷或接近充满时两个数值都更低：所以冬天充电更慢、能量回收更弱。</string>
     <string name="tech_hint_cells">电池由数百个电芯组成。这里显示最弱的、最强的以及两者之差。差值在 20…30 mV 以内属正常。长期差值偏大，说明某个电芯老化得比其他更快。</string>
     <string name="tech_hint_motors">电机及其驱动逆变器的温度。日常行驶在 60…80° 以内。长时间加速或拖挂时温度更高，车辆会自行降低功率直到冷却。</string>
     <string name="tech_hint_compressor">空调与热泵压缩机消耗多少瓦。它是除电机之外的主要用电设备：夏天酷热、冬天严寒时会明显缩短续航。</string>

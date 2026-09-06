@@ -1254,7 +1254,7 @@
     <string name="tech_label_power">power</string>
     <string name="tech_label_battery_power">battery power</string>
     <string name="tech_label_max_charge">max charge power</string>
-    <string name="tech_label_max_discharge">max discharge power</string>
+    <string name="tech_label_max_discharge">available battery power</string>
     <string name="tech_label_motor_temp">motor temperature</string>
     <string name="tech_label_inverter_temp">inverter temperature</string>
     <string name="tech_label_rpm">rpm</string>
@@ -1281,13 +1281,14 @@
     <string name="tech_value_percent">%1$d%%</string>
     <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
+    <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Battery health: how much of the original capacity is left. 100% on a new car, slowly decreasing over the years. The car itself calculates this value.</string>
     <string name="tech_hint_hv_voltage">Voltage of the traction battery. It rises while charging and falls as the pack discharges, roughly 450…560 V on this car. On its own it says little, it is useful together with power.</string>
     <string name="tech_hint_motor_power">Power at the electric motors right now: how much the car sends to the wheels or takes back from them while regenerating. Zero when parked. The car itself calculates this value.</string>
     <string name="tech_hint_power">How much energy the battery is giving out right now. Plus: the car is spending it (acceleration, climate). Minus: the battery is taking energy in, either regeneration while braking or charging from a charger. Second number: how fast the charge is draining, percent per hour. When parked this is the onboard electronics draw.</string>
     <string name="tech_hint_12v">Voltage of the ordinary 12-volt battery that powers the electronics. With the car running it is 13…14.5 V. If it is below 12 V while parked, the battery is getting weak.</string>
     <string name="tech_hint_insulation">Resistance between the high-voltage battery and the body. The higher the better: a few megaohms is normal. Falling towards 0.5 MΩ and below means insulation is damaged somewhere, time for a service.</string>
-    <string name="tech_hint_bms_limits">How much power the battery controller allows right now to take in while charging and to give out for acceleration. On a cold or nearly full battery the limits are lower: that is why charging is slower and regeneration weaker in winter.</string>
+    <string name="tech_hint_bms_limits">The ceiling the battery controller allows right now: how much to take in while charging (a charger may give less) and how much to give out for acceleration. On a cold or nearly full battery both values are lower: that is why charging is slower and regeneration weaker in winter.</string>
     <string name="tech_hint_cells">The battery is made of hundreds of cells. Shown are the weakest one, the strongest one and the difference between them. A difference up to 20…30 mV is normal. A permanently large difference means one cell is ageing faster than the others.</string>
     <string name="tech_hint_motors">Temperature of the electric motors and of the inverters that drive them. In ordinary driving up to 60…80°. During long acceleration or towing they get hotter and the car reduces power itself until they cool down.</string>
     <string name="tech_hint_compressor">How many watts the air conditioning and heat pump compressor draws. It is the main consumer besides the motors: in summer heat and in winter frost it noticeably eats into the range.</string>
