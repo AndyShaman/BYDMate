@@ -378,6 +378,47 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_CLUSTER_DISPLAY_DIAG -> runCatching {
+                    // Reply immediately: the snapshot runs 8-9 shell commands (up to 4 s each) on
+                    // its own thread, so the binder thread and the app's HelperClient mutex are
+                    // never held behind a slow dumpsys. Rate-limited, not once-only: the user
+                    // usually retries after turning log recording on, and `logcat -c` at recording
+                    // start wipes an earlier snapshot.
+                    // Inside the rate window the cached snapshot is re-emitted instead, so a
+                    // fresh recording session still gets the full cdiag block.
+                    val now = android.os.SystemClock.elapsedRealtime()
+                    val started = synchronized(clusterDiagLock) {
+                        val running = clusterDiagThread?.isAlive == true
+                        if (running) { clusterDiagReplayWhenDone = true; true }
+                        else if (now - clusterDiagLastMs < CLUSTER_DIAG_MIN_INTERVAL_MS) {
+                            val cached = clusterDiagCache
+                            if (cached != null) {
+                                android.util.Log.i("bydmate_helper", "cdiag: replaying cached snapshot (${cached.size} lines)")
+                                cached.forEach { android.util.Log.i("bydmate_helper", it) }
+                            }
+                            cached != null
+                        } else {
+                            clusterDiagLastMs = now
+                            clusterDiagThread = Thread({
+                                val lines = runCatching { logClusterDisplayDiag() }.getOrNull()
+                                val replay = synchronized(clusterDiagLock) {
+                                    if (lines != null) clusterDiagCache = lines
+                                    clusterDiagReplayWhenDone.also { clusterDiagReplayWhenDone = false }
+                                }
+                                // A request arrived mid-collection (typically: recording just
+                                // started and wiped logcat) - emit the whole block once more.
+                                if (replay && lines != null) {
+                                    android.util.Log.i("bydmate_helper", "cdiag: replaying snapshot after collection (${lines.size} lines)")
+                                    lines.forEach { android.util.Log.i("bydmate_helper", it) }
+                                }
+                            }, "bydmate-cdiag").apply { isDaemon = true; start() }
+                            true
+                        }
+                    }
+                    reply?.writeInt(if (started) 0 else 1); reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_PUT_GLOBAL_SETTING -> runCatching {
                     val key = data.readString() ?: ""
                     val value = data.readInt()
@@ -1402,6 +1443,111 @@ internal fun shExecMerged(script: String, vararg args: String): String {
     val out = process.inputStream.bufferedReader().use { it.readText().trim() }
     process.waitFor()
     return out.ifEmpty { "OK" }
+}
+
+/** Snapshot rate limit (see TX_CLUSTER_DISPLAY_DIAG): one at a time, at most one per minute. */
+private val clusterDiagLock = Any()
+private var clusterDiagThread: Thread? = null
+private var clusterDiagLastMs = Long.MIN_VALUE / 2
+private var clusterDiagCache: List<String>? = null
+private var clusterDiagReplayWhenDone = false
+private const val CLUSTER_DIAG_MIN_INTERVAL_MS = 60_000L
+
+/**
+ * Bounded variant of [shExecMerged] for the read-only diagnostic snapshot: a dumpsys on an unknown
+ * firmware can print megabytes or hang, and neither may stall the daemon's binder thread. stdout is
+ * drained on a background thread into a buffer capped at [maxBytes]; if the process outlives
+ * [timeoutMs] it is killed and whatever was read is returned with a `[timeout Nms]` marker line.
+ * Used ONLY by [logClusterDisplayDiag] — the production callers stay on [shExec]/[shExecMerged].
+ */
+private fun shExecBounded(script: String, timeoutMs: Long = 4000L, maxBytes: Int = 64 * 1024): String {
+    val process = ProcessBuilder("sh", "-c", script).redirectErrorStream(true).start()
+    val buffer = StringBuilder()
+    val reader = Thread {
+        runCatching {
+            process.inputStream.reader().use { stream ->
+                val chunk = CharArray(8192)
+                var total = 0
+                while (total < maxBytes) {
+                    val n = stream.read(chunk)
+                    if (n < 0) break
+                    val take = minOf(n, maxBytes - total)
+                    synchronized(buffer) { buffer.append(chunk, 0, take) }
+                    total += take
+                }
+            }
+        }
+    }
+    reader.isDaemon = true
+    reader.start()
+    val finished = process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)
+    if (!finished) process.destroyForcibly()
+    reader.join(500L)
+    val out = synchronized(buffer) { buffer.toString() }.trim()
+    return if (finished) out else (out + "\n[timeout ${timeoutMs}ms]")
+}
+
+/**
+ * Read-only cluster-display snapshot for cars where the projection display never resolves
+ * (DiLink 3/4, issue #182). Collection only: props, the DisplayManager and SurfaceFlinger display
+ * lists, the projection services and which SurfaceControl methods are visible under shell uid.
+ * Nothing is invoked or written — no auto_container command, no SurfaceControl call, no settings.
+ * Every command is individually guarded so one failure still leaves the rest of the snapshot in
+ * the log, under the daemon tag the app's log recorder already captures.
+ */
+private fun logClusterDisplayDiag(): List<String> {
+    val tag = "bydmate_helper"
+    val emitted = ArrayList<String>()
+    var cmds = 0
+    var errors = 0
+    var timeouts = 0
+    fun run(script: String, timeoutMs: Long = 4000L, maxBytes: Int = 64 * 1024): String {
+        cmds++
+        val out = runCatching { shExecBounded(script, timeoutMs, maxBytes) }
+            .getOrElse { errors++; "" }
+        if (out.contains("[timeout ")) timeouts++
+        return out
+    }
+    fun emit(line: String) {
+        val full = "cdiag: " + line.take(300)
+        emitted += full
+        android.util.Log.i(tag, full)
+    }
+
+    val propScript = ClusterDisplayDiag.PROP_KEYS.joinToString("; ") { "echo $it=$(getprop $it)" }
+    emit(ClusterDisplayDiag.propsLine(run(propScript)) + " uid=${android.os.Process.myUid()}")
+    emit(ClusterDisplayDiag.bydPropsLine(run("getprop | grep '^\\[ro\\.byd\\.'")))
+    emit(ClusterDisplayDiag.servicesLine(
+        run("service list | grep -i container"),
+        run("service check auto_container"),
+        run("service check AutoContainer"),
+        run("ls /dev/graphics 2>/dev/null | tr '\\n' ' '"),
+    ))
+
+    val displays = ClusterDisplayDiag.displayLines(run("dumpsys display"))
+    displays.kept.forEach { emit("display: $it") }
+    if (displays.dropped > 0) emit("display: +${displays.dropped} more matched lines dropped")
+
+    var sf = run("dumpsys SurfaceFlinger --displays")
+    if (ClusterDisplayDiag.surfaceFlingerFallbackNeeded(sf)) sf = run("dumpsys SurfaceFlinger")
+    val sfLines = ClusterDisplayDiag.surfaceFlingerLines(sf)
+    sfLines.kept.forEach { emit("sf: $it") }
+    if (sfLines.dropped > 0) emit("sf: +${sfLines.dropped} more matched lines dropped")
+
+    // Reflective visibility only: we report which SurfaceControl entry points this firmware has,
+    // and never call any of them. Hidden-API filtering can throw on some builds, hence the guard.
+    val probed = listOf(
+        "createDisplay", "destroyDisplay", "setDisplaySurface", "setDisplayProjection",
+        "setDisplayLayerStack", "getPhysicalDisplayIds", "getPhysicalDisplayToken", "getBuiltInDisplay",
+    )
+    runCatching {
+        val names = Class.forName("android.view.SurfaceControl").declaredMethods.map { it.name }.toSet()
+        val (present, missing) = probed.partition { it in names }
+        emit("surfacecontrol present=$present missing=$missing")
+    }.onFailure { emit("surfacecontrol unavailable: ${it.javaClass.simpleName}") }
+
+    emit("done cmds=$cmds errors=$errors timeouts=$timeouts")
+    return emitted
 }
 
 /** Single named gateway: pins all am/monkey prod callers to the merged-stream runner.

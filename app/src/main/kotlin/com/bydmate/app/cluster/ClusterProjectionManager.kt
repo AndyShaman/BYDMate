@@ -980,6 +980,18 @@ object ClusterProjectionManager {
             if (overlayView != null) hideOverlay(helper)
             Log.e(TAG, "cluster display not found")
             log("abort: cluster display not found")
+            // #182: ask the daemon for a read-only snapshot of the firmware's display stack on
+            // every abort. No gate here on purpose: the user usually retries right after turning
+            // log recording on (which wipes logcat), and the daemon rate-limits the collection
+            // itself, replaying its cached block otherwise. Collection only, unreachable on cars
+            // where the display resolves.
+            run {
+                val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+                val appDisplays = dm.displays.joinToString { "${it.displayId}:\"${it.name}\"" }
+                log("cluster diag: app displays=$appDisplays; asking daemon for snapshot")
+                Log.i(TAG, "cluster diag requested; app displays=$appDisplays")
+                runCatching { helper.logClusterDisplayDiag() }
+            }
             return "projection"
         }
         log("transport=${if (direct) "direct" else "vd"} display=${display.displayId} " +
