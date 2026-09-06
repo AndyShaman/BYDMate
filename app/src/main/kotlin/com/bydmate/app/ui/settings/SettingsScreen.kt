@@ -2055,6 +2055,21 @@ private fun ServiceSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
+            // Quiet foreground notification: the service picks the channel up on its next
+            // notification refresh (a few seconds), no restart needed.
+            var quietNotification by remember {
+                mutableStateOf(clusterPrefs.getBoolean(com.bydmate.app.service.TrackingService.KEY_QUIET_NOTIFICATION, false))
+            }
+            SettingToggleRow(
+                title = stringResource(R.string.settings_quiet_notification_title),
+                description = stringResource(R.string.settings_quiet_notification_desc),
+                checked = quietNotification,
+                onCheckedChange = {
+                    quietNotification = it
+                    clusterPrefs.edit().putBoolean(com.bydmate.app.service.TrackingService.KEY_QUIET_NOTIFICATION, it).apply()
+                },
+            )
+            SettingDivider()
             SettingActionRow(
                 title = stringResource(R.string.settings_export_csv_button),
                 description = stringResource(R.string.settings_export_csv_desc),

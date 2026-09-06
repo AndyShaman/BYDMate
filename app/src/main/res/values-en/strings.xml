@@ -1125,6 +1125,8 @@
     <string name="settings_widget_reset_position_desc">Return the widget to its default position</string>
     <string name="settings_export_csv_desc">Full trip history as one file in the Download folder</string>
     <string name="settings_log_recording_desc">Detailed activity log for troubleshooting. Enable when the developer asks for it</string>
+    <string name="settings_quiet_notification_title">Quiet tracking notification</string>
+    <string name="settings_quiet_notification_desc">The BYDMate notification moves to the collapsed silent list with no status bar icon. It cannot be removed entirely: Android requires a notification for background work</string>
     <string name="settings_config_export_desc">Backup: trip history with GPS and API keys in plain text, file in the Download folder</string>
     <string name="settings_config_restore_desc">Current data and settings will be fully replaced with the backup contents</string>
     <string name="settings_autostart_header">Autostart</string>

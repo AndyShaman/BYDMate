@@ -240,6 +240,12 @@ class TrackingService : Service(), LocationListener {
         private const val TAG = "TrackingService"
         private const val NOTIFICATION_ID = 1
         private const val CHANNEL_ID = "bydmate_tracking"
+        // Opt-in "quiet" channel (IMPORTANCE_MIN): the mandatory foreground notification collapses
+        // into the shade's silent list with no status-bar icon. Off by default - existing users keep
+        // the LOW channel untouched (#86). Pref lives in the cluster_projection file next to the other
+        // car/system toggles the settings screen edits.
+        private const val QUIET_CHANNEL_ID = "bydmate_tracking_quiet"
+        const val KEY_QUIET_NOTIFICATION = "quiet_notification"
         // Throttle autoservice gun-state read so we don't hit Binder/ADB on every
         // poll tick. 5 ticks ≈ 15 s — fast enough that the user sees a row
         // appear within ~half a minute of unplugging, gentle enough not to
@@ -1626,8 +1632,23 @@ class TrackingService : Service(), LocationListener {
             description = "Trip and charge tracking"
             setShowBadge(false)
         }
+        val quiet = NotificationChannel(
+            QUIET_CHANNEL_ID,
+            "BYDMate Tracking (quiet)",
+            NotificationManager.IMPORTANCE_MIN
+        ).apply {
+            description = "Trip and charge tracking, collapsed in the shade"
+            setShowBadge(false)
+        }
         val nm = getSystemService(NotificationManager::class.java)
         nm.createNotificationChannel(channel)
+        nm.createNotificationChannel(quiet)
+    }
+
+    private fun activeChannelId(): String {
+        val quiet = getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_QUIET_NOTIFICATION, false)
+        return if (quiet) QUIET_CHANNEL_ID else CHANNEL_ID
     }
 
     private fun buildNotification(text: String): Notification {
@@ -1636,7 +1657,7 @@ class TrackingService : Service(), LocationListener {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_IMMUTABLE
         )
-        return NotificationCompat.Builder(this, CHANNEL_ID)
+        return NotificationCompat.Builder(this, activeChannelId())
             .setContentTitle("BYDMate")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_compass)

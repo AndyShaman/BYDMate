@@ -1280,6 +1280,8 @@
     <string name="settings_widget_reset_position_desc">Вернуть виджет на место по умолчанию</string>
     <string name="settings_export_csv_desc">Вся история поездок одним файлом в папку Download</string>
     <string name="settings_log_recording_desc">Подробный журнал работы для разбора проблем. Включайте по запросу разработчика</string>
+    <string name="settings_quiet_notification_title">Тихое уведомление в шторке</string>
+    <string name="settings_quiet_notification_desc">Уведомление BYDMate уходит в свёрнутый список без значка в строке состояния. Совсем убрать его нельзя: Android требует уведомление для работы в фоне</string>
     <string name="settings_config_export_desc">Бэкап: история поездок с GPS и API-ключи открытым текстом, файл в папке Download</string>
     <string name="settings_config_restore_desc">Текущие данные и настройки будут полностью заменены содержимым бэкапа</string>
     <string name="settings_autostart_header">Автозапуск</string>

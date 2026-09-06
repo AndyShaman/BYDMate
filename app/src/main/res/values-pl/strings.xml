@@ -1278,6 +1278,8 @@
     <string name="settings_widget_reset_position_desc">Przywróć widżet na domyślne miejsce</string>
     <string name="settings_export_csv_desc">Cała historia przejazdów w jednym pliku do folderu Download</string>
     <string name="settings_log_recording_desc">Szczegółowy dziennik działania do analizy problemów. Włączaj na prośbę dewelopera</string>
+    <string name="settings_quiet_notification_title">Ciche powiadomienie w panelu</string>
+    <string name="settings_quiet_notification_desc">Powiadomienie BYDMate trafia do zwiniętej listy bez ikony na pasku stanu. Nie da się go usunąć całkowicie: Android wymaga powiadomienia do pracy w tle</string>
     <string name="settings_config_export_desc">Kopia: historia przejazdów z GPS i klucze API otwartym tekstem, plik w folderze Download</string>
     <string name="settings_config_restore_desc">Bieżące dane i ustawienia zostaną całkowicie zastąpione zawartością kopii</string>
     <string name="settings_autostart_header">Autostart</string>
