@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -13,8 +14,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
@@ -26,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -40,12 +44,12 @@ import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentBlue
 import com.bydmate.app.ui.theme.AccentGreen
-import com.bydmate.app.ui.theme.AccentOrange
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.CardSurfaceElevated
 import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.NavyDeep
+import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.SocYellow
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
@@ -53,9 +57,6 @@ import com.bydmate.app.ui.theme.TextSecondary
 import kotlin.math.roundToInt
 
 private const val DASH = "—"
-
-/** Full scale of the BMS limit bars, kW. */
-private const val LIMIT_BAR_FULL_SCALE_KW = 200.0
 
 /**
  * «Техника» — the full-screen live panel behind the battery card on the Dashboard.
@@ -234,12 +235,10 @@ private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit
             stringResource(R.string.tech_label_max_charge),
             state.bmsMaxChargeKw?.let { stringResource(R.string.tech_value_kw, it.roundToInt()) } ?: DASH,
         )
-        LimitBar(state.bmsMaxChargeKw, AccentBlue)
         TechRow(
             stringResource(R.string.tech_label_max_discharge),
             state.bmsMaxDischargeKw?.let { stringResource(R.string.tech_value_kw, it) } ?: DASH,
         )
-        LimitBar(state.bmsMaxDischargeKw?.toDouble(), AccentOrange)
         Hint(state.openHint, "bmsLimits", R.string.tech_hint_bms_limits)
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 10.dp)) {
@@ -261,6 +260,13 @@ private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit
                 ?.let { stringResource(R.string.tech_value_mv, Math.round(it * 1000.0).toInt()) } ?: DASH,
             valueColor = cellDeltaColor(state.cellDelta, state.soc),
         )
+        if (state.cellMin != null && state.cellMax != null) {
+            CellRangeStrip(
+                state.cellMin,
+                state.cellMax,
+                cellDeltaColor(state.cellDelta, state.soc),
+            )
+        }
         Hint(state.openHint, "cells", R.string.tech_hint_cells)
     }
 }
@@ -279,16 +285,23 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifi
             stringResource(R.string.tech_label_rear),
             valueColor = TextMuted,
         )
+        val anyTemp = state.motorTempFront ?: state.motorTempRear
+            ?: state.inverterTempFront ?: state.inverterTempRear
         PairRow(
             stringResource(R.string.tech_label_motor_temp),
             state.motorTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
             state.motorTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
         )
+        if (anyTemp != null) TempBarPair(state.motorTempFront, state.motorTempRear)
         PairRow(
             stringResource(R.string.tech_label_inverter_temp),
             state.inverterTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
             state.inverterTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
         )
+        if (anyTemp != null) {
+            TempBarPair(state.inverterTempFront, state.inverterTempRear)
+            TempScaleCaption()
+        }
         PairRow(
             stringResource(R.string.tech_label_rpm),
             rpmForDisplay(state.motorRpmFront)?.toString() ?: DASH,
@@ -336,10 +349,7 @@ private fun TyresCard(state: TechPanelUiState, onHint: (String) -> Unit, modifie
         onHint = onHint,
         modifier = modifier,
     ) {
-        TyreRow(stringResource(R.string.tech_tyre_fl), state.tirePressFL, state.tyreTempFL)
-        TyreRow(stringResource(R.string.tech_tyre_fr), state.tirePressFR, state.tyreTempFR)
-        TyreRow(stringResource(R.string.tech_tyre_rl), state.tirePressRL, state.tyreTempRL)
-        TyreRow(stringResource(R.string.tech_tyre_rr), state.tirePressRR, state.tyreTempRR)
+        TyreTopView(state)
         Hint(state.openHint, "tyres", R.string.tech_hint_tyres)
     }
 }
@@ -459,34 +469,172 @@ private fun PairRow(
     }
 }
 
+/**
+ * Range of the cell voltages drawn on a fixed LFP scale, so a wide spread is visible as a wide
+ * band without reading the numbers. The band carries the same colour as the delta value.
+ */
 @Composable
-private fun TyreRow(corner: String, pressureKpa: Int?, tempC: Int?) {
-    val bar = pressureKpa?.let { it / 100.0 }
-    val value = when {
-        bar != null && tempC != null -> stringResource(R.string.tech_value_tyre, bar, tempC)
-        bar != null -> stringResource(R.string.tech_value_tyre_pressure, bar)
-        tempC != null -> stringResource(R.string.tech_value_deg, tempC)
-        else -> DASH
+private fun CellRangeStrip(min: Double, max: Double, color: Color) {
+    val (lo, hi) = TechPanelVisuals.cellScale(min, max)
+    val span = hi - lo
+    val start = ((min - lo) / span).coerceIn(0.0, 1.0).toFloat()
+    val end = ((max - lo) / span).coerceIn(0.0, 1.0).toFloat()
+    Column(modifier = Modifier.padding(top = 6.dp)) {
+        BoxWithConstraints(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(8.dp)
+                .background(CardSurfaceElevated, RoundedCornerShape(4.dp))
+        ) {
+            val track = maxWidth
+            Box(
+                modifier = Modifier
+                    .offset(x = track * start)
+                    .width((track * (end - start)).coerceAtLeast(2.dp))
+                    .height(8.dp)
+                    .background(color, RoundedCornerShape(4.dp))
+            )
+        }
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(stringResource(R.string.tech_value_cell_scale, lo), color = TextMuted, fontSize = 10.sp)
+            Text(stringResource(R.string.tech_value_cell_scale, hi), color = TextMuted, fontSize = 10.sp)
+        }
     }
-    TechRow(corner, value)
 }
 
-/** Proportional bar under a BMS limit; empty track when the limit is unknown. */
+/** Front and rear temperature bars side by side under their row. */
 @Composable
-private fun LimitBar(kw: Double?, color: Color) {
-    val fraction = ((kw ?: 0.0) / LIMIT_BAR_FULL_SCALE_KW).coerceIn(0.0, 1.0).toFloat()
+private fun TempBarPair(front: Int?, rear: Int?) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(modifier = Modifier.weight(1f)) { TempBar(front) }
+        Box(modifier = Modifier.weight(1f)) { TempBar(rear) }
+    }
+}
+
+/**
+ * Temperature against the 0-150°C scale, with the warm and hot zones shaded on the track so a
+ * bar reaching into them reads as a warning without a legend. Empty track when unknown.
+ */
+@Composable
+private fun TempBar(temp: Int?) {
+    val fraction = ((temp ?: 0) / TechPanelVisuals.TEMP_FULL_SCALE_C).coerceIn(0.0, 1.0).toFloat()
+    val color = when (temp?.let { TechPanelVisuals.tempZone(it) }) {
+        TechPanelVisuals.TempZone.HOT -> SocRed
+        TechPanelVisuals.TempZone.WARM -> SocYellow
+        else -> AccentGreen
+    }
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .height(6.dp)
             .background(CardSurfaceElevated, RoundedCornerShape(3.dp))
     ) {
-        if (fraction > 0f) {
+        Row(modifier = Modifier.matchParentSize()) {
+            Box(modifier = Modifier.weight(0.6f))
+            Box(modifier = Modifier.weight(0.2f).fillMaxHeight().background(SocYellow.copy(alpha = 0.18f)))
+            Box(modifier = Modifier.weight(0.2f).fillMaxHeight().background(SocRed.copy(alpha = 0.22f)))
+        }
+        if (temp != null && fraction > 0f) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(fraction)
                     .height(6.dp)
                     .background(color, RoundedCornerShape(3.dp))
+            )
+        }
+    }
+}
+
+/** Marks where the warm and hot zones start on the temperature bars above. */
+@Composable
+private fun TempScaleCaption() {
+    Row(modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)) {
+        Box(modifier = Modifier.weight(0.6f)) { TempScaleTick("0°") }
+        Box(modifier = Modifier.weight(0.2f)) { TempScaleTick("90°") }
+        Box(modifier = Modifier.weight(0.2f)) { TempScaleTick("120°") }
+        TempScaleTick("150°")
+    }
+}
+
+@Composable
+private fun TempScaleTick(text: String) {
+    Text(text, color = TextMuted, fontSize = 10.sp)
+}
+
+/** Top view of the car: pressure and temperature sit where the wheel is. */
+@Composable
+private fun TyreTopView(state: TechPanelUiState) {
+    val deviates = TechPanelVisuals.tyreDeviates(
+        listOf(state.tirePressFL, state.tirePressFR, state.tirePressRL, state.tirePressRR)
+    )
+    Box(modifier = Modifier.fillMaxWidth().padding(top = 4.dp), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(width = 200.dp, height = 120.dp)) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.Center)
+                    .size(width = 80.dp, height = 112.dp)
+                    .background(
+                        CardSurfaceElevated.copy(alpha = 0.6f),
+                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                    )
+                    .border(
+                        1.dp,
+                        CardBorder,
+                        RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp, bottomStart = 20.dp, bottomEnd = 20.dp)
+                    )
+            )
+            TyreTile(
+                state.tirePressFL, state.tyreTempFL, deviates[0],
+                Modifier.align(Alignment.TopStart).padding(top = 6.dp),
+            )
+            TyreTile(
+                state.tirePressFR, state.tyreTempFR, deviates[1],
+                Modifier.align(Alignment.TopEnd).padding(top = 6.dp),
+            )
+            TyreTile(
+                state.tirePressRL, state.tyreTempRL, deviates[2],
+                Modifier.align(Alignment.BottomStart).padding(bottom = 2.dp),
+            )
+            TyreTile(
+                state.tirePressRR, state.tyreTempRR, deviates[3],
+                Modifier.align(Alignment.BottomEnd).padding(bottom = 2.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun TyreTile(pressureKpa: Int?, tempC: Int?, deviates: Boolean, modifier: Modifier = Modifier) {
+    val bar = pressureKpa?.let { it / 100.0 }
+    Row(
+        modifier = modifier
+            .size(width = 70.dp, height = 44.dp)
+            .clip(RoundedCornerShape(8.dp))
+            .background(CardSurfaceElevated)
+    ) {
+        Box(
+            modifier = Modifier
+                .width(3.dp)
+                .fillMaxHeight()
+                .background(if (deviates) SocYellow else AccentGreen)
+        )
+        Column(modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp)) {
+            Text(
+                bar?.let { stringResource(R.string.tech_value_tyre_pressure, it) } ?: DASH,
+                color = TextPrimary,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+            )
+            Text(
+                tempC?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+                color = TextSecondary,
+                fontSize = 11.sp,
             )
         }
     }
