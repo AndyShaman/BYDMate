@@ -87,12 +87,7 @@ class NativeParsReader @Inject constructor(
         FidMap.entries.forEachIndexed { i, entry ->
             val (status, word) = pairs[i]
             val value: Any? = if (status != 0) null else when (entry.transact) {
-                5 -> SentinelDecoder.decodeInt(word)?.let { raw ->
-                    when (entry.decoder) {
-                        Decoder.INT_SCALED -> ParamDecoder.decodeScaled(raw, entry.scale)
-                        else               -> ParamDecoder.decodeInt(raw, entry.decoder)
-                    }
-                }
+                5 -> decodeTx5(entry, SentinelDecoder.decodeInt(word))
                 7 -> SentinelDecoder.parseFloatFromShellInt(word)?.let { f ->
                     ParamDecoder.decodeFloat(java.lang.Float.floatToRawIntBits(f), entry.decoder)
                 }
@@ -171,12 +166,23 @@ class NativeParsReader @Inject constructor(
         return assembleSnapshot(decoded, windowRrRaw)
     }
 
-    /** tx=5 decode tail, shared by the plain reads and the raw windowRR sample. */
+    // Range rejects (INT_TEMP_C / INT_PERCENT) used to vanish silently: a car answering a
+    // plain out-of-range number (Dolphin cabin temp, #180) left no trace in any dump.
+    private val rejectLog = com.bydmate.app.data.autoservice.LogThrottle()
+
+    /** tx=5 decode tail, shared by the plain reads, the daemon batch and the raw windowRR sample. */
     private fun decodeTx5(entry: FidEntry, raw: Int?): Any? = raw?.let {
-        when (entry.decoder) {
+        val value = when (entry.decoder) {
             Decoder.INT_SCALED -> ParamDecoder.decodeScaled(it, entry.scale)
             else               -> ParamDecoder.decodeInt(it, entry.decoder)
         }
+        if (value == null && rejectLog.shouldLog(entry.field)) {
+            android.util.Log.w(
+                "NativeParsReader",
+                "decode rejected: ${entry.field} dev=${entry.device} fid=${entry.fid} decoder=${entry.decoder} raw=$it"
+            )
+        }
+        value
     }
 
     /**
