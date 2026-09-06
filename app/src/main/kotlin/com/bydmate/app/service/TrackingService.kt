@@ -1171,6 +1171,14 @@ class TrackingService : Service(), LocationListener {
         }
     }
 
+    // Declared explicitly: default interface methods on compileSdk 34, but ABSTRACT on API 29 -
+    // without them Android 10 (DiLink 3.0/4.0) throws AbstractMethodError from LocationManager's
+    // ListenerTransport whenever the GPS provider toggles (ignition off/on), killing the process.
+    override fun onProviderEnabled(provider: String) { /* no-op */ }
+    override fun onProviderDisabled(provider: String) { /* no-op */ }
+    @Deprecated("Deprecated in Java")
+    override fun onStatusChanged(provider: String?, status: Int, extras: android.os.Bundle?) { /* no-op */ }
+
     private fun startPolling() {
         Log.i(TAG, "Starting polling via SharedAdaptiveLoop")
         pollingJob = serviceScope.launch {
@@ -1571,6 +1579,19 @@ class TrackingService : Service(), LocationListener {
         // support, not the raw pref, so unsupported cars stay untouched (Codex fix 1).
         if (!mirrorEnabled && !voiceEnabled && !knobEnabled && !hudController.requiresA11y()) return
         starGrant.ensure(reason)
+        // Android 10 (DiLink 3.0/4.0): once our process died while bound, AccessibilityManagerService
+        // parks the component in mBindingServices and skips it on every settings rewrite until a
+        // package update, force-stop or reboot (AOSP Q updateServicesLocked, "wait for the binding").
+        // The daemon's remove+re-add then reports success while the framework never binds. Name the
+        // state only when every re-assert succeeded (daemon path healthy) and the service still is
+        // not running - all-false re-asserts mean a broken daemon, not a stuck framework.
+        val last = GrantSelfHeal.history().lastOrNull { it.name == "star a11y" }
+        val daemonOkButUnbound = last != null && !last.granted &&
+            last.reasserts.isNotEmpty() && last.reasserts.all { it }
+        if (android.os.Build.VERSION.SDK_INT <= 29 && daemonOkButUnbound && !starServiceRunning()) {
+            Log.w(TAG, "star a11y stuck in binding state ($reason): daemon re-asserted the setting " +
+                "${last.reasserts.size}x OK but the framework did not bind; likely needs reboot (AOSP Q mBindingServices)")
+        }
     }
 
     private fun notificationListenerGranted(): Boolean {
