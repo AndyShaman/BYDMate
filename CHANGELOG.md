@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.14.3] - 2026-09-07
+
 ### Новое
 - Слепые зоны: тумблер «Обе камеры на главный экран» для машин, где левая камера на приборке мешает (#183)
 
@@ -1002,7 +1004,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.14.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.14.3...HEAD
+[3.14.3]: https://github.com/AndyShaman/BYDMate/compare/v3.14.2...v3.14.3
 [3.14.2]: https://github.com/AndyShaman/BYDMate/compare/v3.14.1...v3.14.2
 [3.14.1]: https://github.com/AndyShaman/BYDMate/compare/v3.14.0...v3.14.1
 [3.14.0]: https://github.com/AndyShaman/BYDMate/compare/v3.13.2...v3.14.0
