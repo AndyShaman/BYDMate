@@ -1174,6 +1174,8 @@
     <string name="settings_blindspot_position_button">Ajustar a posição</string>
     <string name="settings_blindspot_position_done">Pronto</string>
     <string name="settings_blindspot_position_drag">Arraste a janelinha</string>
+    <string name="settings_blindspot_both_main_title">Ambas as câmeras na tela principal</string>
+    <string name="settings_blindspot_both_main_desc">A câmera esquerda aparece ao lado da direita na tela, o painel de instrumentos não é usado</string>
     <string name="settings_blindspot_glow_title">Destaque quando houver um objeto no ponto cego</string>
     <string name="settings_blindspot_glow_desc">Moldura laranja em volta da janela enquanto o sensor detecta um carro ao lado</string>
     <string name="settings_blindspot_hint">Requer versão com câmeras de visão 360°. Quando a projeção no painel não estiver disponível, a janelinha funciona na tela principal.</string>

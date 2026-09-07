@@ -1330,6 +1330,8 @@
     <string name="settings_blindspot_position_button">Ustaw położenie</string>
     <string name="settings_blindspot_position_done">Gotowe</string>
     <string name="settings_blindspot_position_drag">Przeciągnij okienko</string>
+    <string name="settings_blindspot_both_main_title">Obie kamery na ekranie głównym</string>
+    <string name="settings_blindspot_both_main_desc">Lewa kamera jest pokazywana obok prawej na tablecie, zestaw wskaźników nie jest używany</string>
     <string name="settings_blindspot_glow_title">Podświetlenie, gdy obiekt jest w martwym polu</string>
     <string name="settings_blindspot_glow_desc">Pomarańczowa ramka wokół okna, gdy czujnik widzi auto obok</string>
     <string name="settings_blindspot_hint">Potrzebna wersja wyposażenia z kamerami 360°. Jeśli nie da się wyświetlić projekcji na wskaźnikach, okienko działa na ekranie głównym.</string>

@@ -147,3 +147,11 @@ class BlindSpotTelemetryGate {
         return BlindSpotTelemetryState(ageMs, mustClose, lastValid)
     }
 }
+
+/**
+ * Where the left camera goes: a mirrored window on the main screen next to the right PiP, or the
+ * cluster panel. Cars without a projection display have no choice; [bothOnMain] is the user opt-in
+ * (#183) for the drivers whose cluster is better left alone.
+ */
+fun blindSpotUsesMirror(bothOnMain: Boolean, hasClusterDisplay: Boolean): Boolean =
+    bothOnMain || !hasClusterDisplay

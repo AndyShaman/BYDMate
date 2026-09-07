@@ -182,3 +182,16 @@ class BlindSpotTelemetryGateTest {
         assertFalse(gate.onSample(null, 1_450L).mustClose)
     }
 }
+
+class BlindSpotMirrorRoutingTest {
+
+    @Test fun `without a cluster display the left camera always mirrors`() {
+        assertTrue(blindSpotUsesMirror(bothOnMain = false, hasClusterDisplay = false))
+        assertTrue(blindSpotUsesMirror(bothOnMain = true, hasClusterDisplay = false))
+    }
+
+    @Test fun `with a cluster display the opt-in decides`() {
+        assertFalse(blindSpotUsesMirror(bothOnMain = false, hasClusterDisplay = true))
+        assertTrue(blindSpotUsesMirror(bothOnMain = true, hasClusterDisplay = true))
+    }
+}

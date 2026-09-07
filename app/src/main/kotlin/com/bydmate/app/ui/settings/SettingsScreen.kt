@@ -1366,6 +1366,9 @@ private fun BlindSpotCard() {
             BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT))
     }
     var bsdGlow by remember { mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BSD_GLOW, true)) }
+    var bothOnMain by remember {
+        mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false))
+    }
 
     // Drag-to-place preview: it lives in a WindowManager overlay, so leaving the screen has to
     // take it down explicitly. The flag follows the window rather than the clicks — the overlay
@@ -1456,6 +1459,17 @@ private fun BlindSpotCard() {
             ),
             onClick = {
                 if (placing) positionOverlay.hide() else placing = positionOverlay.show(context)
+            },
+            enabled = enabled,
+        )
+        SettingDivider()
+        SettingToggleRow(
+            title = stringResource(R.string.settings_blindspot_both_main_title),
+            description = stringResource(R.string.settings_blindspot_both_main_desc),
+            checked = bothOnMain,
+            onCheckedChange = {
+                bothOnMain = it
+                prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it).apply()
             },
             enabled = enabled,
         )

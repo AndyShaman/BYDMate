@@ -28,6 +28,9 @@ class BlindSpotPreferences @Inject constructor(
     val pipYPx: Int get() = prefs.getInt(KEY_PIP_Y_PX, UNSET_PX)
     val bsdGlow: Boolean get() = prefs.getBoolean(KEY_BSD_GLOW, true)
 
+    /** Opt-in (#183): keep the left camera on the main screen even when a cluster panel exists. */
+    val bothOnMain: Boolean get() = prefs.getBoolean(KEY_BOTH_ON_MAIN, false)
+
     companion object {
         const val PREFS_NAME = "blind_spot"
         const val KEY_ENABLED = "enabled"
@@ -36,6 +39,7 @@ class BlindSpotPreferences @Inject constructor(
         const val KEY_PIP_X_PX = "pip_x_px"
         const val KEY_PIP_Y_PX = "pip_y_px"
         const val KEY_BSD_GLOW = "bsd_glow"
+        const val KEY_BOTH_ON_MAIN = "both_on_main"
 
         /** Position is stored in absolute pixels, so "never placed" needs its own value. */
         const val UNSET_PX = -1

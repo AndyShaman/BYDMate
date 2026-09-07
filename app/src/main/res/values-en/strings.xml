@@ -1177,6 +1177,8 @@
     <string name="settings_blindspot_position_button">Adjust position</string>
     <string name="settings_blindspot_position_done">Done</string>
     <string name="settings_blindspot_position_drag">Drag the window</string>
+    <string name="settings_blindspot_both_main_title">Both cameras on the main screen</string>
+    <string name="settings_blindspot_both_main_desc">The left camera is shown next to the right one on the tablet, the instrument cluster is not used</string>
     <string name="settings_blindspot_glow_title">Highlight when an object is in the blind spot</string>
     <string name="settings_blindspot_glow_desc">Orange border around the window while the sensor sees a car alongside</string>
     <string name="settings_blindspot_hint">Requires a trim with surround-view cameras. When the cluster projection is not available, the window works on the main screen.</string>
