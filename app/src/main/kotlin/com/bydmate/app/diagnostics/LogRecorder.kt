@@ -366,7 +366,9 @@ class LogRecorder internal constructor(
             // DiLink 4 a11y stuck-binding diagnostics: who force-stops / kills our process
             // ("Force stopping com.bydmate.app", "Killing ...") and the framework's own
             // accessibility bookkeeping around ignition off/on.
-            "ActivityManager:I", "AccessibilityManagerService:*"
+            "ActivityManager:I", "AccessibilityManagerService:*",
+            // #180: the "decode rejected" line lives on this tag and was missing from the filter.
+            "NativeParsReader:*"
         )
     }
 }

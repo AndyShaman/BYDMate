@@ -1332,6 +1332,8 @@
     <string name="settings_blindspot_position_button">Настроить положение</string>
     <string name="settings_blindspot_position_done">Готово</string>
     <string name="settings_blindspot_position_drag">Перетащите окошко</string>
+    <string name="settings_blindspot_both_main_title">Обе камеры на главный экран</string>
+    <string name="settings_blindspot_both_main_desc">Левая камера показывается рядом с правой на планшете, приборка не используется</string>
     <string name="settings_blindspot_glow_title">Подсветка при объекте в слепой зоне</string>
     <string name="settings_blindspot_glow_desc">Оранжевая рамка вокруг окна, когда датчик видит машину рядом</string>
     <string name="settings_blindspot_hint">Нужна комплектация с круговым обзором. Если вывести проекцию на приборку невозможно, окошко работает на главном экране.</string>

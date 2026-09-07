@@ -1292,6 +1292,8 @@
     <string name="settings_blindspot_position_button">调整位置</string>
     <string name="settings_blindspot_position_done">完成</string>
     <string name="settings_blindspot_position_drag">拖动小窗</string>
+    <string name="settings_blindspot_both_main_title">两侧摄像头都显示在主屏</string>
+    <string name="settings_blindspot_both_main_desc">左侧摄像头与右侧一起显示在中控屏上，不使用仪表盘</string>
     <string name="settings_blindspot_glow_title">盲区有车时高亮</string>
     <string name="settings_blindspot_glow_desc">传感器检测到旁边有车时，窗口周围显示橙色边框</string>
     <string name="settings_blindspot_hint">需要配备全景影像的车型。如果无法投射到仪表盘，小窗会在主屏幕上工作。</string>
