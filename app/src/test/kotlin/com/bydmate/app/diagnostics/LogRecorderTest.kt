@@ -108,6 +108,8 @@ class LogRecorderTest {
         assertEquals(2, spawned.size)
         assertEquals(listOf("logcat", "-c"), spawned[0].toList())
         assertTrue(spawned[1].contains("BootReceiver:*"))
+        // #180: the "decode rejected" line lives on this tag.
+        assertTrue(spawned[1].contains("NativeParsReader:*"))
 
         val state = recorder.state.value
         assertTrue(state.isRecording)
