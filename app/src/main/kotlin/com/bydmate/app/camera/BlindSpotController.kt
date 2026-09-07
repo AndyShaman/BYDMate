@@ -40,6 +40,7 @@ import kotlinx.coroutines.ExecutorCoroutineDispatcher
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -197,7 +198,7 @@ class BlindSpotController @Inject constructor(
         // The screen preference can flip mid-drive too, and the routing is decided once, at
         // attach time. Comparing against the preference the attached windows were built from
         // keeps this off the display manager on every tick.
-        if (clusterWindow != null && mirrorByChoice != prefs.bothOnMain) {
+        if ((clusterWindow != null || pipWindow != null) && mirrorByChoice != prefs.bothOnMain) {
             awaitTeardown("blind-spot screen preference changed")
             return
         }
@@ -622,7 +623,10 @@ class BlindSpotController @Inject constructor(
                 cameraOpen = false
             }
             applyShow(BlindSpotSide.NONE)
-            compositorJob?.cancel()
+            // Join, not just cancel: the blocking binder call inside cannot be interrupted, and
+            // its confirmed result must land in compositorPowered before the check below, or a
+            // power-up that completes after we looked leaves the cluster black.
+            compositorJob?.cancelAndJoin()
             compositorJob = null
             compositorTarget = false
             if (compositorPowered) applyCompositor(false)
