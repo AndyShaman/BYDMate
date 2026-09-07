@@ -25,7 +25,7 @@
     <string name="settings_display_mirror_title">Projeção no painel via botão do volante</string>
     <string name="settings_display_mirror_desc">Um toque curto no botão escolhido do volante move o aplicativo selecionado para o painel de instrumentos e vice-versa.</string>
     <string name="settings_cluster_auto_container_title">Mostrar no painel imediatamente</string>
-    <string name="settings_cluster_auto_container_desc">Ativar o modo de projeção do painel automaticamente</string>
+    <string name="settings_cluster_auto_container_desc">O app alterna o painel para o modo de projeção e de volta sozinho (navegador e câmeras de ponto cego). Desative se depois disso o ADAS ou o widget de fábrica sumir do painel e não voltar sozinho: então alterne o modo do painel manualmente, a imagem aparece no minimapa</string>
     <string name="settings_cluster_direct_reboot_hint">Para o agente de voz ver o navegador no painel, reinicie o DiLink uma vez: mantenha pressionado o botão de volume. Apenas desligar o carro não é suficiente. Até o reinício a projeção funciona, mas o agente não vê a rota.</string>
     <string name="cluster_direct_unsupported_hint">A saída direta não está disponível no firmware deste carro, um modo compatível é usado</string>
     <string name="settings_projection_mode_title">Modo de projeção</string>

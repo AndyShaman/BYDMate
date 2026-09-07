@@ -24,7 +24,7 @@
     <string name="settings_display_mirror_title">Projection to cluster via wheel button</string>
     <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
     <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
-    <string name="settings_cluster_auto_container_desc">Switch the cluster into projection mode automatically</string>
+    <string name="settings_cluster_auto_container_desc">The app switches the cluster into projection mode and back by itself (navigator and blind-spot cameras). Turn it off if ADAS or the stock widget disappears from the cluster afterwards and does not come back on its own: then switch the cluster mode manually, the picture shows in the mini-map</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
     <string name="settings_projection_mode_title">Projection mode</string>

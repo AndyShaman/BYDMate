@@ -28,7 +28,7 @@
     <string name="settings_display_mirror_title">Вывод на приборку кнопкой руля</string>
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
-    <string name="settings_cluster_auto_container_desc">Автоматически переводить приборку в режим проекции</string>
+    <string name="settings_cluster_auto_container_desc">Приложение само переключает приборку в режим проекции и обратно (навигатор и камеры слепых зон). Выключите, если после этого с приборки пропадает ADAS или штатный виджет и не возвращается сам: тогда режим приборки переключайте вручную, а картинка будет видна в мини-карте</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прямой вывод недоступен на прошивке этой машины, используется совместимый режим</string>
     <string name="settings_projection_mode_title">Режим проекции</string>
