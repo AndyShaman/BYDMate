@@ -28,7 +28,7 @@
     <string name="settings_display_mirror_title">Вывад на прыборку кнопкай руля</string>
     <string name="settings_display_mirror_desc">Кароткае націсканне выбранай кнопкі руля пераносіць выбраную праграму на прыборку і назад.</string>
     <string name="settings_cluster_auto_container_title">Адразу паказваць на прыборцы</string>
-    <string name="settings_cluster_auto_container_desc">Аўтаматычна пераводзіць прыборку ў рэжым праекцыі</string>
+    <string name="settings_cluster_auto_container_desc">Праграма сама пераключае прыборку ў рэжым праекцыі і назад (навігатар і камеры сляпых зон). Выключыце, калі пасля гэтага з прыборкі знікае ADAS або штатны віджэт і не вяртаецца сам: тады рэжым прыборкі пераключайце ўручную, а карцінка будзе бачная ў міні-карце</string>
     <string name="settings_cluster_direct_reboot_hint">Каб галасавы агент бачыў навігатар на прыборцы, адзін раз перазагрузіце DiLink: заціскайце і ўтрымлівайце колца гучнасці. Проста заглушыць машыну недастаткова. Да перазагрузкі праекцыя працуе, але агент не бачыць маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прамы вывад недаступны на прашыўцы гэтай машыны, выкарыстоўваецца сумяшчальны рэжым</string>
     <string name="settings_projection_mode_title">Рэжым праекцыі</string>

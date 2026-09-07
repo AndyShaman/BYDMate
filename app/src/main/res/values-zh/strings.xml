@@ -28,7 +28,7 @@
     <string name="settings_display_mirror_title">方向盘按键投射到仪表盘</string>
     <string name="settings_display_mirror_desc">短按所选方向盘按键，将所选应用投射到仪表盘或返回屏幕。</string>
     <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
-    <string name="settings_cluster_auto_container_desc">自动将仪表盘切换到投屏模式</string>
+    <string name="settings_cluster_auto_container_desc">应用会自动将仪表盘切换到投屏模式并切回（导航和盲区摄像头）。如果之后仪表盘上的 ADAS 或原厂小部件消失且不会自行恢复，请关闭此项：此时请手动切换仪表盘模式，画面会显示在小地图中</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
     <string name="cluster_direct_unsupported_hint">此车机固件不支持直连输出，已使用兼容模式</string>
     <string name="settings_projection_mode_title">投影模式</string>
