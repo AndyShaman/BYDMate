@@ -16,6 +16,10 @@ import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.IBinder
 import android.os.Looper
 import android.os.PowerManager
@@ -88,6 +92,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var autoserviceClient: com.bydmate.app.data.autoservice.AutoserviceClient
     @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
+    @Inject lateinit var adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
     @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
     @Inject lateinit var lastSessionRepository: com.bydmate.app.data.repository.LastSessionRepository
@@ -110,6 +115,9 @@ class TrackingService : Service(), LocationListener {
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var pollingJob: Job? = null
+    // Trigger 2 for the ADB restore: Android refuses to enable wireless debugging without a
+    // Wi-Fi connection, so a Wi-Fi network appearing is the moment a blocked attempt can run.
+    private var wifiRestoreCallback: ConnectivityManager.NetworkCallback? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var wakeLockRenewer: WakeLockRenewer? = null
     private var locationManager: LocationManager? = null
@@ -483,6 +491,7 @@ class TrackingService : Service(), LocationListener {
         ChainLog.append(this, "startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
+        registerWifiRestoreCallback()
         // HUD output resumes with the service on cars where the user enabled it.
         hudController.startIfEnabled()
 
@@ -1114,6 +1123,7 @@ class TrackingService : Service(), LocationListener {
         _youtubeForeground.value = false
         _foregroundPackage.value = null
         networkAvailableMonitor.stop()
+        unregisterWifiRestoreCallback()
         try {
             unregisterReceiver(screenWakeReceiver)
         } catch (e: Exception) {
@@ -1286,8 +1296,12 @@ class TrackingService : Service(), LocationListener {
                             lastHelperRespawnAtMs = now
                             Log.w(TAG, "Helper daemon unhealthy, attempting respawn")
                             serviceScope.launch {
-                                runCatching { helperBootstrap.ensureRunning() }
+                                val respawned = runCatching { helperBootstrap.ensureRunning() }
                                     .onFailure { Log.w(TAG, "Helper respawn failed: ${it.message}") }
+                                    .getOrDefault(false)
+                                // Trigger 3: a daemon that will not come back usually means the
+                                // ADB channel under it is gone (port closed by a reboot).
+                                if (!respawned) adbRestoreManager.attemptIfNeeded("watchdog")
                             }
                         }
                     }
@@ -1464,8 +1478,16 @@ class TrackingService : Service(), LocationListener {
                 if (adbOnDeviceClient.connect().isSuccess) {
                     val granted = adbOnDeviceClient.grantUsageStatsAppop("com.bydmate.app")
                     Log.i(TAG, "GET_USAGE_STATS appop grant: $granted")
+                    // Self-grant while the classic port still answers, regardless of the restore
+                    // toggle: on firmwares that close the port at every reboot this is the last
+                    // moment a shell command can reach us, and the permission is what lets the
+                    // app turn wireless debugging on later. Idempotent.
+                    val secureSettings = adbOnDeviceClient.grantWriteSecureSettings("com.bydmate.app")
+                    Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings")
                 } else {
                     Log.w(TAG, "ADB connect refused — camera detection may be inactive until appop is granted manually")
+                    // Trigger 1: the port is dead on service start — try to bring it back.
+                    adbRestoreManager.attemptIfNeeded("service_start")
                 }
             } catch (e: Exception) {
                 Log.w(TAG, "ADB appop grant failed: ${e.message}")
@@ -1481,6 +1503,45 @@ class TrackingService : Service(), LocationListener {
         serviceScope.launch {
             cameraStateMonitor.foregroundPackage.collect { _foregroundPackage.value = it }
         }
+    }
+
+    /**
+     * Re-runs the ADB restore when Wi-Fi appears. Registered unconditionally — the manager
+     * itself checks the toggle and the classic port, so a car that never needs the feature
+     * pays one callback and nothing else.
+     */
+    private fun registerWifiRestoreCallback() {
+        if (wifiRestoreCallback != null) return
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                serviceScope.launch {
+                    runCatching { adbRestoreManager.attemptIfNeeded("wifi") }
+                        .onFailure { Log.w(TAG, "ADB restore on wifi failed: ${it.message}") }
+                }
+            }
+        }
+        try {
+            val request = NetworkRequest.Builder()
+                .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+                .build()
+            cm.registerNetworkCallback(request, callback)
+            wifiRestoreCallback = callback
+        } catch (e: Exception) {
+            Log.w(TAG, "Wi-Fi callback registration failed: ${e.message}")
+        }
+    }
+
+    private fun unregisterWifiRestoreCallback() {
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        wifiRestoreCallback?.let { callback ->
+            try {
+                cm?.unregisterNetworkCallback(callback)
+            } catch (e: Exception) {
+                Log.w(TAG, "Wi-Fi callback unregister failed: ${e.message}")
+            }
+        }
+        wifiRestoreCallback = null
     }
 
     private fun startLocationUpdates() {

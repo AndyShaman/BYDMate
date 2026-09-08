@@ -494,6 +494,17 @@ These features are on by default, with no switch to flip. The first time the app
 
   Step-by-step: [PDF guide (Russian)](docs/guides/dilink5-adb-activation-ru.pdf) — included in the repository.
 
+#### ADB turns off at every reboot
+
+On DiLink firmwares from summer 2026 (the "2606" builds) the ADB port closes at every head-unit reboot, and every car control feature stops working until ADB is enabled by hand. For those cars **Settings → Car system** has a **"Restore ADB after a reboot"** toggle (off by default): the app brings ADB back up through the wireless debugging built into Android. A "?" badge next to the toggle explains it in detail, and a status line sits below it.
+
+What to know:
+
+- **Wi-Fi in the car must be on and connected to a network** (home, a phone hotspot, any). Without Wi-Fi, Android does not allow wireless debugging to be enabled, and there is no way around it.
+- The first time **on each new network** the system dialog "Allow wireless debugging on this network?" appears: tick "Always allow on this network" and press ALLOW. That is why it is easier to always use the same network.
+- Once, while ADB still works, the app grants itself the `WRITE_SECURE_SETTINGS` system permission (a single command over ADB). Without it wireless debugging cannot be enabled: the status line shows "Activation needed".
+- If ADB on your firmware survives a reboot anyway, there is no need to turn the toggle on: the status line shows "Not needed".
+
 ### 2. DiPlus (D+) is no longer required
 
 Since version 3.0.0 BYDMate works directly with the car's system and **does not require** the third-party D+ (迪加) app. All data is read and every command is sent through the car's system service.

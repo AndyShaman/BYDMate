@@ -49,3 +49,11 @@
 
 # commons-suncalc references findbugs annotations at compile-time only; not on classpath.
 -dontwarn edu.umd.cs.findbugs.annotations.**
+
+# BouncyCastle builds the self-signed certificate for the ADB TLS handshake. The provider
+# resolves its algorithm implementations reflectively from class-name strings, so R8 cannot
+# see them as used; without these the release build fails at certificate generation only.
+-keep class org.bouncycastle.jcajce.provider.** { *; }
+-keep class org.bouncycastle.jce.provider.** { *; }
+-dontwarn org.bouncycastle.**
+-dontwarn javax.naming.**

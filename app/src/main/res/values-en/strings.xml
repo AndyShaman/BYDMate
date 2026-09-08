@@ -71,6 +71,19 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Steering wheel volume knob</string>
     <string name="settings_knob_play_pause_desc">Pressing the knob pauses and resumes playback instead of switching the audio source. Needed after the firmware update that made the press change the source.</string>
+
+    <!-- ADB restore after reboot (firmwares 2606+) -->
+    <string name="settings_adb_restore_title">Restore ADB after a reboot</string>
+    <string name="settings_adb_restore_desc">For firmwares where ADB turns off at every reboot. Wi-Fi must be on.</string>
+    <string name="settings_adb_restore_help_title">How ADB restore works</string>
+    <string name="settings_adb_restore_help_body">On newer DiLink firmwares (since summer 2026) the ADB port closes at every reboot, and BYDMate loses access to the car control features.\n\nThe app can bring ADB back up through the wireless debugging built into Android. For that:\n\n1. Wi-Fi in the car must be on and connected to a network: your home one, a phone hotspot or any other. Without Wi-Fi, Android does not allow wireless debugging to be enabled, that is a system limitation.\n\n2. The first time on each new network the system dialog “Allow wireless debugging on this network?” appears on the screen. Tick “Always allow on this network” and press ALLOW. After that everything happens without questions on this network, so it is convenient to use the same one.\n\n3. Once, while ADB still works, the app grants itself the system permission it needs. If the status line shows “Activation needed”, connect ADB the usual way and restart the app.\n\nIf ADB on your firmware works after a reboot anyway, there is no need to turn this on: the status line will show “Not needed”.</string>
+    <string name="settings_adb_restore_status_not_needed">Not needed: ADB already works</string>
+    <string name="settings_adb_restore_status_needs_activation">Activation needed: connect ADB once and restart the app</string>
+    <string name="settings_adb_restore_status_waiting_wifi">Waiting for Wi-Fi</string>
+    <string name="settings_adb_restore_status_needs_dialog">Confirm the dialog on the screen: “Always allow on this network” and ALLOW</string>
+    <string name="settings_adb_restore_status_connecting">Restoring…</string>
+    <string name="settings_adb_restore_status_restored">Restored at %1$s</string>
+    <string name="settings_adb_restore_status_failed">Error: %1$s</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">Car system</string>
     <string name="settings_car_language_title">Car interface language</string>

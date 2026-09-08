@@ -75,6 +75,19 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">Колёсико громкости на руле</string>
     <string name="settings_knob_play_pause_desc">Нажатие ставит на паузу и продолжает воспроизведение, а не переключает источник звука. Нужно после обновления прошивки, где нажатие стало менять источник.</string>
+
+    <!-- ADB restore after reboot (firmwares 2606+) -->
+    <string name="settings_adb_restore_title">Восстанавливать ADB после перезагрузки</string>
+    <string name="settings_adb_restore_desc">Для прошивок, где ADB выключается при каждой перезагрузке. Нужен включённый Wi-Fi.</string>
+    <string name="settings_adb_restore_help_title">Как работает восстановление ADB</string>
+    <string name="settings_adb_restore_help_body">На новых прошивках DiLink (с лета 2026) порт ADB закрывается при каждой перезагрузке, и BYDMate теряет доступ к функциям управления машиной.\n\nПриложение умеет поднимать ADB заново через встроенную в Android беспроводную отладку. Для этого:\n\n1. Wi-Fi в машине должен быть включён и подключён к сети: домашней, к раздаче с телефона или любой другой. Без Wi-Fi Android не даёт включить беспроводную отладку, это ограничение системы.\n\n2. При первом включении на каждой новой сети на экране появится системный диалог «Allow wireless debugging on this network?». Отметьте «Always allow on this network» и нажмите ALLOW. Дальше на этой сети всё будет происходить без вопросов, поэтому удобно использовать одну и ту же сеть.\n\n3. Один раз, пока ADB ещё работает, приложение выдаёт себе нужное системное разрешение. Если строка состояния показывает «Нужна активация», подключите ADB обычным способом и перезапустите приложение.\n\nЕсли ADB на вашей прошивке и так работает после перезагрузки, включать не нужно: строка состояния покажет «Не требуется».</string>
+    <string name="settings_adb_restore_status_not_needed">Не требуется: ADB уже работает</string>
+    <string name="settings_adb_restore_status_needs_activation">Нужна активация: подключите ADB один раз и перезапустите приложение</string>
+    <string name="settings_adb_restore_status_waiting_wifi">Ожидание Wi-Fi</string>
+    <string name="settings_adb_restore_status_needs_dialog">Подтвердите диалог на экране: «Always allow on this network» и ALLOW</string>
+    <string name="settings_adb_restore_status_connecting">Восстанавливаем…</string>
+    <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
+    <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">Система машины</string>
     <string name="settings_car_language_title">Язык интерфейса машины</string>
