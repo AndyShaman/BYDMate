@@ -781,6 +781,19 @@
     <!-- Volume knob on the steering wheel: play/pause instead of audio-source switch -->
     <string name="settings_knob_play_pause_title">方向盘音量旋钮</string>
     <string name="settings_knob_play_pause_desc">按下旋钮暂停和继续播放，而不是切换音源。固件更新后按下变为切换音源时需要开启。</string>
+
+    <!-- ADB restore after reboot (firmwares 2606+) -->
+    <string name="settings_adb_restore_title">重启后恢复 ADB</string>
+    <string name="settings_adb_restore_desc">适用于每次重启后 ADB 都会关闭的固件。需要打开 Wi-Fi。</string>
+    <string name="settings_adb_restore_help_title">ADB 恢复功能的工作原理</string>
+    <string name="settings_adb_restore_help_body">在较新的 DiLink 固件上（2026 年夏季之后），ADB 端口在每次重启后都会关闭，BYDMate 会失去对车辆控制功能的访问。\n\n应用可以通过 Android 内置的无线调试重新打开 ADB。为此：\n\n1. 车机的 Wi-Fi 必须打开并连接到网络：家里的网络、手机热点或其他任意网络。没有 Wi-Fi 时 Android 不允许开启无线调试，这是系统限制。\n\n2. 在每个新网络上首次开启时，屏幕上会出现系统对话框“Allow wireless debugging on this network?”。请勾选“Always allow on this network”并点击 ALLOW。之后在该网络上不会再询问，因此建议一直使用同一个网络。\n\n3. 在 ADB 仍然可用时，应用会一次性给自己授予所需的系统权限。如果状态行显示“需要激活”，请按常规方式连接一次 ADB，然后重启应用。\n\n如果您的固件在重启后 ADB 本来就能工作，则无需开启：状态行会显示“无需开启”。</string>
+    <string name="settings_adb_restore_status_not_needed">无需开启：ADB 已在工作</string>
+    <string name="settings_adb_restore_status_needs_activation">需要激活：请先正常连接一次 ADB，然后重启应用</string>
+    <string name="settings_adb_restore_status_waiting_wifi">等待 Wi-Fi</string>
+    <string name="settings_adb_restore_status_needs_dialog">请在屏幕上确认对话框：勾选“Always allow on this network”并点击 ALLOW</string>
+    <string name="settings_adb_restore_status_connecting">正在恢复…</string>
+    <string name="settings_adb_restore_status_restored">已于 %1$s 恢复</string>
+    <string name="settings_adb_restore_status_failed">错误：%1$s</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">车机系统</string>
     <string name="settings_car_language_title">车机界面语言</string>

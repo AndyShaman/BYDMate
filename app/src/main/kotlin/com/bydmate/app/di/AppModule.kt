@@ -548,6 +548,19 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideAdbRestorePreferences(
+        @ApplicationContext ctx: Context,
+    ): com.bydmate.app.data.autoservice.AdbRestorePreferences =
+        com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx)
+
+    @Provides
+    @Singleton
+    fun provideAdbRestoreSystem(
+        impl: com.bydmate.app.data.autoservice.AndroidAdbRestoreSystem,
+    ): com.bydmate.app.data.autoservice.AdbRestoreSystem = impl
+
+    @Provides
+    @Singleton
     fun provideSplitPreferences(
         @ApplicationContext ctx: Context,
     ): com.bydmate.app.split.SplitPreferences =

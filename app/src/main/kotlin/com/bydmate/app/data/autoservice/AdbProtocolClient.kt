@@ -11,6 +11,7 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.KeyPair
 import java.security.Signature
+import java.security.cert.X509Certificate
 import java.security.interfaces.RSAPublicKey
 import java.util.Arrays
 
@@ -41,6 +42,11 @@ internal interface AdbProtocol {
  * little-endian blob (`modSizeWords | n0inv | modulus[64] | rr[64] | exponent`)
  * then Base64 + UTF-8.
  *
+ * On firmwares where the classic port is gone the same client also speaks the
+ * wireless-debugging variant: adbd answers the banner with `STLS`, and everything
+ * after the TLS handshake is the identical packet protocol. Authorization there is
+ * still our RSA key — it travels inside the self-signed certificate ([AdbTls]).
+ *
  * Thread safety: `connect`/`exec`/`disconnect` are mutually exclusive via
  * `synchronized(this)`; concurrent reads from multiple coroutines are safe but
  * serialized — fine for our use case (catch-up + occasional manual probe).
@@ -48,10 +54,17 @@ internal interface AdbProtocol {
 internal class AdbProtocolClient(
     private val keyPair: KeyPair,
     private val host: String = "127.0.0.1",
-    private val port: Int = 5555
+    private val port: Int = 5555,
+    private val certificateProvider: () -> X509Certificate = { AdbCertificate.forKeyPair(keyPair) },
+    // Test seams: a fake socket / a passthrough TLS upgrade let the STLS branch run on the JVM.
+    private val socketFactory: (String, Int) -> Socket = { h, p -> Socket(h, p) },
+    private val tlsUpgrade: (Socket) -> Socket = { plain ->
+        AdbTls.upgrade(plain, keyPair, certificateProvider())
+    },
 ) : AdbProtocol {
 
     @Volatile private var socket: Socket? = null
+    @Volatile private var tlsSocket: Socket? = null
     @Volatile private var input: InputStream? = null
     @Volatile private var output: OutputStream? = null
     @Volatile private var localStreamId: Int = 1
@@ -64,7 +77,7 @@ internal class AdbProtocolClient(
         }
         disconnectInternal()
         try {
-            val s = Socket(host, port).apply {
+            val s = socketFactory(host, port).apply {
                 soTimeout = SOCKET_TIMEOUT_MS
                 tcpNoDelay = true
             }
@@ -75,7 +88,18 @@ internal class AdbProtocolClient(
             val hostBanner = "host::\u0000".toByteArray(Charsets.UTF_8)
             writePacket(A_CNXN, A_VERSION_AUTH, MAX_PAYLOAD, hostBanner)
 
-            val first = readPacket()
+            var first = readPacket()
+            if (first.command == A_STLS) {
+                // Wireless debugging: acknowledge the offer, then everything below the
+                // packet layer moves into TLS. adbd re-sends its banner afterwards.
+                Log.d(TAG, "Daemon requested TLS, upgrading")
+                writePacket(A_STLS, A_STLS_VERSION, 0, EMPTY)
+                val tls = tlsUpgrade(s)
+                tlsSocket = tls
+                input = tls.getInputStream()
+                output = tls.getOutputStream()
+                first = readPacket()
+            }
             return when (first.command) {
                 A_CNXN -> {
                     Log.i(TAG, "Connected (no auth required)")
@@ -104,7 +128,14 @@ internal class AdbProtocolClient(
     }
 
     @Synchronized
-    override fun exec(cmd: String): String? {
+    override fun exec(cmd: String): String? = openService("shell:$cmd")
+
+    /**
+     * Opens an ADB service stream (`shell:…`, `tcpip:5555`, …), collects everything the
+     * daemon writes back and returns it once the stream is closed. Null on transport error.
+     */
+    @Synchronized
+    fun openService(service: String): String? {
         // Lazy reconnect: the socket can die silently between calls (idle timeout, DiLink Wi-Fi
         // hiccup) without any caller checking isConnected() first — retry once inline before
         // giving up. connect() is @Synchronized on this same monitor (reentrant, no deadlock) and
@@ -114,7 +145,7 @@ internal class AdbProtocolClient(
             val localId = localStreamId
             localStreamId += 1
 
-            val payload = "shell:$cmd\u0000".toByteArray(Charsets.UTF_8)
+            val payload = "$service\u0000".toByteArray(Charsets.UTF_8)
             writePacket(A_OPEN, localId, 0, payload)
 
             // Wait up to 20 packets for OKAY matching our localId.
@@ -130,7 +161,7 @@ internal class AdbProtocolClient(
                 handleStalePacket(pkt, localId)
             }
             if (!gotOkay) {
-                Log.e(TAG, "shell: never got OKAY for localId=$localId")
+                Log.e(TAG, "$service: never got OKAY for localId=$localId")
                 return null
             }
 
@@ -152,7 +183,7 @@ internal class AdbProtocolClient(
             }
             sb.toString().trim()
         } catch (e: Exception) {
-            Log.w(TAG, "exec failed: ${e.message}")
+            Log.w(TAG, "$service failed: ${e.message}")
             disconnectInternal()
             null
         }
@@ -174,7 +205,9 @@ internal class AdbProtocolClient(
     }
 
     private fun disconnectInternal() {
+        try { tlsSocket?.close() } catch (_: Exception) {}
         try { socket?.close() } catch (_: Exception) {}
+        tlsSocket = null
         socket = null
         input = null
         output = null
@@ -206,7 +239,7 @@ internal class AdbProtocolClient(
             writePacket(A_AUTH, AUTH_RSAPUBLICKEY, 0, pub)
 
             // User must tap "Allow" on DiLink — give them up to 60s.
-            val s = socket
+            val s = tlsSocket ?: socket
             try {
                 s?.soTimeout = USER_PROMPT_TIMEOUT_MS
                 resp = readPacket()
@@ -282,7 +315,9 @@ internal class AdbProtocolClient(
         const val A_OKAY: Int = 0x59414B4F          // bytes 'O','K','A','Y' LE
         const val A_CLSE: Int = 0x45534C43          // bytes 'C','L','S','E' LE
         const val A_WRTE: Int = 0x45545257          // bytes 'W','R','T','E' LE
+        const val A_STLS: Int = 0x534C5453          // "STLS" — daemon offers the TLS upgrade
 
+        const val A_STLS_VERSION: Int = 0x01000000  // TLS protocol version we answer STLS with
         const val A_VERSION_AUTH: Int = 0x01000001  // ADB version negotiated for AUTH-style handshake
         const val MAX_PAYLOAD: Int = 262144
 

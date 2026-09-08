@@ -8,6 +8,7 @@ import android.widget.Toast
 import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
+import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_OFFSET_PCT
@@ -2008,6 +2009,66 @@ private fun ServiceSection(
         }
     }
 
+    // ADB restore (firmwares that close port 5555 on every reboot). The toggle is shown on
+    // every car: where the port survives a reboot the status line simply says so.
+    val adbRestore = remember { clusterEntryPoint.adbRestoreManager() }
+    var adbRestoreEnabled by remember { mutableStateOf(adbRestore.isEnabled()) }
+    var adbRestoreHelpOpen by remember { mutableStateOf(false) }
+    val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
+    // Opening Settings with the feature on refreshes the status line (and picks the port back
+    // up if it is down) instead of showing whatever the last trigger left behind. Keyed on the
+    // toggle, so switching it on runs an attempt right away.
+    LaunchedEffect(adbRestoreEnabled) {
+        if (adbRestoreEnabled) adbRestore.attemptIfNeeded("settings")
+    }
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(modifier = Modifier.weight(1f)) {
+                    SettingToggleRow(
+                        title = stringResource(R.string.settings_adb_restore_title),
+                        description = stringResource(R.string.settings_adb_restore_desc),
+                        checked = adbRestoreEnabled,
+                        onCheckedChange = { enabled ->
+                            adbRestoreEnabled = enabled
+                            adbRestore.setEnabled(enabled)
+                        },
+                    )
+                }
+                SettingHelpBadge { adbRestoreHelpOpen = true }
+            }
+            adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
+        }
+    }
+    if (adbRestoreHelpOpen) {
+        AlertDialog(
+            onDismissRequest = { adbRestoreHelpOpen = false },
+            containerColor = CardSurface,
+            title = {
+                Text(stringResource(R.string.settings_adb_restore_help_title), color = TextPrimary)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_adb_restore_help_body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { adbRestoreHelpOpen = false }) {
+                    Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
+                }
+            },
+        )
+    }
+
     // Hidden BYD language dialog (UI7 only). We never write the locale ourselves — the button just
     // opens the factory dialog, and the card stays hidden on firmwares that do not ship it.
     val localeIntent = remember { Intent("android.settings.LOCALE_SETTINGS1") }
@@ -3370,3 +3431,19 @@ private fun ModelPickerDialog(
     }
 }
 
+/** Status line under the ADB restore toggle; null while the feature is off. */
+@Composable
+private fun adbRestoreStatusText(state: AdbRestoreState): String? = when (state) {
+    AdbRestoreState.Disabled -> null
+    AdbRestoreState.NotNeeded -> stringResource(R.string.settings_adb_restore_status_not_needed)
+    AdbRestoreState.NeedsActivation -> stringResource(R.string.settings_adb_restore_status_needs_activation)
+    AdbRestoreState.WaitingWifi -> stringResource(R.string.settings_adb_restore_status_waiting_wifi)
+    AdbRestoreState.NeedsDialog -> stringResource(R.string.settings_adb_restore_status_needs_dialog)
+    AdbRestoreState.Connecting -> stringResource(R.string.settings_adb_restore_status_connecting)
+    is AdbRestoreState.Restored -> stringResource(
+        R.string.settings_adb_restore_status_restored,
+        android.text.format.DateFormat.getTimeFormat(LocalContext.current)
+            .format(java.util.Date(state.atMs)),
+    )
+    is AdbRestoreState.Failed -> stringResource(R.string.settings_adb_restore_status_failed, state.reason)
+}

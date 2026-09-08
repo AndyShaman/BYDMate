@@ -69,6 +69,7 @@ class HelperBootstrapTest {
         override suspend fun isConnected() = connected
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String) = true
+        override suspend fun grantWriteSecureSettings(packageName: String) = true
         override suspend fun spawnHelper(token: String): Boolean {
             spawnCalls++
             spawnTokens += token

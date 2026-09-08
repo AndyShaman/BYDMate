@@ -188,6 +188,7 @@ class SettingsViewModelConnectionsTest {
         override suspend fun isConnected(): Boolean = false
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
+        override suspend fun grantWriteSecureSettings(packageName: String): Boolean = false
         override suspend fun spawnHelper(token: String): Boolean = false
         override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null
@@ -272,6 +273,10 @@ class SettingsViewModelConnectionsTest {
             splitJournal = com.bydmate.app.split.NoSplitJournal,
             driverMemory = com.bydmate.app.agent.DriverMemory(
                 ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
+            adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
+                com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
+                mockk(relaxed = true),
             ),
         )
     }

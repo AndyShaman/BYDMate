@@ -26,6 +26,7 @@ class AutoserviceClientImplTest {
             return responses[cmd]
         }
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = true
+        override suspend fun grantWriteSecureSettings(packageName: String): Boolean = true
         override suspend fun spawnHelper(token: String): Boolean = false
         override suspend fun killHelper(): Boolean = false
         override suspend fun readHelperLog(): String? = null

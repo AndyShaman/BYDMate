@@ -250,6 +250,7 @@ class SettingsViewModel @Inject constructor(
     private val splitSessionManager: com.bydmate.app.split.SplitSessionManager,
     private val splitJournal: com.bydmate.app.split.SplitJournal,
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
+    private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -1564,6 +1565,13 @@ class SettingsViewModel @Inject constructor(
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
+                val secureSettingsGranted = appContext.checkSelfPermission(
+                    android.Manifest.permission.WRITE_SECURE_SETTINGS
+                ) == android.content.pm.PackageManager.PERMISSION_GRANTED
+                appendLine(
+                    "adb_restore=${adbRestoreManager.isEnabled()}/${adbRestoreManager.state.value} " +
+                        "write_secure_settings=$secureSettingsGranted"
+                )
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
             }

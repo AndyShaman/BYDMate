@@ -39,6 +39,15 @@ interface AdbOnDeviceClient {
     suspend fun grantUsageStatsAppop(packageName: String): Boolean
 
     /**
+     * Grants WRITE_SECURE_SETTINGS to our own package via shell uid, so the app can turn
+     * Android's wireless debugging back on after a reboot on firmwares that no longer keep
+     * port 5555 open (see AdbRestoreManager). Granted while the classic port is still alive,
+     * regardless of whether the restore toggle is on — afterwards there is no channel left
+     * to grant it through. Idempotent. Returns true on success.
+     */
+    suspend fun grantWriteSecureSettings(packageName: String): Boolean
+
+    /**
      * Spawns the helper daemon under shell uid via app_process, using the app's
      * own signed base.apk as CLASSPATH (no dex push — integrity comes from the
      * APK signature). The daemon registers itself as the `bydmate_helper` binder
@@ -89,7 +98,10 @@ class AdbOnDeviceClientImpl @Inject constructor(
      */
     @Suppress("unused")  // assigned via internal setter from tests
     internal var protocolFactory: () -> AdbProtocol = {
-        AdbProtocolClient(keyStore.loadOrGenerate())
+        AdbProtocolClient(
+            keyPair = keyStore.loadOrGenerate(),
+            certificateProvider = { keyStore.loadOrGenerateCertificate() },
+        )
     }
 
     @Volatile private var protocol: AdbProtocol? = null
@@ -147,6 +159,23 @@ class AdbOnDeviceClientImpl @Inject constructor(
             out.isBlank()
         } catch (e: Exception) {
             Log.w(TAG, "grantUsageStatsAppop failed: ${e.message}")
+            false
+        }
+    }
+
+    override suspend fun grantWriteSecureSettings(packageName: String): Boolean = withContext(Dispatchers.IO) {
+        // Only permit our own package — never grant permissions to anything else.
+        require(packageName.matches(PACKAGE_NAME_REGEX)) {
+            "grantWriteSecureSettings: refused package $packageName"
+        }
+        val cmd = "pm grant $packageName android.permission.WRITE_SECURE_SETTINGS"
+        val p = protocol ?: return@withContext false
+        try {
+            // pm prints nothing on success (and on a re-grant); any output is an error.
+            val out = p.exec(cmd) ?: return@withContext false
+            out.isBlank()
+        } catch (e: Exception) {
+            Log.w(TAG, "grantWriteSecureSettings failed: ${e.message}")
             false
         }
     }
@@ -246,7 +275,7 @@ class AdbOnDeviceClientImpl @Inject constructor(
         // Rejects tx=6 (setInt), tx=8 (setBuffer), and arbitrary shell.
         private val WRITE_BARRIER_REGEX = Regex("""^service call autoservice [579] i32 \d+ i32 -?\d+$""")
 
-        // Narrow whitelist for grantUsageStatsAppop — only our own package.
+        // Narrow whitelist for the two self-grants — only our own package.
         private val PACKAGE_NAME_REGEX = Regex("""^com\.bydmate\.app$""")
 
         // Spawn token shape — alphanumeric only, so it can never break out of the spawn

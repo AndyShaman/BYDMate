@@ -30,6 +30,12 @@
     <uses-permission
         android:name="android.permission.READ_LOGS"
         tools:ignore="ProtectedPermissions" />
+    <!-- Development permission, self-granted over ADB (pm grant) while the classic port is
+         still alive. Needed to turn Android's own wireless debugging back on after a reboot
+         on firmwares that no longer keep port 5555 open (see AdbRestoreManager). -->
+    <uses-permission
+        android:name="android.permission.WRITE_SECURE_SETTINGS"
+        tools:ignore="ProtectedPermissions" />
 
     <!-- The camera permission is for the head unit's own cameras; the app runs fine without one. -->
     <uses-feature

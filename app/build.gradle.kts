@@ -28,8 +28,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 443
-        versionName = "3.14.3"
+        versionCode = 444
+        versionName = "3.14.3-test"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -126,6 +126,20 @@ android {
         compose = true
         buildConfig = true
     }
+
+    packaging {
+        resources {
+            // The BouncyCastle jars (and their transitive jspecify) each ship their own copy
+            // of these entries; the packager refuses to merge duplicates and none of them are
+            // of any use inside the APK. Everything under META-INF/versions is JPMS/OSGi
+            // metadata that Android ignores outright.
+            excludes += setOf(
+                "META-INF/LICENSE.md",
+                "META-INF/NOTICE.md",
+                "META-INF/versions/**",
+            )
+        }
+    }
 }
 
 // AC-12: a publishable release APK must be signed. Debug and CI builds are
@@ -192,6 +206,11 @@ dependencies {
 
     // AppCompat (required for AppCompatDelegate.setApplicationLocales per-app language support)
     implementation("androidx.appcompat:appcompat:1.6.1")
+
+    // X.509 self-signed certificate for the ADB TLS (STLS) handshake — the platform's
+    // stripped com.android.org.bouncycastle has no certificate builder. The provider is
+    // passed explicitly to the builders, never registered globally.
+    implementation("org.bouncycastle:bcpkix-jdk18on:1.85")
 
     // Hidden-API bypass: allows in-process ServiceManager.getService() on Android 9+
     // to reach the helper binder without UnsatisfiedLinkError / NoSuchMethodError.

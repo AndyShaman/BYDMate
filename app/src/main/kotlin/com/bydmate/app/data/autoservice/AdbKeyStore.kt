@@ -8,6 +8,7 @@ import java.security.KeyFactory
 import java.security.KeyPair
 import java.security.KeyPairGenerator
 import java.security.MessageDigest
+import java.security.cert.X509Certificate
 import java.security.spec.PKCS8EncodedKeySpec
 import java.security.spec.X509EncodedKeySpec
 import javax.inject.Inject
@@ -33,8 +34,10 @@ class AdbKeyStore @Inject constructor(
     private val keyDir: File get() = File(context.filesDir, "adb_keys")
     private val privFile: File get() = File(keyDir, "adb_key.priv")
     private val pubFile: File get() = File(keyDir, "adb_key.pub")
+    private val certFile: File get() = File(keyDir, "adb_key.crt")
 
     @Volatile private var cached: KeyPair? = null
+    @Volatile private var cachedCert: X509Certificate? = null
 
     /**
      * Loads the persisted keypair if both files exist & parse, otherwise
@@ -66,6 +69,37 @@ class AdbKeyStore @Inject constructor(
         pubFile.writeBytes(pair.public.encoded)
         cached = pair
         return pair
+    }
+
+    /**
+     * Self-signed certificate carrying the same public key, used for the TLS (STLS)
+     * handshake on firmwares where the classic port is gone. Cached as DER next to
+     * the key so every restore attempt reuses one certificate; a corrupted or
+     * key-mismatched cache is regenerated and overwritten.
+     */
+    @Synchronized
+    fun loadOrGenerateCertificate(): X509Certificate {
+        cachedCert?.let { return it }
+        val pair = loadOrGenerate()
+
+        if (certFile.exists()) {
+            try {
+                val cert = AdbCertificate.fromDer(certFile.readBytes())
+                if (cert.publicKey.encoded.contentEquals(pair.public.encoded)) {
+                    cachedCert = cert
+                    return cert
+                }
+                Log.w(TAG, "Cached certificate does not match the keypair, regenerating")
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load saved certificate, regenerating: $e")
+            }
+        }
+
+        val cert = AdbCertificate.forKeyPair(pair)
+        keyDir.mkdirs()
+        certFile.writeBytes(cert.encoded)
+        cachedCert = cert
+        return cert
     }
 
     /**

@@ -368,7 +368,10 @@ class LogRecorder internal constructor(
             // accessibility bookkeeping around ignition off/on.
             "ActivityManager:I", "AccessibilityManagerService:*",
             // #180: the "decode rejected" line lives on this tag and was missing from the filter.
-            "NativeParsReader:*"
+            "NativeParsReader:*",
+            // ADB restore on firmwares that close port 5555 at every reboot: one line per state,
+            // plus the protocol client, which reports the TLS upgrade and the handshake outcome.
+            "AdbRestore:*", "AdbProtocolClient:*"
         )
     }
 }
