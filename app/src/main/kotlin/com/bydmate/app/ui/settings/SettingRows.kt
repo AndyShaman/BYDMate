@@ -69,14 +69,19 @@ private fun RowLabel(
     description: String?,
     enabled: Boolean,
     modifier: Modifier = Modifier,
+    onHelp: (() -> Unit)? = null,
 ) {
     Column(modifier = modifier.padding(end = 12.dp)) {
-        Text(
-            text = title,
-            color = if (enabled) TextPrimary else TextMuted,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text = title,
+                color = if (enabled) TextPrimary else TextMuted,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+            )
+            // Optional "?" next to the title (not the switch) — the badge explains the feature.
+            if (onHelp != null) SettingHelpBadge(onHelp)
+        }
         if (description != null) {
             Text(
                 text = description,
@@ -97,6 +102,7 @@ fun SettingToggleRow(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     enabled: Boolean = true,
+    onHelp: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -106,7 +112,7 @@ fun SettingToggleRow(
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowLabel(title, description, enabled, Modifier.weight(1f))
+        RowLabel(title, description, enabled, Modifier.weight(1f), onHelp)
         Switch(
             checked = checked,
             onCheckedChange = onCheckedChange,

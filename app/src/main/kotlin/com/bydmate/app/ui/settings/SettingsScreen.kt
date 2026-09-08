@@ -2027,23 +2027,16 @@ private fun ServiceSection(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    SettingToggleRow(
-                        title = stringResource(R.string.settings_adb_restore_title),
-                        description = stringResource(R.string.settings_adb_restore_desc),
-                        checked = adbRestoreEnabled,
-                        onCheckedChange = { enabled ->
-                            adbRestoreEnabled = enabled
-                            adbRestore.setEnabled(enabled)
-                        },
-                    )
-                }
-                SettingHelpBadge { adbRestoreHelpOpen = true }
-            }
+            SettingToggleRow(
+                title = stringResource(R.string.settings_adb_restore_title),
+                description = stringResource(R.string.settings_adb_restore_desc),
+                checked = adbRestoreEnabled,
+                onCheckedChange = { enabled ->
+                    adbRestoreEnabled = enabled
+                    adbRestore.setEnabled(enabled)
+                },
+                onHelp = { adbRestoreHelpOpen = true },
+            )
             adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
         }
     }
