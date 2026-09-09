@@ -1514,11 +1514,35 @@ class TrackingService : Service(), LocationListener {
         if (wifiRestoreCallback != null) return
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager ?: return
         val callback = object : ConnectivityManager.NetworkCallback() {
+            // The network that last reported itself validated. onCapabilitiesChanged fires many
+            // times per connection, so only the transition into validated triggers an attempt.
+            private var validated: Network? = null
+
             override fun onAvailable(network: Network) {
                 serviceScope.launch {
                     runCatching { adbRestoreManager.attemptIfNeeded("wifi") }
                         .onFailure { Log.w(TAG, "ADB restore on wifi failed: ${it.message}") }
                 }
+            }
+
+            // onAvailable fires before the link actually carries traffic; wireless debugging needs
+            // a usable network, so the validated capability is the moment worth writing on.
+            override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                val usable = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+                if (!usable) {
+                    if (validated == network) validated = null
+                    return
+                }
+                if (validated == network) return
+                validated = network
+                serviceScope.launch {
+                    runCatching { adbRestoreManager.attemptIfNeeded("wifi_validated") }
+                        .onFailure { Log.w(TAG, "ADB restore on validated wifi failed: ${it.message}") }
+                }
+            }
+
+            override fun onLost(network: Network) {
+                if (validated == network) validated = null
             }
         }
         try {
@@ -1614,6 +1638,13 @@ class TrackingService : Service(), LocationListener {
         override fun onReceive(context: Context?, intent: Intent?) {
             serviceScope.launch { ensureStarServiceRunning("wake:${intent?.action}") }
             serviceScope.launch { notificationListenerGrant.ensure("wake:${intent?.action}") }
+            // Trigger 4: the wireless-debugging dialog can only be confirmed on an awake screen,
+            // so a wake is the cheapest moment to re-check whether it was. The manager gates itself.
+            val trigger = if (intent?.action == Intent.ACTION_USER_PRESENT) "user_present" else "screen_on"
+            serviceScope.launch {
+                runCatching { adbRestoreManager.attemptIfNeeded(trigger) }
+                    .onFailure { Log.w(TAG, "ADB restore on $trigger failed: ${it.message}") }
+            }
         }
     }
 

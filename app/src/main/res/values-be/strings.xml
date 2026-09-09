@@ -29,6 +29,8 @@
     <string name="settings_display_mirror_desc">Кароткае націсканне выбранай кнопкі руля пераносіць выбраную праграму на прыборку і назад.</string>
     <string name="settings_cluster_auto_container_title">Адразу паказваць на прыборцы</string>
     <string name="settings_cluster_auto_container_desc">Праграма сама пераключае прыборку ў рэжым праекцыі і назад (навігатар і камеры сляпых зон). Выключыце, калі пасля гэтага з прыборкі знікае ADAS або штатны віджэт і не вяртаецца сам: тады рэжым прыборкі пераключайце ўручную, а карцінка будзе бачная ў міні-карце</string>
+    <string name="settings_cluster_full_display_title">Поўны экран прыборкі</string>
+    <string name="settings_cluster_full_display_desc">Па змаўчанні карта займае верх прыборкі, а ўнізе застаецца штатная паласа са хуткасцю і асноўнымі паказчыкамі. Уключыце, калі хочаце карту на ўсю прыборку без гэтай паласы. Працуе толькі на прашыўках з новым інтэрфейсам, на астатніх нічога не мяняе. Ужываецца пры наступным вывадзе на прыборку</string>
     <string name="settings_cluster_direct_reboot_hint">Каб галасавы агент бачыў навігатар на прыборцы, адзін раз перазагрузіце DiLink: заціскайце і ўтрымлівайце колца гучнасці. Проста заглушыць машыну недастаткова. Да перазагрузкі праекцыя працуе, але агент не бачыць маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прамы вывад недаступны на прашыўцы гэтай машыны, выкарыстоўваецца сумяшчальны рэжым</string>
     <string name="settings_projection_mode_title">Рэжым праекцыі</string>
@@ -1303,12 +1305,15 @@
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Дзякуй, што вы з BYDMate</string>
-    <string name="donate_auto_body">Праект некамерцыйны і цалкам бясплатны, развіваецца на чыстым энтузіязме. Калі BYDMate аказаўся вам карысным і вы хочаце сказаць дзякуй, падтрымайце распрацоўку пераводам USDT у любой з сетак ніжэй.</string>
+    <string name="donate_auto_body">Праект некамерцыйны і цалкам бясплатны, развіваецца на чыстым энтузіязме. Калі BYDMate аказаўся вам карысным і вы хочаце сказаць дзякуй, падтрымайце распрацоўку: пераводам USDT у сетках EVM або картай праз ЮMoney.</string>
     <string name="donate_settings_title">Падтрымаць праект</string>
-    <string name="donate_settings_body">BYDMate некамерцыйны і бясплатны. Калі хочаце падтрымаць распрацоўку, перавядзіце USDT на адрас ніжэй у любой з сетак EVM.</string>
+    <string name="donate_settings_body">BYDMate некамерцыйны і бясплатны. Калі хочаце падтрымаць распрацоўку, перавядзіце USDT на адрас ніжэй або аплаціце картай праз ЮMoney.</string>
     <string name="donate_qr_hint">Навядзіце камеру тэлефона на код</string>
     <string name="donate_address_label">Адрас USDT · сеткі EVM</string>
     <string name="donate_copy_button">Скапіраваць адрас</string>
+    <string name="donate_card_label">Картай · ЮMoney</string>
+    <string name="donate_card_body">Аплата картай або кашальком ЮMoney. Адкрыйце спасылку на тэлефоне і ўкажыце любую суму.</string>
+    <string name="donate_copy_link_button">Скапіраваць спасылку</string>
     <string name="donate_copied_toast">Адрас скапіраваны</string>
     <string name="donate_networks">Сеткі: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
     <string name="donate_warning">Не адпраўляйце праз TON, TRON (TRC-20) ці Solana. Сродкі будуць страчаны.</string>

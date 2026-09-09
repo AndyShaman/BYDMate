@@ -1057,6 +1057,9 @@ private fun DisplaySection() {
     }
     var extendedConfirmOpen by remember { mutableStateOf(false) }
     var modeHelpOpen by remember { mutableStateOf(false) }
+    var preferFullDisplay by remember {
+        mutableStateOf(ClusterProjectionManager.isPreferFullDisplay(context))
+    }
 
     // Persist the new size and re-apply it live. reproject() is a no-op unless we are actively
     // projecting, so a tweak while OFF just lands in prefs and shows on the next star press.
@@ -1141,6 +1144,19 @@ private fun DisplaySection() {
         if (modeHelpOpen) {
             SettingHint(text = stringResource(R.string.settings_projection_mode_help))
         }
+        SettingDivider()
+        // Which cluster projection surface to render on: the native mini band ("..._1", default)
+        // or the full cluster ("..._0"). Only the pref is written — like the transport chip, it
+        // applies at the next projection start, never to a live projection.
+        SettingToggleRow(
+            title = stringResource(R.string.settings_cluster_full_display_title),
+            description = stringResource(R.string.settings_cluster_full_display_desc),
+            checked = preferFullDisplay,
+            onCheckedChange = {
+                preferFullDisplay = it
+                ClusterProjectionManager.setPreferFullDisplay(context, it)
+            },
+        )
         if (extendedConfirmOpen) {
             AlertDialog(
                 onDismissRequest = { extendedConfirmOpen = false },
@@ -2017,9 +2033,11 @@ private fun ServiceSection(
     val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
     // Opening Settings with the feature on refreshes the status line (and picks the port back
     // up if it is down) instead of showing whatever the last trigger left behind. Keyed on the
-    // toggle, so switching it on runs an attempt right away.
+    // toggle, so switching it on runs an attempt right away. The attempt runs in the manager's
+    // own scope, not this composition: leaving the screen used to kill the helper bootstrap that
+    // follows a successful restore.
     LaunchedEffect(adbRestoreEnabled) {
-        if (adbRestoreEnabled) adbRestore.attemptIfNeeded("settings")
+        if (adbRestoreEnabled) adbRestore.requestAttempt("settings")
     }
     Card(
         shape = RoundedCornerShape(12.dp),

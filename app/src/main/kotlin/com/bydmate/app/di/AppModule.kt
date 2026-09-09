@@ -553,6 +553,14 @@ object AppModule {
     ): com.bydmate.app.data.autoservice.AdbRestorePreferences =
         com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx)
 
+    /** Long-lived scope for ADB-restore retries — they must outlive the screen that started them. */
+    @Provides
+    @Singleton
+    @com.bydmate.app.data.autoservice.AdbRestoreScope
+    fun provideAdbRestoreScope(): kotlinx.coroutines.CoroutineScope =
+        kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+
     @Provides
     @Singleton
     fun provideAdbRestoreSystem(

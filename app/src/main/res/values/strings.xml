@@ -29,6 +29,8 @@
     <string name="settings_display_mirror_desc">Короткое нажатие выбранной кнопки руля переносит выбранное приложение на приборку и обратно.</string>
     <string name="settings_cluster_auto_container_title">Сразу показывать на приборке</string>
     <string name="settings_cluster_auto_container_desc">Приложение само переключает приборку в режим проекции и обратно (навигатор и камеры слепых зон). Выключите, если после этого с приборки пропадает ADAS или штатный виджет и не возвращается сам: тогда режим приборки переключайте вручную, а картинка будет видна в мини-карте</string>
+    <string name="settings_cluster_full_display_title">Полный экран приборки</string>
+    <string name="settings_cluster_full_display_desc">По умолчанию карта занимает верх приборки, а внизу остаётся штатная полоса со скоростью и основными показателями. Включите, если хотите карту на всю приборку без этой полосы. Работает только на прошивках с новым интерфейсом, на остальных ничего не меняет. Применяется при следующем выводе на приборку</string>
     <string name="settings_cluster_direct_reboot_hint">Чтобы голосовой агент видел навигатор на приборке, один раз перезагрузите ДиЛинк: зажмите и удерживайте колёсико громкости. Просто заглушить машину недостаточно. До перезагрузки проекция работает, но агент не видит маршрут.</string>
     <string name="cluster_direct_unsupported_hint">Прямой вывод недоступен на прошивке этой машины, используется совместимый режим</string>
     <string name="settings_projection_mode_title">Режим проекции</string>
@@ -1305,12 +1307,15 @@
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Спасибо, что вы с BYDMate</string>
-    <string name="donate_auto_body">Проект некоммерческий и полностью бесплатный, развивается на чистом энтузиазме. Если BYDMate оказался вам полезен и вы хотите сказать спасибо, поддержите разработку переводом USDT в любой из сетей ниже.</string>
+    <string name="donate_auto_body">Проект некоммерческий и полностью бесплатный, развивается на чистом энтузиазме. Если BYDMate оказался вам полезен и вы хотите сказать спасибо, поддержите разработку: переводом USDT в сетях EVM или картой через ЮMoney.</string>
     <string name="donate_settings_title">Поддержать проект</string>
-    <string name="donate_settings_body">BYDMate некоммерческий и бесплатный. Если хотите поддержать разработку, переведите USDT на адрес ниже в любой из сетей EVM.</string>
+    <string name="donate_settings_body">BYDMate некоммерческий и бесплатный. Если хотите поддержать разработку, переведите USDT на адрес ниже или оплатите картой через ЮMoney.</string>
     <string name="donate_qr_hint">Наведите камеру телефона на код</string>
     <string name="donate_address_label">Адрес USDT · сети EVM</string>
     <string name="donate_copy_button">Скопировать адрес</string>
+    <string name="donate_card_label">Картой · ЮMoney</string>
+    <string name="donate_card_body">Оплата картой или кошельком ЮMoney. Откройте ссылку на телефоне и укажите любую сумму.</string>
+    <string name="donate_copy_link_button">Скопировать ссылку</string>
     <string name="donate_copied_toast">Адрес скопирован</string>
     <string name="donate_networks">Сети: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
     <string name="donate_warning">Не отправляйте через TON, TRON (TRC-20) или Solana. Средства будут потеряны.</string>

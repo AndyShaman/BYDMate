@@ -277,6 +277,7 @@ class SettingsViewModelConnectionsTest {
             adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
                 com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
                 mockk(relaxed = true),
+                kotlinx.coroutines.test.TestScope(),
             ),
         )
     }

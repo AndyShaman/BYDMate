@@ -41,6 +41,12 @@ interface AdbRestoreSystem {
     /** Writes `adb_wifi_enabled`; false when the write itself was rejected. */
     fun writeAdbWifiEnabled(value: Int): Boolean
 
+    /**
+     * The TLS port adbd itself publishes in `service.adb.tls.port`, null when the property is
+     * absent or not a number. Cheap, and lets us skip an mDNS discovery that costs up to 45 s.
+     */
+    fun tlsPortFromProperty(): Int?
+
     /** Finds the local `_adb-tls-connect._tcp` port, null on timeout. */
     suspend fun discoverTlsPort(timeoutMs: Long): Int?
 
@@ -95,6 +101,17 @@ class AndroidAdbRestoreSystem @Inject constructor(
         runCatching { Settings.Global.putInt(context.contentResolver, ADB_WIFI_ENABLED, value) }
             .onFailure { Log.w(TAG, "write adb_wifi_enabled=$value failed: ${it.message}") }
             .getOrDefault(false)
+
+    /**
+     * `service.adb.tls.port` is readable from an app uid on AOSP, but nothing guarantees it on a
+     * BYD build — a missing class, a denied read or a stale value all end the same way here, with
+     * null, and the caller falls back to mDNS.
+     */
+    override fun tlsPortFromProperty(): Int? = runCatching {
+        val getter = Class.forName("android.os.SystemProperties")
+            .getMethod("get", String::class.java)
+        (getter.invoke(null, ADB_TLS_PORT_PROP) as? String)?.trim()?.toIntOrNull()
+    }.onFailure { Log.d(TAG, "read $ADB_TLS_PORT_PROP failed: ${it.message}") }.getOrNull()
 
     override suspend fun discoverTlsPort(timeoutMs: Long): Int? =
         withTimeoutOrNull(timeoutMs) { discoverTlsPortInternal() }
@@ -229,6 +246,7 @@ class AndroidAdbRestoreSystem @Inject constructor(
         const val CLASSIC_PORT = 5555
         private const val ADB_WIFI_ENABLED = "adb_wifi_enabled"
         private const val TLS_CONNECT_SERVICE = "_adb-tls-connect._tcp"
+        private const val ADB_TLS_PORT_PROP = "service.adb.tls.port"
         // Wi-Fi is up but its identity is hidden (no location permission / masked BSSID) —
         // the cooldown then applies to "some network" instead of a specific one.
         private const val UNKNOWN_NETWORK = "wifi"

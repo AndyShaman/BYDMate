@@ -8,11 +8,14 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -38,7 +41,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -58,6 +60,10 @@ import com.bydmate.app.ui.theme.TextSecondary
  *  than a string resource because it is identical in every locale and must never be
  *  accidentally translated, re-formatted, or line-wrapped by a localization pass. */
 const val DONATION_ADDRESS = "0x24919d8a46357D83fe935F02BEbE55b1b7c360B8"
+
+/** ЮMoney fundraise page: card / SberPay / ЮMoney wallet payment. Kept in code for the
+ *  same reasons as [DONATION_ADDRESS] -- identical in every locale, must not be translated. */
+const val DONATION_YOOMONEY_URL = "https://yoomoney.ru/fundraise/1K60HLUIS32.260908"
 
 /** AUTO = the once-per-version prompt on app entry (two dismiss options); SETTINGS = the
  *  same content opened deliberately from the settings card (single "Close" button). */
@@ -122,10 +128,21 @@ fun DonateDialog(
                 colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
                 modifier = Modifier
                     .fillMaxWidth(0.62f)
+                    // Bounded height so the scrollable content Column below can actually use
+                    // weight(1f, fill = false) to reserve space for the buttons row.
+                    .fillMaxHeight(0.9f)
                     // Absorb taps so clicking the card never dismisses via the scrim behind it.
                     .clickable(indication = null, interactionSource = remember { MutableInteractionSource() }) {},
             ) {
                 Column(modifier = Modifier.padding(28.dp)) {
+                    // Scrollable so the two-column QR/address content never pushes the action
+                    // buttons below off screen on shorter displays; weight(fill = false) keeps
+                    // the Column sized to its content when it already fits.
+                    Column(
+                        modifier = Modifier
+                            .weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                    ) {
                     Text(
                         stringResource(
                             if (entry == DonateEntry.AUTO) R.string.donate_auto_title else R.string.donate_settings_title
@@ -139,12 +156,26 @@ fun DonateDialog(
                         ),
                         color = TextSecondary, fontSize = 16.sp, lineHeight = 24.sp,
                     )
-                    Spacer(Modifier.height(22.dp))
+                    Spacer(Modifier.height(14.dp))
+                    Text(
+                        stringResource(R.string.donate_qr_hint),
+                        color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                    )
+                    Spacer(Modifier.height(14.dp))
                     Row(horizontalArrangement = Arrangement.spacedBy(24.dp)) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.donate_address_label),
+                                color = TextMuted, fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
                             Box(
                                 modifier = Modifier
-                                    .size(300.dp)
+                                    .size(200.dp)
                                     .background(Color.White, RoundedCornerShape(14.dp))
                                     .padding(12.dp),
                             ) {
@@ -154,32 +185,18 @@ fun DonateDialog(
                                     modifier = Modifier.fillMaxSize(),
                                 )
                             }
-                            Spacer(Modifier.height(10.dp))
                             Text(
-                                stringResource(R.string.donate_qr_hint),
-                                color = AccentGreen, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                                textAlign = TextAlign.Center,
+                                DONATION_ADDRESS,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                lineHeight = 21.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(CardSurface, RoundedCornerShape(12.dp))
+                                    .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
                             )
-                        }
-                        Column(
-                            modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(stringResource(R.string.donate_address_label), color = TextMuted, fontSize = 12.sp)
-                                Text(
-                                    DONATION_ADDRESS,
-                                    color = TextPrimary,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontSize = 17.sp,
-                                    lineHeight = 24.sp,
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(CardSurface, RoundedCornerShape(12.dp))
-                                        .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
-                                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                                )
-                            }
                             OutlinedButton(
                                 onClick = {
                                     clipboard.setText(AnnotatedString(DONATION_ADDRESS))
@@ -208,7 +225,61 @@ fun DonateDialog(
                                     .padding(horizontal = 12.dp, vertical = 10.dp),
                             )
                         }
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            Text(
+                                stringResource(R.string.donate_card_label),
+                                color = TextMuted, fontSize = 12.sp,
+                                modifier = Modifier.fillMaxWidth(),
+                            )
+                            Box(
+                                modifier = Modifier
+                                    .size(200.dp)
+                                    .background(Color.White, RoundedCornerShape(14.dp))
+                                    .padding(12.dp),
+                            ) {
+                                Image(
+                                    painter = painterResource(R.drawable.donate_qr_yoomoney),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize(),
+                                )
+                            }
+                            Text(
+                                DONATION_YOOMONEY_URL,
+                                color = TextPrimary,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 15.sp,
+                                lineHeight = 21.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(CardSurface, RoundedCornerShape(12.dp))
+                                    .border(1.dp, CardBorder, RoundedCornerShape(12.dp))
+                                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                            )
+                            OutlinedButton(
+                                onClick = {
+                                    clipboard.setText(AnnotatedString(DONATION_YOOMONEY_URL))
+                                    Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                border = BorderStroke(1.dp, AccentGreen),
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
+                            ) {
+                                Text(
+                                    stringResource(R.string.donate_copy_link_button),
+                                    fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                                )
+                            }
+                            Text(
+                                stringResource(R.string.donate_card_body),
+                                color = TextSecondary, fontSize = 13.sp, lineHeight = 19.sp,
+                            )
+                        }
                     }
+                    } // end scrollable inner Column
                     Spacer(Modifier.height(24.dp))
                     Row(
                         modifier = Modifier.fillMaxWidth(),

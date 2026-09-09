@@ -29,6 +29,8 @@
     <string name="settings_display_mirror_desc">Krótkie naciśnięcie wybranego przycisku kierownicy przenosi wybraną aplikację na wskaźniki i z powrotem.</string>
     <string name="settings_cluster_auto_container_title">Od razu pokazuj na wskaźnikach</string>
     <string name="settings_cluster_auto_container_desc">Aplikacja sama przełącza wskaźniki w tryb projekcji i z powrotem (nawigacja i kamery martwego pola). Wyłącz, jeśli po tym ze wskaźników znika ADAS lub fabryczny widżet i nie wraca sam: wtedy tryb wskaźników przełączaj ręcznie, a obraz będzie widoczny w mini-mapie</string>
+    <string name="settings_cluster_full_display_title">Pełny ekran wskaźników</string>
+    <string name="settings_cluster_full_display_desc">Domyślnie mapa zajmuje górę wskaźników, a na dole zostaje fabryczny pasek z prędkością i głównymi wskazaniami. Włącz, jeśli chcesz mapę na całych wskaźnikach bez tego paska. Działa tylko na oprogramowaniu z nowym interfejsem, gdzie indziej nic nie zmienia. Działa przy następnej projekcji</string>
     <string name="settings_cluster_direct_reboot_hint">Aby asystent głosowy widział nawigację na wskaźnikach, raz zrestartuj DiLink: naciśnij i przytrzymaj pokrętło głośności. Samo zgaszenie silnika nie wystarczy. Do restartu projekcja działa, ale agent nie widzi trasy.</string>
     <string name="cluster_direct_unsupported_hint">Bezpośredni tryb jest niedostępny w oprogramowaniu tego auta, używany jest tryb zgodności</string>
     <string name="settings_projection_mode_title">Tryb projekcji</string>
@@ -1303,12 +1305,15 @@
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Dziękujemy, że jesteś z BYDMate</string>
-    <string name="donate_auto_body">Projekt jest niekomercyjny i całkowicie darmowy, rozwija się na czystym entuzjazmie. Jeśli BYDMate okazał się przydatny i chcesz powiedzieć dziękuję, wesprzyj rozwój przelewem USDT w dowolnej z sieci poniżej.</string>
+    <string name="donate_auto_body">Projekt jest niekomercyjny i całkowicie darmowy, rozwija się na czystym entuzjazmie. Jeśli BYDMate okazał się przydatny i chcesz powiedzieć dziękuję, wesprzyj rozwój: przelewem USDT w sieciach EVM lub kartą przez ЮMoney.</string>
     <string name="donate_settings_title">Wesprzyj projekt</string>
-    <string name="donate_settings_body">BYDMate jest niekomercyjny i darmowy. Jeśli chcesz wesprzeć rozwój, wyślij USDT na adres poniżej w dowolnej sieci EVM.</string>
+    <string name="donate_settings_body">BYDMate jest niekomercyjny i darmowy. Jeśli chcesz wesprzeć rozwój, wyślij USDT na adres poniżej lub zapłać kartą przez ЮMoney.</string>
     <string name="donate_qr_hint">Skieruj aparat telefonu na kod</string>
     <string name="donate_address_label">Adres USDT · sieci EVM</string>
     <string name="donate_copy_button">Skopiuj adres</string>
+    <string name="donate_card_label">Kartą · ЮMoney</string>
+    <string name="donate_card_body">Płatność kartą lub portfelem ЮMoney. Otwórz link na telefonie i podaj dowolną kwotę.</string>
+    <string name="donate_copy_link_button">Skopiuj link</string>
     <string name="donate_copied_toast">Adres skopiowany</string>
     <string name="donate_networks">Sieci: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
     <string name="donate_warning">Nie wysyłaj przez TON, TRON (TRC-20) ani Solana. Środki zostaną utracone.</string>

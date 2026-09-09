@@ -103,6 +103,8 @@ object ClusterProjectionManager {
     const val KEY_AUTO_CONTAINER = "auto_container_enabled"
     /** Projection transport: direct freeform launch (default) vs legacy VirtualDisplay pipeline. */
     const val KEY_DIRECT_PROJECTION = "direct_projection_enabled"
+    /** Render on the full-cluster projection surface ("..._0") instead of the default "..._1". */
+    const val KEY_PREFER_FULL_DISPLAY = "cluster_prefer_full_display"
     // Set while the daemon has powered the cluster compositor up for our projection; cleared only
     // after a CONFIRMED power-down. Survives process death: when the car shuts off mid-projection
     // the off sequence (18 -> pause -> 0) never runs, the compositor reboots in projection mode
@@ -194,6 +196,13 @@ object ClusterProjectionManager {
     private var projectedPackage: String? = null
     /** Cluster display id while direct (freeform) projection is active; -1 otherwise. */
     private var directDisplayId = -1
+    /**
+     * [KEY_PREFER_FULL_DISPLAY] as read when the current projection session started. Pinned for
+     * the session so a toggle flip mid-projection cannot make [swapToNewSize] resolve a different
+     * surface than the one Navi sits on (bounds from one display applied to another). null = no
+     * session; [resolveClusterDisplay] then reads the live preference.
+     */
+    private var sessionPreferFull: Boolean? = null
     /** Post-move liveness watch of the direct projection (#134); see [armDirectDeathWatch]. */
     private var directDeathWatchJob: Job? = null
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
@@ -328,19 +337,23 @@ object ClusterProjectionManager {
      * Applies the user's calibrated cluster window bounds to [taskId] on [taskDisplayId].
      *
      * Called ONCE by SplitSessionManager when a split pane's task departs to the cluster display
-     * via the native "show on cluster" button (Task M). No-ops unless [taskDisplayId] matches the
-     * RESOLVED cluster display id (queried via [resolveClusterDisplay] under [mutex]).
+     * via the native "show on cluster" button (Task M). No-ops unless [taskDisplayId] is actually
+     * a cluster projection surface.
      *
-     * Why resolveClusterDisplay rather than directDisplayId: directDisplayId is a live-session-only
-     * member assigned only when OUR direct freeform projection is running. The target scenario
-     * (native BYD "show on cluster" button) does not involve our projection at all, so
-     * directDisplayId is -1 and gating on it would make this function always a no-op.
-     * resolveClusterDisplay locates the display by name ("XDJAScreenProjection") and works
-     * regardless of whether our projection is active. Taking [mutex] here is safe under the
-     * established lock order: this function is called from [SplitSessionManager]'s watchdog
-     * (already holding SSM.mutex) via the [applyCalibratedBounds] lambda, so the acquisition
-     * order is SSM.mutex → CPM.mutex — the only permitted direction (see [onBeforeClusterSend]
-     * KDoc for the full cycle analysis).
+     * Why not resolveClusterDisplay: resolveClusterDisplay applies the user's "Full cluster
+     * screen" preference and picks ONE of possibly several "XDJAScreenProjection_N" surfaces by
+     * that preference — but the native button decides which surface the task lands on
+     * independently of the preference. On a firmware with two projection surfaces, if the native
+     * button moves the task to a surface other than the one the preference points at, comparing
+     * [taskDisplayId] against resolveClusterDisplay's pick would falsely no-op and never apply
+     * calibration. Instead this function looks up [taskDisplayId] directly and classifies it as a
+     * cluster surface by name ("XDJAScreenProjection"), falling back to [DEFAULT_CLUSTER_DISPLAY_ID]
+     * only when no display carries that name at all — mirroring resolveClusterDisplay's own
+     * fallback. Geometry is computed from THAT display's real size, so each surface gets bounds
+     * matched to its own resolution. Taking [mutex] here is safe under the established lock order:
+     * this function is called from [SplitSessionManager]'s watchdog (already holding SSM.mutex)
+     * via the [applyCalibratedBounds] lambda, so the acquisition order is SSM.mutex → CPM.mutex —
+     * the only permitted direction (see [onBeforeClusterSend] KDoc for the full cycle analysis).
      *
      * Density is explicitly out of scope: the native mechanism owns the cluster display when this
      * is called, and a density change is a car-visible side effect outside the split session.
@@ -354,12 +367,22 @@ object ClusterProjectionManager {
     suspend fun applyCalibratedBoundsToTask(taskId: Int, taskDisplayId: Int, context: Context, helper: HelperClient): Boolean {
         if (taskDisplayId <= 0) return true
         return mutex.withLock {
-            val clusterDisplay = resolveClusterDisplay(context) ?: return@withLock true
-            if (taskDisplayId != clusterDisplay.displayId) return@withLock true
+            val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+            val display = dm.getDisplay(taskDisplayId)
+            val hasNamedProjectionDisplay = dm.displays.any {
+                it.name.contains("XDJAScreenProjection", ignoreCase = true)
+            }
+            val isClusterSurface = display != null && (
+                display.name.contains("XDJAScreenProjection", ignoreCase = true) ||
+                    (!hasNamedProjectionDisplay && taskDisplayId == DEFAULT_CLUSTER_DISPLAY_ID)
+            )
+            if (!isClusterSurface) return@withLock true
+            val point = Point()
+            @Suppress("DEPRECATION") display!!.getRealSize(point)
             val (widthPct, heightPct) = readSizePct(context)
             val (offsetXPct, offsetYPct) = readOffsetPct(context)
             val geo = geometryFor(
-                ClusterMode.FULLSCREEN, clusterWidth, clusterHeight,
+                ClusterMode.FULLSCREEN, point.x, point.y,
                 widthPct, heightPct, offsetXPct, offsetYPct,
             ) ?: return@withLock true
             val b = freeformBounds(geo)
@@ -368,7 +391,8 @@ object ClusterProjectionManager {
             val ok = runCatching { helper.setTaskBounds(taskId, b[0], b[1], b[2], b[3]) }
                 .onFailure { if (it is CancellationException) throw it }
                 .getOrDefault(false)
-            Log.i(TAG, "applyCalibratedBoundsToTask: task=$taskId display=$taskDisplayId bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] ok=$ok")
+            Log.i(TAG, "applyCalibratedBoundsToTask: task=$taskId display=$taskDisplayId " +
+                "name=\"${display.name}\" ${point.x}x${point.y} bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] ok=$ok")
             ok
         }
     }
@@ -664,6 +688,18 @@ object ClusterProjectionManager {
     /** Transport pref as consumers must see it: runs the one-time migration first. */
     fun isDirectProjectionEnabled(context: Context): Boolean = readDirectEnabled(context)
 
+    /** True when the user asked for the full-cluster projection surface ("..._0"). */
+    fun isPreferFullDisplay(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_PREFER_FULL_DISPLAY, false)
+
+    /** Stores the display preference; it takes effect at the next projection start. */
+    fun setPreferFullDisplay(context: Context, enabled: Boolean) {
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putBoolean(KEY_PREFER_FULL_DISPLAY, enabled).apply()
+        Log.i(TAG, "prefer full display -> $enabled")
+    }
+
     /** True when the user ever made an explicit transport choice (UI chip or migration).
      *  The system freeform flag is managed ONLY for these users; a passive user's flag is
      *  never touched — it may be owned by a third-party projection app. */
@@ -732,6 +768,7 @@ object ClusterProjectionManager {
                 pullBackToMain(context, helper, focus = true)
                 hideOverlay(helper)
                 projectedPackage = null
+                sessionPreferFull = null
                 currentMode = ClusterMode.OFF
                 lastFailure = null
                 frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
@@ -760,6 +797,7 @@ object ClusterProjectionManager {
                     log("projection failed ($failure); falling back to OFF")
                     pullBackToMain(context, helper, focus = true)
                     projectedPackage = null
+                    sessionPreferFull = null
                     currentMode = ClusterMode.OFF
                     lastFailure = failure
                     frame?.restore(helper, ClusterFrameUi7.Owner.PROJECTION)
@@ -958,6 +996,8 @@ object ClusterProjectionManager {
             return "daemon"
         }
         recoverStaleDirectDensity(context, helper)
+        // Pin the display preference for this session (see [sessionPreferFull]).
+        sessionPreferFull = isPreferFullDisplay(context)
         // VD/factory transport: return the freeform flag to 0 BEFORE any display-dependent
         // branch. On cars whose cluster display never resolves (Song, DiLink 3-4) project()
         // exits below, so a later write never runs there - exactly the population the
@@ -996,7 +1036,8 @@ object ClusterProjectionManager {
             return "projection"
         }
         log("transport=${if (direct) "direct" else "vd"} display=${display.displayId} " +
-            "${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+            "\"${display.name}\" ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi " +
+            "prefer_full=$sessionPreferFull")
         if (autoContainerEnabled(context)) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
@@ -1373,20 +1414,30 @@ object ClusterProjectionManager {
         }
     }
 
+    /** One `id:"name" WxH` entry per projection surface, for the display-choice log lines. */
+    private fun projectionDisplaysDescription(displays: List<Display>): String =
+        displays.joinToString {
+            val size = Point()
+            @Suppress("DEPRECATION") it.getRealSize(size)
+            "${it.displayId}:\"${it.name}\" ${size.x}x${size.y}"
+        }
+
     /**
      * App-side display lookup. The cluster's projection surfaces are virtual displays owned by
      * com.byd.containerservice, named "*XDJAScreenProjection*" (1280x480). Validated on-car
      * 2026-06-02: the panel composites the "..._1" surface in Full mode, so we pick it by name;
      * if it is absent we take the first projection surface, else fall back to id 2. Name-based
-     * selection survives containerservice reassigning display ids at boot. Updates cluster W/H/dpi.
+     * selection survives containerservice reassigning display ids at boot; [KEY_PREFER_FULL_DISPLAY]
+     * flips the pick to the full-cluster "..._0" surface. Updates cluster W/H/dpi.
      */
     private fun resolveClusterDisplay(context: Context): Display? {
         val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
         val projectionDisplays = dm.displays.filter {
             it.name.contains("XDJAScreenProjection", ignoreCase = true)
         }
-        val match = projectionDisplays.firstOrNull { it.name.endsWith("_1") }
-            ?: projectionDisplays.firstOrNull()
+        val preferFull = sessionPreferFull ?: isPreferFullDisplay(context)
+        val pickedName = pickProjectionDisplayName(projectionDisplays.map { it.name }, preferFull)
+        val match = projectionDisplays.firstOrNull { it.name == pickedName }
             ?: dm.getDisplay(DEFAULT_CLUSTER_DISPLAY_ID)
         if (match == null) {
             // Song family / DiLink 3-4 report no projection surface at all; the full list
@@ -1411,7 +1462,9 @@ object ClusterProjectionManager {
             if (shouldAbsorbDisplayDensity(directDisplayId, markerId, metrics.densityDpi)) {
                 clusterDensityDpi = metrics.densityDpi
             }
-            Log.i(TAG, "cluster display id=${match.displayId} ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi")
+            Log.i(TAG, "cluster display id=${match.displayId} \"${match.name}\" " +
+                "${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi prefer_full=$preferFull " +
+                "candidates=[${projectionDisplaysDescription(projectionDisplays)}]")
         }
         return match
     }
