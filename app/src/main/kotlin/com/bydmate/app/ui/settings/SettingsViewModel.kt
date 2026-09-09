@@ -1570,6 +1570,7 @@ class SettingsViewModel @Inject constructor(
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
                 appendLine(
                     "adb_restore=${adbRestoreManager.isEnabled()}/${adbRestoreManager.state.value} " +
+                        "trigger=${adbRestoreManager.lastTrigger} retries=${adbRestoreManager.retryCount} " +
                         "write_secure_settings=$secureSettingsGranted"
                 )
             } catch (e: Exception) {
@@ -1732,9 +1733,13 @@ class SettingsViewModel @Inject constructor(
                 // bounds that fall outside the visible zone.
                 val dm = appContext.getSystemService(Context.DISPLAY_SERVICE)
                     as android.hardware.display.DisplayManager
-                val clusterDisplay = dm.displays.filter {
+                val preferFullDisplay = cpm.isPreferFullDisplay(appContext)
+                val projectionDisplays = dm.displays.filter {
                     it.name.contains("XDJAScreenProjection", ignoreCase = true)
-                }.let { p -> p.firstOrNull { it.name.endsWith("_1") } ?: p.firstOrNull() }
+                }
+                val pickedName = com.bydmate.app.cluster.pickProjectionDisplayName(
+                    projectionDisplays.map { it.name }, preferFullDisplay)
+                val clusterDisplay = projectionDisplays.firstOrNull { it.name == pickedName }
                 if (clusterDisplay == null) {
                     appendLine("display: (no XDJAScreenProjection surface on this car)")
                     appendLine("bounds: n/a")
@@ -1745,6 +1750,7 @@ class SettingsViewModel @Inject constructor(
                     @Suppress("DEPRECATION") clusterDisplay.getMetrics(metrics)
                     appendLine("display: id=${clusterDisplay.displayId} \"${clusterDisplay.name}\" " +
                         "${size.x}x${size.y} dpi=${metrics.densityDpi}")
+                    appendLine("display_pref: " + if (preferFullDisplay) "full" else "mini")
                     val geo = com.bydmate.app.cluster.geometryFor(
                         com.bydmate.app.cluster.ClusterMode.FULLSCREEN, size.x, size.y,
                         clusterPrefs.getInt(cpm.KEY_WIDTH_PCT, com.bydmate.app.cluster.MAX_PROJECTION_PCT),

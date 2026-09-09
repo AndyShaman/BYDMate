@@ -25,6 +25,8 @@
     <string name="settings_display_mirror_desc">A short press of the chosen steering-wheel button moves the selected app to the cluster and back.</string>
     <string name="settings_cluster_auto_container_title">Show on the cluster right away</string>
     <string name="settings_cluster_auto_container_desc">The app switches the cluster into projection mode and back by itself (navigator and blind-spot cameras). Turn it off if ADAS or the stock widget disappears from the cluster afterwards and does not come back on its own: then switch the cluster mode manually, the picture shows in the mini-map</string>
+    <string name="settings_cluster_full_display_title">Full cluster screen</string>
+    <string name="settings_cluster_full_display_desc">By default the map fills the top of the cluster and the stock strip with speed and key readings stays at the bottom. Turn on if you want the map across the whole cluster without that strip. Works only on firmwares with the new interface, changes nothing elsewhere. Applies at the next projection</string>
     <string name="settings_cluster_direct_reboot_hint">For the voice agent to see the navigator on the cluster, reboot the DiLink head unit once: press and hold the volume knob. Simply turning the car off is not enough. Until the reboot projection still works, but the agent cannot see the route.</string>
     <string name="cluster_direct_unsupported_hint">Direct output is not available on this car\'s firmware, a compatible mode is used</string>
     <string name="settings_projection_mode_title">Projection mode</string>
@@ -1150,12 +1152,15 @@
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">Thanks for using BYDMate</string>
-    <string name="donate_auto_body">The project is non-commercial and completely free, built purely out of enthusiasm. If BYDMate has been useful to you and you would like to say thanks, you can support development with a USDT transfer on any of the networks below.</string>
+    <string name="donate_auto_body">The project is non-commercial and completely free, built purely out of enthusiasm. If BYDMate has been useful to you and you would like to say thanks, you can support development with a USDT transfer on the EVM networks below or with a card via ЮMoney.</string>
     <string name="donate_settings_title">Support the project</string>
-    <string name="donate_settings_body">BYDMate is non-commercial and free. If you would like to support development, send USDT to the address below on any EVM network.</string>
+    <string name="donate_settings_body">BYDMate is non-commercial and free. If you would like to support development, send USDT to the address below or pay by card via ЮMoney.</string>
     <string name="donate_qr_hint">Point your phone\'s camera at the code</string>
     <string name="donate_address_label">USDT address · EVM networks</string>
     <string name="donate_copy_button">Copy address</string>
+    <string name="donate_card_label">Card · ЮMoney</string>
+    <string name="donate_card_body">Payment by card or a ЮMoney wallet. Open the link on your phone and enter any amount.</string>
+    <string name="donate_copy_link_button">Copy link</string>
     <string name="donate_copied_toast">Address copied</string>
     <string name="donate_networks">Networks: Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
     <string name="donate_warning">Do not send via TON, TRON (TRC-20), or Solana. Funds will be lost.</string>

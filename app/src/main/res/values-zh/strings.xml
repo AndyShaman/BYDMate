@@ -29,6 +29,8 @@
     <string name="settings_display_mirror_desc">短按所选方向盘按键，将所选应用投射到仪表盘或返回屏幕。</string>
     <string name="settings_cluster_auto_container_title">立即显示到仪表盘</string>
     <string name="settings_cluster_auto_container_desc">应用会自动将仪表盘切换到投屏模式并切回（导航和盲区摄像头）。如果之后仪表盘上的 ADAS 或原厂小部件消失且不会自行恢复，请关闭此项：此时请手动切换仪表盘模式，画面会显示在小地图中</string>
+    <string name="settings_cluster_full_display_title">仪表盘全屏</string>
+    <string name="settings_cluster_full_display_desc">默认地图占仪表盘上半部分，下方保留原厂的车速和主要信息条。若希望地图占满整个仪表盘、不显示该信息条，请开启。仅在新界面固件上有效，其他固件不受影响。下次投屏时生效</string>
     <string name="settings_cluster_direct_reboot_hint">要让语音助手看到仪表盘上的导航，请将DiLink车机重启一次：长按音量旋钮即可重启。仅熄火并不能重启车机。重启之前投屏仍然可用，但语音助手看不到路线。</string>
     <string name="cluster_direct_unsupported_hint">此车机固件不支持直连输出，已使用兼容模式</string>
     <string name="settings_projection_mode_title">投影模式</string>
@@ -1265,12 +1267,15 @@
 
     <!-- Donation dialog + support card -->
     <string name="donate_auto_title">感谢您使用 BYDMate</string>
-    <string name="donate_auto_body">该项目非商业化且完全免费，完全出于个人热情开发维护。如果 BYDMate 对您有帮助，想表示感谢，可以通过以下任意网络转账 USDT 支持开发。</string>
+    <string name="donate_auto_body">该项目非商业化且完全免费，完全出于个人热情开发维护。如果 BYDMate 对您有帮助，想表示感谢，可以通过 EVM 网络转账 USDT，或通过 ЮMoney 用银行卡支持开发。</string>
     <string name="donate_settings_title">支持项目</string>
-    <string name="donate_settings_body">BYDMate 非商业化且免费。如果想支持开发，请通过以下任意 EVM 网络将 USDT 转到下方地址。</string>
+    <string name="donate_settings_body">BYDMate 非商业化且免费。如果想支持开发，请将 USDT 转到下方地址，或通过 ЮMoney 用银行卡支付。</string>
     <string name="donate_qr_hint">用手机摄像头扫描二维码</string>
     <string name="donate_address_label">USDT 地址 · EVM 网络</string>
     <string name="donate_copy_button">复制地址</string>
+    <string name="donate_card_label">银行卡 · ЮMoney</string>
+    <string name="donate_card_body">支持银行卡或 ЮMoney 钱包付款。请在手机上打开链接并输入任意金额。</string>
+    <string name="donate_copy_link_button">复制链接</string>
     <string name="donate_copied_toast">地址已复制</string>
     <string name="donate_networks">网络：Arbitrum One, Optimism, Polygon, BNB Smart Chain, Avalanche, Ethereum</string>
     <string name="donate_warning">请勿通过 TON、TRON (TRC-20) 或 Solana 转账，资金将无法找回。</string>
