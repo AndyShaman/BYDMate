@@ -38,6 +38,14 @@ class RangeCalculatorTest {
         assertEquals(199.7, c.estimate(soc = 50, totalElecKwh = 1500.0)!!, 0.5)
     }
 
+    @Test fun `carry glitch near full capacity is discarded, not treated as real`() = runBlocking {
+        // A counter glitch handing back carry close to the full pack must not zero the range —
+        // carry above CARRY_SANE_FRACTION of capacity is discarded and treated as 0.
+        val c = newCalc(capacity = 72.0, recentAvg = 18.0, carry = 35.99)
+        // 50% × 72 = 36 kWh (carry ignored); 36 / 18 × 100 = 200 km
+        assertEquals(200.0, c.estimate(soc = 50, totalElecKwh = 1500.0)!!, 0.5)
+    }
+
     @Test fun `zero avg returns null`() = runBlocking {
         val c = newCalc(recentAvg = 0.0)
         assertNull(c.estimate(soc = 50, totalElecKwh = 1500.0))

@@ -50,6 +50,7 @@ import com.bydmate.app.domain.calculator.OdometerConsumptionBuffer
 import com.bydmate.app.domain.calculator.RangeAvgSource
 import com.bydmate.app.domain.calculator.SocInterpolator
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.domain.calculator.RangeEstimate
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -143,6 +144,9 @@ class TrackingService : Service(), LocationListener {
     @Volatile private var cachedLastTripAvg: Double? = null
 
     private var lastSummaryLogTs: Long = 0L
+    // Last range value logged (km, rounded) — avoids flooding logcat since
+    // estimate() runs on every ~3s poll tick.
+    private var lastLoggedRangeKm: Int? = null
     @Volatile private var lastGuidanceGrantRearmTs: Long = 0L
     // Live charging-end detector. We track gun-connect state across polls and
     // fire runCatchUp on the connected→disconnected edge. The gun signal is
@@ -879,6 +883,25 @@ class TrackingService : Service(), LocationListener {
     }
 
     /**
+     * Logs the range estimate breakdown, but only when the rounded rangeKm
+     * actually changed — estimate() runs on every ~3s poll tick, so logging
+     * unconditionally would flood logcat without adding diagnostic value.
+     */
+    private fun logRangeIfChanged(estimate: RangeEstimate?, soc: Int?, totalElecKwh: Double?) {
+        val roundedKm = estimate?.rangeKm?.let { Math.round(it).toInt() }
+        if (roundedKm == lastLoggedRangeKm) return
+        lastLoggedRangeKm = roundedKm
+        if (estimate == null) {
+            Log.d(TAG, "range: unavailable, soc=$soc")
+            return
+        }
+        val carry = socInterpolator.carryOver(totalElecKwh, soc)
+        Log.d(TAG, "range: avg=${"%.1f".format(estimate.avgKwhPer100)} " +
+            "carry=${"%.3f".format(carry)} remainingKwh=${"%.2f".format(estimate.remainingKwh)} " +
+            "rangeKm=${"%.1f".format(estimate.rangeKm)} soc=$soc")
+    }
+
+    /**
      * Last-chance re-arm of the notification-listener grant while guidance is running. The
      * startup/SCREEN_ON attempts can all fire before the helper daemon is up (field reports from
      * Sea Lion 07/06), and by the time it matters — Navigator minimized, HUD fed from the
@@ -1371,12 +1394,14 @@ class TrackingService : Service(), LocationListener {
                         shortAvg = shortAvg,
                     )
 
-                    val rangeKm = rangeCalculator.estimate(
+                    val rangeEstimate = rangeCalculator.estimateDetailed(
                         soc = data.soc,
                         totalElecKwh = data.totalElecConsumption,
                         batteryTempC = data.avgBatTemp,
                     )
+                    val rangeKm = rangeEstimate?.rangeKm
                     _lastRangeKm.value = rangeKm
+                    logRangeIfChanged(rangeEstimate, data.soc, data.totalElecConsumption)
 
                     _tripDistanceKm.value = tripDistance
                     _tripKwhConsumed.value = tripKwhConsumed

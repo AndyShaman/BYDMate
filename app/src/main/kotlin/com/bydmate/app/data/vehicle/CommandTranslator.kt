@@ -16,11 +16,10 @@ data class SeatCommand(val group: SeatGroup, val level: Int)
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.
  *
- * Window aggregates (车窗全开/关闭/半开/通风, 前排/后排车窗全开/关闭) and individual rear
- * windows (后左/后右打开{n}) fan out to the validated per-door % fids — see the
- * [composite] map. The competitor "aggregate" fids all target the driver
- * short-form fid (1125122104) and the rear short-form fids are no-ops on
- * Leopard 3, so the % path is the only reliable channel.
+ * Window aggregates (车窗全开/关闭/半开/通风, 前排/后排车窗全开/关闭) fan out per door —
+ * see the [composite] map — because the competitor "aggregate" fids all target the
+ * driver short-form fid (1125122104). Full open / full close use the per-door
+ * open/close fids; half, vent and explicit percentages use the per-door % fids.
  *
  * Interior/cabin light (打开/关闭车内灯), ambient light (氛围灯打开/关闭), DRL
  * (打开/关闭日行灯) and mirror heat = rear-window defrost (后视镜加热/关闭后视镜加热)
@@ -42,15 +41,20 @@ object CommandTranslator {
     data class Resolved(val actionName: String, val value: Int)
 
     private val table: Map<String, Resolved> = mapOf(
-        // ── Windows (individual %, 0..100) ── LIVE_VALIDATED ──────────────────
-        "主驾打开100" to Resolved("window_driver_pos",      100),
-        "主驾打开0"   to Resolved("window_driver_pos",        0),
-        "副驾打开100" to Resolved("window_passenger_pos",   100),
-        "副驾打开0"   to Resolved("window_passenger_pos",     0),
-        "后左打开100" to Resolved("window_rear_left_pos",   100),
-        "后左打开0"   to Resolved("window_rear_left_pos",     0),
-        "后右打开100" to Resolved("window_rear_right_pos",  100),
-        "后右打开0"   to Resolved("window_rear_right_pos",    0),
+        // ── Windows (full open / full close) ── dedicated open/close fids ─────
+        // "Open" and "close" are their own commands on the car, not the positions
+        // 100% and 0%: the percent family is accepted (status=1) but moves nothing on
+        // DiLink 3.0 (Yuan Plus / Song PRO, issue #64), while the open/close fids are
+        // the family both generations share. Any OTHER aperture (vent, half, an
+        // explicit percentage) still goes out on the percent path below.
+        "主驾打开100" to Resolved("window_driver_open",      1),
+        "主驾打开0"   to Resolved("window_driver_close",     2),
+        "副驾打开100" to Resolved("window_passenger_open",   1),
+        "副驾打开0"   to Resolved("window_passenger_close",  2),
+        "后左打开100" to Resolved("window_rear_left_open",   1),
+        "后左打开0"   to Resolved("window_rear_left_close",  2),
+        "后右打开100" to Resolved("window_rear_right_open",  1),
+        "后右打开0"   to Resolved("window_rear_right_close", 2),
 
         // ── Windows (vent, individual) ── crack one window to VENT_PCT via the
         // validated % path. The all-window vent (车窗通风) is a composite fan-out
@@ -150,16 +154,22 @@ object CommandTranslator {
         Resolved("window_rear_right_pos", pct),
     )
 
+    /** Full open / full close of a door set — the dedicated open/close fids, not 100%/0%. */
+    private fun windowsOpen(vararg doors: String): List<Resolved> =
+        doors.map { Resolved("window_${it}_open", 1) }
+    private fun windowsClose(vararg doors: String): List<Resolved> =
+        doors.map { Resolved("window_${it}_close", 2) }
+
     private val composite: Map<String, List<Resolved>> = buildMap {
-        // ── Windows ── fan out to validated per-door % fids ───────────────────
-        put("车窗全开", allWindows(100))
-        put("车窗关闭", allWindows(0))
+        // ── Windows ── fan out per door: open/close fids for 全开/关闭, % fids otherwise ─
+        put("车窗全开", windowsOpen("driver", "passenger", "rear_left", "rear_right"))
+        put("车窗关闭", windowsClose("driver", "passenger", "rear_left", "rear_right"))
         put("车窗半开", allWindows(50))
         put("车窗通风", allWindows(VENT_PCT))
-        put("前排车窗全开", listOf(Resolved("window_driver_pos", 100), Resolved("window_passenger_pos", 100)))
-        put("前排车窗关闭", listOf(Resolved("window_driver_pos", 0), Resolved("window_passenger_pos", 0)))
-        put("后排车窗全开", listOf(Resolved("window_rear_left_pos", 100), Resolved("window_rear_right_pos", 100)))
-        put("后排车窗关闭", listOf(Resolved("window_rear_left_pos", 0), Resolved("window_rear_right_pos", 0)))
+        put("前排车窗全开", windowsOpen("driver", "passenger"))
+        put("前排车窗关闭", windowsClose("driver", "passenger"))
+        put("后排车窗全开", windowsOpen("rear_left", "rear_right"))
+        put("后排车窗关闭", windowsClose("rear_left", "rear_right"))
         // ── Fridge temperature presets ── mode + setpoint (dev=1023) ──────────
         put("冰箱制冷-6度", fridgeCool(-6))
         put("冰箱制冷-3度", fridgeCool(-3))

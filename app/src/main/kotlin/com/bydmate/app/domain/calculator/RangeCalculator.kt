@@ -1,5 +1,6 @@
 package com.bydmate.app.domain.calculator
 
+import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
 import javax.inject.Singleton
 
@@ -60,8 +61,15 @@ class RangeCalculator(
         if (cap !in CAPACITY_SANE_KWH) return null
         val avg = buffer.recentAvgConsumption()
         if (!avg.isFinite() || avg <= 0.0) return null
-        val carry = socInterpolator.carryOver(totalElecKwh, soc)
+        var carry = socInterpolator.carryOver(totalElecKwh, soc)
         if (!carry.isFinite()) return null
+        // carry is the energy spent since the last 1% SOC step, so it cannot sanely exceed a
+        // few percent of capacity. A single odometer/counter glitch can otherwise hand back
+        // carry close to the full capacity, zeroing remainingKwh on an otherwise normal drive.
+        if (carry > cap * CARRY_SANE_FRACTION) {
+            Log.w(TAG, "carryOver=$carry exceeds sane bound (cap=$cap); treating as 0")
+            carry = 0.0
+        }
         val remainingKwh = (soc / 100.0) * cap - carry
         if (!remainingKwh.isFinite() || remainingKwh <= 0.0) return null
         val rangeKm = remainingKwh / avg * 100.0
@@ -79,7 +87,13 @@ class RangeCalculator(
         estimateDetailed(soc, totalElecKwh, batteryTempC)?.rangeKm
 
     companion object {
+        private const val TAG = "RangeCalculator"
+
         /** Plausible EV battery capacity bounds for the user-entered setting, kWh. */
         val CAPACITY_SANE_KWH = 1.0..1000.0
+
+        /** carryOver above this fraction of capacity is a counter glitch, not real energy spent
+         *  since the last SOC step (~1% of capacity, plus headroom). */
+        const val CARRY_SANE_FRACTION = 0.03
     }
 }

@@ -1344,12 +1344,14 @@
     <string name="settings_blindspot_pip_width_title">Шырыня акенца</string>
     <string name="settings_blindspot_pip_width_desc">Шырыня акенца на галоўным экране ў % ад шырыні экрана</string>
     <string name="settings_blindspot_position_title">Становішча акенца</string>
-    <string name="settings_blindspot_position_desc">Паказвае пустое акенца паверх экрана: перацягніце яго пальцам туды, дзе будзе камера</string>
+    <string name="settings_blindspot_position_desc">Правая камера. Паказвае пустое акенца паверх экрана: перацягніце яго пальцам туды, дзе будзе камера</string>
     <string name="settings_blindspot_position_button">Наладзіць становішча</string>
     <string name="settings_blindspot_position_done">Гатова</string>
     <string name="settings_blindspot_position_drag">Перацягніце акенца</string>
     <string name="settings_blindspot_both_main_title">Абедзве камеры на галоўны экран</string>
     <string name="settings_blindspot_both_main_desc">Левая камера паказваецца побач з правай на планшэце, прыборка не выкарыстоўваецца</string>
+    <string name="settings_blindspot_left_position_title">Становішча левай камеры</string>
+    <string name="settings_blindspot_left_position_desc">Па змаўчанні левае акенца стаіць люстрана правому. Перацягніце, каб задаць сваё месца</string>
     <string name="settings_blindspot_glow_title">Падсветка пры аб\'екце ў сляпой зоне</string>
     <string name="settings_blindspot_glow_desc">Аранжавая рамка вакол акна, калі датчык бачыць машыну побач</string>
     <string name="settings_blindspot_hint">Патрэбна камплектацыя з кругавым аглядам. Калі вывесці праекцыю на прыборку немагчыма, акенца працуе на галоўным экране.</string>

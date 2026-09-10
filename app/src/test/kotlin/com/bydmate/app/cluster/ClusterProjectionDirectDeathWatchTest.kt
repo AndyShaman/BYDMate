@@ -143,7 +143,7 @@ class ClusterProjectionDirectDeathWatchTest {
         coVerify(exactly = 2) {
             helper.launchFreeform(
                 NAVI_PACKAGE, clusterDisplayId(), any(), any(), any(), any(),
-                HelperBinderProtocol.PANE_TYPE_RECENTS,
+                HelperBinderProtocol.PANE_TYPE_STANDARD,
             )
         }
         assertTrue(
@@ -196,7 +196,7 @@ class ClusterProjectionDirectDeathWatchTest {
         coVerify(exactly = 2) {
             helper.launchFreeform(
                 NAVI_PACKAGE, clusterDisplayId(), any(), any(), any(), any(),
-                HelperBinderProtocol.PANE_TYPE_RECENTS,
+                HelperBinderProtocol.PANE_TYPE_STANDARD,
             )
         }
         assertTrue(

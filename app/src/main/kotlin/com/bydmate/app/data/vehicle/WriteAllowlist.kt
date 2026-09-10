@@ -232,6 +232,14 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("window_passenger_ctrl",  1001, 1125122107, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
             WriteEntry("window_rear_left_ctrl",  1001, 1125122112, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
             WriteEntry("window_rear_right_ctrl", 1001, 1125122115, null, 1, 5, "windows", false, "dilink3-catalog-2026-07-30"),
+            // Rear open/close on the same CTRL fids (1=open, 2=close) — the twins of the
+            // live-validated front short-form entries, used by the translator for the
+            // "open"/"close" commands. Live-validated on Leopard 3 2026-09-10 (4/4 cycles;
+            // the very first write after a long idle was accepted but moved nothing).
+            WriteEntry("window_rear_left_open",   1001, 1125122112, null, 1, 1, "windows", true,  "live-leopard3-2026-09-10"),
+            WriteEntry("window_rear_left_close",  1001, 1125122112, null, 2, 2, "windows", true,  "live-leopard3-2026-09-10"),
+            WriteEntry("window_rear_right_open",  1001, 1125122115, null, 1, 1, "windows", true,  "live-leopard3-2026-09-10"),
+            WriteEntry("window_rear_right_close", 1001, 1125122115, null, 2, 2, "windows", true,  "live-leopard3-2026-09-10"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

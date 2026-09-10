@@ -1388,12 +1388,13 @@ private fun BlindSpotCard() {
     }
 
     // Drag-to-place preview: it lives in a WindowManager overlay, so leaving the screen has to
-    // take it down explicitly. The flag follows the window rather than the clicks — the overlay
-    // also goes away on its own idle timer.
-    val placingState = remember { mutableStateOf(false) }
+    // take it down explicitly. The state follows the window rather than the clicks — the overlay
+    // also goes away on its own idle timer. One window at a time, so the side being placed is
+    // the state (null = nothing on screen).
+    val placingState = remember { mutableStateOf<BlindSpotPositionOverlay.Side?>(null) }
     var placing by placingState
     val positionOverlay = remember {
-        BlindSpotPositionOverlay().apply { onHidden = { placingState.value = false } }
+        BlindSpotPositionOverlay().apply { onHidden = { placingState.value = null } }
     }
     // MainActivity survives configuration changes, so onDispose alone never fires when the driver
     // goes Home — an opaque touchable window would stay over whatever is on screen.
@@ -1463,7 +1464,7 @@ private fun BlindSpotCard() {
             enabled = enabled,
             onValueChangeFinished = {
                 prefs.edit().putInt(BlindSpotPreferences.KEY_PIP_WIDTH_PCT, pipWidthPct).apply()
-                if (placing) positionOverlay.refreshSize()
+                if (placing != null) positionOverlay.refreshSize()
             },
         )
         SettingDivider()
@@ -1471,11 +1472,16 @@ private fun BlindSpotCard() {
             title = stringResource(R.string.settings_blindspot_position_title),
             description = stringResource(R.string.settings_blindspot_position_desc),
             buttonLabel = stringResource(
-                if (placing) R.string.settings_blindspot_position_done
+                if (placing == BlindSpotPositionOverlay.Side.RIGHT) R.string.settings_blindspot_position_done
                 else R.string.settings_blindspot_position_button
             ),
             onClick = {
-                if (placing) positionOverlay.hide() else placing = positionOverlay.show(context)
+                val side = BlindSpotPositionOverlay.Side.RIGHT
+                // Read before hide(): hiding clears [placing] through onHidden, and a second
+                // tap on the same row must close the window, not reopen it.
+                val closing = placing == side
+                positionOverlay.hide()
+                if (!closing && positionOverlay.show(context, side)) placing = side
             },
             enabled = enabled,
         )
@@ -1487,9 +1493,32 @@ private fun BlindSpotCard() {
             onCheckedChange = {
                 bothOnMain = it
                 prefs.edit().putBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, it).apply()
+                // The left window only exists on the main screen while this is on; its placement
+                // row goes away with it, and an open drag overlay would have nothing to dismiss it.
+                if (!it && placing == BlindSpotPositionOverlay.Side.LEFT) positionOverlay.hide()
             },
             enabled = enabled,
         )
+        // Only when the left camera is actually shown on the main screen — there is nothing to
+        // place otherwise (it lives on the cluster panel).
+        if (bothOnMain) {
+            SettingDivider()
+            SettingActionRow(
+                title = stringResource(R.string.settings_blindspot_left_position_title),
+                description = stringResource(R.string.settings_blindspot_left_position_desc),
+                buttonLabel = stringResource(
+                    if (placing == BlindSpotPositionOverlay.Side.LEFT) R.string.settings_blindspot_position_done
+                    else R.string.settings_blindspot_position_button
+                ),
+                onClick = {
+                    val side = BlindSpotPositionOverlay.Side.LEFT
+                    val closing = placing == side
+                    positionOverlay.hide()
+                    if (!closing && positionOverlay.show(context, side)) placing = side
+                },
+                enabled = enabled,
+            )
+        }
         SettingDivider()
         SettingToggleRow(
             title = stringResource(R.string.settings_blindspot_glow_title),

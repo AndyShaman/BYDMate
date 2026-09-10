@@ -1344,12 +1344,14 @@
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
     <string name="settings_blindspot_pip_width_desc" formatted="false">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
     <string name="settings_blindspot_position_title">Położenie okienka</string>
-    <string name="settings_blindspot_position_desc">Pokazuje puste okienko nad ekranem: przeciągnij je palcem tam, gdzie ma być kamera</string>
+    <string name="settings_blindspot_position_desc">Prawa kamera. Pokazuje puste okienko nad ekranem: przeciągnij je palcem tam, gdzie ma być kamera</string>
     <string name="settings_blindspot_position_button">Ustaw położenie</string>
     <string name="settings_blindspot_position_done">Gotowe</string>
     <string name="settings_blindspot_position_drag">Przeciągnij okienko</string>
     <string name="settings_blindspot_both_main_title">Obie kamery na ekranie głównym</string>
     <string name="settings_blindspot_both_main_desc">Lewa kamera jest pokazywana obok prawej na tablecie, zestaw wskaźników nie jest używany</string>
+    <string name="settings_blindspot_left_position_title">Położenie lewej kamery</string>
+    <string name="settings_blindspot_left_position_desc">Domyślnie lewe okienko jest lustrzanym odbiciem prawego. Przeciągnij, aby ustawić własne miejsce</string>
     <string name="settings_blindspot_glow_title">Podświetlenie, gdy obiekt jest w martwym polu</string>
     <string name="settings_blindspot_glow_desc">Pomarańczowa ramka wokół okna, gdy czujnik widzi auto obok</string>
     <string name="settings_blindspot_hint">Potrzebna wersja wyposażenia z kamerami 360°. Jeśli nie da się wyświetlić projekcji na wskaźnikach, okienko działa na ekranie głównym.</string>

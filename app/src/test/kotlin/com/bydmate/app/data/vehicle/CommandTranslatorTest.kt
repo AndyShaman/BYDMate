@@ -94,67 +94,100 @@ class CommandTranslatorTest {
         assertEquals(1, r?.value)
     }
 
-    // ── Rear windows (individual) — Alice VPS vocab 后左/后右打开{n} ──────────────
-    @Test fun `rear-left open 100 maps to window_rear_left_pos val 100`() {
+    // ── Windows: open / close use the dedicated fids, not 100% / 0% ───────────
+    @Test fun `driver open maps to window_driver_open val 1`() {
+        val r = one("主驾打开100")
+        assertEquals("window_driver_open", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `driver close maps to window_driver_close val 2`() {
+        val r = one("主驾打开0")
+        assertEquals("window_driver_close", r?.actionName)
+        assertEquals(2, r?.value)
+    }
+
+    @Test fun `passenger open maps to window_passenger_open val 1`() {
+        val r = one("副驾打开100")
+        assertEquals("window_passenger_open", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    @Test fun `rear-left open maps to window_rear_left_open val 1`() {
         val r = one("后左打开100")
-        assertEquals("window_rear_left_pos", r?.actionName)
-        assertEquals(100, r?.value)
+        assertEquals("window_rear_left_open", r?.actionName)
+        assertEquals(1, r?.value)
     }
 
-    @Test fun `rear-right open 0 maps to window_rear_right_pos val 0`() {
+    @Test fun `rear-right close maps to window_rear_right_close val 2`() {
         val r = one("后右打开0")
-        assertEquals("window_rear_right_pos", r?.actionName)
-        assertEquals(0, r?.value)
+        assertEquals("window_rear_right_close", r?.actionName)
+        assertEquals(2, r?.value)
     }
 
-    // ── Rear windows (aggregate) — fan-out to both validated % fids ────────────
-    @Test fun `rear windows open fans out to both rear pos fids at 100`() {
+    // ── Windows: an aperture that is not full open / full close stays on the % path ──
+    @Test fun `driver vent stays on window_driver_pos`() {
+        val r = one("主驾通风")
+        assertEquals("window_driver_pos", r?.actionName)
+        assertEquals(10, r?.value)
+    }
+
+    // ── Rear windows (aggregate) — fan-out to both open/close fids ────────────
+    @Test fun `rear windows open fans out to both rear open fids`() {
         assertEquals(
-            setOf("window_rear_left_pos" to 100, "window_rear_right_pos" to 100),
+            setOf("window_rear_left_open" to 1, "window_rear_right_open" to 1),
             pairs("后排车窗全开"),
         )
     }
 
-    @Test fun `rear windows close fans out to both rear pos fids at 0`() {
+    @Test fun `rear windows close fans out to both rear close fids`() {
         assertEquals(
-            setOf("window_rear_left_pos" to 0, "window_rear_right_pos" to 0),
+            setOf("window_rear_left_close" to 2, "window_rear_right_close" to 2),
             pairs("后排车窗关闭"),
         )
     }
 
     // ── Front windows (aggregate) — fan-out to driver + passenger ─────────────
-    @Test fun `front windows open fans out to driver and passenger pos at 100`() {
+    @Test fun `front windows open fans out to driver and passenger open fids`() {
         assertEquals(
-            setOf("window_driver_pos" to 100, "window_passenger_pos" to 100),
+            setOf("window_driver_open" to 1, "window_passenger_open" to 1),
             pairs("前排车窗全开"),
         )
     }
 
-    // ── All windows (aggregate) — fan-out to all four validated % fids ────────
-    @Test fun `all windows open fans out to all four pos fids at 100`() {
+    @Test fun `front windows close fans out to driver and passenger close fids`() {
+        assertEquals(
+            setOf("window_driver_close" to 2, "window_passenger_close" to 2),
+            pairs("前排车窗关闭"),
+        )
+    }
+
+    // ── All windows (aggregate) — fan-out to all four open/close fids ─────────
+    @Test fun `all windows open fans out to all four open fids`() {
         assertEquals(
             setOf(
-                "window_driver_pos" to 100,
-                "window_passenger_pos" to 100,
-                "window_rear_left_pos" to 100,
-                "window_rear_right_pos" to 100,
+                "window_driver_open" to 1,
+                "window_passenger_open" to 1,
+                "window_rear_left_open" to 1,
+                "window_rear_right_open" to 1,
             ),
             pairs("车窗全开"),
         )
     }
 
-    @Test fun `all windows close fans out to all four pos fids at 0`() {
+    @Test fun `all windows close fans out to all four close fids`() {
         assertEquals(
             setOf(
-                "window_driver_pos" to 0,
-                "window_passenger_pos" to 0,
-                "window_rear_left_pos" to 0,
-                "window_rear_right_pos" to 0,
+                "window_driver_close" to 2,
+                "window_passenger_close" to 2,
+                "window_rear_left_close" to 2,
+                "window_rear_right_close" to 2,
             ),
             pairs("车窗关闭"),
         )
     }
 
+    // ── Half stays on the % path (no "half" command on the open/close fids) ───
     @Test fun `all windows half fans out to all four pos fids at 50`() {
         assertEquals(
             setOf(

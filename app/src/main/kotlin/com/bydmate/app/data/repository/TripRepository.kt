@@ -172,7 +172,10 @@ class TripRepository @Inject constructor(
             val km = t.distanceKm ?: return@mapNotNull null
             val kwh = t.kwhConsumed ?: return@mapNotNull null
             if (km <= 0.0 || kwh < 0.0) return@mapNotNull null
-            kwh / km * 100.0
+            val avg = kwh / km * 100.0
+            // A single glitched trip (BMS spike, GPS/odometer hiccup) can send avg
+            // consumption to absurd values, which would zero out the range estimate.
+            avg.takeIf { it in AVG_SANE_KWH_PER_100KM }
         }
         if (tripAvgs.isEmpty()) return fallback
         val active = weights.take(tripAvgs.size)
@@ -224,4 +227,12 @@ class TripRepository @Inject constructor(
 
     suspend fun getTripsForCapacityEstimate(): List<TripEntity> =
         tripDao.getTripsForCapacityEstimate()
+
+    companion object {
+        /**
+         * Plausible EV consumption bounds, kWh/100km. Shared with LiveTripBuffer and
+         * RangeAvgSource so a single glitched sample can't crater the range estimate.
+         */
+        val AVG_SANE_KWH_PER_100KM = 3.0..100.0
+    }
 }

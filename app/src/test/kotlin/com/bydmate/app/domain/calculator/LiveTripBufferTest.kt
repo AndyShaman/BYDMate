@@ -96,6 +96,15 @@ class LiveTripBufferTest {
         assertTrue(b.sampleCount() <= LiveTripBuffer.MAX_SAMPLES)
     }
 
+    @Test fun `implausible spike consumption returns null avg`() = runBlocking {
+        val b = LiveTripBuffer()
+        // 0.5 km driven, 50 kWh delta → 10000 kWh/100km, a sensor glitch, not
+        // a real EV consumption value — must not be surfaced to RangeCalculator.
+        b.onSample(100.0, 500.0, 1L)
+        b.onSample(100.5, 550.0, 1L)
+        assertNull(b.avgOverLastKm(10.0))
+    }
+
     @Test fun `reset clears state`() = runBlocking {
         val b = LiveTripBuffer()
         b.onSample(100.0, 500.0, 1L)

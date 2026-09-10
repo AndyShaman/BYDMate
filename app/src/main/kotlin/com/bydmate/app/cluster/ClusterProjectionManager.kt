@@ -928,7 +928,16 @@ object ClusterProjectionManager {
                         moveOk = true
                         log("recovery: task recreated by setMode: $taskId -> $relaunchedId")
                     } else {
-                        moveOk = helper.moveTaskToDisplay(taskId, 0)
+                        // Same light-path readback as pullBackToMain: a task already on the main
+                        // display must not be moved again (AOSP 12 throws), or the marker would
+                        // survive and this recovery would run at every service start.
+                        val state = if (modeOk) helper.getTaskState(targetPackage(appContext)) else null
+                        if (state != null && state.taskId == taskId && state.displayId == 0) {
+                            moveOk = true
+                            log("recovery: light path, task=$taskId already on display 0")
+                        } else {
+                            moveOk = helper.moveTaskToDisplay(taskId, 0)
+                        }
                         helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
                     }
                 }
@@ -1241,13 +1250,14 @@ object ClusterProjectionManager {
         // suppress watchdog misclassifications during the transient REMOVE+RELAUNCH (Q1 / F-1).
         // No-op when [pkg] is not a split pane or no session is active.
         onBeforeClusterSend?.invoke(pkg)
-        // RECENTS, unlike the split panes (which went STANDARD in 392 to get their own input
-        // shield): the cluster hosts a single task alone on its display, so the shared-root
-        // touch defect never applied here — and this typing is what the on-car acceptance of
-        // the projection path was run with. Fleet safety: do not change it without a car.
+        // STANDARD (#134): a live navigator task is STANDARD, so asking for RECENTS forced the
+        // daemon to remove and recreate it (a task can only be typed at creation) — on Sea Lion 07
+        // the navigator process died with it and the route was lost. STANDARD matches the live
+        // type, so the daemon takes the light path (one `am start` with mode+display, task id
+        // survives). Price: AOSP draws its freeform DecorCaption over a STANDARD window.
         return when (helper.launchFreeform(
             pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
-            HelperBinderProtocol.PANE_TYPE_RECENTS,
+            HelperBinderProtocol.PANE_TYPE_STANDARD,
         )) {
             FreeformLaunchResult.OK -> {
                 directDisplayId = display.displayId
@@ -1360,9 +1370,11 @@ object ClusterProjectionManager {
                     // With no task left this births the app on the cluster display; with a task that
                     // fled to the main screen it moves that task back — the same operation project()
                     // performs on every star press, so a healthy machine sees nothing new here.
+                    // Same STANDARD typing as the send above (#134): the recovery must not be the
+                    // one path that still removes and recreates the navigator task.
                     val result = helper.launchFreeform(
                         pkg, displayId, bounds[0], bounds[1], bounds[2], bounds[3],
-                        HelperBinderProtocol.PANE_TYPE_RECENTS,
+                        HelperBinderProtocol.PANE_TYPE_STANDARD,
                     )
                     log("direct: recovery relaunch result=$result")
                 }
@@ -1567,7 +1579,17 @@ object ClusterProjectionManager {
                 log("pullback: task recreated by setMode: $taskId -> $relaunchedId (pkg=$pkg)")
                 if (focus) helper.setFocusedTask(relaunchedId)
             } else {
-                moveOk = helper.moveTaskToDisplay(taskId, 0)
+                // The daemon's light path applies mode AND display in one am start, so the task
+                // can already be home. moveTaskToDisplay into the display area a task is already
+                // in throws on AOSP 12 — a false moveOk would keep KEY_DIRECT_DISPLAY_ID set and
+                // make every service start replay this recovery against the navigator.
+                val state = if (modeOk) helper.getTaskState(pkg) else null
+                if (state != null && state.taskId == taskId && state.displayId == 0) {
+                    moveOk = true
+                    log("pullback: light path, task=$taskId already on display 0 (pkg=$pkg)")
+                } else {
+                    moveOk = helper.moveTaskToDisplay(taskId, 0)
+                }
                 helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
                 if (focus) helper.setFocusedTask(taskId)
             }

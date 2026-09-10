@@ -1346,12 +1346,14 @@
     <string name="settings_blindspot_pip_width_title">Ширина окошка</string>
     <string name="settings_blindspot_pip_width_desc">Ширина окошка на главном экране в % от ширины экрана</string>
     <string name="settings_blindspot_position_title">Положение окошка</string>
-    <string name="settings_blindspot_position_desc">Показывает пустое окошко поверх экрана: перетащите его пальцем туда, где будет камера</string>
+    <string name="settings_blindspot_position_desc">Правая камера. Показывает пустое окошко поверх экрана: перетащите его пальцем туда, где будет камера</string>
     <string name="settings_blindspot_position_button">Настроить положение</string>
     <string name="settings_blindspot_position_done">Готово</string>
     <string name="settings_blindspot_position_drag">Перетащите окошко</string>
     <string name="settings_blindspot_both_main_title">Обе камеры на главный экран</string>
     <string name="settings_blindspot_both_main_desc">Левая камера показывается рядом с правой на планшете, приборка не используется</string>
+    <string name="settings_blindspot_left_position_title">Положение левой камеры</string>
+    <string name="settings_blindspot_left_position_desc">По умолчанию левое окошко стоит зеркально правому. Перетащите, чтобы задать своё место</string>
     <string name="settings_blindspot_glow_title">Подсветка при объекте в слепой зоне</string>
     <string name="settings_blindspot_glow_desc">Оранжевая рамка вокруг окна, когда датчик видит машину рядом</string>
     <string name="settings_blindspot_hint">Нужна комплектация с круговым обзором. Если вывести проекцию на приборку невозможно, окошко работает на главном экране.</string>
