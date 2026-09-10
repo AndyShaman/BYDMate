@@ -39,11 +39,17 @@ class RangeAvgSource(
 
     override suspend fun recentAvgConsumption(): Double {
         val historical = historicalProvider()
-        val live = liveAvgProvider() ?: return historical
+        val live = liveAvgProvider() ?: return sane(historical)
         val sessionKm = sessionKmProvider()
         val w = liveWeight(sessionKm)
-        return w * live + (1.0 - w) * historical
+        return sane(w * live + (1.0 - w) * historical)
     }
+
+    // Last-resort gate: historical/live are already filtered at their sources
+    // (TripRepository, LiveTripBuffer), but a misbehaving provider here would
+    // otherwise crater the range estimate.
+    private fun sane(avg: Double): Double =
+        if (avg in TripRepository.AVG_SANE_KWH_PER_100KM) avg else FALLBACK_KWH_PER_100KM
 
     private fun liveWeight(sessionKm: Double): Double {
         if (sessionKm <= LIVE_WEIGHT_FLOOR_KM) return 0.0

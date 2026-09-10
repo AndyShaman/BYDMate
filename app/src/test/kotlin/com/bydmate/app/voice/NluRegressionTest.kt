@@ -42,6 +42,11 @@ class NluRegressionTest {
         "отключить подогрев сиденья" to "主驾座椅加热关闭",
         "выключи обогрев сиденья" to "主驾座椅加热关闭",
         "подогрев сиденья на 5" to null,       // level 5 -> agent (seat_heat_driver_5)
+        // issue #185: "сидения" (genitive singular, as ASR renders "сиденья водителя")
+        // stems the same as "сидений" (genitive plural) -> must NOT trigger the plural
+        // fan-out when a DRIVER/PASSENGER qualifier already names a single side.
+        "включи подогрев сидения водителя" to "主驾座椅加热1档",
+        "включи подогрев сидения пассажира" to "副驾座椅加热1档",
         // locks / car
         "закрой машину" to "车门上锁",
         "открой машину" to "车门解锁",

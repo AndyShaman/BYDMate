@@ -62,8 +62,13 @@ object NluParser {
         // exactly ONE command, otherwise the utterance is ambiguous and goes to the
         // agent (issue #98). EN has no plural detection ("seats" stems to "seat"):
         // it reaches this branch only via the ALL qualifier ("all seats").
+        // issue #185: the stemmer collapses genitive singular "сидения" (as in
+        // "сидения водителя") and genitive plural "сидений" to the same stem, so
+        // pluralSeat alone can't tell them apart. A DRIVER/PASSENGER qualifier
+        // already names one side explicitly -- that always wins over the plural guess.
         val seatPresent = devices3.any { it.name.startsWith("SEAT") }
-        val pluralSeat = VoiceStemmer.stem("сидения") in stems
+        val sideQualified = Qual.DRIVER in qualifiers || Qual.PASSENGER in qualifiers
+        val pluralSeat = !sideQualified && VoiceStemmer.stem("сидения") in stems
         if (seatPresent && (Qual.ALL in qualifiers || pluralSeat)) {
             val perSide = listOf(this::driverSeat, this::passengerSeat).map { side ->
                 val sideDevices = devices3.mapTo(LinkedHashSet()) {

@@ -107,6 +107,8 @@ class BlindSpotController @Inject constructor(
     private var mirrorByChoice = false
     /** Geometry the PiP window currently carries; a mismatch with the settings re-applies it. */
     private var appliedPipRect: Rect? = null
+    /** Geometry the left main-screen window currently has; null when there is no such window. */
+    private var appliedLeftRect: Rect? = null
     /** Projection-overlay attach counter as of our own attach; a later value means the overlay
      *  was (re)added above our cluster window and we have to re-attach on top of it. */
     private var lastOverlayEpoch = 0
@@ -425,54 +427,53 @@ class BlindSpotController @Inject constructor(
         )
     }
 
-    /** Left camera on a car without a cluster to project onto: the right PiP mirrored across the
-     *  screen, so the two windows sit symmetrically wherever the driver placed the right one. */
+    /** Left camera on a car without a cluster to project onto: its own place once the driver set
+     *  one (#183), the right PiP mirrored across the screen until then. */
     private fun attachMirrorWindow() {
-        val rect = mirrorRect(pipRect())
+        val rect = leftPipRect()
         val window = PreviewWindow("left-pip")
         if (window.attach(context, pipParams(rect), offscreenX(rect.width()))) {
             clusterWindow = window
             clusterOnMainScreen = true
+            appliedLeftRect = rect
         }
     }
 
-    /** Re-applies the PiP geometry after the user changed the width or dragged the window. */
+    /** Re-applies the PiP geometry after the user changed the width or dragged a window. */
     private fun applyPipGeometry() {
         if (pipWindow == null && !clusterOnMainScreen) return
         val rect = pipRect()
-        if (rect == appliedPipRect) return
+        // The left window has its own saved corner, so it can move while the right one stands still.
+        val left = if (clusterOnMainScreen) leftPipRect() else null
+        if (rect == appliedPipRect && left == appliedLeftRect) return
         var applied = true
         pipWindow?.let { if (!it.setGeometry(rect, offscreenX(rect.width()))) applied = false }
-        if (clusterOnMainScreen) {
-            val mirror = mirrorRect(rect)
+        if (left != null) {
             clusterWindow?.let {
-                if (!it.setGeometry(mirror, offscreenX(mirror.width()))) applied = false
+                if (!it.setGeometry(left, offscreenX(left.width()))) applied = false
             }
         }
-        if (applied) appliedPipRect = rect
-    }
-
-    /** Reflection of a main-screen rect across the vertical axis of the screen. */
-    private fun mirrorRect(rect: Rect): Rect {
-        val screenWidth = realMetrics(defaultDisplay()).widthPixels
-        val left = (screenWidth - rect.right).coerceAtLeast(0)
-        return Rect(left, rect.top, left + rect.width(), rect.bottom)
+        if (applied) {
+            appliedPipRect = rect
+            appliedLeftRect = left
+        }
     }
 
     /** Main-screen PiP geometry: 16:9 of the width slider, at the corner the user dragged it to
      *  (the default slot until then), clamped to the screen. */
     private fun pipRect(): Rect {
         val metrics = realMetrics(defaultDisplay())
-        val widthPct = prefs.pipWidthPct
-        val x = prefs.pipXPx
-        val y = prefs.pipYPx
-        if (x == BlindSpotPreferences.UNSET_PX || y == BlindSpotPreferences.UNSET_PX) {
-            return BlindSpotPreferences.defaultPipRect(metrics.widthPixels, metrics.heightPixels, widthPct)
-        }
-        val size = BlindSpotPreferences.pipSize(metrics.widthPixels, widthPct)
-        val left = x.coerceIn(0, (metrics.widthPixels - size.width).coerceAtLeast(0))
-        val top = y.coerceIn(0, (metrics.heightPixels - size.height).coerceAtLeast(0))
-        return Rect(left, top, left + size.width, top + size.height)
+        return BlindSpotPreferences.placedPipRect(
+            metrics.widthPixels, metrics.heightPixels, prefs.pipWidthPct, prefs.pipXPx, prefs.pipYPx)
+    }
+
+    /** Geometry of the left window on the main screen; mirrors [pipRect] while it has no own place. */
+    private fun leftPipRect(): Rect {
+        val metrics = realMetrics(defaultDisplay())
+        return BlindSpotPreferences.leftPipRect(
+            metrics.widthPixels, metrics.heightPixels, prefs.pipWidthPct,
+            prefs.leftPipXPx, prefs.leftPipYPx, pipRect(),
+        )
     }
 
     private fun pipParams(rect: Rect): WindowManager.LayoutParams =
@@ -643,6 +644,7 @@ class BlindSpotController @Inject constructor(
             releaseWindow(pipWindow)
             pipWindow = null
             appliedPipRect = null
+            appliedLeftRect = null
         } finally {
             // No windows left, so nothing is shown regardless of where the flips left them.
             shownSide = BlindSpotSide.NONE

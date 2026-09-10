@@ -371,7 +371,9 @@ class LogRecorder internal constructor(
             "NativeParsReader:*",
             // ADB restore on firmwares that close port 5555 at every reboot: one line per state,
             // plus the protocol client, which reports the TLS upgrade and the handshake outcome.
-            "AdbRestore:*", "AdbProtocolClient:*"
+            "AdbRestore:*", "AdbProtocolClient:*",
+            // Window channel probe verdicts (percent family vs CTRL, #79/#64).
+            "WindowChannelRouter:*"
         )
     }
 }

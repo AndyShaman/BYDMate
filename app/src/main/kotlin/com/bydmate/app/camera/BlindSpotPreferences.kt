@@ -26,6 +26,10 @@ class BlindSpotPreferences @Inject constructor(
     /** Top-left corner in real display pixels; [UNSET_PX] until the user drags the window. */
     val pipXPx: Int get() = prefs.getInt(KEY_PIP_X_PX, UNSET_PX)
     val pipYPx: Int get() = prefs.getInt(KEY_PIP_Y_PX, UNSET_PX)
+
+    /** Same for the left window (#183); [UNSET_PX] means "mirror the right one". */
+    val leftPipXPx: Int get() = prefs.getInt(KEY_LEFT_PIP_X_PX, UNSET_PX)
+    val leftPipYPx: Int get() = prefs.getInt(KEY_LEFT_PIP_Y_PX, UNSET_PX)
     val bsdGlow: Boolean get() = prefs.getBoolean(KEY_BSD_GLOW, true)
 
     /** Opt-in (#183): keep the left camera on the main screen even when a cluster panel exists. */
@@ -38,6 +42,8 @@ class BlindSpotPreferences @Inject constructor(
         const val KEY_PIP_WIDTH_PCT = "pip_width_pct"
         const val KEY_PIP_X_PX = "pip_x_px"
         const val KEY_PIP_Y_PX = "pip_y_px"
+        const val KEY_LEFT_PIP_X_PX = "left_pip_x_px"
+        const val KEY_LEFT_PIP_Y_PX = "left_pip_y_px"
         const val KEY_BSD_GLOW = "bsd_glow"
         const val KEY_BOTH_ON_MAIN = "both_on_main"
 
@@ -67,5 +73,36 @@ class BlindSpotPreferences @Inject constructor(
             val top = ((displayH - size.height) / 2).coerceAtLeast(0)
             return Rect(left, top, left + size.width, top + size.height)
         }
+
+        /** The saved corner clamped to the screen, or the default slot while nothing was placed. */
+        fun placedPipRect(displayW: Int, displayH: Int, widthPct: Int, x: Int, y: Int): Rect {
+            if (x == UNSET_PX || y == UNSET_PX) return defaultPipRect(displayW, displayH, widthPct)
+            val size = pipSize(displayW, widthPct)
+            val left = x.coerceIn(0, (displayW - size.width).coerceAtLeast(0))
+            val top = y.coerceIn(0, (displayH - size.height).coerceAtLeast(0))
+            return Rect(left, top, left + size.width, top + size.height)
+        }
+
+        /** Reflection of a main-screen rect across the vertical axis of the screen. */
+        fun mirrorRect(rect: Rect, displayW: Int): Rect {
+            val left = (displayW - rect.right).coerceAtLeast(0)
+            return Rect(left, rect.top, left + rect.width(), rect.bottom)
+        }
+
+        /**
+         * Left window (#183): its own corner once the driver placed it, the mirror of [rightRect]
+         * until then — so a driver who only tunes the right camera gets a symmetric pair.
+         * The controller and the drag overlay both come here, so the two always agree.
+         */
+        fun leftPipRect(
+            displayW: Int,
+            displayH: Int,
+            widthPct: Int,
+            leftX: Int,
+            leftY: Int,
+            rightRect: Rect,
+        ): Rect =
+            if (leftX == UNSET_PX || leftY == UNSET_PX) mirrorRect(rightRect, displayW)
+            else placedPipRect(displayW, displayH, widthPct, leftX, leftY)
     }
 }

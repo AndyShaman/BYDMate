@@ -78,6 +78,7 @@ class SettingsViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
+    private val windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore = mockk(relaxed = true)
     private val helperClient: HelperClient = mockk(relaxed = true)
     // relaxed → ensureRunning() defaults to false; tests that need the daemon "up" stub it true.
     private val helperBootstrap: HelperBootstrap = mockk(relaxed = true)
@@ -280,6 +281,7 @@ class SettingsViewModelTest {
             ttsEngine = resolvedTtsEngine,
             voiceController = voiceController,
             seatChannelStore = seatChannelStore,
+            windowChannelStore = windowChannelStore,
             helperClient = helperClient,
             helperBootstrap = helperBootstrap,
             agentOrchestrator = agentOrchestrator,

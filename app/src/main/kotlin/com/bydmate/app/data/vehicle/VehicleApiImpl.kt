@@ -9,9 +9,17 @@ import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -36,6 +44,12 @@ class VehicleApiImpl @Inject constructor(
     )
 
     private val windowChannel = WindowChannelRouter(helper, windowStore)
+
+    // Owns the delayed window readback logging only — a write never waits for it.
+    // internal var (not a constructor param — Hilt's @Inject constructor can't carry a
+    // default here) so tests can swap in a deterministic scope (e.g. Dispatchers.Unconfined)
+    // instead of racing the real Dispatchers.IO scheduler.
+    internal var readbackScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     // Liveness + snapshots — passthroughs.
     override suspend fun isAvailable(): Boolean = autoservice.isAvailable()
@@ -186,9 +200,23 @@ class VehicleApiImpl @Inject constructor(
             return Result.failure(err)
         }
 
+        // Window writes have no readback fid and a history of "accepted but nothing
+        // moved" (#64): sample the pane position now and again once it has had time to
+        // travel. Diagnostics only — the result never changes the outcome or the channel.
+        // Started before helper.write on its own scope so a slow/hung read channel can never
+        // delay the write itself.
+        val windowReadFid = WINDOW_READ_FIDS[actionName.lowercase()]
+
         logAttempt(actionName, entry, value)
 
+        val windowReadback = windowReadFid?.let { startWindowReadback(actionName, entry, value, it) }
+
         val wrote: Boolean = try {
+            if (windowReadback != null) {
+                // Bounded wait so the "before" sample usually precedes the write, but a hung
+                // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
+                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowReadback.before.await() }
+            }
             helper.write(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
             // Rethrow cancellation so callers outside the NonCancellable write unit
@@ -199,6 +227,10 @@ class VehicleApiImpl @Inject constructor(
             val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
             maybeReportValidatedFailure(actionName, err, entry)
             return Result.failure(err)
+        } finally {
+            // Always released, even on exception/cancellation, so the logging coroutine
+            // waiting on it (see startWindowReadback) never hangs forever.
+            windowReadback?.written?.complete(Unit)
         }
 
         if (!wrote) {
@@ -241,6 +273,61 @@ class VehicleApiImpl @Inject constructor(
         Log.i(TAG, "doWrite OK: action=$actionName dev=${entry.dev} fid=${entry.writeFid} value=$value readback=$readback validated=${entry.validated}")
         logWrite(actionName, entry.dev, entry.writeFid, value, readback?.toInt(), true, null, entry.validated)
         return Result.success(Unit)
+    }
+
+    // ─── Window readback logging ───────────────────────────────────────────────
+
+    /**
+     * Handle for a readback started on [readbackScope]: [before] is the (possibly still
+     * running) "before" sample, and [written] is signalled by the caller once the write
+     * attempt is over (success, failure, or exception) so the logging coroutine knows the
+     * write is no longer in flight before it takes the "after" sample.
+     */
+    private class WindowReadback(val before: Deferred<Pair<Int, Int?>>, val written: CompletableDeferred<Unit>)
+
+    /**
+     * Samples the pane position now and again once it has had time to travel, entirely on
+     * [readbackScope] so a slow/hung read channel never delays the write. The "before" read
+     * starts immediately on its own async job; the caller bounds how long it waits on it before
+     * calling helper.write ([WINDOW_BEFORE_READ_BUDGET_MS]), and signals [WindowReadback.written]
+     * once the write attempt is done so the 2 s travel window is timed from the write, not from
+     * the read. The rear-right percent lives under a different fid on DiLink 3.0 catalogs (#79)
+     * — pick the twin when the primary reports a feature link error, so before and after are
+     * sampled from the same fid.
+     */
+    private fun startWindowReadback(actionName: String, entry: WriteEntry, value: Int, primaryFid: Int): WindowReadback {
+        val beforeDeferred = readbackScope.async { resolveWindowReadFid(primaryFid) }
+        val written = CompletableDeferred<Unit>()
+        readbackScope.launch {
+            val (readFid, before) = beforeDeferred.await()
+            written.await()
+            delay(WINDOW_READBACK_DELAY_MS)
+            val after = readWindowRaw(readFid)
+            Log.i(
+                TAG,
+                "window readback action=$actionName fid=${entry.writeFid} value=$value " +
+                    "before=$before after=$after (dev=${entry.dev} readFid=$readFid)"
+            )
+        }
+        return WindowReadback(beforeDeferred, written)
+    }
+
+    /** Read fid actually sampled, plus the position read right now (raw, sentinels kept as-is). */
+    private suspend fun resolveWindowReadFid(primaryFid: Int): Pair<Int, Int?> {
+        val raw = readWindowRaw(primaryFid)
+        if (primaryFid == WINDOW_RR_READ_FID && raw == SentinelDecoder.FEATURE_LINK_ERROR) {
+            return WINDOW_RR_READ_FID_GEN3 to readWindowRaw(WINDOW_RR_READ_FID_GEN3)
+        }
+        return primaryFid to raw
+    }
+
+    /** Raw position read; a failed read is logged as null and never fails the write. */
+    private suspend fun readWindowRaw(fid: Int): Int? = try {
+        autoservice.getIntRaw(WINDOW_DEV, fid)
+    } catch (e: Exception) {
+        if (e is CancellationException) throw e
+        Log.w(TAG, "window readback read fid=$fid failed: ${e.message}")
+        null
     }
 
     /**
@@ -369,6 +456,35 @@ class VehicleApiImpl @Inject constructor(
         private const val TAG = "VehicleApiImpl"
         private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
+
+        // ── Window readback (diagnostics) ──────────────────────────────────────
+        private const val WINDOW_DEV = 1001
+        /** Long enough for a pane to reach its end position on a full open/close. */
+        private const val WINDOW_READBACK_DELAY_MS = 2_000L
+        /** Bounded wait so the "before" sample usually precedes the write, but a hung read
+         *  channel costs at most this much. */
+        private const val WINDOW_BEFORE_READ_BUDGET_MS = 300L
+        private const val WINDOW_RR_READ_FID = 947912752
+        private const val WINDOW_RR_READ_FID_GEN3 = 1267728408
+        /** Write action → the READ fid of the same pane (percent, dev=1001). */
+        private val WINDOW_READ_FIDS: Map<String, Int> = mapOf(
+            "window_driver_pos" to 947912728,
+            "window_driver_open" to 947912728,
+            "window_driver_close" to 947912728,
+            "window_driver_ctrl" to 947912728,
+            "window_passenger_pos" to 1267728400,
+            "window_passenger_open" to 1267728400,
+            "window_passenger_close" to 1267728400,
+            "window_passenger_ctrl" to 1267728400,
+            "window_rear_left_pos" to 947912736,
+            "window_rear_left_open" to 947912736,
+            "window_rear_left_close" to 947912736,
+            "window_rear_left_ctrl" to 947912736,
+            "window_rear_right_pos" to WINDOW_RR_READ_FID,
+            "window_rear_right_open" to WINDOW_RR_READ_FID,
+            "window_rear_right_close" to WINDOW_RR_READ_FID,
+            "window_rear_right_ctrl" to WINDOW_RR_READ_FID,
+        )
         // TODO: route to Crashlytics when Firebase is integrated
     }
 }

@@ -1945,8 +1945,8 @@ private fun launchApp(packageName: String): Boolean =
  *
  * The freeform placement itself is delegated to [ensureTypedFreeform] — the single owner of
  * the "a live freeform task must match its desired activityType" invariant, shared with
- * [setWindowingModeCompat]; [desiredActivityType] is the caller's choice (split panes:
- * STANDARD, cluster projection: RECENTS).
+ * [setWindowingModeCompat]; [desiredActivityType] is the caller's choice (STANDARD for both
+ * split panes and cluster projection).
  * Its [IllegalStateException] is mapped back to this function's Boolean contract.
  *
  * NOTE: the defaults of [taskIdForPackage] / [getActivityType] report "no task / unknown type",
@@ -1987,8 +1987,8 @@ internal fun raiseFreeformTaskCore(
  * Both freeform entry points — [raiseFreeformTaskCore] and the freeform branch of
  * [setWindowingModeCompat] — go through here instead of each deciding for itself.
  *
- * [desiredActivityType] is the caller's choice: split panes ask for STANDARD (392), cluster
- * projection asks for RECENTS. Migration note: v3.9 created its panes as RECENTS, so on the
+ * [desiredActivityType] is the caller's choice: split panes ask for STANDARD (392) and so does
+ * cluster projection (#134). Migration note: v3.9 created its panes as RECENTS, so on the
  * first 392 split the live panes are re-typed through the remove branch below.
  *
  * Three cases, by [liveActivityType]:
@@ -2248,14 +2248,19 @@ internal object FreeformResultCodes {
 // WindowConfiguration windowing modes (android.app; hidden constants, stable since API 28).
 internal const val WINDOWING_MODE_FULLSCREEN = 1
 internal const val WINDOWING_MODE_FREEFORM = 5
-// Who wants which type (392): split panes are STANDARD, cluster projection stays RECENTS.
+
+/** Settle budget of the light fullscreen pull-back: [PULLBACK_READS] reads, one per pause. */
+internal const val PULLBACK_POLL_MS = 300L
+internal const val PULLBACK_READS = 4
+// Who wants which type (392/#134): split panes are STANDARD, and so is cluster projection.
 // RECENTS suppresses the AOSP-12 freeform DecorCaption (hasWindowDecorCaption() is true only for
 // activityType == STANDARD && windowingMode == FREEFORM), which is why v3.9 created panes as
 // RECENTS — but recents-typed tasks nest as leaves under one shared root task, so their input
 // shields are not cropped to the pane bounds and only the top pane receives touch (on-car
 // 2026-07-29, ActivityRecordInputSink fullscreen; memory project_split_screen_wave.md). Panes
-// therefore take the caption and keep their own root task; the cluster has a single pane and is
-// unaffected, so it keeps RECENTS.
+// therefore take the caption and keep their own root task. The cluster kept RECENTS until #134:
+// a live navigator task is STANDARD, so the retype forced a remove+relaunch that killed the
+// navigator on Sea Lion 07 — the cluster is STANDARD now and wears the caption too.
 // IMPORTANT (on-car 390): `--activityType N` types a task only when the task is CREATED. Passing it
 // to `am start` for an ALREADY LIVE task changes the windowing mode and nothing else. Re-typing a
 // live task therefore means removing it and letting the relaunch create it (see
@@ -2310,10 +2315,12 @@ internal fun handleSetWindowingModeTx(
  * IActivityTaskManager.setTaskWindowingMode and DiLink 5 did not restore it (on-car
  * NoSuchMethodException, 2026-07-15), so after that specific throw the shell ActivityStarter
  * path takes over: `am start --windowingMode 5 --display N -n <cmp>` applies mode+display to an
- * EXISTING task, keeping its task id (validated on-car). Freeform sticks to a task on this ROM —
- * the only way back to fullscreen is removing the stack and relaunching on the main display
- * (the navigator restores its own guidance session; the task id changes). Any other [reflectSet]
- * throw is rethrown untouched so [launchFreeformCore]'s classification still sees it.
+ * EXISTING task, keeping its task id (validated on-car). The way back to fullscreen is the same
+ * command with mode 1 and display 0; the task is read back through [stateOf] and only an
+ * unconfirmed pullback (state unreadable, wrong display or still not fullscreen) falls back to the
+ * legacy remove+relaunch, which changes the task id and makes the navigator rebuild its guidance
+ * session (#134). Any other [reflectSet] throw is rethrown untouched so [launchFreeformCore]'s
+ * classification still sees it.
  *
  * Q2 / F-2+F-6: [getActivityType] is queried before attempting [reflectSet] in the freeform
  * direction. [reflectSet] changes the windowing mode but preserves the activityType — so a task
@@ -2379,6 +2386,38 @@ internal fun setWindowingModeCompat(
             taskId, freeformType, desiredActivityType, freeformDisplayId, component, shell, sleep, stateOf,
         )
     } else {
+        // Light path first (#134): the same `am start` trick the freeform direction uses —
+        // mode+display applied to the EXISTING task, so the navigator keeps its id, its process
+        // and its guidance session. Verified by reading the task back; only an unconfirmed
+        // pullback falls through to the destructive remove+relaunch below.
+        val light = runCatching {
+            shell("am start --windowingMode $WINDOWING_MODE_FULLSCREEN --display 0 -n \"\$1\"", listOf(component))
+        }.getOrNull()
+        if (light != null && !light.contains("Error") && !light.contains("Exception")) {
+            // Settle tolerance, same shape as the freeform probe: the reparent takes a moment and
+            // the state can read null (task momentarily invisible mid-move) or stale. Only an
+            // exhausted budget means the light path did not work. The am start is NOT repeated.
+            var after: TaskModeState? = null
+            repeat(PULLBACK_READS) {
+                sleep(PULLBACK_POLL_MS)
+                after = stateOf(taskId)
+                if (after != null && after.displayId == 0 &&
+                    after.windowingMode == WINDOWING_MODE_FULLSCREEN
+                ) {
+                    android.util.Log.i("bydmate_helper", "pullback light path ok task=$taskId")
+                    return
+                }
+            }
+            android.util.Log.i(
+                "bydmate_helper",
+                "pullback light path failed: task=$taskId state=$after → remove+relaunch",
+            )
+        } else {
+            android.util.Log.i(
+                "bydmate_helper",
+                "pullback light path failed: task=$taskId am=${light?.take(120)} → remove+relaunch",
+            )
+        }
         // A swallowed remove failure would let the relaunch deliver its intent to the
         // still-alive freeform task and report success with the task stranded on the
         // cluster (codex pre-release audit 2026-07-16). "Exception occurred while
@@ -2402,8 +2441,8 @@ internal fun setWindowingModeCompat(
  * landed anyway (relaunch race), and a [move] that throws "already there" is accepted when the
  * task sits on the target display. [getActivityType] guards that skip: a live task whose type
  * differs from [desiredActivityType] goes through [setMode] (and thus [ensureTypedFreeform]) to be
- * recreated with the right type, because the type is the caller's whole point — RECENTS for the
- * cluster, STANDARD for split panes. Unknown type (-1) skips the check, as does the default
+ * recreated with the right type, because the type is the caller's whole point — STANDARD for both
+ * split panes and the cluster (#134). Unknown type (-1) skips the check, as does the default
  * [getActivityType]. [setMode] gets ONE bounded retry after a settle pause — a transient vendor throw
  * (e.g. racing the task's own relaunch) must not dump the launch into the VD fallback.
  * Availability probe: AOSP does NOT throw when freeform is off — Task.setWindowingMode silently

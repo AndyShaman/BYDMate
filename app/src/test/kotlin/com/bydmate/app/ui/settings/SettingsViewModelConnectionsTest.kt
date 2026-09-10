@@ -72,6 +72,7 @@ class SettingsViewModelConnectionsTest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val seatChannelStore: SeatChannelStore = mockk(relaxed = true)
+    private val windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore = mockk(relaxed = true)
     private val helperClient: HelperClient = mockk(relaxed = true)
     private val helperBootstrap: HelperBootstrap = mockk(relaxed = true)
     private val agentOrchestrator: AgentOrchestrator = mockk(relaxed = true)
@@ -255,6 +256,7 @@ class SettingsViewModelConnectionsTest {
             ttsEngine = ttsEngine,
             voiceController = voiceController,
             seatChannelStore = seatChannelStore,
+            windowChannelStore = windowChannelStore,
             helperClient = helperClient,
             helperBootstrap = helperBootstrap,
             agentOrchestrator = agentOrchestrator,

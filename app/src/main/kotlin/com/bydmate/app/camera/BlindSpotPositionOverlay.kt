@@ -32,6 +32,9 @@ import kotlin.math.roundToInt
  * the saved position would land somewhere else on the next show.
  */
 class BlindSpotPositionOverlay {
+    /** Which camera window is being placed: they have their own corners (#183). */
+    enum class Side { RIGHT, LEFT }
+
     private val handler = Handler(Looper.getMainLooper())
     private val autoHide = Runnable { hide() }
     private val retryHide = Runnable { hide() }
@@ -40,6 +43,7 @@ class BlindSpotPositionOverlay {
     private var wm: WindowManager? = null
     private var view: View? = null
     private var params: WindowManager.LayoutParams? = null
+    private var side: Side = Side.RIGHT
 
     /** Told when the window actually went away, including the idle auto-hide the caller cannot
      *  see otherwise. Called on Main. */
@@ -53,9 +57,14 @@ class BlindSpotPositionOverlay {
 
     val isShown: Boolean get() = view != null
 
-    /** True when the window is up; false when WindowManager refused it. */
-    fun show(context: Context): Boolean {
-        if (view != null) return true
+    /**
+     * True when the window is up; false when WindowManager refused it, or when the previous
+     * window is still on screen — [hide] can leave one behind for its retry loop, and re-pointing
+     * [side] at another camera would then save the drag under the wrong keys.
+     */
+    fun show(context: Context, side: Side = Side.RIGHT): Boolean {
+        if (view != null) return false
+        this.side = side
         val metrics = realMetrics(context)
         val rect = placement(context, metrics)
         val layoutParams = WindowManager.LayoutParams(
@@ -111,17 +120,24 @@ class BlindSpotPositionOverlay {
         onHidden?.invoke()
     }
 
-    /** Re-applies the size after the width slider moved, keeping the window on screen. */
+    /**
+     * Re-applies the size after the width slider moved, keeping the window on screen.
+     *
+     * Recomputes the whole window through [placement] rather than clamping the old x/y: it
+     * already knows the saved corner (if any), the left/right mirror rule, and the screen
+     * clamp, and the saved corner always reflects the last drag — there is nothing stale to
+     * preserve by clamping the previous frame's position instead.
+     */
     fun refreshSize() {
         val ctx = context ?: return
         val frame = view ?: return
         val p = params ?: return
         val metrics = realMetrics(ctx)
-        val size = BlindSpotPreferences.pipSize(metrics.widthPixels, prefs(ctx).widthPct())
-        p.width = size.width
-        p.height = size.height
-        p.x = p.x.coerceIn(0, (metrics.widthPixels - size.width).coerceAtLeast(0))
-        p.y = p.y.coerceIn(0, (metrics.heightPixels - size.height).coerceAtLeast(0))
+        val rect = placement(ctx, metrics)
+        p.width = rect.width()
+        p.height = rect.height()
+        p.x = rect.left
+        p.y = rect.top
         runCatching { wm?.updateViewLayout(frame, p) }.exceptionOrNull()?.let {
             Log.w(TAG, "position overlay resize failed: ${it.javaClass.simpleName}: ${it.message}")
         }
@@ -177,8 +193,8 @@ class BlindSpotPositionOverlay {
             MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                 context?.let {
                     prefs(it).edit()
-                        .putInt(BlindSpotPreferences.KEY_PIP_X_PX, p.x)
-                        .putInt(BlindSpotPreferences.KEY_PIP_Y_PX, p.y)
+                        .putInt(keyX(), p.x)
+                        .putInt(keyY(), p.y)
                         .apply()
                 }
                 handler.postDelayed(autoHide, AUTO_HIDE_MS)
@@ -188,21 +204,35 @@ class BlindSpotPositionOverlay {
         return true
     }
 
-    /** Saved corner clamped to the screen, or the default slot while nothing was placed yet. */
+    /**
+     * Where the placed window starts: the saved corner clamped to the screen, the default slot
+     * for the right camera while nothing was placed, and the mirror of the right window for the
+     * left one — the same rule [BlindSpotController] shows the camera with.
+     */
     private fun placement(context: Context, metrics: DisplayMetrics): Rect {
         val prefs = prefs(context)
         val widthPct = prefs.widthPct()
-        val x = prefs.getInt(BlindSpotPreferences.KEY_PIP_X_PX, BlindSpotPreferences.UNSET_PX)
-        val y = prefs.getInt(BlindSpotPreferences.KEY_PIP_Y_PX, BlindSpotPreferences.UNSET_PX)
-        if (x == BlindSpotPreferences.UNSET_PX || y == BlindSpotPreferences.UNSET_PX) {
-            return BlindSpotPreferences.defaultPipRect(
-                metrics.widthPixels, metrics.heightPixels, widthPct)
-        }
-        val size = BlindSpotPreferences.pipSize(metrics.widthPixels, widthPct)
-        val left = x.coerceIn(0, (metrics.widthPixels - size.width).coerceAtLeast(0))
-        val top = y.coerceIn(0, (metrics.heightPixels - size.height).coerceAtLeast(0))
-        return Rect(left, top, left + size.width, top + size.height)
+        val rightRect = BlindSpotPreferences.placedPipRect(
+            metrics.widthPixels, metrics.heightPixels, widthPct,
+            prefs.getInt(BlindSpotPreferences.KEY_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
+            prefs.getInt(BlindSpotPreferences.KEY_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+        )
+        if (side == Side.RIGHT) return rightRect
+        return BlindSpotPreferences.leftPipRect(
+            metrics.widthPixels, metrics.heightPixels, widthPct,
+            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
+            prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
+            rightRect,
+        )
     }
+
+    private fun keyX(): String =
+        if (side == Side.LEFT) BlindSpotPreferences.KEY_LEFT_PIP_X_PX
+        else BlindSpotPreferences.KEY_PIP_X_PX
+
+    private fun keyY(): String =
+        if (side == Side.LEFT) BlindSpotPreferences.KEY_LEFT_PIP_Y_PX
+        else BlindSpotPreferences.KEY_PIP_Y_PX
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(BlindSpotPreferences.PREFS_NAME, Context.MODE_PRIVATE)

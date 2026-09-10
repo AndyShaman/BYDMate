@@ -1,5 +1,6 @@
 package com.bydmate.app.domain.calculator
 
+import com.bydmate.app.data.repository.TripRepository
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import javax.inject.Inject
@@ -75,6 +76,7 @@ class LiveTripBuffer @Inject constructor() {
      *   - fewer than 2 samples
      *   - dKm <= 0 (samples collapsed at same mileage)
      *   - dKwh < 0 (BMS recalibration during window)
+     *   - resulting avg outside plausible EV consumption bounds (sensor glitch)
      */
     suspend fun avgOverLastKm(windowKm: Double): Double? = mutex.withLock {
         if (samples.size < 2) return@withLock null
@@ -86,7 +88,8 @@ class LiveTripBuffer @Inject constructor() {
         val dKwh = newest.totalElec - anchor.totalElec
         if (dKm <= 0.0) return@withLock null
         if (dKwh < 0.0) return@withLock null
-        dKwh / dKm * 100.0
+        val avg = dKwh / dKm * 100.0
+        avg.takeIf { it in TripRepository.AVG_SANE_KWH_PER_100KM }
     }
 
     companion object {

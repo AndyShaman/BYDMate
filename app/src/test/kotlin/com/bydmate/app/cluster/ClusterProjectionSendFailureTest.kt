@@ -231,11 +231,11 @@ class ClusterProjectionSendFailureTest {
             "restoring the removed UNAVAILABLE call gives count=2",
             1, callCount,
         )
-        // Fleet safety: the cluster keeps launching its projected app as a RECENTS-typed task.
-        // Only the split panes were flipped to STANDARD; the cluster path must stay byte-identical.
+        // #134: the cluster launches its projected app as a STANDARD-typed task, so a live
+        // navigator task matches and is never removed and recreated on its way to the cluster.
         coVerify {
             helper.launchFreeform(
-                any(), any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_RECENTS,
+                any(), any(), any(), any(), any(), any(), HelperBinderProtocol.PANE_TYPE_STANDARD,
             )
         }
     }

@@ -56,6 +56,14 @@ class RangeAvgSourceTest {
         assertEquals(20.0, s.recentAvgConsumption(), 0.01)
     }
 
+    @Test fun `insane historical result falls back to constant`() = runBlocking {
+        // TripRepository/LiveTripBuffer already filter out-of-range values at
+        // their source, but this is the last-resort gate: an out-of-range
+        // historical value (e.g. misconfigured caller) must not reach the UI.
+        val s = newSource(historical = 5000.0, live = null, sessionKm = 0.0)
+        assertEquals(RangeAvgSource.FALLBACK_KWH_PER_100KM, s.recentAvgConsumption(), 0.01)
+    }
+
     @Test fun `historical fallback flows through when no trips`() = runBlocking {
         // historicalProvider returns 18 (the default fallback inside repo).
         val s = newSource(historical = 18.0, live = null, sessionKm = 0.0)

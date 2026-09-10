@@ -78,6 +78,24 @@ class TripRepositoryWeightedAvgTest {
         assertEquals(26.25, result, 0.001)
     }
 
+    @Test fun `insane trip consumption excluded from average`() = runBlocking {
+        // Trip at startTs=3000: 0.1 km, 500 kWh consumed → 500000 kWh/100km, a
+        // glitch (odometer/BMS hiccup) — excluded by the sanity range.
+        // Trip at startTs=2000: 10 km @ 20 kWh/100km — newest sane trip (weight 0.5)
+        // Trip at startTs=1000: 10 km @ 30 kWh/100km — older  sane trip (weight 0.3)
+        // Two sane trips, weights truncated to [0.5, 0.3] → sum=0.8
+        // Expected: 0.625*20 + 0.375*30 = 12.5 + 11.25 = 23.75
+        repo.insertTrip(TripEntity(startTs = 1000, endTs = 2000, distanceKm = 10.0, kwhConsumed = 3.0))
+        repo.insertTrip(TripEntity(startTs = 2000, endTs = 3000, distanceKm = 10.0, kwhConsumed = 2.0))
+        repo.insertTrip(TripEntity(startTs = 3000, endTs = 4000, distanceKm = 0.1, kwhConsumed = 500.0))
+        val result = repo.getWeightedHistoricalAvg(
+            minKm = 0.05,
+            weights = listOf(0.5, 0.3, 0.2),
+            fallback = 18.0,
+        )
+        assertEquals(23.75, result, 0.001)
+    }
+
     @Test fun `minKm filter excludes short trips`() = runBlocking {
         // Trip at startTs=3000: 2 km — FAILS minKm=3, excluded
         // Trip at startTs=2000: 10 km @ 20 kWh/100km — newest PASSING (weight 0.5)

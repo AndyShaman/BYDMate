@@ -361,6 +361,38 @@ class WriteAllowlistTest {
         }
     }
 
+    // ── #64: rear open/close, the twins of the live-validated front short-form ──
+    @Test fun `window open and close entries cover all four doors`() {
+        val al = WriteAllowlist.loadProduction { "{}" }
+        val fids = mapOf(
+            "window_driver" to 1125122104,
+            "window_passenger" to 1125122107,
+            "window_rear_left" to 1125122112,
+            "window_rear_right" to 1125122115,
+        )
+        for ((door, fid) in fids) {
+            val open = al.find("${door}_open") ?: error("missing ${door}_open")
+            val close = al.find("${door}_close") ?: error("missing ${door}_close")
+            assertEquals("${door}_open dev", 1001, open.dev)
+            assertEquals("${door}_open fid", fid, open.writeFid)
+            assertEquals("${door}_open valueMin", 1, open.valueMin)
+            assertEquals("${door}_open valueMax", 1, open.valueMax)
+            assertEquals("${door}_open category", "windows", open.category)
+            assertEquals("${door}_close dev", 1001, close.dev)
+            assertEquals("${door}_close fid", fid, close.writeFid)
+            assertEquals("${door}_close valueMin", 2, close.valueMin)
+            assertEquals("${door}_close valueMax", 2, close.valueMax)
+            assertEquals("${door}_close category", "windows", close.category)
+        }
+        // All four doors are live-confirmed on Leopard 3 (rear pair on-car 2026-09-10).
+        for (name in listOf(
+            "window_rear_left_open", "window_rear_left_close",
+            "window_rear_right_open", "window_rear_right_close",
+        )) {
+            assertTrue("$name is live-validated", al.find(name)!!.validated)
+        }
+    }
+
     // ── Dim 6, Test 6: LIVE_VALIDATED has no duplicate actionName ────────────
     @Test fun `LIVE_VALIDATED has no duplicate actionName case-insensitive`() {
         val liveKeys = WriteAllowlist.LIVE_VALIDATED.map { it.actionName.lowercase() }

@@ -30,7 +30,8 @@ class VehicleApiNonCancellableTest {
     private val writeLogDao: VehicleWriteLogDao = mockk(relaxed = true)
 
     private val allowlist = WriteAllowlist(
-        WriteAllowlist.LIVE_VALIDATED.associateBy { it.actionName.lowercase() }
+        (WriteAllowlist.LIVE_VALIDATED + WriteAllowlist.CANDIDATE_UNVALIDATED)
+            .associateBy { it.actionName.lowercase() }
     )
 
     private val seatStore = object : SeatChannelStore {
@@ -51,27 +52,27 @@ class VehicleApiNonCancellableTest {
 
     /**
      * Composite window command (后排车窗全开 = rear windows fully open) fans out to two
-     * per-door % writes: window_rear_left_pos and window_rear_right_pos. Cancelling the
+     * per-door writes: window_rear_left_open and window_rear_right_open. Cancelling the
      * calling job after the first write has started but before it returns must NOT prevent
      * the second write from executing — the NonCancellable wrapper ensures both writes
      * complete before the cancellation is observed.
      */
     @Test fun `composite write completes both sub-writes even when calling job is cancelled after first write starts`() = runTest {
-        val rl = allowlist.find("window_rear_left_pos")!!
-        val rr = allowlist.find("window_rear_right_pos")!!
+        val rl = allowlist.find("window_rear_left_open")!!
+        val rr = allowlist.find("window_rear_right_open")!!
         val writeCount = AtomicInteger(0)
 
         // Gate: lets the test cancel the dispatch job while the first write is in progress.
         val firstWriteInProgress = CompletableDeferred<Unit>()
         val releaseFirstWrite = CompletableDeferred<Unit>()
 
-        coEvery { helper.write(rl.dev, rl.writeFid, 100) } coAnswers {
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } coAnswers {
             writeCount.incrementAndGet()
             firstWriteInProgress.complete(Unit) // signal: first write has started
             releaseFirstWrite.await()           // suspend here; NonCancellable keeps this alive
             true
         }
-        coEvery { helper.write(rr.dev, rr.writeFid, 100) } coAnswers {
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } coAnswers {
             writeCount.incrementAndGet()
             true
         }

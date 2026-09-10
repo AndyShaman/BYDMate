@@ -236,6 +236,7 @@ class SettingsViewModel @Inject constructor(
     private val ttsEngine: TtsEngine,
     private val voiceController: VoiceController,
     private val seatChannelStore: SeatChannelStore,
+    private val windowChannelStore: com.bydmate.app.data.vehicle.WindowChannelStore,
     private val helperClient: com.bydmate.app.data.vehicle.HelperClient,
     private val helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap,
     private val agentOrchestrator: AgentOrchestrator,
@@ -1907,6 +1908,10 @@ class SettingsViewModel @Inject constructor(
                     splitLines.forEach { appendLine("  $it") }
                 }
             } catch (e: Exception) { appendLine("(failed to gather split state: ${e.message})") }
+
+            appendLine("--- windows ---")
+            // Which write channel this firmware ended up on (#79): percent fids or CTRL.
+            appendLine("window channel: ${windowChannelStore.winner()}")
 
             appendLine("--- seats ---")
             SeatsDiagnostics.format(helperDiag.seats).forEach { appendLine(it) }

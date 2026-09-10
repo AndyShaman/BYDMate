@@ -427,6 +427,25 @@ class WindowChannelRouterTest {
         assertEquals("window_rear_right_ctrl", r.route("window_rear_right_pos", 100).actionName)
     }
 
+    // Open/close already sit on the CTRL fids — the router must pass them straight
+    // through instead of folding them into the percent→CTRL map.
+    @Test fun `window open and close actions are passed through untouched`() = runTest {
+        val helper = mockk<HelperClient>()
+        val store = FakeStore(WindowChannel.CTRL)
+        val r = router(helper, store)
+
+        for (name in listOf(
+            "window_driver_open", "window_driver_close",
+            "window_passenger_open", "window_passenger_close",
+            "window_rear_left_open", "window_rear_left_close",
+            "window_rear_right_open", "window_rear_right_close",
+        )) {
+            val value = if (name.endsWith("_open")) 1 else 2
+            assertEquals(RoutedWrite(name, value), r.route(name, value))
+        }
+        coVerify(exactly = 0) { helper.read(any(), any()) }
+    }
+
     /** 0=close, vent aperture=vent detent, 50=half, 100=open. VENT_PCT (10) is the
      *  aperture CommandTranslator emits for every 通风 window command. */
     @Test fun `percent maps to the matching ctrl detent`() {

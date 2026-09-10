@@ -9,7 +9,13 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import io.mockk.slot
 import org.junit.Assert.assertEquals
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -29,7 +35,8 @@ class VehicleApiWriteTest {
 
     // Build allowlist from LIVE_VALIDATED — same data VehicleApiImpl uses at runtime.
     private val allowlist = WriteAllowlist(
-        WriteAllowlist.LIVE_VALIDATED.associateBy { it.actionName.lowercase() }
+        (WriteAllowlist.LIVE_VALIDATED + WriteAllowlist.CANDIDATE_UNVALIDATED)
+            .associateBy { it.actionName.lowercase() }
     )
 
     private val seatStore = object : SeatChannelStore {
@@ -135,6 +142,39 @@ class VehicleApiWriteTest {
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 50) }
     }
 
+    // A hung window-position read must never delay the write (P2 audit fix): the readback
+    // sample runs on its own scope, started before helper.write, not awaited by doWrite.
+    // Real dispatchers (not runTest's virtual scheduler): the readback lives on its own
+    // Dispatchers.IO scope, so timing here is real wall-clock, bounded by
+    // WINDOW_BEFORE_READ_BUDGET_MS (300 ms) — comfortably under the 1 s outer budget.
+    @Test fun `writeWindowDriver does not wait for a hung readback read`() = runBlocking {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 50) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } coAnswers { awaitCancellation() }
+
+        val result = withTimeout(1_000) { api.writeWindowDriver(50) }
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 50) }
+    }
+
+    // Dispatchers.Unconfined instead of the real Dispatchers.IO: the "before" async job then
+    // runs to completion before doWrite's await() resumes, deterministically, instead of
+    // racing the WINDOW_BEFORE_READ_BUDGET_MS timeout against the real IO scheduler.
+    @Test fun `writeWindowDriver reads the before position ahead of the write when the read is fast`() = runBlocking {
+        val entry = allowlist.find("window_driver_pos")!!
+        val impl = VehicleApiImpl(parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore)
+        impl.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        val calls = mutableListOf<String>()
+        coEvery { autoservice.getIntRaw(any(), any()) } coAnswers { calls.add("read"); null }
+        coEvery { helper.write(entry.dev, entry.writeFid, 50) } coAnswers { calls.add("write"); true }
+
+        val result = impl.writeWindowDriver(50)
+
+        assertTrue(result.isSuccess)
+        assertEquals(listOf("read", "write"), calls)
+    }
+
     @Test fun `writeWindowDriver returns failure HelperUnreachable when helper write fails (validated entry)`() = runTest {
         val entry = allowlist.find("window_driver_pos")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 50) } returns false
@@ -168,30 +208,30 @@ class VehicleApiWriteTest {
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 2) }
     }
 
-    // ── Composite dispatch: rear windows fan out to both rear % fids ──────────
+    // ── Composite dispatch: rear windows fan out to both rear open fids ───────
 
-    @Test fun `dispatch rear windows open writes both rear pos fids and returns success`() = runTest {
-        val rl = allowlist.find("window_rear_left_pos")!!
-        val rr = allowlist.find("window_rear_right_pos")!!
-        coEvery { helper.write(rl.dev, rl.writeFid, 100) } returns true
-        coEvery { helper.write(rr.dev, rr.writeFid, 100) } returns true
+    @Test fun `dispatch rear windows open writes both rear open fids and returns success`() = runTest {
+        val rl = allowlist.find("window_rear_left_open")!!
+        val rr = allowlist.find("window_rear_right_open")!!
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns true
 
         val result = api.dispatch("后排车窗全开")
         assertTrue(result.isSuccess)
-        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 100) }
-        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 100) }
+        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 1) }
+        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 1) }
     }
 
     @Test fun `dispatch rear windows open returns failure but still attempts both when one fid fails`() = runTest {
-        val rl = allowlist.find("window_rear_left_pos")!!
-        val rr = allowlist.find("window_rear_right_pos")!!
-        coEvery { helper.write(rl.dev, rl.writeFid, 100) } returns true
-        coEvery { helper.write(rr.dev, rr.writeFid, 100) } returns false // rear-right fails
+        val rl = allowlist.find("window_rear_left_open")!!
+        val rr = allowlist.find("window_rear_right_open")!!
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns false // rear-right fails
 
         val result = api.dispatch("后排车窗全开")
         assertTrue(result.isFailure)
-        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 100) }
-        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 100) }
+        coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 1) }
+        coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 1) }
     }
 
     @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {
