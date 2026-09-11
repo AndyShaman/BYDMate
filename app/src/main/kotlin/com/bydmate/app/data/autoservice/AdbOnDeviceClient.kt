@@ -172,7 +172,12 @@ class AdbOnDeviceClientImpl @Inject constructor(
         val p = protocol ?: return@withContext false
         try {
             // pm prints nothing on success (and on a re-grant); any output is an error.
-            val out = p.exec(cmd) ?: return@withContext false
+            val out = p.exec(cmd)
+            if (out == null) {
+                Log.w(TAG, "grantWriteSecureSettings: transport error")
+                return@withContext false
+            }
+            if (out.isNotBlank()) Log.w(TAG, "grantWriteSecureSettings: pm answered: ${out.trim().take(300)}")
             out.isBlank()
         } catch (e: Exception) {
             Log.w(TAG, "grantWriteSecureSettings failed: ${e.message}")

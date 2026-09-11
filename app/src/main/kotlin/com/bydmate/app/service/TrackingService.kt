@@ -1322,9 +1322,13 @@ class TrackingService : Service(), LocationListener {
                                 val respawned = runCatching { helperBootstrap.ensureRunning() }
                                     .onFailure { Log.w(TAG, "Helper respawn failed: ${it.message}") }
                                     .getOrDefault(false)
-                                // Trigger 3: a daemon that will not come back usually means the
-                                // ADB channel under it is gone (port closed by a reboot).
-                                if (!respawned) adbRestoreManager.attemptIfNeeded("watchdog")
+                                // Trigger 3: either verdict is a reason to check the restore state.
+                                // A daemon that just came back means the classic port is alive right
+                                // now — the one window a self-grant of WRITE_SECURE_SETTINGS can use
+                                // (see AdbRestoreManager.attemptLocked). A daemon that will not come
+                                // back usually means the ADB channel under it is gone (port closed by
+                                // a reboot).
+                                adbRestoreManager.attemptIfNeeded(if (respawned) "helper_respawned" else "watchdog")
                             }
                         }
                     }
@@ -1508,7 +1512,9 @@ class TrackingService : Service(), LocationListener {
                     // moment a shell command can reach us, and the permission is what lets the
                     // app turn wireless debugging on later. Idempotent.
                     val secureSettings = adbOnDeviceClient.grantWriteSecureSettings("com.bydmate.app")
-                    Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings")
+                    val held = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+                        PackageManager.PERMISSION_GRANTED
+                    Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings held=$held")
                 } else {
                     Log.w(TAG, "ADB connect refused — camera detection may be inactive until appop is granted manually")
                     // Trigger 1: the port is dead on service start — try to bring it back.

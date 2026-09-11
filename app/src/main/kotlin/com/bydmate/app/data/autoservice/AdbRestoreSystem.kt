@@ -33,6 +33,9 @@ interface AdbRestoreSystem {
     /** Is WRITE_SECURE_SETTINGS granted to us? */
     fun hasWriteSecureSettings(): Boolean
 
+    /** Runs `pm grant … WRITE_SECURE_SETTINGS` for ourselves over the classic port; true on success. */
+    suspend fun selfGrantWriteSecureSettings(): Boolean
+
     /** Identity of the currently connected Wi-Fi network (BSSID, else SSID), null when there is none. */
     fun wifiNetwork(): String?
 
@@ -75,6 +78,11 @@ class AndroidAdbRestoreSystem @Inject constructor(
     override fun hasWriteSecureSettings(): Boolean =
         context.checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
             PackageManager.PERMISSION_GRANTED
+
+    override suspend fun selfGrantWriteSecureSettings(): Boolean = runCatching {
+        if (adbOnDeviceClient.connect().isFailure) return@runCatching false
+        adbOnDeviceClient.grantWriteSecureSettings(context.packageName)
+    }.onFailure { Log.w(TAG, "selfGrantWriteSecureSettings failed: ${it.message}") }.getOrDefault(false)
 
     override fun wifiNetwork(): String? {
         val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager

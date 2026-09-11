@@ -41,6 +41,8 @@ class AdbRestoreManagerTest {
 
     private class FakeSystem : AdbRestoreSystem {
         var permission = true
+        var selfGrantCalls = 0
+        var selfGrantResult = true
         var wifi: String? = "aa:bb:cc:dd:ee:ff"
         var adbWifiEnabled = 0
         /** What the setting reads back as after our write — 0 models the unconfirmed dialog. */
@@ -80,6 +82,11 @@ class AdbRestoreManagerTest {
         var onWifiNetworkQuery: (() -> Unit)? = null
 
         override fun hasWriteSecureSettings(): Boolean = permission
+        override suspend fun selfGrantWriteSecureSettings(): Boolean {
+            selfGrantCalls++
+            if (selfGrantResult) permission = true
+            return selfGrantResult
+        }
         override fun wifiNetwork(): String? {
             onWifiNetworkQuery?.invoke()
             return wifi
@@ -189,6 +196,32 @@ class AdbRestoreManagerTest {
         assertEquals(AdbRestoreState.NotNeeded, m.state.value)
         assertTrue(system.settingsWrites.isEmpty())
         assertEquals(0, system.helperStarts)
+    }
+
+    @Test
+    fun `live classic port without the permission self-grants it and reports NotNeeded`() = runTest {
+        val system = FakeSystem().apply {
+            classicResults = mutableListOf(true)
+            permission = false
+        }
+        val m = manager(FakePrefs(), system)
+
+        m.attemptIfNeeded("service_start")
+
+        assertEquals(AdbRestoreState.NotNeeded, m.state.value)
+        assertEquals(1, system.selfGrantCalls)
+        assertTrue(system.permission)
+    }
+
+    @Test
+    fun `live classic port with the permission already held does not self-grant`() = runTest {
+        val system = FakeSystem().apply { classicResults = mutableListOf(true) }
+        val m = manager(FakePrefs(), system)
+
+        m.attemptIfNeeded("service_start")
+
+        assertEquals(AdbRestoreState.NotNeeded, m.state.value)
+        assertEquals(0, system.selfGrantCalls)
     }
 
     @Test
