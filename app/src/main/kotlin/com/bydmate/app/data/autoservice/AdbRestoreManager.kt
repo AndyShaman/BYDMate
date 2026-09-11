@@ -283,6 +283,12 @@ class AdbRestoreManager @Inject constructor(
         }
         if (system.classicConnect()) {
             if (abandoned(gen)) return
+            // The classic port answering is the one moment a shell command can reach us: take the
+            // permission now so the next reboot can be restored without it (idempotent, see TrackingService).
+            if (!system.hasWriteSecureSettings()) {
+                val granted = system.selfGrantWriteSecureSettings()
+                Log.i(TAG, "self-grant WRITE_SECURE_SETTINGS over classic port: $granted")
+            }
             transition(AdbRestoreState.NotNeeded, "classic port alive")
             return
         }
