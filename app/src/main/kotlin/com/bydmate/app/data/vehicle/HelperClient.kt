@@ -8,6 +8,7 @@ import android.util.Log
 import android.view.Surface
 import java.io.ByteArrayOutputStream
 import com.bydmate.app.helper.HelperBinderHolder
+import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -213,6 +214,15 @@ interface HelperClient {
      * why. Collection only: the daemon writes nothing and invokes no projection call.
      */
     suspend fun logClusterDisplayDiag(): Boolean
+
+    /**
+     * The firmware's full display inventory as the daemon reads it under shell uid (#194).
+     * Needed on firmwares that whitelist DisplayManager per app, where the app uid sees display 0
+     * only and the cluster surface is invisible to [android.hardware.display.DisplayManager].
+     * Null when the daemon is unreachable, too old to know the TX, or answered a failure status;
+     * an empty list means the dump carried no display at all.
+     */
+    suspend fun listDisplays(): List<DisplayDevice>?
 
     /** Write [value] to Settings.Global [key] via `settings put global` under shell uid.
      *  Daemon-whitelisted to sentrymode_enabled_switch and enable_freeform_support. */
@@ -542,6 +552,36 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
         } ?: false
+
+    // LIST_DISPLAYS_TIMEOUT_MS, not the default 2s: the daemon spawns `dumpsys display`, whose
+    // own bound is 4s, and a cold DiLink can take most of it.
+    override suspend fun listDisplays(): List<DisplayDevice>? =
+        transactParsed(HelperBinderProtocol.TX_LIST_DISPLAYS, { }, timeoutMs = LIST_DISPLAYS_TIMEOUT_MS) { reply ->
+            if (reply.dataAvail() < 8) return@transactParsed null
+            val status = reply.readInt()
+            val count = reply.readInt()
+            if (status != 0 || count < 0) return@transactParsed null
+            val out = ArrayList<DisplayDevice>(count)
+            repeat(count) {
+                // A truncated reply (foreign transport, old daemon) must not be read as an
+                // inventory that simply lacks the cluster: bail out to null instead.
+                if (reply.dataAvail() <= 0) return@transactParsed null
+                val id = reply.readInt()
+                val name = reply.readString() ?: ""
+                val width = reply.readInt()
+                val height = reply.readInt()
+                val densityDpi = reply.readInt()
+                val ownerPkg = reply.readString().orEmpty()
+                val ownerUid = reply.readInt()
+                val flags = reply.readString().orEmpty()
+                out += DisplayDevice(
+                    id, name, width, height, densityDpi,
+                    ownerPkg.ifEmpty { null }, ownerUid,
+                    flags.split(",").filter { f -> f.isNotBlank() },
+                )
+            }
+            out
+        }
 
     override suspend fun putGlobalSetting(key: String, value: Int): Boolean =
         statusOk(HelperBinderProtocol.TX_PUT_GLOBAL_SETTING) {
@@ -993,6 +1033,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
          *  the joined string. 4.5 s matches RAISE_TIMEOUT_MS (same cold-DiLink baseline); no mutex
          *  is held during this call so the budget can be generous. Applied PER chunk transact. */
         private const val DUMP_FIDS_TIMEOUT_MS = 4_500L
+
+        /** TX_LIST_DISPLAYS budget: one `dumpsys display` under the daemon's own 4 s bound,
+         *  plus marshalling. Runs inside a projection attempt, so it must not sit on the
+         *  default 2 s and report "no cluster display" on a merely slow head unit. */
+        private const val LIST_DISPLAYS_TIMEOUT_MS = 5_000L
 
         /** Safety cap on the number of TX_DUMP_FIDS loop iterations (chunks). 64 × 64 KiB = 4 MiB,
          *  far above any realistic SDK catalog size; guards against a misbehaving daemon. */

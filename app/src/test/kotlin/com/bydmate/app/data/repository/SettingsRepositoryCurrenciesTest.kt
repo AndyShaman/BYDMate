@@ -12,6 +12,12 @@ class SettingsRepositoryCurrenciesTest {
         assertEquals("UZS", uzs!!.symbol)
     }
 
+    @Test fun `KGS currency is available with som symbol`() {
+        val kgs = SettingsRepository.CURRENCIES.find { it.code == "KGS" }
+        assertNotNull(kgs)
+        assertEquals("сом", kgs!!.symbol)
+    }
+
     @Test fun `default currency stays BYN as first element`() {
         assertEquals(SettingsRepository.DEFAULT_CURRENCY, SettingsRepository.CURRENCIES.first().code)
     }

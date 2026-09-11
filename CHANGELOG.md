@@ -8,8 +8,14 @@
 
 ## [Unreleased]
 
+## [3.15.2] - 2026-09-11
+
+### Новое
+- Тарифы: добавлена валюта KGS (сом), по просьбе из Кыргызстана (#191)
+
 ### Исправления
 - Восстановление ADB: приложение забирает нужное разрешение при любом живом подключении к ADB, а не только при запуске; в лог пишется ответ системы, если разрешение не выдано
+- Приборка: на DiLink 4.0 (Song Plus 2021 и похожие) приложение теперь находит экран приборки, который прошивка скрывает от приложений, и выводит навигатор на него напрямую. Если прошивка не даёт закрепить окно на приборке с первого раза, приложение повторяет попытку после переноса
 
 ## [3.15.1] - 2026-09-10
 
@@ -1025,7 +1031,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.2...HEAD
+[3.15.2]: https://github.com/AndyShaman/BYDMate/compare/v3.15.1...v3.15.2
 [3.15.1]: https://github.com/AndyShaman/BYDMate/compare/v3.15.0...v3.15.1
 [3.15.0]: https://github.com/AndyShaman/BYDMate/compare/v3.14.3...v3.15.0
 [3.14.3]: https://github.com/AndyShaman/BYDMate/compare/v3.14.2...v3.14.3

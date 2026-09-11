@@ -322,6 +322,21 @@ object HelperBinderProtocol {
      */
     val TX_CLUSTER_DISPLAY_DIAG: Int = IBinder.FIRST_CALL_TRANSACTION + 40  // 41
 
+    /**
+     * Full display inventory read out of `dumpsys display` under shell uid (issue #194).
+     * The projection needs it on firmwares where BYD whitelisted DisplayManager per app and the
+     * app uid sees display 0 only, so [com.bydmate.app.cluster.ClusterProjectionManager]'s own
+     * lookup finds no cluster surface. Read-only: one dumpsys, nothing is written or invoked.
+     * Synchronous and not rate-limited (unlike TX_CLUSTER_DISPLAY_DIAG, which spawns a whole
+     * snapshot): the caller needs the answer inside one projection attempt.
+     *
+     * (no args) -> [int status (0 = ok, -1 = failed), int count, then per display:
+     *   int displayId, String name, int width, int height, int densityDpi,
+     *   String ownerPkg ("" when none), int ownerUid (-1 when none),
+     *   String flags (comma-separated, "" when none)]
+     */
+    val TX_LIST_DISPLAYS: Int = IBinder.FIRST_CALL_TRANSACTION + 41  // 42
+
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
      *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is

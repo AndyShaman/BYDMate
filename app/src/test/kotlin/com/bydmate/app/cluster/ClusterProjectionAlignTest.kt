@@ -151,6 +151,27 @@ class ClusterProjectionAlignTest {
         assertEquals(listOf(0), written)
     }
 
+    // --- #194: a car whose cluster display only the daemon can see ---
+
+    @Test
+    fun `align keeps the flag at 1 when the direct transport is forced by the car`() = runTest {
+        // DiLink 4.0 with "factory" chosen in settings: the overlay transport cannot work there,
+        // so the boot-time realignment must not zero the flag the placement depends on.
+        setDirectPref(false)
+        // Literal key name mirrors the private KEY_DIRECT_FORCED in ClusterProjectionManager.
+        prefs().edit().putBoolean("cluster_direct_forced", true).commit()
+        assertTrue(ClusterProjectionManager.alignFreeformFlag(context, helper))
+        assertEquals(listOf(1), written)
+    }
+
+    @Test
+    fun `align writes 0 without the forced marker - the whole current fleet`() = runTest {
+        setDirectPref(false)
+        prefs().edit().putBoolean("cluster_direct_forced", false).commit()
+        assertTrue(ClusterProjectionManager.alignFreeformFlag(context, helper))
+        assertEquals(listOf(0), written)
+    }
+
     // --- split settings toggle: reboot-hint arming ---
 
     @Test
