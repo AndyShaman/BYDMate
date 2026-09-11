@@ -39,6 +39,24 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
 /**
+ * The cluster surface one projection attempt targets, and how it was found.
+ *
+ * [appDisplay] is the app-uid [Display] whenever DisplayManager in our own process can see the
+ * surface — the whole fleet so far (Leopard 3, Sea Lion 07, DiLink 5.1, UI7). It is null when only
+ * the daemon could enumerate the display (#194: DiLink 4.0 whitelists DisplayManager per app and
+ * answers our process with display 0 alone), and the branches that need a real [Display] — the
+ * overlay and the VirtualDisplay pipeline behind it — are then unavailable.
+ */
+data class ClusterTarget(
+    val displayId: Int,
+    val name: String,
+    val width: Int,
+    val height: Int,
+    val densityDpi: Int,
+    val appDisplay: Display?,
+)
+
+/**
  * Owns the cluster projection lifecycle. An overlay SurfaceView is placed on the
  * cluster display in the app process; its Surface backs a VirtualDisplay created
  * in the shell-uid daemon (Phase 1), onto which Navi's task is pinned.
@@ -63,6 +81,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 object ClusterProjectionManager {
     private const val TAG = "ClusterProjection"
     private const val DEFAULT_CLUSTER_DISPLAY_ID = 2          // Phase 0: fission display id
+    private const val DEFAULT_CLUSTER_DENSITY_DPI = 320       // Phase 0: native Leopard 3 cluster density
     private const val VIRTUAL_DISPLAY_FLAGS = 322             // TRUSTED | OWN_CONTENT_ONLY | PRESENTATION (OpenBYD)
     private const val VD_FLAG_PUBLIC = 1                      // DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
     private const val VD_NAME = "BYDMate_Cluster_VD"
@@ -105,6 +124,14 @@ object ClusterProjectionManager {
     const val KEY_DIRECT_PROJECTION = "direct_projection_enabled"
     /** Render on the full-cluster projection surface ("..._0") instead of the default "..._1". */
     const val KEY_PREFER_FULL_DISPLAY = "cluster_prefer_full_display"
+    /**
+     * Set while the cluster display of this car is invisible to the app uid (#194), i.e. the
+     * direct transport is not a choice but the only one that works. NOT a transport choice of the
+     * user's: it never counts as one ([hasTransportChoice] ignores it), it is written by the
+     * projection itself, and it is cleared the moment an app-uid lookup succeeds — so a firmware
+     * update that opens the display up returns the car to its own setting.
+     */
+    private const val KEY_DIRECT_FORCED = "cluster_direct_forced"
     // Set while the daemon has powered the cluster compositor up for our projection; cleared only
     // after a CONFIRMED power-down. Survives process death: when the car shuts off mid-projection
     // the off sequence (18 -> pause -> 0) never runs, the compositor reboots in projection mode
@@ -511,7 +538,7 @@ object ClusterProjectionManager {
             runCatching {
                 helper.putGlobalSetting(
                     "enable_freeform_support",
-                    freeformFlagValue(readDirectEnabled(context), splitPreferences.isFeatureEnabled()))
+                    freeformFlagValue(effectiveDirect(context), splitPreferences.isFeatureEnabled()))
             }.getOrDefault(false)
         }
 
@@ -560,7 +587,9 @@ object ClusterProjectionManager {
         if (!bootstrap.ensureRunning()) return true        // daemon gone; keep what's on screen
         if (directDisplayId != -1) {
             // Direct mode: no overlay/VD to rebuild — retarget the freeform window in place.
-            val display = resolveClusterDisplay(context) ?: return true
+            // The target is resolved for its side effects (cluster W/H/dpi); the resize itself
+            // addresses the live task, so the daemon-only case needs no Display here either.
+            resolveClusterTarget(context, helper) ?: return true
             val (widthPct, heightPct) = readSizePct(context)
             val (offsetXPct, offsetYPct) = readOffsetPct(context)
             val geo = geometryFor(
@@ -580,7 +609,8 @@ object ClusterProjectionManager {
         }
         val oldOverlay = overlayView ?: return true
         val oldVdId = remoteDisplayId
-        val display = resolveClusterDisplay(context) ?: return true
+        // The overlay needs a real Display; a live overlay means the app uid has one.
+        val display = resolveClusterTarget(context, helper)?.appDisplay ?: return true
         val (widthPct, heightPct) = readSizePct(context)
         val (offsetXPct, offsetYPct) = readOffsetPct(context)
         val geo = geometryFor(
@@ -687,6 +717,30 @@ object ClusterProjectionManager {
 
     /** Transport pref as consumers must see it: runs the one-time migration first. */
     fun isDirectProjectionEnabled(context: Context): Boolean = readDirectEnabled(context)
+
+    /** #194: this car's cluster display is reachable only through the daemon (see [KEY_DIRECT_FORCED]). */
+    private fun readDirectForced(context: Context): Boolean =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            .getBoolean(KEY_DIRECT_FORCED, false)
+
+    /**
+     * The transport the projection will actually use: the user's choice, or direct regardless of
+     * it when this car has no other option (#194). Every writer of enable_freeform_support asks
+     * THIS, not the raw preference — otherwise the boot-time realignment would put the flag back
+     * to 0 on a DiLink 4.0 whose owner picked "factory", and the next ignition cycle would have no
+     * freeform to place the window with. The settings chip and [hasTransportChoice] deliberately
+     * keep reading the raw preference: the marker is a property of the car, not a user decision.
+     */
+    private fun effectiveDirect(context: Context): Boolean =
+        readDirectEnabled(context) || readDirectForced(context)
+
+    /** Records whether this car's cluster display is app-uid visible; see [KEY_DIRECT_FORCED]. */
+    private fun setDirectForced(context: Context, forced: Boolean) {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getBoolean(KEY_DIRECT_FORCED, false) == forced) return
+        prefs.edit().putBoolean(KEY_DIRECT_FORCED, forced).apply()
+        log("direct transport forced marker -> $forced")
+    }
 
     /** True when the user asked for the full-cluster projection surface ("..._0"). */
     fun isPreferFullDisplay(context: Context): Boolean =
@@ -805,6 +859,31 @@ object ClusterProjectionManager {
                 }
             }
         }
+    }
+
+    /**
+     * #194 order: on a firmware whose cluster display is invisible to the app uid the compositor
+     * is powered up only AFTER the task is confirmed on it. Everywhere else the power-up leads the
+     * placement (see [project]) because a failed placement still falls back to the overlay/VD
+     * pipeline; here there is no fallback, and a 16 sent for a placement that then failed would
+     * leave the cluster in projection mode with nothing drawing on it.
+     *
+     * Same write-ahead marker contract as the leading power-up: committed BEFORE the call, so a
+     * power cut in between still leaves the boot recovery something to heal from, and a failed
+     * commit skips the power-up.
+     */
+    private suspend fun powerUpCompositorAfterPlacement(context: Context, helper: HelperClient) {
+        @Suppress("ApplySharedPref")
+        val markerWritten = withContext(Dispatchers.IO) {
+            context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+                .edit().putBoolean(KEY_COMPOSITOR_POWERED, true).commit()
+        }
+        if (!markerWritten) {
+            log("compositor marker not persisted; power-up after placement skipped")
+            return
+        }
+        val up = runCatching { helper.setClusterContainerMode(true) }.getOrDefault(false)
+        log("compositor power-up after placement ok=$up")
     }
 
     /**
@@ -983,7 +1062,7 @@ object ClusterProjectionManager {
             if (!force && !hasTransportChoice(appContext) && !splitEnabled) return@launch
             // When direct is chosen (and split is off), the flag is already 1 from project().
             // Only VD/factory transport and the split consumer need this boot-time realignment.
-            if (!force && readDirectEnabled(appContext) && !splitEnabled) return@launch
+            if (!force && effectiveDirect(appContext) && !splitEnabled) return@launch
             if (!bootstrap.ensureRunning()) {
                 Log.w(TAG, "realignFreeformFlag: daemon unreachable; retrying next service start")
                 return@launch
@@ -1012,18 +1091,21 @@ object ClusterProjectionManager {
         // exits below, so a later write never runs there - exactly the population the
         // factory restore exists for. Direct mode keeps its byte-identical call order: its
         // write stays in the direct-first block below.
-        val direct = readDirectEnabled(context)
-        if (!direct && hasTransportChoice(context)) runCatching {
+        // effectiveDirect, not the raw pref: on a car whose cluster is daemon-only (#194) the
+        // factory restore must not zero the flag the placement depends on — see [effectiveDirect].
+        // Identical to the raw pref everywhere the app uid can see the cluster display.
+        val directTransport = effectiveDirect(context)
+        if (!directTransport && hasTransportChoice(context)) runCatching {
             helper.putGlobalSetting(
                 "enable_freeform_support",
-                freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
+                freeformFlagValue(directTransport, splitPreferences.isFeatureEnabled()))
         }
         // #85/#62: resolve the display BEFORE any compositor ИПЦ write. Song family /
         // DiLink 3-4 expose no projection display; powering the compositor up there painted
         // a black rectangle on the cluster that survived until reboot. Local read-only
         // DisplayManager query - hoisting it does not reorder any daemon call on cars
         // that do have the display.
-        val display = resolveClusterDisplay(context) ?: run {
+        val target = resolveClusterTarget(context, helper) ?: run {
             // Failure-path parity with the pre-hoist order: a live overlay (reproject on a
             // display that vanished mid-session) must not survive a failed attempt. No-op on
             // cars without a cluster display - overlayView is always null there.
@@ -1044,10 +1126,19 @@ object ClusterProjectionManager {
             }
             return "projection"
         }
-        log("transport=${if (direct) "direct" else "vd"} display=${display.displayId} " +
-            "\"${display.name}\" ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi " +
+        // #194: a display only the daemon can see has no app-uid [Display] behind it, so the
+        // overlay — and with it the whole VirtualDisplay pipeline — cannot be built. The transport
+        // is then direct regardless of the settings chip: it is the only one that works there.
+        val daemonOnly = target.appDisplay == null
+        val direct = directTransport || daemonOnly
+        log("transport=${if (direct) "direct" else "vd"} display=${target.displayId} " +
+            "\"${target.name}\" ${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi " +
             "prefer_full=$sessionPreferFull")
-        if (autoContainerEnabled(context)) {
+        if (daemonOnly) log("transport=direct (forced: display invisible to app uid)")
+        // The compositor power-up moves BELOW the placement in the daemon-only case (see the
+        // direct block): with no overlay to fall back on, a 16 sent before a placement that then
+        // fails would leave the cluster in projection mode with nobody drawing on it.
+        if (autoContainerEnabled(context) && !daemonOnly) {
             // Wave P: power the cluster compositor up before projecting; replaces the manual
             // "star key -> Navi mode" step. Fail-soft: projection proceeds even if this call
             // fails (the compositor may already be on). The marker is persisted even on failure —
@@ -1070,7 +1161,11 @@ object ClusterProjectionManager {
             }
         }
         if (overlayView != null) hideOverlay(helper)  // defensive: never stack overlays
-        if (!ensureOverlayPermission(context, helper)) {
+        if (daemonOnly) {
+            // No overlay is ever built on this path, so a missing SYSTEM_ALERT_WINDOW must not
+            // abort the one transport the car has.
+            log("overlay permission check skipped (direct-only)")
+        } else if (!ensureOverlayPermission(context, helper)) {
             Log.e(TAG, "overlay permission unavailable; aborting projection")
             log("abort: SYSTEM_ALERT_WINDOW unavailable")
             return "projection"
@@ -1102,12 +1197,23 @@ object ClusterProjectionManager {
                     freeformFlagValue(direct, splitPreferences.isFeatureEnabled()))
             }
             if (remoteDisplayId == -1) releaseOrphanedDisplay(context, helper)
-            if (tryDirectProjection(context, helper, display, geo, plan)) {
+            if (tryDirectProjection(context, helper, target, geo, plan)) {
+                // #194: the compositor is powered up only now, with the task already placed —
+                // the opposite order of the rest of the fleet, where the overlay/VD fallback
+                // still covers a failed placement (see the auto-container block above).
+                if (daemonOnly && autoContainerEnabled(context)) powerUpCompositorAfterPlacement(context, helper)
                 // Platformized firmware only: open the cluster's Map frame now that something of
                 // ours is actually on it. Fail-soft — a projection is never failed by the frame.
                 frame?.apply(helper, ClusterFrameUi7.Owner.PROJECTION)
                 return null
             }
+        }
+        if (daemonOnly) {
+            // The VD pipeline below needs an app-uid Display for its overlay; there is none.
+            Log.e(TAG, "direct projection failed and no VD fallback on this firmware")
+            log("direct failed and no VD fallback on this firmware (display invisible to app uid)")
+            onClusterSendFailed?.invoke(targetPackage(context))
+            return "projection"
         }
 
         // F-1 fix (Round 8): hoist pkg so all VD terminal failure paths can call onClusterSendFailed.
@@ -1127,6 +1233,11 @@ object ClusterProjectionManager {
         // again just before launchAndForce is always safe. The first re-arm covers surface→createVd;
         // the second re-arm covers the launchAndForce window specifically.
         onBeforeClusterSend?.invoke(pkg)
+        // The daemon-only case returned above, so the app uid has a Display for the overlay here.
+        val display = target.appDisplay ?: run {
+            log("abort: no app-uid display for the VD pipeline")
+            return "projection"
+        }
         val failure = try {
             val surface = withTimeoutOrNull(SURFACE_TIMEOUT_MS) {
                 addOverlayAndAwaitSurface(context, display, geo, plan, helper)
@@ -1202,7 +1313,7 @@ object ClusterProjectionManager {
      * (direct mode active, no overlay/VD needed); false = fall back to the VD pipeline.
      */
     private suspend fun tryDirectProjection(
-        context: Context, helper: HelperClient, display: Display, geo: ClusterGeometry, plan: RenderPlan,
+        context: Context, helper: HelperClient, target: ClusterTarget, geo: ClusterGeometry, plan: RenderPlan,
     ): Boolean {
         val pkg = targetPackage(context)
         val bounds = freeformBounds(geo)
@@ -1239,7 +1350,7 @@ object ClusterProjectionManager {
         // marker is healed by the next recoverStaleDirectTask / recoverStaleDirectDensity pass.
         @Suppress("ApplySharedPref")
         val markerWritten = withContext(Dispatchers.IO) {
-            prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, display.displayId).commit()
+            prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, target.displayId).commit()
         }
         if (!markerWritten) {
             Log.w(TAG, "direct projection: write-ahead marker not persisted; VD fallback")
@@ -1256,21 +1367,21 @@ object ClusterProjectionManager {
         // type, so the daemon takes the light path (one `am start` with mode+display, task id
         // survives). Price: AOSP draws its freeform DecorCaption over a STANDARD window.
         return when (helper.launchFreeform(
-            pkg, display.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
+            pkg, target.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
             HelperBinderProtocol.PANE_TYPE_STANDARD,
         )) {
             FreeformLaunchResult.OK -> {
-                directDisplayId = display.displayId
+                directDisplayId = target.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
                 verdict.clearOnSuccess()
                 @Suppress("KotlinConstantConditions")
-                if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, display.displayId, plan)
+                if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, target.displayId, plan)
                 projectedPackage = pkg
-                Log.i(TAG, "direct projection: $pkg on display ${display.displayId} " +
+                Log.i(TAG, "direct projection: $pkg on display ${target.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
-                log("direct OK: $pkg display=${display.displayId} " +
+                log("direct OK: $pkg display=${target.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
-                armDirectDeathWatch(helper, pkg, display.displayId, bounds)
+                armDirectDeathWatch(helper, pkg, target.displayId, bounds)
                 true
             }
             FreeformLaunchResult.UNAVAILABLE -> {
@@ -1310,7 +1421,7 @@ object ClusterProjectionManager {
                 // Same rationale as UNAVAILABLE above: grace survives for the VD fallback.
                 // onClusterSendFailed is called only at terminal VD failures, not here.
                 Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
-                log("direct FAILED: launchFreeform rejected pkg=$pkg display=${display.displayId}; VD fallback")
+                log("direct FAILED: launchFreeform rejected pkg=$pkg display=${target.displayId}; VD fallback")
                 false
             }
         }
@@ -1433,6 +1544,49 @@ object ClusterProjectionManager {
             @Suppress("DEPRECATION") it.getRealSize(size)
             "${it.displayId}:\"${it.name}\" ${size.x}x${size.y}"
         }
+
+    /**
+     * The cluster surface for this attempt: the app-uid lookup first, the daemon's inventory only
+     * when the app uid found nothing (#194).
+     *
+     * On every car where [resolveClusterDisplay] answers — the whole current fleet — this is that
+     * answer wrapped in a [ClusterTarget] and NOT one extra daemon call; the fallback exists for
+     * firmwares that hide the display from our uid entirely, where the alternative is today's
+     * abort. Null keeps the caller's existing abort path (with its cdiag snapshot).
+     */
+    private suspend fun resolveClusterTarget(context: Context, helper: HelperClient): ClusterTarget? {
+        val match = resolveClusterDisplay(context)
+        if (match != null) {
+            // The app uid can see the cluster: whatever transport the user picked is available,
+            // so a marker left by an older firmware (or an older app version) is dropped here.
+            setDirectForced(context, false)
+            return ClusterTarget(
+                match.displayId, match.name, clusterWidth, clusterHeight, clusterDensityDpi, match,
+            )
+        }
+        val devices = runCatching { helper.listDisplays() }.getOrNull() ?: return null
+        val preferFull = sessionPreferFull ?: isPreferFullDisplay(context)
+        val picked = pickClusterFromDaemon(devices, preferFull) ?: run {
+            log("no cluster display in the daemon inventory: " +
+                devices.joinToString { "${it.id}:\"${it.name}\"" })
+            return null
+        }
+        // From here on every writer of enable_freeform_support must keep the flag at 1: the
+        // overlay transport cannot work on this car, and the flag is read once per boot.
+        setDirectForced(context, true)
+        clusterWidth = picked.width
+        clusterHeight = picked.height
+        // A dump without a readable density (truncated / unknown wording) keeps the cluster
+        // default rather than handing 0 dpi to the render plan.
+        clusterDensityDpi = if (picked.densityDpi > 0) picked.densityDpi else DEFAULT_CLUSTER_DENSITY_DPI
+        val line = "cluster display via daemon: id=${picked.id} \"${picked.name}\" " +
+            "${clusterWidth}x$clusterHeight dpi=$clusterDensityDpi " +
+            "owner=${picked.ownerPkg ?: "?"}(${picked.ownerUid}) " +
+            "flags=[${picked.flags.joinToString(",")}] (app uid sees none)"
+        Log.i(TAG, line)
+        log(line)
+        return ClusterTarget(picked.id, picked.name, clusterWidth, clusterHeight, clusterDensityDpi, null)
+    }
 
     /**
      * App-side display lookup. The cluster's projection surfaces are virtual displays owned by

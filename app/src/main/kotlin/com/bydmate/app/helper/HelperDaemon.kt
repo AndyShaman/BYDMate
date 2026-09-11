@@ -421,6 +421,32 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_LIST_DISPLAYS -> runCatching {
+                    // Synchronous, unlike TX_CLUSTER_DISPLAY_DIAG: the caller is a projection
+                    // attempt that cannot continue without the answer. One bounded dumpsys
+                    // (~100-300 ms), read-only.
+                    // 256 KiB, not the snapshot default: the "Logical Displays" section this
+                    // parses comes AFTER the device list, so a dump cut at 64 KiB on a rich
+                    // firmware would report no display at all.
+                    val devices = ClusterDisplayDiag.parseDisplayDevices(
+                        shExecBounded("dumpsys display", maxBytes = 256 * 1024))
+                    android.util.Log.i("bydmate_helper", "TX_LIST_DISPLAYS: ${devices.size} displays " +
+                        devices.joinToString { "${it.id}:\"${it.name}\" ${it.width}x${it.height}" }.take(300))
+                    reply?.writeInt(0)
+                    reply?.writeInt(devices.size)
+                    devices.forEach { d ->
+                        reply?.writeInt(d.id)
+                        reply?.writeString(d.name)
+                        reply?.writeInt(d.width)
+                        reply?.writeInt(d.height)
+                        reply?.writeInt(d.densityDpi)
+                        reply?.writeString(d.ownerPkg ?: "")
+                        reply?.writeInt(d.ownerUid)
+                        reply?.writeString(d.flags.joinToString(","))
+                    }
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_PUT_GLOBAL_SETTING -> runCatching {
                     val key = data.readString() ?: ""
                     val value = data.readInt()
@@ -1527,7 +1553,9 @@ private fun logClusterDisplayDiag(): List<String> {
         run("ls /dev/graphics 2>/dev/null | tr '\\n' ' '"),
     ))
 
-    val displays = ClusterDisplayDiag.displayLines(run("dumpsys display"))
+    val rawDisplay = run("dumpsys display")
+    ClusterDisplayDiag.displaySummaries(rawDisplay).forEach { emit("display: $it") }
+    val displays = ClusterDisplayDiag.displayLines(rawDisplay)
     displays.kept.forEach { emit("display: $it") }
     if (displays.dropped > 0) emit("display: +${displays.dropped} more matched lines dropped")
 
@@ -2588,9 +2616,49 @@ internal fun launchFreeformCore(
         }
         final = runCatching { state(liveTaskId) }.getOrNull()
     }
-    val placed = when {
+    var placed = when {
         final != null -> final.displayId == displayId && final.windowingMode == WINDOWING_MODE_FREEFORM
         else -> movedByCall
+    }
+    // #194 (DiLink 4.0, same finding as byd-dashcast): the cluster display of that firmware has no
+    // FLAG_SUPPORTS_FREEFORM_WINDOW_MANAGEMENT, so the ROM silently drops freeform during the
+    // reparent and the task arrives fullscreen ON the target display. DashCast switches the mode
+    // AFTER the move for exactly this reason. Re-assert it once, re-pin, and let the re-read decide
+    // — only while the sleep still fits the client's budget, like the grace poll above. A firmware
+    // that keeps freeform across the move (the whole current fleet) never enters this branch.
+    if (final != null && final.displayId == displayId &&
+        final.windowingMode != WINDOWING_MODE_FREEFORM && now() + GRACE_POLL_MS <= deadlineMs
+    ) {
+        runCatching { setMode(liveTaskId, WINDOWING_MODE_FREEFORM) }
+        refreshTaskId()
+        runCatching { bounds(liveTaskId, left, top, right, bottom) }
+        runCatching { focus(liveTaskId) }
+        // Same poll as the mid-relaunch grace above, and for the same reason: the compat setMode
+        // goes through `am start`, which can RECREATE the task — a single read 200 ms later hits
+        // either nothing or the dying old task and reports a false FAILED (and a fullscreen
+        // restore) for a placement that is about to be correct. A task surfacing under a new id
+        // was never pinned, so it is pinned here before its state decides the verdict.
+        var reassertAttempt = 0
+        var reasserted: TaskModeState? = null
+        while ((reasserted == null || reasserted.windowingMode != WINDOWING_MODE_FREEFORM) &&
+            reassertAttempt < 6 && now() + GRACE_POLL_MS <= deadlineMs
+        ) {
+            reassertAttempt++
+            sleep(GRACE_POLL_MS)
+            refreshTaskId()
+            if (liveTaskId != pinnedTaskId) {
+                log("re-pinning task $liveTaskId found after the freeform re-assert (was $pinnedTaskId)", null)
+                movedByCall = false
+                pin(liveTaskId)
+                pinnedTaskId = liveTaskId
+            }
+            reasserted = runCatching { state(liveTaskId) }.getOrNull()
+        }
+        final = reasserted
+        placed = reasserted != null && reasserted.displayId == displayId &&
+            reasserted.windowingMode == WINDOWING_MODE_FREEFORM
+        log("freeform dropped by reparent to display $displayId; " +
+            "re-asserted after move -> mode=${reasserted?.windowingMode} (polls=$reassertAttempt)", null)
     }
     if (placed && !movedByCall) log("move(task=$liveTaskId) threw but task already on display $displayId; accepting", null)
     if (!placed) {

@@ -556,4 +556,92 @@ class LaunchFreeformCoreTest {
         assertEquals(FreeformResultCodes.OK, result)
         assertTrue("phase 2 must still address 36", ops.any { it == "move:36:4" })
     }
+
+    // --- Issue #194: a cluster display without FLAG_SUPPORTS_FREEFORM_WINDOW_MANAGEMENT ---
+
+    @Test
+    fun `freeform dropped by the reparent is re-asserted once and confirms the placement`() {
+        // DiLink 4.0 (Song Plus 2021): the ROM coerces the window back to fullscreen while
+        // reparenting it to the cluster. The task IS on the target display — only its mode was
+        // lost — so one more setMode after the move is what byd-dashcast does and what works here.
+        val modeOps = mutableListOf<String>()
+        var moved = false
+        var mode = WINDOWING_MODE_FULLSCREEN
+        val result = run(
+            setMode = { t, m -> modeOps += "$t:$m"; mode = m },
+            move = { t, d -> ops += "move:$t:$d"; moved = true; mode = WINDOWING_MODE_FULLSCREEN },
+            state = { TaskModeState(mode, if (moved) 4 else 0) },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertEquals("the freeform switch, then exactly one re-assert", listOf("36:5", "36:5"), modeOps)
+        assertTrue(logs.any { it.contains("re-asserted after move") })
+    }
+
+    @Test
+    fun `a task recreated by the re-assert is re-pinned and confirms on a later poll`() {
+        // The compat setMode goes through `am start`, so the re-assert can recreate the task: the
+        // old id is gone and the new one reaches getTasks only a poll or two later. A single read
+        // after the re-assert would report FAILED for a placement that lands correctly.
+        val modeOps = mutableListOf<String>()
+        var moved = false
+        var mode = WINDOWING_MODE_FULLSCREEN
+        var recreated = false
+        var polls = 0
+        val result = run(
+            setMode = { t, m ->
+                modeOps += "$t:$m"
+                if (!moved) mode = m else { recreated = true; mode = WINDOWING_MODE_FREEFORM }
+            },
+            move = { t, d ->
+                ops += "move:$t:$d"; moved = true
+                if (!recreated) mode = WINDOWING_MODE_FULLSCREEN
+            },
+            state = { t ->
+                when {
+                    !recreated -> TaskModeState(mode, if (moved) 4 else 0)
+                    t != 37 -> null                            // the id phase 2 pinned is gone
+                    polls++ == 0 -> null                       // the relaunch is not listed yet
+                    else -> TaskModeState(WINDOWING_MODE_FREEFORM, 4)
+                }
+            },
+            resolveCurrentTaskId = { if (recreated) 37 else 36 },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertEquals("the freeform switch, then exactly one re-assert", listOf("36:5", "36:5"), modeOps)
+        assertTrue(logs.any { it.contains("re-pinning task 37 found after the freeform re-assert") })
+        assertTrue("the new task must be pinned before the verdict", ops.contains("move:37:4"))
+        assertTrue(ops.contains("bounds:37:0,38,1280,441"))
+        assertEquals("two polls: the first sees nothing, the second confirms", 2, ops.count { it == "sleep:500" })
+    }
+
+    @Test
+    fun `a re-assert that does not hold still maps to FAILED and restores fullscreen`() {
+        val modeOps = mutableListOf<String>()
+        var moved = false
+        var mode = WINDOWING_MODE_FULLSCREEN
+        val result = run(
+            // Once the task sits on the cluster this firmware ignores the request entirely.
+            setMode = { t, m -> modeOps += "$t:$m"; if (!moved) mode = m },
+            move = { t, d -> ops += "move:$t:$d"; moved = true; mode = WINDOWING_MODE_FULLSCREEN },
+            state = { TaskModeState(mode, if (moved) 4 else 0) },
+        )
+        assertEquals(FreeformResultCodes.FAILED, result)
+        assertEquals("switch, re-assert, then the fullscreen restore", listOf("36:5", "36:5", "36:1"), modeOps)
+    }
+
+    @Test
+    fun `a healthy placement never re-asserts the mode`() {
+        // Fleet regression guard: on Leopard 3 the mode survives the reparent, so the number of
+        // setMode calls must not change by this fix.
+        val modeOps = mutableListOf<String>()
+        var moved = false
+        var mode = WINDOWING_MODE_FULLSCREEN
+        val result = run(
+            setMode = { t, m -> modeOps += "$t:$m"; mode = m },
+            move = { t, d -> ops += "move:$t:$d"; moved = true },
+            state = { TaskModeState(mode, if (moved) 4 else 0) },
+        )
+        assertEquals(FreeformResultCodes.OK, result)
+        assertEquals(listOf("36:5"), modeOps)
+    }
 }

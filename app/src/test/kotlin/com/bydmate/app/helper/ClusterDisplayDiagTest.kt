@@ -2,6 +2,7 @@ package com.bydmate.app.helper
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -116,6 +117,46 @@ class ClusterDisplayDiagTest {
     }
 
     @Test
+    fun `display summary keeps name resolution owner and flags for a virtual display`() {
+        val raw = """DisplayDeviceInfo{"fission_bg_xdjaVirtualSurface": uniqueId="virtual:com.xdja.containerservice,1000,fission_bg_xdjaVirtualSurface,0", 1920 x 720, modeId 2, defaultModeId 2, supportedModes [{id=2, width=1920, height=720, fps=60.0}], colorMode 0, supportedColorModes [0], HdrCapabilities null, density 320, 320.0 x 320.0 dpi, appVsyncOff 0, presDeadline 16666666, touch NONE, rotation 0, type VIRTUAL, address null, deviceProductInfo null, state ON, owner com.xdja.containerservice (uid 1000), FLAG_PRIVATE, FLAG_PRESENTATION, FLAG_OWN_CONTENT_ONLY}"""
+        val summaries = ClusterDisplayDiag.displaySummaries(raw)
+        assertEquals(1, summaries.size)
+        val summary = summaries.single()
+        assertTrue(summary.contains("1920x720"))
+        assertTrue(summary.contains("owner=com.xdja.containerservice (uid 1000)"))
+        assertTrue(summary.contains("flags=FLAG_PRIVATE,FLAG_PRESENTATION,FLAG_OWN_CONTENT_ONLY"))
+    }
+
+    @Test
+    fun `display summary reports missing owner and flags rather than omitting them`() {
+        val raw = """DisplayDeviceInfo{"Built-in Screen": uniqueId="local:0", 1920 x 1200, modeId 1, type INTERNAL, state ON}"""
+        val summary = ClusterDisplayDiag.displaySummaries(raw).single()
+        assertTrue(summary.contains("owner=?"))
+        assertTrue(summary.contains("flags=-"))
+    }
+
+    @Test
+    fun `display summary line stays within the log budget for a very long uniqueId`() {
+        val raw = """DisplayDeviceInfo{"cluster": uniqueId="virtual:${"x".repeat(1000)}", 1280 x 480, type VIRTUAL, state ON, owner com.byd.cluster (uid 1000), FLAG_PRIVATE}"""
+        val summary = ClusterDisplayDiag.displaySummaries(raw).single()
+        assertTrue(summary.length <= ClusterDisplayDiag.MAX_LINE)
+        assertTrue(summary.contains("owner=com.byd.cluster (uid 1000)"))
+        assertTrue(summary.contains("flags=FLAG_PRIVATE"))
+    }
+
+    @Test
+    fun `non default mDisplayId line is prioritized within the non default group`() {
+        val raw = buildString {
+            appendLine("mDisplayId=0 name=\"Built-in\" state ON")
+            appendLine("mDisplayId=0 owner sys (uid 1000)")
+            repeat(5) { appendLine("name=\"noise$it\" type NOISE") }
+            appendLine("mDisplayId=1 name=\"Cluster\" state ON")
+        }
+        val ranked = ClusterDisplayDiag.displayLines(raw, max = 3)
+        assertTrue(ranked.kept.any { it.contains("mDisplayId=1") })
+    }
+
+    @Test
     fun `every kept line is truncated to the log budget`() {
         val long = "mDisplayId=2 " + "x".repeat(1000)
         val displays = ClusterDisplayDiag.displayLines(long)
@@ -127,5 +168,51 @@ class ClusterDisplayDiagTest {
         assertTrue(sf.kept.all { it.length <= ClusterDisplayDiag.MAX_LINE })
         assertTrue(byd.length <= ClusterDisplayDiag.MAX_LINE)
         assertTrue(services.length <= ClusterDisplayDiag.MAX_LINE)
+    }
+
+    @Test
+    fun `parses the DiLink 4 dump into the main display and the hidden cluster surface`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.DILINK4)
+        assertEquals(listOf(0, 1), devices.map { it.id })
+        val cluster = devices[1]
+        assertEquals("fission_bg_xdjaVirtualSurface", cluster.name)
+        assertEquals(1920, cluster.width)
+        assertEquals(720, cluster.height)
+        // The field line is cut at the cdiag budget before owner/flags/density: the display must
+        // still come back, with the unreadable parts reported as absent rather than invented.
+        assertEquals(0, cluster.densityDpi)
+        assertNull(cluster.ownerPkg)
+        assertEquals(-1, cluster.ownerUid)
+        assertTrue(cluster.flags.isEmpty())
+    }
+
+    @Test
+    fun `each logical display is reported once, not once per DisplayInfo field`() {
+        // Every block carries mBaseDisplayInfo AND mOverrideDisplayInfo for the same display.
+        val ids = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.DILINK4).map { it.id }
+        assertEquals(ids.distinct(), ids)
+    }
+
+    @Test
+    fun `parses the Leopard 3 dump with owner, flags and density from the device line`() {
+        val devices = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.LEOPARD3)
+        assertEquals(listOf(0, 2, 3, 4), devices.map { it.id })
+        val mini = devices.single { it.id == 4 }
+        assertEquals("shared_fission_bg_XDJAScreenProjection_1", mini.name)
+        assertEquals(1280, mini.width)
+        assertEquals(480, mini.height)
+        assertEquals(320, mini.densityDpi)
+        assertEquals("com.byd.containerservice", mini.ownerPkg)
+        assertEquals(1000, mini.ownerUid)
+        assertEquals(listOf("FLAG_PRESENTATION"), mini.flags)
+    }
+
+    @Test
+    fun `parses a third-party private virtual display with its app uid owner`() {
+        val foreign = ClusterDisplayDiag.parseDisplayDevices(DisplayDumpFixtures.FOREIGN_PRIVATE_VD)
+            .single { it.id == 6 }
+        assertEquals("com.dudu.autoui", foreign.ownerPkg)
+        assertEquals(10071, foreign.ownerUid)
+        assertTrue(foreign.flags.contains("FLAG_PRIVATE"))
     }
 }

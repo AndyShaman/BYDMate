@@ -1763,6 +1763,26 @@ class SettingsViewModel @Inject constructor(
                         "[${geo.xOffset},${geo.yOffset},${geo.xOffset + geo.width},${geo.yOffset + geo.height}] " +
                             "scale=${clusterPrefs.getInt(cpm.KEY_SCALE_PCT, com.bydmate.app.cluster.DEFAULT_SCALE_PCT)}%")
                 }
+                // #194: the inventory the daemon reads under shell uid. On firmwares that hide
+                // displays from the app uid (DiLink 4.0) the cluster surface appears ONLY here,
+                // and "target" says which of the two lookups the projection would use.
+                val daemonDisplays = runCatching { helperClient.listDisplays() }.getOrNull()
+                appendLine("daemon displays: " + when {
+                    daemonDisplays == null -> "(unavailable)"
+                    daemonDisplays.isEmpty() -> "(none)"
+                    else -> daemonDisplays.joinToString {
+                        "${it.id}:\"${it.name}\" ${it.width}x${it.height} " +
+                            "[${it.flags.joinToString(",")}]"
+                    }
+                })
+                val daemonPick = daemonDisplays?.let {
+                    com.bydmate.app.cluster.pickClusterFromDaemon(it, preferFullDisplay)
+                }
+                appendLine("target: " + when {
+                    clusterDisplay != null -> "app"
+                    daemonPick != null -> "daemon (id=${daemonPick.id})"
+                    else -> "none"
+                })
                 val clusterJournal = cpm.journalLines(appContext)
                 appendLine("journal:")
                 if (clusterJournal.isEmpty()) appendLine("  (empty)")

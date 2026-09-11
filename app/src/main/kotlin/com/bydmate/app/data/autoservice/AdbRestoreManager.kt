@@ -289,7 +289,8 @@ class AdbRestoreManager @Inject constructor(
                 val granted = system.selfGrantWriteSecureSettings()
                 Log.i(TAG, "self-grant WRITE_SECURE_SETTINGS over classic port: $granted")
             }
-            transition(AdbRestoreState.NotNeeded, "classic port alive")
+            // The grant suspended: a toggle flipped meanwhile must not be overwritten by NotNeeded.
+            transitionIfCurrent(gen, AdbRestoreState.NotNeeded, "classic port alive")
             return
         }
         if (abandoned(gen)) return

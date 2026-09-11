@@ -163,6 +163,7 @@ open class SettingsRepository @Inject constructor(
             Currency("PLN", "zł"),
             Currency("CNY", "¥"),
             Currency("UZS", "UZS"),
+            Currency("KGS", "сом"),
         )
     }
 
