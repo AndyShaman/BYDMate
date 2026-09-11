@@ -224,6 +224,13 @@ object ClusterProjectionManager {
     /** Cluster display id while direct (freeform) projection is active; -1 otherwise. */
     private var directDisplayId = -1
     /**
+     * True once THIS attempt asked the daemon to place a task on the cluster. An attempt that
+     * fails before that (no cluster display, daemon unreachable, surface never arrived) left the
+     * user's own navigator window exactly where it was — and since the Android 10 compat fix the
+     * daemon reports that task, so a pullback would force a live user window fullscreen.
+     */
+    @Volatile private var placementAttempted = false
+    /**
      * [KEY_PREFER_FULL_DISPLAY] as read when the current projection session started. Pinned for
      * the session so a toggle flip mid-projection cannot make [swapToNewSize] resolve a different
      * surface than the one Navi sits on (bounds from one display applied to another). null = no
@@ -998,7 +1005,17 @@ object ClusterProjectionManager {
                 val taskId = helper.getTaskId(targetPackage(appContext))
                 var modeOk = false
                 var moveOk = false
-                if (taskId != null) {
+                // Same already-home guard as pullBackToMain: since the Android 10 compat fix the
+                // daemon reports the user's own navigator task here too, and a task already
+                // fullscreen on the main display is a completed reclaim, not something to restore.
+                val homeState = if (taskId != null) helper.getTaskState(targetPackage(appContext)) else null
+                val alreadyHome = homeState != null && homeState.taskId == taskId &&
+                    homeState.displayId == 0 && homeState.windowingMode == WINDOWING_MODE_FULLSCREEN
+                if (alreadyHome) {
+                    modeOk = true
+                    moveOk = true
+                    log("recovery: task=$taskId already home (display 0, fullscreen), nothing to restore")
+                } else if (taskId != null) {
                     modeOk = helper.setTaskWindowingMode(taskId, WINDOWING_MODE_FULLSCREEN)
                     // Same compat-path handling as pullBackToMain: a changed task id means the
                     // daemon relaunched the task fullscreen on the main display already.
@@ -1078,6 +1095,7 @@ object ClusterProjectionManager {
     private suspend fun project(
         context: Context, mode: ClusterMode, helper: HelperClient, bootstrap: HelperBootstrap,
     ): String? {
+        placementAttempted = false
         if (!bootstrap.ensureRunning()) {
             Log.e(TAG, "helper daemon not running; aborting projection")
             log("abort: helper daemon not running")
@@ -1283,6 +1301,7 @@ object ClusterProjectionManager {
             // grace immediately before this call so the full DEPARTURE_GRACE_MS window covers the
             // task-transition phase (see SSM.DEPARTURE_GRACE_MS invariant KDoc for derivation).
             onBeforeClusterSend?.invoke(pkg)
+            placementAttempted = true
             val ok = helper.launchAndForce(pkg, id, plan.bufferWidth, plan.bufferHeight)
             if (!ok) {
                 Log.e(TAG, "launchAndForce failed")
@@ -1366,6 +1385,7 @@ object ClusterProjectionManager {
         // the navigator process died with it and the route was lost. STANDARD matches the live
         // type, so the daemon takes the light path (one `am start` with mode+display, task id
         // survives). Price: AOSP draws its freeform DecorCaption over a STANDARD window.
+        placementAttempted = true
         return when (helper.launchFreeform(
             pkg, target.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
             HelperBinderProtocol.PANE_TYPE_STANDARD,
@@ -1713,12 +1733,31 @@ object ClusterProjectionManager {
         // Always clear the member: keeps the VD path out of the direct-resize branch even when
         // the density reset fails (daemon dead).
         directDisplayId = -1
+        // Nothing was sent to the daemon this attempt and no crash marker is pending: there is no
+        // task of ours to reclaim, and the navigator the user has open on the main screen (maybe
+        // freeform, maybe in a split) must keep its window.
+        if (!placementAttempted && directId == -1) {
+            log("pullback: nothing was placed this attempt, leaving task untouched (pkg=$pkg)")
+            return
+        }
         val resetOk = directId != -1 &&
             runCatching { helper.setDisplayDensity(directId, 0) }.getOrDefault(false)
         val taskId = helper.getTaskId(pkg)
         var modeOk = false
         var moveOk = false
-        if (taskId != null) {
+        // Android 10 head units (DiLink 3.0 / 4.0) used to answer null here, so pullback was a
+        // silent no-op; now they report the user's live navigator task. A task already sitting
+        // fullscreen on the main display needs no restore — sending mode/move/bounds at it would
+        // shuffle a window this projection never touched.
+        val homeState = if (taskId != null) helper.getTaskState(pkg) else null
+        val alreadyHome = taskId != null && homeState != null && homeState.taskId == taskId &&
+            homeState.displayId == 0 && homeState.windowingMode == WINDOWING_MODE_FULLSCREEN
+        if (alreadyHome) {
+            modeOk = true
+            moveOk = true
+            log("pullback: task=$taskId already home (display 0, fullscreen), skipping restore (pkg=$pkg)")
+            if (focus) helper.setFocusedTask(taskId)
+        } else if (taskId != null) {
             // Restore fullscreen windowing before moving back to the main display; a freeform
             // task otherwise keeps its tiny bounds. For a VD-mode task this is a no-op in ATMS;
             // sending it unconditionally also covers the daemon-switched-but-client-FAILED window.
