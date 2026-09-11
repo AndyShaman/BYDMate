@@ -344,10 +344,12 @@ class NativeParsReader @Inject constructor(
             autoWipers          = autoWipers,
             bmsState            = bmsState,
             insulationKohm      = ranged("insulationKohm", 0..65000),
-            motorTempFront      = ranged("motorTempFront", -50..150),
-            motorTempRear       = ranged("motorTempRear", -50..150),
-            inverterTempFront   = ranged("inverterTempFront", -50..150),
-            inverterTempRear    = ranged("inverterTempRear", -50..150),
+            // -40 is the scale floor the firmware reports for a motor/inverter the car does not
+            // have (#186: FWD Song Plus showed -40 for the rear pair); treat it as absent.
+            motorTempFront      = ranged("motorTempFront", -39..150),
+            motorTempRear       = ranged("motorTempRear", -39..150),
+            inverterTempFront   = ranged("inverterTempFront", -39..150),
+            inverterTempRear    = ranged("inverterTempRear", -39..150),
             hvVoltage           = hvVoltage,
             hvCurrent           = hvCurrent,
             batteryPowerW       = batteryPowerW,

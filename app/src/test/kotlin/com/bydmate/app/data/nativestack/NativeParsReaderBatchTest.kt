@@ -553,6 +553,34 @@ class NativeParsReaderBatchTest {
         coVerify(exactly = 0) { auto.isAvailable() }
     }
 
+    /** #186: a FWD car reports exactly -40 (scale floor) for the rear motor/inverter it does
+     *  not have; that is "no sensor", not a temperature. -39 is still a reading. */
+    @Test
+    fun `tech panel treats -40 motor and inverter temperature as absent`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        val settings = settingsWithCapacity()
+        val helper = mockk<HelperClient>()
+        coEvery {
+            helper.readBatch(any())
+        } returns mostlySentinelPairs(
+            mapOf(
+                fid("soc").field to java.lang.Float.floatToRawIntBits(43.0f),
+                fid("motorTempFront").field to -39,
+                fid("motorTempRear").field to -40,
+                fid("inverterTempFront").field to 12,
+                fid("inverterTempRear").field to -40,
+            ),
+        )
+        val gate = gateFixedAt(BatchMode.ACTIVE)
+
+        val data = checkNotNull(NativeParsReader(auto, settings, helper, gate).fetch())
+
+        assertEquals(-39, data.motorTempFront)
+        assertEquals(12, data.inverterTempFront)
+        assertNull(data.motorTempRear)
+        assertNull(data.inverterTempRear)
+    }
+
     /** A wrong-transact sentinel must null the field, and with no current there is no power. */
     @Test
     fun `tech panel sentinels null the fields and suppress battery power`() = runTest {
