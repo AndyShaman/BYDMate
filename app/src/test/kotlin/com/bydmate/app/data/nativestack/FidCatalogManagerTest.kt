@@ -142,9 +142,36 @@ class FidCatalogManagerTest {
         } while (subject.resolvePending && rounds < 20)
 
         assertFalse("the budget must stop the retries", subject.resolvePending)
+        assertFalse("a spent budget closes the retry timer too", subject.resolveOpen)
         assertTrue("the budget must be a small number of attempts, was $rounds", rounds <= 10)
         assertTrue(subject.resolveStatus, subject.resolveStatus.contains("gave up"))
         assertEquals("constants", FidAddresses.table.source)
+    }
+
+    /**
+     * The retry timer runs off [FidCatalogManager.resolveOpen], which — unlike `resolvePending` —
+     * is already true before the startup attempt, so the timer can start with the service and
+     * simply wait. It closes only when a table is installed or the budget is spent.
+     */
+    @Test fun `resolveOpen is true before the first attempt, while pending, and false once installed`() = runTest {
+        var probeSilent = true
+        val helper = object : HelperClient by mockk(relaxed = true) {
+            override suspend fun dumpFids(): DumpFidsResult = DumpFidsResult.Success(dump)
+            override suspend fun readBatch(items: List<BatchReadItem>): List<Pair<Int, Int>>? =
+                if (probeSilent) null else items.map { 0 to 50 }
+        }
+        val subject = manager(helper)
+
+        assertTrue("open before any attempt ran", subject.resolveOpen)
+        assertFalse("nothing is pending before the first attempt", subject.resolvePending)
+
+        subject.ensureResolved()
+        assertTrue("still open while the resolution is pending", subject.resolveOpen)
+        assertTrue(subject.resolvePending)
+
+        probeSilent = false
+        subject.ensureResolved()
+        assertFalse("an installed table closes the retry timer", subject.resolveOpen)
     }
 
     /** A silent probe says nothing about the candidates, so nothing is installed and the

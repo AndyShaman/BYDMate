@@ -54,6 +54,7 @@ class HelperBinderHolderTest {
     fun reset() {
         HelperBinderHolder.clear()
         HelperBinderHolder.expectedToken = null
+        HelperBinderHolder.onAccepted = null
     }
 
     @Test
@@ -205,6 +206,47 @@ class HelperBinderHolderTest {
         assertEquals(BinderAcceptResult.NOT_EXPECTED, HelperBinderHolder.accept(payload(replay, TOKEN)))
         assertEquals("not_expected", HelperBinderHolder.lastReject)
         assertSame("the accepted binder must stay", fake, HelperBinderHolder.binder)
+    }
+
+    @Test
+    fun `onAccepted fires once a binder is accepted`() {
+        // The binder arrival is the one signal every daemon spawn path shares, whoever called
+        // ensureRunning() — that is what the fid-catalog retry hangs off.
+        var fired = 0
+        HelperBinderHolder.onAccepted = { fired++ }
+        HelperBinderHolder.expectedToken = TOKEN
+        val fake = FakeIBinder()
+
+        assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))
+        assertEquals(1, fired)
+        assertSame(fake, HelperBinderHolder.binder)
+    }
+
+    @Test
+    fun `onAccepted stays silent on a rejected intent`() {
+        var fired = 0
+        HelperBinderHolder.onAccepted = { fired++ }
+        HelperBinderHolder.expectedToken = TOKEN
+
+        assertEquals(
+            BinderAcceptResult.TOKEN_MISMATCH,
+            HelperBinderHolder.accept(payload(FakeIBinder(), "deadbeefdeadbeefdeadbeefdeadbeef")),
+        )
+        assertEquals(
+            BinderAcceptResult.DESCRIPTOR_MISMATCH,
+            HelperBinderHolder.accept(payload(FakeIBinder("com.evil.IHelper"), TOKEN)),
+        )
+        assertEquals("a rejected intent must not trigger the callback", 0, fired)
+    }
+
+    @Test
+    fun `a throwing callback does not break acceptance`() {
+        HelperBinderHolder.onAccepted = { error("callback blew up") }
+        HelperBinderHolder.expectedToken = TOKEN
+        val fake = FakeIBinder()
+
+        assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))
+        assertSame(fake, HelperBinderHolder.binder)
     }
 
     private companion object {

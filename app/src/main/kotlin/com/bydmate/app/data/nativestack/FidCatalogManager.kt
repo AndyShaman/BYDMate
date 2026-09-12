@@ -45,17 +45,28 @@ class FidCatalogManager @Inject constructor(
     private var attempts = 0
 
     /**
-     * True while a further attempt is worth making from the service's periodic tick: an attempt
-     * was already spent, nothing is installed, and the tick budget is not exhausted.
+     * True while a further attempt is worth making: an attempt was already spent, nothing is
+     * installed, and the budget is not exhausted.
      *
-     * The daemon can be perfectly healthy while autoservice itself answers nothing yet (cold
-     * start, #194 firmwares): the watchdog then never respawns anything, so the respawn path —
-     * the only other re-trigger — never fires and the process would stay on compiled constants
-     * for the whole session. The budget bounds the retries; a respawn still gets its own attempt
-     * regardless, exactly as before.
+     * The retries come from the service's retry timer (every [RETRY_INTERVAL_MS], independent of
+     * the poll flow) and from the daemon binder arrival. They used to come from the poll tick,
+     * which was wrong: the tick only advances when autoservice `isAvailable()` passes, and it
+     * cannot pass on a car whose probe fids are exactly the ones the catalog would move (Song
+     * Plus, build 456) — the retry could never fire there.
+     *
+     * The daemon can also be perfectly healthy while autoservice itself answers nothing yet
+     * (cold start, #194 firmwares): the watchdog then never respawns anything, so the respawn
+     * path — the only other re-trigger — never fires. The budget bounds the retries; a respawn
+     * still gets its own attempt regardless, exactly as before.
      */
     val resolvePending: Boolean
         get() = !resolved && attempts in 1 until MAX_RESOLVE_ATTEMPTS
+
+    /** True while a retry timer still has work: nothing installed and the attempt budget not spent.
+     *  Unlike [resolvePending] this is also true before the startup attempt ran, so the timer can
+     *  start at service creation and simply wait. */
+    val resolveOpen: Boolean
+        get() = !resolved && attempts < MAX_RESOLVE_ATTEMPTS
 
     /** Resolution state for the `--- fid resolve ---` dump section. */
     val resolveStatus: String
@@ -83,7 +94,7 @@ class FidCatalogManager @Inject constructor(
             attempts++
             if (attempts > 1) {
                 val budget = if (attempts <= MAX_RESOLVE_ATTEMPTS) "$attempts/$MAX_RESOLVE_ATTEMPTS"
-                    else "$attempts (beyond the tick budget)"
+                    else "$attempts (beyond the retry budget)"
                 Log.i(TAG, "fid resolve: retry $budget")
             }
             try {
@@ -226,16 +237,21 @@ class FidCatalogManager @Inject constructor(
 
     private fun cacheFile(): File = File(context.filesDir, CACHE_FILE)
 
-    private companion object {
+    internal companion object {
         const val TAG = "FidCatalog"
         const val CACHE_FILE = "fid-catalog.txt"
         const val PROBE_ATTEMPTS = 3
         const val PROBE_RETRY_DELAY_MS = 10_000L
 
-        /** Attempts the service's periodic tick may spend on an unfinished resolution, counting
-         *  the startup one. Five attempts spaced by the health-check tick cover the minutes a
-         *  cold autoservice needs, without polling the car for the rest of the session. */
+        /** Attempts the service's retry timer may spend on an unfinished resolution, counting
+         *  the startup one. Five attempts spaced by [RETRY_INTERVAL_MS] cover the minutes a cold
+         *  autoservice needs, without probing the car for the rest of the session. The timer is
+         *  deliberately not the poll tick: the tick only advances once `isAvailable()` passes,
+         *  which a car whose probe fids the catalog would move can never do (Song Plus, 456). */
         const val MAX_RESOLVE_ATTEMPTS = 5
+
+        /** Spacing of the service's retry timer between unfinished resolution attempts. */
+        const val RETRY_INTERVAL_MS = 30_000L
     }
 }
 

@@ -32,6 +32,7 @@ import com.bydmate.app.R
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.remote.AlicePollingManager
+import com.bydmate.app.data.nativestack.FidCatalogManager
 import com.bydmate.app.data.nativestack.ParsReader
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.remote.IternioIntervalPolicy
@@ -41,6 +42,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.remote.IternioTelemetryClient
 import com.bydmate.app.data.remote.WebhookTelemetryClient
 import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.domain.tracker.TripState
 import com.bydmate.app.domain.tracker.TripTracker
 import com.bydmate.app.domain.calculator.BigNumberCalculator
@@ -100,7 +102,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
-    @Inject lateinit var fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager
+    @Inject lateinit var fidCatalogManager: FidCatalogManager
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
@@ -500,6 +502,17 @@ class TrackingService : Service(), LocationListener {
         // HUD output resumes with the service on cars where the user enabled it.
         hudController.startIfEnabled()
 
+        // A daemon can be spawned by any ensureRunning() caller (GrantSelfHeal reassert, Settings,
+        // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
+        // Song Plus, build 456. The binder arrival is the one signal every spawn path shares.
+        HelperBinderHolder.onAccepted = {
+            if (fidCatalogManager.resolvePending) {
+                Log.i(TAG, "fid resolve: daemon binder arrived, retrying")
+                resolveFidCatalog()
+            }
+        }
+        startFidResolveRetryTimer()
+
         // Reset the live trip-distance companion flow — stale value from a prior
         // service instance in the same process must not leak to the widget before
         // the first polling tick overwrites it.
@@ -778,14 +791,35 @@ class TrackingService : Service(), LocationListener {
      * their addresses. On its own IO coroutine, because it ends in a probe round on the car
      * and must not hold up the caller. Until it lands every reader uses the compiled
      * constants. Called from the startup chain, from the watchdog respawn (so a daemon that
-     * was absent at startup still gets read once it comes back) and, while the resolution is
-     * pending, from the poll tick — autoservice can start answering under a daemon that was
-     * healthy all along, which no respawn would ever report.
+     * was absent at startup still gets read once it comes back), from the binder-arrival
+     * callback and from [startFidResolveRetryTimer].
      */
     private fun resolveFidCatalog() {
         serviceScope.launch {
             fidCatalogManager.ensureResolved()
             fidSubscriptionManager.restartForResolvedAddresses()
+        }
+    }
+
+    /**
+     * Retry timer for the fid catalog. Lives OUTSIDE the poll flow on purpose: the flow only
+     * emits when the autoservice probe passes, and on a car whose probe fids the catalog would
+     * move the probe cannot pass until the catalog is resolved — a retry on the poll tick could
+     * never fire there (crazyhack, Song Plus, build 456). Bounded by MAX_RESOLVE_ATTEMPTS in
+     * FidCatalogManager; the respawn path keeps its own attempt beyond that budget.
+     */
+    private fun startFidResolveRetryTimer() {
+        serviceScope.launch {
+            while (fidCatalogManager.resolveOpen) {
+                delay(FidCatalogManager.RETRY_INTERVAL_MS)
+                // Only after the startup attempt has run: an attempt spent while ensureRunning() is
+                // still spawning the daemon would be a wasted one.
+                if (fidCatalogManager.resolvePending) {
+                    fidCatalogManager.ensureResolved()
+                    fidSubscriptionManager.restartForResolvedAddresses()
+                }
+            }
+            Log.i(TAG, "fid resolve: retry timer done (${fidCatalogManager.resolveStatus})")
         }
     }
 
@@ -1176,6 +1210,7 @@ class TrackingService : Service(), LocationListener {
         // (WorkManager restarts the service into the same process, reusing the
         // singleton). Cancelling here left confirm-action callbacks dead until
         // process death.
+        HelperBinderHolder.onAccepted = null
         serviceScope.cancel()
 
         // Remove GPS listener to prevent leak
@@ -1354,17 +1389,6 @@ class TrackingService : Service(), LocationListener {
                                 if (respawned) resolveFidCatalog()
                             }
                         }
-                    }
-
-                    // Fid catalog: an attempt that reached the daemon but not autoservice leaves
-                    // the resolution pending. The daemon stays healthy in that case, so the
-                    // respawn path above never re-triggers the read and the process would keep
-                    // the compiled constants for the session. Same cadence as the health check;
-                    // the attempt budget lives in FidCatalogManager.
-                    if (pollTickCount % HELPER_HEALTH_CHECK_EVERY_N_TICKS == 0L &&
-                        fidCatalogManager.resolvePending
-                    ) {
-                        resolveFidCatalog()
                     }
 
                     // On first data after startup: detect offline charging

@@ -80,8 +80,17 @@ object HelperBinderHolder {
     @Volatile var lastReject: String? = null
         private set
 
+    /**
+     * Called right after a binder was accepted and stored — the one signal every daemon spawn
+     * path shares, whoever called ensureRunning(). Runs on the receiver's thread (the main
+     * thread), so it must return immediately: launch a coroutine, never block or transact.
+     */
+    @Volatile var onAccepted: (() -> Unit)? = null
+
     const val TRANSPORT_NONE = "none"
     const val TRANSPORT_BROADCAST = "broadcast"
+
+    private const val TAG = "HelperBinderRx"
 
     /**
      * Authenticates an incoming [ACTION_BINDER][HelperBinderProtocol.ACTION_BINDER] payload and
@@ -120,6 +129,8 @@ object HelperBinderHolder {
         // The token is single-use: one spawn, one binder. Leaving it set would let a replay of
         // the same intent — or a second sender that saw the token — swap the binder afterwards.
         expectedToken = null
+        runCatching { onAccepted?.invoke() }
+            .onFailure { Log.w(TAG, "onAccepted callback threw: ${it.message}") }
         return BinderAcceptResult.ACCEPTED
     }
 
