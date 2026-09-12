@@ -155,3 +155,11 @@ class BlindSpotTelemetryGate {
  */
 fun blindSpotUsesMirror(bothOnMain: Boolean, hasClusterDisplay: Boolean): Boolean =
     bothOnMain || !hasClusterDisplay
+
+/**
+ * Whether the shown window covers the main screen, where the floating widget lives: the right
+ * camera always sits there as a PiP, the left one only when it is the mirrored fallback
+ * ([blindSpotUsesMirror]) instead of a window on the cluster panel.
+ */
+fun blindSpotCoversMainScreen(side: BlindSpotSide, clusterOnMainScreen: Boolean): Boolean =
+    side == BlindSpotSide.RIGHT || (side == BlindSpotSide.LEFT && clusterOnMainScreen)

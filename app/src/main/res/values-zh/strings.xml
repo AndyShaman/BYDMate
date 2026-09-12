@@ -546,7 +546,7 @@
     <!-- Dashboard -->
     <string name="dashboard_vehicle_data_offline">未收到车辆数据</string>
     <string name="dashboard_diplus_offline">DiPlus 无响应</string>
-    <string name="dashboard_adb_offline">ADB 无响应</string>
+    <string name="dashboard_adb_offline">车辆数据不可用</string>
     <string name="dashboard_status_online">在线</string>
     <string name="dashboard_status_offline">离线</string>
 
