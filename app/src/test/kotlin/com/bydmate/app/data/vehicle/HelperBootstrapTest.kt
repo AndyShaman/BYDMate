@@ -97,6 +97,28 @@ class HelperBootstrapTest {
         override suspend fun daemonVersion(): Long? = version
     }
 
+    /** Minimal IBinder carrying our daemon's descriptor — enough for the holder's accept
+     *  path (android.os.Binder cannot be used: transact is final there). */
+    private class FakeDaemonBinder : android.os.IBinder {
+        override fun isBinderAlive(): Boolean = true
+        override fun pingBinder(): Boolean = true
+        override fun getInterfaceDescriptor(): String =
+            com.bydmate.app.helper.HelperBinderProtocol.DESCRIPTOR
+        override fun queryLocalInterface(descriptor: String): android.os.IInterface? = null
+        @Suppress("OVERRIDE_DEPRECATION")
+        override fun dump(fd: java.io.FileDescriptor, args: Array<String>?) {}
+        override fun dumpAsync(fd: java.io.FileDescriptor, args: Array<String>?) {}
+        override fun transact(code: Int, data: android.os.Parcel, reply: android.os.Parcel?, flags: Int) = false
+        override fun linkToDeath(recipient: android.os.IBinder.DeathRecipient, flags: Int) {}
+        override fun unlinkToDeath(recipient: android.os.IBinder.DeathRecipient, flags: Int): Boolean = true
+    }
+
+    private fun binderPayload(binder: android.os.IBinder, token: String): android.os.Bundle =
+        android.os.Bundle().apply {
+            putBinder(com.bydmate.app.helper.HelperBinderProtocol.KEY_BINDER, binder)
+            putString(com.bydmate.app.helper.HelperBinderProtocol.KEY_TOKEN, token)
+        }
+
     @Test
     fun `fresh daemon of current version is reused without kill or spawn`() = runTest {
         prefs().edit().putLong(KEY, baselineVersion()).apply()
@@ -480,13 +502,37 @@ class HelperBootstrapTest {
     }
 
     @Test
-    fun `a spawn that never answers disarms its token`() = runTest {
+    fun `a spawn that never answers keeps its token armed for a late binder`() = runTest {
+        // trinket firmwares boot the daemon slower than our poll window and publish the
+        // binder by broadcast afterwards (crazyhack, Song Plus, 2026-09-12). Disarming the
+        // token here threw that healthy binder away and every write failed until a respawn.
         val adb = FakeAdb()
         val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
 
         assertFalse(boot.ensureRunning())
-        // The spawn window is closed: a late intent carrying that token must no longer be taken.
-        assertEquals(null, HelperBinderHolder.expectedToken)
+        assertEquals(adb.spawnTokens.last(), HelperBinderHolder.expectedToken)
+
+        val late = FakeDaemonBinder()
+        assertEquals(
+            com.bydmate.app.helper.BinderAcceptResult.ACCEPTED,
+            HelperBinderHolder.accept(binderPayload(late, adb.spawnTokens.last())),
+        )
+    }
+
+    @Test
+    fun `clearLastSpawnFailure drops the recorded failure`() = runTest {
+        val adb = FakeAdb()
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertTrue("a failure must be on record first", boot.lastSpawnFailure() != null)
+
+        boot.clearLastSpawnFailure()
+
+        assertEquals(null, boot.lastSpawnFailure())
+        listOf("helper_last_fail_ts", "helper_last_fail_reason", "helper_last_fail_log").forEach {
+            assertFalse("$it must be removed", prefs().contains(it))
+        }
     }
 
     @Test

@@ -506,6 +506,14 @@ class TrackingService : Service(), LocationListener {
         // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
         // Song Plus, build 456. The binder arrival is the one signal every spawn path shares.
         HelperBinderHolder.onAccepted = {
+            // A binder that lands while a spawn failure is on record is a late arrival: the
+            // poll window gave up on this daemon, the token stayed armed and the broadcast
+            // was adopted anyway. Drop the failure so the dump stops naming DAEMON_SILENT
+            // next to a healthy daemon.
+            if (helperBootstrap.lastSpawnFailure() != null) {
+                Log.i(TAG, "helper binder arrived after spawn window; adopted")
+                helperBootstrap.clearLastSpawnFailure()
+            }
             if (fidCatalogManager.resolvePending) {
                 Log.i(TAG, "fid resolve: daemon binder arrived, retrying")
                 resolveFidCatalog()
