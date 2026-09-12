@@ -322,6 +322,13 @@ interface HelperClient {
     suspend fun daemonVersion(): Long?
 
     /**
+     * Tells the daemon this process now holds its Binder, so it stops re-announcing it by
+     * broadcast (#64/#148). Returns the daemon's status (0 = registered), or null against a
+     * daemon too old for TX_REGISTER_CLIENT — non-fatal, that daemon just keeps re-announcing.
+     */
+    suspend fun registerClient(): Int?
+
+    /**
      * Returns the package name of the currently foreground (top-of-stack) task, or null when the
      * daemon is unreachable, transact fails, or the daemon pre-dates TX_GET_TOP_PACKAGE (an old
      * daemon makes transact return false → null, which the media-key poll treats as "not
@@ -716,6 +723,16 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         transact(HelperBinderProtocol.TX_GET_VERSION) { }
             ?.let { (status, value) -> if (readAccepted(status)) value.toLong() else null }
 
+    override suspend fun registerClient(): Int? {
+        val rc = transactParsed(HelperBinderProtocol.TX_REGISTER_CLIENT,
+            { it.writeStrongBinder(clientToken) }) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            reply.readInt()
+        }
+        Log.i(TAG, "registerClient rc=$rc")
+        return rc
+    }
+
     override suspend fun getTopTaskPackage(): String? =
         withContext(Dispatchers.IO) {
             withTimeoutOrNull(REQ_TIMEOUT_MS) {
@@ -1052,6 +1069,11 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
          * as a failure). A read is accepted only on status == 0.
          * See HelperClientStatusTest.
          */
+        /** Our end of TX_REGISTER_CLIENT: the daemon links to this Binder's death to learn that
+         *  our process is gone. Process-wide and lazy — it must outlive every client instance,
+         *  and constructing it eagerly would drag android.os.Binder into plain JVM tests. */
+        private val clientToken: android.os.Binder by lazy { android.os.Binder() }
+
         internal fun writeAccepted(status: Int): Boolean = status >= 0
         internal fun readAccepted(status: Int): Boolean = status == 0
 

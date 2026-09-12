@@ -505,7 +505,10 @@ class TrackingService : Service(), LocationListener {
         // A daemon can be spawned by any ensureRunning() caller (GrantSelfHeal reassert, Settings,
         // cluster) after the startup resolve already failed with "daemon unreachable" — crazyhack's
         // Song Plus, build 456. The binder arrival is the one signal every spawn path shares.
-        HelperBinderHolder.onAccepted = {
+        // installOnAccepted, not a plain assignment: a re-announce may have started this very
+        // process and been accepted before the service existed, and every later broadcast is
+        // rejected as already_held — the daemon would never learn we hold it.
+        HelperBinderHolder.installOnAccepted {
             // A binder that lands while a spawn failure is on record is a late arrival: the
             // poll window gave up on this daemon, the token stayed armed and the broadcast
             // was adopted anyway. Drop the failure so the dump stops naming DAEMON_SILENT
@@ -518,6 +521,9 @@ class TrackingService : Service(), LocationListener {
                 Log.i(TAG, "fid resolve: daemon binder arrived, retrying")
                 resolveFidCatalog()
             }
+            // Tell the daemon we hold its binder so it stops re-announcing it (#64/#148).
+            // Must not block the receiver thread — registerClient is a binder transact.
+            serviceScope.launch { helperClient.registerClient() }
         }
         startFidResolveRetryTimer()
 
@@ -1218,7 +1224,7 @@ class TrackingService : Service(), LocationListener {
         // (WorkManager restarts the service into the same process, reusing the
         // singleton). Cancelling here left confirm-action callbacks dead until
         // process death.
-        HelperBinderHolder.onAccepted = null
+        HelperBinderHolder.installOnAccepted(null)
         serviceScope.cancel()
 
         // Remove GPS listener to prevent leak

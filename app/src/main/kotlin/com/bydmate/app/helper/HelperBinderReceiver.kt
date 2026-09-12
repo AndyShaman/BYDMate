@@ -3,6 +3,7 @@ package com.bydmate.app.helper
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.os.Bundle
 import android.os.IBinder
 import android.util.Log
@@ -15,12 +16,14 @@ internal enum class BinderAcceptResult(val reason: String) {
     ACCEPTED("accepted"),
     /** Nothing usable in the intent — no extras bundle or no binder inside it. */
     NO_BINDER("no_binder"),
-    /** We are not waiting for a daemon right now (no spawn in flight). */
+    /** No token is armed at all — no spawn of ours has ever run in this install. */
     NOT_EXPECTED("not_expected"),
-    /** Token does not match the one we generated for the spawn in flight. */
+    /** Token does not match the one we generated for the last spawn. */
     TOKEN_MISMATCH("token_mismatch"),
     /** The binder is not our daemon's stub. */
     DESCRIPTOR_MISMATCH("descriptor_mismatch"),
+    /** We already hold a binder — a re-announce into a live process, or a replay. */
+    ALREADY_HELD("already_held"),
 }
 
 /**
@@ -35,10 +38,14 @@ internal fun decideBinderAccept(
     hasBinder: Boolean,
     token: String?,
     expectedToken: String?,
+    alreadyHolding: Boolean = false,
 ): BinderAcceptResult? = when {
     !hasBinder -> BinderAcceptResult.NO_BINDER
     expectedToken.isNullOrEmpty() -> BinderAcceptResult.NOT_EXPECTED
     token != expectedToken -> BinderAcceptResult.TOKEN_MISMATCH
+    // The token outlives its accept now (a daemon re-announces into a recreated app process),
+    // so holding a binder is what makes the intent single-use: nothing may swap a live binder.
+    alreadyHolding -> BinderAcceptResult.ALREADY_HELD
     else -> null
 }
 
@@ -65,8 +72,25 @@ object HelperBinderHolder {
     @Volatile var binder: IBinder? = null
         private set
 
-    /** Token generated for the spawn currently in flight; set by HelperBootstrap BEFORE spawning. */
+    /** Token generated for the last spawn; armed by HelperBootstrap BEFORE spawning and restored
+     *  from prefs after a process restart, so a live daemon's re-announce is still authenticated.
+     *  Read freely (the dump prints it); every write goes through [armToken] / [restore]. */
     @Volatile var expectedToken: String? = null
+        private set
+
+    /** Guards the read-modify-write of [expectedToken]: the receiver thread restores it from
+     *  prefs while HelperBootstrap arms a fresh spawn on Dispatchers.IO, and a lost update there
+     *  costs the new daemon its authentication for the rest of the process lifetime. */
+    private val tokenLock = Any()
+
+    /** Arms (or clears) the token for a spawn. Wins over a concurrent [restore]. */
+    internal fun armToken(token: String?) {
+        synchronized(tokenLock) { expectedToken = token }
+    }
+
+    /** True while HelperBootstrap waits for a daemon it just spawned. Only distinguishes a first
+     *  delivery from a re-announce in the log — no decision hangs off it. */
+    @Volatile var spawnInFlight: Boolean = false
 
     /** "none" until a binder is accepted, "broadcast" while one is held. For the diagnostic dump. */
     @Volatile var transport: String = TRANSPORT_NONE
@@ -87,10 +111,48 @@ object HelperBinderHolder {
      */
     @Volatile var onAccepted: (() -> Unit)? = null
 
+    /**
+     * Installs [callback] and fires it at once when a binder is already held. A re-announce can
+     * start the process and be accepted before TrackingService exists: the callback was null then,
+     * and every later broadcast is turned away as already_held — so without this the daemon would
+     * never learn that a client holds it and would keep broadcasting for the life of the process.
+     */
+    internal fun installOnAccepted(callback: (() -> Unit)?) {
+        onAccepted = callback
+        if (callback == null || binder == null) return
+        Log.i(TAG, "onAccepted installed with a binder already held")
+        runCatching { callback() }
+            .onFailure { Log.w(TAG, "onAccepted callback threw: ${it.message}") }
+    }
+
     const val TRANSPORT_NONE = "none"
     const val TRANSPORT_BROADCAST = "broadcast"
 
+    /** Same SharedPreferences file HelperBootstrap keeps its daemon bookkeeping in. */
+    const val PREFS_NAME = "helper"
+    /** Token of the last spawn — survives the app process so a live daemon can be re-adopted. */
+    const val KEY_SPAWN_TOKEN = "helper_spawn_token"
+    /** Set to [TRANSPORT_BROADCAST] once a broadcast binder was accepted; never written on the
+     *  addService path, so on Leopard 3 it stays absent and nothing waits for a re-announce. */
+    const val KEY_LAST_TRANSPORT = "helper_last_transport"
+
     private const val TAG = "HelperBinderRx"
+
+    /**
+     * Re-arms [expectedToken] from the persisted spawn token after a process restart — without it
+     * a recreated process rejects the live daemon's re-announce as not_expected and the bootstrap
+     * kills a perfectly healthy daemon. Called from the receiver's onReceive (the earliest point
+     * that both has a Context and matters: nothing else in the process needs the token), and
+     * never overwrites a token armed by a spawn in flight.
+     */
+    internal fun restore(prefs: SharedPreferences) {
+        // Prefs are read outside the lock (disk); only the compare-and-set is guarded, so a token
+        // armed for a spawn in flight is never overwritten by the stored one.
+        val persisted = prefs.getString(KEY_SPAWN_TOKEN, null)?.takeIf { it.isNotEmpty() } ?: return
+        synchronized(tokenLock) {
+            if (expectedToken == null) expectedToken = persisted
+        }
+    }
 
     /**
      * Authenticates an incoming [ACTION_BINDER][HelperBinderProtocol.ACTION_BINDER] payload and
@@ -98,11 +160,14 @@ object HelperBinderHolder {
      */
     internal fun accept(bundle: Bundle?): BinderAcceptResult {
         val incoming = bundle?.getBinder(HelperBinderProtocol.KEY_BINDER)
+        // One read under the lock: a token being armed mid-decision must not be seen half-way.
+        val expected = synchronized(tokenLock) { expectedToken }
         // Nothing below this point may touch `incoming` until the token has matched.
         decideBinderAccept(
             hasBinder = incoming != null,
             token = bundle?.getString(HelperBinderProtocol.KEY_TOKEN),
-            expectedToken = expectedToken,
+            expectedToken = expected,
+            alreadyHolding = binder != null,
         )?.let { rejected ->
             lastReject = rejected.reason
             return rejected
@@ -126,9 +191,9 @@ object HelperBinderHolder {
         transport = TRANSPORT_BROADCAST
         receivedAt = System.currentTimeMillis()
         lastReject = null
-        // The token is single-use: one spawn, one binder. Leaving it set would let a replay of
-        // the same intent — or a second sender that saw the token — swap the binder afterwards.
-        expectedToken = null
+        // The token stays armed on purpose — the same daemon re-announces to every new app
+        // process. What keeps a replay out is the holder itself: see BinderAcceptResult.ALREADY_HELD.
+        Log.i(TAG, "accepted via=${if (spawnInFlight) "first" else "re-announce"}")
         runCatching { onAccepted?.invoke() }
             .onFailure { Log.w(TAG, "onAccepted callback threw: ${it.message}") }
         return BinderAcceptResult.ACCEPTED
@@ -160,8 +225,23 @@ class HelperBinderReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != HelperBinderProtocol.ACTION_BINDER) return
+        // A process recreated while the daemon lives has no token in memory; this is the first
+        // place in such a process that needs one, so it is also where the persisted one is re-armed.
+        val prefs = context.getSharedPreferences(HelperBinderHolder.PREFS_NAME, Context.MODE_PRIVATE)
+        HelperBinderHolder.restore(prefs)
         val bundle = intent.getBundleExtra(HelperBinderProtocol.EXTRA_BUNDLE)
         val verdict = HelperBinderHolder.accept(bundle)
+        if (verdict == BinderAcceptResult.ACCEPTED) {
+            // This firmware delivers the daemon by broadcast: remembering that is what lets a
+            // recreated process wait for a re-announce instead of killing a live daemon. The token
+            // is persisted only for a daemon that actually handed us a binder — a spawn whose
+            // daemon died in the lock race (ALREADY_RUNNING) never overwrites the live one's token.
+            prefs.edit()
+                .putString(HelperBinderHolder.KEY_LAST_TRANSPORT, HelperBinderHolder.TRANSPORT_BROADCAST)
+                .putString(HelperBinderHolder.KEY_SPAWN_TOKEN,
+                    bundle?.getString(HelperBinderProtocol.KEY_TOKEN))
+                .apply()
+        }
         Log.i(
             TAG,
             "binder received via broadcast: accepted=${verdict == BinderAcceptResult.ACCEPTED} " +

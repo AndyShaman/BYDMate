@@ -240,6 +240,41 @@ class AdbOnDeviceClientTest {
         assertEquals("a refused token must never reach the shell", 0, fake.execCalls.size)
     }
 
+    @Test
+    fun `helperHeartbeat connects lazily when the process has no protocol yet`() = runTest {
+        // A process recreated while the daemon runs never called connect(); reporting "no daemon"
+        // there sent HelperBootstrap into kill+respawn on a healthy daemon (#64/#148).
+        val fake = FakeProtocol(
+            connectResult = true,
+            execResponses = mapOf("ps -A -o NAME" to "init\nbydmate_helper\nzygote"),
+        )
+        val client = newClient(fake)
+
+        assertTrue("a live daemon must be reported even without a prior connect", client.helperHeartbeat())
+        assertEquals("the protocol must be connected lazily", 1, fake.connectCalls)
+    }
+
+    @Test
+    fun `helperHeartbeat stays false when the lazy connect fails`() = runTest {
+        val fake = FakeProtocol(connectResult = false)
+        val client = newClient(fake)
+
+        assertFalse("no channel means no honest answer about the daemon", client.helperHeartbeat())
+        assertEquals("nothing may be executed over a refused connection", 0, fake.execCalls.size)
+    }
+
+    @Test
+    fun `readHelperLog connects lazily too`() = runTest {
+        val fake = FakeProtocol(
+            connectResult = true,
+            execResponses = mapOf("cat /data/local/tmp/bydmate_helper.log" to "READY via=broadcast"),
+        )
+        val client = newClient(fake)
+
+        assertEquals("READY via=broadcast", client.readHelperLog())
+        assertEquals(1, fake.connectCalls)
+    }
+
     private companion object {
         const val TOKEN = "0123456789abcdef0123456789abcdef"
     }

@@ -59,6 +59,7 @@ import android.os.IBinder
  *       -> reply: writeInt(status), writeInt(0)  // status 0 = ok; -1 = failed/component unresolved
  *       activityType = trailing int, absent on old clients → RECENTS (see PANE_TYPE_*).
  *       An old daemon without this handler makes transact return false → client returns false.
+ *   TX_REGISTER_CLIENT : writeStrongBinder(clientBinder)   -> reply: writeInt(status=0)
  *   TX_DUMP_FIDS : (no args)
  *       -> reply: writeInt(status), writeString(dump)  // status 0 = ok; -1 = reflection failed
  *       dump = sorted "ClassName.FIELD_NAME=value" lines joined with \n; empty string on non-BYD firmware.
@@ -354,6 +355,17 @@ object HelperBinderProtocol {
      * An old daemon without this handler makes transact return false → client returns null.
      */
     val TX_CLUSTER_WM_DIAG: Int = IBinder.FIRST_CALL_TRANSACTION + 42  // 43
+
+    /**
+     * Registers the app process with the daemon so it stops re-announcing its Binder
+     * (broadcast transport only, #64/#148). The app sends a plain Binder of its own; the daemon
+     * links to its death and resumes the re-announce timer when the app process goes away.
+     *
+     * Request: [IBinder client] -> [int status (0 = registered)]
+     * An old daemon without this handler makes transact return false → client returns null and
+     * simply keeps receiving one broadcast per re-announce interval.
+     */
+    val TX_REGISTER_CLIENT: Int = IBinder.FIRST_CALL_TRANSACTION + 43  // 44
 
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
