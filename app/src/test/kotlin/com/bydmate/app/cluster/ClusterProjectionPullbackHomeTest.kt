@@ -3,6 +3,7 @@ package com.bydmate.app.cluster
 import android.content.Context
 import android.os.Looper
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.vehicle.DensityResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.SplitTaskState
@@ -116,7 +117,7 @@ class ClusterProjectionPullbackHomeTest {
     // --- helpers ---
 
     private fun helperWith(state: SplitTaskState): HelperClient = mockk(relaxed = true) {
-        coEvery { setDisplayDensity(any(), any()) } returns true
+        coEvery { setDisplayDensity(any(), any()) } returns DensityResult(true)
         coEvery { getTaskId(any()) } returns taskId
         coEvery { setTaskWindowingMode(any(), any(), any()) } returns true
         coEvery { getTaskState(any()) } returns state

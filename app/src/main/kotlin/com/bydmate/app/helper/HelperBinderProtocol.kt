@@ -135,8 +135,11 @@ object HelperBinderProtocol {
     val TX_LAUNCH_FREEFORM: Int = IBinder.FIRST_CALL_TRANSACTION + 21          // 22
 
     /** `wm density` override on a NON-default display: [int displayId, int density
-     *  (0 = reset)] -> [int status, int 0]. Maps the projection scale regulator onto the
-     *  real cluster display in direct mode. */
+     *  (0 = reset)] -> [int status, int 0, String readback]. Maps the projection scale regulator
+     *  onto the real cluster display in direct mode. The readback is what `wm density -d <id>`
+     *  prints right after the write (`Physical density: N; Override density: M`) — additive
+     *  trailing field, old clients read the two ints and stop, and a new client against an old
+     *  daemon finds no bytes left and reads it as empty. */
     val TX_SET_DISPLAY_DENSITY: Int = IBinder.FIRST_CALL_TRANSACTION + 22      // 23
 
     /** `pm grant` of android.permission.READ_LOGS to our own package (development permission,
@@ -336,6 +339,21 @@ object HelperBinderProtocol {
      *   String flags (comma-separated, "" when none)]
      */
     val TX_LIST_DISPLAYS: Int = IBinder.FIRST_CALL_TRANSACTION + 41  // 42
+
+    /**
+     * WindowManager-side readback for the cluster scale investigation (direct mode, DiLink 4.0):
+     * what `dumpsys window displays` says about every display's density (`init=…` line, which
+     * carries the `base=` override when one is in force) and what configuration the projected
+     * app's activity last reported (`mLastReportedConfiguration`, i.e. the dpi the app itself
+     * received). `dumpsys display` alone cannot answer either question — it prints the display
+     * device density, not the WindowManager override. Read-only: two bounded dumpsys calls.
+     *
+     * Request: [String projectedPkg ("" = skip the activity lookup)]
+     * Reply:   [int status (0 = ok, -1 = failed), String wmDisplays, String navTaskConfig]
+     * Both strings are newline-joined, already capped lines; empty when nothing matched.
+     * An old daemon without this handler makes transact return false → client returns null.
+     */
+    val TX_CLUSTER_WM_DIAG: Int = IBinder.FIRST_CALL_TRANSACTION + 42  // 43
 
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the

@@ -4,6 +4,8 @@ import android.util.Log
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.data.nativestack.FidAddress
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
 import com.bydmate.app.data.nativestack.ParsReader
@@ -205,11 +207,11 @@ class VehicleApiImpl @Inject constructor(
         // travel. Diagnostics only — the result never changes the outcome or the channel.
         // Started before helper.write on its own scope so a slow/hung read channel can never
         // delay the write itself.
-        val windowReadFid = WINDOW_READ_FIDS[actionName.lowercase()]
+        val windowReadField = WINDOW_READ_FIELDS[actionName.lowercase()]
 
         logAttempt(actionName, entry, value)
 
-        val windowReadback = windowReadFid?.let { startWindowReadback(actionName, entry, value, it) }
+        val windowReadback = windowReadField?.let { startWindowReadback(actionName, entry, value, it) }
 
         val wrote: Boolean = try {
             if (windowReadback != null) {
@@ -283,7 +285,7 @@ class VehicleApiImpl @Inject constructor(
      * attempt is over (success, failure, or exception) so the logging coroutine knows the
      * write is no longer in flight before it takes the "after" sample.
      */
-    private class WindowReadback(val before: Deferred<Pair<Int, Int?>>, val written: CompletableDeferred<Unit>)
+    private class WindowReadback(val before: Deferred<Pair<FidAddress, Int?>>, val written: CompletableDeferred<Unit>)
 
     /**
      * Samples the pane position now and again once it has had time to travel, entirely on
@@ -295,8 +297,8 @@ class VehicleApiImpl @Inject constructor(
      * — pick the twin when the primary reports a feature link error, so before and after are
      * sampled from the same fid.
      */
-    private fun startWindowReadback(actionName: String, entry: WriteEntry, value: Int, primaryFid: Int): WindowReadback {
-        val beforeDeferred = readbackScope.async { resolveWindowReadFid(primaryFid) }
+    private fun startWindowReadback(actionName: String, entry: WriteEntry, value: Int, primaryField: String): WindowReadback {
+        val beforeDeferred = readbackScope.async { resolveWindowReadFid(primaryField) }
         val written = CompletableDeferred<Unit>()
         readbackScope.launch {
             val (readFid, before) = beforeDeferred.await()
@@ -306,27 +308,29 @@ class VehicleApiImpl @Inject constructor(
             Log.i(
                 TAG,
                 "window readback action=$actionName fid=${entry.writeFid} value=$value " +
-                    "before=$before after=$after (dev=${entry.dev} readFid=$readFid)"
+                    "before=$before after=$after (dev=${entry.dev} readFid=${readFid.fid})"
             )
         }
         return WindowReadback(beforeDeferred, written)
     }
 
-    /** Read fid actually sampled, plus the position read right now (raw, sentinels kept as-is). */
-    private suspend fun resolveWindowReadFid(primaryFid: Int): Pair<Int, Int?> {
-        val raw = readWindowRaw(primaryFid)
-        if (primaryFid == WINDOW_RR_READ_FID && raw == SentinelDecoder.FEATURE_LINK_ERROR) {
-            return WINDOW_RR_READ_FID_GEN3 to readWindowRaw(WINDOW_RR_READ_FID_GEN3)
+    /** Read address actually sampled, plus the position read right now (raw, sentinels kept as-is). */
+    private suspend fun resolveWindowReadFid(primaryField: String): Pair<FidAddress, Int?> {
+        val primary = FidAddresses.of(primaryField)
+        val raw = readWindowRaw(primary)
+        if (primaryField == WINDOW_RR_FIELD && raw == SentinelDecoder.FEATURE_LINK_ERROR) {
+            val gen3 = FidAddresses.of(WINDOW_RR_GEN3_FIELD)
+            return gen3 to readWindowRaw(gen3)
         }
-        return primaryFid to raw
+        return primary to raw
     }
 
     /** Raw position read; a failed read is logged as null and never fails the write. */
-    private suspend fun readWindowRaw(fid: Int): Int? = try {
-        autoservice.getIntRaw(WINDOW_DEV, fid)
+    private suspend fun readWindowRaw(address: FidAddress): Int? = try {
+        autoservice.getIntRaw(address.device, address.fid)
     } catch (e: Exception) {
         if (e is CancellationException) throw e
-        Log.w(TAG, "window readback read fid=$fid failed: ${e.message}")
+        Log.w(TAG, "window readback read fid=${address.fid} failed: ${e.message}")
         null
     }
 
@@ -458,32 +462,32 @@ class VehicleApiImpl @Inject constructor(
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
 
         // ── Window readback (diagnostics) ──────────────────────────────────────
-        private const val WINDOW_DEV = 1001
         /** Long enough for a pane to reach its end position on a full open/close. */
         private const val WINDOW_READBACK_DELAY_MS = 2_000L
         /** Bounded wait so the "before" sample usually precedes the write, but a hung read
          *  channel costs at most this much. */
         private const val WINDOW_BEFORE_READ_BUDGET_MS = 300L
-        private const val WINDOW_RR_READ_FID = 947912752
-        private const val WINDOW_RR_READ_FID_GEN3 = 1267728408
-        /** Write action → the READ fid of the same pane (percent, dev=1001). */
-        private val WINDOW_READ_FIDS: Map<String, Int> = mapOf(
-            "window_driver_pos" to 947912728,
-            "window_driver_open" to 947912728,
-            "window_driver_close" to 947912728,
-            "window_driver_ctrl" to 947912728,
-            "window_passenger_pos" to 1267728400,
-            "window_passenger_open" to 1267728400,
-            "window_passenger_close" to 1267728400,
-            "window_passenger_ctrl" to 1267728400,
-            "window_rear_left_pos" to 947912736,
-            "window_rear_left_open" to 947912736,
-            "window_rear_left_close" to 947912736,
-            "window_rear_left_ctrl" to 947912736,
-            "window_rear_right_pos" to WINDOW_RR_READ_FID,
-            "window_rear_right_open" to WINDOW_RR_READ_FID,
-            "window_rear_right_close" to WINDOW_RR_READ_FID,
-            "window_rear_right_ctrl" to WINDOW_RR_READ_FID,
+        private const val WINDOW_RR_FIELD = "windowRR"
+        private const val WINDOW_RR_GEN3_FIELD = "windowRRGen3"
+        /** Write action → the FidMap READ entry of the same pane (percent). The address
+         *  itself is looked up per read, so it follows the firmware catalog. */
+        private val WINDOW_READ_FIELDS: Map<String, String> = mapOf(
+            "window_driver_pos" to "windowFL",
+            "window_driver_open" to "windowFL",
+            "window_driver_close" to "windowFL",
+            "window_driver_ctrl" to "windowFL",
+            "window_passenger_pos" to "windowFR",
+            "window_passenger_open" to "windowFR",
+            "window_passenger_close" to "windowFR",
+            "window_passenger_ctrl" to "windowFR",
+            "window_rear_left_pos" to "windowRL",
+            "window_rear_left_open" to "windowRL",
+            "window_rear_left_close" to "windowRL",
+            "window_rear_left_ctrl" to "windowRL",
+            "window_rear_right_pos" to WINDOW_RR_FIELD,
+            "window_rear_right_open" to WINDOW_RR_FIELD,
+            "window_rear_right_close" to WINDOW_RR_FIELD,
+            "window_rear_right_ctrl" to WINDOW_RR_FIELD,
         )
         // TODO: route to Crashlytics when Firebase is integrated
     }

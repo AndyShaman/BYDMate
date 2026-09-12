@@ -1276,10 +1276,10 @@ private fun DisplaySection() {
             enabled = enabled,
             onValueChangeFinished = applyGeometry,
         )
-        // #121: only the VD transport can scale (it sizes the render buffer). Direct mode would
-        // need a density override on the live cluster display, which kills Qt apps like 2GIS, so
-        // the slider is inert there. Kept enabled and visible - the value still applies the moment
-        // the user switches back to Factory.
+        // #121: the VD transport scales by sizing the render buffer, direct mode by a density
+        // override on the cluster display. That override is only ever set while no window of the
+        // app is on the display (it kills Qt apps like 2GIS otherwise), so in direct mode a new
+        // value lands on the next send to the cluster rather than right away.
         if (directProjection) {
             SettingHint(text = stringResource(R.string.settings_display_scale_direct_hint))
         }
@@ -2489,6 +2489,22 @@ private fun VoiceSettingsContent(
                 ),
                 selectedIndex = genderIds.indexOf(state.agentGender).coerceAtLeast(0),
                 onSelect = { viewModel.setAgentGender(genderIds[it]) },
+            )
+            SettingDivider()
+            // #190: the map app every route/search command opens (voice agent and automation).
+            val routeNavigatorIds = listOf(
+                com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
+                com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
+            )
+            SettingChipRow(
+                title = stringResource(R.string.settings_route_navigator_label),
+                description = stringResource(R.string.settings_route_navigator_hint),
+                options = listOf(
+                    stringResource(R.string.settings_route_navigator_yandex),
+                    stringResource(R.string.settings_route_navigator_dgis),
+                ),
+                selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
+                onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
             )
         }
     }

@@ -2,6 +2,7 @@ package com.bydmate.app.ui.settings
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.automation.RouteNavigatorUris
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.EnergyDataDeadDetector
@@ -306,6 +307,8 @@ class SettingsViewModelTest {
                 mockk(relaxed = true),
                 kotlinx.coroutines.test.TestScope(),
             ),
+            fidCatalogManager = mockk(relaxed = true),
+            writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
         )
     }
 
@@ -1081,6 +1084,71 @@ class SettingsViewModelTest {
             "engineer",
             ctx.getSharedPreferences("voice", Context.MODE_PRIVATE).getString("agent_persona", "")
         )
+    }
+
+    /** #190: default is Yandex, the setter mirrors into the same voice prefs the dispatcher reads. */
+    @Test fun `route navigator defaults to yandex and persists the choice`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RouteNavigatorUris.YANDEX, vm.uiState.value.routeNavigator)
+
+        vm.setRouteNavigator(RouteNavigatorUris.DGIS)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RouteNavigatorUris.DGIS, vm.uiState.value.routeNavigator)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(
+            RouteNavigatorUris.DGIS,
+            ctx.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, "")
+        )
+    }
+
+    /** The dump header must carry the choice: it is the only place a user log shows it. */
+    @Test fun `the diagnostic header reports the chosen route navigator`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        vm.setRouteNavigator(RouteNavigatorUris.DGIS)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // The header is written before the logcat pipe (which the test seam blows up on),
+        // so the started file keeps the settings block even though the start itself fails.
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader()
+
+        assertTrue(
+            "the settings block must report the navigator, was:\n$header",
+            header.contains("route_navigator=dgis"),
+        )
+    }
+
+    /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */
+    private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000): String {
+        val deadline = System.currentTimeMillis() + timeoutMs
+        while (System.currentTimeMillis() < deadline) {
+            val file = listOf(publicDumpDir(), fallbackDumpDir())
+                .flatMap { it.listFiles()?.toList() ?: emptyList() }
+                .filter { it.name.startsWith("bydmate_logs_") }
+                .maxByOrNull { it.lastModified() }
+            val text = file?.readText().orEmpty()
+            if (text.contains("--- settings ---")) return text
+            Thread.sleep(10)
+        }
+        throw AssertionError("no diagnostic header was written within $timeoutMs ms")
+    }
+
+    /** A value written by an older build (or garbage) must not leak into the UI or the dispatcher. */
+    @Test fun `an unknown stored navigator reads back as yandex`() = runTest {
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        ctx.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+            .edit().putString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, "2gis").commit()
+
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RouteNavigatorUris.YANDEX, vm.uiState.value.routeNavigator)
     }
 
     @Test fun `testAgentModel on Answer sets result with seconds and answer prefix`() = runTest {

@@ -53,7 +53,7 @@
     <string name="settings_display_offset_y_desc">窗口位置：0 - 顶部，50 - 居中，100 - 底部</string>
     <string name="settings_display_scale">缩放</string>
     <string name="settings_display_scale_desc">界面大小：数值越小，界面元素越小，地图显示越多</string>
-    <string name="settings_display_scale_direct_hint">缩放仅在“出厂”投屏模式下生效。“扩展”模式下应用始终按原始大小显示。</string>
+    <string name="settings_display_scale_direct_hint">要应用新的缩放，请关闭并重新打开仪表盘投送。</string>
     <string name="settings_section_places_title">地点</string>
     <string name="settings_section_application_title">应用</string>
     <string name="settings_smart_home_section_title">智能家居</string>
@@ -1190,6 +1190,10 @@
     <string name="settings_agent_gender_male">男声</string>
     <string name="settings_agent_gender_female">女声</string>
     <string name="settings_agent_gender_hint">对所有语音生效：每种音色都有男声和女声版本</string>
+    <string name="settings_route_navigator_label">路线导航应用</string>
+    <string name="settings_route_navigator_yandex">Yandex 导航</string>
+    <string name="settings_route_navigator_dgis">2GIS</string>
+    <string name="settings_route_navigator_hint">规划路线和地图搜索时打开哪个应用</string>
     <string name="settings_agent_memory_title">驾驶员记忆</string>
     <string name="settings_agent_memory_hint">当你告诉智能体时，它会记住你的名字和长期偏好。说“忘记……”即可删除某一条</string>
     <string name="settings_agent_memory_empty">暂无记忆内容</string>

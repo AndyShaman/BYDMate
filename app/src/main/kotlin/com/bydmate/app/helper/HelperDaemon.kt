@@ -463,6 +463,26 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_CLUSTER_WM_DIAG -> runCatching {
+                    // Read-only readback for the direct-mode scale question: what WindowManager
+                    // itself holds per display, and what configuration the projected activity last
+                    // reported. Bounded like every other diagnostic dumpsys; `activity activities`
+                    // gets 512 KiB because the ActivityRecord entries come late in that dump.
+                    val pkg = data.readString() ?: ""
+                    val displays = ClusterDisplayDiag.wmDisplayLines(
+                        shExecBounded("dumpsys window displays", maxBytes = 256 * 1024))
+                    val taskConfig = ClusterDisplayDiag.taskConfigLines(
+                        shExecBounded("dumpsys activity activities", maxBytes = 512 * 1024), pkg)
+                    android.util.Log.i("bydmate_helper", "TX_CLUSTER_WM_DIAG pkg=$pkg " +
+                        "displays=${displays.size} task=${taskConfig.joinToString("; ").take(200)}")
+                    reply?.writeInt(0)
+                    reply?.writeString(displays.joinToString("\n"))
+                    reply?.writeString(taskConfig.joinToString("\n"))
+                    true
+                }.getOrElse {
+                    reply?.writeInt(-1); reply?.writeString(""); reply?.writeString(""); true
+                }
+
                 HelperBinderProtocol.TX_PUT_GLOBAL_SETTING -> runCatching {
                     val key = data.readString() ?: ""
                     val value = data.readInt()
@@ -534,10 +554,13 @@ fun main(args: Array<String>) {
                 HelperBinderProtocol.TX_SET_DISPLAY_DENSITY -> runCatching {
                     val displayId = data.readInt()
                     val density = data.readInt()
-                    val ok = setDisplayDensity(displayId, density)
-                    reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
+                    val result = setDisplayDensity(displayId, density)
+                    reply?.writeInt(if (result.ok) 0 else -1); reply?.writeInt(0)
+                    // 3rd field (additive): the `wm density -d <id>` readback. Old clients read the
+                    // two ints and stop; parcel reads are sequential, so nothing shifts for them.
+                    reply?.writeString(result.readback)
                     true
-                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); reply?.writeString(""); true }
 
                 HelperBinderProtocol.TX_GET_TASK_STATE -> runCatching {
                     val pkg = data.readString() ?: ""
@@ -1572,7 +1595,7 @@ private fun createVirtualDisplay(
     return id
 }
 
-private class CmdResult(val code: Int, val stdout: String)
+internal class CmdResult(val code: Int, val stdout: String)
 
 /**
  * Runs [script] under sh with [args] bound to positional params ($1, $2, …) so untrusted values
@@ -1599,15 +1622,18 @@ private fun shExec(script: String, vararg args: String): CmdResult {
  * "Exception occurred while executing '<cmd>'"; the single merged pipe cannot deadlock.)
  * Do NOT use for component resolution ([resolveLaunchComponent]): stderr must not reach the parser.
  */
-internal fun shExecMerged(script: String, vararg args: String): String {
+internal fun shExecMerged(script: String, vararg args: String): String =
+    shExecMergedResult(script, *args).stdout.ifEmpty { "OK" }
+
+/** [shExecMerged] with the exit code kept: the `wm density` op logs rc and output together. */
+private fun shExecMergedResult(script: String, vararg args: String): CmdResult {
     val cmd = arrayListOf("sh", "-c", script, "sh")
     cmd.addAll(args)
     val process = ProcessBuilder(cmd)
         .redirectErrorStream(true)
         .start()
     val out = process.inputStream.bufferedReader().use { it.readText().trim() }
-    process.waitFor()
-    return out.ifEmpty { "OK" }
+    return CmdResult(process.waitFor(), out)
 }
 
 /** Snapshot rate limit (see TX_CLUSTER_DISPLAY_DIAG): one at a time, at most one per minute. */
@@ -1741,23 +1767,48 @@ internal fun autoContainerCall(cmd: Int, exec: (String, String) -> Int): Boolean
 }
 
 /**
+ * Outcome of the `wm density` op: [ok] is the exit status of the set/reset command, [readback] is
+ * what `wm density -d <id>` printed right after it (Android 10: `Physical density: N` plus
+ * `Override density: M` when an override is in force), flattened onto one line. Empty when the
+ * command was rejected before running or the readback printed nothing.
+ */
+internal data class DensityCommandResult(val ok: Boolean, val readback: String)
+
+/**
  * Testable core of the `wm density` op. [displayId] must be a NON-default display — the main
  * screen must never be rescaled by this daemon. [density] 0 = reset, otherwise sane wm bounds.
- * [exec] runs a shell script with positional args and returns its exit code.
+ * [exec] runs a shell script with positional args and returns its exit code plus merged output.
+ *
+ * The set is always followed by a readback: on DiLink 4.0 the set returns rc=0 while the cluster
+ * picture does not change, and only `wm density -d <id>` says whether WindowManager took the
+ * override at all.
  */
-internal fun setDisplayDensityCore(displayId: Int, density: Int, exec: (String, List<String>) -> Int): Boolean {
-    if (displayId !in 1..63) return false
-    if (density != 0 && density !in 80..640) return false
-    return if (density == 0) {
-        exec("wm density reset -d \"\$1\"", listOf(displayId.toString())) == 0
+internal fun setDisplayDensityCore(
+    displayId: Int, density: Int, exec: (String, List<String>) -> CmdResult,
+): DensityCommandResult {
+    if (displayId !in 1..63) return DensityCommandResult(false, "")
+    if (density != 0 && density !in 80..640) return DensityCommandResult(false, "")
+    val set = if (density == 0) {
+        exec("wm density reset -d \"\$1\"", listOf(displayId.toString()))
     } else {
-        exec("wm density \"\$1\" -d \"\$2\"", listOf(density.toString(), displayId.toString())) == 0
+        exec("wm density \"\$1\" -d \"\$2\"", listOf(density.toString(), displayId.toString()))
     }
+    val label = if (density == 0) "reset" else density.toString()
+    android.util.Log.i("bydmate_helper", "wm density set display=$displayId density=$label " +
+        "rc=${set.code} out=\"${flattenOutput(set.stdout, 120, " / ")}\"")
+    val readback = flattenOutput(
+        exec("wm density -d \"\$1\"", listOf(displayId.toString())).stdout, 160, "; ")
+    android.util.Log.i("bydmate_helper", "wm density readback display=$displayId: $readback")
+    return DensityCommandResult(set.code == 0, readback)
 }
 
-private fun setDisplayDensity(displayId: Int, density: Int): Boolean =
+/** Command output onto one log line: newlines become [separator], the result is capped at [max]. */
+private fun flattenOutput(raw: String, max: Int, separator: String): String =
+    raw.lines().map { it.trim() }.filter { it.isNotEmpty() }.joinToString(separator).take(max)
+
+private fun setDisplayDensity(displayId: Int, density: Int): DensityCommandResult =
     setDisplayDensityCore(displayId, density) { script, args ->
-        shExec(script, *args.toTypedArray()).code
+        shExecMergedResult(script, *args.toTypedArray())
     }
 
 /**

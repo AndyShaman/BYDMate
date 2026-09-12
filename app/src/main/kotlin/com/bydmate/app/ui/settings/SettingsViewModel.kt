@@ -180,6 +180,8 @@ data class SettingsUiState(
     val agentName: String = "",
     val agentPersona: String = AgentPersona.NAVIGATOR.id,
     val agentGender: String = "m",
+    /** #190: which map app the navigate action opens — "yandex" (default) or "dgis". */
+    val routeNavigator: String = com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
     /** Long-term facts the agent remembered about the driver (DriverMemory). */
     val agentMemoryFacts: List<String> = emptyList(),
     // Wave J: multi-provider LLM connections (OpenRouter / z.ai / custom)
@@ -252,6 +254,8 @@ class SettingsViewModel @Inject constructor(
     private val splitJournal: com.bydmate.app.split.SplitJournal,
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
+    private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
+    private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -408,6 +412,10 @@ class SettingsViewModel @Inject constructor(
                 .getString("agent_persona", null) ?: AgentPersona.NAVIGATOR.id
             val agentGender = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
                 .getString("agent_gender", "m") ?: "m"
+            val routeNavigator = com.bydmate.app.data.automation.RouteNavigatorUris.normalize(
+                appContext.getSharedPreferences(
+                    com.bydmate.app.data.automation.RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE
+                ).getString(com.bydmate.app.data.automation.RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))
 
             // Wave J: multi-provider LLM connections
             val zaiApiKey = settingsRepository.getString(SettingsRepository.KEY_ZAI_API_KEY, "")
@@ -468,6 +476,7 @@ class SettingsViewModel @Inject constructor(
                     agentName = agentName,
                     agentPersona = agentPersona,
                     agentGender = agentGender,
+                    routeNavigator = routeNavigator,
                     agentMemoryFacts = driverMemory.facts(),
                     zaiApiKey = zaiApiKey,
                     customName = customName,
@@ -1429,6 +1438,21 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Picks the map app the navigate action opens (#190): "yandex" (default) or "dgis".
+     * Persisted in the same SharedPreferences("voice") file as the other agent settings, which
+     * is where [com.bydmate.app.data.automation.ActionDispatcher] reads it on every route.
+     */
+    fun setRouteNavigator(value: String) {
+        val normalized = com.bydmate.app.data.automation.RouteNavigatorUris.normalize(value)
+        _uiState.update { it.copy(routeNavigator = normalized) }
+        appContext.getSharedPreferences(
+            com.bydmate.app.data.automation.RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE
+        ).edit()
+            .putString(com.bydmate.app.data.automation.RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, normalized)
+            .apply()
+    }
+
+    /**
      * Switches the agent's gender ("m"/"f"). Persists into SharedPreferences("voice")
      * under "agent_gender", same access pattern as setAgentPersona. If the currently
      * selected TTS voice doesn't match the new gender, switches it to its counterpart
@@ -1517,7 +1541,7 @@ class SettingsViewModel @Inject constructor(
             HelperDiagnostics(
                 alive = runCatching { helperClient.isAlive() }.getOrNull(),
                 // One binder round-trip for all ten seat reads.
-                seats = runCatching { helperClient.readBatch(SeatsDiagnostics.batchItems) }.getOrNull(),
+                seats = runCatching { helperClient.readBatch(SeatsDiagnostics.batchItems()) }.getOrNull(),
             )
         }
         return withTimeoutOrNull(HELPER_DIAG_BUDGET_MS) { probe.await() }
@@ -1566,6 +1590,10 @@ class SettingsViewModel @Inject constructor(
                 appendLine("data_source: $dataSource")
                 appendLine("battery_capacity: raw=\"$capacityRaw\" parsed=$capacityParsed")
                 appendLine("abrp_enabled: $abrpEnabled token_len=$abrpTokenLen car_model=\"$abrpCarModel\"")
+                appendLine("route_navigator=" + com.bydmate.app.data.automation.RouteNavigatorUris.normalize(
+                    appContext.getSharedPreferences(
+                        com.bydmate.app.data.automation.RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE
+                    ).getString(com.bydmate.app.data.automation.RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null)))
                 val secureSettingsGranted = appContext.checkSelfPermission(
                     android.Manifest.permission.WRITE_SECURE_SETTINGS
                 ) == android.content.pm.PackageManager.PERMISSION_GRANTED
@@ -1726,6 +1754,15 @@ class SettingsViewModel @Inject constructor(
                     "freeform_reboot_pending=${clusterPrefs.getBoolean(cpm.KEY_FREEFORM_REBOOT_PENDING, false)}")
                 appendLine("projected_pkg: ${diag.projectedPackage ?: "(none)"} " +
                     "target=${clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, "(default)")}")
+                // #121: the density override carries the scale in direct mode, and apps latched by
+                // the death watch as dying on a non-native density are sent at the panel's own
+                // density instead — their scale slider is inert.
+                val densityUnsafe = cpm.densityUnsafePackages(appContext)
+                appendLine("density: " + when (diag.directDensityDpi) {
+                    -1 -> "(not set this session)"
+                    0 -> "native"
+                    else -> "${diag.directDensityDpi} dpi"
+                } + " unsafe=" + if (densityUnsafe.isEmpty()) "(none)" else densityUnsafe.joinToString())
                 appendLine("vd: id=${diag.vdDisplayId} overlay_attached=${diag.overlayAttached} " +
                     "direct_display=${diag.directDisplayId} " +
                     "direct_marker=${clusterPrefs.getInt(cpm.KEY_DIRECT_DISPLAY_ID, -1)}")
@@ -1775,6 +1812,29 @@ class SettingsViewModel @Inject constructor(
                             "[${it.flags.joinToString(",")}]"
                     }
                 })
+                // Density question (#194, direct mode): `dumpsys display` prints the display
+                // DEVICE density, so it cannot say whether WindowManager took a `wm density`
+                // override or whether the projected app received it. These two blocks can.
+                // Skipped entirely when the daemon did not answer the inventory call above.
+                val wmDiagPkg = diag.projectedPackage
+                    ?: clusterPrefs.getString(cpm.KEY_TARGET_PACKAGE, com.bydmate.app.cluster.NAVI_PACKAGE)
+                    ?: com.bydmate.app.cluster.NAVI_PACKAGE
+                val wmDiag = if (daemonDisplays == null) null
+                    else runCatching { helperClient.clusterWmDiag(wmDiagPkg) }.getOrNull()
+                if (wmDiag == null) {
+                    appendLine("wm displays: (daemon unavailable)")
+                } else {
+                    if (wmDiag.displays.isEmpty()) appendLine("wm displays: (none)")
+                    else {
+                        appendLine("wm displays:")
+                        wmDiag.displays.forEach { appendLine("  $it") }
+                    }
+                    if (wmDiag.taskConfig.isEmpty()) appendLine("nav task config: (none)")
+                    else {
+                        appendLine("nav task config:")
+                        wmDiag.taskConfig.forEach { appendLine("  $it") }
+                    }
+                }
                 val daemonPick = daemonDisplays?.let {
                     com.bydmate.app.cluster.pickClusterFromDaemon(it, preferFullDisplay)
                 }
@@ -1938,6 +1998,18 @@ class SettingsViewModel @Inject constructor(
 
             appendLine("--- seat command journal ---")
             SeatsDiagnostics.journalLines(appContext).forEach { appendLine(it) }
+
+            appendLine("--- fid resolve ---")
+            try {
+                com.bydmate.app.data.nativestack.FidResolveDiagnostics.format(
+                    com.bydmate.app.data.nativestack.FidAddresses.table,
+                    fidCatalogManager.catalog,
+                    writeAllowlist.allEntries().map {
+                        com.bydmate.app.data.nativestack.WriteFidRow(it.actionName, it.dev, it.writeFid)
+                    },
+                    fidCatalogManager.resolveStatus,
+                ).forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- fid subscriptions ---")
             try {

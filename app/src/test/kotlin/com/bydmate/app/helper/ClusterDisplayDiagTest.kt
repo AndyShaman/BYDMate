@@ -215,4 +215,100 @@ class ClusterDisplayDiagTest {
         assertEquals(10071, foreign.ownerUid)
         assertTrue(foreign.flags.contains("FLAG_PRIVATE"))
     }
+
+    // --- WindowManager readback (TX_CLUSTER_WM_DIAG) ---
+
+    /** `dumpsys window displays` on Android 10: display 1 carries a forced density (base=), the
+     *  main display does not. */
+    private val WINDOW_DISPLAYS = """
+        WINDOW MANAGER DISPLAY CONTENTS (dumpsys window displays)
+          Display: mDisplayId=0
+            init=1920x1080 320dpi cur=1920x1080 app=1920x1080 rng=1080x1080-1920x1920
+            deferred=false mLayoutNeeded=false
+          Display: mDisplayId=1
+            init=1920x720 320dpi base=1920x720 160dpi cur=1920x720 app=1920x720 rng=1920x720-1920x720
+            deferred=false mLayoutNeeded=false mTouchExcludeRegion=SkRegion()
+    """.trimIndent()
+
+    @Test
+    fun `wm displays reports the init line of every display, forced and unforced`() {
+        val lines = ClusterDisplayDiag.wmDisplayLines(WINDOW_DISPLAYS)
+        assertEquals(2, lines.size)
+        assertEquals(
+            "0: init=1920x1080 320dpi cur=1920x1080 app=1920x1080 rng=1080x1080-1920x1920",
+            lines[0],
+        )
+        assertTrue(
+            "the forced display must keep its base= override: ${lines[1]}",
+            lines[1].startsWith("1: init=1920x720 320dpi base=1920x720 160dpi"),
+        )
+    }
+
+    @Test
+    fun `wm displays caps the number of displays and the line length`() {
+        val many = (0..9).joinToString("\n") { id ->
+            "  Display: mDisplayId=$id\n    init=1920x720 320dpi " + "x".repeat(400)
+        }
+        val lines = ClusterDisplayDiag.wmDisplayLines(many)
+        assertEquals(ClusterDisplayDiag.MAX_WM_DISPLAYS, lines.size)
+        assertTrue(lines.all { it.length <= ClusterDisplayDiag.MAX_WM_LINE + 4 })
+    }
+
+    @Test
+    fun `wm displays on a dump without display blocks is empty`() {
+        assertTrue(ClusterDisplayDiag.wmDisplayLines("").isEmpty())
+    }
+
+    /** `dumpsys activity activities` on Android 10: the plural header line precedes the blob. */
+    private val ACTIVITIES = """
+        Display #0 (activities from top to bottom):
+          Stack #4075:
+            * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
+              packageName=ru.yandex.yandexnavi processName=ru.yandex.yandexnavi
+              mActivityComponent=ru.yandex.yandexnavi/.MainActivity
+              mLastReportedConfigurations:
+               mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp w960dp h360dp 160dpi lrg land finger qwerty/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1920, 720) mAppBounds=Rect(0, 0 - 1920, 720) mWindowingMode=freeform mDisplayWindowingMode=fullscreen mActivityType=standard} s.6}
+              resumed=true
+    """.trimIndent()
+
+    @Test
+    fun `nav task config reports the dpi the activity itself received`() {
+        val lines = ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi")
+        assertEquals(1, lines.size)
+        assertTrue(
+            "the component and its reported dpi must be on the line: ${lines[0]}",
+            lines[0].startsWith("ru.yandex.yandexnavi/.MainActivity dpi=160 raw=\""),
+        )
+    }
+
+    @Test
+    fun `nav task config survives the singular spelling and a missing dpi`() {
+        val singular = """
+              * ActivityRecord{a1b2c3 u0 ru.yandex.yandexnavi/.MainActivity t4075}
+                mLastReportedConfiguration={1.0 ?mcc?mnc [ru_RU] ldltr sw360dp land finger}
+        """.trimIndent()
+        val lines = ClusterDisplayDiag.taskConfigLines(singular, "ru.yandex.yandexnavi")
+        assertEquals(1, lines.size)
+        assertTrue("missing dpi must read as ?: ${lines[0]}", lines[0].contains(" dpi=? "))
+    }
+
+    @Test
+    fun `nav task config names the package when no record is there`() {
+        assertEquals(
+            listOf("(no ActivityRecord for ru.yandex.yandexnavi.other)"),
+            ClusterDisplayDiag.taskConfigLines(ACTIVITIES, "ru.yandex.yandexnavi.other"),
+        )
+    }
+
+    @Test
+    fun `nav task config caps the number of records`() {
+        val many = (1..5).joinToString("\n") { i ->
+            "    * ActivityRecord{h$i u0 ru.yandex.yandexnavi/.Act$i t40$i}\n" +
+                "      mLastReportedConfiguration={1.0 160dpi}"
+        }
+        assertEquals(
+            ClusterDisplayDiag.MAX_TASK_CONFIGS,
+            ClusterDisplayDiag.taskConfigLines(many, "ru.yandex.yandexnavi").size,
+        )
+    }
 }

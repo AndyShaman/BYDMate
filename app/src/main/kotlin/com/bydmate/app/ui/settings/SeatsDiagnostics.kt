@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.settings
 
 import android.content.Context
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.SeatCommandJournal
 
@@ -15,22 +16,32 @@ import com.bydmate.app.data.vehicle.SeatCommandJournal
  */
 internal object SeatsDiagnostics {
 
-    data class SeatFid(val name: String, val dev: Int, val fid: Int)
+    /** One printed row: the dump label plus the FidMap entry it reads. */
+    data class SeatFid(val name: String, val field: String) {
+        // `this.` is required: bare `field` inside an accessor is the backing-field keyword.
+        /** Address in force right now — the constant until the firmware catalog resolves it. */
+        val dev: Int get() = FidAddresses.device(this.field)
+        val fid: Int get() = FidAddresses.fid(this.field)
+    }
 
-    /** All tx=5 reads, in print order: live status, live level, then the trim config flags. */
+    /**
+     * All tx=5 reads, in print order: live status, live level, then the trim config flags.
+     * Addresses live in FidMap (shared with the poll loop where the same fid is polled), so
+     * the block follows whatever the firmware catalog resolved them to.
+     */
     val FIDS: List<SeatFid> = listOf(
-        SeatFid("vent_status_driver", 1000, 702545928),
-        SeatFid("heat_status_driver", 1000, 702545932),
-        SeatFid("vent_level_driver", 1000, 702545944),
-        SeatFid("heat_level_driver", 1000, 702545948),
+        SeatFid("vent_status_driver", "seatVentStatusDriver"),
+        SeatFid("heat_status_driver", "seatHeatStatusDriver"),
+        SeatFid("vent_level_driver", "seatVentDriver"),
+        SeatFid("heat_level_driver", "seatHeatDriver"),
         // Passenger side: these two are LEVELS (0=off, 1..5), not the 1=on/2=off status enum
         // the driver labels above carry — the catalog names them AC_PASSENGER_SEAT_*_LEVEL.
-        SeatFid("vent_level_passenger", 1000, 711983128),
-        SeatFid("heat_level_passenger", 1000, 711983132),
-        SeatFid("config_vent_lf", 1000, 715132952),
-        SeatFid("config_heat_lf", 1000, 715132955),
-        SeatFid("has_driver_seat_ventilating", 1023, -811597816),
-        SeatFid("has_driver_seat_heating", 1023, -811597813),
+        SeatFid("vent_level_passenger", "seatVentPassenger"),
+        SeatFid("heat_level_passenger", "seatHeatPassenger"),
+        SeatFid("config_vent_lf", "seatConfigVentLf"),
+        SeatFid("config_heat_lf", "seatConfigHeatLf"),
+        SeatFid("has_driver_seat_ventilating", "seatHasDriverVent"),
+        SeatFid("has_driver_seat_heating", "seatHasDriverHeat"),
         // Candidate status families, read-only. The 0x29e0/0x2a70 family above is dead on
         // Song L / Han EV (reads 0 with ventilation physically running), so the dump also
         // samples the two other seat families in the catalog: the 3CE hal_only block and the
@@ -39,26 +50,29 @@ internal object SeatsDiagnostics {
         // The passenger status enum (counterpart of vent_status_driver/heat_status_driver).
         // Unvalidated on a live car, so the write-side readback does not use it yet — the
         // dump decides whether it answers at all.
-        SeatFid("cand_passenger_vent_status", 1000, 711983112),
-        SeatFid("cand_passenger_heat_status", 1000, 711983116),
-        SeatFid("cand_3ce_vent_status_driver", 1000, 1021313032),
-        SeatFid("cand_3ce_heat_status_driver", 1000, 1021313034),
-        SeatFid("cand_3ce_vent_level_driver", 1000, 1021313044),
-        SeatFid("cand_3ce_heat_level_driver", 1000, 1021313048),
-        SeatFid("cand_lrse_vent_status_rl", 1000, 412180522),
-        SeatFid("cand_lrse_heat_status_rl", 1000, 412180526),
-        SeatFid("cand_lrse_vent_status_rr", 1000, 412180528),
-        SeatFid("cand_lrse_heat_status_rr", 1000, 412180532),
+        SeatFid("cand_passenger_vent_status", "seatCandPassengerVentStatus"),
+        SeatFid("cand_passenger_heat_status", "seatCandPassengerHeatStatus"),
+        SeatFid("cand_3ce_vent_status_driver", "seatCand3ceVentStatusDriver"),
+        SeatFid("cand_3ce_heat_status_driver", "seatCand3ceHeatStatusDriver"),
+        SeatFid("cand_3ce_vent_level_driver", "seatCand3ceVentLevelDriver"),
+        SeatFid("cand_3ce_heat_level_driver", "seatCand3ceHeatLevelDriver"),
+        SeatFid("cand_lrse_vent_status_rl", "seatCandLrseVentStatusRl"),
+        SeatFid("cand_lrse_heat_status_rl", "seatCandLrseHeatStatusRl"),
+        SeatFid("cand_lrse_vent_status_rr", "seatCandLrseVentStatusRr"),
+        SeatFid("cand_lrse_heat_status_rr", "seatCandLrseHeatStatusRr"),
         // The four LRSE level fids are printed by address: which one belongs to which
         // seat/function is not established, and guessing it in the label would mislead
         // whoever reads the dump.
-        SeatFid("cand_lrse_level_1", 1000, 412180536),
-        SeatFid("cand_lrse_level_2", 1000, 412180540),
-        SeatFid("cand_lrse_level_3", 1000, 412180544),
-        SeatFid("cand_lrse_level_4", 1000, 412180548),
+        SeatFid("cand_lrse_level_1", "seatCandLrseLevel1"),
+        SeatFid("cand_lrse_level_2", "seatCandLrseLevel2"),
+        SeatFid("cand_lrse_level_3", "seatCandLrseLevel3"),
+        SeatFid("cand_lrse_level_4", "seatCandLrseLevel4"),
     )
 
-    val batchItems: List<BatchReadItem> = FIDS.map { BatchReadItem(TX_GET_INT, it.dev, it.fid) }
+    fun batchItems(): List<BatchReadItem> = FIDS.map {
+        val address = FidAddresses.of(it.field)
+        BatchReadItem(TX_GET_INT, address.device, address.fid)
+    }
 
     /**
      * Renders one line per fid from raw (status, value) pairs in [FIDS] order. A null

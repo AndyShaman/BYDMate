@@ -53,7 +53,7 @@
     <string name="settings_display_offset_y_desc">Położenie okna: 0 - góra, 50 - środek, 100 - dół</string>
     <string name="settings_display_scale">Skala</string>
     <string name="settings_display_scale_desc">Wielkość interfejsu: mniejsza wartość - drobniejsze elementy i więcej mapy w oknie</string>
-    <string name="settings_display_scale_direct_hint">Skala działa tylko w trybie projekcji „Fabryczny”. W trybie „Rozszerzony” aplikacja zawsze renderuje się w rozmiarze natywnym.</string>
+    <string name="settings_display_scale_direct_hint">Aby zastosować nową skalę, wyłącz i ponownie włącz wyświetlanie na zestawie wskaźników.</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Prawa gwiazdka</string>
     <string name="steering_button_left_star">Lewa gwiazdka</string>
@@ -1227,6 +1227,10 @@
     <string name="settings_agent_gender_male">Męska</string>
     <string name="settings_agent_gender_female">Żeńska</string>
     <string name="settings_agent_gender_hint">Działa na wszystkie głosy: każde źródło ma wariant męski i żeński</string>
+    <string name="settings_route_navigator_label">Nawigacja dla tras</string>
+    <string name="settings_route_navigator_yandex">Yandex Navigator</string>
+    <string name="settings_route_navigator_dgis">2GIS</string>
+    <string name="settings_route_navigator_hint">Która aplikacja otwiera się dla tras i wyszukiwania na mapie</string>
     <string name="settings_agent_memory_title">Pamięć o kierowcy</string>
     <string name="settings_agent_memory_hint">Agent zapamiętuje imię i stałe preferencje, gdy mu o tym powiesz. Powiedz „zapomnij …”, aby usunąć jeden fakt</string>
     <string name="settings_agent_memory_empty">Na razie nic nie zapamiętano</string>

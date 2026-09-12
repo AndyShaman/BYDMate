@@ -118,4 +118,74 @@ class FidMapTest {
         }
         assertEquals(0.1, FidMap.entries.single { it.field == "bmsMaxChargeKw" }.scale, 0.0001)
     }
+
+    /** The addresses moved out of FidRegistry must still be the ones it documents. */
+    @Test fun `extra entries carry the constants they took over`() {
+        val registry = mapOf(
+            "soh" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOH),
+            "lifetimeAvgPhm" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_AVG_PHM),
+            "chargingType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_TYPE),
+            "chargeBatteryVolt" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGE_BATTERY_VOLT),
+            "batteryType" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_BATTERY_TYPE),
+            "chargingCapacity" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_CAPACITY),
+            "soc" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_SOC),
+            "mileage" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_MILEAGE),
+            "totalElecConsumption" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_STATISTIC
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_LIFETIME_KWH),
+            "voltage12v" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_BODYWORK
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_OTA_BATTERY_POWER_VOLTAGE),
+            "power" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_ENGINE
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_ENGINE_POWER),
+            "chargeGunState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_GUN_CONNECT_STATE),
+            "bmsState" to (com.bydmate.app.data.autoservice.FidRegistry.DEV_CHARGING
+                to com.bydmate.app.data.autoservice.FidRegistry.FID_CHARGING_BMS_STATE),
+        )
+        registry.forEach { (field, address) ->
+            val entry = FidMap.byField.getValue(field)
+            assertEquals("device of $field", address.first, entry.device)
+            assertEquals("fid of $field", address.second, entry.fid)
+        }
+    }
+
+    @Test fun `subscription entries carry the constants they took over`() {
+        val subscriptions = com.bydmate.app.data.subscription.FidSubscriptionManager
+        assertEquals(subscriptions.FID_BLINK, FidMap.byField.getValue("turnSignal").fid)
+        assertEquals(subscriptions.FID_GEAR, FidMap.byField.getValue("gear").fid)
+        assertEquals(subscriptions.FID_BSD_LEFT, FidMap.byField.getValue("bsdLeft").fid)
+        assertEquals(subscriptions.FID_BSD_RIGHT, FidMap.byField.getValue("bsdRight").fid)
+    }
+
+    /**
+     * Readers ask for addresses by field name, so a rename would only show up at runtime.
+     * These are the names looked up outside the poll loop.
+     */
+    @Test fun `field names the readers ask for all exist`() {
+        val asked = listOf(
+            "soh", "soc", "mileage", "totalElecConsumption", "voltage12v", "power",
+            "chargeGunState", "chargingType", "chargeBatteryVolt", "batteryType",
+            "chargingCapacity", "bmsState",
+            "turnSignal", "gear", "bsdLeft", "bsdRight",
+            "windowFL", "windowFR", "windowRL", "windowRR", "windowRRGen3",
+        ) + com.bydmate.app.ui.settings.SeatsDiagnostics.FIDS.map { it.field }
+        val missing = asked.filterNot { it in FidMap.byField }
+        assertTrue("FidMap has no entry for $missing", missing.isEmpty())
+    }
+
+    @Test fun `every entry carries a catalog symbol except the one that has none`() {
+        val withoutSymbol = FidMap.all.filter { it.symbol == null }.map { it.field }
+        assertEquals(listOf("windowRRGen3"), withoutSymbol)
+    }
+
+    @Test fun `field names are unique across the polled and extra tables`() {
+        assertEquals(FidMap.all.size, FidMap.byField.size)
+    }
 }

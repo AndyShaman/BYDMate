@@ -28,8 +28,16 @@ class NativeParsReader @Inject constructor(
     private val gate: BatchReadGate,
 ) : ParsReader {
 
-    private val batchItems: List<BatchReadItem> =
-        FidMap.entries.map { BatchReadItem(it.transact, it.device, it.fid) }
+    /**
+     * Batch request for one poll tick. Built per call, not cached: the addresses come from
+     * [FidAddresses], which swaps the constants for catalog-resolved ones once the firmware
+     * catalog has been read. Same entries in the same order, so the reply still lines up
+     * with [FidMap.entries] index by index.
+     */
+    private fun batchItems(): List<BatchReadItem> = FidMap.entries.map {
+        val address = FidAddresses.of(it.field)
+        BatchReadItem(it.transact, address.device, address.fid)
+    }
 
     /**
      * Last driveMode the car actually reported. The fid answers 0 while a mode switch is in
@@ -46,7 +54,7 @@ class NativeParsReader @Inject constructor(
         BatchMode.OFF -> fetchViaAdb()
         BatchMode.VALIDATING -> {
             val adb = fetchViaAdb()
-            val batchRaw = helperClient.readBatch(batchItems)
+            val batchRaw = helperClient.readBatch(batchItems())
             if (batchRaw == null) {
                 gate.recordBatchUnavailable()
             } else {
@@ -66,7 +74,7 @@ class NativeParsReader @Inject constructor(
     }
 
     private suspend fun fetchViaBatch(): DiParsData? {
-        val pairs = helperClient.readBatch(batchItems) ?: return null
+        val pairs = helperClient.readBatch(batchItems()) ?: return null
         return assembleSnapshot(decodeBatch(pairs), windowRrRawFromBatch(pairs))
     }
 
@@ -144,17 +152,18 @@ class NativeParsReader @Inject constructor(
         var windowRrRaw: Int? = null
 
         for (entry in FidMap.entries) {
+            val address = FidAddresses.of(entry.field)
             val value: Any? = when {
                 entry === windowRrEntry -> {
-                    windowRrRaw = autoservice.getIntRaw(entry.device, entry.fid)
+                    windowRrRaw = autoservice.getIntRaw(address.device, address.fid)
                     decodeTx5(entry, windowRrRaw?.let { SentinelDecoder.decodeInt(it) })
                 }
-                entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(entry.device, entry.fid))
+                entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(address.device, address.fid))
                 entry.transact == 7 -> {
                     // AutoserviceClient.getFloat already rejects float sentinels (-1.0f, NaN, Inf).
                     // Convert Float back to its raw IEEE-754 bits so ParamDecoder.decodeFloat
                     // can apply its SentinelDecoder path (which also rejects -1.0f etc.).
-                    val f = autoservice.getFloat(entry.device, entry.fid)
+                    val f = autoservice.getFloat(address.device, address.fid)
                     if (f == null) null
                     else ParamDecoder.decodeFloat(java.lang.Float.floatToRawIntBits(f), entry.decoder)
                 }
@@ -179,7 +188,8 @@ class NativeParsReader @Inject constructor(
         if (value == null && rejectLog.shouldLog(entry.field)) {
             android.util.Log.w(
                 "NativeParsReader",
-                "decode rejected: ${entry.field} dev=${entry.device} fid=${entry.fid} decoder=${entry.decoder} raw=$it"
+                "decode rejected: ${entry.field} dev=${FidAddresses.device(entry.field)} " +
+                    "fid=${FidAddresses.fid(entry.field)} decoder=${entry.decoder} raw=$it"
             )
         }
         value
