@@ -1,6 +1,7 @@
 package com.bydmate.app.data.vehicle
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.os.Build
 import android.util.Log
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
@@ -146,9 +147,7 @@ class HelperBootstrap @Inject constructor(
                 // showing a stale `last_spawn_failure` next to a healthy daemon.
                 prefs.edit()
                     .putLong(KEY_SPAWNED_VERSION, want)
-                    .remove(KEY_LAST_FAIL_TS)
-                    .remove(KEY_LAST_FAIL_REASON)
-                    .remove(KEY_LAST_FAIL_LOG)
+                    .removeLastFailure()
                     .apply()
                 // The daemon answered — via ServiceManager or via an already-accepted broadcast
                 // (which disarms the token itself). Either way nothing else may claim this
@@ -169,9 +168,12 @@ class HelperBootstrap @Inject constructor(
         // intent arrived at all, and why it was turned away if it did.
         val holderState = "holder: transport=${HelperBinderHolder.transport} " +
             "lastReject=${HelperBinderHolder.lastReject ?: "(none)"}"
-        // The spawn window is over: disarm the token so a late or forged intent carrying it
-        // cannot install a binder we are no longer waiting for.
-        HelperBinderHolder.expectedToken = null
+        // The token STAYS armed on purpose: a daemon that boots slower than our poll window
+        // publishes its binder by broadcast after we gave up (trinket, crazyhack 2026-09-12),
+        // and disarming here threw that healthy binder away — every write then failed until
+        // the watchdog respawned. The token is single-use (accept() clears it), the next
+        // spawn overwrites it, and a forged intent still needs this exact token plus our
+        // daemon's interface descriptor.
         recordSpawnFailure(SpawnFailReason.DAEMON_SILENT, "$tail\n$holderState")
         return false
     }
@@ -209,6 +211,18 @@ class HelperBootstrap @Inject constructor(
      */
     private suspend fun adbAwareReason(overChannel: SpawnFailReason): SpawnFailReason =
         if (adb.isConnected()) overChannel else SpawnFailReason.ADB_UNREACHABLE
+
+    /**
+     * Forgets the recorded spawn failure. Called when a binder arrives after the poll window
+     * gave up: the daemon is healthy, and a dump still printing `last_spawn_failure:
+     * DAEMON_SILENT` next to it sends the triage the wrong way.
+     */
+    fun clearLastSpawnFailure() {
+        prefs.edit().removeLastFailure().apply()
+    }
+
+    private fun SharedPreferences.Editor.removeLastFailure(): SharedPreferences.Editor =
+        remove(KEY_LAST_FAIL_TS).remove(KEY_LAST_FAIL_REASON).remove(KEY_LAST_FAIL_LOG)
 
     /** Last recorded spawn failure, or null if the daemon has never failed to come up. */
     fun lastSpawnFailure(): SpawnFailure? {
