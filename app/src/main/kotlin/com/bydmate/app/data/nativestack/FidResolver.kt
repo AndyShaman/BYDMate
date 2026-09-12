@@ -62,6 +62,12 @@ class ResolvedFidTable(
     val notes: List<FidResolutionNote>,
     /** `constants` before any catalog arrived, else `daemon`/`file` + fingerprint. */
     val source: String,
+    /**
+     * INT_SCALED scale in force per field: [FidEntry.catalogScale] where the catalog moved
+     * the address and the entry declares one, the entry's own scale everywhere else.
+     * Empty for a table built without it — those fields fall back to the compiled scale.
+     */
+    private val scales: Map<String, Double> = emptyMap(),
 ) {
     /** Address for [field]; throws for a name that is not in [FidMap] (a code bug). */
     fun address(field: String): FidAddress =
@@ -70,6 +76,10 @@ class ResolvedFidTable(
     fun fid(field: String): Int = address(field).fid
 
     fun device(field: String): Int = address(field).device
+
+    /** Scale the INT_SCALED decoder must use for [field] with the address in force. */
+    fun scale(field: String): Double =
+        scales[field] ?: FidMap.byField[field]?.scale ?: 1.0
 
     val catalogCount: Int get() = notes.count { it.outcome == FidResolution.CATALOG }
     val rejectedCount: Int get() = notes.count { it.outcome == FidResolution.REJECTED }
@@ -159,6 +169,7 @@ object FidResolver {
             FidResolutionNote(it.field, it.symbol, address, address, null, FidResolution.CONST)
         },
         source = "constants",
+        scales = entries.associate { it.field to it.scale },
     )
 
     /** True when every probe read failed, i.e. the answer says nothing about the candidates. */
@@ -232,6 +243,7 @@ object FidResolver {
         val probeTransportDead = requests.isNotEmpty() && samples.all { it == null }
 
         val addresses = LinkedHashMap<String, FidAddress>()
+        val scales = LinkedHashMap<String, Double>()
         val notes = ArrayList<FidResolutionNote>(entries.size)
         for (entry in entries) {
             val base = constant.getValue(entry.field)
@@ -239,6 +251,9 @@ object FidResolver {
             val reason = rejected[entry.field]
             val used = if (candidate != null && reason == null) candidate else base
             addresses[entry.field] = used
+            val onCatalogAddress = candidate != null && reason == null
+            scales[entry.field] =
+                if (onCatalogAddress) entry.catalogScale ?: entry.scale else entry.scale
             notes += FidResolutionNote(
                 field = entry.field,
                 symbol = entry.symbol,
@@ -256,7 +271,7 @@ object FidResolver {
         }
         notes.filter { it.outcome != FidResolution.CONST }
             .forEach { android.util.Log.i(TAG, "fid resolve: ${it.render()}") }
-        return Outcome(ResolvedFidTable(addresses, notes, source), probeTransportDead)
+        return Outcome(ResolvedFidTable(addresses, notes, source, scales), probeTransportDead)
     }
 
     /**
@@ -277,7 +292,9 @@ object FidResolver {
         5 -> {
             if (SentinelDecoder.decodeInt(word) == null) Verdict(word.toString(), "sentinel")
             else if (entry.decoder == Decoder.INT_SCALED) {
-                val value = ParamDecoder.decodeScaled(word, entry.scale)
+                // Only catalog candidates are ever probed, so the catalog scale is the one
+                // this reading would be decoded with if the candidate is accepted.
+                val value = ParamDecoder.decodeScaled(word, entry.catalogScale ?: entry.scale)
                 Verdict(value?.toString() ?: word.toString(), if (value == null) "sentinel" else null)
             } else {
                 val value = ParamDecoder.decodeInt(word, entry.decoder)

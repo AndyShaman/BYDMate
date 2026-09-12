@@ -32,4 +32,7 @@ object FidAddresses {
     fun fid(field: String): Int = table.fid(field)
 
     fun device(field: String): Int = table.device(field)
+
+    /** INT_SCALED scale in force for [field] with the address currently installed. */
+    fun scale(field: String): Double = table.scale(field)
 }

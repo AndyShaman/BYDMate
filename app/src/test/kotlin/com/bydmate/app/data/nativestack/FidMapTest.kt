@@ -188,4 +188,14 @@ class FidMapTest {
     @Test fun `field names are unique across the polled and extra tables`() {
         assertEquals(FidMap.all.size, FidMap.byField.size)
     }
+
+    /** A per-address scale is a deliberate exception, not a habit: the odometer is the
+     *  only field whose catalog address reports a different unit than our constant. */
+    @Test fun `only the odometer carries a catalog scale`() {
+        assertEquals(1.0, FidMap.byField.getValue("mileage").catalogScale)
+        assertEquals(
+            listOf("mileage"),
+            FidMap.all.filter { it.catalogScale != null }.map { it.field },
+        )
+    }
 }

@@ -29,13 +29,12 @@ class NativeParsReader @Inject constructor(
 ) : ParsReader {
 
     /**
-     * Batch request for one poll tick. Built per call, not cached: the addresses come from
-     * [FidAddresses], which swaps the constants for catalog-resolved ones once the firmware
-     * catalog has been read. Same entries in the same order, so the reply still lines up
-     * with [FidMap.entries] index by index.
+     * Batch request for one poll tick, built against [table] — the snapshot of
+     * [FidAddresses] this fetch works from. Same entries in the same order, so the reply
+     * still lines up with [FidMap.entries] index by index.
      */
-    private fun batchItems(): List<BatchReadItem> = FidMap.entries.map {
-        val address = FidAddresses.of(it.field)
+    private fun batchItems(table: ResolvedFidTable): List<BatchReadItem> = FidMap.entries.map {
+        val address = table.address(it.field)
         BatchReadItem(it.transact, address.device, address.fid)
     }
 
@@ -49,33 +48,42 @@ class NativeParsReader @Inject constructor(
     /** Keeps the raw tech-panel line to one per 5 s on the 1 s DRIVE cadence. */
     private val techLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(5_000L)
 
-    override suspend fun fetch(): DiParsData? = when (gate.mode()) {
-        BatchMode.ACTIVE -> fetchViaBatch() ?: fetchViaAdb()
-        BatchMode.OFF -> fetchViaAdb()
-        BatchMode.VALIDATING -> {
-            val adb = fetchViaAdb()
-            val batchRaw = helperClient.readBatch(batchItems())
-            if (batchRaw == null) {
-                gate.recordBatchUnavailable()
-            } else {
-                gate.recordComparison(
-                    adb,
-                    // Shadow snapshot: compared, never returned — so it must not update
-                    // any state a returned snapshot depends on (see stickyDriveMode).
-                    assembleSnapshot(
-                        decodeBatch(batchRaw),
-                        windowRrRawFromBatch(batchRaw),
-                        rememberSticky = false,
-                    ),
-                )
+    /**
+     * One snapshot of [FidAddresses] per fetch. The global table is @Volatile and the
+     * catalog resolution can install a new one at any moment: taking the address from one
+     * table and the scale from another would decode a word read at the old address with
+     * the new scale (a 10x odometer glitch for one tick).
+     */
+    override suspend fun fetch(): DiParsData? {
+        val table = FidAddresses.table
+        return when (gate.mode()) {
+            BatchMode.ACTIVE -> fetchViaBatch(table) ?: fetchViaAdb(table)
+            BatchMode.OFF -> fetchViaAdb(table)
+            BatchMode.VALIDATING -> {
+                val adb = fetchViaAdb(table)
+                val batchRaw = helperClient.readBatch(batchItems(table))
+                if (batchRaw == null) {
+                    gate.recordBatchUnavailable()
+                } else {
+                    gate.recordComparison(
+                        adb,
+                        // Shadow snapshot: compared, never returned — so it must not update
+                        // any state a returned snapshot depends on (see stickyDriveMode).
+                        assembleSnapshot(
+                            decodeBatch(batchRaw, table),
+                            windowRrRawFromBatch(batchRaw),
+                            rememberSticky = false,
+                        ),
+                    )
+                }
+                adb // the proven path stays primary until promotion
             }
-            adb // the proven path stays primary until promotion
         }
     }
 
-    private suspend fun fetchViaBatch(): DiParsData? {
-        val pairs = helperClient.readBatch(batchItems()) ?: return null
-        return assembleSnapshot(decodeBatch(pairs), windowRrRawFromBatch(pairs))
+    private suspend fun fetchViaBatch(table: ResolvedFidTable): DiParsData? {
+        val pairs = helperClient.readBatch(batchItems(table)) ?: return null
+        return assembleSnapshot(decodeBatch(pairs, table), windowRrRawFromBatch(pairs))
     }
 
     /** Raw pre-decode windowRR value when the read itself succeeded, else null. */
@@ -90,12 +98,12 @@ class NativeParsReader @Inject constructor(
      * on the raw IEEE-754 bits — mirroring AutoserviceClient.getInt/getFloat +
      * the per-entry decode in fetchViaAdb.
      */
-    private fun decodeBatch(pairs: List<Pair<Int, Int>>): Map<String, Any?> {
+    private fun decodeBatch(pairs: List<Pair<Int, Int>>, table: ResolvedFidTable): Map<String, Any?> {
         val decoded = mutableMapOf<String, Any?>()
         FidMap.entries.forEachIndexed { i, entry ->
             val (status, word) = pairs[i]
             val value: Any? = if (status != 0) null else when (entry.transact) {
-                5 -> decodeTx5(entry, SentinelDecoder.decodeInt(word))
+                5 -> decodeTx5(entry, SentinelDecoder.decodeInt(word), table)
                 7 -> SentinelDecoder.parseFloatFromShellInt(word)?.let { f ->
                     ParamDecoder.decodeFloat(java.lang.Float.floatToRawIntBits(f), entry.decoder)
                 }
@@ -140,7 +148,7 @@ class NativeParsReader @Inject constructor(
         )
     }
 
-    private suspend fun fetchViaAdb(): DiParsData? {
+    private suspend fun fetchViaAdb(table: ResolvedFidTable): DiParsData? {
         if (!autoservice.isAvailable()) return null
 
         // Decoded values keyed by FidEntry.field.
@@ -152,13 +160,13 @@ class NativeParsReader @Inject constructor(
         var windowRrRaw: Int? = null
 
         for (entry in FidMap.entries) {
-            val address = FidAddresses.of(entry.field)
+            val address = table.address(entry.field)
             val value: Any? = when {
                 entry === windowRrEntry -> {
                     windowRrRaw = autoservice.getIntRaw(address.device, address.fid)
-                    decodeTx5(entry, windowRrRaw?.let { SentinelDecoder.decodeInt(it) })
+                    decodeTx5(entry, windowRrRaw?.let { SentinelDecoder.decodeInt(it) }, table)
                 }
-                entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(address.device, address.fid))
+                entry.transact == 5 -> decodeTx5(entry, autoservice.getInt(address.device, address.fid), table)
                 entry.transact == 7 -> {
                     // AutoserviceClient.getFloat already rejects float sentinels (-1.0f, NaN, Inf).
                     // Convert Float back to its raw IEEE-754 bits so ParamDecoder.decodeFloat
@@ -179,17 +187,22 @@ class NativeParsReader @Inject constructor(
     // plain out-of-range number (Dolphin cabin temp, #180) left no trace in any dump.
     private val rejectLog = com.bydmate.app.data.autoservice.LogThrottle()
 
-    /** tx=5 decode tail, shared by the plain reads, the daemon batch and the raw windowRR sample. */
-    private fun decodeTx5(entry: FidEntry, raw: Int?): Any? = raw?.let {
+    /**
+     * tx=5 decode tail, shared by the plain reads, the daemon batch and the raw windowRR
+     * sample. [table] is the fetch's own snapshot: the scale must be the one that goes with
+     * the address the word was read from.
+     */
+    private fun decodeTx5(entry: FidEntry, raw: Int?, table: ResolvedFidTable): Any? = raw?.let {
         val value = when (entry.decoder) {
-            Decoder.INT_SCALED -> ParamDecoder.decodeScaled(it, entry.scale)
+            Decoder.INT_SCALED -> ParamDecoder.decodeScaled(it, table.scale(entry.field))
             else               -> ParamDecoder.decodeInt(it, entry.decoder)
         }
         if (value == null && rejectLog.shouldLog(entry.field)) {
+            val address = table.address(entry.field)
             android.util.Log.w(
                 "NativeParsReader",
-                "decode rejected: ${entry.field} dev=${FidAddresses.device(entry.field)} " +
-                    "fid=${FidAddresses.fid(entry.field)} decoder=${entry.decoder} raw=$it"
+                "decode rejected: ${entry.field} dev=${address.device} " +
+                    "fid=${address.fid} decoder=${entry.decoder} raw=$it"
             )
         }
         value

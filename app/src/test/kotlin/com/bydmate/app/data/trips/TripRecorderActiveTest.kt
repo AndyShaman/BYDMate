@@ -55,6 +55,30 @@ class TripRecorderActiveTest {
         coVerify(exactly = 1) { lastState.clearOpenTrip() }
     }
 
+    @Test fun `an implausible odometer delta drops the distance instead of inserting it`() = runTest {
+        // The odometer scale changed under an open trip (catalog resolved mid-session on
+        // Song Plus): 8647.2 km at open, 86472.0 at close would be a 77 825 km trip.
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 8647.2))
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 86472.0))
+
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertNull(captured.captured.distanceKm)
+        assertNull(captured.captured.kwhPer100km)
+        assertEquals(72.9 * 0.10, captured.captured.kwhConsumed!!, 0.001)
+    }
+
+    @Test fun `a plausible odometer delta is kept`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0))
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 150.5))
+
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertEquals(50.5, captured.captured.distanceKm!!, 0.001)
+    }
+
     @Test fun `totalElec delta gives consumption even when SOC unchanged`() = runTest {
         val (rec, tripDao, lastState) = setup()
         rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, totalElecConsumption = 1000.0))  // open

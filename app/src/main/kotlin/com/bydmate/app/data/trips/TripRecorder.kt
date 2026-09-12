@@ -7,6 +7,7 @@ import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.LastStateEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.remote.DiParsData
+import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -97,11 +98,26 @@ class TripRecorder @Inject constructor(
         return if (socDelta > 0) socDelta / 100.0 * cap else null
     }
 
+    /**
+     * Odometer delta of one trip, or null when the two readings cannot belong to the same
+     * drive: the odometer scale changed under an open trip (the firmware catalog resolved
+     * mid-session and moved the odometer fid) or the baseline came from a startup race.
+     * The trip itself is still recorded, only the distance is dropped.
+     */
+    private fun plausibleDistance(start: Double?, end: Double?): Double? {
+        if (start == null || end == null) return null
+        val delta = (end - start).coerceAtLeast(0.0)
+        if (delta > MAX_PLAUSIBLE_TRIP_KM) {
+            Log.w(TAG, "trip distance implausible: start=$start end=$end delta=$delta → dropped")
+            return null
+        }
+        return delta
+    }
+
     private suspend fun close(open: Open, end: DiParsData) {
         val cap = batteryCapacityKwh()
         val kwh = computeKwh(open.startTotalElec, end.totalElecConsumption, open.startSoc, end.soc, cap)
-        val distance = if (open.startMileage != null && end.mileage != null)
-            (end.mileage - open.startMileage).coerceAtLeast(0.0) else null
+        val distance = plausibleDistance(open.startMileage, end.mileage)
         val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
         tripDao.insert(
             TripEntity(
@@ -134,8 +150,7 @@ class TripRecorder @Inject constructor(
         }
         if (active) {
             val kwh = computeKwh(state.tripStartTotalElec, state.totalElec, state.tripStartSoc, state.soc, batteryCapacityKwh())
-            val distance = if (state.tripStartMileage != null && state.mileage != null)
-                (state.mileage - state.tripStartMileage).coerceAtLeast(0.0) else null
+            val distance = plausibleDistance(state.tripStartMileage, state.mileage)
             val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
             tripDao.insert(
                 TripEntity(
@@ -151,5 +166,13 @@ class TripRecorder @Inject constructor(
             )
         }
         lastStateDao.clearOpenTrip()
+    }
+
+    private companion object {
+        const val TAG = "TripRecorder"
+
+        /** Upper bound of a single trip's distance; above it the odometer delta is a
+         *  scale change or a bad baseline, not a drive. */
+        const val MAX_PLAUSIBLE_TRIP_KM = 1500.0
     }
 }

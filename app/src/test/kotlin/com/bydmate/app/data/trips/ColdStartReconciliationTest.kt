@@ -14,6 +14,7 @@ import io.mockk.slot
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -67,6 +68,31 @@ class ColdStartReconciliationTest {
         assertEquals(72.9 * 0.10, cap.captured.kwhConsumed!!, 0.001)
         assertEquals(72.9, cap.captured.kwhPer100km!!, 0.001)  // 7.29 kWh / 10 km * 100
         coVerify { lastState.clearOpenTrip() }
+    }
+
+    @Test fun `a stale trip with an implausible odometer delta loses its distance`() = runTest {
+        // The open trip was resumed on the old odometer scale (8647.2), the loop then
+        // persisted the new-scale reading (86472.0), and the process died before close().
+        val tripDao = mockk<TripDao>(relaxed = true)
+        val lastState = mockk<LastStateDao>(relaxed = true) {
+            coEvery { getCurrent() } returns LastStateEntity(
+                id = 1, ts = 1_000_000L, soc = 70, mileage = 86472.0,
+                openTripId = 99L, tripStartTs = 900_000L, tripStartSoc = 80,
+                tripStartMileage = 8647.2
+            )
+        }
+        val rec = TripRecorder(
+            tripDao, lastState, energyAvailable(false),
+            mockk<EnergyDataDeadDetector>(relaxed = true),
+            batteryCapacityKwh = { 72.9 },
+            now = { 1_000_000L + 10 * 60_000L }
+        )
+        rec.reconcileColdStart()
+        val cap = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(cap)) }
+        assertNull(cap.captured.distanceKm)
+        assertNull(cap.captured.kwhPer100km)
+        assertEquals(72.9 * 0.10, cap.captured.kwhConsumed!!, 0.001)
     }
 
     @Test fun `stale trip consumption uses totalElec delta when available`() = runTest {
