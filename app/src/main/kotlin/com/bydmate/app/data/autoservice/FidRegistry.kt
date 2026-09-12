@@ -5,6 +5,11 @@ package com.bydmate.app.data.autoservice
  *
  * IMPORTANT: read-only constants. NEVER add a setInt fid here — the
  * regex barrier in AutoserviceClientImpl will reject any tx=6 attempt.
+ *
+ * The FID_* values below are Leopard 3 constants and are no longer read directly:
+ * each one is mirrored by a FidMap entry (polling set or FidMap.extra) carrying the
+ * same address plus its catalog symbol, and the readers take the address from
+ * FidAddresses so it follows the firmware catalog. FidMapTest keeps the two in step.
  */
 object FidRegistry {
 

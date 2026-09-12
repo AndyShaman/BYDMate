@@ -2,6 +2,8 @@ package com.bydmate.app.data.vehicle
 
 import android.util.Log
 import com.bydmate.app.data.autoservice.SentinelDecoder
+import com.bydmate.app.data.nativestack.FidAddress
+import com.bydmate.app.data.nativestack.FidMap
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -81,8 +83,8 @@ class WindowChannelRouter(
     private suspend fun probe(): Probe {
         // Read one fid at a time and leave as soon as the answer is conclusive: a healthy
         // unit answers on the first fid and pays for a single binder read.
-        for (fid in PERCENT_FIDS) {
-            val percent = read(fid)
+        for (field in PERCENT_FIELDS) {
+            val percent = read(constant(field))
             if (percent != null && percent in PERCENT_RANGE) {
                 // Latching PERCENT also drops any pending candidate (see setWinner): one
                 // healthy observation ends the candidate history.
@@ -93,7 +95,7 @@ class WindowChannelRouter(
             // family is absent: a null is a failed read, another sentinel is another fault.
             if (percent != FEATURE_LINK_ERROR) return Probe(undecided())
         }
-        val alt = read(RR_PERCENT_FID_GEN3)
+        val alt = read(constant("windowRRGen3"))
         if (alt == null || alt !in PERCENT_RANGE) return Probe(undecided())
         return confirmCandidate()
     }
@@ -128,23 +130,25 @@ class WindowChannelRouter(
         return WindowChannel.UNKNOWN
     }
 
+    /** Compiled READ address of [field] — see PERCENT_FIELDS for why it is not resolved. */
+    private fun constant(field: String): FidAddress =
+        FidMap.byField.getValue(field).let { FidAddress(it.device, it.fid) }
+
     /** A probe failure must never fail the write it precedes — treat it as undecided. */
-    private suspend fun read(fid: Int): Long? = try {
-        helper.read(WINDOW_DEV, fid)
+    private suspend fun read(address: FidAddress): Long? = try {
+        helper.read(address.device, address.fid)
     } catch (e: Exception) {
         if (e is CancellationException) throw e
-        Log.w(TAG, "window channel probe read fid=$fid failed: ${e.message}")
+        Log.w(TAG, "window channel probe read fid=${address.fid} failed: ${e.message}")
         null
     }
 
     companion object {
         private const val TAG = "WindowChannelRouter"
 
-        private const val WINDOW_DEV = 1001
-        // READ fids, not write fids: the four DiLink 5.0 window percents and the
-        // DiLink 3.0 twin of the rear-right one.
-        private val PERCENT_FIDS = listOf(947912728, 1267728400, 947912736, 947912752)
-        private const val RR_PERCENT_FID_GEN3 = 1267728408
+        // Constants on purpose: this probe picks the WRITE family, and write fids are not
+        // resolved by the catalog; resolved addresses are for telemetry/readback only.
+        private val PERCENT_FIELDS = listOf("windowFL", "windowFR", "windowRL", "windowRR")
         private val FEATURE_LINK_ERROR = SentinelDecoder.FEATURE_LINK_ERROR.toLong()
         private val PERCENT_RANGE = 0L..100L
 

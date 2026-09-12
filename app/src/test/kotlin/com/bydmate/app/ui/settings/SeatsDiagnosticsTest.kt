@@ -14,9 +14,9 @@ class SeatsDiagnosticsTest {
     private fun okReadings(vararg values: Int) = values.map { 0 to it }
 
     @Test fun `batch items mirror the fid table as tx 5 reads`() {
-        assertEquals(SeatsDiagnostics.FIDS.size, SeatsDiagnostics.batchItems.size)
+        assertEquals(SeatsDiagnostics.FIDS.size, SeatsDiagnostics.batchItems().size)
         SeatsDiagnostics.FIDS.forEachIndexed { i, f ->
-            val item = SeatsDiagnostics.batchItems[i]
+            val item = SeatsDiagnostics.batchItems()[i]
             assertEquals("tx for ${f.name}", 5, item.tx)
             assertEquals("dev for ${f.name}", f.dev, item.dev)
             assertEquals("fid for ${f.name}", f.fid, item.fid)

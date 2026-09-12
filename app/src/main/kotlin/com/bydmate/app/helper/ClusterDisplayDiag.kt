@@ -31,6 +31,11 @@ internal object ClusterDisplayDiag {
 
     const val MAX_LINE = 300
     const val MAX_DISPLAY_LINES = 8
+    /** Cap for the WindowManager readback lines (TX_CLUSTER_WM_DIAG), tighter than [MAX_LINE]:
+     *  an `init=` line and a reported configuration are both long and go into the dump verbatim. */
+    const val MAX_WM_LINE = 200
+    const val MAX_WM_DISPLAYS = 6
+    const val MAX_TASK_CONFIGS = 2
     const val MAX_SURFACE_FLINGER_LINES = 6
     const val MAX_BYD_PROPS = 3
 
@@ -82,6 +87,16 @@ internal object ClusterDisplayDiag {
     private val DISPLAY_REAL_SIZE = Regex("""\breal (\d+) x (\d+)""")
     private val DISPLAY_DENSITY = Regex("""\bdensity (\d+)""")
     private val DISPLAY_OWNER_PARTS = Regex("""\bowner (\S+) \(uid (\d+)\)""")
+
+    /** `  Display: mDisplayId=1` — the header of one display block of `dumpsys window displays`. */
+    private val WM_DISPLAY_HEADER = Regex("""Display:\s+mDisplayId=(\d+)""")
+
+    /** `* ActivityRecord{a1b2c3 u0 pkg/.Cls t4075}` — the brace body, up to the closing brace or
+     *  the end of a truncated line. */
+    private val ACTIVITY_RECORD = Regex("""ActivityRecord\{([^}\n]*)""")
+
+    private val CONFIG_DPI = Regex("""(\d+)dpi""")
+    private val CONFIG_DISPLAY_ID = Regex("""\b(?:mDisplayId|displayId)=(\d+)""")
 
     /**
      * Builds the one-line props summary from `key=value` output. A key the firmware does not
@@ -195,6 +210,84 @@ internal object ClusterDisplayDiag {
     fun surfaceFlingerFallbackNeeded(raw: String): Boolean =
         raw.isBlank() || raw.contains("unknown", ignoreCase = true) ||
             raw.contains("Usage", ignoreCase = true)
+
+    /**
+     * Per-display density line out of `dumpsys window displays` (TX_CLUSTER_WM_DIAG): for every
+     * `Display: mDisplayId=N` block the first line that starts with `init=`. That line is the only
+     * place WindowManager prints its own density state — Android 10 writes
+     * `init=WxH Ddpi [base=WxH Ddpi] cur=… app=… rng=…`, and the `base=` part appears exactly when
+     * a `wm density` override is in force. Returns `"<id>: <line>"`, at most [max] displays.
+     */
+    fun wmDisplayLines(raw: String, max: Int = MAX_WM_DISPLAYS): List<String> {
+        val out = ArrayList<String>(max)
+        var currentId: Int? = null
+        for (line in raw.lines()) {
+            val header = WM_DISPLAY_HEADER.find(line)
+            if (header != null) {
+                currentId = header.groupValues[1].toIntOrNull()
+                continue
+            }
+            val trimmed = line.trim()
+            if (currentId != null && trimmed.startsWith("init=")) {
+                out += "$currentId: ${trimmed.take(MAX_WM_LINE)}"
+                currentId = null          // one line per display: the first init= is the display's
+                if (out.size >= max) break
+            }
+        }
+        return out
+    }
+
+    /**
+     * What the projected app's activity last reported as its configuration, out of
+     * `dumpsys activity activities` (TX_CLUSTER_WM_DIAG): the `mLastReportedConfiguration` line
+     * following an `ActivityRecord{… <pkg>/…}` entry. This is the dpi the app itself received,
+     * which is the half of the density question `dumpsys display` cannot answer.
+     *
+     * Both Android 10 spellings are accepted: the `mLastReportedConfigurations:` header line and
+     * the `mLastReportedConfiguration={…}` line that carries the blob. A record without a dpi
+     * token is reported as `dpi=?` rather than dropped. No record for [pkg] → a single
+     * `(no ActivityRecord for <pkg>)` line, so the dump says which package was looked for.
+     */
+    fun taskConfigLines(raw: String, pkg: String, max: Int = MAX_TASK_CONFIGS): List<String> {
+        val lines = raw.lines()
+        val out = ArrayList<String>(max)
+        for ((index, line) in lines.withIndex()) {
+            if (out.size >= max) break
+            val body = ACTIVITY_RECORD.find(line)?.groupValues?.get(1) ?: continue
+            val component = body.split(' ').firstOrNull { it.contains('/') } ?: continue
+            if (pkg.isEmpty() || !component.startsWith("$pkg/")) continue
+            val config = configLineFor(lines, index)
+            val dpi = config?.let { CONFIG_DPI.find(it)?.groupValues?.get(1) } ?: "?"
+            val displayId = CONFIG_DISPLAY_ID.find(config ?: "")?.groupValues?.get(1)
+                ?: CONFIG_DISPLAY_ID.find(line)?.groupValues?.get(1)
+            out += component + " dpi=" + dpi +
+                (displayId?.let { " display=$it" } ?: "") +
+                " raw=\"" + (config?.trim()?.take(MAX_WM_LINE) ?: "(no config line)") + "\""
+        }
+        return out.ifEmpty { listOf("(no ActivityRecord for ${pkg.ifEmpty { "(unknown)" }})") }
+    }
+
+    /** The configuration line belonging to the ActivityRecord at [start]: the first
+     *  `mLastReportedConfiguration` line before the next record, preferring the one that carries
+     *  the `{…}` blob over the bare `mLastReportedConfigurations:` header. */
+    private fun configLineFor(lines: List<String>, start: Int): String? {
+        var fallback: String? = null
+        var i = start + 1
+        while (i < lines.size && i <= start + CONFIG_LOOKAHEAD) {
+            val line = lines[i]
+            if (line.contains("ActivityRecord{")) break
+            if (line.contains("mLastReportedConfiguration")) {
+                if (line.contains("{")) return line
+                if (fallback == null) fallback = line
+            }
+            i++
+        }
+        return fallback
+    }
+
+    /** How far past an ActivityRecord we look for its configuration line. AOSP Q prints the
+     *  activity's fields within a few dozen lines; beyond that we would be reading another entry. */
+    private const val CONFIG_LOOKAHEAD = 40
 
     private fun rank(raw: String, keywords: List<String>, max: Int): Ranked {
         val matched = raw.lines().map { it.trim() }

@@ -100,6 +100,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
+    @Inject lateinit var fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
     @Inject lateinit var continuousAsr: com.bydmate.app.voice.ContinuousAsr
     @Inject lateinit var asrLoadGuard: com.bydmate.app.voice.AsrLoadGuard
@@ -586,6 +587,9 @@ class TrackingService : Service(), LocationListener {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
+                // Not gated on ok: a cached catalog resolves over the ADB read path without the
+                // daemon, and without one the call just returns and the respawn path retries.
+                resolveFidCatalog()
                 // Reconcile the native-assistant package state with the toggle in BOTH
                 // directions once the daemon is live, so a drift self-heals. An earlier
                 // enable/disable can silently miss the daemon (bootstrap race, or the daemon
@@ -766,6 +770,22 @@ class TrackingService : Service(), LocationListener {
         // (up to ~85 MB on early-adopter installs). No-op once deleted.
         serviceScope.launch(Dispatchers.IO) {
             runCatching { File(filesDir, "vosk").deleteRecursively() }
+        }
+    }
+
+    /**
+     * Reads the firmware's fid catalog and re-registers the subscriptions if it moved any of
+     * their addresses. On its own IO coroutine, because it ends in a probe round on the car
+     * and must not hold up the caller. Until it lands every reader uses the compiled
+     * constants. Called from the startup chain, from the watchdog respawn (so a daemon that
+     * was absent at startup still gets read once it comes back) and, while the resolution is
+     * pending, from the poll tick — autoservice can start answering under a daemon that was
+     * healthy all along, which no respawn would ever report.
+     */
+    private fun resolveFidCatalog() {
+        serviceScope.launch {
+            fidCatalogManager.ensureResolved()
+            fidSubscriptionManager.restartForResolvedAddresses()
         }
     }
 
@@ -1329,8 +1349,22 @@ class TrackingService : Service(), LocationListener {
                                 // back usually means the ADB channel under it is gone (port closed by
                                 // a reboot).
                                 adbRestoreManager.attemptIfNeeded(if (respawned) "helper_respawned" else "watchdog")
+                                // A daemon that just came back is also the first chance to read
+                                // the fid catalog when it was unreachable at startup.
+                                if (respawned) resolveFidCatalog()
                             }
                         }
+                    }
+
+                    // Fid catalog: an attempt that reached the daemon but not autoservice leaves
+                    // the resolution pending. The daemon stays healthy in that case, so the
+                    // respawn path above never re-triggers the read and the process would keep
+                    // the compiled constants for the session. Same cadence as the health check;
+                    // the attempt budget lives in FidCatalogManager.
+                    if (pollTickCount % HELPER_HEALTH_CHECK_EVERY_N_TICKS == 0L &&
+                        fidCatalogManager.resolvePending
+                    ) {
+                        resolveFidCatalog()
                     }
 
                     // On first data after startup: detect offline charging

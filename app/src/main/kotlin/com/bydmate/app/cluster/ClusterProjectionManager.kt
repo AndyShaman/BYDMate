@@ -16,6 +16,7 @@ import android.view.SurfaceView
 import android.view.View
 import android.view.WindowManager
 import android.widget.FrameLayout
+import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
@@ -151,6 +152,13 @@ object ClusterProjectionManager {
     // override on the next pull-back.
     const val KEY_DIRECT_DISPLAY_ID = "direct_display_id"
 
+    // Per-package verdict "this app dies when the cluster display carries a non-native density"
+    // (#121, 2GIS/Qt), learned from behaviour by the post-launch death watch — never a package
+    // list. Stamped with the app versionCode so a build that changes how the density is applied
+    // re-probes instead of inheriting an old verdict.
+    const val KEY_DENSITY_UNSAFE_PREFIX = "direct_density_unsafe_"
+    const val KEY_DENSITY_UNSAFE_VERSION = "direct_density_unsafe_version"
+
     // WindowConfiguration windowing mode (android.app; hidden constant, stable since API 28).
     private const val WINDOWING_MODE_FULLSCREEN = 1
 
@@ -237,6 +245,11 @@ object ClusterProjectionManager {
      * session; [resolveClusterDisplay] then reads the live preference.
      */
     private var sessionPreferFull: Boolean? = null
+    /** Density override this process last sent for the cluster display: 0 = native (no override
+     *  or reset), -1 = nothing sent yet. Diagnostics only. */
+    @Volatile
+    private var directDensityApplied: Int = -1
+
     /** Post-move liveness watch of the direct projection (#134); see [armDirectDeathWatch]. */
     private var directDeathWatchJob: Job? = null
     // PROJECT_MEDIA has no app-side query API (unlike SYSTEM_ALERT_WINDOW / canDrawOverlays),
@@ -306,6 +319,7 @@ object ClusterProjectionManager {
         val overlayAttached: Boolean,
         val attemptInProgress: Boolean,
         val lastFailure: String?,
+        val directDensityDpi: Int,
     )
 
     fun diag(): Diag = Diag(
@@ -316,6 +330,7 @@ object ClusterProjectionManager {
         overlayAttached = overlayView != null,
         attemptInProgress = projectionAttemptInProgress,
         lastFailure = lastFailure,
+        directDensityDpi = directDensityApplied,
     )
 
     /** Journal ring for the dump, oldest first; usable before any projection ran in this process. */
@@ -603,15 +618,17 @@ object ClusterProjectionManager {
                 ClusterMode.FULLSCREEN, clusterWidth, clusterHeight,
                 widthPct, heightPct, offsetXPct, offsetYPct,
             ) ?: return true
-            val plan = renderPlanFor(geo, clusterDensityDpi, readScalePct(context))
+            // Bounds only: the density that carries the scale is set BEFORE a launch, never under
+            // the live window (#121), so a scale edit lands on the next send to the cluster.
+            val scalePct = readScalePct(context)
+            val dpi = directDensityLabel(directDensityFor(scalePct))
             val taskId = helper.getTaskId(projectedPackage ?: targetPackage(context)) ?: return true
             val b = freeformBounds(geo)
             helper.setTaskBounds(taskId, b[0], b[1], b[2], b[3])
-            @Suppress("KotlinConstantConditions")
-            if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, directDisplayId, plan)
-            Log.i(TAG, "resize (direct): bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] dpi=${plan.densityDpi}")
+            Log.i(TAG, "resize (direct): bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] " +
+                "scale=$scalePct% dpi=$dpi (applies on next send to cluster)")
             log("resize direct: task=$taskId bounds=[${b[0]},${b[1]},${b[2]},${b[3]}] " +
-                "dpi=${plan.densityDpi} (scale n/a in direct mode)")
+                "scale=$scalePct% dpi=$dpi (applies on next send to cluster)")
             return true
         }
         val oldOverlay = overlayView ?: return true
@@ -973,8 +990,20 @@ object ClusterProjectionManager {
         val staleId = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
             .getInt(KEY_DIRECT_DISPLAY_ID, -1)
         if (staleId == -1) return
-        if (!runCatching { helper.setDisplayDensity(staleId, 0) }.getOrDefault(false)) {
+        // The stranded task is still ON that display: resetting now is the live Configuration
+        // change of #121, and tryDirectProjection is about to re-adopt the task rather than
+        // relaunch it, so it leaves the density as is too. The marker stays set either way, so
+        // density absorption remains suppressed and the base does not compound.
+        val strandedHere = runCatching { helper.getTaskState(targetPackage(context)) }
+            .getOrNull()?.let { it.taskId > 0 && it.displayId == staleId } == true
+        if (strandedHere) {
+            log("direct: stale density kept, task still on display $staleId")
+            return
+        }
+        if (runCatching { helper.setDisplayDensity(staleId, 0) }.getOrNull()?.ok != true) {
             Log.w(TAG, "recoverStaleDirectDensity: reset failed on display $staleId")
+        } else {
+            directDensityApplied = 0
         }
     }
 
@@ -1001,7 +1030,6 @@ object ClusterProjectionManager {
                     return@withLock
                 }
                 Log.i(TAG, "recoverStaleDirectTask: pulling back task left in direct mode by a prior session")
-                val resetOk = runCatching { helper.setDisplayDensity(staleId, 0) }.getOrDefault(false)
                 val taskId = helper.getTaskId(targetPackage(appContext))
                 var modeOk = false
                 var moveOk = false
@@ -1037,6 +1065,18 @@ object ClusterProjectionManager {
                         helper.setTaskBounds(taskId, 0, 0, 0, 0)  // cosmetic; not gating the marker
                     }
                 }
+                // Density LAST and only on a confirmed reclaim, as in pullBackToMain (#121): the
+                // stranded task leaves the cluster display first, so the override is never dropped
+                // under a live window; a failed reclaim keeps both the override and the marker.
+                val reclaimed = taskId == null || moveOk
+                val reset = if (reclaimed) {
+                    runCatching { helper.setDisplayDensity(staleId, 0) }.getOrNull()
+                } else null
+                val resetOk = reset?.ok == true
+                if (resetOk) directDensityApplied = 0
+                if (reclaimed) log("recovery: density reset ok=$resetOk display=$staleId " +
+                    "readback=[${reset?.readback.orEmpty()}]")
+                else log("recovery: density reset skipped, task still on display $staleId")
                 if (shouldClearDirectMarker(resetOk, taskId != null, modeOk, moveOk)) {
                     prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, -1).apply()
                     log("recovery: direct task reclaimed from display $staleId")
@@ -1386,6 +1426,57 @@ object ClusterProjectionManager {
         // type, so the daemon takes the light path (one `am start` with mode+display, task id
         // survives). Price: AOSP draws its freeform DecorCaption over a STANDARD window.
         placementAttempted = true
+        // Scale (#121): the density override is the only scale lever in direct mode, and it is set
+        // HERE — before the launch, with a settle — because changing the density of a display that
+        // already hosts a rendered window is the Configuration change that kills 2GIS (Qt). Same
+        // order BYD DashCast uses (`wm density N -d <display>`, then `am start`). A task of ours
+        // already sitting on the target display is exactly that forbidden case: the launch below
+        // only re-adopts it, so the density stays as it is.
+        val adopted = runCatching { helper.getTaskState(pkg) }.getOrNull()
+            ?.let { it.taskId > 0 && it.displayId == target.displayId } == true
+        var densitySent = 0
+        if (adopted) {
+            log("direct: task already on display ${target.displayId}, density left as is")
+        } else if (densityUnsafe(context, pkg)) {
+            log("direct: density skipped for $pkg (died after non-native dpi earlier)")
+        } else {
+            val scalePct = readScalePct(context)
+            val density = directDensityFor(scalePct)
+            val result = runCatching { helper.setDisplayDensity(target.displayId, density) }
+                .getOrNull()
+            val ok = result?.ok == true
+            if (ok) directDensityApplied = density
+            log("direct: density scale=$scalePct% dpi=${directDensityLabel(density)} " +
+                "display=${target.displayId} ok=$ok readback=[${result?.readback.orEmpty()}] " +
+                "(before launch)")
+            if (density != 0) {
+                densitySent = density
+                delay(DIRECT_DENSITY_SETTLE_MS)
+            }
+        }
+        // A failed launch leaves the display scaled for whatever the firmware puts there next, and
+        // UNAVAILABLE also clears the direct marker boot recovery would reset it from.
+        suspend fun resetDensityAfter(what: String) {
+            if (densitySent == 0) return
+            // ...but only once the task is off that display. The daemon's failure path restores
+            // fullscreen WITHOUT moving the task back (it can be left fullscreen ON the cluster
+            // display), and resetting under a live window is the Configuration change of #121 that
+            // the pre-launch order exists to avoid — the same confirmed-only invariant
+            // pullBackToMain follows. The override and the write-ahead marker both stay, so
+            // recoverStaleDirectDensity / recoverStaleDirectTask drop them at the next start.
+            val stillOnTarget = runCatching { helper.getTaskState(pkg) }.getOrNull()
+                ?.let { it.taskId > 0 && it.displayId == target.displayId } == true
+            if (stillOnTarget) {
+                prefs.edit().putInt(KEY_DIRECT_DISPLAY_ID, target.displayId).apply()
+                log("direct: density reset skipped after $what, " +
+                    "task still on display ${target.displayId}")
+                return
+            }
+            val result = runCatching { helper.setDisplayDensity(target.displayId, 0) }.getOrNull()
+            val ok = result?.ok == true
+            if (ok) directDensityApplied = 0
+            log("direct: density reset after $what ok=$ok readback=[${result?.readback.orEmpty()}]")
+        }
         return when (helper.launchFreeform(
             pkg, target.displayId, bounds[0], bounds[1], bounds[2], bounds[3],
             HelperBinderProtocol.PANE_TYPE_STANDARD,
@@ -1394,14 +1485,12 @@ object ClusterProjectionManager {
                 directDisplayId = target.displayId
                 prefs.edit().putBoolean(KEY_FREEFORM_REBOOT_PENDING, false).apply()
                 verdict.clearOnSuccess()
-                @Suppress("KotlinConstantConditions")
-                if (DIRECT_DENSITY_SCALE_ENABLED) applyDirectDensity(helper, target.displayId, plan)
                 projectedPackage = pkg
                 Log.i(TAG, "direct projection: $pkg on display ${target.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
                 log("direct OK: $pkg display=${target.displayId} " +
                     "bounds=[${bounds[0]},${bounds[1]},${bounds[2]},${bounds[3]}] dpi=${plan.densityDpi}")
-                armDirectDeathWatch(helper, pkg, target.displayId, bounds)
+                armDirectDeathWatch(context, helper, pkg, target.displayId, bounds, densitySent)
                 true
             }
             FreeformLaunchResult.UNAVAILABLE -> {
@@ -1418,6 +1507,7 @@ object ClusterProjectionManager {
                     .apply()
                 Log.i(TAG, "direct projection: freeform unavailable (reboot pending); VD fallback")
                 log("direct UNAVAILABLE: freeform not active yet (reboot pending); VD fallback")
+                resetDensityAfter("UNAVAILABLE")
                 // After the edit above: the verdict pairs this outcome with the armed hint.
                 if (verdict.noteUnavailable()) {
                     log("freeform unavailable again after reboot - latching unsupported verdict")
@@ -1442,6 +1532,7 @@ object ClusterProjectionManager {
                 // onClusterSendFailed is called only at terminal VD failures, not here.
                 Log.w(TAG, "direct projection failed; VD fallback (marker kept for recovery)")
                 log("direct FAILED: launchFreeform rejected pkg=$pkg display=${target.displayId}; VD fallback")
+                resetDensityAfter("FAILED")
                 false
             }
         }
@@ -1469,8 +1560,15 @@ object ClusterProjectionManager {
      *
      * Healthy fleet (Leopard 3, where the navigator survives the move): three
      * [HelperClient.getTaskState] reads and nothing else — no journal lines, no daemon writes.
+     *
+     * The watch doubles as the probe behind [densityUnsafe]: when [densityApplied] is non-zero the
+     * scale override is a suspect for the death (#121), so the recovery drops it to the native
+     * density first and the package is latched density-unsafe for later sends.
      */
-    private fun armDirectDeathWatch(helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray) {
+    private fun armDirectDeathWatch(
+        context: Context, helper: HelperClient, pkg: String, displayId: Int, bounds: IntArray,
+        densityApplied: Int,
+    ) {
         directDeathWatchJob?.cancel()
         directDeathWatchJob = scope.launch {
             var relaunched = false
@@ -1498,6 +1596,17 @@ object ClusterProjectionManager {
                     relaunched = true
                     Log.w(TAG, "direct projection: $pkg $what; relaunching on display $displayId")
                     log("direct task $what; relaunching on display $displayId (pkg=$pkg)")
+                    // The scale override was the one non-standard thing about this launch: drop it
+                    // BEFORE the relaunch (which must run at the native density to stand a chance)
+                    // and remember it for this package.
+                    if (densityApplied != 0) {
+                        val resetOk = runCatching { helper.setDisplayDensity(displayId, 0) }
+                            .getOrNull()?.ok == true
+                        if (resetOk) directDensityApplied = 0
+                        markDensityUnsafe(context, pkg)
+                        log("direct: density reset to native before relaunch ok=$resetOk; " +
+                            "$pkg marked density-unsafe (dpi=$densityApplied, $what)")
+                    }
                     // With no task left this births the app on the cluster display; with a task that
                     // fled to the main screen it moves that task back — the same operation project()
                     // performs on every star press, so a healthy machine sees nothing new here.
@@ -1513,22 +1622,73 @@ object ClusterProjectionManager {
         }
     }
 
-    /**
-     * #121: content scale is inert in direct mode. There is no VirtualDisplay to size a buffer on —
-     * the app runs in a freeform window on the real cluster display — so the only lever is a wm
-     * density override on a LIVE display, which is exactly the Configuration change that kills
-     * 2GIS (see [renderPlanFor]). Direct mode therefore always renders at the native density,
-     * i.e. scale 100%. [applyDirectDensity] stays in the tree behind this gate: the density RESET
-     * it can send is still the shape crash recovery uses, and flipping this back is how a future
-     * transport that can scale safely would re-enable the slider.
-     */
-    private const val DIRECT_DENSITY_SCALE_ENABLED = false
+    /** Settle after a density change before the launch, as BYD DashCast does it. */
+    private const val DIRECT_DENSITY_SETTLE_MS = 150L
 
-    /** Density override for direct mode: native dpi -> reset (no override), else the plan's dpi. */
-    private suspend fun applyDirectDensity(helper: HelperClient, displayId: Int, plan: RenderPlan) {
-        val density = if (plan.densityDpi == clusterDensityDpi) 0 else plan.densityDpi
-        runCatching { helper.setDisplayDensity(displayId, density) }
+    /**
+     * Content scale in direct mode. There is no VirtualDisplay to size a buffer on (the inverse
+     * buffer trick of [renderPlanFor]) — the app runs in a freeform window on the real cluster
+     * display, so a density override IS the scale: a smaller density draws smaller content, the
+     * same direction the buffer gives on the VD path. 100% -> 0 = no override, native density.
+     *
+     * #121 is about WHEN, not whether: a density change on a display that already hosts a rendered
+     * window is the Configuration change 2GIS (Qt) dies on. The rule this code keeps is therefore
+     * that the density is only ever changed while no live task of the projected package sits on
+     * that display — before a launch (with [DIRECT_DENSITY_SETTLE_MS] to settle), and never under
+     * a live window: a task already on the cluster is left alone, a resize moves bounds only and
+     * the new scale lands on the next send, and every exit path resets the override.
+     */
+    private fun directDensityFor(scalePct: Int): Int {
+        val clamped = scalePct.coerceIn(MIN_SCALE_PCT, MAX_SCALE_PCT)
+        return if (clamped == DEFAULT_SCALE_PCT) 0
+               else (clusterDensityDpi * clamped / 100).coerceAtLeast(1)
     }
+
+    /** Journal wording for a density value: 0 is a reset to the panel's own density. */
+    private fun directDensityLabel(density: Int): String = if (density == 0) "native" else "$density"
+
+    /**
+     * #121 self-heal. The 2GIS crash was diagnosed as "dies a few seconds after launch at every
+     * dpi except the native one", i.e. a pre-launch density can kill it too — the safe ORDER is
+     * not a proof of safety. So the density is treated as a probe: [armDirectDeathWatch] already
+     * watches the task for a few seconds after the launch, and a death that followed a non-native
+     * density latches this verdict for that package. Every later send of it runs at the native
+     * density, and the scale slider silently stops applying to that one app.
+     *
+     * Learned from behaviour, never a package list: the firmware and the app both vary across the
+     * fleet, and a car where 2GIS survives keeps its scale.
+     *
+     * Both loss shapes latch it. The death watch reads a task that fled to the main display as a
+     * death too (the system restarts a killed foreground app there), and the two are not
+     * distinguishable from here — the conservative reading costs that package its scale, the
+     * optimistic one costs the user a navigator that keeps dying.
+     */
+    private fun densityUnsafe(context: Context, pkg: String): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        if (prefs.getInt(KEY_DENSITY_UNSAFE_VERSION, -1) != BuildConfig.VERSION_CODE) {
+            val stale = prefs.all.keys.filter { it.startsWith(KEY_DENSITY_UNSAFE_PREFIX) }
+            prefs.edit()
+                .apply { stale.forEach { remove(it) } }
+                .putInt(KEY_DENSITY_UNSAFE_VERSION, BuildConfig.VERSION_CODE)
+                .apply()
+            return false
+        }
+        return prefs.getBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, false)
+    }
+
+    private fun markDensityUnsafe(context: Context, pkg: String) {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit()
+            .putInt(KEY_DENSITY_UNSAFE_VERSION, BuildConfig.VERSION_CODE)
+            .putBoolean(KEY_DENSITY_UNSAFE_PREFIX + pkg, true)
+            .apply()
+    }
+
+    /** Packages currently latched as density-unsafe, for the diagnostic dump. */
+    fun densityUnsafePackages(context: Context): List<String> =
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).all
+            .filter { (k, v) -> k.startsWith(KEY_DENSITY_UNSAFE_PREFIX) && v == true }
+            .map { it.key.removePrefix(KEY_DENSITY_UNSAFE_PREFIX) }
+            .sorted()
 
     /**
      * Creates the projection VirtualDisplay, preferring PUBLIC flags: accessibility ignores
@@ -1740,8 +1900,6 @@ object ClusterProjectionManager {
             log("pullback: nothing was placed this attempt, leaving task untouched (pkg=$pkg)")
             return
         }
-        val resetOk = directId != -1 &&
-            runCatching { helper.setDisplayDensity(directId, 0) }.getOrDefault(false)
         val taskId = helper.getTaskId(pkg)
         var modeOk = false
         var moveOk = false
@@ -1789,6 +1947,21 @@ object ClusterProjectionManager {
         } else {
             Log.d(TAG, "pullBackToMain: projected task ($pkg) not found")
             log("pullback: task $pkg not found (already gone)")
+        }
+        // Density LAST, and only on a CONFIRMED reclaim (#121): dropping the override while the
+        // task still sits on the cluster is the live Configuration change the pre-launch order
+        // exists to avoid. A failed reclaim keeps the override and, through resetOk=false, the
+        // marker — the next service start retries both.
+        val reclaimed = taskId == null || moveOk
+        val reset = if (directId != -1 && reclaimed) {
+            runCatching { helper.setDisplayDensity(directId, 0) }.getOrNull()
+        } else null
+        val resetOk = reset?.ok == true
+        if (resetOk) directDensityApplied = 0
+        if (directId != -1) {
+            if (reclaimed) log("pullback: density reset ok=$resetOk display=$directId " +
+                "readback=[${reset?.readback.orEmpty()}]")
+            else log("pullback: density reset skipped, task still on display $directId")
         }
         // Same confirmed-only invariant as recoverStaleDirectTask: the marker survives until
         // BOTH the density reset and the task reclaim are confirmed (or the task is gone), so

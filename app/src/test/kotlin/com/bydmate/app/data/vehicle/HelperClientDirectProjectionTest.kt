@@ -90,12 +90,67 @@ class HelperClientDirectProjectionTest {
     @Test
     fun `setDisplayDensity marshals displayId and density and maps status`() = runBlocking {
         var code = -1; var disp = -1; var dens = -1
-        val ok = clientWith(fakeWithStatus(0, capture = {
+        val result = clientWith(fakeWithStatus(0, capture = {
             disp = it.readInt(); dens = it.readInt()
         }, seenCode = { code = it })).setDisplayDensity(4, 230)
-        assertTrue(ok)
+        assertTrue(result.ok)
         assertEquals(HelperBinderProtocol.TX_SET_DISPLAY_DENSITY, code)
         assertEquals(4, disp); assertEquals(230, dens)
-        assertFalse(clientWith(fakeWithStatus(-1)).setDisplayDensity(4, 0))
+        assertFalse(clientWith(fakeWithStatus(-1)).setDisplayDensity(4, 0).ok)
+    }
+
+    /** The `wm density -d <id>` readback is the trailing string of the reply. */
+    @Test
+    fun `setDisplayDensity returns the trailing readback string`() = runBlocking {
+        val binder = object : FakeIBinder() {
+            override fun transact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                reply!!.writeInt(0); reply.writeInt(0)
+                reply.writeString("Physical density: 320; Override density: 160")
+                reply.setDataPosition(0)
+                return true
+            }
+        }
+        assertEquals(
+            "Physical density: 320; Override density: 160",
+            clientWith(binder).setDisplayDensity(1, 160).readback,
+        )
+    }
+
+    /** An old daemon sends the two ints only — the missing trailing field must read as empty. */
+    @Test
+    fun `setDisplayDensity against an old daemon reads an empty readback`() = runBlocking {
+        val result = clientWith(fakeWithStatus(0)).setDisplayDensity(1, 160)
+        assertTrue(result.ok)
+        assertEquals("", result.readback)
+    }
+
+    @Test
+    fun `clusterWmDiag splits the two reply blocks into lines`() = runBlocking {
+        var code = -1; var pkg: String? = null
+        val binder = object : FakeIBinder() {
+            override fun transact(c: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                code = c
+                data.setDataPosition(0)
+                data.enforceInterface(HelperBinderProtocol.DESCRIPTOR)
+                pkg = data.readString()
+                reply!!.writeInt(0)
+                reply.writeString("0: init=1920x1080 320dpi\n1: init=1920x720 320dpi base=1920x720 160dpi")
+                reply.writeString("ru.yandex.yandexnavi/.MainActivity dpi=160 raw=\"x\"")
+                reply.setDataPosition(0)
+                return true
+            }
+        }
+        val diag = clientWith(binder).clusterWmDiag("ru.yandex.yandexnavi")
+        assertEquals(HelperBinderProtocol.TX_CLUSTER_WM_DIAG, code)
+        assertEquals("ru.yandex.yandexnavi", pkg)
+        assertEquals(2, diag!!.displays.size)
+        assertEquals("1: init=1920x720 320dpi base=1920x720 160dpi", diag.displays[1])
+        assertEquals(1, diag.taskConfig.size)
+    }
+
+    @Test
+    fun `clusterWmDiag returns null on a failure status and on a missing daemon`() = runBlocking {
+        assertEquals(null, clientWith(fakeWithStatus(-1)).clusterWmDiag("pkg"))
+        assertEquals(null, clientWith(null).clusterWmDiag("pkg"))
     }
 }

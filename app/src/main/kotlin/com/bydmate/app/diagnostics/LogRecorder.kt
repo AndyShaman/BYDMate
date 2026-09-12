@@ -373,7 +373,9 @@ class LogRecorder internal constructor(
             // plus the protocol client, which reports the TLS upgrade and the handshake outcome.
             "AdbRestore:*", "AdbProtocolClient:*",
             // Window channel probe verdicts (percent family vs CTRL, #79/#64).
-            "WindowChannelRouter:*"
+            "WindowChannelRouter:*",
+            // Firmware fid catalog: where it came from and every address it moved.
+            "FidCatalog:*"
         )
     }
 }

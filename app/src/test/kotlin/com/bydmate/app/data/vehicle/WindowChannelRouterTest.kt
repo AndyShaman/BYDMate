@@ -1,5 +1,9 @@
 package com.bydmate.app.data.vehicle
 
+import com.bydmate.app.data.nativestack.FidAddress
+import com.bydmate.app.data.nativestack.FidAddresses
+import com.bydmate.app.data.nativestack.FidMap
+import com.bydmate.app.data.nativestack.ResolvedFidTable
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -8,6 +12,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.After
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -56,13 +61,17 @@ class WindowChannelRouterTest {
         private val entered: CompletableDeferred<Unit>? = null,
     ) : HelperClient by mockk(relaxed = true) {
         val reads = AtomicInteger(0)
+        val seen = java.util.Collections.synchronizedList(mutableListOf<Int>())
         override suspend fun read(dev: Int, fid: Int, tx: Int): Long? {
             entered?.complete(Unit)
             gate?.await()
             reads.incrementAndGet()
+            seen.add(fid)
             return answers[fid]
         }
     }
+
+    @After fun restoreConstants() = FidAddresses.resetToConstants()
 
     private fun router(helper: HelperClient, store: WindowChannelStore, clock: () -> Long = { BASE_MS }) =
         WindowChannelRouter(helper, store, clock)
@@ -457,5 +466,25 @@ class WindowChannelRouterTest {
         assertEquals(4, WindowChannelRouter.ctrlValue(75))
         assertEquals(1, WindowChannelRouter.ctrlValue(76))
         assertEquals(1, WindowChannelRouter.ctrlValue(100))
+    }
+
+    /** The probe picks the WRITE family, and write fids are not catalog-resolved, so it must
+     *  read the compiled constant even when the catalog moved that address for telemetry. */
+    @Test fun `probe reads the compiled constant when the catalog moved the address`() = runTest {
+        val moved = FidMap.all.associate { entry ->
+            entry.field to if (entry.field == "windowFL") {
+                FidAddress(entry.device, entry.fid + 1)
+            } else {
+                FidAddress(entry.device, entry.fid)
+            }
+        }
+        FidAddresses.install(ResolvedFidTable(moved, emptyList(), "test"))
+        val helper = CountingHelper(PERCENT_FIDS.associateWith { 40L })
+        val store = FakeStore()
+
+        router(helper, store).route("window_driver_pos", 100)
+
+        assertEquals(1, helper.seen.size)
+        assertEquals(FL_FID, helper.seen.single())
     }
 }

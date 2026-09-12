@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.remote.DiParsData
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.lang.reflect.Method
@@ -24,18 +25,20 @@ class FidSubscriptionManager @Inject constructor(
 ) {
     private class DeviceSpec(val label: String, val className: String, val fids: IntArray)
 
-    private val specs = listOf(
-        DeviceSpec("light", "android.hardware.bydauto.light.BYDAutoLightDevice", intArrayOf(FID_BLINK)),
-        DeviceSpec("gearbox", "android.hardware.bydauto.gearbox.BYDAutoGearboxDevice", intArrayOf(FID_GEAR)),
-        DeviceSpec("adas", "android.hardware.bydauto.adas.BYDAutoADASDevice", intArrayOf(FID_BSD_LEFT, FID_BSD_RIGHT)),
+    // Addresses are read at start() rather than at construction: the firmware catalog may
+    // replace the Leopard 3 constants with this car's own fids before the service starts.
+    private fun buildSpecs(): List<DeviceSpec> = listOf(
+        DeviceSpec("light", "android.hardware.bydauto.light.BYDAutoLightDevice",
+            intArrayOf(FidAddresses.fid("turnSignal"))),
+        DeviceSpec("gearbox", "android.hardware.bydauto.gearbox.BYDAutoGearboxDevice",
+            intArrayOf(FidAddresses.fid("gear"))),
+        DeviceSpec("adas", "android.hardware.bydauto.adas.BYDAutoADASDevice",
+            intArrayOf(FidAddresses.fid("bsdLeft"), FidAddresses.fid("bsdRight"))),
     )
 
-    private val channels = mapOf(
-        FID_BLINK to SubscriptionChannelState("blink/$FID_BLINK", 1..6),
-        FID_GEAR to SubscriptionChannelState("gear/$FID_GEAR", 1..6),
-        FID_BSD_LEFT to SubscriptionChannelState("bsdL/$FID_BSD_LEFT", 0..2),
-        FID_BSD_RIGHT to SubscriptionChannelState("bsdR/$FID_BSD_RIGHT", 0..2),
-    )
+    private var channels: Map<Int, SubscriptionChannelState> = emptyMap()
+    private var blinkChannel: SubscriptionChannelState? = null
+    private var gearChannel: SubscriptionChannelState? = null
 
     // device instance + listener proxy + resolved unregister method, per successfully subscribed spec
     private class Registration(val device: Any, val listener: Any, val unregister: Method)
@@ -55,7 +58,19 @@ class FidSubscriptionManager @Inject constructor(
         if (started) return
         if (!testBuild) return  // observe-mode phase: -test builds only, prod untouched
         started = true
-        for (spec in specs) {
+        val blinkFid = FidAddresses.fid("turnSignal")
+        val gearFid = FidAddresses.fid("gear")
+        val bsdLeftFid = FidAddresses.fid("bsdLeft")
+        val bsdRightFid = FidAddresses.fid("bsdRight")
+        channels = mapOf(
+            blinkFid to SubscriptionChannelState("blink/$blinkFid", 1..6),
+            gearFid to SubscriptionChannelState("gear/$gearFid", 1..6),
+            bsdLeftFid to SubscriptionChannelState("bsdL/$bsdLeftFid", 0..2),
+            bsdRightFid to SubscriptionChannelState("bsdR/$bsdRightFid", 0..2),
+        )
+        blinkChannel = channels[blinkFid]
+        gearChannel = channels[gearFid]
+        for (spec in buildSpecs()) {
             try {
                 subscribe(spec)
                 registerResults[spec.label] = "ok"
@@ -67,6 +82,24 @@ class FidSubscriptionManager @Inject constructor(
                 Log.w(TAG, "register ${spec.label} failed", e)
             }
         }
+    }
+
+    /**
+     * Re-registers the listeners when the firmware catalog moved one of the subscribed
+     * addresses. The subscriptions are built at [start], which runs before the catalog has
+     * been read and probed, so without this they would sit on the Leopard 3 constants on a
+     * car that uses different fids. A no-op when nothing moved or nothing was subscribed.
+     */
+    @Synchronized
+    fun restartForResolvedAddresses() {
+        if (!started) return
+        val moved = SUBSCRIBED_FIELDS.filter {
+            FidAddresses.fid(it) != com.bydmate.app.data.nativestack.FidMap.byField.getValue(it).fid
+        }
+        if (moved.isEmpty()) return
+        Log.i(TAG, "catalog moved subscribed fids (${moved.joinToString()}), re-registering")
+        stop()
+        start()
     }
 
     @Synchronized
@@ -83,8 +116,8 @@ class FidSubscriptionManager @Inject constructor(
     /** Called from TrackingService on every poll tick; poll stays the source of truth. */
     fun onPollSnapshot(data: DiParsData) {
         if (!started) return
-        channels[FID_BLINK]?.onPollComparison(data.turnSignal)
-        channels[FID_GEAR]?.onPollComparison(data.gear)
+        blinkChannel?.onPollComparison(data.turnSignal)
+        gearChannel?.onPollComparison(data.gear)
         // BSD fids are not in FidMap — no poll counterpart in this phase, events only.
     }
 
@@ -176,10 +209,16 @@ class FidSubscriptionManager @Inject constructor(
     }
 
     companion object {
+        // Leopard 3 constants, kept as the compiled fallbacks; the live addresses come from
+        // FidMap ("turnSignal", "gear", "bsdLeft", "bsdRight") through FidAddresses.
         const val FID_BLINK = 950009900
         const val FID_GEAR = 555745336
         const val FID_BSD_LEFT = 1098907664
         const val FID_BSD_RIGHT = 1098907666
+
+        /** FidMap entries these subscriptions read, in the order buildSpecs uses them. */
+        private val SUBSCRIBED_FIELDS = listOf("turnSignal", "gear", "bsdLeft", "bsdRight")
+
         private const val TAG = "FidSubscription"
     }
 }

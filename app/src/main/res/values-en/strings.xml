@@ -49,7 +49,7 @@
     <string name="settings_display_offset_y_desc">Window position: 0 - top, 50 - center, 100 - bottom</string>
     <string name="settings_display_scale">Scale</string>
     <string name="settings_display_scale_desc">UI size: lower value - smaller elements and more map in the window</string>
-    <string name="settings_display_scale_direct_hint">Scale applies only in the Factory projection mode. In Extended the app always renders at its native size.</string>
+    <string name="settings_display_scale_direct_hint">To apply the new scale, turn the cluster output off and on again.</string>
     <!-- Steering-wheel button names (cluster trigger picker) -->
     <string name="steering_button_right_star">Right star</string>
     <string name="steering_button_left_star">Left star</string>
@@ -1075,6 +1075,10 @@
     <string name="settings_agent_gender_male">Male</string>
     <string name="settings_agent_gender_female">Female</string>
     <string name="settings_agent_gender_hint">Applies to all voices: each source has a male and a female option</string>
+    <string name="settings_route_navigator_label">Navigator for routes</string>
+    <string name="settings_route_navigator_yandex">Yandex Navigator</string>
+    <string name="settings_route_navigator_dgis">2GIS</string>
+    <string name="settings_route_navigator_hint">Which app opens for routes and map search</string>
     <string name="settings_agent_memory_title">Driver memory</string>
     <string name="settings_agent_memory_hint">The agent remembers your name and lasting preferences when you tell it to. Say “forget …” to drop a single fact</string>
     <string name="settings_agent_memory_empty">Nothing remembered yet</string>
