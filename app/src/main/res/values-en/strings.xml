@@ -521,7 +521,7 @@
     <string name="widget_trash_release">release - widget hidden</string>
     <string name="widget_trash_hint">drag here to hide</string>
     <string name="dashboard_vehicle_data_offline">No vehicle data</string>
-    <string name="dashboard_adb_offline">ADB is not responding</string>
+    <string name="dashboard_adb_offline">Car data unavailable</string>
     <string name="dashboard_diplus_offline">DiPlus is not responding</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>

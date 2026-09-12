@@ -620,7 +620,7 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Нет данных от автомобиля</string>
-    <string name="dashboard_adb_offline">ADB не отвечает</string>
+    <string name="dashboard_adb_offline">Данные машины недоступны</string>
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>

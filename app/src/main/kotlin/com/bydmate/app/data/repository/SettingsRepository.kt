@@ -43,6 +43,8 @@ open class SettingsRepository @Inject constructor(
         const val KEY_IDLE_DRAIN_CLEANUP_DONE = "idle_drain_cleanup_done"
         const val KEY_CONSUMPTION_RECALC_DONE = "consumption_recalc_done"
         const val KEY_IDLE_DRAIN_V2_CLEANUP = "idle_drain_v2_cleanup"
+        /** One-time repair of trips holding an impossible energydata kWh value. */
+        const val KEY_ENERGY_KWH_SANITY_DONE = "energydata_kwh_sanity_v1_done"
         /** DriveMode trigger value "0" (old "NORMAL") rewritten to the real NORMAL code "3". */
         const val KEY_DRIVEMODE_RULE_MIGRATION = "drivemode_rule_migration_v2"
         const val KEY_OPENROUTER_API_KEY = "openrouter_api_key"
@@ -321,6 +323,12 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setConsumptionRecalcDone() =
         setString(KEY_CONSUMPTION_RECALC_DONE, "true")
+
+    suspend fun isEnergyKwhSanityDone(): Boolean =
+        getString(KEY_ENERGY_KWH_SANITY_DONE, "false") == "true"
+
+    suspend fun setEnergyKwhSanityDone() =
+        setString(KEY_ENERGY_KWH_SANITY_DONE, "true")
 
     suspend fun getMapTileSource(): String =
         getString(KEY_MAP_TILE_SOURCE, DEFAULT_MAP_TILE_SOURCE)

@@ -195,3 +195,21 @@ class BlindSpotMirrorRoutingTest {
         assertTrue(blindSpotUsesMirror(bothOnMain = true, hasClusterDisplay = true))
     }
 }
+
+class BlindSpotMainScreenCoverageTest {
+
+    @Test fun `the right PiP always covers the main screen`() {
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, clusterOnMainScreen = false))
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.RIGHT, clusterOnMainScreen = true))
+    }
+
+    @Test fun `the left window covers it only as the mirrored fallback`() {
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.LEFT, clusterOnMainScreen = false))
+        assertTrue(blindSpotCoversMainScreen(BlindSpotSide.LEFT, clusterOnMainScreen = true))
+    }
+
+    @Test fun `nothing shown covers nothing`() {
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, clusterOnMainScreen = false))
+        assertFalse(blindSpotCoversMainScreen(BlindSpotSide.NONE, clusterOnMainScreen = true))
+    }
+}

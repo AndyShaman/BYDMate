@@ -33,6 +33,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.ui.widget.WidgetController
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -527,6 +528,7 @@ class BlindSpotController @Inject constructor(
         shownSide = side
         if (side != BlindSpotSide.NONE) shownAt = SystemClock.elapsedRealtime()
         Log.i(TAG, "show $previous -> $side")
+        syncWidgetSuppression()
         if (side == BlindSpotSide.LEFT) {
             requestCompositor(true)
         } else {
@@ -534,6 +536,18 @@ class BlindSpotController @Inject constructor(
             if (previous == BlindSpotSide.LEFT) requestCompositor(false)
         }
         if (side != BlindSpotSide.RIGHT) pipWindow?.setGlow(false)
+    }
+
+    /**
+     * Keeps the floating dashboard widget out of the camera image: it is drawn above our window
+     * on the main screen (VadimV, 2026-09-12). Nothing is persisted — the release just lets the
+     * widget's own rules decide again, and a teardown releases it too, so it can never stay hidden.
+     */
+    private fun syncWidgetSuppression() {
+        WidgetController.setSuppressed(
+            WIDGET_SUPPRESS_REASON,
+            blindSpotCoversMainScreen(shownSide, clusterOnMainScreen),
+        )
     }
 
     /** Fire-and-forget compositor switch for the show path; one job at a time. */
@@ -649,6 +663,8 @@ class BlindSpotController @Inject constructor(
             // No windows left, so nothing is shown regardless of where the flips left them.
             shownSide = BlindSpotSide.NONE
             lastRequestedSide = BlindSpotSide.NONE
+            // Nothing is shown any more, so the widget comes back even if applyShow above failed.
+            syncWidgetSuppression()
             windowsAttachedAt = 0L
             cameraOpenedAt = 0L
             coolingSince = 0L
@@ -890,6 +906,8 @@ class BlindSpotController @Inject constructor(
 
     private companion object {
         const val TAG = "BlindSpot"
+        /** Suppression key handed to WidgetController while a window covers the main screen. */
+        const val WIDGET_SUPPRESS_REASON = "blind-spot camera"
 
         // Telemetry read through the daemon (Leopard 3, on-car 2026-07-31).
         const val TX_INT = 5

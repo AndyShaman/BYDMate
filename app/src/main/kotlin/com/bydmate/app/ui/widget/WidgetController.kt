@@ -42,6 +42,7 @@ import com.bydmate.app.R
 import com.bydmate.app.domain.calculator.ConsumptionAggregator
 import com.bydmate.app.domain.calculator.ConsumptionState
 import com.bydmate.app.domain.calculator.Trend
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
@@ -83,6 +84,10 @@ object WidgetController {
 
     @Volatile private var appForegrounded: Boolean = false
     @Volatile private var previewMode: Boolean = false
+
+    /** Overlays of our own that currently cover the widget (the blind-spot camera PiP today).
+     *  Non-empty = the widget is hidden for the duration, without touching its preference. */
+    internal val suppressReasons = MutableStateFlow<Set<String>>(emptySet())
 
     private var wm: WindowManager? = null
     private var widgetView: ComposeView? = null
@@ -276,6 +281,20 @@ object WidgetController {
     }
 
     /**
+     * Hides the widget while [reason] is on screen and restores it on release. Nothing is
+     * persisted and no preference is touched, so the widget comes back only if the user's own
+     * enabled/visibility rules still ask for it.
+     */
+    fun setSuppressed(reason: String, on: Boolean) {
+        val before = suppressReasons.value
+        val after = if (on) before + reason else before - reason
+        if (after == before) return
+        suppressReasons.value = after
+        if (on) Log.i(TAG, "widget: suppressed ($reason)")
+        else Log.i(TAG, "widget: restored ($reason closed)")
+    }
+
+    /**
      * Settings UI calls this while user drags the alpha or size slider so the
      * widget pops over Settings, letting the user see the change live. Set to
      * false on screen leave (DisposableEffect.onDispose) to restore normal
@@ -334,13 +353,18 @@ object WidgetController {
         dataScope = scope
         // Camera surface always hides the widget; YouTube hides it only when the user
         // opted in through the Settings toggle, and so does any app in the user-picked list.
+        // Our own overlays (blind-spot camera PiP) are ORed on top: combine(...) is typed only
+        // up to 5 flows, so the suppression is folded in around the five inputs above.
         val hideFlow = combine(
-            TrackingService.cameraActive,
-            TrackingService.youtubeForeground,
-            prefsHideOnYoutubeFlow,
-            TrackingService.foregroundPackage,
-            prefsHideInAppsFlow,
-        ) { cam, yt, hideYt, fgPkg, hideApps -> shouldHideOverlay(cam, yt, hideYt, fgPkg, hideApps) }
+            combine(
+                TrackingService.cameraActive,
+                TrackingService.youtubeForeground,
+                prefsHideOnYoutubeFlow,
+                TrackingService.foregroundPackage,
+                prefsHideInAppsFlow,
+            ) { cam, yt, hideYt, fgPkg, hideApps -> shouldHideOverlay(cam, yt, hideYt, fgPkg, hideApps) },
+            suppressReasons,
+        ) { hide, reasons -> hide || reasons.isNotEmpty() }
         // Stock combine(...) is typed only up to 5 flows — bundle consumption +
         // alpha + scale + hideOverlay into one UiBundle so we stay under the limit.
         val uiFlow = combine(
