@@ -338,7 +338,7 @@ class LogRecorder internal constructor(
             "-s", "BootReceiver:*",
             "TrackingService:*", "TripTracker:*",
             "HistoryImporter:*", "EnergyDataReader:*",
-            "AutoserviceClient:*", "AdbOnDeviceClient:*",
+            "AutoserviceClient:*", "AdbOnDevice:*",
             "IternioTelemetryClient:*", "BatteryHealthRepository:*",
             "ChargesViewModel:*", "ChargeRepository:*",
             // v3.0.3: widen coverage to write/daemon/automation subsystems

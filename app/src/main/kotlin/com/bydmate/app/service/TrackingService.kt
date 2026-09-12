@@ -1576,11 +1576,19 @@ class TrackingService : Service(), LocationListener {
                     // Self-grant while the classic port still answers, regardless of the restore
                     // toggle: on firmwares that close the port at every reboot this is the last
                     // moment a shell command can reach us, and the permission is what lets the
-                    // app turn wireless debugging on later. Idempotent.
-                    val secureSettings = adbOnDeviceClient.grantWriteSecureSettings("com.bydmate.app")
-                    val held = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+                    // app turn wireless debugging on later. Skipped once held: the extra `pm grant`
+                    // on every service start is the only new traffic on the classic socket since
+                    // v3.13.1, and on a trinket unit the daemon spawn stopped being dispatched (#64).
+                    val alreadyHeld = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
                         PackageManager.PERMISSION_GRANTED
-                    Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings held=$held")
+                    if (alreadyHeld) {
+                        Log.i(TAG, "WRITE_SECURE_SETTINGS grant: skipped, already held")
+                    } else {
+                        val secureSettings = adbOnDeviceClient.grantWriteSecureSettings("com.bydmate.app")
+                        val held = checkSelfPermission(Manifest.permission.WRITE_SECURE_SETTINGS) ==
+                            PackageManager.PERMISSION_GRANTED
+                        Log.i(TAG, "WRITE_SECURE_SETTINGS grant: $secureSettings held=$held")
+                    }
                 } else {
                     Log.w(TAG, "ADB connect refused — camera detection may be inactive until appop is granted manually")
                     // Trigger 1: the port is dead on service start — try to bring it back.
