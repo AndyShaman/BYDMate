@@ -253,14 +253,26 @@ class AdbOnDeviceClientImpl @Inject constructor(
     }
 
     override suspend fun readHelperLog(): String? = withContext(Dispatchers.IO) {
-        val p = protocol ?: return@withContext null
+        val p = protocolOrConnect() ?: return@withContext null
         runCatching { p.exec("cat $HELPER_LOG_PATH") }.getOrNull()
     }
 
     override suspend fun helperHeartbeat(): Boolean = withContext(Dispatchers.IO) {
-        val p = protocol ?: return@withContext false
+        val p = protocolOrConnect() ?: return@withContext false
         val out = runCatching { p.exec("ps -A -o NAME") }.getOrNull() ?: return@withContext false
         out.lineSequence().any { it.trim() == HELPER_PROCESS_NAME }
+    }
+
+    /**
+     * The live protocol, connecting lazily like spawnHelper/killHelper do. A process recreated
+     * while the daemon runs has no protocol yet, and a bare `protocol ?: return false` reported
+     * "no daemon process" for a daemon that is very much alive — which sent HelperBootstrap
+     * straight into kill+respawn (#64/#148). Null only when the connect itself failed.
+     */
+    private suspend fun protocolOrConnect(): AdbProtocol? {
+        protocol?.let { return it }
+        if (connect().isFailure) return null
+        return protocol
     }
 
     override suspend fun shutdown() {

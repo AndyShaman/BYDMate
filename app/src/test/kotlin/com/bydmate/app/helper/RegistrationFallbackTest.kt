@@ -1,7 +1,9 @@
 package com.bydmate.app.helper
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -52,5 +54,27 @@ class RegistrationFallbackTest {
     @Test fun `a blank token counts as absent`() {
         assertNull(spawnTokenFrom(arrayOf("10123", "")))
         assertNull(spawnTokenFrom(arrayOf("10123", "   ")))
+    }
+
+    @Test fun `the broadcast transport keeps announcing until a client registers`() {
+        assertTrue(shouldReannounce(HelperBinderHolder.TRANSPORT_BROADCAST, clientRegistered = false))
+        assertFalse(shouldReannounce(HelperBinderHolder.TRANSPORT_BROADCAST, clientRegistered = true))
+    }
+
+    @Test fun `only the first delivery may wake a stopped app`() {
+        // The first broadcast must reach an app that is in the stopped state right after an
+        // update; a re-announce must not, or force-stopping the app would restart it 10 s later.
+        assertEquals(
+            android.content.Intent.FLAG_INCLUDE_STOPPED_PACKAGES,
+            binderIntentFlags(includeStopped = true),
+        )
+        assertEquals(0, binderIntentFlags(includeStopped = false))
+    }
+
+    @Test fun `a registered service name is never re-announced`() {
+        // Leopard 3 / DiLink 5: the app re-looks the daemon up by name after any restart, so
+        // there is nothing to announce and no timer to run.
+        assertFalse(shouldReannounce("servicemanager", clientRegistered = false))
+        assertFalse(shouldReannounce("servicemanager", clientRegistered = true))
     }
 }

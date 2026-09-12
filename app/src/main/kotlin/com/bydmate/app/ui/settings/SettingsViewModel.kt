@@ -1926,6 +1926,14 @@ class SettingsViewModel @Inject constructor(
                     else com.bydmate.app.helper.HelperBinderHolder.transport)
                 appendLine("broadcast_last_reject: " +
                     (com.bydmate.app.helper.HelperBinderHolder.lastReject ?: "(none)"))
+                // Whether a recreated process can still authenticate the daemon's re-announce,
+                // and whether this car delivers the daemon by broadcast at all (#64/#148).
+                val helperPrefs = appContext.getSharedPreferences(
+                    com.bydmate.app.helper.HelperBinderHolder.PREFS_NAME, Context.MODE_PRIVATE)
+                appendLine("token_persisted: " + if (helperPrefs.contains(
+                        com.bydmate.app.helper.HelperBinderHolder.KEY_SPAWN_TOKEN)) "yes" else "no")
+                appendLine("last_transport: " + (helperPrefs.getString(
+                    com.bydmate.app.helper.HelperBinderHolder.KEY_LAST_TRANSPORT, null) ?: "absent"))
                 val failure = helperBootstrap.lastSpawnFailure()
                 if (failure == null) {
                     appendLine("last_spawn_failure: (none)")

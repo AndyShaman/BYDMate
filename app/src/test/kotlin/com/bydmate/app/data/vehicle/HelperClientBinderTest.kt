@@ -771,7 +771,7 @@ class HelperClientBinderTest {
 
     /** Puts [binder] into the holder the way an authenticated broadcast would. */
     private fun holdByBroadcast(binder: IBinder) {
-        HelperBinderHolder.expectedToken = "0123456789abcdef0123456789abcdef"
+        HelperBinderHolder.armToken("0123456789abcdef0123456789abcdef")
         val payload = android.os.Bundle().apply {
             putBinder(HelperBinderProtocol.KEY_BINDER, binder)
             putString(HelperBinderProtocol.KEY_TOKEN, HelperBinderHolder.expectedToken)
@@ -782,7 +782,7 @@ class HelperClientBinderTest {
     @org.junit.After
     fun clearHolder() {
         HelperBinderHolder.clear()
-        HelperBinderHolder.expectedToken = null
+        HelperBinderHolder.armToken(null)
     }
 
     /**

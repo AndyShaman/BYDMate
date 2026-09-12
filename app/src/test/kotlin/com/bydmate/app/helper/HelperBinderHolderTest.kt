@@ -5,6 +5,7 @@ import android.os.IBinder
 import android.os.IInterface
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Before
@@ -53,13 +54,13 @@ class HelperBinderHolderTest {
     @Before @After
     fun reset() {
         HelperBinderHolder.clear()
-        HelperBinderHolder.expectedToken = null
+        HelperBinderHolder.armToken(null)
         HelperBinderHolder.onAccepted = null
     }
 
     @Test
     fun `a binder matching the spawn token is held`() {
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val fake = FakeIBinder()
 
         assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))
@@ -70,7 +71,7 @@ class HelperBinderHolderTest {
 
     @Test
     fun `a foreign token is rejected`() {
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
 
         assertEquals(
             BinderAcceptResult.TOKEN_MISMATCH,
@@ -82,7 +83,7 @@ class HelperBinderHolderTest {
 
     @Test
     fun `a binder that is not our daemon stub is rejected`() {
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
 
         assertEquals(
             BinderAcceptResult.DESCRIPTOR_MISMATCH,
@@ -104,7 +105,7 @@ class HelperBinderHolderTest {
 
     @Test
     fun `an intent without a binder is rejected`() {
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
 
         assertEquals(BinderAcceptResult.NO_BINDER, HelperBinderHolder.accept(payload(null, TOKEN)))
         assertEquals(BinderAcceptResult.NO_BINDER, HelperBinderHolder.accept(null))
@@ -112,7 +113,7 @@ class HelperBinderHolderTest {
 
     @Test
     fun `daemon death clears the held binder`() {
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val fake = FakeIBinder()
         HelperBinderHolder.accept(payload(fake, TOKEN))
 
@@ -139,6 +140,12 @@ class HelperBinderHolderTest {
             BinderAcceptResult.TOKEN_MISMATCH,
             decideBinderAccept(hasBinder = true, token = "ffff", expectedToken = TOKEN),
         )
+        // A matching token still loses to a binder we already hold — the token is no longer
+        // consumed by an accept, so this is what keeps a replay out.
+        assertEquals(
+            BinderAcceptResult.ALREADY_HELD,
+            decideBinderAccept(hasBinder = true, token = TOKEN, expectedToken = TOKEN, alreadyHolding = true),
+        )
         // null = nothing left to decide from the intent alone; the descriptor step takes over.
         assertNull(decideBinderAccept(hasBinder = true, token = TOKEN, expectedToken = TOKEN))
         assertEquals(
@@ -158,7 +165,7 @@ class HelperBinderHolderTest {
         assertEquals(BinderAcceptResult.NOT_EXPECTED, HelperBinderHolder.accept(payload(whileIdle, TOKEN)))
         assertEquals("no spawn in flight must not touch the binder", 0, whileIdle.descriptorReads)
 
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val foreign = FakeIBinder()
         assertEquals(
             BinderAcceptResult.TOKEN_MISMATCH,
@@ -173,12 +180,13 @@ class HelperBinderHolderTest {
 
     @Test
     fun `a late death notice from the previous daemon does not wipe its successor`() {
-        // Respawn: A is replaced by B, then A's death notice finally arrives. Clearing on it
+        // Respawn: A dies, B takes over, then A's death notice finally arrives. Clearing on it
         // would leave HelperClient with no binder while a healthy daemon is running.
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val first = FakeIBinder()
         HelperBinderHolder.accept(payload(first, TOKEN))
-        HelperBinderHolder.expectedToken = SECOND_TOKEN
+        HelperBinderHolder.clear()                      // the kill path: A is gone
+        HelperBinderHolder.armToken(SECOND_TOKEN)
         val second = FakeIBinder()
         HelperBinderHolder.accept(payload(second, SECOND_TOKEN))
 
@@ -194,18 +202,132 @@ class HelperBinderHolderTest {
     }
 
     @Test
-    fun `a spawn token is single-use`() {
-        // One spawn, one binder: a replay of the accepted intent (or anyone who saw the token)
-        // must not be able to swap the binder afterwards.
-        HelperBinderHolder.expectedToken = TOKEN
+    fun `a held binder cannot be swapped by a replay of the same intent`() {
+        // The token now outlives the accept (the daemon re-announces to every new app process),
+        // so holding a binder is what makes the delivery single-use.
+        HelperBinderHolder.armToken(TOKEN)
         val fake = FakeIBinder()
         assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))
-        assertNull("the token is consumed by the accept", HelperBinderHolder.expectedToken)
+        assertEquals("the token stays armed for the next process", TOKEN, HelperBinderHolder.expectedToken)
 
         val replay = FakeIBinder()
-        assertEquals(BinderAcceptResult.NOT_EXPECTED, HelperBinderHolder.accept(payload(replay, TOKEN)))
-        assertEquals("not_expected", HelperBinderHolder.lastReject)
+        assertEquals(BinderAcceptResult.ALREADY_HELD, HelperBinderHolder.accept(payload(replay, TOKEN)))
+        assertEquals("already_held", HelperBinderHolder.lastReject)
         assertSame("the accepted binder must stay", fake, HelperBinderHolder.binder)
+        assertEquals("a rejected re-announce must not touch the binder", 0, replay.descriptorReads)
+    }
+
+    @Test
+    fun `the same token is accepted again once the daemon binder is gone`() {
+        // A recreated app process: the daemon is the same one, so it re-announces with the token
+        // it was spawned with — and that must be adopted, not turned away.
+        HelperBinderHolder.armToken(TOKEN)
+        val first = FakeIBinder()
+        assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(first, TOKEN)))
+
+        HelperBinderHolder.clear()                      // process restart / daemon death
+
+        val reannounced = FakeIBinder()
+        assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(reannounced, TOKEN)))
+        assertSame(reannounced, HelperBinderHolder.binder)
+    }
+
+    @Test
+    fun `a new spawn token replaces the old one`() {
+        HelperBinderHolder.armToken(TOKEN)
+        HelperBinderHolder.accept(payload(FakeIBinder(), TOKEN))
+        HelperBinderHolder.clear()
+        HelperBinderHolder.armToken(SECOND_TOKEN)
+
+        assertEquals(
+            "the superseded token must not open the receiver any more",
+            BinderAcceptResult.TOKEN_MISMATCH,
+            HelperBinderHolder.accept(payload(FakeIBinder(), TOKEN)),
+        )
+        assertEquals(
+            BinderAcceptResult.ACCEPTED,
+            HelperBinderHolder.accept(payload(FakeIBinder(), SECOND_TOKEN)),
+        )
+    }
+
+    @Test
+    fun `the persisted spawn token is restored into a fresh process`() {
+        val prefs = org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences(HelperBinderHolder.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString(HelperBinderHolder.KEY_SPAWN_TOKEN, TOKEN).apply()
+
+        // Process restart: nothing is armed in memory, and without the restore the live daemon's
+        // re-announce would be rejected as not_expected.
+        HelperBinderHolder.armToken(null)
+        HelperBinderHolder.restore(prefs)
+        assertEquals(TOKEN, HelperBinderHolder.expectedToken)
+
+        val reannounced = FakeIBinder()
+        assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(reannounced, TOKEN)))
+
+        // A spawn in flight owns the holder: restore must not overwrite its token.
+        HelperBinderHolder.clear()
+        HelperBinderHolder.armToken(SECOND_TOKEN)
+        HelperBinderHolder.restore(prefs)
+        assertEquals(SECOND_TOKEN, HelperBinderHolder.expectedToken)
+        prefs.edit().clear().apply()
+    }
+
+    @Test
+    fun `the receiver persists the token of the daemon that handed us a binder`() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val prefs = context.getSharedPreferences(
+            HelperBinderHolder.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
+        HelperBinderHolder.armToken(TOKEN)
+
+        val intent = android.content.Intent(HelperBinderProtocol.ACTION_BINDER)
+            .putExtra(HelperBinderProtocol.EXTRA_BUNDLE, payload(FakeIBinder(), TOKEN))
+        HelperBinderReceiver().onReceive(context, intent)
+
+        assertNotNull("the binder must be held", HelperBinderHolder.binder)
+        assertEquals(TOKEN, prefs.getString(HelperBinderHolder.KEY_SPAWN_TOKEN, null))
+        assertEquals(
+            HelperBinderHolder.TRANSPORT_BROADCAST,
+            prefs.getString(HelperBinderHolder.KEY_LAST_TRANSPORT, null),
+        )
+        prefs.edit().clear().apply()
+    }
+
+    @Test
+    fun `a rejected intent persists nothing`() {
+        val context = org.robolectric.RuntimeEnvironment.getApplication()
+        val prefs = context.getSharedPreferences(
+            HelperBinderHolder.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        prefs.edit().clear().apply()
+        HelperBinderHolder.armToken(TOKEN)
+
+        val intent = android.content.Intent(HelperBinderProtocol.ACTION_BINDER)
+            .putExtra(HelperBinderProtocol.EXTRA_BUNDLE, payload(FakeIBinder(), SECOND_TOKEN))
+        HelperBinderReceiver().onReceive(context, intent)
+
+        assertNull(prefs.getString(HelperBinderHolder.KEY_SPAWN_TOKEN, null))
+        assertNull(prefs.getString(HelperBinderHolder.KEY_LAST_TRANSPORT, null))
+    }
+
+    @Test
+    fun `a restore racing a fresh spawn leaves the new token in place`() {
+        // The receiver thread restores from prefs while HelperBootstrap arms the next spawn on
+        // Dispatchers.IO. A lost update here would make the new daemon's broadcast — and every
+        // re-announce after it — fail with token_mismatch for the life of the process.
+        val prefs = org.robolectric.RuntimeEnvironment.getApplication()
+            .getSharedPreferences(HelperBinderHolder.PREFS_NAME, android.content.Context.MODE_PRIVATE)
+        prefs.edit().putString(HelperBinderHolder.KEY_SPAWN_TOKEN, TOKEN).apply()
+
+        HelperBinderHolder.armToken(SECOND_TOKEN)
+        HelperBinderHolder.restore(prefs)
+
+        assertEquals("the spawn in flight owns the token", SECOND_TOKEN, HelperBinderHolder.expectedToken)
+        assertEquals(
+            BinderAcceptResult.ACCEPTED,
+            HelperBinderHolder.accept(payload(FakeIBinder(), SECOND_TOKEN)),
+        )
+        prefs.edit().clear().apply()
     }
 
     @Test
@@ -214,7 +336,7 @@ class HelperBinderHolderTest {
         // ensureRunning() — that is what the fid-catalog retry hangs off.
         var fired = 0
         HelperBinderHolder.onAccepted = { fired++ }
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val fake = FakeIBinder()
 
         assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))
@@ -223,10 +345,36 @@ class HelperBinderHolderTest {
     }
 
     @Test
+    fun `installing the callback over a held binder fires it once`() {
+        // A re-announce can start the process and be accepted before TrackingService exists.
+        // Every later broadcast is then rejected as already_held, so installing the callback is
+        // the last chance to register with the daemon — otherwise it broadcasts forever.
+        HelperBinderHolder.armToken(TOKEN)
+        HelperBinderHolder.accept(payload(FakeIBinder(), TOKEN))
+
+        var fired = 0
+        HelperBinderHolder.installOnAccepted { fired++ }
+
+        assertEquals("a held binder must trigger the freshly installed callback", 1, fired)
+    }
+
+    @Test
+    fun `installing the callback with an empty holder fires nothing`() {
+        var fired = 0
+        HelperBinderHolder.installOnAccepted { fired++ }
+        assertEquals(0, fired)
+
+        // Still wired up for the binder that has yet to arrive.
+        HelperBinderHolder.armToken(TOKEN)
+        HelperBinderHolder.accept(payload(FakeIBinder(), TOKEN))
+        assertEquals(1, fired)
+    }
+
+    @Test
     fun `onAccepted stays silent on a rejected intent`() {
         var fired = 0
         HelperBinderHolder.onAccepted = { fired++ }
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
 
         assertEquals(
             BinderAcceptResult.TOKEN_MISMATCH,
@@ -242,7 +390,7 @@ class HelperBinderHolderTest {
     @Test
     fun `a throwing callback does not break acceptance`() {
         HelperBinderHolder.onAccepted = { error("callback blew up") }
-        HelperBinderHolder.expectedToken = TOKEN
+        HelperBinderHolder.armToken(TOKEN)
         val fake = FakeIBinder()
 
         assertEquals(BinderAcceptResult.ACCEPTED, HelperBinderHolder.accept(payload(fake, TOKEN)))

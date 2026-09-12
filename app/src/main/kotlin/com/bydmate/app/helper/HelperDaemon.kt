@@ -38,6 +38,9 @@ private const val FAILURE_STACK_FRAMES = 4
 // Guard against a pathological cause cycle while unwrapping reflection wrappers.
 private const val MAX_CAUSE_HOPS = 4
 
+// How often the broadcast transport re-announces the binder while no app process holds it.
+private const val REANNOUNCE_INTERVAL_MS = 10_000L
+
 // Budget for the placement part of a TX_LAUNCH_FREEFORM, measured from before the launch retry
 // loop. The client starts its FORCE_TIMEOUT_MS = 15s only once it holds the channel, so the whole
 // TX has 15s of daemon time. Worst case inside it: resolveOrLaunchTask ~9.5s on a cold start, the
@@ -811,6 +814,12 @@ fun main(args: Array<String>) {
                     reply?.writeInt(HelperBinderProtocol.SPLIT37_FAILED); reply?.writeInt(-1); true
                 }
 
+                HelperBinderProtocol.TX_REGISTER_CLIENT -> runCatching {
+                    registerHelperClient(data.readStrongBinder())
+                    reply?.writeInt(0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); true }
+
                 else -> super.onTransact(code, data, reply, flags)
             }
         }
@@ -838,7 +847,11 @@ fun main(args: Array<String>) {
             }
             RegistrationFallback.BROADCAST -> try {
                 publishBinderByBroadcast(systemContext!!, helperBinder, spawnToken!!)
-                transport = "broadcast"
+                transport = HelperBinderHolder.TRANSPORT_BROADCAST
+                // One delivery is not enough: the app process is recreated (service restart, task
+                // removed, memory pressure) far more often than the daemon, and a recreated process
+                // has no binder. Keep announcing until a client registers (#64/#148).
+                scheduleReannounce(systemContext!!, helperBinder, spawnToken!!)
             } catch (be: Exception) {
                 System.err.println("ERR: broadcast ${describeBootstrapFailure(be)}")
                 exitProcess(5)
@@ -891,11 +904,16 @@ internal fun decideRegistrationFallback(hasSystemContext: Boolean, hasToken: Boo
  * Hands [binder] to the app in an explicit broadcast — the D+ (aps_diplus) recipe for firmwares
  * where the shell domain may transact with autoservice but may not register a service name.
  *
- * Explicit component + package so no other app can receive it, FLAG_INCLUDE_STOPPED_PACKAGES so
- * a force-stopped app (the state right after an update) is still woken. The token lets the app
- * authenticate the sender; version and pid are diagnostics for the dump.
+ * Explicit component + package so no other app can receive it, and on the FIRST delivery
+ * FLAG_INCLUDE_STOPPED_PACKAGES so a force-stopped app (the state right after an update) is still
+ * woken. The token lets the app authenticate the sender; version and pid are diagnostics for the dump.
  */
-private fun publishBinderByBroadcast(ctx: Context, binder: IBinder, token: String) {
+private fun publishBinderByBroadcast(
+    ctx: Context,
+    binder: IBinder,
+    token: String,
+    includeStopped: Boolean = true,
+) {
     val extras = Bundle().apply {
         putBinder(HelperBinderProtocol.KEY_BINDER, binder)
         putString(HelperBinderProtocol.KEY_TOKEN, token)
@@ -905,10 +923,83 @@ private fun publishBinderByBroadcast(ctx: Context, binder: IBinder, token: Strin
     val intent = Intent(HelperBinderProtocol.ACTION_BINDER)
         .setComponent(ComponentName(HelperBinderProtocol.APP_PACKAGE, HelperBinderProtocol.RECEIVER_CLASS))
         .setPackage(HelperBinderProtocol.APP_PACKAGE)
-        .addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+        .addFlags(binderIntentFlags(includeStopped))
         .putExtra(HelperBinderProtocol.EXTRA_BUNDLE, extras)
     ctx.sendBroadcast(intent)
 }
+
+/** App-side binder registered over TX_REGISTER_CLIENT; null while no app process holds ours. */
+@Volatile private var helperClientBinder: IBinder? = null
+
+/** Re-announce broadcasts sent since the last client registration — diagnostic counter only. */
+@Volatile private var reannounceCount = 0
+
+/** Re-arms the re-announce timer once the registered client dies; null on the addService path. */
+@Volatile private var resumeReannounce: (() -> Unit)? = null
+
+/**
+ * Whether the binder still has to be announced. Only the broadcast transport needs it at all —
+ * on firmwares where addService worked the app re-looks the daemon up by name after any restart.
+ */
+internal fun shouldReannounce(transport: String, clientRegistered: Boolean): Boolean =
+    transport == HelperBinderHolder.TRANSPORT_BROADCAST && !clientRegistered
+
+/**
+ * Repeats [publishBinderByBroadcast] every [REANNOUNCE_INTERVAL_MS] while no app process has
+ * registered. Uncapped on purpose: one explicit intent per 10 s costs nothing, and it is
+ * self-limiting — a running app registers within seconds of receiving the binder.
+ */
+private fun scheduleReannounce(ctx: Context, binder: IBinder, token: String) {
+    val handler = android.os.Handler(Looper.getMainLooper())
+    val tick = object : Runnable {
+        override fun run() {
+            if (!shouldReannounce(HelperBinderHolder.TRANSPORT_BROADCAST, helperClientBinder != null)) return
+            // includeStopped = false: the user force-stopping the app kills our client binder and
+            // resumes this timer — waking the app back up would override that stop. A process
+            // restarted normally still receives it.
+            runCatching { publishBinderByBroadcast(ctx, binder, token, includeStopped = false) }
+            reannounceCount++
+            println("REANNOUNCE n=$reannounceCount")
+            System.out.flush()
+            handler.postDelayed(this, REANNOUNCE_INTERVAL_MS)
+        }
+    }
+    resumeReannounce = {
+        // removeCallbacks first: a register+die in the same interval could otherwise leave two
+        // chains posting in parallel.
+        handler.removeCallbacks(tick)
+        handler.postDelayed(tick, REANNOUNCE_INTERVAL_MS)
+    }
+    handler.postDelayed(tick, REANNOUNCE_INTERVAL_MS)
+}
+
+/** TX_REGISTER_CLIENT body: remember the app's binder and stop announcing until it dies. */
+private fun registerHelperClient(client: IBinder?) {
+    if (client == null) return
+    helperClientBinder = client
+    reannounceCount = 0
+    println("CLIENT registered")
+    System.out.flush()
+    runCatching {
+        client.linkToDeath({
+            helperClientBinder = null
+            println("CLIENT died")
+            System.out.flush()
+            resumeReannounce?.invoke()
+        }, 0)
+    }.onFailure {
+        // Already dead between the transact and the link — that is no client at all.
+        helperClientBinder = null
+        resumeReannounce?.invoke()
+    }
+}
+
+/**
+ * Intent flags of the binder broadcast. Only the first delivery may wake a stopped package: every
+ * re-announce that did so would restart an app the user just force-stopped.
+ */
+internal fun binderIntentFlags(includeStopped: Boolean): Int =
+    if (includeStopped) Intent.FLAG_INCLUDE_STOPPED_PACKAGES else 0
 
 // Trailing activityType int: absent when the caller predates the split touch fix →
 // legacy RECENTS. Values other than STANDARD are coerced to RECENTS (conservative).

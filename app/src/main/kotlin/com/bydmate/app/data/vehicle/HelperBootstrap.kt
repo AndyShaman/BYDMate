@@ -72,12 +72,28 @@ class HelperBootstrap @Inject constructor(
         if (want == VERSION_READ_FAILED) return helper.isAlive()
         // Live query is authoritative: daemon's CLASSPATH is frozen at spawn time, so
         // VERSION_CODE in the running JVM reflects which APK it was spawned from.
-        if (helper.daemonVersion() == want) return true
+        val version = helper.daemonVersion()
+        if (version == want) return true
         // Daemon is stale (wrong version, too old for TX_GET_VERSION) or dead.
+        val alive = helper.isAlive()
+        val heartbeat = adb.helperHeartbeat()
+        val lastTransport = prefs.getString(HelperBinderHolder.KEY_LAST_TRANSPORT, null)
+        // The one line that says WHY the kill path was entered — its absence hid the trigger in
+        // the field log of build 459 (crazyhack, Song Plus).
+        Log.i(TAG, "daemon stale or unreachable: version=${version ?: "null"} want=$want " +
+            "alive=$alive heartbeat=$heartbeat lastTransport=${lastTransport ?: "absent"}")
+        // On broadcast-only firmwares (#64/#148) a recreated app process has no binder and no way
+        // to ask for one — but the daemon re-announces. Give it one interval before killing a
+        // daemon that is perfectly healthy. Right after an app update the old daemon does not
+        // re-announce at all: that costs this wait once, then the kill path runs as before.
+        if (lastTransport == HelperBinderHolder.TRANSPORT_BROADCAST && heartbeat) {
+            HelperBinderHolder.spawnInFlight = false
+            if (awaitReannounce(want)) return true
+        }
         // Kill when either the binder ping responds (isAlive) OR the process is visible in ps
         // (helperHeartbeat): a process holding the file lock must be killed before we spawn even
         // if its UID gate has gone mute (uid change after reinstall makes every transact fail).
-        if (helper.isAlive() || adb.helperHeartbeat()) {
+        if (alive || heartbeat) {
             // If the kill could not even be dispatched (no ADB connection / exec threw), we have
             // no evidence the stale daemon is gone. Bail rather than spawn over a possibly-live
             // old daemon; the next call retries.
@@ -128,12 +144,17 @@ class HelperBootstrap @Inject constructor(
         // broadcast within milliseconds, and an intent that arrives with no expected token set
         // is rejected.
         val token = newSpawnToken()
-        HelperBinderHolder.expectedToken = token
+        val persistedToken = prefs.getString(HelperBinderHolder.KEY_SPAWN_TOKEN, null)
+        HelperBinderHolder.armToken(token)
+        HelperBinderHolder.spawnInFlight = true
         if (!adb.spawnHelper(token)) {
             Log.w(TAG, "spawnHelper dispatch failed; not persisting version")
-            // No daemon is coming for this token — leaving it armed would keep the receiver open
-            // to it for the rest of the process lifetime.
-            HelperBinderHolder.expectedToken = null
+            // No daemon is coming for this token. Fall back to the token of the daemon that IS
+            // running (persisted by an earlier spawn, possibly from a previous app process): with
+            // ADB down that live daemon's re-announce is the only way back to a working channel,
+            // and it can only present the token it was spawned with.
+            HelperBinderHolder.armToken(persistedToken)
+            HelperBinderHolder.spawnInFlight = false
             recordSpawnFailure(adbAwareReason(SpawnFailReason.SPAWN_DISPATCH_FAILED),
                 "app_process spawn could not be dispatched")
             return false
@@ -149,12 +170,12 @@ class HelperBootstrap @Inject constructor(
                     .putLong(KEY_SPAWNED_VERSION, want)
                     .removeLastFailure()
                     .apply()
-                // The daemon answered — via ServiceManager or via an already-accepted broadcast
-                // (which disarms the token itself). Either way nothing else may claim this
-                // spawn's token any more; leaving it armed would let a later forged intent be
-                // accepted the moment the registered daemon dies and the holder becomes the
-                // fallback.
-                HelperBinderHolder.expectedToken = null
+                // The daemon answered — via ServiceManager or via an accepted broadcast. Nothing
+                // else may claim this spawn's token in THIS process any more; the persisted copy
+                // is written by the receiver on accept, so it always names the daemon that really
+                // handed us a binder.
+                HelperBinderHolder.armToken(null)
+                HelperBinderHolder.spawnInFlight = false
                 return true
             }
         }
@@ -171,10 +192,37 @@ class HelperBootstrap @Inject constructor(
         // The token STAYS armed on purpose: a daemon that boots slower than our poll window
         // publishes its binder by broadcast after we gave up (trinket, crazyhack 2026-09-12),
         // and disarming here threw that healthy binder away — every write then failed until
-        // the watchdog respawned. The token is single-use (accept() clears it), the next
-        // spawn overwrites it, and a forged intent still needs this exact token plus our
-        // daemon's interface descriptor.
+        // the watchdog respawned. A binder we already hold cannot be swapped (already_held), the
+        // next spawn overwrites the token, and a forged intent still needs this exact token plus
+        // our daemon's interface descriptor.
+        // The poll gave up, so a binder arriving from now on is a late delivery / re-announce.
+        HelperBinderHolder.spawnInFlight = false
         recordSpawnFailure(SpawnFailReason.DAEMON_SILENT, "$tail\n$holderState")
+        return false
+    }
+
+    /**
+     * Polls the holder for a re-announced binder. True only when one arrives AND the daemon
+     * behind it carries the version we want; a daemon of another version is genuinely stale and
+     * must go through the kill path.
+     */
+    private suspend fun awaitReannounce(want: Long): Boolean {
+        // Attempt 0 carries no delay: the binder can land while the checks above were suspended
+        // (daemonVersion, isAlive, helperHeartbeat are all round trips), and a holder that is
+        // already full must be examined instead of ignored — the old gate killed that daemon.
+        repeat(REANNOUNCE_POLL_ATTEMPTS + 1) { attempt ->
+            if (attempt > 0) delay(REANNOUNCE_POLL_INTERVAL_MS)
+            if (HelperBinderHolder.binder == null) return@repeat
+            val version = helper.daemonVersion()
+            if (version == want) {
+                Log.i(TAG, if (attempt == 0) "adopted live daemon (arrived during checks)"
+                    else "adopted live daemon via re-announce")
+                return true
+            }
+            Log.i(TAG, "re-announced daemon carries version=${version ?: "null"} want=$want; stale")
+            return false
+        }
+        Log.i(TAG, "no re-announce within ${REANNOUNCE_WAIT_MS / 1000} s")
         return false
     }
 
@@ -262,7 +310,7 @@ class HelperBootstrap @Inject constructor(
 
     companion object {
         private const val TAG = "HelperBootstrap"
-        private const val PREFS = "helper"
+        private const val PREFS = HelperBinderHolder.PREFS_NAME
         private const val KEY_SPAWNED_VERSION = "spawned_version_code"
         private const val KEY_LAST_FAIL_TS = "helper_last_fail_ts"
         private const val KEY_LAST_FAIL_LOG = "helper_last_fail_log"
@@ -278,5 +326,10 @@ class HelperBootstrap @Inject constructor(
         // round 1; one extra kill is re-dispatched before round 2 if it is still alive).
         private const val KILL_ROUNDS = 2
         private const val SPAWN_TOKEN_BYTES = 16
+        // Wait for a re-announce before killing a live daemon on broadcast-only firmwares.
+        // Longer than one daemon re-announce interval (10 s) so a single missed tick is enough.
+        private const val REANNOUNCE_WAIT_MS = 12_000L
+        private const val REANNOUNCE_POLL_INTERVAL_MS = 500L
+        private const val REANNOUNCE_POLL_ATTEMPTS = (REANNOUNCE_WAIT_MS / REANNOUNCE_POLL_INTERVAL_MS).toInt()
     }
 }
