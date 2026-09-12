@@ -191,6 +191,40 @@ class FidResolverTest {
         assertEquals(1046, outcome.table.device("autoWipers"))
     }
 
+    @Test
+    fun `the mileage scale follows the address the resolver picked`() = runTest {
+        // The catalog address reports whole km on that firmware, the Leopard 3 constant
+        // reports tenths: the odometer showed 8647 instead of 86472 km (crazyhack, 458).
+        val songPlus = FidResolver.resolve(FidMap.all, catalog("songplus"), alwaysPlausible, "test")
+        assertEquals(1033543696, songPlus.table.fid("mileage"))
+        assertEquals(1.0, songPlus.table.scale("mileage"), 0.0)
+
+        // DiLink 4.0 keeps our own fid for the odometer, so the tenths scale stays.
+        val diLink4 = FidResolver.resolve(FidMap.all, catalog("dilink4"), alwaysPlausible, "test")
+        assertEquals(FidMap.byField.getValue("mileage").fid, diLink4.table.fid("mileage"))
+        assertEquals(0.1, diLink4.table.scale("mileage"), 0.0)
+    }
+
+    @Test
+    fun `the constants table always uses the entry scale`() {
+        val constants = FidResolver.constants(FidMap.all)
+        assertEquals(0.1, constants.scale("mileage"), 0.0)
+        assertEquals(FidMap.byField.getValue("soc").scale, constants.scale("soc"), 0.0)
+    }
+
+    @Test
+    fun `a rejected catalog candidate keeps the constant scale`() = runTest {
+        val entries = listOf(
+            FidEntry("odo", 1014, 100, 5, Decoder.INT_SCALED, scale = 0.1,
+                catalogScale = 1.0, symbol = "Statistic.ODO"),
+        )
+        val moved = FidCatalog(mapOf("Statistic.ODO" to 200), mapOf("STATISTIC" to 1014))
+        val outcome = FidResolver.resolve(entries, moved, FidProbe { requests -> requests.map { null } }, "test")
+        assertEquals(FidResolution.REJECTED, outcome.table.notes.first().outcome)
+        assertEquals(100, outcome.table.fid("odo"))
+        assertEquals(0.1, outcome.table.scale("odo"), 0.0)
+    }
+
     private companion object {
         const val STALE_BY_DESIGN = "chargeBatteryVolt"
     }

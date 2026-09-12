@@ -133,11 +133,18 @@ class AutoserviceClientImpl @Inject constructor(
 
     override suspend fun readBatterySnapshot(): BatteryReading? {
         if (!adb.isConnected()) return null
+        // One table snapshot for the odometer: its scale must be the one that goes with the
+        // address the raw word came from (our own fid reports tenths of a km, a catalog
+        // address on another firmware reports whole km), and the global table can be
+        // swapped by the catalog resolution between the two lookups.
+        val table = FidAddresses.table
+        val mileageAddress = table.address("mileage")
         return BatteryReading(
             sohPercent = getInt("soh")?.toFloat(),
             socPercent = getFloat("soc"),
             lifetimeKwh = getFloat("totalElecConsumption"),
-            lifetimeMileageKm = getInt("mileage")?.let { it / 10f },
+            lifetimeMileageKm = getInt(mileageAddress.device, mileageAddress.fid)
+                ?.let { (it * table.scale("mileage")).toFloat() },
             voltage12v = getFloat("voltage12v"),
             readAtMs = System.currentTimeMillis()
         )

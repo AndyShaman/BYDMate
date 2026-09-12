@@ -8,6 +8,11 @@ data class FidEntry(
     val decoder: Decoder,
     val scale: Double = 1.0, // used only when decoder == INT_SCALED
     /**
+     * Scale to use INSTEAD of [scale] when the resolver moved this field to a catalog
+     * address (outcome CATALOG). Null = the same scale applies either way.
+     */
+    val catalogScale: Double? = null,
+    /**
      * Name of this address in the firmware's own fid catalog
      * (`Prefix.FIELD` as printed by the daemon's fid dump, e.g.
      * `Statistic.STATISTIC_ELEC_PERCENTAGE`). Derived by reverse lookup of [fid]
@@ -36,7 +41,9 @@ object FidMap {
         // Core energy + drive
         FidEntry("soc",                  1014, 1246777400,   7, Decoder.FLOAT_PERCENT, symbol = "Statistic.STATISTIC_ELEC_PERCENTAGE"),
         FidEntry("speed",                1013, -1807745016,  7, Decoder.FLOAT_KW, symbol = "Speed.SPEED_AUTO_SPEED"),
-        FidEntry("mileage",              1014, 1246765072,   5, Decoder.INT_SCALED,  scale = 0.1, symbol = "Statistic.STATISTIC_TOTAL_MILEAGE"),
+        // Our own fid reports tenths of a km; the catalog address reports whole km on the
+        // firmwares that move it (Song Plus: raw 86357 = 86357 km).
+        FidEntry("mileage",              1014, 1246765072,   5, Decoder.INT_SCALED,  scale = 0.1, catalogScale = 1.0, symbol = "Statistic.STATISTIC_TOTAL_MILEAGE"),
         FidEntry("power",                1012, 339738656,    5, Decoder.INT_RAW, symbol = "Engine.ENGINE_POWER"),
         FidEntry("totalElecConsumption", 1014, 1032871984,   7, Decoder.FLOAT_KWH, symbol = "Statistic.STATISTIC_TOTAL_ELEC_CONSUMPTION"),
         FidEntry("voltage12v",           1001, 1128267816,   7, Decoder.FLOAT_VOLT, symbol = "Ota.OTA_BATTERY_POWER_VOLTAGE"),

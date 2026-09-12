@@ -12,6 +12,7 @@ import io.mockk.just
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
+import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
@@ -623,5 +624,41 @@ class NativeParsReaderBatchTest {
 
         coVerify(exactly = 1) { helper.readBatch(any()) }
         assertEquals(FidMap.entries.size, items.captured.size)
+    }
+
+    /**
+     * The odometer's unit follows the address the resolver picked: on a firmware whose
+     * catalog moves that fid the raw word is whole km, not tenths (Song Plus).
+     */
+    @Test
+    fun `a catalog-resolved odometer is decoded with the catalog scale`() = runTest {
+        val catalog = FidCatalog.parse(
+            checkNotNull(javaClass.classLoader?.getResourceAsStream("fid-catalog-songplus.txt"))
+                .bufferedReader().readText()
+        )
+        val plausible = FidProbe { requests ->
+            requests.map { if (it.transact == 7) java.lang.Float.floatToRawIntBits(5.0f) else 5 }
+        }
+        val resolved = FidResolver.resolve(FidMap.all, catalog, plausible, "test").table
+        assertEquals(FidResolution.CATALOG, resolved.notes.first { it.field == "mileage" }.outcome)
+        FidAddresses.install(resolved)
+
+        val helper = mockk<HelperClient>()
+        coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
+            mapOf(
+                "mileage" to 86472,
+                fid("soc").field to java.lang.Float.floatToRawIntBits(41.0f),
+            )
+        )
+        val reader = NativeParsReader(
+            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+        )
+
+        val data = reader.fetch()
+        assertEquals(86472.0, data!!.mileage!!, 0.001)
+    }
+
+    @After fun restoreConstants() {
+        FidAddresses.resetToConstants()
     }
 }
