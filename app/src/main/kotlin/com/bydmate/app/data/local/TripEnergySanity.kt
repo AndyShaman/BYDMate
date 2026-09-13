@@ -37,6 +37,7 @@ object TripEnergySanity {
     const val MAX_KWH_PER_TRIP = 500.0
 
     fun isPlausible(electricityKwh: Double, tripKm: Double?): Boolean {
+        if (!electricityKwh.isFinite()) return false
         if (electricityKwh < 0.0) return false
         if (electricityKwh > MAX_KWH_PER_TRIP) return false
         val km = tripKm ?: 0.0

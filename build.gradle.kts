@@ -6,4 +6,6 @@ plugins {
     id("com.google.dagger.hilt.android") version "2.53.1" apply false
     id("org.jetbrains.kotlin.plugin.compose") version "2.1.0" apply false
     id("org.gradle.test-retry") version "1.6.2" apply false
+    id("org.jetbrains.kotlinx.kover") version "0.9.9" apply false
+    id("io.gitlab.arturbosch.detekt") version "1.23.8" apply false
 }
