@@ -1,0 +1,39 @@
+# Overrides on top of the detekt default ruleset (buildUponDefaultConfig = true).
+# Only what this project needs; everything else stays at defaults.
+
+complexity:
+  CyclomaticComplexMethod:
+    active: true
+    ignoreAnnotated: ['Composable']
+  LongMethod:
+    active: true
+    ignoreAnnotated: ['Composable']
+  LargeClass:
+    active: true
+  NestedBlockDepth:
+    active: true
+    ignoreAnnotated: ['Composable']
+  TooManyFunctions:
+    active: true
+    ignoreAnnotated: ['Composable']
+  LongParameterList:
+    active: true
+    ignoreAnnotated: ['Composable']
+
+style:
+  # Constants are everywhere in fid/protocol code — flagging them is pure noise.
+  MagicNumber:
+    active: false
+  MaxLineLength:
+    active: false
+  ReturnCount:
+    active: false
+  UnusedPrivateMember:
+    active: true
+    ignoreAnnotated: ['Composable', 'Preview']
+
+naming:
+  # @Composable functions are PascalCase by convention.
+  FunctionNaming:
+    active: true
+    ignoreAnnotated: ['Composable']

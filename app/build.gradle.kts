@@ -8,6 +8,8 @@ plugins {
     id("com.google.dagger.hilt.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.gradle.test-retry")
+    id("org.jetbrains.kotlinx.kover")
+    id("io.gitlab.arturbosch.detekt")
 }
 
 // Release signing is loaded from keystore.properties (gitignored, never in VCS).
@@ -228,6 +230,7 @@ dependencies {
     testImplementation("androidx.arch.core:core-testing:2.2.0")
     testImplementation("app.cash.turbine:turbine:1.0.0")
     testImplementation("com.squareup.okhttp3:mockwebserver:4.12.0")
+    testImplementation("io.kotest:kotest-property-jvm:6.2.5")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.1")
     androidTestImplementation("androidx.room:room-testing:2.6.1")
@@ -243,4 +246,39 @@ dependencies {
     implementation(files("libs/sherpa-onnx-static-link-onnxruntime-1.13.3.aar"))
     // tar.bz2 unpack for downloaded piper voice archives
     implementation("org.apache.commons:commons-compress:1.27.1")
+}
+
+// Coverage report only — no verification rule, nothing fails on a low number.
+// Report: ./gradlew :app:koverHtmlReportDebug
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    // Hilt / Dagger generated
+                    "*_Factory", "*_Factory\$*",
+                    "*_HiltModules*",
+                    "Hilt_*",
+                    "*_MembersInjector",
+                    "dagger.hilt.*",
+                    "*_GeneratedInjector",
+                    "*ComposableSingletons*",
+                    // Room generated
+                    "*_Impl",
+                    "*BuildConfig*",
+                )
+                // Compose screens are not the coverage target
+                packages("com.bydmate.app.ui")
+            }
+        }
+    }
+}
+
+// Static analysis, report-only for existing code: everything currently flagged
+// is frozen in config/detekt/baseline.xml, only NEW findings fail the build.
+detekt {
+    buildUponDefaultConfig = true
+    config.setFrom("$rootDir/config/detekt/detekt.yml")
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+    autoCorrect = false
 }

@@ -33,6 +33,9 @@ jobs:
       - name: Android Lint
         run: ./gradlew :app:lintDebug --stacktrace
 
+      - name: detekt
+        run: ./gradlew :app:detekt --stacktrace
+
       - name: Upload reports on failure
         if: failure()
         uses: actions/upload-artifact@v7
