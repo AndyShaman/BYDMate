@@ -1005,7 +1005,7 @@
     <string name="voice_listening">Listening</string>
     <string name="voice_thinking">Thinking</string>
     <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
-    <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. Set Voice language to Russian in Settings.</string>
+    <string name="voice_error_lang_not_ru">Voice commands understand Russian speech only. In Settings → Application pick Language: Русский.</string>
     <string name="voice_block_park_required">Park required</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1032,7 +1032,7 @@
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">Agent replies</string>
     <string name="settings_tts_toggle">Speak agent replies aloud</string>
-    <string name="settings_tts_subtitle">Offline speech synthesis, Russian voice</string>
+    <string name="settings_tts_subtitle">The agent answers aloud, works without the internet.</string>
     <string name="settings_tts_model_delete">Delete</string>
     <string name="settings_tts_download_failed">Failed to download voice</string>
     <string name="settings_voice_volume_hint">Reply volume is controlled by the system Voice channel: steering-wheel volume buttons or the car\'s Sound settings</string>
@@ -1059,7 +1059,7 @@
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Keys for online voices</string>
-    <string name="settings_tts_keys_openrouter_hint">The key and model are configured in AI connections.</string>
+    <string name="settings_tts_keys_openrouter_hint">The key and model are taken from Integrations → AI connections.</string>
     <string name="settings_minimax_provider_label">Provider</string>
     <string name="settings_minimax_provider_official">Official</string>
     <string name="settings_minimax_provider_fal">fal.ai</string>
@@ -1099,13 +1099,13 @@
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Voice AI agent</string>
-    <string name="agent_enable_desc">Free-form questions and commands via an LLM (OpenRouter). Uses the API key from Integrations.</string>
+    <string name="agent_enable_desc">Answers complex questions and commands in its own words. Needs a key: set it in Integrations.</string>
     <string name="agent_model_shared_caption">The OpenRouter key and model for the agent are configured in Integrations</string>
     <string name="agent_chat_open">Agent chat (debug)</string>
     <string name="agent_test_model_button">Test model</string>
     <string name="agent_test_model_running">Testing model...</string>
     <string name="agent_test_model_result">%1$s: answered in %2$.1f s - \"%3$s\"</string>
-    <string name="agent_test_model_disabled">Error: agent disabled or not configured</string>
+    <string name="agent_test_model_disabled">First turn the agent on and set a key in Integrations.</string>
     <string name="agent_exa_api_key_label">Exa API Key (web search)</string>
 
     <!-- Voice agent (Wave J): multi-provider LLM connections -->
@@ -1122,7 +1122,7 @@
     <string name="settings_conn_model_label">Model (id)</string>
     <string name="settings_conn_check">Check</string>
     <string name="settings_conn_checking">Checking…</string>
-    <string name="settings_zai_hint">Free glm-4.7-flash, recommended as the primary model</string>
+    <string name="settings_zai_hint">Free option, replies more slowly. Good as a backup.</string>
     <string name="settings_custom_hint">Any OpenAI-compatible API. A preset fills in the URL and model, bring your own key.</string>
     <string name="settings_custom_extra_json_label">Extra request parameters (JSON)</string>
     <string name="settings_custom_extra_json_hint">Merged into every request to this server, for example {\"thinking\": false} to switch reasoning off</string>
