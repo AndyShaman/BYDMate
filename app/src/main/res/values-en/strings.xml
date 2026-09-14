@@ -1333,5 +1333,4 @@
     <string name="tech_hint_compressor">How many watts the air conditioning and heat pump compressor draws. It is the main consumer besides the motors: in summer heat and in winter frost it noticeably eats into the range.</string>
     <string name="tech_hint_tyres">Pressure and temperature of each wheel from the sensors in the tyres. Pressure rises by 0.2…0.3 bar as the tyres warm up on a trip, that is normal. If one wheel is noticeably lower than the others, check whether it is losing air.</string>
     <string name="tech_order_hint">Hold a card to change the order</string>
-    <string name="tech_order_reset">Reset the order</string>
 </resources>

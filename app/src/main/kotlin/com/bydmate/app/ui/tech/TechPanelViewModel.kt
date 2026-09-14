@@ -171,11 +171,6 @@ class TechPanelViewModel @Inject constructor(
         }
     }
 
-    fun resetCardOrder() {
-        _uiState.update { it.copy(cardOrder = TechCardOrder.DEFAULT) }
-        viewModelScope.launch { settingsRepository.setTechCardOrder("") }
-    }
-
     private suspend fun loadCardOrder() {
         val order = TechCardOrder.parse(settingsRepository.getTechCardOrder())
         val hintSeen = settingsRepository.isTechOrderHintSeen()
