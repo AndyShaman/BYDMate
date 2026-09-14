@@ -465,4 +465,39 @@ class AgentOrchestratorTest {
         // section), so pin the section header itself, not the bare words.
         assertTrue(sys.indexOf("О ВОДИТЕЛЕ (факты") > sys.indexOf("ХАРАКТЕР:"))
     }
+
+    // Wave 5: the live history dies five minutes after the last answer, so an exchange the
+    // driver refers to hours later can only come back through the day memory block.
+    @Test
+    fun `an answered turn comes back in the next prompt on the same day`() = runTest {
+        coEvery { repo.isAgentEnabled() } returns true
+        coEvery { tools.schemas() } returns JSONArray()
+        val day = DayMemory(prefs = null)
+        val backend = FakeBackend(replies = ArrayDeque(listOf(answer("Сто двадцать"), answer("Готово"))))
+        val orch = AgentOrchestrator(backend, tools, repo, dayMemory = day).also { it.nowMs = { clock } }
+
+        orch.ask("сколько до дома")
+        clock += 10 * 60 * 1000L
+        orch.ask("а теперь поехали")
+
+        val sys = (backend.requests.last()[1] as AgentMessage.System).content
+        assertTrue(sys, sys.contains("сколько до дома"))
+        assertTrue(sys, sys.contains("Сто двадцать"))
+    }
+
+    @Test
+    fun `an automation turn never carries the day memory`() = runTest {
+        coEvery { repo.isAgentEnabled() } returns true
+        coEvery { tools.schemas() } returns JSONArray()
+        coEvery { tools.schemas(includeAutomationTools = false) } returns JSONArray()
+        val day = DayMemory(prefs = null)
+            .also { it.record("сколько до дома", "Сто двадцать", 1_000_000L) }
+        val backend = FakeBackend(replies = ArrayDeque(listOf(answer("ок"))))
+        val orch = AgentOrchestrator(backend, tools, repo, dayMemory = day).also { it.nowMs = { clock } }
+
+        orch.askDetached("утренняя сводка")
+
+        val sys = (backend.requests.single()[1] as AgentMessage.System).content
+        assertFalse(sys, sys.contains("сколько до дома"))
+    }
 }

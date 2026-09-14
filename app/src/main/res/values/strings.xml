@@ -1249,6 +1249,7 @@
     <string name="settings_agent_memory_hint">Агент запоминает имя и устойчивые предпочтения, когда вы ему об этом говорите. Скажите «забудь …», чтобы убрать один факт</string>
     <string name="settings_agent_memory_empty">Пока ничего не запомнено</string>
     <string name="settings_agent_memory_forget_all">Забыть всё</string>
+    <string name="settings_agent_memory_forget_one">Забыть</string>
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Голосовой AI-агент</string>
