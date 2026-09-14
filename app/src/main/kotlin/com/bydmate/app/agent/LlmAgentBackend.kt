@@ -52,7 +52,10 @@ class LlmAgentBackend @Inject constructor(
             val first = call(conn, wire, tools, guarded, withExtras = true)
             if (first.isSuccess || forwarded || !rejectedExtras(conn, first, guarded != null)) return first
             Log.w(TAG, "provider ${conn.id} rejected request extras (HTTP 400), retrying plain")
-            return call(conn, wire, tools, guarded, withExtras = false)
+            // The plain retry drops cache_control too: it lives inside the message content, not
+            // in the extras, so a model that rejects the breakpoint would fail the retry with
+            // the identical body and the agent would go silent instead of losing caching only.
+            return call(conn, toWire(messages), tools, guarded, withExtras = false)
         }
 
         var result = attempt(primary)

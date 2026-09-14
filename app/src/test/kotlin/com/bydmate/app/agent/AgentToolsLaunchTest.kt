@@ -59,7 +59,6 @@ class AgentToolsLaunchTest {
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
     ).apply {
-        clusterPollIntervalMs = 0L; clusterPollAttempts = 5
         naviForegroundCheck = { true }; naviVerifyAttempts = 1; naviVerifyIntervalMs = 1L
     }
 
@@ -369,20 +368,24 @@ class AgentToolsLaunchTest {
 
     // --- set_cluster_projection ---
 
-    // (a) on=true, before=OFF, after=FULLSCREEN -> apply(true), ok:true with app label.
-    @Test fun cluster_projection_on_toggles_and_confirms() = runTest {
-        every { clusterVoiceControl.projectionMode() } returnsMany
-            listOf(ClusterMode.OFF, ClusterMode.FULLSCREEN)
+    // (a) on=true, before=OFF -> dispatched as a cluster_projection action, ok:true with label.
+    // The dispatcher owns the mode poll, so the tool never polls a second time.
+    @Test fun cluster_projection_on_dispatches_and_confirms() = runTest {
+        every { clusterVoiceControl.projectionMode() } returns ClusterMode.OFF
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertTrue(out.getBoolean("ok"))
         assertFalse(out.has("note"))
         assertEquals("Навигатор", out.getString("app"))
-        verify { clusterVoiceControl.apply(true) }
+        assertEquals("cluster_projection", captured.captured.kind)
+        assertEquals("1", captured.captured.payload)
+        verify(exactly = 0) { clusterVoiceControl.apply(any()) }
     }
 
-    // (b) on=true, before=FULLSCREEN -> apply not called, ok:true "already" note with label.
+    // (b) on=true, before=FULLSCREEN -> nothing dispatched, ok:true "already" note with label.
     @Test fun cluster_projection_on_when_already_on_is_noop() = runTest {
         every { clusterVoiceControl.projectionMode() } returns ClusterMode.FULLSCREEN
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
@@ -390,64 +393,52 @@ class AgentToolsLaunchTest {
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertTrue(out.getBoolean("ok"))
         assertEquals("Навигатор уже на приборке", out.getString("note"))
-        verify(exactly = 0) { clusterVoiceControl.apply(any()) }
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    // (c) on=true, before=OFF, still OFF after delay -> retry hint. Wave P: the compositor is
-    // powered automatically around projection, so the old manual "Full + Navi" precondition
-    // hint is gone; the honest advice is to retry in a few seconds.
+    // (c) the dispatcher reports the projection never came up -> retry hint. Wave P: the
+    // compositor is powered automatically around projection, so the old manual "Full + Navi"
+    // precondition hint is gone; the honest advice is to retry in a few seconds.
     @Test fun cluster_projection_on_stuck_reports_retry_hint() = runTest {
         every { clusterVoiceControl.projectionMode() } returns ClusterMode.OFF
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
+        coEvery { dispatcher.dispatch(any(), any()) } returns
+            DispatchResult(false, "проекция на приборку не включилась")
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertFalse(out.has("ok"))
         val error = out.getString("error")
         assertTrue(error.contains("Попробуй повторить"))
         assertFalse(error.contains("Navi"))
-        verify { clusterVoiceControl.apply(true) }
     }
 
-    // (c2) on=true, still OFF after delay, lastFailure()="daemon" -> honest daemon-down note,
-    // no Full/Navi precondition hint (that hint is only for the manual-precondition case).
+    // (c2) the dispatcher blames the restarting daemon -> honest note, not a plain failure.
     @Test fun cluster_projection_on_stuck_daemon_down_reports_honest_note() = runTest {
         every { clusterVoiceControl.projectionMode() } returns ClusterMode.OFF
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
-        every { clusterVoiceControl.lastFailure() } returns "daemon"
+        coEvery { dispatcher.dispatch(any(), any()) } returns
+            DispatchResult(false, ActionDispatcher.DAEMON_RESTART_REASON)
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertFalse(out.getBoolean("ok"))
         val note = out.getString("note")
         assertTrue(note.contains("попробуй ещё раз"))
         assertFalse(note.contains("Navi"))
-        verify { clusterVoiceControl.apply(true) }
     }
 
-    // (g) Regression: the mode lands on a later poll — the tool must keep polling and
-    // report success instead of the old single-check false negative.
-    @Test fun cluster_projection_on_succeeds_when_mode_lands_on_later_poll() = runTest {
-        every { clusterVoiceControl.projectionMode() } returnsMany
-            listOf(ClusterMode.OFF, ClusterMode.OFF, ClusterMode.OFF, ClusterMode.FULLSCREEN)
+    // (d) on=false, before=FULLSCREEN -> dispatched with payload "0", ok:true.
+    @Test fun cluster_projection_off_dispatches_and_confirms() = runTest {
+        every { clusterVoiceControl.projectionMode() } returns ClusterMode.FULLSCREEN
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
-        val out = JSONObject(tools().execute(
-            AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
-        assertTrue(out.getBoolean("ok"))
-        assertEquals("Навигатор", out.getString("app"))
-        verify { clusterVoiceControl.apply(true) }
-    }
-
-    // (d) on=false, before=FULLSCREEN, after=OFF -> apply(false), ok:true.
-    @Test fun cluster_projection_off_toggles_and_confirms() = runTest {
-        every { clusterVoiceControl.projectionMode() } returnsMany
-            listOf(ClusterMode.FULLSCREEN, ClusterMode.OFF)
-        every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
+        val captured = slot<ActionDef>()
+        coEvery { dispatcher.dispatch(capture(captured), any()) } returns DispatchResult(true)
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":false}""")))
         assertTrue(out.getBoolean("ok"))
-        verify { clusterVoiceControl.apply(false) }
+        assertEquals("0", captured.captured.payload)
     }
 
-    // (e) on=false, before=OFF -> apply not called, note "проекции уже нет".
+    // (e) on=false, before=OFF -> nothing dispatched, note "проекции уже нет".
     @Test fun cluster_projection_off_when_already_off_is_noop() = runTest {
         every { clusterVoiceControl.projectionMode() } returns ClusterMode.OFF
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
@@ -455,17 +446,19 @@ class AgentToolsLaunchTest {
             AgentToolCall("1", "set_cluster_projection", """{"on":false}""")))
         assertTrue(out.getBoolean("ok"))
         assertEquals("проекции уже нет на приборке", out.getString("note"))
-        verify(exactly = 0) { clusterVoiceControl.apply(any()) }
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
     }
 
-    // (f) projectionMode() throws -> treated as OFF, not propagated; on=true still actuates.
+    // (f) projectionMode() throws -> treated as OFF, not propagated; on=true still dispatches.
     @Test fun cluster_projection_unreadable_state_treated_as_off_and_still_actuates() = runTest {
         every { clusterVoiceControl.projectionMode() } throws RuntimeException("boom")
         every { clusterVoiceControl.projectedAppLabel() } returns "Навигатор"
+        coEvery { dispatcher.dispatch(any(), any()) } returns
+            DispatchResult(false, "проекция на приборку не включилась")
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "set_cluster_projection", """{"on":true}""")))
         assertTrue(out.has("error"))
-        verify { clusterVoiceControl.apply(true) }
+        coVerify { dispatcher.dispatch(match { it.kind == "cluster_projection" }, any()) }
     }
 
     // missing "on" argument -> error, apply not called.

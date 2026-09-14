@@ -11,13 +11,16 @@ import io.mockk.mockk
 import io.mockk.slot
 import org.junit.Assert.assertEquals
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -365,6 +368,28 @@ class VehicleApiWriteTest {
 
         assertTrue(result.isFailure)
         assertTrue(result.exceptionOrNull()!!.message!!.contains("окно водителя"))
+    }
+
+    // The physical write lands before the verdict is read back, so a caller cancelled inside
+    // that ~1 s window must still get the outcome instead of an exception for a command the
+    // car already obeyed — the same protection the composite burst has.
+    @Test fun `a cancel during the window verdict still returns the outcome`() = runTest {
+        val entry = allowlist.find("window_driver_open")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returns 0
+        val rows = mutableListOf<VehicleWriteLogEntity>()
+        coEvery { writeLogDao.insert(capture(rows)) } returns Unit
+        val impl = verifyingApi()
+
+        var outcome: Result<Unit>? = null
+        val job = launch { outcome = impl.dispatch("主驾打开100") }
+        advanceTimeBy(500)
+        job.cancel()
+        job.join()
+
+        assertNotNull("dispatch must return a verdict despite the cancel", outcome)
+        assertTrue(outcome!!.isFailure)
+        assertTrue(rows.any { it.error == "window_noop" })
     }
 
     @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {

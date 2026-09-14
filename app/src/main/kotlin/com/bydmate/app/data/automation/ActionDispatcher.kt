@@ -185,6 +185,9 @@ class ActionDispatcher @Inject constructor(
          * a call. NOT windows/climate/sunroof/door-lock/front-trunk (low harm or
          * already speed-gated). Pure function — unit-testable without Android.
          */
+        /** Projection failed because the cluster daemon is restarting: retriable, not broken. */
+        internal const val DAEMON_RESTART_REASON = "служебный процесс перезапускается"
+
         internal fun isDangerousAction(action: ActionDef): Boolean = when (action.kind) {
             "param" -> isDoorUnlockCommand(action.command) || isRearTrunkOpenCommand(action.command)
             "sentry" -> action.payload == "0"
@@ -374,7 +377,7 @@ class ActionDispatcher @Inject constructor(
         }
         if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
         val reason = if (clusterVoiceControl.lastFailure() == "daemon") {
-            "служебный процесс перезапускается"
+            DAEMON_RESTART_REASON
         } else if (on) {
             "проекция на приборку не включилась"
         } else {

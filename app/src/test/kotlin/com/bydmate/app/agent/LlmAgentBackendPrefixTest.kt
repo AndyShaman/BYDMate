@@ -1,5 +1,6 @@
 package com.bydmate.app.agent
 
+import com.bydmate.app.data.remote.LlmHttpException
 import com.bydmate.app.data.remote.OpenRouterClient
 import io.mockk.coEvery
 import io.mockk.mockk
@@ -49,6 +50,23 @@ class LlmAgentBackendPrefixTest {
         assertEquals("ephemeral", static.getJSONObject("cache_control").getString("type"))
         // The moving block sits after the breakpoint and stays a plain string.
         assertEquals("динамика", wire.getJSONObject(1).getString("content"))
+    }
+
+    // A 400 can come from the cache breakpoint itself, not only from the provider extras:
+    // the plain retry must therefore drop cache_control too, or it repeats the same body.
+    @Test fun the_plain_retry_drops_the_cache_breakpoint() = runTest {
+        coEvery { resolver.primary() } returns conn(LlmConnectionResolver.ID_OPENROUTER)
+        coEvery { resolver.fallback() } returns null
+        val bodies = mutableListOf<JSONArray>()
+        coEvery { client.chatRaw(any(), any(), any(), capture(bodies), any(), any()) } returnsMany listOf(
+            Result.failure(LlmHttpException(400)),
+            Result.success(JSONObject("""{"content":"ок"}""")),
+        )
+        assertTrue(backend.chat(messages, null).isSuccess)
+        assertEquals(2, bodies.size)
+        // First attempt carries the breakpoint, the retry sends the same system block plain.
+        assertTrue(bodies[0].getJSONObject(0).get("content") is JSONArray)
+        assertEquals("СТАТИКА", bodies[1].getJSONObject(0).getString("content"))
     }
 
     @Test fun other_endpoints_get_plain_string_content() = runTest {
