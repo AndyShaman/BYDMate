@@ -45,6 +45,20 @@ class AgentPromptTest {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("клавиша руля"))
     }
 
+    // Wave 4: an automation built on a guessed threshold is worse than a question.
+    @Test fun prompt_forbids_guessing_automation_details() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("Не додумывай ни порог"))
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("уточняющий вопрос и только потом создавай"))
+    }
+
+    @Test fun prompt_tells_the_model_to_read_the_created_rule_back() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("возвращает поле rule"))
+    }
+
+    @Test fun prompt_applies_stored_comfort_preferences() {
+        assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("привычка по комфорту"))
+    }
+
     @Test fun prompt_mentions_driver_memory_tools() {
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("remember_fact"))
         assertTrue(AgentOrchestrator.SYSTEM_PROMPT.contains("forget_fact"))

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
+import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
@@ -24,6 +25,8 @@ import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.RuleEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.remote.InsightStatsAggregator
+import com.bydmate.app.data.nativestack.MotorSplit
+import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.PlaceRepository
@@ -654,9 +657,9 @@ class AgentTools @Inject constructor(
                                         "yandex_music", "sentry", "hotspot", "app_launch",
                                         "cluster_projection", "speak", "agent_query",
                                         "split_screen", "split_screen_close",
-                                        "split_screen_toggle")))
-                                    .put("description", "Тип действия. split_screen_close и " +
-                                        "split_screen_toggle дополнительных полей не требуют"))
+                                        "split_screen_toggle", "youtube", "go_home")))
+                                    .put("description", "Тип действия. split_screen_close, " +
+                                        "split_screen_toggle и go_home дополнительных полей не требуют"))
                                 // No second enum: the same ~90 ids already ship with
                                 // vehicle_control, and repeating them here cost ~2 kB of the
                                 // static prefix on every single turn.
@@ -683,7 +686,10 @@ class AgentTools @Inject constructor(
                                 .put("url", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=url: ссылка со схемой, например https://"))
                                 .put("mode", JSONObject().put("type", "string")
-                                    .put("description", "Только для kind=yandex_music: режим, например mybeat"))
+                                    .put("description", "Для kind=yandex_music: режим, например mybeat. " +
+                                        "Для kind=youtube: play (включить) или search (открыть поиск), по умолчанию play"))
+                                .put("query", JSONObject().put("type", "string")
+                                    .put("description", "Только для kind=youtube: что искать на YouTube"))
                                 .put("on", JSONObject().put("type", "boolean")
                                     .put("description", "Для kind=sentry: включить/выключить охрану. Для kind=cluster_projection: true = вывести проекцию на приборку, false = убрать. Для kind=hotspot: включить/выключить точку доступа Wi-Fi"))
                                 .put("app", JSONObject().put("type", "string")
@@ -798,6 +804,16 @@ class AgentTools @Inject constructor(
         putIf("ac_on", d.acStatus?.let { it == 1 })
         putIf("ac_temp_c", d.acTemp)
         putIf("fan_level", d.fanLevel)
+        // Same 1..5 enum the blow-direction actions write (CommandTranslator ac_wind_mode):
+        // the agent could set it but not read it back, which is worse than not having it.
+        putIf("ac_wind_mode", when (d.acWindMode) {
+            1 -> "в лицо"
+            2 -> "в лицо и ноги"
+            3 -> "в ноги"
+            4 -> "в ноги и на стекло"
+            5 -> "на стекло"
+            else -> null
+        })
         putIf("recirculation_inner", d.acCirc?.let { it == 1 })
         putIf("defrost_front_on", d.acDefrostFront?.let { it == 1 })
         putIf("ac_auto_mode", d.acCtrlMode?.let { it == 0 })
@@ -821,6 +837,10 @@ class AgentTools @Inject constructor(
         putIf("tire_press_fr_kpa", d.tirePressFR)
         putIf("tire_press_rl_kpa", d.tirePressRL)
         putIf("tire_press_rr_kpa", d.tirePressRR)
+        putIf("tire_temp_fl_c", d.tyreTempFL)
+        putIf("tire_temp_fr_c", d.tyreTempFR)
+        putIf("tire_temp_rl_c", d.tyreTempRL)
+        putIf("tire_temp_rr_c", d.tyreTempRR)
         // Deterministic low-pressure flag so the model reliably warns by voice.
         // 210 kPa is ~16% below the Leopard 3 cold placard (~250 kPa).
         val tirePressures = listOfNotNull(d.tirePressFL, d.tirePressFR, d.tirePressRL, d.tirePressRR)
@@ -828,6 +848,19 @@ class AgentTools @Inject constructor(
             o.put("tire_pressure_warning",
                 "давление в одном из колёс ниже нормы, предупреди водителя")
         }
+        // Power split between the motors, from the same helper the «Техника» screen uses.
+        // Null = single-motor car or no data; Idle = standing still, where the ratio is noise.
+        when (val split = motorSplitPercent(d.motorCurrentFront, d.motorCurrentRear)) {
+            is MotorSplit.Share -> {
+                o.put("motor_share_front_pct", split.frontPercent)
+                o.put("motor_share_rear_pct", split.rearPercent)
+            }
+            MotorSplit.Idle -> o.put("motor_share", "моторы сейчас не тянут")
+            null -> Unit
+        }
+        // What the BMS allows right now; the peak on hard acceleration is higher.
+        putIf("bms_max_charge_kw", d.bmsMaxChargeKw)
+        putIf("bms_max_discharge_kw", d.bmsMaxDischargeKw)
         putIf("voltage_12v", d.voltage12v)
         putIf("battery_temp_avg_c", d.avgBatTemp)
         putIf("battery_temp_max_c", d.maxBatTemp)
@@ -862,6 +895,12 @@ class AgentTools @Inject constructor(
         putIf("ambient_light_level_1dark_5bright", d.lightLevel)
         putIf("key_fob_battery_ok", d.keyBatteryStatus?.let { it == 0 })
         putIf("rain_detected", d.rain?.let { it == 1 })
+        // Blind-spot cameras are a BYDMate feature, not a car parameter: the driver asks why
+        // the picture does not appear, and the answer is usually "off" or "below the threshold".
+        runCatchingCancellable { BlindSpotPreferences(context) }.getOrNull()?.let { bs ->
+            o.put("blind_spot_cameras_enabled", bs.enabled)
+            if (bs.enabled) o.put("blind_spot_cameras_from_kmh", bs.thresholdKmh)
+        }
         // Deterministic belt flag (same pattern as tire_pressure_warning): moving with
         // the driver unbuckled, or an occupied front passenger seat unbuckled.
         val moving = (d.speed ?: 0) > 0
@@ -1984,12 +2023,20 @@ class AgentTools @Inject constructor(
         )
         runCatchingCancellable { ruleDao.insert(rule) }
             .getOrElse { return """{"error":"не удалось создать автоматизацию"}""" }
+        // One compact Russian line the model is told to read back: the driver hears exactly
+        // what was created and catches a wrong threshold or action on the spot.
         return JSONObject()
             .put("ok", true)
             .put("name", name)
+            .put("rule", ruleSummary(name, trigger, actions))
             .put("hint", "скажи «выключи автоматизацию $name» чтобы отключить")
             .toString()
     }
+
+    /** One spoken line describing the rule that was just created, so the model can repeat it
+     *  back instead of an unverifiable "готово". Both display names are already Russian. */
+    private fun ruleSummary(name: String, trigger: TriggerDef, actions: List<ActionDef>): String =
+        "«$name»: если ${trigger.displayName}, то " + actions.joinToString(", ") { it.displayName }
 
     /** Enum trigger params persist a numeric code; the agent may pass the code ("4") or the
      *  human label it saw in get_vehicle_state ("D"/"d"). Returns the code, or null when the
@@ -2195,6 +2242,15 @@ class AgentTools @Inject constructor(
                 Built.Value(ActionDef(command = "yandex_music", displayName = "Я.Музыка",
                     kind = "yandex_music", payload = JSONObject().put("mode", mode).toString()))
             }
+            "youtube" -> {
+                val query = a.optString("query").trim()
+                if (query.isEmpty()) return Built.Error("не указано, что включить на YouTube (поле query)")
+                val mode = a.optString("mode").trim().takeIf { it == "search" } ?: "play"
+                Built.Value(ActionDef(command = "", displayName = "YouTube: $query", kind = "youtube",
+                    payload = JSONObject().put("mode", mode).put("query", query).toString()))
+            }
+            "go_home" -> Built.Value(
+                ActionDef(command = "", displayName = "Домой", kind = "go_home"))
             "sentry" -> {
                 val on = requireBoolArg(a, "on") ?: return Built.Error("не указано состояние охранного режима")
                 Built.Value(ActionDef(command = "sentry",

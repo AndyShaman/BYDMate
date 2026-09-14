@@ -221,6 +221,44 @@ class AgentToolsAutomationTest {
         assertEquals("param", actions[0].kind)
     }
 
+    // Wave 4: the model reads this line back so the driver hears what was actually created.
+    @Test fun create_automation_returns_a_spoken_summary_of_the_rule() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        coEvery { ruleDao.insert(any()) } returns 1L
+
+        val out = JSONObject(tools().execute(call("create_automation", createArgs())))
+
+        val summary = out.getString("rule")
+        assertTrue(summary, summary.contains("Ночной свет"))
+        assertTrue(summary, summary.contains("SOC"))
+        assertTrue(summary, summary.contains("20"))
+        assertTrue(summary, summary.contains("окна", ignoreCase = true))
+    }
+
+    @Test fun create_automation_accepts_go_home_and_youtube_actions() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val slot = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(slot)) } returns 1L
+
+        val out = JSONObject(tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"go_home"},{"kind":"youtube","query":"джаз"}]"""))))
+
+        assertTrue(out.toString(), out.getBoolean("ok"))
+        val actions = ActionDef.listFromJson(slot.captured.actions)
+        assertEquals("go_home", actions[0].kind)
+        assertEquals("youtube", actions[1].kind)
+        val payload = JSONObject(actions[1].payload!!)
+        assertEquals("джаз", payload.getString("query"))
+        assertEquals("play", payload.getString("mode"))
+    }
+
+    @Test fun create_automation_youtube_without_a_query_is_rejected() = runTest {
+        coEvery { ruleDao.getAllList() } returns emptyList()
+        val out = JSONObject(tools().execute(call("create_automation", createArgs(
+            actions = """[{"kind":"youtube"}]"""))))
+        assertTrue(out.getString("error").contains("YouTube"))
+    }
+
     @Test fun create_automation_place_trigger_found_sets_place_id_and_name() = runTest {
         coEvery { ruleDao.getAllList() } returns emptyList()
         coEvery { places.getAllSnapshot() } returns listOf(PlaceEntity(id = 3, name = "Дом", lat = 55.0, lon = 37.0))
