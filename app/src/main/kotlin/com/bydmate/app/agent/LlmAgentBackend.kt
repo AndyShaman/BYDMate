@@ -233,7 +233,8 @@ class LlmAgentBackend @Inject constructor(
                     )
                 }
             }
-            return AgentReply(content, calls)
+            val finish = message.optString(OpenRouterClient.FINISH_REASON).takeIf { it.isNotBlank() }
+            return AgentReply(content, calls, finish)
         }
     }
 }

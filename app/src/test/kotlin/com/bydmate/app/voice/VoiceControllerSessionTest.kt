@@ -1270,7 +1270,9 @@ class VoiceControllerSessionTest {
         awaitSubscribed(fakeAsr.events)
 
         fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("закрой окна"))
-        awaitTrue { cleared }
+        // The dwell now scales with the answer length when nothing was spoken aloud, so the
+        // window is longer than the seam alone suggests even for this short outcome text.
+        awaitTrue(timeoutMs = 5_000L) { cleared }
     }
 
     @Test fun `a new utterance cancels the pending orb clear`() {

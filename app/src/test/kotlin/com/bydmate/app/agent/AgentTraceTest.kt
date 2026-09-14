@@ -36,6 +36,26 @@ class AgentTraceTest {
         return AgentOrchestrator(backend, tools, repo).also { it.trace = { line -> lines += line } }
     }
 
+    // The driver reported answers that just stop: when the provider says it ran out of tokens,
+    // the trace must name it and the shown answer must end with a visible cut.
+    @Test fun a_reply_cut_by_max_tokens_is_traced_and_marked() = runTest {
+        val backend = FakeBackend(ArrayDeque(listOf(
+            Result.success(AgentReply("Маршрут проходит через", emptyList(), finishReason = "length")),
+        )))
+        val lines = mutableListOf<String>()
+        val result = orchestrator(backend, lines).ask("расскажи про маршрут") { }
+
+        assertTrue(result is AgentResult.Answer)
+        val answer = (result as AgentResult.Answer).text
+        assertTrue("answer not marked as cut: $answer", answer.endsWith("…"))
+        assertTrue("no finish=length in $lines", lines.any {
+            it.startsWith("reply ") && it.contains("finish=length")
+        })
+        assertTrue("turn line does not name the cut in $lines", lines.any {
+            it.startsWith("turn done") && it.contains("finish=length")
+        })
+    }
+
     @Test fun tool_round_and_turn_are_traced() = runTest {
         coEvery { tools.execute(any(), any()) } returns """{"ok":true}"""
         val backend = FakeBackend(ArrayDeque(listOf(

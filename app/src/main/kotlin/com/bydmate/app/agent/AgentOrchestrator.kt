@@ -175,6 +175,14 @@ class AgentOrchestrator @Inject constructor(
         }
     }
 
+    /** The answer as the driver gets it: trimmed, and marked with [TRUNCATED_MARK] when
+     *  max_tokens cut it, so a reply that stops mid-sentence is visibly a cut and not a bug. */
+    private fun finalAnswer(reply: AgentReply): String {
+        val answer = reply.content?.trim().orEmpty()
+        if (answer.isEmpty() || reply.finishReason != FINISH_LENGTH) return answer
+        return if (answer.endsWith(TRUNCATED_MARK)) answer else answer + TRUNCATED_MARK
+    }
+
     /** The loop itself; [rounds] carries the LLM round count out to the tracing wrapper. */
     @Suppress("LongParameterList")
     private suspend fun runLoopTraced(
@@ -209,7 +217,7 @@ class AgentOrchestrator @Inject constructor(
                 }
             tracer.reply(reply)
             if (reply.toolCalls.isEmpty()) {
-                val answer = reply.content?.trim().orEmpty()
+                val answer = finalAnswer(reply)
                 if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
                 if (onSentence != null) chunker?.flush()?.let(onSentence)
                 messages += AgentMessage.Assistant(answer)
@@ -292,6 +300,11 @@ class AgentOrchestrator @Inject constructor(
         private const val MAX_HISTORY = 20
         private const val MAX_IDENTICAL_CALLS = 2
         private const val MAX_LOOP_STRIKES = 2
+
+        /** Provider stop reason meaning the answer hit max_tokens, plus the mark that makes
+         *  such a cut visible in the pill and in the journal. */
+        private const val FINISH_LENGTH = "length"
+        private const val TRUNCATED_MARK = "…"
         private const val LOOP_ERROR =
             """{"error":"этот вызов уже выполнялся с теми же аргументами, смени подход или ответь пользователю"}"""
         internal val SYSTEM_PROMPT = """

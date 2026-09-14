@@ -54,6 +54,19 @@ class OpenRouterClientChatStreamTest {
         assertTrue(sent.getBoolean("stream"))
     }
 
+    // A reply cut at max_tokens arrives as finish_reason=length on the last chunk; the agent
+    // can only see it if it is carried out on the message.
+    @Test
+    fun `finish reason from the stream reaches the returned message`() = runTest {
+        server.enqueue(sse(
+            chunk("Маршрут"),
+            """data: {"choices":[{"delta":{},"finish_reason":"length"}]}""",
+            "data: [DONE]",
+        ))
+        val msg = client.chatStream("u", "k", "m", messages(), null) {}.getOrThrow()
+        assertEquals("length", msg.getString(OpenRouterClient.FINISH_REASON))
+    }
+
     @Test
     fun `extras are merged into the streaming payload`() = runTest {
         server.enqueue(sse(chunk("Ок."), "data: [DONE]"))

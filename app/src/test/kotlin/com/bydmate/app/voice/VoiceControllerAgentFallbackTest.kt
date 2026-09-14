@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -495,5 +496,92 @@ class VoiceControllerAgentFallbackTest {
         Thread.sleep(500)
 
         assertEquals(listOf("Первое.", "Первое. Второе."), answerHookCalls)
+    }
+
+    // Barge-in by name aborts the answer mid-stream. The half-sentence already painted into the
+    // "Агент: …" row belongs to an answer that will never arrive, so it must go.
+    @Test fun `barge-in by name clears the half-streamed answer from the dialog`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        val askStarted = java.util.concurrent.CountDownLatch(1)
+        coEvery { agentOrchestrator.ask(any(), any()) } coAnswers {
+            secondArg<((String) -> Unit)?>()?.invoke("Маршрут проходит")
+            askStarted.countDown()
+            kotlinx.coroutines.awaitCancellation()
+        }
+        coEvery { agentOrchestrator.noteAction(any()) } returns Unit
+
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(
+            agentOrchestrator = agentOrchestrator, continuousAsr = fakeAsr,
+            agentIdentity = { AgentIdentity("Лео", AgentPersona.NAVIGATOR) },
+        )
+        val shown = AtomicReference<String?>(null)
+        controller.showAnswerHook = { text -> shown.set(text) }
+        val cleared = java.util.concurrent.atomic.AtomicBoolean(false)
+        controller.clearDialogHook = { cleared.set(true); shown.set(null) }
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи про маршрут"))
+        awaitTrue { shown.get() != null }
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("Лео"))
+
+        awaitTrue { cleared.get() }
+        assertEquals(null, shown.get())
+    }
+
+    private val longAnswer = "Маршрут проходит через центр, дальше по набережной. ".repeat(4)
+
+    // A driver with TTS off has to READ the answer: a long one must stay up long enough for that,
+    // so the dwell scales with its length instead of the fixed six seconds.
+    @Test fun `a long unspoken answer stays on screen past the fixed dwell`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer(longAnswer)
+        coEvery { agentOrchestrator.noteAction(any()) } returns Unit
+
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(
+            agentOrchestrator = agentOrchestrator, ttsEnabled = false, continuousAsr = fakeAsr)
+        controller.dialogClearDelayMs = 50L
+        val cleared = java.util.concurrent.atomic.AtomicBoolean(false)
+        val shown = AtomicReference<String?>(null)
+        controller.clearDialogHook = { cleared.set(true) }
+        controller.showAnswerHook = { text -> shown.set(text) }
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи про маршрут"))
+        awaitTrue { shown.get() != null }
+
+        Thread.sleep(600)
+        assertTrue("the answer was cleared before it could be read", !cleared.get())
+    }
+
+    // Spoken aloud, the same answer keeps the fixed dwell after the speech ends: the driver
+    // listened to it, there is nothing left to read.
+    @Test fun `a spoken answer keeps the fixed dwell`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer(longAnswer)
+        coEvery { agentOrchestrator.noteAction(any()) } returns Unit
+        val ttsEngine = quietTtsEngine()
+        every { ttsEngine.startQueue() } returns null
+        every { ttsEngine.speak(any()) } returns true
+
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(
+            agentOrchestrator = agentOrchestrator, ttsEnabled = true,
+            ttsEngine = ttsEngine, continuousAsr = fakeAsr)
+        controller.dialogClearDelayMs = 50L
+        val cleared = java.util.concurrent.atomic.AtomicBoolean(false)
+        controller.clearDialogHook = { cleared.set(true) }
+
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("расскажи про маршрут"))
+
+        awaitTrue { cleared.get() }
     }
 }
