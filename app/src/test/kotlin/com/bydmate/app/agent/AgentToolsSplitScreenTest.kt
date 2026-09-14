@@ -209,10 +209,22 @@ class AgentToolsSplitScreenTest {
     @Test fun mirror_when_active_calls_manager() = runTest {
         stateFlow.value = SplitSessionState.Active(
             SplitPair("a.pkg", "b.pkg", SplitSide.RIGHT), narrowTaskId = 1, wideTaskId = 2)
+        coEvery { splitMgr.mirror() } returns null
         val out = JSONObject(tools().execute(
             AgentToolCall("1", "split_screen", """{"action":"mirror"}""")))
         assertTrue(out.getBoolean("ok"))
         coVerify { splitMgr.mirror() }
+    }
+
+    // Wave 3: mirror() is a silent no-op in several states (pane on the cluster, move in
+    // progress) — the driver must hear the reason, not "готово".
+    @Test fun mirror_that_did_nothing_returns_the_reason() = runTest {
+        stateFlow.value = SplitSessionState.Active(
+            SplitPair("a.pkg", "b.pkg", SplitSide.RIGHT), narrowTaskId = 1, wideTaskId = 2)
+        coEvery { splitMgr.mirror() } returns "одна из панелей сейчас на приборке"
+        val out = JSONObject(tools().execute(
+            AgentToolCall("1", "split_screen", """{"action":"mirror"}""")))
+        assertEquals("одна из панелей сейчас на приборке", out.getString("error"))
     }
 
     // (l) mirror when Idle → "сплит не запущен", no manager call.

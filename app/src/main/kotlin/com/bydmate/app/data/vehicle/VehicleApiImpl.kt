@@ -202,22 +202,21 @@ class VehicleApiImpl @Inject constructor(
             return Result.failure(err)
         }
 
-        // Window writes have no readback fid and a history of "accepted but nothing
-        // moved" (#64): sample the pane position now and again once it has had time to
-        // travel. Diagnostics only — the result never changes the outcome or the channel.
-        // Started before helper.write on its own scope so a slow/hung read channel can never
-        // delay the write itself.
+        // Window writes have no readback fid and a history of "accepted but nothing moved"
+        // (#97 Song L, #64): sample the pane position now, and again after the write, to tell
+        // a real actuation from a silently dropped one. Started before helper.write on its own
+        // scope so a slow/hung read channel can never delay the write itself.
         val windowReadField = WINDOW_READ_FIELDS[actionName.lowercase()]
 
         logAttempt(actionName, entry, value)
 
-        val windowReadback = windowReadField?.let { startWindowReadback(actionName, entry, value, it) }
+        val windowBefore = windowReadField?.let { field -> readbackScope.async { resolveWindowReadFid(field) } }
 
         val wrote: Boolean = try {
-            if (windowReadback != null) {
+            if (windowBefore != null) {
                 // Bounded wait so the "before" sample usually precedes the write, but a hung
                 // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
-                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowReadback.before.await() }
+                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowBefore.await() }
             }
             helper.write(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
@@ -229,10 +228,6 @@ class VehicleApiImpl @Inject constructor(
             val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
             maybeReportValidatedFailure(actionName, err, entry)
             return Result.failure(err)
-        } finally {
-            // Always released, even on exception/cancellation, so the logging coroutine
-            // waiting on it (see startWindowReadback) never hangs forever.
-            windowReadback?.written?.complete(Unit)
         }
 
         if (!wrote) {
@@ -270,6 +265,18 @@ class VehicleApiImpl @Inject constructor(
             return Result.failure(err)
         }
 
+        // The pane accepted the command but never moved: report the truth instead of a
+        // success the driver can see is wrong (#97 — the first write of a burst is dropped).
+        if (windowBefore != null) {
+            val stuck = verifyWindowMoved(actionName, requestedAction, requestedValue, entry, value, windowBefore)
+            if (stuck != null) {
+                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "window_noop", entry.validated)
+                val err = VehicleWriteError.ReadbackMismatch(actionName, stuck)
+                maybeReportValidatedFailure(actionName, err, entry)
+                return Result.failure(err)
+            }
+        }
+
         // INFO so a successful dispatch is visible in logcat (the DAO row is private).
         // Pair with the HelperClient "status=" line to tell a real action from a no-op.
         Log.i(TAG, "doWrite OK: action=$actionName dev=${entry.dev} fid=${entry.writeFid} value=$value readback=$readback validated=${entry.validated}")
@@ -280,38 +287,52 @@ class VehicleApiImpl @Inject constructor(
     // ─── Window readback logging ───────────────────────────────────────────────
 
     /**
-     * Handle for a readback started on [readbackScope]: [before] is the (possibly still
-     * running) "before" sample, and [written] is signalled by the caller once the write
-     * attempt is over (success, failure, or exception) so the logging coroutine knows the
-     * write is no longer in flight before it takes the "after" sample.
+     * Did the pane actually start moving after an accepted write? Samples the position twice,
+     * 400 ms apart (the seat channel's pattern), and compares each sample with the "before"
+     * position taken around the write. Any movement — even a pane still travelling — proves
+     * the write landed. Returns null when the write is good or when there is no evidence
+     * against it, else a short Russian reason.
+     *
+     * Deliberately fail-open: a read that does not complete, a sentinel, a pane already at the
+     * requested position, or a command whose target percent is unknown (CTRL detents, vent)
+     * all count as "no evidence", never as a failure. Only the requested percent actions can
+     * be judged, and only when the pane had somewhere to travel.
      */
-    private class WindowReadback(val before: Deferred<Pair<FidAddress, Int?>>, val written: CompletableDeferred<Unit>)
-
-    /**
-     * Samples the pane position now and again once it has had time to travel, entirely on
-     * [readbackScope] so a slow/hung read channel never delays the write. The "before" read
-     * starts immediately on its own async job; the caller bounds how long it waits on it before
-     * calling helper.write ([WINDOW_BEFORE_READ_BUDGET_MS]), and signals [WindowReadback.written]
-     * once the write attempt is done so the 2 s travel window is timed from the write, not from
-     * the read. The rear-right percent lives under a different fid on DiLink 3.0 catalogs (#79)
-     * — pick the twin when the primary reports a feature link error, so before and after are
-     * sampled from the same fid.
-     */
-    private fun startWindowReadback(actionName: String, entry: WriteEntry, value: Int, primaryField: String): WindowReadback {
-        val beforeDeferred = readbackScope.async { resolveWindowReadFid(primaryField) }
-        val written = CompletableDeferred<Unit>()
-        readbackScope.launch {
-            val (readFid, before) = beforeDeferred.await()
-            written.await()
-            delay(WINDOW_READBACK_DELAY_MS)
-            val after = readWindowRaw(readFid)
-            Log.i(
-                TAG,
-                "window readback action=$actionName fid=${entry.writeFid} value=$value " +
-                    "before=$before after=$after (dev=${entry.dev} readFid=${readFid.fid})"
-            )
+    @Suppress("LongParameterList")
+    private suspend fun verifyWindowMoved(
+        actionName: String,
+        requestedAction: String,
+        requestedValue: Int,
+        entry: WriteEntry,
+        value: Int,
+        beforeSample: Deferred<Pair<FidAddress, Int?>>,
+    ): String? {
+        val target = requestedValue.takeIf { requestedAction.endsWith(POS_ACTION_SUFFIX) && it in 0..100 }
+            ?: return null
+        val (readFid, beforeRaw) = withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { beforeSample.await() }
+            ?: return null
+        val before = beforeRaw?.let { SentinelDecoder.decodeInt(it) } ?: return null
+        if (kotlin.math.abs(before - target) <= WINDOW_POSITION_TOLERANCE_PCT) return null
+        val prefix = "window readback action=$actionName dev=${entry.dev} fid=${entry.writeFid} " +
+            "value=$value before=$before"
+        val seen = mutableListOf<String>()
+        repeat(WINDOW_VERIFY_ATTEMPTS) {
+            delay(WINDOW_VERIFY_DELAY_MS)
+            val after = readWindowRaw(readFid)?.let { SentinelDecoder.decodeInt(it) }
+            seen += after?.toString() ?: "err"
+            // A read we could not take is not evidence against the write.
+            if (after == null) return logWindowVerdict(prefix, seen, null)
+            if (kotlin.math.abs(after - before) > WINDOW_POSITION_TOLERANCE_PCT) {
+                return logWindowVerdict(prefix, seen, null)
+            }
         }
-        return WindowReadback(beforeDeferred, written)
+        return logWindowVerdict(prefix, seen, "стекло не сдвинулось с места, команда не сработала")
+    }
+
+    /** Single log line for the verdict (kept from the diagnostics-only readback) + the verdict. */
+    private fun logWindowVerdict(prefix: String, seen: List<String>, verdict: String?): String? {
+        Log.i(TAG, "$prefix after=${seen.joinToString(",")} verdict=${verdict ?: "moved"}")
+        return verdict
     }
 
     /** Read address actually sampled, plus the position read right now (raw, sentinels kept as-is). */
@@ -461,9 +482,15 @@ class VehicleApiImpl @Inject constructor(
         private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
 
-        // ── Window readback (diagnostics) ──────────────────────────────────────
-        /** Long enough for a pane to reach its end position on a full open/close. */
-        private const val WINDOW_READBACK_DELAY_MS = 2_000L
+        // ── Window readback (write verdict) ────────────────────────────────────
+        /** Per attempt; a pane that was commanded starts moving well inside two of these
+         *  (same budget as the seat channel's status verification). */
+        private const val WINDOW_VERIFY_DELAY_MS = 400L
+        private const val WINDOW_VERIFY_ATTEMPTS = 2
+        /** Percent noise between two reads of a standing pane. */
+        private const val WINDOW_POSITION_TOLERANCE_PCT = 2
+        /** Only the percent family carries a target we can compare the position with. */
+        private const val POS_ACTION_SUFFIX = "_pos"
         /** Bounded wait so the "before" sample usually precedes the write, but a hung read
          *  channel costs at most this much. */
         private const val WINDOW_BEFORE_READ_BUDGET_MS = 300L

@@ -16,6 +16,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.bydmate.app.R
+import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
@@ -30,6 +31,7 @@ import com.bydmate.app.split.SplitStartResult
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
 import org.json.JSONObject
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
@@ -273,6 +275,10 @@ class ActionDispatcher @Inject constructor(
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
 
     // Test seam: real impl asks MediaSessionManager for active sessions via our listener component.
+    /** Test seam -- how long to wait for the cluster projection to actually come up. */
+    internal var clusterPollIntervalMs = 500L
+    internal var clusterPollAttempts = 10
+
     internal var activeMediaControllers: () -> List<MediaController> = {
         runCatching {
             val msm = context.getSystemService(Context.MEDIA_SESSION_SERVICE) as MediaSessionManager
@@ -343,17 +349,39 @@ class ActionDispatcher @Inject constructor(
 
     // --- cluster projection (steering-wheel star key path, via ClusterVoiceControl) ---
 
-    /** ClusterVoiceControl.apply() is fire-and-forget (async setMode under the manager's mutex,
-     *  like the star key) and never throws, so there is no synchronous success/failure to report
-     *  here beyond payload validation -- this stays fail-soft the same way dispatchSentry does. */
-    private fun dispatchClusterProjection(action: ActionDef): DispatchResult {
+    /**
+     * ClusterVoiceControl.apply() is fire-and-forget (async setMode under the manager's mutex,
+     * like the star key), so the only honest verdict comes from reading the mode back. We wait
+     * for it up to [clusterPollAttempts] x [clusterPollIntervalMs] and report a failure when the
+     * projection never reached the requested state.
+     *
+     * This applies to automation-origin dispatches too, by design: a rule whose "projection on"
+     * step silently did nothing must show up as a failed step, exactly like a rejected vehicle
+     * write. The gate semantics above (speed limits, CAN/SHELL blocking) are untouched -- this
+     * only changes what a dispatched-but-ineffective projection reports.
+     */
+    private suspend fun dispatchClusterProjection(action: ActionDef): DispatchResult {
         val on = when (action.payload) {
             "1" -> true
             "0" -> false
             else -> return DispatchResult(false, "Некорректное состояние проекции на приборку")
         }
+        val want = if (on) ClusterMode.FULLSCREEN else ClusterMode.OFF
         clusterVoiceControl.apply(on)
-        return DispatchResult(true)
+        repeat(clusterPollAttempts) {
+            if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
+            delay(clusterPollIntervalMs)
+        }
+        if (clusterVoiceControl.projectionMode() == want) return DispatchResult(true)
+        val reason = if (clusterVoiceControl.lastFailure() == "daemon") {
+            "служебный процесс перезапускается"
+        } else if (on) {
+            "проекция на приборку не включилась"
+        } else {
+            "проекция с приборки не убралась"
+        }
+        Log.w(TAG, "cluster projection did not reach $want: $reason")
+        return DispatchResult(false, reason)
     }
 
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */

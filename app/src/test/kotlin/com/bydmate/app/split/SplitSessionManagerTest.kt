@@ -473,7 +473,7 @@ class SplitSessionManagerTest {
         val mgr = SplitSessionManager(helper, prefs, FakeSplitBackdrop(), backgroundScope, 60_000)
         mgr.start(SplitPair("pkg.narrow", "pkg.wide", SplitSide.RIGHT))
 
-        mgr.mirror()
+        assertNull("a mirror that moved the panes reports no reason", mgr.mirror())
 
         // After mirror: side is LEFT — narrow task 11 gets narrow-LEFT bounds,
         // wide task 10 gets wide-LEFT bounds.
@@ -484,6 +484,12 @@ class SplitSessionManagerTest {
         val newState = mgr.state.value as SplitSessionState.Active
         assertEquals(SplitSide.LEFT, newState.pair.narrowSide)
         assertEquals(SplitSide.LEFT, prefs.getLastPair()?.narrowSide)
+    }
+
+    @Test fun `mirror without a session reports that the split is not running`() = runTest {
+        val helper = mockk<HelperClient>(relaxed = true)
+        val mgr = SplitSessionManager(helper, FakeSplitPreferences(), FakeSplitBackdrop(), backgroundScope, 60_000)
+        assertEquals("сплит не запущен", mgr.mirror())
     }
 
     @Test fun `mirror LEFT to RIGHT uses RIGHT geometry`() = runTest {
@@ -3138,7 +3144,8 @@ class SplitSessionManagerTest {
         // Capture state before mirror attempt.
         val stateBefore = mgr.state.value as SplitSessionState.Active
 
-        mgr.mirror()
+        val reason = mgr.mirror()
+        assertEquals("одна из панелей сейчас на приборке", reason)
 
         // mirror() must be a full no-op: no bounds changes and session state unchanged.
         // Without the guard, mirror() would stamp main-screen bounds onto the cluster task,

@@ -137,7 +137,9 @@ class VehicleApiWriteTest {
     @Test fun `writeWindowDriver with 50 percent calls helper write with correct fid and returns success`() = runTest {
         val entry = allowlist.find("window_driver_pos")!!
         coEvery { helper.write(entry.dev, entry.writeFid, 50) } returns true
-        // window_driver_pos has no readbackFid
+        // window_driver_pos has no readbackFid; an unreadable position means the movement
+        // verification has no evidence and leaves the outcome alone (see the wave 3 block below).
+        coEvery { autoservice.getIntRaw(any(), any()) } returns null
         assertTrue(api.writeWindowDriver(50).isSuccess)
         coVerify(exactly = 1) { helper.write(entry.dev, entry.writeFid, 50) }
     }
@@ -173,6 +175,62 @@ class VehicleApiWriteTest {
 
         assertTrue(result.isSuccess)
         assertEquals(listOf("read", "write"), calls)
+    }
+
+    // ── Wave 3: the pane either moved or the write is reported as failed ──────
+
+    // Unconfined readback scope so the "before" sample is taken deterministically before the
+    // write; runTest's virtual clock makes the two 400 ms verification waits free.
+    private fun verifyingApi() = VehicleApiImpl(
+        parsReader, autoservice, helper, allowlist, writeLogDao, seatStore, windowStore,
+    ).also { it.readbackScope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined) }
+
+    @Test fun `window write that does not move the pane is reported as a failure`() = runTest {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returns 100
+
+        val result = verifyingApi().writeWindowDriver(0)
+
+        assertTrue(result.isFailure)
+        val err = result.exceptionOrNull() as VehicleWriteError.ReadbackMismatch
+        assertTrue(err.message!!, err.message!!.contains("не сдвинулось"))
+    }
+
+    @Test fun `window write that starts the pane moving is a success`() = runTest {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returnsMany listOf(100, 82)
+
+        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
+    }
+
+    // A read we could not take is not evidence against the write: fail open, never invent a
+    // failure out of a dead read channel.
+    @Test fun `unreadable position after the write leaves the outcome successful`() = runTest {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returnsMany listOf(100, null)
+
+        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
+    }
+
+    @Test fun `pane already at the requested position is not verified at all`() = runTest {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 100) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returns 100
+
+        assertTrue(verifyingApi().writeWindowDriver(100).isSuccess)
+        coVerify(exactly = 1) { autoservice.getIntRaw(any(), any()) }
+    }
+
+    // The sentinel classes mean "no data", not "position 0".
+    @Test fun `sentinel position before the write leaves the outcome successful`() = runTest {
+        val entry = allowlist.find("window_driver_pos")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 0) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returns -10011
+
+        assertTrue(verifyingApi().writeWindowDriver(0).isSuccess)
     }
 
     @Test fun `writeWindowDriver returns failure HelperUnreachable when helper write fails (validated entry)`() = runTest {

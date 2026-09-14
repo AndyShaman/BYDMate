@@ -743,14 +743,20 @@ class SplitSessionManager(
     /**
      * Flips the narrow pane to the opposite side, recomputes both bounds,
      * and issues [setTaskBounds] for each task.
+     *
+     * Returns null when the panes were swapped, or a short Russian reason when nothing moved —
+     * every guard below is a silent no-op otherwise, and the caller (voice, overlay) would
+     * report a success the driver can see did not happen.
      */
-    suspend fun mirror() = mutex.withLock {
-        val current = _state.value as? SplitSessionState.Active ?: return@withLock
+    suspend fun mirror(): String? = mutex.withLock {
+        val current = _state.value as? SplitSessionState.Active
+            ?: return@withLock "сплит не запущен"
         // Native panes: the firmware owns the geometry, so the sides change through its own swap
         // and none of the freeform bounds / grace machinery below applies.
         if (current.nativePanes) {
-            val session = split37Session ?: return@withLock
-            val swapped = split37?.swap(session) ?: return@withLock
+            val session = split37Session ?: return@withLock "сплит не запущен"
+            val swapped = split37?.swap(session)
+                ?: return@withLock "прошивка не поменяла панели местами"
             val newSide = if (current.pair.narrowSide == SplitSide.LEFT) SplitSide.RIGHT else SplitSide.LEFT
             val newPair = current.pair.copy(narrowSide = newSide)
             // The engine reads the sides off the session it is handed, so its pair must follow the
@@ -758,7 +764,7 @@ class SplitSessionManager(
             split37Session = swapped.copy(pair = newPair)
             prefs.saveLastPair(newPair)
             _state.value = current.copy(pair = newPair)
-            return@withLock
+            return@withLock null
         }
         // Full no-op while any departure grace is active OR calibration is pending (D-1-R1):
         // the departing task is mid-REMOVE+RELAUNCH or its cluster geometry is unconfirmed;
@@ -770,22 +776,29 @@ class SplitSessionManager(
         // self-heals: E-1 guarantees calibration retry continues until success, so any incorrect
         // main-display bounds will be overwritten by the next successful calibration tick.
         // This is an acknowledged bounded risk — no tryLock or timeout needed.
-        if (departureGraceDeadlines.values.any { nowMs() < it } || calibrationPendingPkgs.isNotEmpty()) return@withLock
+        if (departureGraceDeadlines.values.any { nowMs() < it } || calibrationPendingPkgs.isNotEmpty()) {
+            return@withLock "панели ещё переезжают, повтори через пару секунд"
+        }
         // Full no-op when any pane is on the cluster. mirror() assumes both panes are on the
         // main display: stamping main-screen bounds onto a departed (cluster-calibrated) task
         // would corrupt its calibration with no recovery path (the one-shot departed flag is
         // already set, so the watchdog will not re-apply cluster bounds).
-        if (narrowPaneDepartedEmitted || widePaneDepartedEmitted) return@withLock
+        if (narrowPaneDepartedEmitted || widePaneDepartedEmitted) {
+            return@withLock "одна из панелей сейчас на приборке"
+        }
         val newSide = if (current.pair.narrowSide == SplitSide.LEFT) SplitSide.RIGHT else SplitSide.LEFT
         val (wideBounds, narrowBounds) = boundsFor(newSide)
         // E-2: re-check grace/pending immediately before the bounds writes to minimise the TOCTOU
         // window (see comment on the initial gate above).
-        if (departureGraceDeadlines.values.any { nowMs() < it } || calibrationPendingPkgs.isNotEmpty()) return@withLock
+        if (departureGraceDeadlines.values.any { nowMs() < it } || calibrationPendingPkgs.isNotEmpty()) {
+            return@withLock "панели ещё переезжают, повтори через пару секунд"
+        }
         helper.setTaskBounds(current.narrowTaskId, narrowBounds)
         helper.setTaskBounds(current.wideTaskId, wideBounds)
         val newPair = current.pair.copy(narrowSide = newSide)
         prefs.saveLastPair(newPair)
         _state.value = current.copy(pair = newPair)
+        null
     }
 
     /**
