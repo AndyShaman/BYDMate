@@ -5,6 +5,7 @@ import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
 import androidx.lifecycle.ViewModel
@@ -36,7 +37,11 @@ class TechPanelViewModelTest {
      *  TrackingService flows — resetMain() alone would leave them running across tests. */
     private val store = ViewModelStore()
 
-    @Before fun setUp() { Dispatchers.setMain(testDispatcher) }
+    @Before fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+        savedOrder = ""
+        hintSeen = false
+    }
 
     @After fun tearDown() {
         store.clear()
@@ -63,6 +68,17 @@ class TechPanelViewModelTest {
         return ViewModelProvider(store, factory)[TechPanelViewModel::class.java]
     }
 
+    /** The two settings rows the card order lives in, kept in memory across reads and writes. */
+    private var savedOrder = ""
+    private var hintSeen = false
+
+    private fun settings(): SettingsRepository = mockk<SettingsRepository>(relaxed = true).also { r ->
+        coEvery { r.getTechCardOrder() } answers { savedOrder }
+        coEvery { r.setTechCardOrder(any()) } answers { savedOrder = firstArg() }
+        coEvery { r.isTechOrderHintSeen() } answers { hintSeen }
+        coEvery { r.setTechOrderHintSeen() } answers { hintSeen = true }
+    }
+
     private fun buildViewModel(
         battery: BatteryState? = null,
         avg: AvgSoc = AvgSoc(null, null),
@@ -73,7 +89,7 @@ class TechPanelViewModelTest {
             )
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns avg
-        return scoped(TechPanelViewModel(repo, avgProvider))
+        return scoped(TechPanelViewModel(repo, avgProvider, settings()))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -157,7 +173,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings()))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -268,5 +284,91 @@ class TechPanelViewModelTest {
     @Test
     fun `motor currents open the motors card`() {
         assertTrue(TechPanelUiState(motorCurrentFront = 7.9f, motorCurrentRear = 45.3f).showMotors)
+    }
+
+    // --- card order ---------------------------------------------------------
+
+    @Test
+    fun `without a saved order the cards keep their factory places`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TechCardOrder.DEFAULT, vm.uiState.value.cardOrder)
+        assertTrue("first open must explain the gesture", vm.uiState.value.showOrderHint)
+    }
+
+    @Test
+    fun `a saved order is restored on open`() = runTest {
+        savedOrder = "tyres,motors,battery_now,limits,history,climate"
+        hintSeen = true
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+            ),
+            vm.uiState.value.cardOrder,
+        )
+        assertFalse("the hint is retired once a drag has happened", vm.uiState.value.showOrderHint)
+    }
+
+    /** A version that adds a card must not drop it just because the stored order predates it;
+     *  an id that no longer exists must not crash the screen either. */
+    @Test
+    fun `cards missing from the saved order are appended, unknown ids ignored`() = runTest {
+        savedOrder = "tyres,ghost_card,motors"
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(
+            listOf(
+                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+            ),
+            vm.uiState.value.cardOrder,
+        )
+    }
+
+    @Test
+    fun `a drag persists the new order and retires the hint`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.moveCard(TechCard.TYRES, TechCard.BATTERY_NOW)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TechCard.TYRES, vm.uiState.value.cardOrder.first())
+        assertEquals("tyres,battery_now,limits,history,motors,climate", savedOrder)
+        assertTrue(hintSeen)
+        assertFalse(vm.uiState.value.showOrderHint)
+    }
+
+    @Test
+    fun `reset clears the saved order and brings the factory one back`() = runTest {
+        savedOrder = "tyres,motors,battery_now,limits,history,climate"
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.resetCardOrder()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(TechCardOrder.DEFAULT, vm.uiState.value.cardOrder)
+        assertEquals("", savedOrder)
+    }
+
+    /** Hidden cards drop out of the grid but keep their place in the stored order. */
+    @Test
+    fun `only the cards with data are laid out`() {
+        val state = TechPanelUiState(
+            cardOrder = listOf(
+                TechCard.TYRES, TechCard.MOTORS, TechCard.BATTERY_NOW,
+                TechCard.LIMITS, TechCard.HISTORY, TechCard.CLIMATE,
+            ),
+            motorRpmFront = 1200,
+            soc = 43,
+        )
+        assertEquals(listOf(TechCard.MOTORS, TechCard.BATTERY_NOW), state.visibleCards)
     }
 }

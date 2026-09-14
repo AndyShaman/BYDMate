@@ -42,6 +42,15 @@ class TechPanelI18nTest {
         assertEquals("绝缘", get("zh", R.string.dashboard_battery_insulation_label))
     }
 
+    @Test fun card_order_controls_are_translated() {
+        assertEquals("Удерживайте карточку, чтобы поменять порядок", get("ru", R.string.tech_order_hint))
+        assertEquals("Hold a card to change the order", get("en", R.string.tech_order_hint))
+        assertEquals("长按卡片可调整顺序", get("zh", R.string.tech_order_hint))
+        assertEquals("Сбросить порядок", get("ru", R.string.tech_order_reset))
+        assertEquals("Reset the order", get("en", R.string.tech_order_reset))
+        assertEquals("恢复默认顺序", get("zh", R.string.tech_order_reset))
+    }
+
     @Test fun card_headers_are_translated() {
         assertEquals("Батарея · сейчас", get("ru", R.string.tech_card_battery_now))
         assertEquals("Battery · now", get("en", R.string.tech_card_battery_now))

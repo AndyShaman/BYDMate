@@ -2,6 +2,7 @@ package com.bydmate.app.ui.tech
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
@@ -24,6 +25,10 @@ data class TechPanelUiState(
     val autoserviceOnline: Boolean? = null,
     /** Key of the single open «?» hint, null when none is open. */
     val openHint: String? = null,
+    /** Cards in the order they are drawn, hidden ones included. */
+    val cardOrder: List<TechCard> = TechCardOrder.DEFAULT,
+    /** Shown until the driver drags a card for the first time. */
+    val showOrderHint: Boolean = false,
     // Батарея · сейчас
     val soc: Int? = null,
     val soh: Float? = null,
@@ -103,6 +108,19 @@ data class TechPanelUiState(
     val showHistory: Boolean
         get() = anyOf(lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime)
 
+    /** [cardOrder] without the cards this car has no data for. */
+    val visibleCards: List<TechCard>
+        get() = cardOrder.filter { isVisible(it) }
+
+    fun isVisible(card: TechCard): Boolean = when (card) {
+        TechCard.BATTERY_NOW -> showBatteryNow
+        TechCard.LIMITS -> showLimitsAndCells
+        TechCard.HISTORY -> showHistory
+        TechCard.MOTORS -> showMotors
+        TechCard.CLIMATE -> showClimate
+        TechCard.TYRES -> showTyres
+    }
+
     val hasAnyCard: Boolean
         get() = showBatteryNow || showLimitsAndCells || showMotors ||
             showClimate || showTyres || showHistory
@@ -121,6 +139,7 @@ internal fun rpmForDisplay(raw: Int?): Int? = raw?.let { if (it in -1..0) 0 else
 class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
+    private val settingsRepository: SettingsRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())
@@ -130,11 +149,37 @@ class TechPanelViewModel @Inject constructor(
         observeLiveData()
         viewModelScope.launch { loadBatteryState() }
         viewModelScope.launch { loadAvgSoc() }
+        viewModelScope.launch { loadCardOrder() }
     }
 
     /** One open hint at a time: tapping the open one closes it, any other replaces it. */
     fun toggleHint(key: String) {
         _uiState.update { it.copy(openHint = if (it.openHint == key) null else key) }
+    }
+
+    /**
+     * Drops [moved] into [target]'s place and persists the new order. A completed drag also
+     * retires the hint: the driver has just proved they know the gesture.
+     */
+    fun moveCard(moved: TechCard, target: TechCard) {
+        val next = TechCardOrder.move(_uiState.value.cardOrder, moved, target)
+        if (next == _uiState.value.cardOrder) return
+        _uiState.update { it.copy(cardOrder = next, showOrderHint = false) }
+        viewModelScope.launch {
+            settingsRepository.setTechCardOrder(TechCardOrder.serialize(next))
+            settingsRepository.setTechOrderHintSeen()
+        }
+    }
+
+    fun resetCardOrder() {
+        _uiState.update { it.copy(cardOrder = TechCardOrder.DEFAULT) }
+        viewModelScope.launch { settingsRepository.setTechCardOrder("") }
+    }
+
+    private suspend fun loadCardOrder() {
+        val order = TechCardOrder.parse(settingsRepository.getTechCardOrder())
+        val hintSeen = settingsRepository.isTechOrderHintSeen()
+        _uiState.update { it.copy(cardOrder = order, showOrderHint = !hintSeen) }
     }
 
     private fun observeLiveData() {

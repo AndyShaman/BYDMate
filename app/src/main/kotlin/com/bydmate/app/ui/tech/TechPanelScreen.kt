@@ -3,6 +3,7 @@ package com.bydmate.app.ui.tech
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -27,16 +28,27 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
@@ -87,42 +99,174 @@ fun TechPanelScreen(
             return@Column
         }
 
-        // Two rows of at most three cards each, grouped by what they describe: the battery
-        // and its numbers on top, the drivetrain and the cabin below. IntrinsicSize.Max makes
-        // every card in a row as tall as the tallest one, so their bottoms line up instead of
-        // leaving holes under the short ones. An open hint grows its whole row, as expected.
-        Column(
-            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            CardRow(state.showBatteryNow, state.showLimitsAndCells, state.showHistory) {
-                if (state.showBatteryNow) BatteryNowCard(state, viewModel::toggleHint, cardModifier())
-                if (state.showLimitsAndCells) LimitsAndCellsCard(state, viewModel::toggleHint, cardModifier())
-                if (state.showHistory) HistoryCard(state, viewModel::toggleHint, cardModifier())
+        if (state.showOrderHint) {
+            Text(
+                stringResource(R.string.tech_order_hint),
+                color = TextMuted,
+                fontSize = 11.sp,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+        }
+
+        TechCardGrid(
+            state = state,
+            onHint = viewModel::toggleHint,
+            onMove = viewModel::moveCard,
+            onReset = viewModel::resetCardOrder,
+        )
+    }
+}
+
+/** Columns of the card grid: the screen is 15.6" landscape, three cards fit across it. */
+private const val GRID_COLUMNS = 3
+
+/** How much a card grows while it is held, so the driver sees which one they picked up. */
+private const val LIFT_SCALE = 1.03f
+
+/**
+ * The cards in the driver's own order, three per row. IntrinsicSize.Max makes every card in a
+ * row as tall as the tallest one, so their bottoms line up instead of leaving holes under the
+ * short ones. An open hint grows its whole row, as expected.
+ *
+ * Long-pressing a card lifts it; dragging its centre over another card's slot drops it into
+ * that slot and the grid re-flows under the finger. The slot rectangles are kept by position,
+ * not by card, so they survive a re-order mid-drag; the gesture itself also lives on the slot,
+ * and tracks the card it picked up by identity.
+ */
+@Composable
+private fun TechCardGrid(
+    state: TechPanelUiState,
+    onHint: (String) -> Unit,
+    onMove: (TechCard, TechCard) -> Unit,
+    onReset: () -> Unit,
+) {
+    val cards = state.visibleCards
+    val slots = remember { mutableStateMapOf<Int, Rect>() }
+    val dragging = remember { mutableStateOf<TechCard?>(null) }
+    val offset = remember { mutableStateOf(Offset.Zero) }
+    val latestCards = rememberUpdatedState(cards)
+    val latestMove = rememberUpdatedState(onMove)
+
+    val onDrag: (Offset) -> Unit = { amount ->
+        val card = dragging.value
+        val from = card?.let { latestCards.value.indexOf(it) } ?: -1
+        val fromRect = slots[from]
+        if (card != null && fromRect != null) {
+            offset.value += amount
+            val centre = fromRect.center + offset.value
+            val to = slots.entries.firstOrNull { (i, rect) ->
+                i != from && i < latestCards.value.size && rect.contains(centre)
+            }?.key
+            val toRect = to?.let { slots[it] }
+            if (to != null && toRect != null) {
+                // Keep the lifted card under the finger across the re-flow: its slot has moved.
+                offset.value += fromRect.topLeft - toRect.topLeft
+                latestMove.value(card, latestCards.value[to])
             }
-            CardRow(state.showMotors, state.showClimate, state.showTyres) {
-                if (state.showMotors) MotorsCard(state, viewModel::toggleHint, cardModifier())
-                if (state.showClimate) ClimateCard(state, viewModel::toggleHint, cardModifier())
-                if (state.showTyres) TyresCard(state, viewModel::toggleHint, cardModifier())
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        cards.chunked(GRID_COLUMNS).forEachIndexed { rowIndex, rowCards ->
+            val firstIndex = rowIndex * GRID_COLUMNS
+            val holdsDragged = dragging.value?.let { it in rowCards } == true
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Max)
+                    .zIndex(if (holdsDragged) 1f else 0f),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                rowCards.forEachIndexed { column, card ->
+                    val index = firstIndex + column
+                    CardSlot(
+                        lifted = dragging.value == card,
+                        offset = offset.value,
+                        onBounds = { slots[index] = it },
+                        onLift = {
+                            dragging.value = latestCards.value.getOrNull(index)
+                            offset.value = Offset.Zero
+                        },
+                        onDrag = onDrag,
+                        onDrop = {
+                            dragging.value = null
+                            offset.value = Offset.Zero
+                        },
+                    ) { cardModifier ->
+                        TechCardContent(card, state, onHint, cardModifier)
+                    }
+                }
             }
+        }
+        if (state.cardOrder != TechCardOrder.DEFAULT) {
+            Text(
+                stringResource(R.string.tech_order_reset),
+                color = TextSecondary,
+                fontSize = 11.sp,
+                modifier = Modifier.clickable { onReset() }.padding(vertical = 6.dp),
+            )
         }
     }
 }
 
-/** Equal share of the row's width, stretched to the row's (intrinsic) height. */
+/** One grid cell: an equal share of the row's width, stretched to the row's intrinsic height. */
 @Composable
-private fun RowScope.cardModifier(): Modifier = Modifier.weight(1f).fillMaxHeight()
+private fun RowScope.CardSlot(
+    lifted: Boolean,
+    offset: Offset,
+    onBounds: (Rect) -> Unit,
+    onLift: () -> Unit,
+    onDrag: (Offset) -> Unit,
+    onDrop: () -> Unit,
+    content: @Composable (Modifier) -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .onGloballyPositioned { onBounds(it.boundsInRoot()) }
+            .zIndex(if (lifted) 1f else 0f)
+            .graphicsLayer {
+                if (lifted) {
+                    translationX = offset.x
+                    translationY = offset.y
+                    scaleX = LIFT_SCALE
+                    scaleY = LIFT_SCALE
+                    shadowElevation = 16.dp.toPx()
+                    shape = RoundedCornerShape(14.dp)
+                }
+            }
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { onLift() },
+                    onDrag = { change, amount -> change.consume(); onDrag(amount) },
+                    onDragEnd = { onDrop() },
+                    onDragCancel = { onDrop() },
+                )
+            }
+    ) {
+        content(Modifier.fillMaxSize())
+    }
+}
 
-/** Draws [content] as one row of same-height cards, or nothing when the row is empty.
- *  A hidden card simply leaves more width to its neighbours. */
 @Composable
-private fun CardRow(vararg visible: Boolean, content: @Composable RowScope.() -> Unit) {
-    if (visible.none { it }) return
-    Row(
-        modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Max),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        content = content,
-    )
+private fun TechCardContent(
+    card: TechCard,
+    state: TechPanelUiState,
+    onHint: (String) -> Unit,
+    modifier: Modifier,
+) {
+    when (card) {
+        TechCard.BATTERY_NOW -> BatteryNowCard(state, onHint, modifier)
+        TechCard.LIMITS -> LimitsAndCellsCard(state, onHint, modifier)
+        TechCard.HISTORY -> HistoryCard(state, onHint, modifier)
+        TechCard.MOTORS -> MotorsCard(state, onHint, modifier)
+        TechCard.CLIMATE -> ClimateCard(state, onHint, modifier)
+        TechCard.TYRES -> TyresCard(state, onHint, modifier)
+    }
 }
 
 @Composable
@@ -273,6 +417,22 @@ private fun LimitsAndCellsCard(state: TechPanelUiState, onHint: (String) -> Unit
     }
 }
 
+/**
+ * Rows of the motors card, in the order they are drawn. Kept as data so the order is pinned by
+ * a unit test — the module has no Compose UI test harness. The front/rear split sits last:
+ * VadimV reported it reads as a repeat of the per-motor numbers when it is at the top.
+ */
+internal enum class MotorRow { HEADER, MOTOR_TEMP, INVERTER_TEMP, RPM, PEDALS, POWER_SPLIT }
+
+internal val MOTOR_CARD_ROWS: List<MotorRow> = listOf(
+    MotorRow.HEADER,
+    MotorRow.MOTOR_TEMP,
+    MotorRow.INVERTER_TEMP,
+    MotorRow.RPM,
+    MotorRow.PEDALS,
+    MotorRow.POWER_SPLIT,
+)
+
 @Composable
 private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifier: Modifier = Modifier) {
     TechCard(
@@ -281,49 +441,61 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifi
         onHint = onHint,
         modifier = modifier,
     ) {
-        PairRow(
+        MOTOR_CARD_ROWS.forEach { MotorCardRow(it, state) }
+        Hint(state.openHint, "motors", R.string.tech_hint_motors)
+    }
+}
+
+@Composable
+private fun MotorCardRow(row: MotorRow, state: TechPanelUiState) {
+    val anyTemp = state.motorTempFront ?: state.motorTempRear
+        ?: state.inverterTempFront ?: state.inverterTempRear
+    when (row) {
+        MotorRow.HEADER -> PairRow(
             "",
             stringResource(R.string.tech_label_front),
             stringResource(R.string.tech_label_rear),
             valueColor = TextMuted,
         )
-        when (val split = motorSplitPercent(state.motorCurrentFront, state.motorCurrentRear)) {
-            null -> Unit  // single-motor car or no reading: no row at all
-            MotorSplit.Idle -> PairRow(stringResource(R.string.tech_label_power), DASH, DASH)
-            is MotorSplit.Share -> PairRow(
-                stringResource(R.string.tech_label_power),
-                stringResource(R.string.tech_value_percent, split.frontPercent),
-                stringResource(R.string.tech_value_percent, split.rearPercent),
+        MotorRow.MOTOR_TEMP -> {
+            PairRow(
+                stringResource(R.string.tech_label_motor_temp),
+                state.motorTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+                state.motorTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
             )
+            if (anyTemp != null) TempBarPair(state.motorTempFront, state.motorTempRear)
         }
-        val anyTemp = state.motorTempFront ?: state.motorTempRear
-            ?: state.inverterTempFront ?: state.inverterTempRear
-        PairRow(
-            stringResource(R.string.tech_label_motor_temp),
-            state.motorTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-            state.motorTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-        )
-        if (anyTemp != null) TempBarPair(state.motorTempFront, state.motorTempRear)
-        PairRow(
-            stringResource(R.string.tech_label_inverter_temp),
-            state.inverterTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-            state.inverterTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
-        )
-        if (anyTemp != null) {
-            TempBarPair(state.inverterTempFront, state.inverterTempRear)
-            TempScaleCaption()
+        MotorRow.INVERTER_TEMP -> {
+            PairRow(
+                stringResource(R.string.tech_label_inverter_temp),
+                state.inverterTempFront?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+                state.inverterTempRear?.let { stringResource(R.string.tech_value_deg, it) } ?: DASH,
+            )
+            if (anyTemp != null) {
+                TempBarPair(state.inverterTempFront, state.inverterTempRear)
+                TempScaleCaption()
+            }
         }
-        PairRow(
+        MotorRow.RPM -> PairRow(
             stringResource(R.string.tech_label_rpm),
             rpmForDisplay(state.motorRpmFront)?.toString() ?: DASH,
             rpmForDisplay(state.motorRpmRear)?.toString() ?: DASH,
         )
-        PairRow(
+        MotorRow.PEDALS -> PairRow(
             stringResource(R.string.tech_label_pedals),
             state.pedalAccel?.let { stringResource(R.string.tech_value_percent, it) } ?: DASH,
             state.pedalBrake?.let { stringResource(R.string.tech_value_percent, it) } ?: DASH,
         )
-        Hint(state.openHint, "motors", R.string.tech_hint_motors)
+        MotorRow.POWER_SPLIT ->
+            when (val split = motorSplitPercent(state.motorCurrentFront, state.motorCurrentRear)) {
+                null -> Unit  // single-motor car or no reading: no row at all
+                MotorSplit.Idle -> PairRow(stringResource(R.string.tech_label_power), DASH, DASH)
+                is MotorSplit.Share -> PairRow(
+                    stringResource(R.string.tech_label_power),
+                    stringResource(R.string.tech_value_percent, split.frontPercent),
+                    stringResource(R.string.tech_value_percent, split.rearPercent),
+                )
+            }
     }
 }
 
