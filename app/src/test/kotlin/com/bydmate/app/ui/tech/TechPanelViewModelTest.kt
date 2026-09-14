@@ -345,19 +345,6 @@ class TechPanelViewModelTest {
         assertFalse(vm.uiState.value.showOrderHint)
     }
 
-    @Test
-    fun `reset clears the saved order and brings the factory one back`() = runTest {
-        savedOrder = "tyres,motors,battery_now,limits,history,climate"
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.resetCardOrder()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(TechCardOrder.DEFAULT, vm.uiState.value.cardOrder)
-        assertEquals("", savedOrder)
-    }
-
     /** Hidden cards drop out of the grid but keep their place in the stored order. */
     @Test
     fun `only the cards with data are laid out`() {

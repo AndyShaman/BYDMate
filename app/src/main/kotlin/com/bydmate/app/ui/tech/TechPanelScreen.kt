@@ -112,7 +112,6 @@ fun TechPanelScreen(
             state = state,
             onHint = viewModel::toggleHint,
             onMove = viewModel::moveCard,
-            onReset = viewModel::resetCardOrder,
         )
     }
 }
@@ -138,7 +137,6 @@ private fun TechCardGrid(
     state: TechPanelUiState,
     onHint: (String) -> Unit,
     onMove: (TechCard, TechCard) -> Unit,
-    onReset: () -> Unit,
 ) {
     val cards = state.visibleCards
     val slots = remember { mutableStateMapOf<Int, Rect>() }
@@ -200,14 +198,6 @@ private fun TechCardGrid(
                     }
                 }
             }
-        }
-        if (state.cardOrder != TechCardOrder.DEFAULT) {
-            Text(
-                stringResource(R.string.tech_order_reset),
-                color = TextSecondary,
-                fontSize = 11.sp,
-                modifier = Modifier.clickable { onReset() }.padding(vertical = 6.dp),
-            )
         }
     }
 }
