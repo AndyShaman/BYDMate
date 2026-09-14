@@ -8,6 +8,7 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -111,16 +112,17 @@ class NativeParsReader @Inject constructor(
             }
             decoded[entry.field] = value
         }
-        logTechRaw(pairs)
+        logTechRaw(pairs, decoded)
         return decoded
     }
 
     /**
      * One throttled line with the RAW (pre-sentinel) words of every tech-panel fid, so a
      * single test drive settles the unproven ones (motor currents, battery temp extremes)
-     * without another build. Values the batch failed to read print as "?".
+     * without another build. Values the batch failed to read print as "?". The motor split is
+     * the only decoded value here: it must read exactly as the «Техника» card renders it.
      */
-    private fun logTechRaw(pairs: List<Pair<Int, Int>>) {
+    private fun logTechRaw(pairs: List<Pair<Int, Int>>, decoded: Map<String, Any?>) {
         if (!techLogThrottle.shouldLog("tech")) return
         fun raw(field: String): String {
             val i = FidMap.entries.indexOfFirst { it.field == field }
@@ -144,7 +146,8 @@ class NativeParsReader @Inject constructor(
                 "comp=${raw("compressorW")} ac=${raw("acStatus")} " +
                 "tyT=${raw("tyreTempFL")}/${raw("tyreTempFR")}/${raw("tyreTempRL")}/${raw("tyreTempRR")} " +
                 "acc=${raw("pedalAccel")} brk=${raw("pedalBrake")} " +
-                "cF=${raw("motorCurrentFront")} cR=${raw("motorCurrentRear")}"
+                "cF=${raw("motorCurrentFront")} cR=${raw("motorCurrentRear")} " +
+                "split=${splitText(decoded)}"
         )
     }
 
@@ -380,6 +383,8 @@ class NativeParsReader @Inject constructor(
             bmsMaxDischargeKw   = ranged("bmsMaxDischargeKw", 0..1000),
             motorRpmFront       = ranged("motorRpmFront", -20000..20000),
             motorRpmRear        = ranged("motorRpmRear", -20000..20000),
+            motorCurrentFront   = motorAmps(decoded, "motorCurrentFront"),
+            motorCurrentRear    = motorAmps(decoded, "motorCurrentRear"),
             compressorW         = ranged("compressorW", 0..20000),
             tyreTempFL          = ranged("tyreTempFL", -50..150),
             tyreTempFR          = ranged("tyreTempFR", -50..150),
@@ -416,3 +421,25 @@ class NativeParsReader @Inject constructor(
         val windowRrIndex: Int = FidMap.entries.indexOf(windowRrEntry)
     }
 }
+
+/**
+ * Motor current as DiParsData holds it: the decoded reading, dropped when it falls outside the
+ * physical envelope. Both motors share the traction bus voltage, so the two magnitudes alone
+ * give the front/rear power split.
+ */
+private fun motorAmps(decoded: Map<String, Any?>, field: String): Float? =
+    (decoded[field] as? Double)?.takeIf { abs(it) <= MAX_MOTOR_CURRENT_A }?.toFloat()
+
+/** The split as the «Техника» card computes it, from the very values the card is given. */
+private fun splitText(decoded: Map<String, Any?>): String =
+    when (
+        val split = motorSplitPercent(
+            motorAmps(decoded, "motorCurrentFront"),
+            motorAmps(decoded, "motorCurrentRear"),
+        )
+    ) {
+        null, MotorSplit.Idle -> "-"
+        is MotorSplit.Share -> "${split.frontPercent}%/${split.rearPercent}%"
+    }
+
+private const val MAX_MOTOR_CURRENT_A = 2000.0

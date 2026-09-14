@@ -8,6 +8,15 @@
 
 ## [Unreleased]
 
+## [3.15.4] - 2026-09-14
+
+### Новое
+- Техника: в карточке «Моторы и инверторы» строка «мощность» с долей переднего и заднего мотора в процентах (двухмоторные машины).
+- Камеры слепых зон прячутся, пока на экране родная кругозорка (360), и возвращаются после её закрытия, если поворотник ещё включён.
+
+### Исправления
+- Техника: подсказка «Лимиты BMS» объясняет, почему на разгоне мощность выше «доступной».
+
 ## [3.15.3] - 2026-09-12
 
 ### Новое
@@ -1048,7 +1057,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.3...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.4...HEAD
+[3.15.4]: https://github.com/AndyShaman/BYDMate/compare/v3.15.3...v3.15.4
 [3.15.3]: https://github.com/AndyShaman/BYDMate/compare/v3.15.2...v3.15.3
 [3.15.2]: https://github.com/AndyShaman/BYDMate/compare/v3.15.1...v3.15.2
 [3.15.1]: https://github.com/AndyShaman/BYDMate/compare/v3.15.0...v3.15.1

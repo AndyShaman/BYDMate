@@ -29,6 +29,7 @@ import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.cameraNeedsCompositor
 import com.bydmate.app.cluster.geometryFor
+import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
@@ -81,6 +82,8 @@ class BlindSpotController @Inject constructor(
     private val helper: HelperClient,
     /** Shared with [ClusterProjectionManager] — one instance, one timeline (#135). */
     private val clusterJournal: ClusterJournal,
+    /** Tells when the factory 360 view is on screen; its windows own the screen, not ours. */
+    private val cameraStateMonitor: CameraStateMonitor,
 ) {
     private val probe = AvmCameraProbe()
     private val telemetry = BlindSpotTelemetryGate()
@@ -121,6 +124,8 @@ class BlindSpotController @Inject constructor(
     /** elapsedRealtime of the last transition to a shown side; the stall watchdog counts from here. */
     private var shownAt = 0L
     private var lastRequestedSide = BlindSpotSide.NONE
+    /** Last seen state of the factory 360 view, so only the transition is logged. */
+    private var lastNativeCameraForeground = false
     private var cameraOpen = false
     private var compositorPowered = false   // last CONFIRMED compositor state
     private var compositorTarget = false    // last requested state, in flight or applied
@@ -235,6 +240,15 @@ class BlindSpotController @Inject constructor(
         // A missing gear is not "not reverse": fall back to the last snapshot that read cleanly,
         // which the loss watchdog above keeps younger than 3 s.
         val gearIsReverse = (sample?.gear ?: state.lastValid?.gear) == BLIND_SPOT_GEAR_REVERSE
+        val nativeCameraForeground = cameraStateMonitor.active.value
+        if (nativeCameraForeground != lastNativeCameraForeground) {
+            lastNativeCameraForeground = nativeCameraForeground
+            val verb = if (nativeCameraForeground) "hidden" else "released"
+            Log.i(TAG, "native camera foreground=$nativeCameraForeground: blind-spot $verb")
+            clusterJournal.append(
+                "camera: native 360 ${if (nativeCameraForeground) "up, hide" else "down, release"}"
+            )
+        }
         val decision = decideBlindSpot(
             BlindSpotInput(
                 blink = sample?.blink,
@@ -242,6 +256,7 @@ class BlindSpotController @Inject constructor(
                 gearIsReverse = gearIsReverse,
                 thresholdKmh = prefs.thresholdKmh,
                 telemetryAgeMs = state.ageMs,
+                nativeCameraForeground = nativeCameraForeground,
             )
         )
 
