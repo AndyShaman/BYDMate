@@ -254,6 +254,7 @@ class SettingsViewModel @Inject constructor(
     private val splitSessionManager: com.bydmate.app.split.SplitSessionManager,
     private val splitJournal: com.bydmate.app.split.SplitJournal,
     private val driverMemory: com.bydmate.app.agent.DriverMemory,
+    private val dayMemory: com.bydmate.app.agent.DayMemory,
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
@@ -1481,10 +1482,18 @@ class SettingsViewModel @Inject constructor(
         _uiState.update { it.copy(agentMemoryFacts = driverMemory.facts()) }
     }
 
-    /** Drops every remembered fact. No confirmation: the driver can tell them to the agent again. */
+    /** Drops everything the agent remembers: the long-term facts and today's exchanges alike.
+     *  No confirmation: the driver can tell them to the agent again. */
     fun forgetAgentMemory() {
         driverMemory.forgetAll()
+        dayMemory.forgetAll()
         _uiState.update { it.copy(agentMemoryFacts = emptyList()) }
+    }
+
+    /** Drops one remembered fact: a single wrong fact should not cost the driver the whole list. */
+    fun forgetAgentFact(fact: String) {
+        driverMemory.forget(fact)
+        _uiState.update { it.copy(agentMemoryFacts = driverMemory.facts()) }
     }
 
     /**

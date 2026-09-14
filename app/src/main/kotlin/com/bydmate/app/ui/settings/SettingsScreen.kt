@@ -2533,7 +2533,18 @@ private fun VoiceSettingsContent(
                 )
             } else {
                 state.agentMemoryFacts.forEach { fact ->
-                    Text("\u2022 $fact", color = TextSecondary, fontSize = 12.sp, lineHeight = 17.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "\u2022 $fact",
+                            color = TextSecondary,
+                            fontSize = 12.sp,
+                            lineHeight = 17.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { viewModel.forgetAgentFact(fact) }) {
+                            Text(stringResource(R.string.settings_agent_memory_forget_one), fontSize = 12.sp)
+                        }
+                    }
                 }
             }
         }

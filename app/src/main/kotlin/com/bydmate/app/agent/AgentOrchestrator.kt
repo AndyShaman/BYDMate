@@ -30,6 +30,7 @@ class AgentOrchestrator @Inject constructor(
     private val isMoving: () -> Boolean = { false },
     private val identity: () -> AgentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
     private val memoryBlock: () -> String = { "" },
+    private val dayMemory: DayMemory = DayMemory(prefs = null),
 ) {
     /** Test seam — deterministic clock for the session TTL. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
@@ -64,11 +65,15 @@ class AgentOrchestrator @Inject constructor(
             history += AgentMessage.User(if (isMoving()) "$text $MOVING_TAG" else text)
             try {
                 trimHistory()
-                return runLoop(
+                val result = runLoop(
                     history, systemMessages(), tools.schemas(),
                     allowAutomationTools = true, onSentence,
                     onTerminal = { lastAnswerAt = nowMs() },
                 )
+                // Only finished exchanges are worth keeping: an error or a disabled agent is
+                // not something the driver referred to and must not come back tomorrow.
+                if (result is AgentResult.Answer) dayMemory.record(text, result.text, nowMs())
+                return result
             } catch (ce: kotlin.coroutines.cancellation.CancellationException) {
                 // Roll history back to the entry snapshot: a cancelled turn must not leave an
                 // unpaired tool_calls Assistant (the next ask would be rejected by the provider).
@@ -128,13 +133,14 @@ class AgentOrchestrator @Inject constructor(
      * (the backend puts the cache breakpoint on exactly this message). Everything that moves
      * — today's date, the persona, the driver facts — goes into the second one, after the
      * breakpoint. Per-turn state (driving or not) rides on the user message instead (see
-     * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory.
+     * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory —
+     * neither the driver facts nor today's exchanges.
      */
     private fun systemMessages(includeMemory: Boolean = true): List<AgentMessage> {
         val dynamic = "Сегодня " + SimpleDateFormat("d MMMM yyyy 'года,' EEEE", Locale("ru"))
             .format(Date(nowMs())) + "." +
             AgentPersonaPrompt.block(identity()) +
-            (if (includeMemory) memoryBlock() else "")
+            (if (includeMemory) memoryBlock() + dayMemory.promptBlock(nowMs()) else "")
         return listOf(AgentMessage.System(SYSTEM_PROMPT), AgentMessage.System(dynamic))
     }
 

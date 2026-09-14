@@ -303,6 +303,9 @@ class SettingsViewModelTest {
             driverMemory = com.bydmate.app.agent.DriverMemory(
                 ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
             ),
+            dayMemory = com.bydmate.app.agent.DayMemory(
+                ctx.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            ),
             adbRestoreManager = com.bydmate.app.data.autoservice.AdbRestoreManager(
                 com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl(ctx),
                 mockk(relaxed = true),
