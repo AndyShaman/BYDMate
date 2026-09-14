@@ -65,7 +65,7 @@ class AgentOrchestrator @Inject constructor(
             try {
                 trimHistory()
                 return runLoop(
-                    history, buildSystemPrompt(), tools.schemas(),
+                    history, systemMessages(), tools.schemas(),
                     allowAutomationTools = true, onSentence,
                     onTerminal = { lastAnswerAt = nowMs() },
                 )
@@ -115,31 +115,35 @@ class AgentOrchestrator @Inject constructor(
             val text = userText.trim()
             if (text.isEmpty()) return AgentResult.Disabled
             val messages = mutableListOf<AgentMessage>(AgentMessage.User(text))
-            return runLoop(messages, buildSystemPrompt(includeMemory = false), tools.schemas(includeAutomationTools = false),
+            return runLoop(messages, systemMessages(includeMemory = false), tools.schemas(includeAutomationTools = false),
                 allowAutomationTools = false, onSentence = null, onTerminal = {})
         } finally {
             mutex.unlock()
         }
     }
 
-    // Everything here is stable across the turns of one session (date and persona change far
-    // more slowly than the conversation), so system + tools stay a byte-identical prefix and
-    // the provider's prompt cache keeps hitting. Per-turn state — driving or not — rides on
-    // the user message instead (see [MOVING_TAG]). Driver facts move at the same slow pace:
-    // only a remember_fact/forget_fact call rewrites the block, and that is rare by design.
-    // A detached turn (automation rule, not the driver) neither reads nor writes the memory.
-    private fun buildSystemPrompt(includeMemory: Boolean = true): String = SYSTEM_PROMPT +
-        "\nСегодня " + SimpleDateFormat("d MMMM yyyy 'года,' EEEE", Locale("ru"))
+    /**
+     * Two system messages, and the split is the point: the first is [SYSTEM_PROMPT] and
+     * nothing else, byte-identical on every turn of every day, so the provider can cache it
+     * (the backend puts the cache breakpoint on exactly this message). Everything that moves
+     * — today's date, the persona, the driver facts — goes into the second one, after the
+     * breakpoint. Per-turn state (driving or not) rides on the user message instead (see
+     * [MOVING_TAG]). A detached turn (automation rule, not the driver) carries no memory.
+     */
+    private fun systemMessages(includeMemory: Boolean = true): List<AgentMessage> {
+        val dynamic = "Сегодня " + SimpleDateFormat("d MMMM yyyy 'года,' EEEE", Locale("ru"))
             .format(Date(nowMs())) + "." +
-        AgentPersonaPrompt.block(identity()) +
-        (if (includeMemory) memoryBlock() else "")
+            AgentPersonaPrompt.block(identity()) +
+            (if (includeMemory) memoryBlock() else "")
+        return listOf(AgentMessage.System(SYSTEM_PROMPT), AgentMessage.System(dynamic))
+    }
 
     /** The LLM/tool loop shared by [ask] (live, persistent history) and [askDetached]
      *  (automation origin, throwaway messages). [onTerminal] fires exactly where the live
      *  path used to stamp lastAnswerAt. Caller must hold [mutex]. */
     private suspend fun runLoop(
         messages: MutableList<AgentMessage>,
-        systemPrompt: String,
+        systemMessages: List<AgentMessage>,
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
@@ -151,7 +155,7 @@ class AgentOrchestrator @Inject constructor(
         var outcome = "cancelled"
         try {
             val result = runLoopTraced(
-                messages, systemPrompt, toolSchemas, allowAutomationTools, onSentence, onTerminal,
+                messages, systemMessages, toolSchemas, allowAutomationTools, onSentence, onTerminal,
                 rounds, tracer,
             )
             outcome = when (result) {
@@ -169,7 +173,7 @@ class AgentOrchestrator @Inject constructor(
     @Suppress("LongParameterList")
     private suspend fun runLoopTraced(
         messages: MutableList<AgentMessage>,
-        systemPrompt: String,
+        systemMessages: List<AgentMessage>,
         toolSchemas: JSONArray,
         allowAutomationTools: Boolean,
         onSentence: ((String) -> Unit)?,
@@ -191,7 +195,7 @@ class AgentOrchestrator @Inject constructor(
                 { d -> tracer.delta(); chunker.feed(d).forEach(onSentence) }
             } else null
             val reply = backend
-                .chat(listOf(AgentMessage.System(systemPrompt)) + messages, toolSchemas, onDelta)
+                .chat(systemMessages + messages, toolSchemas, onDelta)
                 .getOrElse {
                     val message = (it as? LlmError)?.userMessage ?: "Нет связи с сервером, скажи простую команду"
                     tracer.replyFailed(message)

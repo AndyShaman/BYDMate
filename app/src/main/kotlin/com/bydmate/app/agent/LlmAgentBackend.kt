@@ -37,7 +37,6 @@ class LlmAgentBackend @Inject constructor(
     ): Result<AgentReply> {
         val primary = connections.primary()
             ?: return Result.failure(LlmError("Агент не настроен: заполните адрес, API-ключ и модель в Настройки, Интеграции"))
-        val wire = toWire(messages)
         var forwarded = false
         val guarded: ((String) -> Unit)? = onDelta?.let { cb -> { d -> forwarded = true; cb(d) } }
 
@@ -47,6 +46,9 @@ class LlmAgentBackend @Inject constructor(
         // requirement: a model or upstream that rejects them with 400 gets the plain request
         // once, so a field the provider does not know can never silence the agent.
         suspend fun attempt(conn: LlmConnection): Result<AgentReply> {
+            // The cache breakpoint is OpenRouter/Anthropic wire syntax; a custom endpoint or
+            // z.ai gets the plain string content it understands.
+            val wire = toWire(messages, cacheStaticPrefix = conn.id == LlmConnectionResolver.ID_OPENROUTER)
             val first = call(conn, wire, tools, guarded, withExtras = true)
             if (first.isSuccess || forwarded || !rejectedExtras(conn, first, guarded != null)) return first
             Log.w(TAG, "provider ${conn.id} rejected request extras (HTTP 400), retrying plain")
@@ -128,6 +130,9 @@ class LlmAgentBackend @Inject constructor(
             // "none" is rejected by models with mandatory reasoning (Gemini 3 Flash), "minimal" is not.
             LlmConnectionResolver.ID_OPENROUTER -> JSONObject()
                 .put("reasoning", JSONObject().put("effort", "minimal").put("exclude", true))
+                // Route to the fastest provider serving the model: the driver waits for the
+                // first spoken word, and providers of the same model differ by seconds.
+                .put("provider", JSONObject().put("sort", "latency"))
                 // stream_options is only legal alongside stream=true; a non-streaming request
                 // carrying it is rejected as an invalid request by OpenAI-compatible endpoints.
                 .also { if (streaming) it.put("stream_options", JSONObject().put("include_usage", true)) }
@@ -155,12 +160,23 @@ class LlmAgentBackend @Inject constructor(
             }
         }
 
-        /** OpenRouter wire encoding of the message history. */
-        internal fun toWire(messages: List<AgentMessage>): JSONArray = JSONArray().apply {
+        /**
+         * OpenRouter wire encoding of the message history. With [cacheStaticPrefix] the FIRST
+         * system message (the orchestrator puts the unchanging prompt there, everything that
+         * moves in a second one) is sent as a content part carrying an ephemeral cache_control
+         * breakpoint, so the provider can serve the tool schemas + prompt from its cache
+         * instead of re-reading them on every turn.
+         */
+        internal fun toWire(messages: List<AgentMessage>, cacheStaticPrefix: Boolean = false): JSONArray = JSONArray().apply {
+            var breakpointLeft = cacheStaticPrefix
             messages.forEach { m ->
                 put(JSONObject().apply {
                     when (m) {
-                        is AgentMessage.System -> { put("role", "system"); put("content", m.content) }
+                        is AgentMessage.System -> {
+                            put("role", "system")
+                            put("content", systemContent(m.content, breakpointLeft))
+                            breakpointLeft = false
+                        }
                         is AgentMessage.User -> { put("role", "user"); put("content", m.content) }
                         is AgentMessage.Assistant -> {
                             put("role", "assistant")
@@ -189,6 +205,14 @@ class LlmAgentBackend @Inject constructor(
                 })
             }
         }
+
+        /** System content: a plain string, or a single text part carrying the cache breakpoint. */
+        private fun systemContent(content: String, withBreakpoint: Boolean): Any =
+            if (!withBreakpoint) content
+            else JSONArray().put(JSONObject()
+                .put("type", "text")
+                .put("text", content)
+                .put("cache_control", JSONObject().put("type", "ephemeral")))
 
         /** Parses choices[0].message into [AgentReply]. */
         internal fun parseReply(message: JSONObject): AgentReply {

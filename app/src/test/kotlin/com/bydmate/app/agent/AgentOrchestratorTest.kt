@@ -136,10 +136,10 @@ class AgentOrchestratorTest {
         val orch = orchestrator(backend)
         repeat(15) { orch.ask("вопрос $it") }  // 30 history messages before trim
         val last = backend.requests.last()
-        // System + at most MAX_HISTORY history messages.
-        assertTrue(last.size <= 21)
-        // First message after System must be a User message (no orphan assistant/tool head).
-        assertTrue(last[1] is AgentMessage.User)
+        // Two system messages (static + dynamic) + at most MAX_HISTORY history messages.
+        assertTrue(last.size <= 22)
+        // First message after the system pair must be a User message (no orphan assistant/tool head).
+        assertTrue(last[2] is AgentMessage.User)
     }
 
     // --- Task 6: fast-path command memory + terse "moving" mode ---
@@ -226,7 +226,8 @@ class AgentOrchestratorTest {
             clear(); set(2026, java.util.Calendar.JULY, 5, 12, 0)
         }.timeInMillis
         orch.ask("что там с зарядом")
-        val system = backend.requests.single().first() as AgentMessage.System
+        // The date moved out of the cached static block into the second system message.
+        val system = backend.requests.single()[1] as AgentMessage.System
         assertTrue(system.content.contains("Сегодня 5 июля 2026 года"))
     }
 
@@ -438,7 +439,9 @@ class AgentOrchestratorTest {
         val identity = { com.bydmate.app.voice.AgentIdentity("Лео", com.bydmate.app.voice.AgentPersona.SNARKY) }
         val orch = AgentOrchestrator(backend, tools, repo, identity = identity).also { it.nowMs = { clock } }
         orch.ask("привет")
-        val sys = backend.requests.single().first() as AgentMessage.System
+        assertEquals(AgentOrchestrator.SYSTEM_PROMPT,
+            (backend.requests.single().first() as AgentMessage.System).content)
+        val sys = backend.requests.single()[1] as AgentMessage.System
         assertTrue(sys.content.contains("ХАРАКТЕР:"))
         assertTrue(sys.content.contains("Тебя зовут Лео"))
         assertTrue(sys.content.contains("шутку или анекдот"))
@@ -456,9 +459,8 @@ class AgentOrchestratorTest {
         val orch = AgentOrchestrator(backend, tools, repo, memoryBlock = { memory.promptBlock() })
             .also { it.nowMs = { clock } }
         orch.ask("привет")
-        val sys = (backend.requests.single().first() as AgentMessage.System).content
+        val sys = (backend.requests.single()[1] as AgentMessage.System).content
         assertTrue(sys.contains("- Водителя зовут Андрей"))
-        assertTrue(sys.indexOf("ХАРАКТЕР:") > sys.indexOf(AgentOrchestrator.SYSTEM_PROMPT))
         // "О ВОДИТЕЛЕ" also occurs inside SYSTEM_PROMPT (the rule that points the model at the
         // section), so pin the section header itself, not the bare words.
         assertTrue(sys.indexOf("О ВОДИТЕЛЕ (факты") > sys.indexOf("ХАРАКТЕР:"))

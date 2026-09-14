@@ -1514,8 +1514,9 @@ class SettingsViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "SettingsViewModel"
-        /** Slug verified in the live OpenRouter catalog (2026-07-08). */
-        internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-lite"
+        /** Slug verified in the live OpenRouter catalog (2026-09-14); the fastest Flash of
+         *  the current line, which is what the voice path is tuned for. */
+        internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.8-flash"
         /** Voice sessions printed in the dump's agent section (newest first). */
         private const val AGENT_DUMP_ENTRIES = 20
         private const val AGENT_DUMP_ANSWER_CHARS = 200
