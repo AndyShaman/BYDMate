@@ -1,5 +1,6 @@
 package com.bydmate.app.voice
 
+import com.bydmate.app.agent.AgentToolOutcome
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -16,6 +17,12 @@ data class VoiceJournalEntry(
     val detail: String,            // resolved command id or agent answer summary (NO Chinese: use displayable text)
     val outcome: Outcome,          // OK / BLOCKED / NOT_UNDERSTOOD / ERROR
     val reason: String? = null,    // block/error reason (Russian)
+    // Agent turns only: which tools ran (in order, with their ok/error verdict) and the
+    // spoken answer. Structured rather than baked into [detail] so the diagnostic dump can
+    // print them apart — a "the agent said done but nothing happened" report is judged by
+    // exactly this pair.
+    val tools: List<AgentToolOutcome> = emptyList(),
+    val answer: String? = null,
 ) {
     enum class Route { NLU, AGENT, NONE }
     enum class Outcome { OK, BLOCKED, NOT_UNDERSTOOD, ERROR }

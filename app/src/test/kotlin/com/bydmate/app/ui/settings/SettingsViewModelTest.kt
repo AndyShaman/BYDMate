@@ -222,6 +222,7 @@ class SettingsViewModelTest {
         ttsEngine: com.bydmate.app.voice.TtsEngine? = null,
         gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager? = null,
         llmConnectionResolver: LlmConnectionResolver? = null,
+        voiceJournal: com.bydmate.app.voice.VoiceJournal = com.bydmate.app.voice.VoiceJournal(),
     ): SettingsViewModel {
         val ctx: Context = ApplicationProvider.getApplicationContext()
 
@@ -310,6 +311,7 @@ class SettingsViewModelTest {
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
+            voiceJournal = voiceJournal,
         )
     }
 
@@ -1123,6 +1125,32 @@ class SettingsViewModelTest {
             "the settings block must report the navigator, was:\n$header",
             header.contains("route_navigator=dgis"),
         )
+    }
+
+    /** Wave 1: the dump carries the agent section — tools and answer of the last turns. */
+    @Test fun `the diagnostic header reports the agent journal`() = runTest {
+        val journal = com.bydmate.app.voice.VoiceJournal()
+        journal.add(
+            com.bydmate.app.voice.VoiceJournalEntry(
+                timestampMs = System.currentTimeMillis(),
+                transcript = "закрой окна",
+                route = com.bydmate.app.voice.VoiceJournalEntry.Route.AGENT,
+                detail = "Окна закрыты",
+                outcome = com.bydmate.app.voice.VoiceJournalEntry.Outcome.OK,
+                tools = listOf(com.bydmate.app.agent.AgentToolOutcome("vehicle_control", true)),
+                answer = "Окна закрыты",
+            )
+        )
+        val vm = buildViewModel(voiceJournal = journal)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader()
+
+        assertTrue("no agent section, was:\n$header", header.contains("--- agent ---"))
+        assertTrue("no tool line, was:\n$header", header.contains("vehicle_control:ok"))
+        assertTrue("no answer line, was:\n$header", header.contains("answer: Окна закрыты"))
     }
 
     /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */

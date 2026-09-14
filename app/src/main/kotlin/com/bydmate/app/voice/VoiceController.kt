@@ -178,6 +178,8 @@ class VoiceController @Inject constructor(
         outcome: VoiceJournalEntry.Outcome,
         reason: String? = null,
         logMsg: String,
+        tools: List<com.bydmate.app.agent.AgentToolOutcome> = emptyList(),
+        answer: String? = null,
     ) {
         journal.add(
             VoiceJournalEntry(
@@ -187,6 +189,8 @@ class VoiceController @Inject constructor(
                 detail = detail,
                 outcome = outcome,
                 reason = reason,
+                tools = tools,
+                answer = answer,
             )
         )
         Log.i(TAG, logMsg)
@@ -724,7 +728,8 @@ class VoiceController @Inject constructor(
                 val toolsNote = if (result.tools.isEmpty()) "" else
                     " [инструменты: " + result.tools.joinToString(", ") { "${it.name}:${if (it.ok) "ok" else "err"}" } + "]"
                 record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(result.text + toolsNote, decodeMs), VoiceJournalEntry.Outcome.OK, null,
-                    "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}")
+                    "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}",
+                    tools = result.tools, answer = result.text)
                 if (!queuedAny && gate.ttsEnabled()) {
                     // See announce() for why this is stamped at call time, not only per-frame,
                     // and only when speak() actually enqueued playback.
