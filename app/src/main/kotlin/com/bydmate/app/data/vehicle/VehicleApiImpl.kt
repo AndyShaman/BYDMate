@@ -105,11 +105,8 @@ class VehicleApiImpl @Inject constructor(
         }
         if (resolved.size == 1) {
             val r = resolved[0]
-            // Same NonCancellable protection as the composite burst below: the window verdict
-            // costs up to ~1 s of reads AFTER the physical write already landed, and a caller
-            // cancelled in that window must still get the verdict instead of an exception for
-            // a command the car actually obeyed.
-            return withContext(NonCancellable) { doWrite(r.actionName, r.value) }
+            // doWrite protects its own window verdict from cancellation, so no wrapper here.
+            return doWrite(r.actionName, r.value)
         }
         // Composite command (e.g. window aggregates, fridge presets) → fan out to several
         // per-door writes. Attempt every sub-write (no short-circuit: a partial open beats
@@ -286,17 +283,33 @@ class VehicleApiImpl @Inject constructor(
 
         // The pane accepted the command but never moved: report the truth instead of a
         // success the driver can see is wrong (#97 — the first write of a burst is dropped).
-        // In a burst the check is handed to the caller, which runs one window for all panes.
-        if (windowCheck != null) {
-            if (verifyInto != null) verifyInto += windowCheck
-            else windowFailure(windowCheck)?.let { return Result.failure(it) }
+        // In a burst the check is handed to the caller, which runs one window for all panes
+        // under its own NonCancellable.
+        //
+        // NonCancellable here: the physical write has already landed, so the verdict (up to
+        // ~1 s of reads) and the audit row that follows it must survive a caller cancelled in
+        // that window — a command the car obeyed must never surface as an exception, whichever
+        // entry point (dispatch, writeWindowDriver, …) started the write.
+        if (windowCheck != null && verifyInto == null) {
+            return withContext(NonCancellable) {
+                val failure = windowFailure(windowCheck)
+                if (failure != null) return@withContext Result.failure(failure)
+                logSuccess(actionName, entry, value, readback)
+                Result.success(Unit)
+            }
         }
+        if (windowCheck != null) verifyInto?.add(windowCheck)
 
+        logSuccess(actionName, entry, value, readback)
+        return Result.success(Unit)
+    }
+
+    /** Logcat line plus audit row for a write that went through. */
+    private suspend fun logSuccess(actionName: String, entry: WriteEntry, value: Int, readback: Long?) {
         // INFO so a successful dispatch is visible in logcat (the DAO row is private).
         // Pair with the HelperClient "status=" line to tell a real action from a no-op.
         Log.i(TAG, "doWrite OK: action=$actionName dev=${entry.dev} fid=${entry.writeFid} value=$value readback=$readback validated=${entry.validated}")
         logWrite(actionName, entry.dev, entry.writeFid, value, readback?.toInt(), true, null, entry.validated)
-        return Result.success(Unit)
     }
 
     // ─── Window readback ───────────────────────────────────────────────────────
