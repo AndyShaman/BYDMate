@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -33,6 +34,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +71,9 @@ object ListeningOverlay {
     internal const val TOP_MARGIN_DP = 56
     // Gap between the pill window and the dialog window below it.
     internal const val PILL_OFFSET_DP = 48
+    // The dialog block grows with the answer up to this share of the screen height; beyond that
+    // it would cover the road view behind the overlay.
+    private const val DIALOG_MAX_HEIGHT_FRACTION = 0.5f
     // SharedPreferences the persisted orb position lives in (shared with the voice feature).
     private const val PREFS_NAME = "voice"
     private const val KEY_ORB_X_ABS = "orb_x_abs"
@@ -362,10 +367,14 @@ object ListeningOverlay {
         val heard by heardState.collectAsState()
         val answer by answerState.collectAsState()
         if (heard != null || answer != null) {
+            // The dialog window is WRAP_CONTENT and NOT_TOUCHABLE, so there is nothing to scroll:
+            // the block simply grows with the answer until it would cover half the screen.
+            val maxHeight = (LocalConfiguration.current.screenHeightDp * DIALOG_MAX_HEIGHT_FRACTION).dp
             Column(
                 verticalArrangement = Arrangement.spacedBy(3.dp),
                 modifier = Modifier
                     .widthIn(max = 480.dp)
+                    .heightIn(max = maxHeight)
                     .background(CardSurface.copy(alpha = 0.92f), RoundedCornerShape(10.dp))
                     .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
@@ -381,11 +390,12 @@ object ListeningOverlay {
         Row(verticalAlignment = Alignment.Top) {
             Text(text = label, fontSize = 13.sp, fontWeight = FontWeight.Bold, color = labelColor)
             Spacer(Modifier.width(6.dp))
+            // No line cap: a long answer must be readable in full for a driver with TTS off.
+            // Ellipsis still applies at the height bound of the block above.
             Text(
                 text = text,
                 fontSize = 13.sp,
                 color = TextPrimary,
-                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
         }

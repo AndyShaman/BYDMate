@@ -149,6 +149,7 @@ class VoiceController @Inject constructor(
         // coroutineContext.isActive is the per-turn mark: a cancelled routing turn stays
         // cancelled even after a following session has reset the global stopRequested flag.
         if (stopRequested.get() || !currentCoroutineContext().isActive) return
+        var didSpeak = false
         if (gate.ttsEnabled()) {
             // Stamp at the moment we ourselves start TTS, not only from the mic filter's
             // per-frame read of ttsEngine.speaking: a short utterance that starts AND ends
@@ -159,13 +160,14 @@ class VoiceController @Inject constructor(
             if (runCatching { ttsEngine.speak(phrase) }.getOrDefault(false)) {
                 echoFilter.noteSpoken(phrase)
                 lastSpeakingSeenMs = System.currentTimeMillis()
+                didSpeak = true
             }
         }
         // Orb dialog: mirror the detailed overlay text into the "Агент: …" row, then arm the clear.
         // Placed here so every announce() terminal (command outcomes + agent Disabled/Error) feeds the
         // orb; the agent Answer branch, which does not call announce(), does the same two calls itself.
         showAnswerHook(overlay)
-        scheduleClear()
+        scheduleClear(overlay, didSpeak)
     }
 
     /** Records one journal entry + a matching logcat line for a terminal voice-session outcome.
@@ -493,15 +495,24 @@ class VoiceController @Inject constructor(
 
     /** Arms the orb-dialog clear after a terminal answer: waits out the spoken answer (immediate if
      *  TTS is off/idle, since speaking is already false), then hides the dialog block after a dwell.
-     *  Cancels any previously armed clear so only the latest answer's timer runs. */
-    private fun scheduleClear() {
+     *  Cancels any previously armed clear so only the latest answer's timer runs.
+     *
+     *  A driver who only hears the answer needs the fixed dwell after it is spoken; a driver who
+     *  has to READ it needs time proportional to its length, so an unspoken long answer stays up
+     *  until it can be read (bounded by [DIALOG_READ_MAX_MS] — the orb must not sit there forever). */
+    private fun scheduleClear(text: String, spoken: Boolean) {
         clearJob?.cancel()
         clearJob = scope.launch {
             ttsEngine.speaking.first { !it }   // wait out the spoken answer (immediate if TTS off)
-            delay(dialogClearDelayMs)
+            delay(readingDwellMs(text, spoken))
             clearDialogHook()
         }
     }
+
+    /** How long the dialog block stays after the answer is on screen. */
+    private fun readingDwellMs(text: String, spoken: Boolean): Long =
+        if (spoken) dialogClearDelayMs
+        else (text.length * DIALOG_READ_MS_PER_CHAR).coerceIn(dialogClearDelayMs, DIALOG_READ_MAX_MS)
 
     /** Cancels a pending orb-dialog clear so a new utterance keeps the block on screen. */
     private fun cancelScheduledClear() {
@@ -701,6 +712,10 @@ class VoiceController @Inject constructor(
         }
         runCatching { queue?.finish() }
         val result = r ?: run {
+            // Barge-in: the streamed half-sentence in the "Агент: …" row belongs to an answer
+            // that will never finish. Drop it so the driver is not left reading a stub while
+            // the orb is already listening again.
+            runCatching { clearDialogHook() }
             record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(transcript, decodeMs),
                 VoiceJournalEntry.Outcome.ERROR, null, "Agent ask cancelled by name barge-in")
             return
@@ -730,17 +745,19 @@ class VoiceController @Inject constructor(
                 record(VoiceJournalEntry.Route.AGENT, transcript, withDecodeMs(result.text + toolsNote, decodeMs), VoiceJournalEntry.Outcome.OK, null,
                     "Agent answered: transcript=\"$transcript\" tools=${result.tools.size}",
                     tools = result.tools, answer = result.text)
+                var didSpeak = queuedAny
                 if (!queuedAny && gate.ttsEnabled()) {
                     // See announce() for why this is stamped at call time, not only per-frame,
                     // and only when speak() actually enqueued playback.
                     if (runCatching { ttsEngine.speak(result.text) }.getOrDefault(false)) {
                         echoFilter.noteSpoken(result.text)
                         lastSpeakingSeenMs = System.currentTimeMillis()
+                        didSpeak = true
                     }
                 }
                 // Orb dialog: this branch does not go through announce(), so feed the orb here.
                 showAnswerHook(result.text)
-                scheduleClear()
+                scheduleClear(result.text, didSpeak)
                 // Wave P: a successful play_music closes the whole session after the reply -- the orb's
                 // presence ducks the very music the agent just started. Music only; every other tool
                 // keeps the dialogue open. Gated on sessionJob so the legacy single-shot path (which has
@@ -796,6 +813,11 @@ class VoiceController @Inject constructor(
         // Wave D2: dwell before the orb dialog block ("Ты: …"/"Агент: …") is cleared, measured from
         // when the spoken answer finishes (or from when it is shown, if TTS is off).
         private const val DIALOG_CLEAR_MS = 6_000L
+
+        // Reading dwell for an answer nobody spoke aloud: rough Russian reading speed, ~1000
+        // characters per minute, with a hard cap so the block never squats on the screen.
+        private const val DIALOG_READ_MS_PER_CHAR = 60L
+        private const val DIALOG_READ_MAX_MS = 30_000L
 
         // Continuous session (Wave B): silence auto-stop. Wave P removed the hard session cap --
         // long conversations must never be cut off; silence is the only automatic exit.

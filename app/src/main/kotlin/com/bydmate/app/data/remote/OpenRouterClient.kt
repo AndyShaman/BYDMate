@@ -28,6 +28,9 @@ class OpenRouterClient @Inject constructor(
         private const val TAG = "OpenRouterClient"
         private const val BASE_URL = "https://openrouter.ai/api/v1"
         private val JSON_MEDIA = "application/json".toMediaType()
+
+        /** Key the choice's finish_reason is carried under, inside the message the agent parses. */
+        internal const val FINISH_REASON = "finish_reason"
     }
 
     /**
@@ -191,7 +194,8 @@ class OpenRouterClient @Inject constructor(
                 if (!resp.isSuccessful) throw LlmHttpException(resp.code)
                 val bodyStr = resp.body?.string().takeUnless { it.isNullOrBlank() }
                     ?: throw IOException("LLM: empty body")
-                JSONObject(bodyStr).getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                val choice = JSONObject(bodyStr).getJSONArray("choices").getJSONObject(0)
+                choice.getJSONObject("message").withFinishReason(choice)
             }
         }
     }
@@ -254,8 +258,8 @@ class OpenRouterClient @Inject constructor(
                         // Provider ignored stream=true and returned a whole completion.
                         val bodyStr = body.string().takeUnless { it.isNullOrBlank() }
                             ?: throw IOException("LLM: empty body")
-                        val message = JSONObject(bodyStr)
-                            .getJSONArray("choices").getJSONObject(0).getJSONObject("message")
+                        val choice = JSONObject(bodyStr).getJSONArray("choices").getJSONObject(0)
+                        val message = choice.getJSONObject("message").withFinishReason(choice)
                         if (!message.isNull("content")) {
                             message.optString("content").takeIf { it.isNotEmpty() }?.let(onDelta)
                         }
@@ -272,6 +276,7 @@ class OpenRouterClient @Inject constructor(
         val content = StringBuilder()
         val toolCalls = LinkedHashMap<Int, JSONObject>()
         var forward = true
+        var finishReason: String? = null
         while (true) {
             val line = source.readUtf8Line() ?: break
             if (line.isBlank() || line.startsWith(":")) continue
@@ -287,26 +292,14 @@ class OpenRouterClient @Inject constructor(
             chunkJson.optJSONObject("usage")?.let { Log.i(TAG, "usage: $it") }
             val choices = chunkJson.optJSONArray("choices") ?: continue
             if (choices.length() == 0) continue
-            val delta = choices.getJSONObject(0).optJSONObject("delta") ?: continue
+            val choice = choices.getJSONObject(0)
+            // Why the model stopped: "length" means max_tokens cut the answer mid-sentence, and
+            // the driver must be told instead of hearing a reply that simply stops.
+            choice.optString("finish_reason").takeIf { it.isNotBlank() }?.let { finishReason = it }
+            val delta = choice.optJSONObject("delta") ?: continue
             delta.optJSONArray("tool_calls")?.let { fragments ->
                 forward = false
-                for (i in 0 until fragments.length()) {
-                    val fragment = fragments.getJSONObject(i)
-                    val idx = fragment.optInt("index", i)
-                    val slot = toolCalls.getOrPut(idx) {
-                        JSONObject()
-                            .put("type", "function")
-                            .put("function", JSONObject().put("name", "").put("arguments", ""))
-                    }
-                    fragment.optString("id").takeIf { it.isNotBlank() }?.let { slot.put("id", it) }
-                    fragment.optJSONObject("function")?.let { fn ->
-                        val slotFn = slot.getJSONObject("function")
-                        fn.optString("name").takeIf { it.isNotBlank() }?.let { slotFn.put("name", it) }
-                        if (fn.has("arguments")) {
-                            slotFn.put("arguments", slotFn.getString("arguments") + fn.optString("arguments"))
-                        }
-                    }
-                }
+                mergeToolCallFragments(fragments, toolCalls)
             }
             if (!delta.isNull("content")) {
                 val piece = delta.optString("content")
@@ -324,6 +317,34 @@ class OpenRouterClient @Inject constructor(
             toolCalls.values.forEach { arr.put(it) }
             message.put("tool_calls", arr)
         }
+        finishReason?.let { message.put(FINISH_REASON, it) }
         return message
+    }
+
+    /** Tool calls arrive as fragments spread over chunks: merge them into [toolCalls] by index,
+     *  appending the argument pieces in arrival order. */
+    private fun mergeToolCallFragments(fragments: JSONArray, toolCalls: MutableMap<Int, JSONObject>) {
+        for (i in 0 until fragments.length()) {
+            val fragment = fragments.getJSONObject(i)
+            val idx = fragment.optInt("index", i)
+            val slot = toolCalls.getOrPut(idx) {
+                JSONObject()
+                    .put("type", "function")
+                    .put("function", JSONObject().put("name", "").put("arguments", ""))
+            }
+            fragment.optString("id").takeIf { it.isNotBlank() }?.let { slot.put("id", it) }
+            fragment.optJSONObject("function")?.let { fn ->
+                val slotFn = slot.getJSONObject("function")
+                fn.optString("name").takeIf { it.isNotBlank() }?.let { slotFn.put("name", it) }
+                if (fn.has("arguments")) {
+                    slotFn.put("arguments", slotFn.getString("arguments") + fn.optString("arguments"))
+                }
+            }
+        }
+    }
+
+    /** Copies the choice's finish_reason onto the message, which is all the agent sees. */
+    private fun JSONObject.withFinishReason(choice: JSONObject): JSONObject = apply {
+        choice.optString("finish_reason").takeIf { it.isNotBlank() }?.let { put(FINISH_REASON, it) }
     }
 }

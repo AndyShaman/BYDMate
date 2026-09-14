@@ -12,6 +12,8 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
 
     private var roundStart = 0L
     private var firstDeltaAt = 0L
+    /** Stop reason of the last model round, so the turn line can name it too. */
+    private var lastFinish: String? = null
 
     /** New model round: resets the round clock and the time-to-first-token mark. */
     fun roundStarted() {
@@ -27,10 +29,11 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
     /** One line per model round: what came back, how many tool calls, time to first token
      *  (-1 when the round was not streamed) and the round's wall time. */
     fun reply(reply: AgentReply) {
+        lastFinish = reply.finishReason
         val ttft = if (firstDeltaAt == 0L) -1L else firstDeltaAt - roundStart
         sink(
             "reply text=\"${clip(reply.content)}\" tool_calls=${reply.toolCalls.size} " +
-                "ttft=${ttft}ms round=${clock() - roundStart}ms"
+                "finish=${reply.finishReason ?: "-"} ttft=${ttft}ms round=${clock() - roundStart}ms"
         )
     }
 
@@ -45,7 +48,7 @@ internal class AgentTrace(private val clock: () -> Long, private val sink: (Stri
     }
 
     fun turn(totalMs: Long, rounds: Int, outcome: String) {
-        sink("turn done total=${totalMs}ms rounds=$rounds outcome=$outcome")
+        sink("turn done total=${totalMs}ms rounds=$rounds finish=${lastFinish ?: "-"} outcome=$outcome")
     }
 
     companion object {
