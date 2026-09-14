@@ -3,6 +3,7 @@ package com.bydmate.app.data.vehicle
 import com.bydmate.app.data.autoservice.AutoserviceClient
 import com.bydmate.app.data.local.dao.VehicleWriteLogDao
 import com.bydmate.app.data.local.entity.VehicleWriteLogEntity
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.nativestack.ParsReader
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -273,6 +274,8 @@ class VehicleApiWriteTest {
         val rr = allowlist.find("window_rear_right_open")!!
         coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
         coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns true
+        // Fan-out is what this checks; an unreadable position keeps the movement verdict out of it.
+        coEvery { autoservice.getIntRaw(any(), any()) } returns null
 
         val result = api.dispatch("后排车窗全开")
         assertTrue(result.isSuccess)
@@ -290,6 +293,78 @@ class VehicleApiWriteTest {
         assertTrue(result.isFailure)
         coVerify(exactly = 1) { helper.write(rl.dev, rl.writeFid, 1) }
         coVerify(exactly = 1) { helper.write(rr.dev, rr.writeFid, 1) }
+    }
+
+    // ── Wave 3 follow-up: one verification window for a whole burst ───────────
+
+    private fun rearWindowFids() = Pair(
+        allowlist.find("window_rear_left_open")!!, allowlist.find("window_rear_right_open")!!)
+
+    /** Both rear panes answer [before] until the write, then [after] — per pane, in order. */
+    private fun stubRearPositions(before: Int, afterLeft: Int, afterRight: Int) {
+        val rl = FidAddresses.of("windowRL")
+        val rr = FidAddresses.of("windowRR")
+        coEvery { autoservice.getIntRaw(rl.device, rl.fid) } returnsMany listOf(before, afterLeft, afterLeft)
+        coEvery { autoservice.getIntRaw(rr.device, rr.fid) } returnsMany listOf(before, afterRight, afterRight)
+    }
+
+    // The burst must cost ONE verification window, not one per pane: two panes that both move
+    // are judged in a single pass, so the whole command stays inside the stagger + one wait.
+    @Test fun `a window burst is verified once, not once per pane`() = runTest {
+        val (rl, rr) = rearWindowFids()
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns true
+        stubRearPositions(before = 0, afterLeft = 25, afterRight = 25)
+        val impl = verifyingApi()
+
+        val startedAt = testScheduler.currentTime
+        assertTrue(impl.dispatch("后排车窗全开").isSuccess)
+
+        // One stagger between the two writes plus a single 400 ms verification pass.
+        assertEquals(550L, testScheduler.currentTime - startedAt)
+    }
+
+    // Song L (#97) shape: the burst is accepted, one pane moves, the other does not.
+    @Test fun `a burst names the pane that did not move`() = runTest {
+        val (rl, rr) = rearWindowFids()
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns true
+        stubRearPositions(before = 0, afterLeft = 25, afterRight = 0)
+        val impl = verifyingApi()
+
+        val result = impl.dispatch("后排车窗全开")
+
+        assertTrue(result.isFailure)
+        val message = result.exceptionOrNull()!!.message!!
+        assertTrue(message, message.contains("заднее правое окно"))
+        assertFalse(message, message.contains("заднее левое"))
+    }
+
+    // Two 400 ms passes is the worst case for a burst where nothing moves at all.
+    @Test fun `a stuck burst costs at most two verification passes`() = runTest {
+        val (rl, rr) = rearWindowFids()
+        coEvery { helper.write(rl.dev, rl.writeFid, 1) } returns true
+        coEvery { helper.write(rr.dev, rr.writeFid, 1) } returns true
+        stubRearPositions(before = 0, afterLeft = 0, afterRight = 0)
+        val impl = verifyingApi()
+
+        val startedAt = testScheduler.currentTime
+        assertTrue(impl.dispatch("后排车窗全开").isFailure)
+
+        assertEquals(950L, testScheduler.currentTime - startedAt)
+    }
+
+    // "Open" and "close" are their own fids on the car but still name a position, so the
+    // commands the driver actually uses are judged too — not just explicit percentages.
+    @Test fun `an open command that moves nothing is reported as a failure`() = runTest {
+        val entry = allowlist.find("window_driver_open")!!
+        coEvery { helper.write(entry.dev, entry.writeFid, 1) } returns true
+        coEvery { autoservice.getIntRaw(any(), any()) } returns 0
+
+        val result = verifyingApi().dispatch("主驾打开100")
+
+        assertTrue(result.isFailure)
+        assertTrue(result.exceptionOrNull()!!.message!!.contains("окно водителя"))
     }
 
     @Test fun `dispatch unknown command returns failure AllowlistMiss without helper call`() = runTest {
