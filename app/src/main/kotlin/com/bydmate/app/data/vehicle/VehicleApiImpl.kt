@@ -113,14 +113,20 @@ class VehicleApiImpl @Inject constructor(
         // hard stop between sub-writes never leaves the car half-commanded (e.g. two windows
         // open, two still closed). Cancellation takes effect after the loop exits.
         var firstError: Throwable? = null
+        val windowChecks = mutableListOf<WindowVerify>()
         withContext(NonCancellable) {
             for ((i, r) in resolved.withIndex()) {
                 // Song L (#97): a burst of window writes ~5 ms apart all return status=1,
                 // but only the later panes actuate — the first write is silently dropped.
                 // Spacing the sub-writes out keeps every write effective on that platform.
                 if (i > 0) delay(COMPOSITE_WRITE_STAGGER_MS)
-                val res = doWrite(r.actionName, r.value)
+                val res = doWrite(r.actionName, r.value, verifyInto = windowChecks)
                 if (res.isFailure && firstError == null) firstError = res.exceptionOrNull()
+            }
+            // All panes were commanded, so they can be judged together: one verification
+            // window for the burst instead of one per pane (~400 ms instead of ~1.6 s).
+            verifyWindowBurst(windowChecks)?.let { stuck ->
+                if (firstError == null) firstError = VehicleWriteError.ReadbackMismatch(commandString, stuck)
             }
         }
         return firstError?.let { Result.failure(it) } ?: Result.success(Unit)
@@ -180,7 +186,13 @@ class VehicleApiImpl @Inject constructor(
      * physical actuator moved. Locks and select climate flags do have readback.
      */
     // internal for testing the Unsupported path (non-validated helper-false flow).
-    internal suspend fun doWrite(requestedAction: String, requestedValue: Int): Result<Unit> {
+    // [verifyInto] collects the window checks instead of running them inline, so a burst of
+    // pane writes shares ONE verification window (see [dispatch]); null = verify right here.
+    internal suspend fun doWrite(
+        requestedAction: String,
+        requestedValue: Int,
+        verifyInto: MutableList<WindowVerify>? = null,
+    ): Result<Unit> {
         // Percent window writes are re-targeted to the CTRL channel on firmwares without
         // the percent family (#79). Percent-capable units and an undecided probe get the
         // request back unchanged, so their write path is untouched.
@@ -206,17 +218,15 @@ class VehicleApiImpl @Inject constructor(
         // (#97 Song L, #64): sample the pane position now, and again after the write, to tell
         // a real actuation from a silently dropped one. Started before helper.write on its own
         // scope so a slow/hung read channel can never delay the write itself.
-        val windowReadField = WINDOW_READ_FIELDS[actionName.lowercase()]
+        val windowCheck = windowCheckFor(actionName, requestedAction, requestedValue, entry, value)
 
         logAttempt(actionName, entry, value)
 
-        val windowBefore = windowReadField?.let { field -> readbackScope.async { resolveWindowReadFid(field) } }
-
         val wrote: Boolean = try {
-            if (windowBefore != null) {
+            if (windowCheck != null) {
                 // Bounded wait so the "before" sample usually precedes the write, but a hung
                 // read channel costs at most WINDOW_BEFORE_READ_BUDGET_MS.
-                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowBefore.await() }
+                withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { windowCheck.before.await() }
             }
             helper.write(entry.dev, entry.writeFid, value)
         } catch (e: Exception) {
@@ -267,14 +277,10 @@ class VehicleApiImpl @Inject constructor(
 
         // The pane accepted the command but never moved: report the truth instead of a
         // success the driver can see is wrong (#97 — the first write of a burst is dropped).
-        if (windowBefore != null) {
-            val stuck = verifyWindowMoved(actionName, requestedAction, requestedValue, entry, value, windowBefore)
-            if (stuck != null) {
-                logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "window_noop", entry.validated)
-                val err = VehicleWriteError.ReadbackMismatch(actionName, stuck)
-                maybeReportValidatedFailure(actionName, err, entry)
-                return Result.failure(err)
-            }
+        // In a burst the check is handed to the caller, which runs one window for all panes.
+        if (windowCheck != null) {
+            if (verifyInto != null) verifyInto += windowCheck
+            else windowFailure(windowCheck)?.let { return Result.failure(it) }
         }
 
         // INFO so a successful dispatch is visible in logcat (the DAO row is private).
@@ -284,55 +290,128 @@ class VehicleApiImpl @Inject constructor(
         return Result.success(Unit)
     }
 
-    // ─── Window readback logging ───────────────────────────────────────────────
+    // ─── Window readback ───────────────────────────────────────────────────────
 
-    /**
-     * Did the pane actually start moving after an accepted write? Samples the position twice,
-     * 400 ms apart (the seat channel's pattern), and compares each sample with the "before"
-     * position taken around the write. Any movement — even a pane still travelling — proves
-     * the write landed. Returns null when the write is good or when there is no evidence
-     * against it, else a short Russian reason.
-     *
-     * Deliberately fail-open: a read that does not complete, a sentinel, a pane already at the
-     * requested position, or a command whose target percent is unknown (CTRL detents, vent)
-     * all count as "no evidence", never as a failure. Only the requested percent actions can
-     * be judged, and only when the pane had somewhere to travel.
-     */
-    @Suppress("LongParameterList")
-    private suspend fun verifyWindowMoved(
+    /** One pane whose movement still has to be judged: everything the verdict needs, plus the
+     *  position sample taken around the write. */
+    internal class WindowVerify(
+        val actionName: String,
+        val entry: WriteEntry,
+        val value: Int,
+        val target: Int,
+        val before: Deferred<Pair<FidAddress, Int?>>,
+    )
+
+    /** The movement check this write needs, or null when the pane or the target is unknown. */
+    private fun windowCheckFor(
         actionName: String,
         requestedAction: String,
         requestedValue: Int,
         entry: WriteEntry,
         value: Int,
-        beforeSample: Deferred<Pair<FidAddress, Int?>>,
-    ): String? {
-        val target = requestedValue.takeIf { requestedAction.endsWith(POS_ACTION_SUFFIX) && it in 0..100 }
-            ?: return null
-        val (readFid, beforeRaw) = withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { beforeSample.await() }
-            ?: return null
-        val before = beforeRaw?.let { SentinelDecoder.decodeInt(it) } ?: return null
-        if (kotlin.math.abs(before - target) <= WINDOW_POSITION_TOLERANCE_PCT) return null
-        val prefix = "window readback action=$actionName dev=${entry.dev} fid=${entry.writeFid} " +
-            "value=$value before=$before"
-        val seen = mutableListOf<String>()
-        repeat(WINDOW_VERIFY_ATTEMPTS) {
-            delay(WINDOW_VERIFY_DELAY_MS)
-            val after = readWindowRaw(readFid)?.let { SentinelDecoder.decodeInt(it) }
-            seen += after?.toString() ?: "err"
-            // A read we could not take is not evidence against the write.
-            if (after == null) return logWindowVerdict(prefix, seen, null)
-            if (kotlin.math.abs(after - before) > WINDOW_POSITION_TOLERANCE_PCT) {
-                return logWindowVerdict(prefix, seen, null)
-            }
-        }
-        return logWindowVerdict(prefix, seen, "стекло не сдвинулось с места, команда не сработала")
+    ): WindowVerify? {
+        val target = windowTargetPercent(requestedAction, requestedValue) ?: return null
+        val field = WINDOW_READ_FIELDS[actionName.lowercase()] ?: return null
+        return WindowVerify(actionName, entry, value, target,
+            readbackScope.async { resolveWindowReadFid(field) })
     }
 
-    /** Single log line for the verdict (kept from the diagnostics-only readback) + the verdict. */
-    private fun logWindowVerdict(prefix: String, seen: List<String>, verdict: String?): String? {
-        Log.i(TAG, "$prefix after=${seen.joinToString(",")} verdict=${verdict ?: "moved"}")
-        return verdict
+    /** Verdict for a single write, as the error it should fail with (null when it is fine). */
+    private suspend fun windowFailure(check: WindowVerify): VehicleWriteError? {
+        val stuck = verifyWindowBurst(listOf(check)) ?: return null
+        val err = VehicleWriteError.ReadbackMismatch(check.actionName, stuck)
+        maybeReportValidatedFailure(check.actionName, err, check.entry)
+        return err
+    }
+
+    /**
+     * Did the panes actually start moving after their writes were accepted? ONE verification
+     * window for the whole burst: every pane is read in the same pass, the passes are
+     * [WINDOW_VERIFY_DELAY_MS] apart (the seat channel's pattern), and the loop exits as soon
+     * as nothing is left to judge. A four-window command therefore costs the same wait as one.
+     * Any movement — even a pane still travelling — proves its write landed.
+     *
+     * Returns null when every pane is accounted for, else a short Russian reason naming the
+     * panes that never moved.
+     *
+     * Deliberately fail-open: a read that does not complete, a sentinel, a pane already at the
+     * requested position, or a command with no comparable target (CTRL detents) all count as
+     * "no evidence", never as a failure.
+     */
+    private suspend fun verifyWindowBurst(checks: List<WindowVerify>): String? {
+        val pending = pendingPanes(checks).toMutableList()
+        repeat(WINDOW_VERIFY_ATTEMPTS) {
+            if (pending.isEmpty()) return null
+            delay(WINDOW_VERIFY_DELAY_MS)
+            val settled = pending.filter { paneSettled(it) }
+            settled.forEach { logWindowVerdict(it, null) }
+            pending.removeAll(settled)
+        }
+        if (pending.isEmpty()) return null
+        pending.forEach { pane ->
+            logWindowVerdict(pane, "не сдвинулось")
+            logWrite(pane.check.actionName, pane.check.entry.dev, pane.check.entry.writeFid,
+                pane.check.value, null, false, "window_noop", pane.check.entry.validated)
+        }
+        val panes = pending.map { paneLabel(it.check.actionName) }
+        return if (panes.size == 1) "${panes[0]} не сдвинулось с места, команда не сработала"
+        else "не сдвинулись с места: " + panes.joinToString(", ")
+    }
+
+    /** Panes worth watching: the "before" sample resolved, was readable, and is not already
+     *  at the requested position. Everything else is "no evidence" and stays out. */
+    private suspend fun pendingPanes(checks: List<WindowVerify>): List<PendingPane> =
+        checks.mapNotNull { check ->
+            val sample = withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { check.before.await() }
+            val before = sample?.second?.let { SentinelDecoder.decodeInt(it) }
+            if (before == null || kotlin.math.abs(before - check.target) <= WINDOW_POSITION_TOLERANCE_PCT) null
+            else PendingPane(check, sample.first, before)
+        }
+
+    /** One more read of a pane: true when it moved, or when the read gives no evidence. */
+    private suspend fun paneSettled(pane: PendingPane): Boolean {
+        val after = readWindowRaw(pane.readFid)?.let { SentinelDecoder.decodeInt(it) }
+        pane.seen += after?.toString() ?: "err"
+        return after == null || kotlin.math.abs(after - pane.before) > WINDOW_POSITION_TOLERANCE_PCT
+    }
+
+    /** A pane that had somewhere to travel, with the samples taken so far. */
+    private class PendingPane(
+        val check: WindowVerify,
+        val readFid: FidAddress,
+        val before: Int,
+        val seen: MutableList<String> = mutableListOf(),
+    )
+
+    /** Single log line per pane: the samples and the verdict. */
+    private fun logWindowVerdict(pane: PendingPane, verdict: String?) {
+        Log.i(
+            TAG,
+            "window readback action=${pane.check.actionName} dev=${pane.check.entry.dev} " +
+                "fid=${pane.check.entry.writeFid} value=${pane.check.value} before=${pane.before} " +
+                "after=${pane.seen.joinToString(",")} verdict=${verdict ?: "moved"}"
+        )
+    }
+
+    /**
+     * Position the pane is expected to end up at, or null when the command carries no
+     * comparable target. Open and close are their own fids on the car but still name a
+     * position; a CTRL detent (the DiLink 3.0 re-route) names none.
+     */
+    private fun windowTargetPercent(requestedAction: String, requestedValue: Int): Int? = when {
+        requestedAction.endsWith("_pos") -> requestedValue.takeIf { it in 0..100 }
+        requestedAction.endsWith("_open") -> 100
+        requestedAction.endsWith("_close") -> 0
+        else -> null
+    }
+
+    /** Pane name for the failure the driver hears. */
+    private fun paneLabel(actionName: String): String = when {
+        actionName.startsWith("window_driver") -> "окно водителя"
+        actionName.startsWith("window_passenger") -> "окно пассажира"
+        actionName.startsWith("window_rear_left") -> "заднее левое окно"
+        actionName.startsWith("window_rear_right") -> "заднее правое окно"
+        else -> "стекло"
     }
 
     /** Read address actually sampled, plus the position read right now (raw, sentinels kept as-is). */
@@ -489,8 +568,6 @@ class VehicleApiImpl @Inject constructor(
         private const val WINDOW_VERIFY_ATTEMPTS = 2
         /** Percent noise between two reads of a standing pane. */
         private const val WINDOW_POSITION_TOLERANCE_PCT = 2
-        /** Only the percent family carries a target we can compare the position with. */
-        private const val POS_ACTION_SUFFIX = "_pos"
         /** Bounded wait so the "before" sample usually precedes the write, but a hung read
          *  channel costs at most this much. */
         private const val WINDOW_BEFORE_READ_BUDGET_MS = 300L

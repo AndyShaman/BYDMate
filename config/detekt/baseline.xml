@@ -130,7 +130,7 @@
     <ID>CyclomaticComplexMethod:TripCounterMath.kt$TripCounterMath$fun compute( stats: TripCounterStats, reset: TripResetState, liveKm: Double?, liveKwh: Double?, sessionStartedAt: Long?, liveWholeSession: Boolean, nowMs: Long, tariff: Double, ): TripCounterUi</ID>
     <ID>CyclomaticComplexMethod:TripsViewModel.kt$TripsViewModel$private fun buildChartBars( trips: List&lt;TripEntity&gt;, period: TripPeriod, metric: ChartMetric, filter: TripFilter ): List&lt;ChartBar&gt;</ID>
     <ID>CyclomaticComplexMethod:TtsModelManager.kt$TtsModelManager$suspend fun ensureStressDict(voice: TtsVoice): Boolean</ID>
-    <ID>CyclomaticComplexMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite(requestedAction: String, requestedValue: Int): Result&lt;Unit&gt;</ID>
+    <ID>CyclomaticComplexMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
     <ID>CyclomaticComplexMethod:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
     <ID>CyclomaticComplexMethod:VoiceController.kt$VoiceController$private suspend fun agentFallback(transcript: String, decodeMs: Long? = null)</ID>
     <ID>CyclomaticComplexMethod:WidgetController.kt$WidgetController.WidgetTouchListener$override fun onTouch(v: android.view.View, event: MotionEvent): Boolean</ID>
@@ -269,7 +269,7 @@
     <ID>LongMethod:TrackingService.kt$TrackingService$private fun maybeSendIternioTelemetry(data: DiParsData, nowMs: Long)</ID>
     <ID>LongMethod:TrackingService.kt$TrackingService$private fun startPolling()</ID>
     <ID>LongMethod:UpdateChecker.kt$UpdateChecker$suspend fun downloadAndInstall( context: Context, update: UpdateInfo, onProgress: (String) -&gt; Unit = {} )</ID>
-    <ID>LongMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite(requestedAction: String, requestedValue: Int): Result&lt;Unit&gt;</ID>
+    <ID>LongMethod:VehicleApiImpl.kt$VehicleApiImpl$internal suspend fun doWrite( requestedAction: String, requestedValue: Int, verifyInto: MutableList&lt;WindowVerify&gt;? = null, ): Result&lt;Unit&gt;</ID>
     <ID>LongMethod:VoiceController.kt$VoiceController$private fun startContinuousSession()</ID>
     <ID>LongMethod:VoiceController.kt$VoiceController$private suspend fun agentFallback(transcript: String, decodeMs: Long? = null)</ID>
     <ID>LongMethod:WidgetController.kt$WidgetController$@Synchronized fun attach(context: Context)</ID>
