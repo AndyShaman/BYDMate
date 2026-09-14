@@ -260,6 +260,35 @@ class VoiceControllerAgentFallbackTest {
         assertEquals(1, answerCount.get())
     }
 
+    /** Wave 1: the journal entry carries the tools that ran and the spoken answer, so the
+     *  diagnostic dump can show what the agent actually did, not just that it replied. */
+    @Test fun `agent Answer journal entry carries tool outcomes and the answer text`() {
+        val agentOrchestrator = mockk<AgentOrchestrator>()
+        coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Answer(
+            "Окна закрыты",
+            listOf(
+                com.bydmate.app.agent.AgentToolOutcome("get_vehicle_state", true),
+                com.bydmate.app.agent.AgentToolOutcome("vehicle_control", false),
+            ),
+        )
+        val journal = VoiceJournal()
+
+        val fakeAsr = FakeContinuousAsr()
+        val controller = makeController(
+            agentOrchestrator = agentOrchestrator, journal = journal, continuousAsr = fakeAsr,
+        )
+        controller.onPttPressed()
+        awaitTrue { controller.listening.value }
+        awaitSubscribed(fakeAsr.events)
+        fakeAsr.events.tryEmit(ContinuousAsrEvent.Utterance("навигатор"))
+        Thread.sleep(500)
+
+        val entry = journal.entries.value.first()
+        assertEquals("Окна закрыты", entry.answer)
+        assertEquals(listOf("get_vehicle_state", "vehicle_control"), entry.tools.map { it.name })
+        assertEquals(listOf(true, false), entry.tools.map { it.ok })
+    }
+
     @Test fun `agent Error records an AGENT-ERROR journal entry with the agent message as reason`() {
         val agentOrchestrator = mockk<AgentOrchestrator>()
         coEvery { agentOrchestrator.ask(any(), any()) } returns AgentResult.Error("нет сети")

@@ -1,5 +1,6 @@
 package com.bydmate.app.agent
 
+import android.util.Log
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.voice.AgentIdentity
 import com.bydmate.app.voice.AgentPersona
@@ -32,6 +33,11 @@ class AgentOrchestrator @Inject constructor(
 ) {
     /** Test seam — deterministic clock for the session TTL. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
+
+    /** Test seam — one line per traced step of the turn. Production writes to logcat under
+     *  [TAG], which the log recorder captures, so a "the agent lied" report is diagnosable
+     *  from the user's own log. */
+    internal var trace: (String) -> Unit = { Log.i(TAG, it) }
 
     private val mutex = Mutex()
     private val history = mutableListOf<AgentMessage>()
@@ -139,6 +145,38 @@ class AgentOrchestrator @Inject constructor(
         onSentence: ((String) -> Unit)?,
         onTerminal: () -> Unit,
     ): AgentResult {
+        val startedAt = nowMs()
+        val rounds = intArrayOf(0)
+        val tracer = AgentTrace({ nowMs() }, { line -> trace(line) })
+        var outcome = "cancelled"
+        try {
+            val result = runLoopTraced(
+                messages, systemPrompt, toolSchemas, allowAutomationTools, onSentence, onTerminal,
+                rounds, tracer,
+            )
+            outcome = when (result) {
+                is AgentResult.Answer -> "answer"
+                is AgentResult.Error -> "error: " + AgentTrace.clip(result.message)
+                AgentResult.Disabled -> "disabled"
+            }
+            return result
+        } finally {
+            tracer.turn(nowMs() - startedAt, rounds[0], outcome)
+        }
+    }
+
+    /** The loop itself; [rounds] carries the LLM round count out to the tracing wrapper. */
+    @Suppress("LongParameterList")
+    private suspend fun runLoopTraced(
+        messages: MutableList<AgentMessage>,
+        systemPrompt: String,
+        toolSchemas: JSONArray,
+        allowAutomationTools: Boolean,
+        onSentence: ((String) -> Unit)?,
+        onTerminal: () -> Unit,
+        rounds: IntArray,
+        tracer: AgentTrace,
+    ): AgentResult {
         val outcomes = mutableListOf<AgentToolOutcome>()
         val callCounts = mutableMapOf<String, Int>()
         var loopStrikes = 0
@@ -147,16 +185,19 @@ class AgentOrchestrator @Inject constructor(
             // the chunker falls out of scope at the end of this iteration (only completed
             // sentences were forwarded); the final turn flushes its tail below.
             val chunker = if (onSentence != null) SentenceChunker() else null
+            rounds[0]++
+            tracer.roundStarted()
             val onDelta: ((String) -> Unit)? = if (onSentence != null && chunker != null) {
-                { d -> chunker.feed(d).forEach(onSentence) }
+                { d -> tracer.delta(); chunker.feed(d).forEach(onSentence) }
             } else null
             val reply = backend
                 .chat(listOf(AgentMessage.System(systemPrompt)) + messages, toolSchemas, onDelta)
                 .getOrElse {
-                    return AgentResult.Error(
-                        (it as? LlmError)?.userMessage ?: "Нет связи с сервером, скажи простую команду"
-                    )
+                    val message = (it as? LlmError)?.userMessage ?: "Нет связи с сервером, скажи простую команду"
+                    tracer.replyFailed(message)
+                    return AgentResult.Error(message)
                 }
+            tracer.reply(reply)
             if (reply.toolCalls.isEmpty()) {
                 val answer = reply.content?.trim().orEmpty()
                 if (answer.isEmpty()) return AgentResult.Error("Пустой ответ модели")
@@ -173,6 +214,7 @@ class AgentOrchestrator @Inject constructor(
                     // Loop guard: the model re-requests an identical call; feed it a synthetic
                     // error instead of executing, and give up after MAX_LOOP_STRIKES rounds.
                     loopStrikes++
+                    tracer.tool(call, "loop-guard", 0L, "")
                     outcomes += AgentToolOutcome(call.name, false)
                     messages += AgentMessage.Tool(call.id, LOOP_ERROR)
                     if (loopStrikes >= MAX_LOOP_STRIKES) {
@@ -189,10 +231,12 @@ class AgentOrchestrator @Inject constructor(
                     continue
                 }
                 callCounts[key] = seen + 1
+                val toolStart = nowMs()
                 val res = tools.execute(call, allowAutomationTools)
                 // ok = the tool JSON has no "error" key; unparseable output counts as ok
                 // (free-form success payloads like web_search results are not errors).
                 val ok = runCatching { !JSONObject(res).has("error") }.getOrDefault(true)
+                tracer.tool(call, if (ok) "ok" else "error", nowMs() - toolStart, res)
                 outcomes += AgentToolOutcome(call.name, ok)
                 messages += AgentMessage.Tool(call.id, res)
             }
@@ -227,6 +271,8 @@ class AgentOrchestrator @Inject constructor(
     }
 
     companion object {
+        private const val TAG = "AgentLoop"
+
         /** Appended to the driver's own line while the car moves; the terse-answer rule for it
          *  lives in the static [SYSTEM_PROMPT]. */
         internal const val MOVING_TAG = "(машина в движении)"

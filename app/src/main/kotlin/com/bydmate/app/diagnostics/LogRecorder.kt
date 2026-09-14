@@ -375,7 +375,9 @@ class LogRecorder internal constructor(
             // Window channel probe verdicts (percent family vs CTRL, #79/#64).
             "WindowChannelRouter:*",
             // Firmware fid catalog: where it came from and every address it moved.
-            "FidCatalog:*"
+            "FidCatalog:*",
+            // Agent wave: one line per model round, tool call and finished turn.
+            "AgentLoop:*"
         )
     }
 }

@@ -69,6 +69,7 @@ import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
 import com.bydmate.app.voice.VoiceController
+import com.bydmate.app.voice.VoiceJournal
 import com.bydmate.app.voice.RuStressMarker
 import com.bydmate.app.voice.TtsEngine
 import com.bydmate.app.voice.TtsModelManager
@@ -257,6 +258,7 @@ class SettingsViewModel @Inject constructor(
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
+    private val voiceJournal: VoiceJournal,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -1514,6 +1516,9 @@ class SettingsViewModel @Inject constructor(
         private const val TAG = "SettingsViewModel"
         /** Slug verified in the live OpenRouter catalog (2026-07-08). */
         internal const val DEFAULT_OPENROUTER_MODEL = "google/gemini-3.1-flash-lite"
+        /** Voice sessions printed in the dump's agent section (newest first). */
+        private const val AGENT_DUMP_ENTRIES = 20
+        private const val AGENT_DUMP_ANSWER_CHARS = 200
         private const val PREVIEW_VOICE_TEXT =
             "Маршрут построен. Через двести метров поверните направо."
         private const val AGENT_TEST_PROMPT =
@@ -1690,6 +1695,33 @@ class SettingsViewModel @Inject constructor(
                 }
             } catch (e: Exception) {
                 appendLine("(failed to gather rules: ${e.message})")
+            }
+
+            // Voice agent: which connection/model answered and what the last turns did.
+            // The journal is a RAM ring buffer, so this is the only place a user report
+            // about a wrong or fabricated answer becomes checkable.
+            appendLine("--- agent ---")
+            try {
+                val conn = llmConnectionResolver.primary()
+                appendLine("connection: ${conn?.id ?: "(not configured)"} model=${conn?.model ?: "-"}")
+                val entries = voiceJournal.entries.value.take(AGENT_DUMP_ENTRIES)
+                if (entries.isEmpty()) {
+                    appendLine("(no voice sessions this run)")
+                } else {
+                    entries.forEach { e ->
+                        val stamp = SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(e.timestampMs))
+                        appendLine("$stamp ${e.route} ${e.outcome} \"${e.transcript}\"" +
+                            (e.reason?.let { " reason=$it" } ?: ""))
+                        if (e.tools.isNotEmpty()) {
+                            appendLine("  tools: " + e.tools.joinToString(", ") {
+                                "${it.name}:${if (it.ok) "ok" else "err"}"
+                            })
+                        }
+                        e.answer?.let { appendLine("  answer: " + com.bydmate.app.agent.AgentTrace.clip(it, AGENT_DUMP_ANSWER_CHARS)) }
+                    }
+                }
+            } catch (e: Exception) {
+                appendLine("(failed to gather agent journal: ${e.message})")
             }
 
             appendLine("--- vehicle data sources ---")
