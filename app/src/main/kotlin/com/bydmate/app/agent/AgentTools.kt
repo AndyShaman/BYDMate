@@ -118,6 +118,14 @@ class AgentTools @Inject constructor(
         driverMemory = memory
     }
 
+    /** Sorted names of the enabled automations, kept in step with the rules table by
+     *  [startRuleWatcher]; null until the first emission. */
+    @Volatile private var cachedRuleNames: List<String>? = null
+    private var ruleWatcherStarted = false
+
+    /** Test seam — scope the rules-table watcher collects on. */
+    internal var ruleWatchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
     /** Test seam — deterministic time for period queries. */
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
 
@@ -192,6 +200,36 @@ class AgentTools @Inject constructor(
         return DispatchResult(false,
             "интент отправлен, но Навигатор не вышел на передний план: маршрут скорее всего " +
                 "не построен, предложи пользователю открыть Навигатор вручную")
+    }
+
+    /**
+     * Names of the enabled automations for the run_automation enum — the only part of the
+     * tool schemas that moves with user data. Recomputing it from the DB on every turn both
+     * costs a query on the voice path and can reshuffle the tail of the static prefix, which
+     * throws away the provider's prompt cache. The rules table is mirrored into a sorted
+     * cache instead: Room re-emits [RuleDao.getAll] after every insert/update/delete, so a
+     * rule edit invalidates the cache exactly once and nothing else does.
+     *
+     * Until the first emission (and wherever the table cannot be watched) this falls back to
+     * a direct read, so the enum is never silently empty.
+     */
+    private suspend fun enabledRuleNames(): List<String> {
+        startRuleWatcher()
+        cachedRuleNames?.let { return it }
+        return runCatchingCancellable { ruleDao.getEnabled() }.getOrDefault(emptyList())
+            .map { it.name }.sorted()
+    }
+
+    private fun startRuleWatcher() {
+        if (ruleWatcherStarted) return
+        ruleWatcherStarted = true
+        ruleWatchScope.launch {
+            runCatchingCancellable {
+                ruleDao.getAll().collect { rules ->
+                    cachedRuleNames = rules.filter { it.enabled }.map { it.name }.sorted()
+                }
+            }
+        }
     }
 
     private fun queryLauncherApps(): List<Pair<String, String>> {
@@ -308,7 +346,7 @@ class AgentTools @Inject constructor(
             listOf("query"),
         ))
         if (includeAutomationTools) {
-            val ruleNames = runCatchingCancellable { ruleDao.getEnabled() }.getOrDefault(emptyList()).map { it.name }
+            val ruleNames = enabledRuleNames()
             put(tool(
                 "run_automation",
                 if (ruleNames.isEmpty()) "Запустить сохранённую автоматизацию по имени. Сейчас включённых автоматизаций нет."
@@ -619,10 +657,13 @@ class AgentTools @Inject constructor(
                                         "split_screen_toggle")))
                                     .put("description", "Тип действия. split_screen_close и " +
                                         "split_screen_toggle дополнительных полей не требуют"))
+                                // No second enum: the same ~90 ids already ship with
+                                // vehicle_control, and repeating them here cost ~2 kB of the
+                                // static prefix on every single turn.
                                 .put("command_id", JSONObject()
                                     .put("type", "string")
-                                    .put("enum", JSONArray(AgentCommandCatalog.ALL.map { it.id }))
-                                    .put("description", "Только для kind=param: идентификатор команды"))
+                                    .put("description", "Только для kind=param: идентификатор команды " +
+                                        "из списка инструмента vehicle_control"))
                                 .put("value", JSONObject().put("type", "integer")
                                     .put("description", "Только для kind=param: значение, если команда его требует"))
                                 .put("ms", JSONObject().put("type", "integer")
