@@ -57,6 +57,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import com.bydmate.app.split.DisabledSplitPreferences
 import com.bydmate.app.split.Pane
 import com.bydmate.app.split.SplitPair
@@ -124,7 +125,7 @@ class AgentTools @Inject constructor(
     /** Sorted names of the enabled automations, kept in step with the rules table by
      *  [startRuleWatcher]; null until the first emission. */
     @Volatile private var cachedRuleNames: List<String>? = null
-    private var ruleWatcherStarted = false
+    private val ruleWatcherStarted = AtomicBoolean(false)
 
     /** Test seam — scope the rules-table watcher collects on. */
     internal var ruleWatchScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -140,12 +141,6 @@ class AgentTools @Inject constructor(
 
     /** Test seam — scope that runs a confirmed dangerous dispatch off the UI thread. */
     internal var confirmScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-
-    /** Test seam — poll interval for re-reading the cluster IPC mode after apply(). */
-    internal var clusterPollIntervalMs = 500L
-
-    /** Test seam — poll attempts before giving up (30 x 500ms = 15s worst case). */
-    internal var clusterPollAttempts = 30
 
     /** Test seam — live GPS position, default reads TrackingService's last known fix. */
     internal var locationProvider: () -> Pair<Double, Double>? =
@@ -224,8 +219,7 @@ class AgentTools @Inject constructor(
     }
 
     private fun startRuleWatcher() {
-        if (ruleWatcherStarted) return
-        ruleWatcherStarted = true
+        if (!ruleWatcherStarted.compareAndSet(false, true)) return
         ruleWatchScope.launch {
             runCatchingCancellable {
                 ruleDao.getAll().collect { rules ->
@@ -1731,9 +1725,10 @@ class AgentTools @Inject constructor(
 
     // --- cluster projection ---
 
-    // Drive ClusterProjectionManager the same way the steering-wheel star does, then re-read to
-    // confirm. The write fid is closed, so projection only takes when the manual preconditions
-    // hold — on failure we voice back the honest, non-automatable hint.
+    // Drive the projection through the SAME ActionDispatcher path as a "cluster_projection"
+    // automation action. The dispatcher already applies the mode and polls it back, so the
+    // verdict in DispatchResult is the honest one and the voice turn waits for exactly one
+    // poll (5 s budget) instead of a second 15 s poll of its own.
     private suspend fun setClusterProjection(args: JSONObject): String {
         if (!args.has("on")) return """{"error":"не указано, включить или выключить проекцию"}"""
         val on = args.optBoolean("on")
@@ -1747,21 +1742,13 @@ class AgentTools @Inject constructor(
         if (before == want) return JSONObject().put("ok", true)
             .put("note", if (on) "$label уже на приборке" else "проекции уже нет на приборке")
             .toString()
-        clusterVoiceControl.apply(on)
-        // setMode is async (scope.launch + mutex) and the full on-sequence (daemon start,
-        // compositor power-up, virtual display, app launch) can take well over 2s on a cold
-        // start. Poll until the mode lands instead of a single fixed-delay check — the old
-        // 2s check reported a false "не включилась" while the projection was still coming up.
-        var after: ClusterMode? = null
-        for (attempt in 1..clusterPollAttempts) {
-            delay(clusterPollIntervalMs)
-            after = runCatchingCancellable { clusterVoiceControl.projectionMode() }.getOrNull()
-            if (after == want) break
-        }
-        val failure = runCatchingCancellable { clusterVoiceControl.lastFailure() }.getOrNull()
+        val result = actionDispatcher.dispatch(
+            ActionDef(command = "cluster_projection", displayName = "Вывод на приборку",
+                kind = "cluster_projection", payload = if (on) "1" else "0"), data = null)
         return when {
-            after == want -> JSONObject().put("ok", true).put("app", label).toString()
-            on && failure == "daemon" -> JSONObject().put("ok", false)
+            result.success -> JSONObject().put("ok", true).put("app", label).toString()
+            // The daemon restart is a "try again in a minute", not a failed command.
+            on && result.reason == ActionDispatcher.DAEMON_RESTART_REASON -> JSONObject().put("ok", false)
                 .put("note", "служебный процесс перезапускается, попробуй ещё раз через минуту").toString()
             on -> JSONObject().put("error",
                 "проекция не включилась. Попробуй повторить команду через несколько секунд").toString()

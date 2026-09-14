@@ -47,7 +47,8 @@ class VehicleApiImpl @Inject constructor(
 
     private val windowChannel = WindowChannelRouter(helper, windowStore)
 
-    // Owns the delayed window readback logging only — a write never waits for it.
+    // Owns the window position samples taken around a write. A write that fails before the
+    // verdict cancels its sample (see doWrite), so no read outlives its dispatch.
     // internal var (not a constructor param — Hilt's @Inject constructor can't carry a
     // default here) so tests can swap in a deterministic scope (e.g. Dispatchers.Unconfined)
     // instead of racing the real Dispatchers.IO scheduler.
@@ -104,7 +105,11 @@ class VehicleApiImpl @Inject constructor(
         }
         if (resolved.size == 1) {
             val r = resolved[0]
-            return doWrite(r.actionName, r.value)
+            // Same NonCancellable protection as the composite burst below: the window verdict
+            // costs up to ~1 s of reads AFTER the physical write already landed, and a caller
+            // cancelled in that window must still get the verdict instead of an exception for
+            // a command the car actually obeyed.
+            return withContext(NonCancellable) { doWrite(r.actionName, r.value) }
         }
         // Composite command (e.g. window aggregates, fridge presets) → fan out to several
         // per-door writes. Attempt every sub-write (no short-circuit: a partial open beats
@@ -234,6 +239,7 @@ class VehicleApiImpl @Inject constructor(
             // (status reads, channel resolution) can still be cancelled normally.
             if (e is CancellationException) throw e
             Log.w(TAG, "doWrite: action=$actionName helper.write threw: ${e.message}")
+            windowCheck?.before?.cancel()
             logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_exception", entry.validated)
             val err = VehicleWriteError.HelperUnreachable(actionName, e.message ?: "io error")
             maybeReportValidatedFailure(actionName, err, entry)
@@ -241,6 +247,7 @@ class VehicleApiImpl @Inject constructor(
         }
 
         if (!wrote) {
+            windowCheck?.before?.cancel()
             return if (entry.validated) {
                 Log.w(TAG, "doWrite: action=$actionName helper.write returned false (validated)")
                 logWrite(actionName, entry.dev, entry.writeFid, value, null, false, "helper_fail", entry.validated)
@@ -260,6 +267,7 @@ class VehicleApiImpl @Inject constructor(
         if (readback == -10011L) {
             // For non-validated entries, sentinel is expected (crowd-validation in progress) — surface as Unsupported.
             // DAO error string stays "readback_sentinel" for diagnostic analysis.
+            windowCheck?.before?.cancel()
             val err = if (entry.validated) VehicleWriteError.Sentinel(actionName) else VehicleWriteError.Unsupported(actionName)
             logWrite(actionName, entry.dev, entry.writeFid, value, readback.toInt(), false, "readback_sentinel", entry.validated)
             maybeReportValidatedFailure(actionName, err, entry)
@@ -269,6 +277,7 @@ class VehicleApiImpl @Inject constructor(
         if (readback != null && readback.toInt() != value) {
             // For non-validated entries, mismatch is expected (crowd-validation in progress) — surface as Unsupported.
             // DAO error string stays "readback_mismatch" for diagnostic analysis.
+            windowCheck?.before?.cancel()
             val err = if (entry.validated) VehicleWriteError.ReadbackMismatch(actionName, "expected=$value got=$readback") else VehicleWriteError.Unsupported(actionName)
             logWrite(actionName, entry.dev, entry.writeFid, value, readback.toInt(), false, "readback_mismatch", entry.validated)
             maybeReportValidatedFailure(actionName, err, entry)
