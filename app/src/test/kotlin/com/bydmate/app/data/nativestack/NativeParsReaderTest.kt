@@ -284,6 +284,31 @@ class NativeParsReaderTest {
         assertEquals(0, data.keyBatteryStatus)
     }
 
+    /** tx=7 float fids: the motor currents must reach DiParsData so the «Техника» split works. */
+    @Test
+    fun `motor currents decode into DiParsData`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+        coEvery { auto.getFloat(fid("soc").device, fid("soc").fid) } returns 87.0f
+        coEvery {
+            auto.getFloat(fid("motorCurrentFront").device, fid("motorCurrentFront").fid)
+        } returns 7.9f
+        coEvery {
+            auto.getFloat(fid("motorCurrentRear").device, fid("motorCurrentRear").fid)
+        } returns 45.3f
+
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+
+        val data = nativeReader(auto, settings).fetch()
+        assertNotNull(data)
+        assertEquals(7.9f, data!!.motorCurrentFront!!, 0.01f)
+        assertEquals(45.3f, data.motorCurrentRear!!, 0.01f)
+    }
+
     @Test
     fun `rain derived 1 when auto wipers on and relay firing`() = runTest {
         val data = sensorReader("autoWipers" to 1, "wiperRelay" to 5).fetch()

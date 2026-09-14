@@ -9,6 +9,7 @@ enum class BlindSpotSide { NONE, LEFT, RIGHT }
  * [blink] is the raw turn-signal mask (fid 950009900, live Leopard 3 2026-07-31):
  * 1=off, 2=left, 4=right, 6=hazard; null when the read failed.
  * [telemetryAgeMs] is the age of the last snapshot where all three signals read cleanly.
+ * [nativeCameraForeground] is true while the BYD camera surface (com.byd.avc) holds the screen.
  */
 data class BlindSpotInput(
     val blink: Int?,
@@ -16,6 +17,7 @@ data class BlindSpotInput(
     val gearIsReverse: Boolean,
     val thresholdKmh: Int,
     val telemetryAgeMs: Long,
+    val nativeCameraForeground: Boolean,
 )
 
 data class BlindSpotDecision(
@@ -36,6 +38,11 @@ const val BLIND_SPOT_WARM_HYSTERESIS_KMH = 5
  * the screens there, so the pipeline fully closes. Stale telemetry only hides the window —
  * cooling the camera down is the controller's job (it holds the 10 s timer), and doing it here
  * would tear the stack down on a single missed read.
+ *
+ * The factory 360 view owns the screen while it is up (it pops up on its own below 15 km/h and
+ * goes away above 30 km/h on some cars), so our windows would only overlap it: they go down for
+ * as long as it is in the foreground. The camera stays warm through it, so the blinker that is
+ * still on when the 360 closes brings the view back on the next tick.
  */
 fun decideBlindSpot(input: BlindSpotInput): BlindSpotDecision {
     val speed = input.speedKmh
@@ -44,6 +51,7 @@ fun decideBlindSpot(input: BlindSpotInput): BlindSpotDecision {
     val show = when {
         input.gearIsReverse -> BlindSpotSide.NONE
         input.telemetryAgeMs > BLIND_SPOT_WATCHDOG_MS -> BlindSpotSide.NONE
+        input.nativeCameraForeground -> BlindSpotSide.NONE
         speed == null || speed < input.thresholdKmh -> BlindSpotSide.NONE
         // Anything outside the two single-side masks (off, hazard, the transient 9 seen on
         // the push channel) means "no blind-spot view".

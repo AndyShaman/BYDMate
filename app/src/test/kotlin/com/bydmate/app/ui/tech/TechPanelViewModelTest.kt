@@ -1,5 +1,7 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.nativestack.MotorSplit
+import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
@@ -229,5 +231,42 @@ class TechPanelViewModelTest {
         assertEquals("-370", rpmForDisplay(-370)?.toString())
         assertEquals("1200", rpmForDisplay(1200)?.toString())
         assertNull(rpmForDisplay(null))
+    }
+
+    /** Measured on the car: the split follows the two motor currents on a shared bus. */
+    @Test
+    fun `motor split follows the current ratio`() {
+        assertEquals(MotorSplit.Share(15, 85), motorSplitPercent(7.9f, 45.3f))
+        assertEquals(MotorSplit.Share(12, 88), motorSplitPercent(0.6f, 4.5f))
+        assertEquals(MotorSplit.Share(0, 100), motorSplitPercent(0.0f, 5.7f))
+        assertEquals(MotorSplit.Share(100, 0), motorSplitPercent(5.7f, 0.0f))
+    }
+
+    /** Regeneration sign is unverified, so only the magnitudes decide the split. */
+    @Test
+    fun `motor split ignores the sign of the currents`() {
+        assertEquals(MotorSplit.Share(15, 85), motorSplitPercent(-7.9f, -45.3f))
+        assertEquals(MotorSplit.Share(15, 85), motorSplitPercent(7.9f, -45.3f))
+    }
+
+    /** Parked: both motors idle, so the row shows dashes instead of an invented 50/50. */
+    @Test
+    fun `motor split is idle while the car draws nothing`() {
+        assertEquals(MotorSplit.Idle, motorSplitPercent(0.0f, 0.0f))
+        assertEquals(MotorSplit.Idle, motorSplitPercent(0.2f, 0.2f))
+    }
+
+    /** A car that does not report the pair (single motor) hides the row entirely. */
+    @Test
+    fun `motor split is null when either current is missing`() {
+        assertNull(motorSplitPercent(null, null))
+        assertNull(motorSplitPercent(1.0f, null))
+        assertNull(motorSplitPercent(null, 1.0f))
+    }
+
+    /** The motor currents alone are enough to draw the motors card. */
+    @Test
+    fun `motor currents open the motors card`() {
+        assertTrue(TechPanelUiState(motorCurrentFront = 7.9f, motorCurrentRear = 45.3f).showMotors)
     }
 }

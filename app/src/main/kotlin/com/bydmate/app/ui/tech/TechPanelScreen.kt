@@ -40,6 +40,8 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
+import com.bydmate.app.data.nativestack.MotorSplit
+import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.ui.components.HelpIcon
 import com.bydmate.app.ui.components.HintBlock
 import com.bydmate.app.ui.theme.AccentBlue
@@ -285,6 +287,15 @@ private fun MotorsCard(state: TechPanelUiState, onHint: (String) -> Unit, modifi
             stringResource(R.string.tech_label_rear),
             valueColor = TextMuted,
         )
+        when (val split = motorSplitPercent(state.motorCurrentFront, state.motorCurrentRear)) {
+            null -> Unit  // single-motor car or no reading: no row at all
+            MotorSplit.Idle -> PairRow(stringResource(R.string.tech_label_power), DASH, DASH)
+            is MotorSplit.Share -> PairRow(
+                stringResource(R.string.tech_label_power),
+                stringResource(R.string.tech_value_percent, split.frontPercent),
+                stringResource(R.string.tech_value_percent, split.rearPercent),
+            )
+        }
         val anyTemp = state.motorTempFront ?: state.motorTempRear
             ?: state.inverterTempFront ?: state.inverterTempRear
         PairRow(

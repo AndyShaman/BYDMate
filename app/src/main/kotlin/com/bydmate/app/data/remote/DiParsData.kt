@@ -84,6 +84,8 @@ data class DiParsData(
     val bmsMaxDischargeKw: Int? = null,
     val motorRpmFront: Int? = null,
     val motorRpmRear: Int? = null,
+    val motorCurrentFront: Float? = null,  // drive motor current, A (bus voltage is shared, so the pair gives the power split)
+    val motorCurrentRear: Float? = null,
     val compressorW: Int? = null,        // AC / heat pump compressor draw, W
     val tyreTempFL: Int? = null,         // °C
     val tyreTempFR: Int? = null,

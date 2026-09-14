@@ -143,7 +143,8 @@ object FidMap {
         FidEntry("inverterTempRear",   1039, 1155530760,  5, Decoder.INT_RAW, symbol = "Gb.GB_REAR_MOTOR_IPM_TEMP"),
         FidEntry("hvVoltage",          1009, 1145045000,  5, Decoder.INT_RAW, symbol = "Charging.CHARGING_CHARGE_BATTERY_VOLT"),
         FidEntry("hvCurrent",          1009, 1145045016,  7, Decoder.FLOAT_AMP, symbol = "Charging.CHARGING_CHARGE_CURRENT"), // negative = charging (#153)
-        // Unproven on the car (0.0 while parked) — logged only, not surfaced in UI.
+        // Proven on the car 2026-09-14: 0.0 parked, 7.9 A front / 45.3 A rear under load.
+        // Shared bus voltage, so the pair drives the front/rear power split in «Техника».
         FidEntry("motorCurrentFront",  1009, 1186988040,  7, Decoder.FLOAT_AMP, symbol = "Charging.CHARGING_DRIVER_MOTOR_CURRENT"),
         FidEntry("motorCurrentRear",   1009, 1186988056,  7, Decoder.FLOAT_AMP, symbol = "Charging.CHARGING_REAR_DRIVER_MOTOR_CURRENT"),
         FidEntry("bmsMaxChargeKw",     1014, 877658136,   5, Decoder.INT_SCALED, scale = 0.1, symbol = "Statistic.STATISTIC_MAX_CHARGE_POWER_ALLOW"),

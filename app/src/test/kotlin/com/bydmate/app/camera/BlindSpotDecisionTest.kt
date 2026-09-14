@@ -16,7 +16,10 @@ class BlindSpotDecisionTest {
         gearIsReverse: Boolean = false,
         thresholdKmh: Int = 20,
         telemetryAgeMs: Long = 0L,
-    ) = BlindSpotInput(blink, speedKmh, gearIsReverse, thresholdKmh, telemetryAgeMs)
+    ) = BlindSpotInput(
+        blink, speedKmh, gearIsReverse, thresholdKmh, telemetryAgeMs,
+        nativeCameraForeground = false,
+    )
 
     @Test fun `left turn signal above threshold shows the left camera`() {
         val d = decideBlindSpot(input(blink = 2))
@@ -30,6 +33,30 @@ class BlindSpotDecisionTest {
 
     @Test fun `reverse gear closes everything`() {
         val d = decideBlindSpot(input(blink = 2, gearIsReverse = true))
+        assertEquals(BlindSpotSide.NONE, d.show)
+        assertFalse(d.cameraWarm)
+    }
+
+    /** The factory 360 owns the screen while it is up; our windows would only overlap it. */
+    @Test fun `native 360 in the foreground hides the window but keeps the camera warm`() {
+        val d = decideBlindSpot(input(blink = 2).copy(nativeCameraForeground = true))
+        assertEquals(BlindSpotSide.NONE, d.show)
+        assertTrue("camera must stay warm so the view returns instantly", d.cameraWarm)
+    }
+
+    /** The very same tick without the 360 shows the side, so only the 360 held it back. */
+    @Test fun `the same blinker shows again once the native 360 is gone`() {
+        assertEquals(
+            BlindSpotSide.LEFT,
+            decideBlindSpot(input(blink = 2).copy(nativeCameraForeground = false)).show,
+        )
+    }
+
+    /** Reverse still wins: the factory rear view is up, and nothing of ours stays warm. */
+    @Test fun `reverse closes everything even while the native 360 is up`() {
+        val d = decideBlindSpot(
+            input(blink = 2, gearIsReverse = true).copy(nativeCameraForeground = true),
+        )
         assertEquals(BlindSpotSide.NONE, d.show)
         assertFalse(d.cameraWarm)
     }

@@ -46,6 +46,8 @@ data class TechPanelUiState(
     val inverterTempRear: Int? = null,
     val motorRpmFront: Int? = null,
     val motorRpmRear: Int? = null,
+    val motorCurrentFront: Float? = null,
+    val motorCurrentRear: Float? = null,
     val pedalAccel: Int? = null,
     val pedalBrake: Int? = null,
     // Климат
@@ -89,6 +91,7 @@ data class TechPanelUiState(
         get() = anyOf(
             motorTempFront, motorTempRear, inverterTempFront, inverterTempRear,
             motorRpmFront, motorRpmRear, pedalAccel, pedalBrake,
+            motorCurrentFront, motorCurrentRear,
         )
     val showClimate: Boolean
         get() = anyOf(compressorW, acStatus, insideTemp, exteriorTemp)
@@ -163,6 +166,8 @@ class TechPanelViewModel @Inject constructor(
                             inverterTempRear = data?.inverterTempRear,
                             motorRpmFront = data?.motorRpmFront,
                             motorRpmRear = data?.motorRpmRear,
+                            motorCurrentFront = data?.motorCurrentFront,
+                            motorCurrentRear = data?.motorCurrentRear,
                             pedalAccel = data?.pedalAccel,
                             pedalBrake = data?.pedalBrake,
                             compressorW = data?.compressorW,
