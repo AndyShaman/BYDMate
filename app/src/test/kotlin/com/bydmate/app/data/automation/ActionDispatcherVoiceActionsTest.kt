@@ -2,6 +2,7 @@ package com.bydmate.app.data.automation
 
 import android.app.NotificationManager
 import android.content.Context
+import com.bydmate.app.cluster.ClusterMode
 import com.bydmate.app.cluster.ClusterVoiceControl
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.vehicle.HelperClient
@@ -94,6 +95,7 @@ class ActionDispatcherVoiceActionsTest {
 
     @Test fun `cluster_projection with payload 1 turns projection on`() = runTest {
         val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returns ClusterMode.FULLSCREEN
         val d = makeDispatcherWithCluster(cluster)
         val r = d.dispatch(clusterAction("1"), data = null)
         assertTrue(r.success)
@@ -102,10 +104,42 @@ class ActionDispatcherVoiceActionsTest {
 
     @Test fun `cluster_projection with payload 0 turns projection off`() = runTest {
         val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returns ClusterMode.OFF
         val d = makeDispatcherWithCluster(cluster)
         val r = d.dispatch(clusterAction("0"), data = null)
         assertTrue(r.success)
         verify(exactly = 1) { cluster.apply(false) }
+    }
+
+    // Wave 3: apply() is fire-and-forget, so a projection that never comes up must be a failed
+    // step in the rule journal, not a silent success.
+    @Test fun `cluster_projection that never comes up is reported as a failure`() = runTest {
+        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returns ClusterMode.OFF
+        every { cluster.lastFailure() } returns null
+        val d = makeDispatcherWithCluster(cluster).also { it.clusterPollIntervalMs = 1L }
+        val r = d.dispatch(clusterAction("1"), data = null)
+        assertFalse(r.success)
+        assertEquals("проекция на приборку не включилась", r.reason)
+    }
+
+    @Test fun `cluster_projection blames the restarting daemon when it is the known cause`() = runTest {
+        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returns ClusterMode.OFF
+        every { cluster.lastFailure() } returns "daemon"
+        val d = makeDispatcherWithCluster(cluster).also { it.clusterPollIntervalMs = 1L }
+        val r = d.dispatch(clusterAction("1"), data = null)
+        assertFalse(r.success)
+        assertEquals("служебный процесс перезапускается", r.reason)
+    }
+
+    // The projection coming up a beat later is still a success: we poll, not sample once.
+    @Test fun `cluster_projection that comes up on a later poll is a success`() = runTest {
+        val cluster = mockk<ClusterVoiceControl>(relaxUnitFun = true)
+        every { cluster.projectionMode() } returnsMany
+            listOf(ClusterMode.OFF, ClusterMode.OFF, ClusterMode.FULLSCREEN)
+        val d = makeDispatcherWithCluster(cluster).also { it.clusterPollIntervalMs = 1L }
+        assertTrue(d.dispatch(clusterAction("1"), data = null).success)
     }
 
     @Test fun `cluster_projection with bad payload fails without calling apply`() = runTest {

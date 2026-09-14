@@ -8,6 +8,7 @@ import io.mockk.coVerify
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertTrue
+import org.junit.Before
 import org.junit.Test
 
 /**
@@ -49,6 +50,12 @@ class VehicleApiWindowRoutingTest {
         override fun setWinner(channel: WindowChannel) {}
         override fun ctrlCandidateAtMs() = 0L
         override fun setCtrlCandidateAtMs(ts: Long) {}
+    }
+
+    /** Routing is what this class checks: with the pane position unreadable the movement
+     *  verification has no evidence and leaves every outcome exactly as it was. */
+    @Before fun positionIsUnreadable() {
+        coEvery { autoservice.getIntRaw(any(), any()) } returns null
     }
 
     private fun api(helper: HelperClient, channel: WindowChannel): VehicleApi =

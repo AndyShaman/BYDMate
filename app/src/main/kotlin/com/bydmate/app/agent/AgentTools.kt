@@ -1833,7 +1833,9 @@ class AgentTools @Inject constructor(
                 if (mgr.state.value is SplitSessionState.Idle) {
                     return """{"error":"сплит не запущен"}"""
                 }
-                mgr.mirror()
+                // mirror() is a silent no-op in half a dozen states (pane on the cluster,
+                // move in progress): report the reason instead of an empty "готово".
+                mgr.mirror()?.let { return JSONObject().put("error", it).toString() }
                 OK
             }
             "swap" -> {
