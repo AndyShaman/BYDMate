@@ -1120,7 +1120,7 @@
     <string name="voice_listening">聆听中</string>
     <string name="voice_thinking">思考中</string>
     <string name="voice_error_model_missing">语音模型尚未下载。请在设置的语音助手部分下载。</string>
-    <string name="voice_error_lang_not_ru">语音命令目前仅支持俄语。请在设置中将语音语言设为俄语。</string>
+    <string name="voice_error_lang_not_ru">语音命令目前仅支持俄语。请在「设置 → 应用」中将语言设为 Русский。</string>
     <string name="voice_block_park_required">需要挂入 P 挡</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1147,7 +1147,7 @@
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">智能体回复</string>
     <string name="settings_tts_toggle">朗读智能体回复</string>
-    <string name="settings_tts_subtitle">离线语音合成，俄语音色</string>
+    <string name="settings_tts_subtitle">智能体出声回答，无需联网。</string>
     <string name="settings_tts_model_delete">删除</string>
     <string name="settings_tts_download_failed">语音包下载失败</string>
     <string name="settings_voice_volume_hint">回复音量由系统 Voice 声道控制：方向盘音量按键或车辆的声音设置</string>
@@ -1174,7 +1174,7 @@
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">在线语音密钥</string>
-    <string name="settings_tts_keys_openrouter_hint">密钥和模型在「AI 连接」中配置。</string>
+    <string name="settings_tts_keys_openrouter_hint">密钥和模型取自「集成」→「AI 连接」。</string>
     <string name="settings_minimax_provider_label">提供方</string>
     <string name="settings_minimax_provider_official">官方</string>
     <string name="settings_minimax_provider_fal">fal.ai</string>
@@ -1214,13 +1214,13 @@
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">语音AI助手</string>
-    <string name="agent_enable_desc">通过LLM（OpenRouter）自由提问和控制。使用「集成」中的API密钥。</string>
+    <string name="agent_enable_desc">用自己的话回答复杂问题和指令。需要密钥：请在「集成」中设置。</string>
     <string name="agent_model_shared_caption">智能体的 OpenRouter 密钥和模型在"集成"页中配置</string>
     <string name="agent_chat_open">智能体聊天（调试）</string>
     <string name="agent_test_model_button">测试模型</string>
     <string name="agent_test_model_running">正在测试模型...</string>
     <string name="agent_test_model_result">%1$s：%2$.1f 秒后回复 - \"%3$s\"</string>
-    <string name="agent_test_model_disabled">错误：智能体已禁用或未配置</string>
+    <string name="agent_test_model_disabled">请先开启智能体，并在「集成」中设置密钥。</string>
     <string name="agent_exa_api_key_label">Exa API Key（网络搜索）</string>
 
     <!-- Voice agent (Wave J): multi-provider LLM connections -->
@@ -1237,7 +1237,7 @@
     <string name="settings_conn_model_label">模型 (id)</string>
     <string name="settings_conn_check">检查</string>
     <string name="settings_conn_checking">检查中…</string>
-    <string name="settings_zai_hint">免费 glm-4.7-flash，推荐设为主模型</string>
+    <string name="settings_zai_hint">免费方案，回复较慢。适合作为备用。</string>
     <string name="settings_custom_hint">任何兼容 OpenAI 的 API。预设会填入地址和模型，密钥需自备。</string>
     <string name="settings_custom_extra_json_label">附加请求参数 (JSON)</string>
     <string name="settings_custom_extra_json_hint">会加入发送到该服务器的每个请求，例如 {\"thinking\": false} 可关闭推理</string>

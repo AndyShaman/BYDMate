@@ -1002,7 +1002,7 @@
     <string name="settings_conn_model_label">Modelo (id)</string>
     <string name="settings_conn_check">Verificar</string>
     <string name="settings_conn_checking">Verificando…</string>
-    <string name="settings_zai_hint">glm-4.7-flash gratuita, recomendada como principal</string>
+    <string name="settings_zai_hint">Opção gratuita, responde mais devagar. Serve como reserva.</string>
     <string name="settings_custom_hint">Qualquer API compatível com OpenAI. A predefinição preenche o endereço e o modelo, a chave é sua.</string>
     <string name="settings_custom_extra_json_label">Parâmetros extra do pedido (JSON)</string>
     <string name="settings_custom_extra_json_hint">Adicionados a cada pedido a este servidor, por exemplo {\"thinking\": false} para desativar o raciocínio</string>
@@ -1051,7 +1051,7 @@
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Chaves para vozes online</string>
-    <string name="settings_tts_keys_openrouter_hint">A chave e o modelo são configurados em «Conexões de IA».</string>
+    <string name="settings_tts_keys_openrouter_hint">A chave e o modelo vêm da seção «Integrações» → «Conexões de IA».</string>
     <string name="settings_minimax_provider_label">Provedor</string>
     <string name="settings_minimax_provider_official">Oficial</string>
     <string name="settings_minimax_provider_fal">fal.ai</string>
@@ -1151,7 +1151,7 @@
     <string name="voice_listening">Ouvindo</string>
     <string name="voice_thinking">Pensando</string>
     <string name="voice_error_model_missing">O modelo de voz não está baixado. Baixe-o em Configurações, seção Agente de voz.</string>
-    <string name="voice_error_lang_not_ru">Os comandos de voz entendem apenas fala em russo. Em Configurações, defina Idioma de voz: Russo.</string>
+    <string name="voice_error_lang_not_ru">Os comandos de voz entendem apenas fala em russo. Em Configurações → Aplicativo escolha Idioma: Русский.</string>
     <string name="voice_block_park_required">É necessário estar em P</string>
     <string name="settings_asr_gigaam_title">Reconhecimento de fala</string>
     <string name="settings_asr_gigaam_ready">Modelo pronto</string>
@@ -1169,20 +1169,20 @@
     <string name="settings_voice_journal_entry_description">Últimas 50 sessões de voz</string>
     <string name="settings_tts_header">Respostas do agente</string>
     <string name="settings_tts_toggle">Falar as respostas do agente em voz alta</string>
-    <string name="settings_tts_subtitle">Síntese de fala offline, voz russa</string>
+    <string name="settings_tts_subtitle">O agente responde em voz alta, funciona sem internet.</string>
     <string name="settings_tts_model_delete">Excluir</string>
     <string name="settings_tts_download_failed">Falha ao baixar a voz</string>
     <string name="settings_voice_volume_hint">O volume das respostas é controlado pelo canal Voice do sistema: botões de volume no volante ou configurações de som do carro</string>
 
     <!-- Voice AI agent -->
     <string name="agent_enable_title">Agente de IA por voz</string>
-    <string name="agent_enable_desc">Perguntas e comandos livres via LLM (OpenRouter). Usa a chave de API da seção Integrações.</string>
+    <string name="agent_enable_desc">Responde com as próprias palavras a perguntas e comandos complexos. Precisa de uma chave: defina-a na seção «Integrações».</string>
     <string name="agent_model_shared_caption">A chave OpenRouter e o modelo do agente são configurados na seção Integrações</string>
     <string name="agent_chat_open">Chat com o agente (depuração)</string>
     <string name="agent_test_model_button">Testar modelo</string>
     <string name="agent_test_model_running">Testando o modelo…</string>
     <string name="agent_test_model_result">%1$s: respondeu em %2$.1f s - \"%3$s\"</string>
-    <string name="agent_test_model_disabled">Erro: agente desativado ou não configurado</string>
+    <string name="agent_test_model_disabled">Primeiro ligue o agente e defina a chave na seção «Integrações».</string>
     <string name="agent_exa_api_key_label">Exa API Key (busca na web)</string>
 
     <!-- HUD navigation -->

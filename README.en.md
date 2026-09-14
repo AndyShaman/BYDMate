@@ -51,7 +51,7 @@ The main things BYDMate gained after version 3.0.
 
 **Blind-spot cameras.** With the turn signal on, the side camera picture appears by itself on the cluster or in a small window on the screen. If a car is detected behind and to the side, the window is highlighted with an orange frame.
 
-**Russian voice AI agent.** Speech recognition runs right in the car, with no internet. Simple commands run instantly; everything else goes to the AI agent, which reads car data, controls the body and climate, builds routes, runs automations and answers by voice. The agent is **Russian-only by design** - the stock BYD assistant already covers English and Chinese, so BYDMate fills the language the car lacks. It is documented in full in the [Russian README](README.md#голосовой-ai-агент).
+**Russian voice AI agent.** Speech recognition runs right in the car, with no internet. Simple commands run instantly; everything else goes to the AI agent, which reads car data, controls the body and climate, builds routes, runs automations and answers by voice. The agent is **Russian-only by design** - the stock BYD assistant already covers English and Chinese, so BYDMate fills the language the car lacks. It is documented in full in the [Russian README](README.md#голосовой-ai-агент). Setup lives in Settings → Voice agent and follows the same steps as the Russian README, with the labels in English.
 
 **Manual range calculation.** If the automatic estimate from trip history does not suit you, the battery settings let you enter your own consumption table by battery temperature.
 

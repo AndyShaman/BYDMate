@@ -1159,7 +1159,7 @@
     <string name="voice_listening">Слушаю</string>
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент.</string>
-    <string name="voice_error_lang_not_ru">Голосовые команды понимают только русскую речь. В Настройках выберите Язык голоса: Русский.</string>
+    <string name="voice_error_lang_not_ru">Голосовые команды понимают только русскую речь. В Настройках → Приложение выберите Язык: Русский.</string>
     <string name="voice_block_park_required">Требуется паркинг</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1186,7 +1186,7 @@
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">Ответы агента</string>
     <string name="settings_tts_toggle">Озвучивать ответы агента</string>
-    <string name="settings_tts_subtitle">Оффлайн-синтез речи, русский голос</string>
+    <string name="settings_tts_subtitle">Агент отвечает вслух, работает без интернета.</string>
     <string name="settings_tts_model_delete">Удалить</string>
     <string name="settings_tts_download_failed">Не удалось скачать голос</string>
     <string name="settings_voice_volume_hint">Громкость ответов регулируется системным каналом Voice: кнопки громкости на руле или Настройки звука машины</string>
@@ -1213,7 +1213,7 @@
 
     <!-- TTS: keys for online voices (Wave N) -->
     <string name="settings_tts_keys_header">Ключи для онлайн-голосов</string>
-    <string name="settings_tts_keys_openrouter_hint">Ключ и модель берутся из раздела «AI подключения».</string>
+    <string name="settings_tts_keys_openrouter_hint">Ключ и модель берутся из раздела «Интеграции» → «AI подключения».</string>
     <string name="settings_minimax_provider_label">Провайдер</string>
     <string name="settings_minimax_provider_official">Официальный</string>
     <string name="settings_minimax_provider_fal">fal.ai</string>
@@ -1253,13 +1253,13 @@
 
     <!-- Voice agent (Phase 1) -->
     <string name="agent_enable_title">Голосовой AI-агент</string>
-    <string name="agent_enable_desc">Свободные вопросы и команды через LLM (OpenRouter). Ключ API берётся из раздела «Интеграции».</string>
+    <string name="agent_enable_desc">Отвечает своими словами на сложные вопросы и команды. Нужен ключ: задайте его в разделе «Интеграции».</string>
     <string name="agent_model_shared_caption">Ключ OpenRouter и модель для агента настраиваются в разделе Интеграции</string>
     <string name="agent_chat_open">Чат с агентом (отладка)</string>
     <string name="agent_test_model_button">Тест модели</string>
     <string name="agent_test_model_running">Проверка модели...</string>
     <string name="agent_test_model_result">%1$s: ответ за %2$.1f с - \"%3$s\"</string>
-    <string name="agent_test_model_disabled">Ошибка: агент выключен или не настроен</string>
+    <string name="agent_test_model_disabled">Сначала включите агента и задайте ключ в разделе «Интеграции».</string>
     <string name="agent_exa_api_key_label">Exa API Key (веб-поиск)</string>
 
     <!-- Voice agent (Wave J): multi-provider LLM connections -->
@@ -1276,7 +1276,7 @@
     <string name="settings_conn_model_label">Модель (id)</string>
     <string name="settings_conn_check">Проверить</string>
     <string name="settings_conn_checking">Проверяю…</string>
-    <string name="settings_zai_hint">Бесплатная glm-4.7-flash, рекомендуется как основная</string>
+    <string name="settings_zai_hint">Бесплатный вариант, отвечает медленнее. Подходит как запасной.</string>
     <string name="settings_custom_hint">Любой OpenAI-совместимый API. Пресет подставляет адрес и модель, ключ свой.</string>
     <string name="settings_custom_extra_json_label">Доп. параметры запроса (JSON)</string>
     <string name="settings_custom_extra_json_hint">Подмешиваются в каждый запрос к этому серверу, например {\"thinking\": false} чтобы выключить рассуждения</string>
