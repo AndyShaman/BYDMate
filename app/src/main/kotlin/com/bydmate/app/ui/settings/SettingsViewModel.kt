@@ -256,6 +256,7 @@ class SettingsViewModel @Inject constructor(
     private val adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager,
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
+    private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -1548,6 +1549,32 @@ class SettingsViewModel @Inject constructor(
             ?: HelperDiagnostics(null, null)
     }
 
+    /** One-line trigger summary for the dump: param, operator and value only. */
+    private fun describeTriggers(json: String): String {
+        val triggers = com.bydmate.app.data.local.entity.TriggerDef.listFromJson(json)
+        if (triggers.isEmpty()) return if (json.isBlank() || json == "[]") "(none)" else "(unparseable)"
+        // kind + placeId: place_enter / place_exit share value="enter", only the kind
+        // tells them apart, and the id tells which geofence (name is user data, omitted).
+        return triggers.joinToString(" ") {
+            val place = it.placeId?.let { id -> " placeId=$id" } ?: ""
+            "[${it.kind}$place param=${it.param} op=${it.operator} value=${it.value}]"
+        }
+    }
+
+    /**
+     * One-line action summary for the dump. The command string is printed only for
+     * kind="param" (a fixed vehicle command); every other kind carries user data in
+     * its payload/command (phone number, address, notification text), so only the
+     * kind is printed.
+     */
+    private fun describeActions(json: String): String {
+        val actions = com.bydmate.app.data.local.entity.ActionDef.listFromJson(json)
+        if (actions.isEmpty()) return if (json.isBlank() || json == "[]") "(none)" else "(unparseable)"
+        return actions.joinToString(" ") {
+            if (it.kind == "param") "[param ${it.command}]" else "[${it.kind}]"
+        }
+    }
+
     /**
      * Writes a diagnostic header to the recording file before piping logcat.
      * Captures app / device / setting context that issue reports (e.g. #19)
@@ -1636,6 +1663,33 @@ class SettingsViewModel @Inject constructor(
             } else {
                 val ageS = (System.currentTimeMillis() - TrackingService.lastDataAtMs) / 1000
                 appendLine("age_s=$ageS gear=${live.gear} speed=${live.speed} powerState=${live.powerState} soc=${live.soc}")
+            }
+
+            // Automation rules (#177): issue reports about a rule that "does nothing"
+            // are undiagnosable without the rule itself. Action payloads stay out —
+            // they hold phone numbers, addresses and notification text.
+            appendLine("--- rules ---")
+            try {
+                val rules = ruleDao.getAllList()
+                if (rules.isEmpty()) {
+                    appendLine("(no rules)")
+                } else {
+                    rules.forEach { rule ->
+                        val last = rule.lastTriggeredAt?.let {
+                            SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(it))
+                        } ?: "(never)"
+                        appendLine(
+                            "rule id=${rule.id} \"${rule.name}\" enabled=${rule.enabled} " +
+                                "logic=${rule.triggerLogic} park=${rule.requirePark} " +
+                                "once=${rule.fireOncePerTrip} confirm=${rule.confirmBeforeExecute} " +
+                                "cooldown=${rule.cooldownSeconds}s fired=${rule.triggerCount} last=$last"
+                        )
+                        appendLine("  triggers: " + describeTriggers(rule.triggers))
+                        appendLine("  actions: " + describeActions(rule.actions))
+                    }
+                }
+            } catch (e: Exception) {
+                appendLine("(failed to gather rules: ${e.message})")
             }
 
             appendLine("--- vehicle data sources ---")

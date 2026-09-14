@@ -322,6 +322,42 @@ class CommandTranslatorTest {
         assertEquals(16, r?.value)
     }
 
+    // ── Fan speed ── dynamic 风量<N> → ac_wind_level, clamped to 1..7 (#201) ──
+    @Test fun `fan level 4 maps to ac_wind_level val 4`() {
+        val r = one("风量4")
+        assertEquals("ac_wind_level", r?.actionName)
+        assertEquals(4, r?.value)
+    }
+
+    @Test fun `fan level 9 clamps to ac_wind_level val 7`() {
+        val r = one("风量9")
+        assertEquals("ac_wind_level", r?.actionName)
+        assertEquals(7, r?.value)
+    }
+
+    @Test fun `fan level 0 clamps to ac_wind_level val 1`() {
+        val r = one("风量0")
+        assertEquals("ac_wind_level", r?.actionName)
+        assertEquals(1, r?.value)
+    }
+
+    // ── Blow direction ── static 吹面/吹脚/除霜 family → ac_wind_mode (#201) ──
+    @Test fun `blow direction commands map to ac_wind_mode values 1 to 5`() {
+        val expected = listOf("吹面" to 1, "吹面吹脚" to 2, "吹脚" to 3, "吹脚除霜" to 4, "除霜" to 5)
+        expected.forEach { (command, value) ->
+            val r = one(command)
+            assertEquals("action for $command", "ac_wind_mode", r?.actionName)
+            assertEquals("value for $command", value, r?.value)
+        }
+    }
+
+    // 吹前挡 drives defrost_front_on on a different fid — the new 除霜 entry must not
+    // have shadowed it.
+    @Test fun `windshield defrost command still maps to defrost_front_on`() {
+        val r = one("吹前挡")
+        assertEquals("defrost_front_on", r?.actionName)
+    }
+
     // ── Trunk ── competitor-actions.json (dev=1001, open=1 close=3) ──────────
     @Test fun `open trunk maps to open_trunk val 1`() {
         val r = one("开后备箱")

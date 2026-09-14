@@ -283,6 +283,7 @@ class SettingsViewModelConnectionsTest {
             ),
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
+            ruleDao = mockk(relaxed = true),
         )
     }
 

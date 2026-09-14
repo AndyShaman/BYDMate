@@ -83,6 +83,15 @@ object CommandTranslator {
         "吹前挡"      to Resolved("defrost_front_on",  1),  // competitor val=1
         "关闭吹前挡"  to Resolved("defrost_front_off", 0),  // competitor val=0
 
+        // ── Climate ── blow direction (ac_wind_mode, dev=1000) ────────────────
+        // Labels taken verbatim from D+ (空调出风模式 enum, indices 1..5); 除霜 is
+        // deliberately distinct from 吹前挡 above, which drives a different fid.
+        "吹面"     to Resolved("ac_wind_mode", 1),
+        "吹面吹脚" to Resolved("ac_wind_mode", 2),
+        "吹脚"     to Resolved("ac_wind_mode", 3),
+        "吹脚除霜" to Resolved("ac_wind_mode", 4),
+        "除霜"     to Resolved("ac_wind_mode", 5),
+
         // ── Locks ── LIVE_VALIDATED ───────────────────────────────────────────
         "车门上锁"  to Resolved("doors_lock",   2),
         "车门解锁"  to Resolved("doors_unlock", 1),
@@ -206,6 +215,11 @@ object CommandTranslator {
             val c = m.groupValues[1].toIntOrNull() ?: return emptyList()
             return fridgeCool(c.coerceIn(FRIDGE_COOL_MIN, FRIDGE_COOL_MAX))
         }
+        // Dynamic fan speed: 风量<N> → ac_wind_level, clamped to 1..7 (#201).
+        FAN_REGEX.matchEntire(stripped)?.let { m ->
+            val level = m.groupValues[1].toInt().coerceIn(FAN_MIN, FAN_MAX)
+            return listOf(Resolved("ac_wind_level", level))
+        }
         FRIDGE_HEAT_REGEX.matchEntire(stripped)?.let { m ->
             val c = m.groupValues[1].toIntOrNull() ?: return emptyList()
             return fridgeHeat(c.coerceIn(FRIDGE_HEAT_MIN, FRIDGE_HEAT_MAX))
@@ -217,6 +231,11 @@ object CommandTranslator {
     private val TEMP_REGEX = Regex("""设置温度(\d+)""")
     private const val TEMP_MIN = 16
     private const val TEMP_MAX = 30
+
+    // Dynamic fan speed command: 风量<N> (e.g. 风量3). Range-clamped in resolve().
+    private val FAN_REGEX = Regex("""风量(\d+)""")
+    private const val FAN_MIN = 1
+    private const val FAN_MAX = 7
 
     // Dynamic fridge commands: 冰箱制冷<N>度 (cool, C in -6..6) / 冰箱制热<N>度 (heat, 35..50).
     private val FRIDGE_COOL_REGEX = Regex("""冰箱制冷(-?\d+)度""")
@@ -231,7 +250,7 @@ object CommandTranslator {
     private const val VENT_PCT = 10
 
     /** Action names produced only by dynamic resolution (absent from [table]). */
-    private val DYNAMIC_ACTIONS = setOf("ac_temp_main")
+    private val DYNAMIC_ACTIONS = setOf("ac_temp_main", "ac_wind_level")
 
     /** Set of all action_names referenced by this translator. Used by invariant test. */
     fun allActions(): Set<String> =

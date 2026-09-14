@@ -240,6 +240,18 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             WriteEntry("window_rear_left_close",  1001, 1125122112, null, 2, 2, "windows", true,  "live-leopard3-2026-09-10"),
             WriteEntry("window_rear_right_open",  1001, 1125122115, null, 1, 1, "windows", true,  "live-leopard3-2026-09-10"),
             WriteEntry("window_rear_right_close", 1001, 1125122115, null, 2, 2, "windows", true,  "live-leopard3-2026-09-10"),
+            // Fan speed (AC_WIND_LEVEL_SET, dev=1000, 1..7). The competitor JSON entry
+            // is value-less (valueMin=valueMax=0), which blocks a ranged write — this
+            // entry restores the 1..7 range. No readbackFid: AC_WIND_LEVEL sits on a
+            // different fid per model (1077936156 on Leopard 3 / DiLink 4, 330301468 on
+            // Song Plus), so a hardcoded readback would report a healthy write as
+            // unsupported off Leopard 3. Not live-validated yet (#201).
+            WriteEntry("ac_wind_level", 1000, 501219340, null, 1, 7, "climate", false, "competitor-actions ac_wind_level; #201"),
+            // Blow direction (AC_WIND_MODE_SET, dev=1000): 1=face, 2=face+feet, 3=feet,
+            // 4=feet+windshield, 5=windshield. 6/7 exist on some models and stay out.
+            // Same value-less competitor entry problem and same per-model readback fid
+            // divergence as ac_wind_level above, so no readbackFid here either (#201).
+            WriteEntry("ac_wind_mode", 1000, 501219336, null, 1, 5, "climate", false, "competitor-actions ac_wind_mode; AirConditioningService decompiled; #201"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),
