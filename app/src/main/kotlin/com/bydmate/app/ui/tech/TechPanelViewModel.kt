@@ -158,16 +158,18 @@ class TechPanelViewModel @Inject constructor(
     }
 
     /**
-     * Drops [moved] into [target]'s place and persists the new order. A completed drag also
-     * retires the hint: the driver has just proved they know the gesture.
+     * Drops [moved] into [target]'s place and persists the new order. The first completed drag
+     * also retires the hint: the driver has just proved they know the gesture. Later drags leave
+     * the flag alone — it is already set.
      */
     fun moveCard(moved: TechCard, target: TechCard) {
         val next = TechCardOrder.move(_uiState.value.cardOrder, moved, target)
         if (next == _uiState.value.cardOrder) return
+        val retireHint = _uiState.value.showOrderHint
         _uiState.update { it.copy(cardOrder = next, showOrderHint = false) }
         viewModelScope.launch {
             settingsRepository.setTechCardOrder(TechCardOrder.serialize(next))
-            settingsRepository.setTechOrderHintSeen()
+            if (retireHint) settingsRepository.setTechOrderHintSeen()
         }
     }
 
