@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.15.5] - 2026-09-14
+
 ### Новое
 - Техника: карточки можно расставить в своём порядке. Удерживайте карточку и перетащите её на место другой, порядок сохранится
 - Тарифы: добавлена валюта AMD (֏, армянский драм) (#205)
@@ -1080,7 +1082,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.4...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.15.5...HEAD
+[3.15.5]: https://github.com/AndyShaman/BYDMate/compare/v3.15.4...v3.15.5
 [3.15.4]: https://github.com/AndyShaman/BYDMate/compare/v3.15.3...v3.15.4
 [3.15.3]: https://github.com/AndyShaman/BYDMate/compare/v3.15.2...v3.15.3
 [3.15.2]: https://github.com/AndyShaman/BYDMate/compare/v3.15.1...v3.15.2
