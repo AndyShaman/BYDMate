@@ -41,6 +41,7 @@ class TechPanelViewModelTest {
         Dispatchers.setMain(testDispatcher)
         savedOrder = ""
         hintSeen = false
+        hintFlagWrites = 0
     }
 
     @After fun tearDown() {
@@ -71,12 +72,13 @@ class TechPanelViewModelTest {
     /** The two settings rows the card order lives in, kept in memory across reads and writes. */
     private var savedOrder = ""
     private var hintSeen = false
+    private var hintFlagWrites = 0
 
     private fun settings(): SettingsRepository = mockk<SettingsRepository>(relaxed = true).also { r ->
         coEvery { r.getTechCardOrder() } answers { savedOrder }
         coEvery { r.setTechCardOrder(any()) } answers { savedOrder = firstArg() }
         coEvery { r.isTechOrderHintSeen() } answers { hintSeen }
-        coEvery { r.setTechOrderHintSeen() } answers { hintSeen = true }
+        coEvery { r.setTechOrderHintSeen() } answers { hintFlagWrites++; hintSeen = true }
     }
 
     private fun buildViewModel(
@@ -343,6 +345,11 @@ class TechPanelViewModelTest {
         assertEquals("tyres,battery_now,limits,history,motors,climate", savedOrder)
         assertTrue(hintSeen)
         assertFalse(vm.uiState.value.showOrderHint)
+
+        // The flag is already set: a second drag must not write it again.
+        vm.moveCard(TechCard.CLIMATE, TechCard.TYRES)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, hintFlagWrites)
     }
 
     /** Hidden cards drop out of the grid but keep their place in the stored order. */
