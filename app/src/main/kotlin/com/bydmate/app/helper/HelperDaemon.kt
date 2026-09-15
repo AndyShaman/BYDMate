@@ -2,6 +2,14 @@
 package com.bydmate.app.helper
 
 import com.bydmate.app.BuildConfig
+import com.bydmate.app.helper.push.FidPushRegistry
+import com.bydmate.app.helper.push.FidRecorder
+import com.bydmate.app.helper.push.PermissiveContext
+import com.bydmate.app.helper.push.readRecStartRequest
+import com.bydmate.app.helper.push.readSubscribeRequest
+import com.bydmate.app.helper.push.writeRecStatus
+import com.bydmate.app.helper.push.writeResultTable
+import com.bydmate.app.helper.push.writeStatusTable
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -183,6 +191,10 @@ fun main(args: Array<String>) {
     @Suppress("DEPRECATION")
     Looper.prepareMainLooper()
     val systemContext: Context? = acquireSystemContext()
+    FidPushRegistry.context = systemContext?.let { PermissiveContext(it) }
+    // The diagnostic recorder builds its own device instances and needs the same Context.
+    FidRecorder.context = FidPushRegistry.context
+    logPushContext(systemContext)
 
     // Step 2: resolve autoservice Binder.
     val smCls = Class.forName("android.os.ServiceManager")
@@ -819,6 +831,34 @@ fun main(args: Array<String>) {
                     reply?.writeInt(0)
                     true
                 }.getOrElse { reply?.writeInt(-1); true }
+
+                HelperBinderProtocol.TX_PUSH_SUBSCRIBE -> runCatching {
+                    val callback = data.readStrongBinder()
+                    val subs = readSubscribeRequest(data)
+                    val results = FidPushRegistry.subscribe(subs, callback, Binder.getCallingUid())
+                    reply?.writeInt(0)
+                    reply?.let { writeResultTable(it, results) }
+                    true
+                }.getOrElse { e ->
+                    android.util.Log.w("FidPush", "TX_PUSH_SUBSCRIBE failed", e)
+                    reply?.writeInt(-1); reply?.writeInt(0); true
+                }
+
+                HelperBinderProtocol.TX_PUSH_UNSUBSCRIBE -> runCatching {
+                    reply?.writeInt(0)
+                    reply?.writeInt(FidPushRegistry.unsubscribe())
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_PUSH_STATUS -> runCatching {
+                    reply?.writeInt(0)
+                    reply?.let { writeStatusTable(it, FidPushRegistry.status()) }
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
+                HelperBinderProtocol.TX_REC_START,
+                HelperBinderProtocol.TX_REC_STOP,
+                HelperBinderProtocol.TX_REC_STATUS -> handleRecorderTransact(code, data, reply)
 
                 else -> super.onTransact(code, data, reply, flags)
             }
@@ -1657,6 +1697,10 @@ internal fun split37MoveTaskCore(
  * Reflection (no HiddenApiBypass): the daemon runs under app_process, where hidden-API
  * enforcement is inactive.
  */
+private fun logPushContext(ctx: Context?) {
+    android.util.Log.i("FidPush", "system context for device classes: ${if (ctx != null) "ok" else "MISSING"}")
+}
+
 private fun acquireSystemContext(): Context? = try {
     val atCls = Class.forName("android.app.ActivityThread")
     val activityThread = atCls.getMethod("systemMain").invoke(null)
@@ -2473,6 +2517,46 @@ internal fun dumpFidsChunkBytes(
     if (offset >= dumpUtf8Bytes.size) return ByteArray(0)
     val end = minOf(offset + chunkMax, dumpUtf8Bytes.size)
     return dumpUtf8Bytes.copyOfRange(offset, end)
+}
+
+/**
+ * The three diagnostic-recorder verbs, out of line so onTransact keeps its own branch count:
+ * start over the requested devices (empty = all), stop, and read the live counters back.
+ * Every reply starts with a status int, so a failure is never read as an empty recording.
+ */
+private fun handleRecorderTransact(code: Int, data: Parcel, reply: Parcel?): Boolean {
+    when (code) {
+        HelperBinderProtocol.TX_REC_START -> runCatching {
+            val devices = readRecStartRequest(data)
+            val result = FidRecorder.start(devices)
+            reply?.writeInt(0)
+            reply?.writeInt(result.devices)
+            reply?.writeInt(result.registered)
+            reply?.writeString(result.error)
+        }.onFailure { e ->
+            android.util.Log.w("FidRec", "TX_REC_START failed", e)
+            reply?.writeInt(-1); reply?.writeInt(0); reply?.writeInt(0); reply?.writeString("")
+        }
+
+        HelperBinderProtocol.TX_REC_STOP -> runCatching {
+            val stopped = FidRecorder.stop()
+            reply?.writeInt(0)
+            reply?.writeInt(stopped)
+        }.onFailure { e ->
+            android.util.Log.w("FidRec", "TX_REC_STOP failed", e)
+            reply?.writeInt(-1); reply?.writeInt(0)
+        }
+
+        else -> runCatching {
+            val status = FidRecorder.status()
+            reply?.writeInt(0)
+            reply?.let { writeRecStatus(it, status) }
+        }.onFailure { e ->
+            android.util.Log.w("FidRec", "TX_REC_STATUS failed", e)
+            reply?.writeInt(-1)
+        }
+    }
+    return true
 }
 
 /**

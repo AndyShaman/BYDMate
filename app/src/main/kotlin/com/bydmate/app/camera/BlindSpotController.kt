@@ -3,10 +3,8 @@ package com.bydmate.app.camera
 import android.animation.ValueAnimator
 import android.content.Context
 import android.graphics.Color
-import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.graphics.Rect
-import android.graphics.RectF
 import android.graphics.SurfaceTexture
 import android.graphics.drawable.GradientDrawable
 import android.hardware.display.DisplayManager
@@ -30,6 +28,7 @@ import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.cameraNeedsCompositor
 import com.bydmate.app.cluster.geometryFor
 import com.bydmate.app.data.camera.CameraStateMonitor
+import com.bydmate.app.data.push.FidPushChannel
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
 import com.bydmate.app.data.vehicle.BatchReadItem
@@ -45,14 +44,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.cancelChildren
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.min
 import kotlin.math.roundToInt
 
 /**
@@ -84,6 +83,8 @@ class BlindSpotController @Inject constructor(
     private val clusterJournal: ClusterJournal,
     /** Tells when the factory 360 view is on screen; its windows own the screen, not ours. */
     private val cameraStateMonitor: CameraStateMonitor,
+    /** Turn signal / gear / BSD events straight from the car, ahead of the 150 ms tick. */
+    private val fidPush: FidPushChannel,
 ) {
     private val probe = AvmCameraProbe()
     private val telemetry = BlindSpotTelemetryGate()
@@ -95,6 +96,15 @@ class BlindSpotController @Inject constructor(
     // Touched from the poll collector (IO) and from onDestroy; everything below them lives on Main.
     @Volatile private var serviceScope: CoroutineScope? = null
     @Volatile private var fastLoop: Job? = null
+    @Volatile private var pushWatcher: Job? = null
+
+    /**
+     * Wakes the fast loop the moment the car reports a blinker, a gear or a BSD change, instead of
+     * waiting out the rest of the tick. Conflated: several events inside one tick are one wake, and
+     * the tick itself still re-reads every value, so a transient blinker mask never decides
+     * anything on its own.
+     */
+    private val wake = Channel<Unit>(Channel.CONFLATED)
 
     /** Created on first camera use, closed in [stop]; recreated if the service starts again
      *  (this singleton outlives TrackingService — WorkManager restarts it into the same process). */
@@ -140,11 +150,19 @@ class BlindSpotController @Inject constructor(
     /** Called from TrackingService.onCreate; the scope dies with the service, and so does the loop. */
     fun start(scope: CoroutineScope) {
         serviceScope = scope
+        pushWatcher?.cancel()
+        pushWatcher = scope.launch {
+            fidPush.events.collect { event ->
+                if (isWakeFid(event.fid)) wake.trySend(Unit)
+            }
+        }
     }
 
     fun stop() {
         fastLoop?.cancel()
         fastLoop = null
+        pushWatcher?.cancel()
+        pushWatcher = null
         serviceScope = null
         ownScope.launch {
             teardownNow("service stop")
@@ -173,10 +191,15 @@ class BlindSpotController @Inject constructor(
         fastLoop = scope.launch(Dispatchers.Main) {
             while (isActive) {
                 tick()
-                delay(TICK_MS)
+                // At most TICK_MS, less when the car pushes a blinker/gear/BSD change first.
+                withTimeoutOrNull(TICK_MS) { wake.receive() }
             }
         }
     }
+
+    /** True for the fids whose change is worth a tick of its own, at the addresses in force now. */
+    private fun isWakeFid(fid: Int): Boolean =
+        WAKE_FIELDS.any { com.bydmate.app.data.nativestack.FidAddresses.fid(it) == fid }
 
     private fun stopFastLoop() {
         val loop = fastLoop ?: return
@@ -405,7 +428,7 @@ class BlindSpotController @Inject constructor(
                     x = geo.xOffset
                     y = geo.yOffset
                 }
-                val window = PreviewWindow("cluster")
+                val window = PreviewWindow("cluster", BlindSpotSide.LEFT, rotatable = false)
                 val displayContext = context.createDisplayContext(display)
                 if (window.attach(displayContext, params, offscreenX(geo.width))) {
                     clusterWindow = window
@@ -413,7 +436,7 @@ class BlindSpotController @Inject constructor(
             }
         }
         val rect = pipRect()
-        val pip = PreviewWindow("pip")
+        val pip = PreviewWindow("pip", BlindSpotSide.RIGHT, rotatable = true)
         if (pip.attach(context, pipParams(rect), offscreenX(rect.width()))) {
             pipWindow = pip
             appliedPipRect = rect
@@ -447,7 +470,7 @@ class BlindSpotController @Inject constructor(
      *  one (#183), the right PiP mirrored across the screen until then. */
     private fun attachMirrorWindow() {
         val rect = leftPipRect()
-        val window = PreviewWindow("left-pip")
+        val window = PreviewWindow("left-pip", BlindSpotSide.LEFT, rotatable = true)
         if (window.attach(context, pipParams(rect), offscreenX(rect.width()))) {
             clusterWindow = window
             clusterOnMainScreen = true
@@ -480,14 +503,14 @@ class BlindSpotController @Inject constructor(
     private fun pipRect(): Rect {
         val metrics = realMetrics(defaultDisplay())
         return BlindSpotPreferences.placedPipRect(
-            metrics.widthPixels, metrics.heightPixels, prefs.pipWidthPct, prefs.pipXPx, prefs.pipYPx)
+            metrics.widthPixels, metrics.heightPixels, prefs.pipShape, prefs.pipXPx, prefs.pipYPx)
     }
 
     /** Geometry of the left window on the main screen; mirrors [pipRect] while it has no own place. */
     private fun leftPipRect(): Rect {
         val metrics = realMetrics(defaultDisplay())
         return BlindSpotPreferences.leftPipRect(
-            metrics.widthPixels, metrics.heightPixels, prefs.pipWidthPct,
+            metrics.widthPixels, metrics.heightPixels, prefs.pipShape,
             prefs.leftPipXPx, prefs.leftPipYPx, pipRect(),
         )
     }
@@ -711,6 +734,10 @@ class BlindSpotController @Inject constructor(
      */
     private inner class PreviewWindow(
         private val label: String,
+        /** Which camera fills this window; the crop turns the picture by it (#207). */
+        private val side: BlindSpotSide,
+        /** Main-screen PiP: only those follow the "portrait window" setting. */
+        private val rotatable: Boolean,
     ) : TextureView.SurfaceTextureListener {
         private var wm: WindowManager? = null
         private var params: WindowManager.LayoutParams? = null
@@ -770,7 +797,7 @@ class BlindSpotController @Inject constructor(
             container = frame
             textureView = texture
             glow = border
-            Log.i(TAG, "$label window attached")
+            Log.i(TAG, "$label window attached rotated=$rotated")
             true
         } catch (e: Throwable) {
             Log.w(TAG, "$label window failed: ${e.javaClass.simpleName}: ${e.message}")
@@ -898,24 +925,15 @@ class BlindSpotController @Inject constructor(
             lastFrameAt = SystemClock.elapsedRealtime()
         }
 
+        /** True while this window shows the picture turned a quarter-turn (#207). */
+        private val rotated: Boolean get() = rotatable && prefs.pipRotate90
+
         /** Centered crop of the side buffer to the window's own aspect, scaled to fill it —
          *  the cluster (1280×480) and the 16:9 PiP need different crops of the same source. */
         private fun applyCrop(width: Int, height: Int) {
             if (width <= 0 || height <= 0) return
             val view = textureView ?: return
-            val aspect = width.toFloat() / height
-            val cropW = min(SOURCE_WIDTH, SOURCE_HEIGHT * aspect)
-            val cropH = min(SOURCE_HEIGHT, SOURCE_WIDTH / aspect)
-            val left = (SOURCE_WIDTH - cropW) / 2f
-            val top = (SOURCE_HEIGHT - cropH) / 2f
-            // Untransformed, the whole buffer fills the view — so the crop in view coordinates
-            // is the source rect scaled by view/source, and FILL blows it back up to the window.
-            val src = RectF(
-                left / SOURCE_WIDTH * width, top / SOURCE_HEIGHT * height,
-                (left + cropW) / SOURCE_WIDTH * width, (top + cropH) / SOURCE_HEIGHT * height,
-            )
-            val dst = RectF(0f, 0f, width.toFloat(), height.toFloat())
-            view.setTransform(Matrix().apply { setRectToRect(src, dst, Matrix.ScaleToFit.FILL) })
+            view.setTransform(BlindSpotCrop.cropMatrix(rotated, side, width, height))
         }
     }
 
@@ -949,6 +967,9 @@ class BlindSpotController @Inject constructor(
         const val PREVIEW_INDEX_LEFT = 2
         const val PREVIEW_INDEX_RIGHT = 3
 
+        /** FidMap fields whose push event wakes the fast loop early. */
+        private val WAKE_FIELDS = listOf("turnSignal", "gear", "bsdLeft", "bsdRight")
+
         const val TICK_MS = 150L
         const val COOL_DOWN_MS = 10_000L
         const val SURFACE_TIMEOUT_MS = 8_000L
@@ -974,10 +995,6 @@ class BlindSpotController @Inject constructor(
         const val OVERLAY_FLAGS = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
             WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED
-
-        /** Per-side AVM buffer on Leopard 3; only its aspect matters for the crop. */
-        const val SOURCE_WIDTH = 1920f
-        const val SOURCE_HEIGHT = 1300f
 
         /** Raw (status, value) pair → int, with the same sentinel filtering a single read applies. */
         fun List<Pair<Int, Int>>.intAt(index: Int): Int? = getOrNull(index)

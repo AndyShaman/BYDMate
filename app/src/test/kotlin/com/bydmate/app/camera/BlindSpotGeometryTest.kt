@@ -21,11 +21,21 @@ class BlindSpotGeometryTest {
     private val screenH = 1200
     private val unset = BlindSpotPreferences.UNSET_PX
 
-    private fun right(x: Int = unset, y: Int = unset, widthPct: Int = 36): Rect =
-        BlindSpotPreferences.placedPipRect(screenW, screenH, widthPct, x, y)
+    private fun right(
+        x: Int = unset,
+        y: Int = unset,
+        widthPct: Int = 36,
+        rotated: Boolean = false,
+    ): Rect = BlindSpotPreferences.placedPipRect(screenW, screenH, PipShape(widthPct, rotated), x, y)
 
-    private fun left(x: Int, y: Int, widthPct: Int = 36, rightRect: Rect = right(widthPct = widthPct)): Rect =
-        BlindSpotPreferences.leftPipRect(screenW, screenH, widthPct, x, y, rightRect)
+    private fun left(
+        x: Int,
+        y: Int,
+        widthPct: Int = 36,
+        rightRect: Rect = right(widthPct = widthPct),
+        rotated: Boolean = false,
+    ): Rect = BlindSpotPreferences.leftPipRect(
+        screenW, screenH, PipShape(widthPct, rotated), x, y, rightRect)
 
     @Test
     fun `unplaced left window mirrors the right one across the screen`() {
@@ -63,7 +73,7 @@ class BlindSpotGeometryTest {
 
     @Test
     fun `a placed left window is clamped to the screen`() {
-        val size = BlindSpotPreferences.pipSize(screenW, 36)
+        val size = BlindSpotPreferences.pipSize(screenW, screenH, PipShape(36, false))
         val leftRect = left(screenW * 2, screenH * 2)
         assertEquals(screenW - size.width, leftRect.left)
         assertEquals(screenH - size.height, leftRect.top)
@@ -76,9 +86,58 @@ class BlindSpotGeometryTest {
         val wideRight = right(x = 1400, y = 200, widthPct = 50)
         val narrowLeft = left(120, 640, widthPct = 20)
         val wideLeft = left(120, 640, widthPct = 50)
-        assertEquals(BlindSpotPreferences.pipSize(screenW, 20).width, narrowLeft.width())
-        assertEquals(BlindSpotPreferences.pipSize(screenW, 50).width, wideLeft.width())
+        assertEquals(BlindSpotPreferences.pipSize(screenW, screenH, PipShape(20, false)).width, narrowLeft.width())
+        assertEquals(BlindSpotPreferences.pipSize(screenW, screenH, PipShape(50, false)).width, wideLeft.width())
         assertEquals(narrowRight.width(), narrowLeft.width())
         assertEquals(wideRight.width(), wideLeft.width())
+    }
+
+    @Test
+    fun `the portrait window is the same window on its short side`() {
+        // #207: the width slider still means the same window, it just stands upright.
+        val flat = BlindSpotPreferences.pipSize(screenW, screenH, PipShape(36, false))
+        val upright = BlindSpotPreferences.pipSize(screenW, screenH, PipShape(36, true))
+        assertEquals(flat.height, upright.width)
+        assertEquals(flat.width, upright.height)
+    }
+
+    @Test
+    fun `a portrait window taller than the screen is scaled down to fit`() {
+        // A short screen and a wide slider: upright, the window would be 1152 px tall on a
+        // 720 px screen, so it shrinks whole and still fits 16:9.
+        val size = BlindSpotPreferences.pipSize(screenW, 720, PipShape(60, true))
+        assertEquals(720, size.height)
+        assertEquals(405, size.width)
+        val rect = BlindSpotPreferences.defaultPipRect(screenW, 720, PipShape(60, true))
+        assertEquals(720, rect.height())
+        assertEquals(405, rect.width())
+        assertEquals(0, rect.top)
+    }
+
+    @Test
+    fun `the portrait default slot stays at the right edge, vertically centered`() {
+        val rect = BlindSpotPreferences.defaultPipRect(screenW, screenH, PipShape(36, true))
+        val size = BlindSpotPreferences.pipSize(screenW, screenH, PipShape(36, true))
+        assertEquals(screenW - size.width, rect.left)
+        assertEquals((screenH - size.height) / 2, rect.top)
+        assertEquals(size.width, rect.width())
+        assertEquals(size.height, rect.height())
+    }
+
+    @Test
+    fun `a placed portrait window is clamped by its own upright size`() {
+        val size = BlindSpotPreferences.pipSize(screenW, screenH, PipShape(36, true))
+        val rect = right(x = screenW * 2, y = screenH * 2, rotated = true)
+        assertEquals(screenW - size.width, rect.left)
+        assertEquals(screenH - size.height, rect.top)
+    }
+
+    @Test
+    fun `the portrait left window mirrors the portrait right one`() {
+        val rightRect = right(x = 1700, y = 200, rotated = true)
+        val leftRect = left(unset, unset, rightRect = rightRect, rotated = true)
+        assertEquals(screenW - rightRect.right, leftRect.left)
+        assertEquals(rightRect.width(), leftRect.width())
+        assertEquals(rightRect.height(), leftRect.height())
     }
 }

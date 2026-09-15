@@ -30,6 +30,17 @@ class AgentCommandCatalogTest {
         assertEquals("车窗关闭", AgentCommandCatalog.resolve("windows_close_all", null))
     }
 
+    @Test fun `resolve returns chinese string for per-window half and pair apertures`() {
+        assertEquals("主驾半开", AgentCommandCatalog.resolve("window_driver_half", null))
+        assertEquals("副驾半开", AgentCommandCatalog.resolve("window_passenger_half", null))
+        assertEquals("后左半开", AgentCommandCatalog.resolve("window_rear_left_half", null))
+        assertEquals("后右半开", AgentCommandCatalog.resolve("window_rear_right_half", null))
+        assertEquals("前排车窗半开", AgentCommandCatalog.resolve("windows_half_front", null))
+        assertEquals("前排车窗通风", AgentCommandCatalog.resolve("windows_vent_front", null))
+        assertEquals("后排车窗半开", AgentCommandCatalog.resolve("windows_half_rear", null))
+        assertEquals("后排车窗通风", AgentCommandCatalog.resolve("windows_vent_rear", null))
+    }
+
     @Test fun `resolve returns chinese string for hazard commands`() {
         assertEquals("双闪打开", AgentCommandCatalog.resolve("hazard_on", null))
         assertEquals("双闪关闭", AgentCommandCatalog.resolve("hazard_off", null))

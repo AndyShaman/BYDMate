@@ -14,8 +14,8 @@ import com.bydmate.app.BuildConfig
  * intent to [ClusterProbeRunner]'s own scope and returns at once: the process stays alive on
  * TrackingService, not on this receiver's window.
  *
- * The receiver stays exported (the manifest is shared), so it is gated to `-test` builds the
- * same way as FidSubscriptionManager (plus local debug builds): a public build ignores the broadcast.
+ * The receiver stays exported (the manifest is shared), so it is gated to `-test` builds
+ * (plus local debug builds): a public build ignores the broadcast.
  */
 class ClusterProbeReceiver : BroadcastReceiver() {
 

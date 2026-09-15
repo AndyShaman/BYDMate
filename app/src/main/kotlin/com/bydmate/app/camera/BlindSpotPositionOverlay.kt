@@ -212,14 +212,16 @@ class BlindSpotPositionOverlay {
     private fun placement(context: Context, metrics: DisplayMetrics): Rect {
         val prefs = prefs(context)
         val widthPct = prefs.widthPct()
+        val shape = PipShape(
+            widthPct, prefs.getBoolean(BlindSpotPreferences.KEY_PIP_ROTATE_90, false))
         val rightRect = BlindSpotPreferences.placedPipRect(
-            metrics.widthPixels, metrics.heightPixels, widthPct,
+            metrics.widthPixels, metrics.heightPixels, shape,
             prefs.getInt(BlindSpotPreferences.KEY_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
             prefs.getInt(BlindSpotPreferences.KEY_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
         )
         if (side == Side.RIGHT) return rightRect
         return BlindSpotPreferences.leftPipRect(
-            metrics.widthPixels, metrics.heightPixels, widthPct,
+            metrics.widthPixels, metrics.heightPixels, shape,
             prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_X_PX, BlindSpotPreferences.UNSET_PX),
             prefs.getInt(BlindSpotPreferences.KEY_LEFT_PIP_Y_PX, BlindSpotPreferences.UNSET_PX),
             rightRect,

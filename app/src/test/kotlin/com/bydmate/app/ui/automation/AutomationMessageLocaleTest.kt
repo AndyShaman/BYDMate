@@ -58,6 +58,7 @@ class AutomationMessageLocaleTest {
             ruleLogDao = mockk(relaxed = true),
             placeRepository = mockk(relaxed = true),
             vehicleApi = mockk(relaxed = true),
+            actionDispatcher = mockk(relaxed = true),
             context = appCtxEn,
         )
 

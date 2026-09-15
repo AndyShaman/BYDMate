@@ -27,6 +27,10 @@ object AgentCommandCatalog {
         Cmd("windows_close_front", "закрыть передние окна", { "前排车窗关闭" }),
         Cmd("windows_open_rear", "открыть задние окна", { "后排车窗全开" }),
         Cmd("windows_close_rear", "закрыть задние окна", { "后排车窗关闭" }),
+        Cmd("windows_half_front", "передние окна наполовину", { "前排车窗半开" }),
+        Cmd("windows_vent_front", "передние окна на проветривание", { "前排车窗通风" }),
+        Cmd("windows_half_rear", "задние окна наполовину", { "后排车窗半开" }),
+        Cmd("windows_vent_rear", "задние окна на проветривание", { "后排车窗通风" }),
         // Windows — individual (open=100 / close=0)
         Cmd("window_driver_open", "открыть окно водителя", { "主驾打开100" }),
         Cmd("window_driver_close", "закрыть окно водителя", { "主驾打开0" }),
@@ -41,6 +45,11 @@ object AgentCommandCatalog {
         Cmd("window_passenger_vent", "проветривание окна переднего пассажира", { "副驾通风" }),
         Cmd("window_rear_left_vent", "проветривание заднего левого окна", { "后左通风" }),
         Cmd("window_rear_right_vent", "проветривание заднего правого окна", { "后右通风" }),
+        // Windows — individual half (the 50 % detent)
+        Cmd("window_driver_half", "окно водителя наполовину", { "主驾半开" }),
+        Cmd("window_passenger_half", "окно переднего пассажира наполовину", { "副驾半开" }),
+        Cmd("window_rear_left_half", "заднее левое окно наполовину", { "后左半开" }),
+        Cmd("window_rear_right_half", "заднее правое окно наполовину", { "后右半开" }),
         // Climate
         Cmd("ac_on", "включить климат-контроль (авто)", { "自动空调" }),
         Cmd("ac_off", "выключить климат-контроль", { "关闭空调" }),

@@ -2,7 +2,9 @@ package com.bydmate.app.ui.automation
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.util.appLocalizedContext
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -43,6 +45,14 @@ class AutomationI18nGoldenTest {
         "副驾通风" to Triple("Проветрить окно пассажира", "Vent Passenger Window", "副驾车窗通风"),
         "后左通风" to Triple("Проветрить заднее левое окно", "Vent Rear Left Window", "后左车窗通风"),
         "后右通风" to Triple("Проветрить заднее правое окно", "Vent Rear Right Window", "后右车窗通风"),
+        "主驾半开" to Triple("Окно водителя на 50%", "Driver Window 50%", "主驾车窗半开"),
+        "副驾半开" to Triple("Окно пассажира на 50%", "Passenger Window 50%", "副驾车窗半开"),
+        "后左半开" to Triple("Заднее левое окно на 50%", "Rear Left Window 50%", "后左车窗半开"),
+        "后右半开" to Triple("Заднее правое окно на 50%", "Rear Right Window 50%", "后右车窗半开"),
+        "前排车窗半开" to Triple("Передние на 50%", "Front Windows 50%", "前排车窗半开"),
+        "前排车窗通风" to Triple("Проветрить передние", "Vent Front Windows", "前排车窗通风"),
+        "后排车窗半开" to Triple("Задние на 50%", "Rear Windows 50%", "后排车窗半开"),
+        "后排车窗通风" to Triple("Проветрить задние", "Vent Rear Windows", "后排车窗通风"),
         "自动空调" to Triple("Авто AC", "Auto AC", "自动空调"),
         "打开空调通风" to Triple("Обдув без AC", "Ventilation (no AC)", "通风（不开AC）"),
         "设置温度18" to Triple("Темп. 18°C", "Temp 18°C", "温度 18°C"),
@@ -150,6 +160,14 @@ class AutomationI18nGoldenTest {
         "副驾通风" to Triple("Окна", "Windows", "车窗"),
         "后左通风" to Triple("Окна", "Windows", "车窗"),
         "后右通风" to Triple("Окна", "Windows", "车窗"),
+        "主驾半开" to Triple("Окна", "Windows", "车窗"),
+        "副驾半开" to Triple("Окна", "Windows", "车窗"),
+        "后左半开" to Triple("Окна", "Windows", "车窗"),
+        "后右半开" to Triple("Окна", "Windows", "车窗"),
+        "前排车窗半开" to Triple("Окна", "Windows", "车窗"),
+        "前排车窗通风" to Triple("Окна", "Windows", "车窗"),
+        "后排车窗半开" to Triple("Окна", "Windows", "车窗"),
+        "后排车窗通风" to Triple("Окна", "Windows", "车窗"),
         "自动空调" to Triple("Климат", "Climate", "空调"),
         "打开空调通风" to Triple("Климат", "Climate", "空调"),
         "设置温度18" to Triple("Климат", "Climate", "空调"),
@@ -424,6 +442,31 @@ class AutomationI18nGoldenTest {
             lang("zh"); assertEquals("pname zh ${t.param}", n.third,  t.localizedName(ctx)); assertEquals("pcat zh ${t.param}", c.third,  t.localizedCategory(ctx))
         }
         assertEquals(parName.size, TRIGGER_PARAMS.size)
+    }
+
+    // Toggle targets are picked in the editor and printed in the failure reason,
+    // so their names must exist in every locale the catalog is checked against.
+    private val toggleTargetName = mapOf(
+        "trunk" to Triple("Багажник", "Trunk", "后备箱"),
+        "front_trunk" to Triple("Передний багажник", "Front trunk", "前备箱"),
+        "sunroof" to Triple("Люк", "Sunroof", "天窗"),
+        "locks" to Triple("Замки дверей", "Door locks", "车门锁"),
+        "cluster" to Triple("Вывод на приборку", "Projection to cluster", "投射到仪表盘"),
+    )
+
+    private fun toggleName(target: String): String {
+        val res = ActionDispatcher.toggleTargetNameRes(target)!!
+        return ctx.appLocalizedContext().getString(res)
+    }
+
+    @Test fun toggle_target_names_match_baseline_all_locales() {
+        for (target in ActionDispatcher.TOGGLE_TARGETS) {
+            val n = toggleTargetName.getValue(target)
+            lang("ru"); assertEquals("toggle ru $target", n.first, toggleName(target))
+            lang("en"); assertEquals("toggle en $target", n.second, toggleName(target))
+            lang("zh"); assertEquals("toggle zh $target", n.third, toggleName(target))
+        }
+        assertEquals(toggleTargetName.size, ActionDispatcher.TOGGLE_TARGETS.size)
     }
 
     @Test fun param_units_and_enum_labels_match_baseline_ru() {

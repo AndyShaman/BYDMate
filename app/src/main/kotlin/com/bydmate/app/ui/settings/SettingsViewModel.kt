@@ -26,6 +26,10 @@ import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.diagnostics.LogRecorder
+import com.bydmate.app.BuildConfig
+import com.bydmate.app.data.push.fidRecorderEnabled
+import com.bydmate.app.helper.push.FID_REC_NO_ERROR
+import com.bydmate.app.helper.push.fidRecorderStatusLines
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.LlmHttpException
 import com.bydmate.app.data.remote.OpenRouterClient
@@ -104,6 +108,13 @@ data class SettingsUiState(
     val diagnosticLog: String? = null,
     val logSaveStatus: String? = null,
     val isRecordingLogs: Boolean = false,
+    /** The fid recorder row is a diagnostic tool: shown on -test and local debug builds only. */
+    val fidRecorderVisible: Boolean = fidRecorderEnabled(BuildConfig.VERSION_NAME, BuildConfig.DEBUG),
+    val fidRecorderRunning: Boolean = false,
+    /** Path of the file the current or last run wrote, with its size; null before the first run. */
+    val fidRecorderFile: String? = null,
+    /** Why the last start registered nothing (no file, daemon unreachable); null when it ran. */
+    val fidRecorderError: String? = null,
     val tripCostTariff: String = "home",
     val consumptionGood: String = SettingsRepository.DEFAULT_CONSUMPTION_GOOD,
     val consumptionBad: String = SettingsRepository.DEFAULT_CONSUMPTION_BAD,
@@ -249,7 +260,7 @@ class SettingsViewModel @Inject constructor(
     private val energyDataDeadDetector: com.bydmate.app.data.local.EnergyDataDeadDetector,
     private val hudController: com.bydmate.app.hud.HudController,
     private val logRecorder: LogRecorder,
-    private val fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager,
+    private val fidPushChannel: com.bydmate.app.data.push.FidPushChannel,
     private val splitPreferences: com.bydmate.app.split.SplitPreferences,
     private val splitSessionManager: com.bydmate.app.split.SplitSessionManager,
     private val splitJournal: com.bydmate.app.split.SplitJournal,
@@ -313,6 +324,47 @@ class SettingsViewModel @Inject constructor(
     init {
         loadSettings()
         observeLogRecorder()
+        refreshFidRecorder()
+    }
+
+    /**
+     * Mirrors the daemon's recorder state into the switch. The recording lives in the daemon, not
+     * in this ViewModel, so a screen reopened mid-run finds the switch on.
+     */
+    fun refreshFidRecorder() {
+        if (!_uiState.value.fidRecorderVisible) return
+        viewModelScope.launch {
+            val status = helperClient.recStatus()
+            _uiState.update {
+                it.copy(
+                    fidRecorderRunning = status?.running == true,
+                    fidRecorderFile = status?.filePath?.takeIf { path -> path.isNotEmpty() }?.let { path ->
+                        "$path (${status.fileBytes / 1024} КБ, ${status.totalEvents})"
+                    },
+                )
+            }
+        }
+    }
+
+    /** Switch handler: on = record every device, off = stop. The state is re-read from the daemon. */
+    fun setFidRecorder(on: Boolean) {
+        viewModelScope.launch {
+            // Optimistic flip so the switch does not sit still while ~45 devices are registered.
+            _uiState.update { it.copy(fidRecorderRunning = on, fidRecorderError = null) }
+            if (on) {
+                val started = helperClient.recStart(IntArray(0))
+                val error = when {
+                    started == null -> "демон не ответил"
+                    started.error != FID_REC_NO_ERROR -> started.error
+                    started.registered == 0 -> "ни один датчик не подписался"
+                    else -> null
+                }
+                _uiState.update { it.copy(fidRecorderError = error) }
+            } else {
+                helperClient.recStop()
+            }
+            refreshFidRecorder()
+        }
     }
 
     /** Load all settings from the repository on init. */
@@ -1586,7 +1638,13 @@ class SettingsViewModel @Inject constructor(
         val actions = com.bydmate.app.data.local.entity.ActionDef.listFromJson(json)
         if (actions.isEmpty()) return if (json.isBlank() || json == "[]") "(none)" else "(unparseable)"
         return actions.joinToString(" ") {
-            if (it.kind == "param") "[param ${it.command}]" else "[${it.kind}]"
+            when (it.kind) {
+                "param" -> "[param ${it.command}]"
+                // Toggle payload is a fixed target id, not user data — and the whole
+                // point of a toggle report is which target failed to flip.
+                "toggle" -> "[toggle ${it.payload}]"
+                else -> "[${it.kind}]"
+            }
         }
     }
 
@@ -1677,7 +1735,19 @@ class SettingsViewModel @Inject constructor(
                 appendLine("(no poll yet)")
             } else {
                 val ageS = (System.currentTimeMillis() - TrackingService.lastDataAtMs) / 1000
-                appendLine("age_s=$ageS gear=${live.gear} speed=${live.speed} powerState=${live.powerState} soc=${live.soc}")
+                // trunk/frontTrunk: the "toggle" action decides open-vs-close from these,
+                // and the front-trunk value semantics are still an assumption (FidMap).
+                appendLine(
+                    "age_s=$ageS gear=${live.gear} speed=${live.speed} powerState=${live.powerState} " +
+                        "soc=${live.soc} trunk=${live.trunk} frontTrunk=${live.frontTrunk}"
+                )
+                // Charging plug: the gun state the detector uses plus the two backup signals,
+                // so a running car with the plug in can be compared against a parked one.
+                appendLine(
+                    "charge gun=${live.chargeGunState} bms=${live.bmsState} " +
+                        "chargerConnect=${live.chargerConnectState} " +
+                        "connectIndicator=${live.chargeConnectIndicator}"
+                )
             }
 
             // Automation rules (#177): issue reports about a rule that "does nothing"
@@ -2115,10 +2185,19 @@ class SettingsViewModel @Inject constructor(
                 ).forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
-            appendLine("--- fid subscriptions ---")
+            appendLine("--- fid push ---")
             try {
-                SubscriptionDiagnostics.format(fidSubscriptionManager.diagnosticsSnapshot())
-                    .forEach { appendLine(it) }
+                fidPushChannel.diagnosticsSnapshot().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
+            appendLine("--- fid recorder ---")
+            try {
+                val recorder = helperClient.recStatus()
+                when {
+                    recorder == null -> appendLine("status unavailable (daemon unreachable)")
+                    !recorder.running && recorder.devices.isEmpty() -> appendLine("not running")
+                    else -> fidRecorderStatusLines(recorder).forEach { appendLine(it) }
+                }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             appendLine("--- last crash ---")

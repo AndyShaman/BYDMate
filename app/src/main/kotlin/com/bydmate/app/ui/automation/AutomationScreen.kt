@@ -1,5 +1,6 @@
 package com.bydmate.app.ui.automation
 
+import android.util.Log
 import android.app.TimePickerDialog
 import android.content.Context
 import android.media.AudioManager
@@ -29,6 +30,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Add
+import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Close
@@ -102,6 +104,7 @@ import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.cluster.VOLUME_KNOB_PRESS_KEYCODE
 import com.bydmate.app.cluster.knownButtonNameRes
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.ScheduleSpec
 import com.bydmate.app.data.automation.minuteToHHmm
 import com.bydmate.app.data.local.entity.ActionDef
@@ -113,6 +116,8 @@ import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.settings.LearnButtonDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.ui.widget.WidgetButtonIcons
+import com.bydmate.app.ui.widget.WidgetPreferences
 import org.json.JSONArray
 import org.json.JSONObject
 import java.text.SimpleDateFormat
@@ -377,7 +382,7 @@ private fun EditorDialog(
     editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
-    onTestAction: (String) -> Unit,
+    onTestAction: (ActionDef) -> Unit,
     onDismiss: () -> Unit
 ) {
     Dialog(
@@ -603,6 +608,9 @@ private fun EditorDialog(
                             onAddCluster = {
                                 onUpdate { copy(actions = actions + newClusterAction(context)) }
                             },
+                            onAddToggle = {
+                                onUpdate { copy(actions = actions + newToggleAction(context)) }
+                            },
                             onAddSplitScreen = {
                                 onUpdate { copy(actions = actions + newSplitScreenAction(context)) }
                             },
@@ -737,6 +745,9 @@ private fun ReorderArrows(onMoveUp: (() -> Unit)?, onMoveDown: (() -> Unit)?) {
             tint = TextSecondary.copy(alpha = if (onMoveDown != null) 1f else 0.25f), modifier = Modifier.size(16.dp))
     }
 }
+
+/** Icons per row in the widget-button icon picker menu. */
+private const val ICON_PICKER_COLUMNS = 6
 
 @Composable
 private fun TriggerRow(
@@ -1263,6 +1274,86 @@ private fun ButtonPressTriggerControls(
             }
         }
     }
+    Spacer(Modifier.width(8.dp))
+    ButtonIconPicker(buttonNumber = current)
+}
+
+/**
+ * Picks the icon drawn on widget button [buttonNumber] instead of its digit. The
+ * icon belongs to the button, not to the rule: it is written to widget prefs right
+ * away, so if two rules share a button the last choice wins. Tapping the selected
+ * icon again clears it and the button goes back to showing its number.
+ */
+@Composable
+private fun ButtonIconPicker(buttonNumber: Int) {
+    val context = LocalContext.current
+    val prefs = remember(context) { WidgetPreferences(context) }
+    var selectedId by remember(buttonNumber) { mutableStateOf(prefs.buttonIconId(buttonNumber)) }
+    var open by remember { mutableStateOf(false) }
+    val selected = WidgetButtonIcons.find(selectedId)
+
+    Box {
+        Box(
+            modifier = Modifier
+                .background(CardSurface, RoundedCornerShape(6.dp))
+                .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                .clickable { open = true }
+                .padding(6.dp)
+                .size(20.dp),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = selected?.vector ?: Icons.Outlined.AddPhotoAlternate,
+                contentDescription = stringResource(R.string.widget_button_icon_hint),
+                tint = if (selected != null) AccentGreen else TextMuted,
+                modifier = Modifier.size(18.dp),
+            )
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            Text(
+                stringResource(R.string.widget_button_icon_hint),
+                fontSize = 11.sp,
+                color = TextSecondary,
+                modifier = Modifier.padding(12.dp, 6.dp),
+            )
+            WidgetButtonIcons.CATALOG.chunked(ICON_PICKER_COLUMNS).forEach { row ->
+                Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
+                    row.forEach { entry ->
+                        val isSelected = entry.id == selectedId
+                        Box(
+                            modifier = Modifier
+                                .padding(2.dp)
+                                .background(
+                                    if (isSelected) AccentGreen.copy(alpha = 0.18f) else CardSurface,
+                                    RoundedCornerShape(6.dp),
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) AccentGreen else CardBorder,
+                                    RoundedCornerShape(6.dp),
+                                )
+                                .clickable {
+                                    val next = if (isSelected) null else entry.id
+                                    selectedId = next
+                                    prefs.setButtonIconId(buttonNumber, next)
+                                    Log.i("AutomationScreen", "button $buttonNumber icon=$next")
+                                }
+                                .padding(6.dp)
+                                .size(22.dp),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = entry.vector,
+                                contentDescription = stringResource(entry.labelRes),
+                                tint = if (isSelected) AccentGreen else TextSecondary,
+                                modifier = Modifier.size(20.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -1353,7 +1444,7 @@ private fun ActionRow(
     action: ActionDef,
     places: List<PlaceEntity>,
     onUpdate: (ActionDef) -> Unit,
-    onTest: (String) -> Unit,
+    onTest: (ActionDef) -> Unit,
     onMoveUp: (() -> Unit)?,
     onMoveDown: (() -> Unit)?,
     onDelete: () -> Unit
@@ -1392,6 +1483,8 @@ private fun ActionRow(
                 HotspotActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "cluster_projection" ->
                 ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            "toggle" ->
+                ToggleActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "speak" ->
                 SpeakActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "agent_query" ->
@@ -1404,11 +1497,14 @@ private fun ActionRow(
                 ParamActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
         }
 
-        // "Выполнить сейчас" — fire this vehicle command immediately for live testing.
-        // Only for param (vehicle) actions; result is shown via Toast + logcat status line.
-        if (action.kind == "param" && action.command.isNotBlank()) {
+        // "Выполнить сейчас" — fire this vehicle action immediately for live testing.
+        // Param actions send their command; toggle actions go through the dispatcher so the
+        // target is flipped from the live state. Result is shown via Toast + logcat line.
+        val testable = (action.kind == "param" && action.command.isNotBlank()) ||
+            (action.kind == "toggle" && !action.payload.isNullOrBlank())
+        if (testable) {
             Spacer(Modifier.width(4.dp))
-            IconButton(onClick = { onTest(action.command) }, modifier = Modifier.size(24.dp)) {
+            IconButton(onClick = { onTest(action) }, modifier = Modifier.size(24.dp)) {
                 Icon(Icons.Outlined.PlayArrow, stringResource(R.string.auto_a11y_run_now), tint = AccentGreen, modifier = Modifier.size(16.dp))
             }
         }
@@ -1678,6 +1774,62 @@ private fun ClusterActionControls(
     }
 }
 
+// --- Toggle Action Controls ---
+
+/**
+ * Row for the "toggle" action: one dropdown picking what gets flipped. The label
+ * comes from the target id, so it follows an in-app language switch; displayName is
+ * rewritten on pick because that is what the journal and the dump show.
+ */
+@Composable
+private fun ToggleActionControls(
+    action: ActionDef,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+    val current = action.payload ?: ActionDispatcher.TOGGLE_TRUNK
+    val targetNames = ActionDispatcher.TOGGLE_TARGETS.associateWith { target ->
+        stringResource(ActionDispatcher.toggleTargetNameRes(target) ?: R.string.automation_action_toggle)
+    }
+    var expanded by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(stringResource(R.string.automation_action_toggle), fontSize = 13.sp, color = TextMuted)
+        Spacer(Modifier.width(6.dp))
+        Box {
+            Text(
+                targetNames[current] ?: current,
+                fontSize = 13.sp,
+                color = AccentTeal,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier
+                    .background(CardSurface, RoundedCornerShape(6.dp))
+                    .border(1.dp, CardBorder, RoundedCornerShape(6.dp))
+                    .clickable { expanded = true }
+                    .padding(8.dp, 6.dp)
+            )
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                ActionDispatcher.TOGGLE_TARGETS.forEach { target ->
+                    DropdownMenuItem(
+                        text = { Text(targetNames[target] ?: target, fontSize = 13.sp) },
+                        onClick = {
+                            expanded = false
+                            onUpdate(action.copy(
+                                payload = target,
+                                displayName = toggleDisplayName(context, target)
+                            ))
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
 // --- Catalog Dropdown (with category headers) ---
 
 @Composable
@@ -1919,6 +2071,7 @@ private fun AddActionButton(
     onAddSpeak: () -> Unit,
     onAddAgentQuery: () -> Unit,
     onAddCluster: () -> Unit,
+    onAddToggle: () -> Unit,
     onAddSplitScreen: () -> Unit,
     onAddSplitScreenClose: () -> Unit,
     onAddSplitScreenToggle: () -> Unit,
@@ -2000,6 +2153,10 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddCluster() }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.automation_action_toggle), fontSize = 13.sp) },
+                onClick = { menuExpanded = false; onAddToggle() }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_split_screen), fontSize = 13.sp) },

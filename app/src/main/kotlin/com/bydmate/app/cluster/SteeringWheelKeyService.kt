@@ -166,7 +166,18 @@ class SteeringWheelKeyService : AccessibilityService() {
     // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         NavA11yFeed.onEvent(this, event)
+        // Whoever just took the MAIN screen, reported the moment it happens: the blind-spot
+        // window has to be gone before the native 360 view is drawn, and the UsageStats poll is
+        // half a second behind. Events from the cluster are dropped by the filter, and the poll
+        // stays the fallback for everything the hints miss.
+        if (event?.eventType == AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) {
+            val pkg = event.packageName?.toString()
+            if (pkg != null && ForegroundHintFilter.allows(this, event, pkg)) {
+                entryPoint().cameraStateMonitor().onForegroundHint(pkg)
+            }
+        }
     }
+
     override fun onInterrupt() { /* no-op */ }
 
     override fun onUnbind(intent: Intent?): Boolean {

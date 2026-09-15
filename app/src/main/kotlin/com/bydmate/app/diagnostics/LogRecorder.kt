@@ -358,8 +358,12 @@ class LogRecorder internal constructor(
             "NavA11yFeed:*", "NavGuidanceHub:*", "GrantSelfHeal:*",
             // Amap-channel wave: notification lane + parser tags.
             "MediaSessionListener:*", "NaviNotifLane:*", "NaviNotifParser:*",
-            // Blindspot wave: observe-mode fid subscriptions + AVM camera probe.
-            "FidSubscription:*", "CameraProbe:*", "BlindSpot:*",
+            // Blindspot wave: AVM camera probe. FidPush carries the daemon's push
+            // subscription (register results, events) and the app's apply lines.
+            "FidPush:*", "TechPanel:*", "CameraProbe:*", "BlindSpot:*", "CameraMonitor:*",
+            // Diagnostic fid recorder (-test builds): summary only — the events go to its own
+            // file in /sdcard/Download, not here.
+            "FidRec:*",
             // Split-screen wave: session/watchdog decisions, pill+picker overlay, widget tap.
             "SplitSessionMgr:*", "SplitOverlayCtrl:*", "SplitPillView:*",
             "WidgetController:*",

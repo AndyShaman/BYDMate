@@ -24,6 +24,10 @@ object VoiceCatalog {
         VoiceCommandSpec(CLOSE, WINDOW_FRONT) { "前排车窗关闭" },
         VoiceCommandSpec(OPEN, WINDOW_REAR) { "后排车窗全开" },
         VoiceCommandSpec(CLOSE, WINDOW_REAR) { "后排车窗关闭" },
+        VoiceCommandSpec(HALF, WINDOW_FRONT) { "前排车窗半开" },
+        VoiceCommandSpec(VENT, WINDOW_FRONT) { "前排车窗通风" },
+        VoiceCommandSpec(HALF, WINDOW_REAR) { "后排车窗半开" },
+        VoiceCommandSpec(VENT, WINDOW_REAR) { "后排车窗通风" },
         // Windows — individual (open=100 / close=0)
         VoiceCommandSpec(OPEN, WINDOW_DRIVER) { "主驾打开100" },
         VoiceCommandSpec(CLOSE, WINDOW_DRIVER) { "主驾打开0" },
@@ -38,6 +42,11 @@ object VoiceCatalog {
         VoiceCommandSpec(VENT, WINDOW_PASSENGER) { "副驾通风" },
         VoiceCommandSpec(VENT, WINDOW_REAR_LEFT) { "后左通风" },
         VoiceCommandSpec(VENT, WINDOW_REAR_RIGHT) { "后右通风" },
+        // Windows — individual half (the 50 % detent)
+        VoiceCommandSpec(HALF, WINDOW_DRIVER) { "主驾半开" },
+        VoiceCommandSpec(HALF, WINDOW_PASSENGER) { "副驾半开" },
+        VoiceCommandSpec(HALF, WINDOW_REAR_LEFT) { "后左半开" },
+        VoiceCommandSpec(HALF, WINDOW_REAR_RIGHT) { "后右半开" },
         // Climate
         VoiceCommandSpec(ON, AC_AUTO) { "自动空调" },
         VoiceCommandSpec(OFF, AC_AUTO) { "关闭空调" },

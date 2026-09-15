@@ -71,6 +71,20 @@ class ActionDispatcherWindowBlockTest {
         assertTrue(isOpen("车窗通风"))
     }
 
+    @Test fun `per-window half is an open`() {
+        assertTrue(isOpen("主驾半开"))
+        assertTrue(isOpen("副驾半开"))
+        assertTrue(isOpen("后左半开"))
+        assertTrue(isOpen("后右半开"))
+    }
+
+    @Test fun `front and rear pair half and vent are opens`() {
+        assertTrue(isOpen("前排车窗半开"))
+        assertTrue(isOpen("前排车窗通风"))
+        assertTrue(isOpen("后排车窗半开"))
+        assertTrue(isOpen("后排车窗通风"))
+    }
+
     // ── isWindowOpenCommand: 天窗 and 遮阳帘 are NOT in window subjects ─────────
 
     @Test fun `sunroof vent is not a window open`() {

@@ -163,6 +163,9 @@ fun SettingsScreen(
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
+    // The fid recorder runs in the daemon, so its switch is re-read every time the screen opens.
+    LaunchedEffect(Unit) { viewModel.refreshFidRecorder() }
+
     // Recalculate confirmation dialog
     if (state.showRecalcConfirm) {
         val tariffLabel = when (state.tripCostTariff) {
@@ -1383,6 +1386,9 @@ private fun BlindSpotCard() {
             BlindSpotPreferences.KEY_PIP_WIDTH_PCT, BlindSpotPreferences.DEFAULT_PIP_WIDTH_PCT))
     }
     var bsdGlow by remember { mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BSD_GLOW, true)) }
+    var rotate90 by remember {
+        mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_PIP_ROTATE_90, false))
+    }
     var bothOnMain by remember {
         mutableStateOf(prefs.getBoolean(BlindSpotPreferences.KEY_BOTH_ON_MAIN, false))
     }
@@ -1466,6 +1472,20 @@ private fun BlindSpotCard() {
                 prefs.edit().putInt(BlindSpotPreferences.KEY_PIP_WIDTH_PCT, pipWidthPct).apply()
                 if (placing != null) positionOverlay.refreshSize()
             },
+        )
+        SettingDivider()
+        SettingToggleRow(
+            title = stringResource(R.string.settings_blindspot_rotate_title),
+            description = stringResource(R.string.settings_blindspot_rotate_desc),
+            checked = rotate90,
+            onCheckedChange = {
+                rotate90 = it
+                prefs.edit().putBoolean(BlindSpotPreferences.KEY_PIP_ROTATE_90, it).apply()
+                // Same path the width slider uses: the drag stand-in has to change shape with the
+                // camera window, and the controller re-applies the geometry on its next tick.
+                if (placing != null) positionOverlay.refreshSize()
+            },
+            enabled = enabled,
         )
         SettingDivider()
         SettingActionRow(
@@ -2214,6 +2234,27 @@ private fun ServiceSection(
                 SettingHint(
                     text = state.logSaveStatus!!,
                 )
+            }
+            // Diagnostic fid recorder (-test/debug builds only): the daemon owns the run, this row
+            // only reflects and toggles it, so a reopened screen still shows a recording in force.
+            if (state.fidRecorderVisible) {
+                SettingDivider()
+                SettingToggleRow(
+                    title = stringResource(R.string.settings_fid_recorder_title),
+                    description = stringResource(R.string.settings_fid_recorder_desc),
+                    checked = state.fidRecorderRunning,
+                    onCheckedChange = { viewModel.setFidRecorder(it) },
+                )
+                if (state.fidRecorderError != null) {
+                    SettingHint(
+                        text = stringResource(R.string.settings_fid_recorder_error, state.fidRecorderError!!),
+                    )
+                }
+                if (state.fidRecorderFile != null) {
+                    SettingHint(
+                        text = stringResource(R.string.settings_fid_recorder_file, state.fidRecorderFile!!),
+                    )
+                }
             }
             SettingDivider()
             SettingActionRow(

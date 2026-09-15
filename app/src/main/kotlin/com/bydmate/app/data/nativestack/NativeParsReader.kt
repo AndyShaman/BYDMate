@@ -8,7 +8,6 @@ import com.bydmate.app.data.vehicle.BatchReadItem
 import com.bydmate.app.data.vehicle.HelperClient
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
@@ -147,6 +146,8 @@ class NativeParsReader @Inject constructor(
                 "tyT=${raw("tyreTempFL")}/${raw("tyreTempFR")}/${raw("tyreTempRL")}/${raw("tyreTempRR")} " +
                 "acc=${raw("pedalAccel")} brk=${raw("pedalBrake")} " +
                 "cF=${raw("motorCurrentFront")} cR=${raw("motorCurrentRear")} " +
+                "gun=${raw("chargeGunState")} bms=${raw("bmsState")} " +
+                "chgConn=${raw("chargerConnectState")} chgInd=${raw("chargeConnectIndicator")} " +
                 "split=${splitText(decoded)}"
         )
     }
@@ -231,12 +232,12 @@ class NativeParsReader @Inject constructor(
         @Suppress("UNCHECKED_CAST")
         fun <T> field(name: String): T? = decoded[name] as? T
 
-        val maxCellVoltage = field<Double>("maxCellVoltage")?.takeIf { it > 0.5 }
-        val minCellVoltage = field<Double>("minCellVoltage")?.takeIf { it > 0.5 }
+        val maxCellVoltage = field<Double>("maxCellVoltage")?.let { FieldGuards.double("maxCellVoltage", it) }
+        val minCellVoltage = field<Double>("minCellVoltage")?.let { FieldGuards.double("minCellVoltage", it) }
 
         // 12V: autoservice path uses FLOAT_VOLT which returns real volts directly —
         // no dual-unit handling needed. Filter ≤ 0.0 as unavailable.
-        val voltage12v = field<Double>("voltage12v")?.takeIf { it > 0.0 }
+        val voltage12v = field<Double>("voltage12v")?.let { FieldGuards.double("voltage12v", it) }
 
         val soc = field<Double>("soc")?.toInt()
         val mileage = field<Double>("mileage")
@@ -257,13 +258,13 @@ class NativeParsReader @Inject constructor(
             else -> maxBatTemp ?: minBatTemp
         }
 
-        // Tech panel readings: INT_RAW passes anything the sentinel filter let through,
-        // so each value is held to its physical envelope before it reaches the UI.
-        fun ranged(name: String, range: IntRange): Int? = field<Int>(name)?.takeIf { it in range }
-        val hvVoltage = ranged("hvVoltage", 0..1000)
+        // Tech panel readings: INT_RAW passes anything the sentinel filter let through, so each
+        // value is held to its physical envelope ([FieldGuards.RANGES], shared with the push
+        // path) before it reaches the UI.
+        fun ranged(name: String): Int? = field<Int>(name)?.let { FieldGuards.int(name, it) }
+        val hvVoltage = ranged("hvVoltage")
         val hvCurrent = field<Double>("hvCurrent")
-        val batteryPowerW =
-            if (hvVoltage != null && hvCurrent != null) hvVoltage * hvCurrent else null
+        val batteryPowerW = FieldGuards.batteryPowerW(hvVoltage, hvCurrent)
 
         // Indirect rain detection: with rain-sensing auto-wipers enabled the wiper
         // relay only fires when the sensor sees water. In manual wiper mode rain is
@@ -333,6 +334,7 @@ class NativeParsReader @Inject constructor(
                 ?: field<Int>("windowRRGen3")?.takeIf { windowRrPrimaryRaw == FEATURE_LINK_ERROR },
             sunroof             = field<Int>("sunroof"),  // percent; 7 = vent detent
             trunk               = field<Int>("trunk"),
+            frontTrunk          = field<Int>("frontTrunk"),
             hood                = field<Int>("hood"),
             seatbeltFL          = field<Int>("seatbeltFL"),
             lockFL              = field<Int>("lockFL"),
@@ -369,29 +371,32 @@ class NativeParsReader @Inject constructor(
             wiperRelay          = wiperRelay,
             autoWipers          = autoWipers,
             bmsState            = bmsState,
-            insulationKohm      = ranged("insulationKohm", 0..65000),
+            insulationKohm      = ranged("insulationKohm"),
             // -40 is the scale floor the firmware reports for a motor/inverter the car does not
             // have (#186: FWD Song Plus showed -40 for the rear pair); treat it as absent.
-            motorTempFront      = ranged("motorTempFront", -39..150),
-            motorTempRear       = ranged("motorTempRear", -39..150),
-            inverterTempFront   = ranged("inverterTempFront", -39..150),
-            inverterTempRear    = ranged("inverterTempRear", -39..150),
+            motorTempFront      = ranged("motorTempFront"),
+            motorTempRear       = ranged("motorTempRear"),
+            inverterTempFront   = ranged("inverterTempFront"),
+            inverterTempRear    = ranged("inverterTempRear"),
             hvVoltage           = hvVoltage,
             hvCurrent           = hvCurrent,
             batteryPowerW       = batteryPowerW,
-            bmsMaxChargeKw      = field<Double>("bmsMaxChargeKw")?.takeIf { it in 0.0..1000.0 },
-            bmsMaxDischargeKw   = ranged("bmsMaxDischargeKw", 0..1000),
-            motorRpmFront       = ranged("motorRpmFront", -20000..20000),
-            motorRpmRear        = ranged("motorRpmRear", -20000..20000),
+            bmsMaxChargeKw      = field<Double>("bmsMaxChargeKw")
+                ?.let { FieldGuards.double("bmsMaxChargeKw", it) },
+            bmsMaxDischargeKw   = ranged("bmsMaxDischargeKw"),
+            motorRpmFront       = ranged("motorRpmFront"),
+            motorRpmRear        = ranged("motorRpmRear"),
             motorCurrentFront   = motorAmps(decoded, "motorCurrentFront"),
             motorCurrentRear    = motorAmps(decoded, "motorCurrentRear"),
-            compressorW         = ranged("compressorW", 0..20000),
-            tyreTempFL          = ranged("tyreTempFL", -50..150),
-            tyreTempFR          = ranged("tyreTempFR", -50..150),
-            tyreTempRL          = ranged("tyreTempRL", -50..150),
-            tyreTempRR          = ranged("tyreTempRR", -50..150),
-            pedalAccel          = ranged("pedalAccel", 0..100),
-            pedalBrake          = ranged("pedalBrake", 0..100),
+            compressorW         = ranged("compressorW"),
+            tyreTempFL          = ranged("tyreTempFL"),
+            tyreTempFR          = ranged("tyreTempFR"),
+            tyreTempRL          = ranged("tyreTempRL"),
+            tyreTempRR          = ranged("tyreTempRR"),
+            pedalAccel          = ranged("pedalAccel"),
+            pedalBrake          = ranged("pedalBrake"),
+            chargerConnectState = field<Int>("chargerConnectState"),
+            chargeConnectIndicator = field<Int>("chargeConnectIndicator"),
         )
     }
 
@@ -428,7 +433,7 @@ class NativeParsReader @Inject constructor(
  * give the front/rear power split.
  */
 private fun motorAmps(decoded: Map<String, Any?>, field: String): Float? =
-    (decoded[field] as? Double)?.takeIf { abs(it) <= MAX_MOTOR_CURRENT_A }?.toFloat()
+    (decoded[field] as? Double)?.let { FieldGuards.double(field, it) }?.toFloat()
 
 /** The split as the «Техника» card computes it, from the very values the card is given. */
 private fun splitText(decoded: Map<String, Any?>): String =
@@ -441,5 +446,3 @@ private fun splitText(decoded: Map<String, Any?>): String =
         null, MotorSplit.Idle -> "-"
         is MotorSplit.Share -> "${split.frontPercent}%/${split.rearPercent}%"
     }
-
-private const val MAX_MOTOR_CURRENT_A = 2000.0
