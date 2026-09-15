@@ -3,6 +3,7 @@ package com.bydmate.app.ui.widget
 import android.content.SharedPreferences
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -220,6 +221,31 @@ class WidgetPreferencesTest {
     @Test fun `getHideInApps does not hand out the stored instance`() {
         prefs.setHideInApps(setOf("com.android.chrome"))
         assertFalse(prefs.getHideInApps() === store[WidgetPreferences.KEY_HIDE_IN_APPS])
+    }
+
+    @Test fun `button icon defaults to null`() {
+        assertNull(prefs.buttonIconId(1))
+    }
+
+    @Test fun `setButtonIconId stores per button`() {
+        prefs.setButtonIconId(1, "window")
+        prefs.setButtonIconId(3, "trunk")
+        assertEquals("window", prefs.buttonIconId(1))
+        assertNull(prefs.buttonIconId(2))
+        assertEquals("trunk", prefs.buttonIconId(3))
+    }
+
+    @Test fun `setButtonIconId null clears the stored icon`() {
+        prefs.setButtonIconId(2, "ac")
+        prefs.setButtonIconId(2, null)
+        assertNull(prefs.buttonIconId(2))
+        assertFalse(store.containsKey(WidgetPreferences.buttonIconKey(2)))
+    }
+
+    @Test fun `setButtonIconId overwrites the previous choice`() {
+        prefs.setButtonIconId(4, "lock")
+        prefs.setButtonIconId(4, "unlock")
+        assertEquals("unlock", prefs.buttonIconId(4))
     }
 
     // --- Minimal fake of SharedPreferences used by WidgetPreferences ---

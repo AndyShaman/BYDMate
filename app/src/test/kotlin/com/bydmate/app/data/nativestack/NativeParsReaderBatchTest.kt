@@ -28,6 +28,8 @@ class NativeParsReaderBatchTest {
 
     private fun fid(field: String) = FidMap.entries.first { it.field == field }
 
+    private fun floatRaw(value: Float) = java.lang.Float.floatToRawIntBits(value)
+
     /** All FidMap entries decode successfully: tx=5 -> plain int 50 (satisfies every
      *  range-checked decoder), tx=7 -> IEEE-754 bits of 50.0f. */
     private fun allOkPairs(): List<Pair<Int, Int>> = FidMap.entries.map { entry ->
@@ -610,7 +612,7 @@ class NativeParsReaderBatchTest {
         assertEquals(499, data.hvVoltage)
     }
 
-    /** One transaction for the whole map, tech fids included. */
+    /** One transaction for the whole map, tech fids included — and nothing beyond it. */
     @Test
     fun `batch carries every FidMap entry in a single readBatch call`() = runTest {
         val auto = mockk<AutoserviceClient>()
@@ -623,7 +625,82 @@ class NativeParsReaderBatchTest {
         NativeParsReader(auto, settings, helper, gate).fetch()
 
         coVerify(exactly = 1) { helper.readBatch(any()) }
+        // Every decoder indexes the reply by FidMap position, so the request is the map itself.
         assertEquals(FidMap.entries.size, items.captured.size)
+        assertEquals(
+            FidMap.entries.map { it.transact to it.fid },
+            items.captured.map { it.tx to it.fid },
+        )
+    }
+
+    /** The two backup plug signals are read like any other entry (#charging detector unchanged). */
+    @Test
+    fun `the charge connect candidates reach the snapshot`() = runTest {
+        val helper = mockk<HelperClient>()
+        coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
+            mapOf(
+                "soc" to java.lang.Float.floatToRawIntBits(43.0f),
+                "chargerConnectState" to 2,
+                "chargeConnectIndicator" to 1,
+            )
+        )
+
+        val data = NativeParsReader(
+            mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+        ).fetch()
+
+        assertEquals(2, data?.chargerConnectState)
+        assertEquals(1, data?.chargeConnectIndicator)
+    }
+
+    /**
+     * A pushed value and a polled value of the same fid must land on the same number: the push
+     * applier borrows FidMap's decoder and the shared guards, and this pins that they agree for
+     * every decoder family in the map.
+     */
+    @Test
+    fun `a pushed value decodes exactly as the polled one`() = runTest {
+        val cases = listOf(
+            Triple("gear", 4, { d: DiParsData -> d.gear as Any? }),                       // INT_ENUM
+            Triple("windowFL", 60, { d: DiParsData -> d.windowFL as Any? }),              // INT_PERCENT
+            Triple("acTemp", 22, { d: DiParsData -> d.acTemp as Any? }),                  // INT_TEMP_C
+            Triple("tirePressFL", 250, { d: DiParsData -> d.tirePressFL as Any? }),       // INT_KPA
+            Triple("power", 31, { d: DiParsData -> d.power as Any? }),                    // INT_RAW
+            Triple("mileage", 12345, { d: DiParsData -> d.mileage as Any? }),             // INT_SCALED
+            Triple("maxCellVoltage", 3900, { d: DiParsData -> d.maxCellVoltage as Any? }),
+            Triple("motorRpmFront", 4200, { d: DiParsData -> d.motorRpmFront as Any? }),  // ranged INT_RAW
+            Triple("soc", floatRaw(43.0f), { d: DiParsData -> d.soc as Any? }),           // FLOAT_PERCENT
+            Triple("speed", floatRaw(61.0f), { d: DiParsData -> d.speed as Any? }),       // FLOAT_KW
+            Triple("totalElecConsumption", floatRaw(5432.5f), { d: DiParsData -> d.totalElecConsumption as Any? }),
+            Triple("voltage12v", floatRaw(13.7f), { d: DiParsData -> d.voltage12v as Any? }),  // FLOAT_VOLT
+            Triple("hvCurrent", floatRaw(-12.5f), { d: DiParsData -> d.hvCurrent as Any? }),   // FLOAT_AMP
+        )
+        val helper = mockk<HelperClient>()
+        coEvery { helper.readBatch(any()) } returns mostlySentinelPairs(
+            cases.associate { (field, raw, _) -> field to raw }
+        )
+        val polled = checkNotNull(
+            NativeParsReader(
+                mockk<AutoserviceClient>(), settingsWithCapacity(), helper, gateFixedAt(BatchMode.ACTIVE)
+            ).fetch()
+        )
+
+        for ((field, raw, read) in cases) {
+            val entry = fid(field)
+            val pushed = checkNotNull(
+                com.bydmate.app.data.push.FidPushApplier.apply(
+                    com.bydmate.app.data.remote.diParsData(),
+                    field,
+                    intValue = raw,
+                    doubleValue = if (entry.transact == 7) {
+                        java.lang.Float.intBitsToFloat(raw).toDouble()
+                    } else {
+                        0.0
+                    },
+                )
+            ) { "$field was not patched from push" }
+            assertEquals("$field disagrees between push and poll", read(polled), read(pushed))
+        }
     }
 
     /**

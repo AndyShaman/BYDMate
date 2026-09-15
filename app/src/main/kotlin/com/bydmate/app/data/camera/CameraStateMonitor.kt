@@ -22,7 +22,9 @@ import javax.inject.Singleton
 /**
  * Detects when the BYD built-in camera/parking surface (`com.byd.avc`) or a
  * YouTube client takes the foreground. Reads the most recent MOVE_TO_FOREGROUND
- * event from UsageStatsManager every [POLL_INTERVAL_MS]. Requires the
+ * event from UsageStatsManager every [POLL_INTERVAL_MS], and takes accessibility hints
+ * ([onForegroundHint]) as the fast path — a poll can still be half a second behind the screen,
+ * while the window-state event arrives as the native view opens. Requires the
  * GET_USAGE_STATS appop, which TrackingService grants at startup via the
  * on-device ADB. YouTube detection feeds [youtubeForeground]; hiding is opt-in
  * via WidgetPreferences.KEY_HIDE_ON_YOUTUBE.
@@ -68,9 +70,7 @@ class CameraStateMonitor @Inject constructor(
                 // before publishing. Stops a stale value from clobbering the
                 // false set in stop().
                 ensureActive()
-                _active.value = lastForegroundPkg == CAMERA_PACKAGE
-                _youtubeForeground.value = isYoutubePackage(lastForegroundPkg)
-                _foregroundPackage.value = lastForegroundPkg
+                publish()
                 delay(POLL_INTERVAL_MS)
             }
         }
@@ -88,15 +88,45 @@ class CameraStateMonitor @Inject constructor(
         lastEventTs = 0L
     }
 
+    /**
+     * Window-state hint from our accessibility service: the app that just took the screen, seen
+     * the moment it happens instead of on the next poll. The poll stays the fallback (the service
+     * can be off) and still wins whenever it brings a newer event.
+     */
+    fun onForegroundHint(packageName: String) {
+        if (packageName == context.packageName || packageName in HINT_IGNORED_PACKAGES) return
+        if (packageName.contains(INPUT_METHOD_MARKER)) return
+        if (!acceptForeground(packageName, System.currentTimeMillis())) return
+        publish()
+        Log.i(TAG, "foreground hint: $packageName (a11y)")
+    }
+
+    /**
+     * Newest observation of the foreground wins. A hint is stamped with the moment it arrived, so
+     * a UsageStats event older than it cannot undo it — and a genuinely newer poll event can.
+     * Returns true when the foreground package changed.
+     */
+    @Synchronized
+    internal fun acceptForeground(packageName: String, eventTs: Long): Boolean {
+        if (eventTs < lastEventTs) return false
+        val changed = packageName != lastForegroundPkg
+        lastForegroundPkg = packageName
+        lastEventTs = eventTs
+        return changed
+    }
+
+    private fun publish() {
+        _active.value = lastForegroundPkg == CAMERA_PACKAGE
+        _youtubeForeground.value = isYoutubePackage(lastForegroundPkg)
+        _foregroundPackage.value = lastForegroundPkg
+    }
+
     private fun refreshForegroundPackage() {
         val now = System.currentTimeMillis()
         val beginTs = if (lastEventTs == 0L) now - INITIAL_LOOKBACK_MS else lastEventTs + 1
         try {
             val latest = latestResumed(usm, beginTs, now + 1)
-            if (latest != null) {
-                lastForegroundPkg = latest.first
-                if (latest.second > lastEventTs) lastEventTs = latest.second
-            }
+            if (latest != null) acceptForeground(latest.first, latest.second)
             // No new events => keep prior foreground (camera still on, etc.).
             // Forward through start() ensures the very first call has lastEventTs=0,
             // forcing the wider window above.
@@ -111,7 +141,15 @@ class CameraStateMonitor @Inject constructor(
     companion object {
         private const val TAG = "CameraMonitor"
         private const val CAMERA_PACKAGE = "com.byd.avc"
-        private const val POLL_INTERVAL_MS = 2_000L
+
+        // A window-state event fires for the status bar shade and for the keyboard too; taking
+        // those as "the foreground app" would hide the camera window over nothing.
+        private val HINT_IGNORED_PACKAGES = setOf("com.android.systemui")
+        private const val INPUT_METHOD_MARKER = "inputmethod"
+        // 500 ms: the blind-spot PiP must drop within half a second of the native 360 view
+        // taking the screen (#183 feedback: a 2 s lag reads as a bug). Each poll is a delta
+        // UsageStats query since the last consumed event, so the extra ticks are cheap.
+        private const val POLL_INTERVAL_MS = 500L
         // First-poll window — wide enough to catch the camera ACTIVITY_RESUMED
         // that fired before our service even started (boot + immediate-reverse
         // scenario). Subsequent polls only fetch the delta since lastEventTs.

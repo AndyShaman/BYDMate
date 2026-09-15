@@ -142,6 +142,14 @@ val ACTION_COMMANDS = listOf(
         ActionOption("副驾通风", R.string.auto_act_vent_passenger_window, R.string.auto_cat_windows),
         ActionOption("后左通风", R.string.auto_act_vent_rear_left_window, R.string.auto_cat_windows),
         ActionOption("后右通风", R.string.auto_act_vent_rear_right_window, R.string.auto_cat_windows),
+        ActionOption("主驾半开", R.string.auto_act_half_driver_window, R.string.auto_cat_windows),
+        ActionOption("副驾半开", R.string.auto_act_half_passenger_window, R.string.auto_cat_windows),
+        ActionOption("后左半开", R.string.auto_act_half_rear_left_window, R.string.auto_cat_windows),
+        ActionOption("后右半开", R.string.auto_act_half_rear_right_window, R.string.auto_cat_windows),
+        ActionOption("前排车窗半开", R.string.auto_act_half_front_windows, R.string.auto_cat_windows),
+        ActionOption("前排车窗通风", R.string.auto_act_vent_front_windows, R.string.auto_cat_windows),
+        ActionOption("后排车窗半开", R.string.auto_act_half_rear_windows, R.string.auto_cat_windows),
+        ActionOption("后排车窗通风", R.string.auto_act_vent_rear_windows, R.string.auto_cat_windows),
         ActionOption("自动空调", R.string.auto_act_auto_ac, R.string.auto_cat_climate),
         ActionOption("打开空调通风", R.string.auto_act_ventilation_no_ac, R.string.auto_cat_climate),
         ActionOption("设置温度18", R.string.auto_act_temp_18c, R.string.auto_cat_climate),
@@ -267,6 +275,7 @@ class AutomationViewModel @Inject constructor(
     private val ruleLogDao: RuleLogDao,
     private val placeRepository: PlaceRepository,
     private val vehicleApi: VehicleApi,
+    private val actionDispatcher: ActionDispatcher,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
@@ -301,13 +310,31 @@ class AutomationViewModel @Inject constructor(
     }
 
     /**
-     * "Выполнить сейчас" — dispatch a single vehicle command through the native
-     * write channel immediately, for live testing from the rule editor. Result is
-     * surfaced via Toast; the raw autoservice status (real action vs no-op) lands
-     * in logcat via HelperClient. Bypasses the automation edge/cooldown logic by
-     * design — this is a manual, explicit user action.
+     * "Выполнить сейчас" — run a single action immediately, for live testing from the
+     * rule editor. A "toggle" action goes through [ActionDispatcher] (it needs the live
+     * state to pick the direction, and the dispatcher already applies every safety gate);
+     * a param action takes the direct write path below. Result is surfaced via Toast.
+     * Bypasses the automation edge/cooldown logic by design — this is a manual action.
      */
-    fun executeNow(command: String) {
+    fun executeNow(action: ActionDef) {
+        if (action.kind == "toggle") {
+            viewModelScope.launch {
+                val result = actionDispatcher.dispatch(action, TrackingService.lastData.value)
+                val lc = context.appLocalizedContext()
+                val msg = if (result.success) lc.getString(R.string.auto_msg_dispatch_sent)
+                          else result.reason ?: lc.getString(R.string.auto_msg_unavailable)
+                Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        executeCommandNow(action.command)
+    }
+
+    /**
+     * Dispatches a raw vehicle command through the native write channel. The raw
+     * autoservice status (real action vs no-op) lands in logcat via HelperClient.
+     */
+    private fun executeCommandNow(command: String) {
         viewModelScope.launch {
             // Manual test button bypasses ActionDispatcher.dispatch, so apply the
             // same safety gates explicitly (frunk/unlock fail closed on unknown speed).
@@ -782,6 +809,25 @@ fun newClusterAction(context: Context): ActionDef = ActionDef(
     kind = "cluster_projection",
     payload = "1"
 )
+
+/**
+ * "toggle": one action that flips a panel (rear/front trunk, sunroof), the door
+ * locks or the cluster projection from whatever state the car reports. Default
+ * target is the rear trunk — the case the action was asked for.
+ */
+fun newToggleAction(context: Context): ActionDef = ActionDef(
+    command = "",
+    displayName = toggleDisplayName(context, ActionDispatcher.TOGGLE_TRUNK),
+    kind = "toggle",
+    payload = ActionDispatcher.TOGGLE_TRUNK
+)
+
+/** "Переключить: <цель>" — the saved display name for a toggle action. */
+fun toggleDisplayName(context: Context, target: String): String {
+    val lc = context.appLocalizedContext()
+    val nameRes = ActionDispatcher.toggleTargetNameRes(target) ?: return lc.getString(R.string.automation_action_toggle)
+    return lc.getString(R.string.automation_action_toggle_display_name, lc.getString(nameRes))
+}
 
 // --- Speak helpers (v3.6) ---
 

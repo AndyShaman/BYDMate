@@ -23,6 +23,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.media.MediaSessionListenerService
+import com.bydmate.app.service.TrackingService
 import com.bydmate.app.split.SplitPair
 import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
@@ -192,7 +193,89 @@ class ActionDispatcher @Inject constructor(
             "param" -> isDoorUnlockCommand(action.command) || isRearTrunkOpenCommand(action.command)
             "sentry" -> action.payload == "0"
             "call" -> true
+            // A toggle resolves to its command only at dispatch time, against the live
+            // state. Locks and the rear trunk can resolve to an unlock / a trunk open,
+            // so they are treated as dangerous whichever way they would flip.
+            "toggle" -> action.payload == TOGGLE_LOCKS || action.payload == TOGGLE_TRUNK
             else -> false
+        }
+
+        // --- toggle targets ("toggle" action payload) ---
+
+        internal const val TOGGLE_TRUNK = "trunk"
+        internal const val TOGGLE_FRONT_TRUNK = "front_trunk"
+        internal const val TOGGLE_SUNROOF = "sunroof"
+        internal const val TOGGLE_LOCKS = "locks"
+        internal const val TOGGLE_CLUSTER = "cluster"
+
+        /** Targets a "toggle" action can flip, in picker order. */
+        internal val TOGGLE_TARGETS = listOf(
+            TOGGLE_TRUNK, TOGGLE_FRONT_TRUNK, TOGGLE_SUNROOF, TOGGLE_LOCKS, TOGGLE_CLUSTER,
+        )
+
+        /** Localized name of a toggle target; null when the id is not a known target. */
+        internal fun toggleTargetNameRes(target: String): Int? = when (target) {
+            TOGGLE_TRUNK -> R.string.toggle_target_trunk
+            TOGGLE_FRONT_TRUNK -> R.string.toggle_target_front_trunk
+            TOGGLE_SUNROOF -> R.string.toggle_target_sunroof
+            TOGGLE_LOCKS -> R.string.toggle_target_locks
+            TOGGLE_CLUSTER -> R.string.toggle_target_cluster
+            else -> null
+        }
+
+        /**
+         * Outcome of resolving a "toggle" against the live state: either the concrete
+         * command that flips it, or why it cannot be flipped right now.
+         */
+        internal sealed interface ToggleResolution {
+            data class Command(val command: String) : ToggleResolution
+            data object StateUnknown : ToggleResolution
+            data object TrunkMoving : ToggleResolution
+            data object UnknownTarget : ToggleResolution
+        }
+
+        /**
+         * Pick the command that flips [target] from its current [state]. Pure — every
+         * state semantic lives here so it is unit-testable without Android:
+         *   trunk       2=closed, 1=open; anything else = tailgate in motion
+         *   frontTrunk  2=closed, 1=open, 3=moving (measured on-car 2026-09-15)
+         *   sunroof     aperture percent, 0=closed
+         *   lockFL      1=unlocked, 2=locked
+         * The cluster target has no snapshot field and is resolved by the caller.
+         */
+        internal fun resolveToggleCommand(target: String, state: Int?): ToggleResolution {
+            if (target !in TOGGLE_TARGETS || target == TOGGLE_CLUSTER) {
+                return ToggleResolution.UnknownTarget
+            }
+            val value = state ?: return ToggleResolution.StateUnknown
+            return when (target) {
+                TOGGLE_TRUNK -> resolveHatchToggle(value, "开后备箱", "关后备箱")
+                TOGGLE_FRONT_TRUNK -> resolveHatchToggle(value, "前备箱打开", "前备箱关闭")
+                TOGGLE_SUNROOF -> ToggleResolution.Command(
+                    if (value == 0) "天窗打开100" else "天窗打开0"
+                )
+                else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
+            }
+        }
+
+        /**
+         * Hatch position (front and rear share the enum): 2=closed, 1=open; any other
+         * step (3 = travelling on the frunk) means it is still moving. Measured on the
+         * frunk on-car 2026-09-15 (2→3→1 opening, 1→3→2 closing); the rear tailgate is
+         * manual on that car, so only its closed value (2) was seen — same family assumed.
+         */
+        private fun resolveHatchToggle(value: Int, open: String, close: String): ToggleResolution =
+            when (value) {
+                2 -> ToggleResolution.Command(open)
+                1 -> ToggleResolution.Command(close)
+                else -> ToggleResolution.TrunkMoving
+            }
+
+        /** Driver door lock: 1=unlocked, 2=locked; anything else is not a lock state. */
+        private fun resolveLocksToggle(value: Int): ToggleResolution = when (value) {
+            1 -> ToggleResolution.Command("车门上锁")
+            2 -> ToggleResolution.Command("车门解锁")
+            else -> ToggleResolution.StateUnknown
         }
 
         private val POSITION_OPEN = Regex("打开(\\d+)")
@@ -278,6 +361,9 @@ class ActionDispatcher @Inject constructor(
     private val notifCounter = AtomicInteger(USER_NOTIF_BASE_ID)
 
     // Test seam: real impl asks MediaSessionManager for active sessions via our listener component.
+    /** Test seam -- the freshest poll a "toggle" resolves its state against. */
+    internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
+
     /** Test seam -- how long to wait for the cluster projection to actually come up. */
     internal var clusterPollIntervalMs = 500L
     internal var clusterPollAttempts = 10
@@ -309,6 +395,7 @@ class ActionDispatcher @Inject constructor(
             "sentry" -> dispatchSentry(action)
             "hotspot" -> dispatchHotspot(action)
             "cluster_projection" -> dispatchClusterProjection(action)
+            "toggle" -> dispatchToggle(action, data)
             "speak" -> dispatchSpeak(action)
             "agent_query" -> dispatchAgentQuery(action)
             "split_screen" -> dispatchSplitScreen(action)
@@ -385,6 +472,72 @@ class ActionDispatcher @Inject constructor(
         }
         Log.w(TAG, "cluster projection did not reach $want: $reason")
         return DispatchResult(false, reason)
+    }
+
+    // --- toggle (flip a panel / the locks / the projection from its current state) ---
+
+    /**
+     * "toggle": read the target's current state, then dispatch the opposite command through
+     * [dispatch] itself — so the resolved command passes the very same speed gates and
+     * confirmation rules as a hand-picked action. A state the car does not report is never
+     * guessed: the step fails with a reason the user can read.
+     *
+     * The state comes from the CURRENT poll, not from [data]: a rule hands every step the one
+     * snapshot taken before the rule started, so "toggle → delay → toggle" would resolve the
+     * second step against the state from before the first one and flip the panel the same way
+     * twice. [data] stays as the fallback for callers that dispatch without a running poll.
+     */
+    private suspend fun dispatchToggle(action: ActionDef, data: DiParsData?): DispatchResult {
+        val lc = context.appLocalizedContext()
+        val target = action.payload.orEmpty()
+        val targetName = toggleTargetNameRes(target)?.let { lc.getString(it) }
+            ?: return DispatchResult(false, lc.getString(R.string.toggle_unknown_target, target))
+
+        val polled = liveSnapshot()
+        val live = polled ?: data
+        val src = if (polled != null) "live" else "step"
+
+        if (target == TOGGLE_CLUSTER) return dispatchClusterToggle(action, live, src)
+
+        val state = when (target) {
+            TOGGLE_TRUNK -> live?.trunk
+            TOGGLE_FRONT_TRUNK -> live?.frontTrunk
+            TOGGLE_SUNROOF -> live?.sunroof
+            TOGGLE_LOCKS -> live?.lockFL
+            else -> null
+        }
+        return when (val resolution = resolveToggleCommand(target, state)) {
+            is ToggleResolution.Command -> {
+                Log.i(TAG, "toggle $target: src=$src state=$state -> ${resolution.command}")
+                dispatch(action.copy(command = resolution.command, kind = "param", payload = null), live)
+            }
+            ToggleResolution.TrunkMoving -> {
+                Log.w(TAG, "toggle $target: src=$src state=$state -> refused (moving)")
+                DispatchResult(false, lc.getString(R.string.toggle_trunk_moving))
+            }
+            ToggleResolution.StateUnknown, ToggleResolution.UnknownTarget -> {
+                Log.w(TAG, "toggle $target: src=$src state=$state -> refused (unknown state)")
+                DispatchResult(false, lc.getString(R.string.toggle_state_unknown, targetName))
+            }
+        }
+    }
+
+    /**
+     * Cluster target: the projection state is its own live reading (the manager's current mode),
+     * so the snapshot only rides along for the gates of the resolved action.
+     */
+    private suspend fun dispatchClusterToggle(
+        action: ActionDef,
+        live: DiParsData?,
+        src: String,
+    ): DispatchResult {
+        val mode = clusterVoiceControl.projectionMode()
+        val payload = if (mode == ClusterMode.FULLSCREEN) "0" else "1"
+        Log.i(TAG, "toggle $TOGGLE_CLUSTER: src=$src state=$mode -> cluster_projection $payload")
+        return dispatch(
+            action.copy(command = "cluster_projection", kind = "cluster_projection", payload = payload),
+            live,
+        )
     }
 
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */

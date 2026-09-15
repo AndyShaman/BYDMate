@@ -367,6 +367,75 @@ object HelperBinderProtocol {
      */
     val TX_REGISTER_CLIENT: Int = IBinder.FIRST_CALL_TRANSACTION + 43  // 44
 
+    /**
+     * Installs the fid push subscription: the daemon registers vendor listeners for the given fids
+     * and pushes every event back over [TX_PUSH_EVENT]. A repeated call replaces the whole
+     * subscription (the previous listeners are unregistered first).
+     *
+     * Each fid travels with its device because the app owns the resolved fid catalog and the daemon
+     * does not — see FidPushWire.
+     *
+     * Request: [IBinder callback, int count, count × (int fid, int device)]
+     * Reply:   [int status (0 = ok, -1 = failed), int count, count × (int fid, int device, String outcome)]
+     * outcome is "OK", "unsupported", or the exception the registration threw.
+     * An old daemon without this handler makes transact return false → client returns null.
+     */
+    val TX_PUSH_SUBSCRIBE: Int = IBinder.FIRST_CALL_TRANSACTION + 44  // 45
+
+    /** Drops every push listener and the callback. (no args) -> [int status, int unregistered]. */
+    val TX_PUSH_UNSUBSCRIBE: Int = IBinder.FIRST_CALL_TRANSACTION + 45  // 46
+
+    /**
+     * Live state of the subscription for the diagnostic dump.
+     *
+     * (no args) -> [int status (0 = ok), int count,
+     *   count × (int fid, int device, String outcome, int events, int lastIntValue,
+     *            double lastDoubleValue, long lastTsElapsed),
+     *   int callbackAlive (0|1), int deliverErrors, int packets, int events, int coalesced]
+     */
+    val TX_PUSH_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 46  // 47
+
+    /**
+     * The one transaction that runs daemon → app, on the plain Binder the app hands over with
+     * [TX_PUSH_SUBSCRIBE]. Sent FLAG_ONEWAY, so the daemon never blocks on the app.
+     *
+     * One transact carries a whole flush of the daemon's coalescing buffer — the last value of
+     * every fid that moved in the window, never more than one event per subscribed fid.
+     *
+     * Request: [int count, count × (int fid, int intValue, double doubleValue, long tsElapsed)]
+     * under [PUSH_CALLBACK_DESCRIPTOR]. No reply.
+     */
+    val TX_PUSH_EVENT: Int = IBinder.FIRST_CALL_TRANSACTION + 47  // 48
+
+    /** Interface token of [TX_PUSH_EVENT] — the app's callback binder, not the daemon's stub. */
+    const val PUSH_CALLBACK_DESCRIPTOR = "com.bydmate.app.helper.push.callback"
+
+    /**
+     * Starts the diagnostic fid recorder: the daemon registers a listener of its own on every fid
+     * of the given devices and logs each changed value under the `FidRec` tag. An empty device
+     * list means every device the daemon knows a listener class for. Independent of the push
+     * subscription — starting or stopping a recording never touches it.
+     *
+     * Request: [int count, count × int device]  (count above MAX_REC_DEVICES is read as empty)
+     * Reply:   [int status (0 = ok, -1 = failed), int devices, int registeredFids]
+     * An old daemon without this handler makes transact return false → client returns null.
+     */
+    val TX_REC_START: Int = IBinder.FIRST_CALL_TRANSACTION + 48  // 49
+
+    /** Unregisters every recorder listener. (no args) -> [int status, int devicesUnregistered]. */
+    val TX_REC_STOP: Int = IBinder.FIRST_CALL_TRANSACTION + 49  // 50
+
+    /**
+     * Live state of the recorder for the diagnostic dump and the broadcast answer.
+     *
+     * (no args) -> [int status (0 = ok), int running (0|1), int totalEvents,
+     *   int deviceCount, deviceCount × (int device, int registered, int total, int filtered,
+     *                                   int events, String error),
+     *   int topCount, topCount × (int fid, String symbol, int events, int lastIntValue,
+     *                             double lastDoubleValue)]
+     */
+    val TX_REC_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 50  // 51
+
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
      *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is

@@ -158,6 +158,16 @@
             </intent-filter>
         </receiver>
 
+        <!-- Diagnostic fid recorder (scripts/fid-record.sh). Exported like the cluster probe and
+             gated to -test/debug builds inside the receiver. -->
+        <receiver
+            android:name=".data.push.FidRecorderReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="com.bydmate.app.FID_RECORD" />
+            </intent-filter>
+        </receiver>
+
         <!-- Helper daemon binder delivery on firmwares that refuse addService to the shell
              domain (#64/#148). Exported by necessity: the sender is the shell uid, not us —
              HelperBinderHolder authenticates by spawn token + interface descriptor. -->

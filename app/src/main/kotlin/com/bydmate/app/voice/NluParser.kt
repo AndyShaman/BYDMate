@@ -55,7 +55,10 @@ object NluParser {
 
         val devices2 = disambiguateAirflow(devices, stems, lang)
         val (actions2, devices3) = narrowSeatOff(effectiveActions, devices2)
-        val leveledActions = upgradeSeatLevel(actions2, devices3, number)
+        if (devices3.any { isAperture(it) } && hasExplicitNumber(rawTokens, lang)) {
+            return ParseResult.Unrecognized
+        }
+        val leveledActions = narrowApertureDetent(upgradeSeatLevel(actions2, devices3, number), devices3)
 
         // "все сиденья"/"сидений" (plural) targets BOTH seats. The catalog emits one
         // command per (action, device), so fan out per side; each side must resolve to
@@ -186,6 +189,32 @@ object NluParser {
             }
         )
         return out
+    }
+
+    /** Windows and the sunroof have exactly three apertures (full / half / vent) —
+     *  an explicit percentage ("открой окно на двадцать процентов") is not one of
+     *  them, and resolving it here would fully open the glass instead. Hand such
+     *  utterances to the agent, which names the three positions and picks the
+     *  nearest one. [detectNumber] matches number words as substrings ("проветри"
+     *  contains "три"), so the route decision uses whole-token matching instead. */
+    private fun hasExplicitNumber(rawTokens: List<String>, lang: VoiceLang): Boolean {
+        if (rawTokens.any { it.toIntOrNull() != null }) return true
+        val words = VoiceLexicon.numberWords(lang).keys.flatMapTo(HashSet()) { it.split(" ") }
+        return rawTokens.any { it in words }
+    }
+
+    private fun isAperture(d: DeviceSlot) =
+        d.name.startsWith("WINDOW") || d == DeviceSlot.SUNROOF
+
+    /** "открой наполовину водительское окно" names both the verb (OPEN) and the
+     *  detent (HALF/VENT): the detent is what the driver asked for, the verb only
+     *  says which way the glass moves. Without this the utterance resolves to two
+     *  commands and falls through to the agent. Apertures only — seats have their
+     *  own VENT_1 family. */
+    private fun narrowApertureDetent(actions: Set<ActionSlot>, devices: Set<DeviceSlot>): Set<ActionSlot> {
+        if (ActionSlot.OPEN !in actions) return actions
+        if (ActionSlot.HALF !in actions && ActionSlot.VENT !in actions) return actions
+        return if (devices.any { isAperture(it) }) actions - ActionSlot.OPEN else actions
     }
 
     /** "обдув"/"вентиляция" is overloaded: it tags AC_FLOW (climate vent),

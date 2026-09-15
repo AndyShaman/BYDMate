@@ -63,6 +63,10 @@ class WindowChannelRouter(
         return RoutedWrite(ctrlAction, ctrlValue(value))
     }
 
+    /** Channel already fixed for this car (persisted winner or a fresh probe verdict), without
+     *  probing for one. UNKNOWN means "not decided", never "percent by default". */
+    fun decidedChannel(): WindowChannel = decided() ?: WindowChannel.UNKNOWN
+
     private suspend fun channel(): WindowChannel {
         decided()?.let { return it }
         return probeMutex.withLock {

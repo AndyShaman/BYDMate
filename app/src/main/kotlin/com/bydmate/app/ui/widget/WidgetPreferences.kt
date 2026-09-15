@@ -175,6 +175,19 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         awaitClose { prefs.unregisterOnSharedPreferenceChangeListener(listener) }
     }
 
+    /**
+     * Icon catalog id shown on expandable button [number] instead of its digit.
+     * Null = no icon chosen, the button keeps showing the number.
+     */
+    fun buttonIconId(number: Int): String? = prefs.getString(buttonIconKey(number), null)
+
+    fun setButtonIconId(number: Int, id: String?) {
+        val key = buttonIconKey(number)
+        val editor = prefs.edit()
+        if (id == null) editor.remove(key) else editor.putString(key, id)
+        editor.apply()
+    }
+
     fun isHideOnYoutube(): Boolean = prefs.getBoolean(KEY_HIDE_ON_YOUTUBE, false)
 
     fun setHideOnYoutube(hide: Boolean) {
@@ -240,6 +253,8 @@ class WidgetPreferences(private val prefs: SharedPreferences) {
         const val KEY_BUTTONS_ENABLED = "widget_buttons_enabled"
         const val KEY_HIDE_ON_YOUTUBE = "widget_hide_on_youtube"
         const val KEY_HIDE_IN_APPS = "widget_hide_in_apps"
+        const val KEY_BUTTON_ICON_PREFIX = "widget_button_icon_"
+        fun buttonIconKey(number: Int): String = "$KEY_BUTTON_ICON_PREFIX$number"
         const val DEFAULT_LEFT_TAP_APP_PKG = "ru.yandex.yandexnavi"
         const val DEFAULT_LEFT_TAP_APP_LABEL = "Яндекс.Навигатор"
         const val SCALE_MIN = 0.7f

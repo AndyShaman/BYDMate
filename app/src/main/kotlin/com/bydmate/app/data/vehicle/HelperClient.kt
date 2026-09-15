@@ -10,6 +10,17 @@ import java.io.ByteArrayOutputStream
 import com.bydmate.app.helper.HelperBinderHolder
 import com.bydmate.app.helper.DisplayDevice
 import com.bydmate.app.helper.HelperBinderProtocol
+import com.bydmate.app.helper.push.FID_REC_NO_ERROR
+import com.bydmate.app.helper.push.FidPushResult
+import com.bydmate.app.helper.push.FidPushStatus
+import com.bydmate.app.helper.push.FidPushSub
+import com.bydmate.app.helper.push.FidRecStart
+import com.bydmate.app.helper.push.FidRecStatus
+import com.bydmate.app.helper.push.readResultTable
+import com.bydmate.app.helper.push.readRecStatus
+import com.bydmate.app.helper.push.readStatusTable
+import com.bydmate.app.helper.push.writeRecStartRequest
+import com.bydmate.app.helper.push.writeSubscribeRequest
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -451,6 +462,32 @@ interface HelperClient {
      * outdated", never as a firmware verdict. Null also covers every non-OK daemon status.
      */
     suspend fun split37ChangeMode(mode: Int): Int?
+
+    /**
+     * Installs the fid push subscription (TX_PUSH_SUBSCRIBE): [callback] is the app binder the
+     * daemon pushes events to, [subs] the resolved fid/device pairs. Returns the daemon's
+     * per-fid outcome table, or null when the daemon is unreachable or does not know the verb.
+     */
+    suspend fun pushSubscribe(callback: IBinder, subs: List<FidPushSub>): List<FidPushResult>?
+
+    /** Drops the push subscription (TX_PUSH_UNSUBSCRIBE). False on any transport failure. */
+    suspend fun pushUnsubscribe(): Boolean
+
+    /** Live push counters for the dump (TX_PUSH_STATUS); null when the daemon is unreachable. */
+    suspend fun pushStatus(): FidPushStatus?
+
+    /**
+     * Starts the diagnostic fid recorder (TX_REC_START) over [devices], or over every known device
+     * when the array is empty. Returns how many devices were attempted and how many fids came back
+     * registered, or null when the daemon is unreachable or does not know the verb.
+     */
+    suspend fun recStart(devices: IntArray): FidRecStart?
+
+    /** Stops the recorder (TX_REC_STOP). False on any transport failure. */
+    suspend fun recStop(): Boolean
+
+    /** Live recorder counters (TX_REC_STATUS); null when the daemon is unreachable. */
+    suspend fun recStatus(): FidRecStatus?
 }
 
 @Singleton
@@ -972,6 +1009,49 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
             val status = if (reply.dataAvail() >= 4) reply.readInt() else return@transactParsed false
             status == 0
         } ?: false
+
+    override suspend fun pushSubscribe(callback: IBinder, subs: List<FidPushSub>): List<FidPushResult>? =
+        transactParsed(HelperBinderProtocol.TX_PUSH_SUBSCRIBE, { p ->
+            p.writeStrongBinder(callback)
+            writeSubscribeRequest(p, subs)
+        }) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            if (reply.readInt() != 0) return@transactParsed null
+            readResultTable(reply)
+        }
+
+    override suspend fun pushUnsubscribe(): Boolean =
+        statusOk(HelperBinderProtocol.TX_PUSH_UNSUBSCRIBE) { }
+
+    override suspend fun pushStatus(): FidPushStatus? =
+        transactParsed(HelperBinderProtocol.TX_PUSH_STATUS, { }) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            if (reply.readInt() != 0) return@transactParsed null
+            readStatusTable(reply)
+        }
+
+    override suspend fun recStart(devices: IntArray): FidRecStart? =
+        transactParsed(
+            HelperBinderProtocol.TX_REC_START,
+            { p -> writeRecStartRequest(p, devices) },
+            // Registering every fid of ~45 devices is dozens of vendor calls, well past the 2s
+            // default; the recorder is diagnostic, so waiting is cheaper than a false "unreachable".
+            timeoutMs = FORCE_TIMEOUT_MS,
+        ) { reply ->
+            if (reply.dataAvail() < 12) return@transactParsed null
+            if (reply.readInt() != 0) return@transactParsed null
+            FidRecStart(reply.readInt(), reply.readInt(), reply.readString().orEmpty().ifEmpty { FID_REC_NO_ERROR })
+        }
+
+    override suspend fun recStop(): Boolean =
+        statusOk(HelperBinderProtocol.TX_REC_STOP) { }
+
+    override suspend fun recStatus(): FidRecStatus? =
+        transactParsed(HelperBinderProtocol.TX_REC_STATUS, { }) { reply ->
+            if (reply.dataAvail() < 4) return@transactParsed null
+            if (reply.readInt() != 0) return@transactParsed null
+            readRecStatus(reply)
+        }
 
     /** (status,value) reply; true iff status == 0. Shared by the boolean projection ops. */
     private suspend fun statusOk(code: Int, writeArgs: (Parcel) -> Unit): Boolean =

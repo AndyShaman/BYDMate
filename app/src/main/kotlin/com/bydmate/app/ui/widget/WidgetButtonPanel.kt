@@ -13,14 +13,21 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Density
@@ -29,6 +36,12 @@ import androidx.compose.ui.unit.sp
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurfaceElevated
+
+/** Buttons in the single bottom row. */
+private const val BUTTON_COUNT = 4
+
+/** Icon side inside a button cell, leaving the rounded border visible. */
+private const val ICON_DP = 26
 
 /**
  * Pure window geometry for the expandable button overlay. Android-free so it can
@@ -96,6 +109,10 @@ object WidgetButtonLayout {
  * Each button is tucked up behind the panel's bottom edge while hidden and slides
  * down into the pocket as it fades in when [expanded] becomes true. Stagger index
  * staggers the tween so buttons pop in sequence.
+ *
+ * A button shows the icon the user picked in the rule editor, or its number when
+ * none is set. Ids are re-read whenever the panel expands, so a fresh choice shows
+ * up on the next expand without restarting the service.
  */
 @Composable
 fun WidgetButtonPanel(
@@ -103,6 +120,13 @@ fun WidgetButtonPanel(
     scaleFactor: Float,
     onButtonClick: (Int) -> Unit,
 ) {
+    val context = LocalContext.current
+    val prefs = remember(context) { WidgetPreferences(context) }
+    var iconIds by remember { mutableStateOf<List<String?>>(List(BUTTON_COUNT) { null }) }
+    LaunchedEffect(expanded) {
+        if (expanded) iconIds = (1..BUTTON_COUNT).map { prefs.buttonIconId(it) }
+    }
+
     val baseDensity = LocalDensity.current
     val scaledDensity = Density(
         density = baseDensity.density * scaleFactor,
@@ -125,10 +149,15 @@ fun WidgetButtonPanel(
                     .height(button),
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                ButtonCell(number = 1, expanded = expanded, staggerIndex = 0, onClick = onButtonClick)
-                ButtonCell(number = 2, expanded = expanded, staggerIndex = 1, onClick = onButtonClick)
-                ButtonCell(number = 3, expanded = expanded, staggerIndex = 2, onClick = onButtonClick)
-                ButtonCell(number = 4, expanded = expanded, staggerIndex = 3, onClick = onButtonClick)
+                repeat(BUTTON_COUNT) { index ->
+                    ButtonCell(
+                        number = index + 1,
+                        iconId = iconIds.getOrNull(index),
+                        expanded = expanded,
+                        staggerIndex = index,
+                        onClick = onButtonClick,
+                    )
+                }
             }
         }
     }
@@ -142,6 +171,7 @@ fun WidgetButtonPanel(
 @Composable
 private fun ButtonCell(
     number: Int,
+    iconId: String?,
     expanded: Boolean,
     staggerIndex: Int,
     onClick: (Int) -> Unit,
@@ -166,12 +196,22 @@ private fun ButtonCell(
             .clickable(enabled = expanded) { onClick(number) },
         contentAlignment = Alignment.Center,
     ) {
-        Text(
-            text = number.toString(),
-            color = AccentGreen,
-            fontSize = 20.sp,
-            fontWeight = FontWeight.Bold,
-            fontFamily = FontFamily.Monospace,
-        )
+        val icon = WidgetButtonIcons.find(iconId)
+        if (icon != null) {
+            Icon(
+                imageVector = icon.vector,
+                contentDescription = stringResource(icon.labelRes),
+                tint = AccentGreen,
+                modifier = Modifier.size(ICON_DP.dp),
+            )
+        } else {
+            Text(
+                text = number.toString(),
+                color = AccentGreen,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace,
+            )
+        }
     }
 }

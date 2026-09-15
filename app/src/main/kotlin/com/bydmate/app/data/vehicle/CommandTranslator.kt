@@ -16,7 +16,7 @@ data class SeatCommand(val group: SeatGroup, val level: Int)
  * Crowd validation strategy: actions not present here OR not in WriteAllowlist will
  * fail-soft at dispatch(). User files issue → we add the mapping in a follow-up.
  *
- * Window aggregates (车窗全开/关闭/半开/通风, 前排/后排车窗全开/关闭) fan out per door —
+ * Window aggregates (车窗全开/关闭/半开/通风, 前排/后排车窗全开/关闭/半开/通风) fan out per door —
  * see the [composite] map — because the competitor "aggregate" fids all target the
  * driver short-form fid (1125122104). Full open / full close use the per-door
  * open/close fids; half, vent and explicit percentages use the per-door % fids.
@@ -64,6 +64,13 @@ object CommandTranslator {
         "副驾通风" to Resolved("window_passenger_pos",  VENT_PCT),
         "后左通风" to Resolved("window_rear_left_pos",  VENT_PCT),
         "后右通风" to Resolved("window_rear_right_pos", VENT_PCT),
+
+        // ── Windows (half, individual) ── the 50 % detent on the same validated %
+        // path as vent. Only 全开/关闭 use the dedicated open/close fids above. ───
+        "主驾半开" to Resolved("window_driver_pos",     HALF_PCT),
+        "副驾半开" to Resolved("window_passenger_pos",  HALF_PCT),
+        "后左半开" to Resolved("window_rear_left_pos",  HALF_PCT),
+        "后右半开" to Resolved("window_rear_right_pos", HALF_PCT),
 
         // ── Climate ── LIVE_VALIDATED (ac_on/ac_off/ac_cycle_*/ac_auto_*) ──────
         // ac_power fid 501219364: 0=off, 1=on (LIVE 2026-07-03, both directions
@@ -156,12 +163,10 @@ object CommandTranslator {
      * Composite commands fan out to several validated per-door % writes. All four
      * window fids (driver/passenger/rear-left/rear-right *_pos) are LIVE_VALIDATED.
      */
-    private fun allWindows(pct: Int): List<Resolved> = listOf(
-        Resolved("window_driver_pos", pct),
-        Resolved("window_passenger_pos", pct),
-        Resolved("window_rear_left_pos", pct),
-        Resolved("window_rear_right_pos", pct),
-    )
+    private fun windowsPct(pct: Int, vararg doors: String): List<Resolved> =
+        doors.map { Resolved("window_${it}_pos", pct) }
+    private fun allWindows(pct: Int): List<Resolved> =
+        windowsPct(pct, "driver", "passenger", "rear_left", "rear_right")
 
     /** Full open / full close of a door set — the dedicated open/close fids, not 100%/0%. */
     private fun windowsOpen(vararg doors: String): List<Resolved> =
@@ -173,12 +178,16 @@ object CommandTranslator {
         // ── Windows ── fan out per door: open/close fids for 全开/关闭, % fids otherwise ─
         put("车窗全开", windowsOpen("driver", "passenger", "rear_left", "rear_right"))
         put("车窗关闭", windowsClose("driver", "passenger", "rear_left", "rear_right"))
-        put("车窗半开", allWindows(50))
+        put("车窗半开", allWindows(HALF_PCT))
         put("车窗通风", allWindows(VENT_PCT))
         put("前排车窗全开", windowsOpen("driver", "passenger"))
         put("前排车窗关闭", windowsClose("driver", "passenger"))
         put("后排车窗全开", windowsOpen("rear_left", "rear_right"))
         put("后排车窗关闭", windowsClose("rear_left", "rear_right"))
+        put("前排车窗半开", windowsPct(HALF_PCT, "driver", "passenger"))
+        put("前排车窗通风", windowsPct(VENT_PCT, "driver", "passenger"))
+        put("后排车窗半开", windowsPct(HALF_PCT, "rear_left", "rear_right"))
+        put("后排车窗通风", windowsPct(VENT_PCT, "rear_left", "rear_right"))
         // ── Fridge temperature presets ── mode + setpoint (dev=1023) ──────────
         put("冰箱制冷-6度", fridgeCool(-6))
         put("冰箱制冷-3度", fridgeCool(-3))
@@ -248,6 +257,10 @@ object CommandTranslator {
     // Vent = crack windows to this aperture % (validated per-door % path). Small
     // opening for fresh air; tune from user feedback. Stays under the >80 km/h gate.
     private const val VENT_PCT = 10
+
+    // Half = the 50 % detent, the only aperture between vent and full open that
+    // voice and the agent expose (arbitrary percentages are not offered).
+    private const val HALF_PCT = 50
 
     /** Action names produced only by dynamic resolution (absent from [table]). */
     private val DYNAMIC_ACTIONS = setOf("ac_temp_main", "ac_wind_level")

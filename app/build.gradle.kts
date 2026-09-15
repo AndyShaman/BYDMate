@@ -30,8 +30,8 @@ android {
         // on DiLink Android 12 (requestLegacyExternalStorage works).
         // targetSdk 30+ would break listFiles() on /storage/emulated/0/energydata/
         targetSdk = 29
-        versionCode = 464
-        versionName = "3.15.5"
+        versionCode = 471
+        versionName = "3.15.5-test"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -161,6 +161,14 @@ ksp {
 }
 
 dependencies {
+    // Hidden BYD framework classes the push listeners subclass. compileOnly: the head unit
+    // provides the real ones, and nothing from the stubs module may land in the APK.
+    compileOnly(project(":bydauto-stubs"))
+
+    // The push listener classes must load in unit tests; on the head unit the framework provides
+    // them, so this is a test-runtime substitute, not a packaged dependency.
+    testImplementation(project(":bydauto-stubs"))
+
     // Compose
     implementation(platform("androidx.compose:compose-bom:2024.12.01"))
     implementation("androidx.compose.material3:material3")

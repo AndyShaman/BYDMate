@@ -8,6 +8,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
 
+/** Shape of a main-screen camera window: the width slider plus the upright flag (#207). */
+data class PipShape(val widthPct: Int, val rotated: Boolean)
+
 /**
  * Blind-spot feature settings. The settings card writes the same SharedPreferences file
  * directly (the projection cards next to it work that way too), so every getter re-reads —
@@ -35,6 +38,11 @@ class BlindSpotPreferences @Inject constructor(
     /** Opt-in (#183): keep the left camera on the main screen even when a cluster panel exists. */
     val bothOnMain: Boolean get() = prefs.getBoolean(KEY_BOTH_ON_MAIN, false)
 
+    /** Opt-in (#207): portrait main-screen windows with the picture turned 90°, like a mirror. */
+    val pipRotate90: Boolean get() = prefs.getBoolean(KEY_PIP_ROTATE_90, false)
+
+    val pipShape: PipShape get() = PipShape(pipWidthPct, pipRotate90)
+
     companion object {
         const val PREFS_NAME = "blind_spot"
         const val KEY_ENABLED = "enabled"
@@ -46,6 +54,7 @@ class BlindSpotPreferences @Inject constructor(
         const val KEY_LEFT_PIP_Y_PX = "left_pip_y_px"
         const val KEY_BSD_GLOW = "bsd_glow"
         const val KEY_BOTH_ON_MAIN = "both_on_main"
+        const val KEY_PIP_ROTATE_90 = "pip_rotate_90"
 
         /** Position is stored in absolute pixels, so "never placed" needs its own value. */
         const val UNSET_PX = -1
@@ -60,24 +69,32 @@ class BlindSpotPreferences @Inject constructor(
         const val MIN_PIP_WIDTH_PCT = 20
         const val MAX_PIP_WIDTH_PCT = 60
 
-        /** 16:9 window sized to [widthPct] % of the display width. */
-        fun pipSize(displayW: Int, widthPct: Int): Size {
-            val width = (displayW * widthPct / 100f).roundToInt()
-            return Size(width, width * 9 / 16)
+        /**
+         * 16:9 window sized to [widthPct] % of the display width, upright (#207) or not.
+         * An upright window is as tall as a flat one is wide, so a wide slider would run it off
+         * the top and bottom of the screen: it is then scaled down whole, keeping 16:9, to
+         * exactly the display height.
+         */
+        fun pipSize(displayW: Int, displayH: Int, shape: PipShape): Size {
+            val width = (displayW * shape.widthPct / 100f).roundToInt()
+            val height = width * 9 / 16
+            val size = if (shape.rotated) Size(height, width) else Size(width, height)
+            if (size.height <= displayH || displayH <= 0) return size
+            return Size((size.width * displayH.toFloat() / size.height).roundToInt(), displayH)
         }
 
         /** Right edge, vertically centered: the PiP sits away from the navigation card. */
-        fun defaultPipRect(displayW: Int, displayH: Int, widthPct: Int): Rect {
-            val size = pipSize(displayW, widthPct)
+        fun defaultPipRect(displayW: Int, displayH: Int, shape: PipShape): Rect {
+            val size = pipSize(displayW, displayH, shape)
             val left = (displayW - size.width).coerceAtLeast(0)
             val top = ((displayH - size.height) / 2).coerceAtLeast(0)
             return Rect(left, top, left + size.width, top + size.height)
         }
 
         /** The saved corner clamped to the screen, or the default slot while nothing was placed. */
-        fun placedPipRect(displayW: Int, displayH: Int, widthPct: Int, x: Int, y: Int): Rect {
-            if (x == UNSET_PX || y == UNSET_PX) return defaultPipRect(displayW, displayH, widthPct)
-            val size = pipSize(displayW, widthPct)
+        fun placedPipRect(displayW: Int, displayH: Int, shape: PipShape, x: Int, y: Int): Rect {
+            if (x == UNSET_PX || y == UNSET_PX) return defaultPipRect(displayW, displayH, shape)
+            val size = pipSize(displayW, displayH, shape)
             val left = x.coerceIn(0, (displayW - size.width).coerceAtLeast(0))
             val top = y.coerceIn(0, (displayH - size.height).coerceAtLeast(0))
             return Rect(left, top, left + size.width, top + size.height)
@@ -97,12 +114,12 @@ class BlindSpotPreferences @Inject constructor(
         fun leftPipRect(
             displayW: Int,
             displayH: Int,
-            widthPct: Int,
+            shape: PipShape,
             leftX: Int,
             leftY: Int,
             rightRect: Rect,
         ): Rect =
             if (leftX == UNSET_PX || leftY == UNSET_PX) mirrorRect(rightRect, displayW)
-            else placedPipRect(displayW, displayH, widthPct, leftX, leftY)
+            else placedPipRect(displayW, displayH, shape, leftX, leftY)
     }
 }

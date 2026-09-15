@@ -62,4 +62,27 @@ class ActionDispatcherDangerousActionTest {
     @Test fun `notification is not dangerous`() {
         assertFalse(isDangerous(ActionDef("x", "", kind = "notification")))
     }
+
+    // --- toggle: resolved command is unknown until dispatch, so the risky targets
+    //     are dangerous whichever way they would flip ---
+
+    @Test fun `locks toggle is dangerous`() {
+        assertTrue(isDangerous(ActionDef("", "", kind = "toggle", payload = "locks")))
+    }
+
+    @Test fun `rear trunk toggle is dangerous`() {
+        assertTrue(isDangerous(ActionDef("", "", kind = "toggle", payload = "trunk")))
+    }
+
+    @Test fun `sunroof toggle is not dangerous`() {
+        assertFalse(isDangerous(ActionDef("", "", kind = "toggle", payload = "sunroof")))
+    }
+
+    @Test fun `front trunk toggle is not dangerous`() {
+        assertFalse(isDangerous(ActionDef("", "", kind = "toggle", payload = "front_trunk")))
+    }
+
+    @Test fun `cluster toggle is not dangerous`() {
+        assertFalse(isDangerous(ActionDef("", "", kind = "toggle", payload = "cluster")))
+    }
 }

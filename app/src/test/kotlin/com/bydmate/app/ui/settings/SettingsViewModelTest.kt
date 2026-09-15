@@ -296,7 +296,7 @@ class SettingsViewModelTest {
             logRecorder = com.bydmate.app.diagnostics.LogRecorder(ctx) {
                 throw UnsupportedOperationException("no logcat in tests")
             },
-            fidSubscriptionManager = mockk(relaxed = true),
+            fidPushChannel = mockk(relaxed = true),
             splitPreferences = mockk(relaxed = true),
             splitSessionManager = mockk(relaxed = true),
             splitJournal = com.bydmate.app.split.NoSplitJournal,

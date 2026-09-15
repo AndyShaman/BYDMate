@@ -34,6 +34,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.EntryPointAccessors
 import dagger.hilt.components.SingletonComponent
 import java.util.Locale
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -428,6 +429,9 @@ object WidgetController {
                     .fromApplication(appCtx, ClusterEntryPoint::class.java)
                     .voiceController()
                 voiceController.listening.collect { listeningState.value = it }
+            } catch (e: CancellationException) {
+                // The widget was taken down: the collector is cancelled by design, not broken.
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "listening subscription failed: ${e.message}")
             }

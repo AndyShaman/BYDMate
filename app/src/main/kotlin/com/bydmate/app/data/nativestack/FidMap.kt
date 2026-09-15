@@ -99,7 +99,13 @@ object FidMap {
         FidEntry("windowRRGen3",         1001, 1267728408,   5, Decoder.INT_PERCENT),
         // Percent fid (live Leopard 3 2026-07-30): 0=closed, 7=vent detent, 50=half, 100=open
         FidEntry("sunroof",              1001, 1101004808,   5, Decoder.INT_PERCENT, symbol = "Bodywork.BODYWORK_MOON_ROOF_OPEN_PERCENT"),
+        // Tailgate position, same enum family as frontTrunk below: 2=closed, 1=open,
+        // anything else = moving. Only the closed value was seen on-car (the Leopard 3
+        // tailgate is manual, the command just unlatches it).
         FidEntry("trunk",                1001, 1074790416,   5, Decoder.INT_ENUM, symbol = "Bodywork.BODYWORK_BACKDOOR_CURRENT_POSITION"),
+        // Front trunk position, measured on-car 2026-09-15: 2=closed, 3=moving, 1=open
+        // (open runs 2→3→1, close runs 1→3→2).
+        FidEntry("frontTrunk",           1001, 1156579344,   5, Decoder.INT_ENUM, symbol = "Bodywork.BODYWORK_FRONT_HATCH_CURRENT_POSITION"),
         FidEntry("lockFL",               1032, 1081081864,   5, Decoder.INT_ENUM, symbol = "Ota.OTA_LF_DOOR_LOCK"),
         FidEntry("driveMode",            1006, 555745294,    5, Decoder.INT_ENUM, symbol = "Energy.ENERGY_OPERATION_MODE"),
         // Ambiguous on L3: ENERGY_MODE_INSTRUMENT and its _44 twin hold the same value.
@@ -158,11 +164,17 @@ object FidMap {
         FidEntry("tyreTempRR",         1007, 1246797884,  5, Decoder.INT_RAW, symbol = "Instrument.INSTRUMENT_2IN1_RB_TYRE_TEMPERATURE"),
         FidEntry("pedalAccel",         1013, 874512392,   5, Decoder.INT_RAW, symbol = "Speed.SPEED_ACCELERATOR_S"),
         FidEntry("pedalBrake",         1013, 874512400,   5, Decoder.INT_RAW, symbol = "Speed.SPEED_BRAKE_S"),
+        // Backup "plug inserted" candidates (2026-09-15 drive): both moved in step with
+        // gunConnectState on a shut-down car. Read for diagnostics only — the charging
+        // detector keeps using gunConnectState until a measurement on a running car with
+        // the plug in says what these two report there.
+        FidEntry("chargerConnectState",    1009, 89128973,  5, Decoder.INT_RAW, symbol = "Charging.CHARGING_CHARGER_CONNECT_STATE"),
+        FidEntry("chargeConnectIndicator", 1007, 710934572, 5, Decoder.INT_RAW, symbol = "Instrument.INSTRUMENT_2IN1_FAULT_POWER_BATTERY_CHARGE_CONNECT_INDICATOR"),
     )
 
     /**
      * READ addresses used outside the poll loop: the one-shot snapshots in
-     * AutoserviceClient, the observe-only fid subscriptions, and the seat
+     * AutoserviceClient, the push subscriptions, and the seat
      * diagnostics block of the dump. They never enter the daemon batch the
      * poll loop sends, but they are resolved by the same [FidResolver].
      */
@@ -177,8 +189,8 @@ object FidMap {
         FidEntry("chargeBatteryVolt",   1009, -1442840491,  5, Decoder.INT_RAW, symbol = "Charging.CHARGING_CHARGE_BATTERY_VOLT"),
         FidEntry("batteryType",         1009, -1728053169,  5, Decoder.INT_ENUM, symbol = "Charging.CHARGING_BATTERY_TYPE"),
         FidEntry("chargingCapacity",    1009, 666894360,    7, Decoder.FLOAT_KWH, symbol = "Charging.CHARGING_CAPACITY"),
-        // Observe-only subscriptions (FidSubscriptionManager). The listener API takes the
-        // fid only; dev=1038 (ADAS) is the catalog device these symbols belong to.
+        // Push subscriptions only (no poll counterpart). dev=1038 (ADAS) is the catalog
+        // device these symbols belong to, and the one the push listener registers on.
         FidEntry("bsdLeft",             1038, 1098907664,   5, Decoder.INT_ENUM, symbol = "Adas.ADAS_RIGHT_RADAR_LCA_WARNINGLEFT"),
         FidEntry("bsdRight",            1038, 1098907666,   5, Decoder.INT_ENUM, symbol = "Adas.ADAS_RIGHT_RADAR_LCA_WARNINGRIGHT"),
         // Seat diagnostics block of the dump (SeatsDiagnostics). Read-only candidates;

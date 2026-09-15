@@ -113,7 +113,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var ttsEngine: com.bydmate.app.voice.TtsEngine
     @Inject lateinit var audioCapture: com.bydmate.app.voice.AudioCapture
     @Inject lateinit var hudController: com.bydmate.app.hud.HudController
-    @Inject lateinit var fidSubscriptionManager: com.bydmate.app.data.subscription.FidSubscriptionManager
+    @Inject lateinit var fidPushChannel: com.bydmate.app.data.push.FidPushChannel
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
 
@@ -337,6 +337,7 @@ class TrackingService : Service(), LocationListener {
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
+
         /** Wall-clock of the last [lastData] update (0 = never). The snapshot itself carries no
          *  timestamp and is never cleared on transport loss, so consumers that voice it to the
          *  driver (agent get_vehicle_state) need this to tell fresh data from stale. */
@@ -521,6 +522,9 @@ class TrackingService : Service(), LocationListener {
                 Log.i(TAG, "fid resolve: daemon binder arrived, retrying")
                 resolveFidCatalog()
             }
+            // A binder that just arrived carries no subscription yet: the daemon clears its
+            // listener table when it dies, and a fresh one starts empty.
+            serviceScope.launch { fidPushChannel.resubscribe("binder accepted") }
             // Tell the daemon we hold its binder so it stops re-announcing it (#64/#148).
             // Must not block the receiver thread — registerClient is a binder transact.
             serviceScope.launch { helperClient.registerClient() }
@@ -726,9 +730,9 @@ class TrackingService : Service(), LocationListener {
         networkAvailableMonitor.start()
         startPolling()
         startCameraMonitor()
-        // Observe-only fid subscriptions (-test builds only): counts events, never
-        // touches the poll above.
-        fidSubscriptionManager.start()
+        // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
+        // untouched and stays the source of truth.
+        serviceScope.launch { fidPushChannel.events.collect { applyPushEvent(it) } }
         // Blind-spot pipeline: idle until the poll below reports the car near the speed
         // threshold, and only when the feature is switched on (default off).
         blindSpotController.start(serviceScope)
@@ -808,10 +812,34 @@ class TrackingService : Service(), LocationListener {
      * was absent at startup still gets read once it comes back), from the binder-arrival
      * callback and from [startFidResolveRetryTimer].
      */
+    /**
+     * Lays a pushed fid value into the live snapshot between two poll ticks. Nothing happens
+     * before the first poll landed (no snapshot to patch) or when the value did not survive its
+     * decoder — the poll stays the source of truth either way.
+     */
+    private fun applyPushEvent(event: com.bydmate.app.helper.push.FidPushEvent) {
+        val field = fidPushChannel.fieldFor(event.fid) ?: return
+        val applied = com.bydmate.app.data.push.FidPushApplier.patch(
+            _lastData, field, event.intValue, event.doubleValue,
+        )
+        if (applied && pushLogThrottle.shouldLog(field)) {
+            Log.i("FidPush", "push fid=${event.fid} $field=${event.intValue}/${event.doubleValue} applied")
+        }
+    }
+
+    /**
+     * One push line per field per second. With every FidMap field subscribed the busy ones
+     * (current, rpm, speed, a window travelling end to end) would otherwise bury the rest of
+     * the log. Only the logging is throttled — every event still patches the snapshot.
+     */
+    private val pushLogThrottle = com.bydmate.app.data.autoservice.LogThrottle(1_000L)
+
     private fun resolveFidCatalog() {
         serviceScope.launch {
             fidCatalogManager.ensureResolved()
-            fidSubscriptionManager.restartForResolvedAddresses()
+            // The one point every daemon path passes through once the daemon is live, on both
+            // transports: startup chain, watchdog respawn, binder arrival and the retry timer.
+            fidPushChannel.resubscribe("fid catalog resolved")
         }
     }
 
@@ -830,7 +858,7 @@ class TrackingService : Service(), LocationListener {
                 // still spawning the daemon would be a wasted one.
                 if (fidCatalogManager.resolvePending) {
                     fidCatalogManager.ensureResolved()
-                    fidSubscriptionManager.restartForResolvedAddresses()
+                    fidPushChannel.resubscribe("fid catalog resolved")
                 }
             }
             Log.i(TAG, "fid resolve: retry timer done (${fidCatalogManager.resolveStatus})")
@@ -1207,7 +1235,6 @@ class TrackingService : Service(), LocationListener {
         }
 
         alicePollingManager.stop()
-        fidSubscriptionManager.stop()
         blindSpotController.stop()
         cameraStateMonitor.stop()
         _cameraActive.value = false
@@ -1313,7 +1340,6 @@ class TrackingService : Service(), LocationListener {
                 try {
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
-                    fidSubscriptionManager.onPollSnapshot(data)
                     blindSpotController.onPollSnapshot(data)
                     alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.

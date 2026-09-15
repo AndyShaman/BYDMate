@@ -50,6 +50,14 @@ class FidMapTest {
         assertTrue("Missing FidMap entries: ${required - mapped}", mapped.containsAll(required))
     }
 
+    @Test fun `front trunk position fid is mapped for the toggle action`() {
+        val entry = FidMap.entries.single { it.field == "frontTrunk" }
+        assertEquals(1001, entry.device)
+        assertEquals(1156579344, entry.fid)
+        assertEquals(5, entry.transact)
+        assertEquals("Bodywork.BODYWORK_FRONT_HATCH_CURRENT_POSITION", entry.symbol)
+    }
+
     @Test fun `turn signal read fid is mapped`() {
         val entry = FidMap.entries.single { it.field == "turnSignal" }
         assertEquals(1004, entry.device)
@@ -154,14 +162,6 @@ class FidMapTest {
             assertEquals("device of $field", address.first, entry.device)
             assertEquals("fid of $field", address.second, entry.fid)
         }
-    }
-
-    @Test fun `subscription entries carry the constants they took over`() {
-        val subscriptions = com.bydmate.app.data.subscription.FidSubscriptionManager
-        assertEquals(subscriptions.FID_BLINK, FidMap.byField.getValue("turnSignal").fid)
-        assertEquals(subscriptions.FID_GEAR, FidMap.byField.getValue("gear").fid)
-        assertEquals(subscriptions.FID_BSD_LEFT, FidMap.byField.getValue("bsdLeft").fid)
-        assertEquals(subscriptions.FID_BSD_RIGHT, FidMap.byField.getValue("bsdRight").fid)
     }
 
     /**

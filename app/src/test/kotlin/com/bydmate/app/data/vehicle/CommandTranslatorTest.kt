@@ -213,6 +213,35 @@ class CommandTranslatorTest {
         )
     }
 
+    // ── Per-window half and the front/rear pair apertures — same % path ───────
+    @Test fun `driver window half maps to driver pos fid at 50`() {
+        val r = one("主驾半开")
+        assertEquals("window_driver_pos", r?.actionName)
+        assertEquals(50, r?.value)
+    }
+
+    @Test fun `front pair half and vent fan out to the two front pos fids`() {
+        assertEquals(
+            setOf("window_driver_pos" to 50, "window_passenger_pos" to 50),
+            pairs("前排车窗半开"),
+        )
+        assertEquals(
+            setOf("window_driver_pos" to 10, "window_passenger_pos" to 10),
+            pairs("前排车窗通风"),
+        )
+    }
+
+    @Test fun `rear pair half and vent fan out to the two rear pos fids`() {
+        assertEquals(
+            setOf("window_rear_left_pos" to 50, "window_rear_right_pos" to 50),
+            pairs("后排车窗半开"),
+        )
+        assertEquals(
+            setOf("window_rear_left_pos" to 10, "window_rear_right_pos" to 10),
+            pairs("后排车窗通风"),
+        )
+    }
+
     // ── Interior / ambient light (candidate, dev=1023 carve-out) ──────────────
     @Test fun `open interior light maps to interior_light_on`() {
         val r = one("打开车内灯")

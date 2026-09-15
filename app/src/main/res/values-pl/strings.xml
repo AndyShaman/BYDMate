@@ -470,6 +470,16 @@
     <string name="automation_action_cluster_projection">Wyświetlanie na wskaźnikach</string>
     <string name="automation_action_cluster_projection_on">Włącz</string>
     <string name="automation_action_cluster_projection_off">Wyłącz</string>
+    <string name="automation_action_toggle">Przełącz</string>
+    <string name="automation_action_toggle_display_name">Przełącz: %1$s</string>
+    <string name="toggle_target_trunk">Bagażnik</string>
+    <string name="toggle_target_front_trunk">Przedni bagażnik</string>
+    <string name="toggle_target_sunroof">Szyberdach</string>
+    <string name="toggle_target_locks">Zamki drzwi</string>
+    <string name="toggle_target_cluster">Wyświetlanie na wskaźnikach</string>
+    <string name="toggle_state_unknown">%1$s: stan nieznany</string>
+    <string name="toggle_trunk_moving">Bagażnik jest w ruchu</string>
+    <string name="toggle_unknown_target">Nieznany cel przełączania: %1$s</string>
     <string name="automation_action_hotspot">Hotspot Wi-Fi</string>
     <string name="automation_action_hotspot_on">Włącz</string>
     <string name="automation_action_hotspot_off">Wyłącz</string>
@@ -1016,6 +1026,14 @@
     <string name="auto_act_vent_passenger_window">Przewietrz szybę pasażera</string>
     <string name="auto_act_vent_rear_left_window">Przewietrz tylną lewą szybę</string>
     <string name="auto_act_vent_rear_right_window">Przewietrz tylną prawą szybę</string>
+    <string name="auto_act_half_driver_window">Szyba kierowcy na 50%</string>
+    <string name="auto_act_half_passenger_window">Szyba pasażera na 50%</string>
+    <string name="auto_act_half_rear_left_window">Tylna lewa szyba na 50%</string>
+    <string name="auto_act_half_rear_right_window">Tylna prawa szyba na 50%</string>
+    <string name="auto_act_half_front_windows">Przednie na 50%</string>
+    <string name="auto_act_vent_front_windows">Przewietrz przednie</string>
+    <string name="auto_act_half_rear_windows">Tylne na 50%</string>
+    <string name="auto_act_vent_rear_windows">Przewietrz tylne</string>
     <string name="auto_act_auto_ac">Auto AC</string>
     <string name="auto_act_ventilation_no_ac">Nawiew bez AC</string>
     <string name="auto_act_temp_18c">Temp. 18°C</string>
@@ -1310,6 +1328,10 @@
     <string name="settings_widget_reset_position_desc">Przywróć widżet na domyślne miejsce</string>
     <string name="settings_export_csv_desc">Cała historia przejazdów w jednym pliku do folderu Download</string>
     <string name="settings_log_recording_desc">Szczegółowy dziennik działania do analizy problemów. Włączaj na prośbę dewelopera</string>
+    <string name="settings_fid_recorder_title">Rejestrator czujników</string>
+    <string name="settings_fid_recorder_desc">Zapisuje każdą zmianę czujników auta do pliku w Pobranych, do analizy</string>
+    <string name="settings_fid_recorder_file">Plik: %1$s</string>
+    <string name="settings_fid_recorder_error">Nie nagrywa: %1$s</string>
     <string name="settings_quiet_notification_title">Ciche powiadomienie w panelu</string>
     <string name="settings_quiet_notification_desc">Powiadomienie BYDMate trafia do zwiniętej listy bez ikony na pasku stanu. Nie da się go usunąć całkowicie: Android wymaga powiadomienia do pracy w tle</string>
     <string name="settings_config_export_desc">Kopia: historia przejazdów z GPS i klucze API otwartym tekstem, plik w folderze Download</string>
@@ -1360,6 +1382,8 @@
     <string name="settings_blindspot_threshold_desc">Poniżej tej prędkości kamera się nie pokazuje</string>
     <string name="settings_blindspot_pip_width_title">Szerokość okienka</string>
     <string name="settings_blindspot_pip_width_desc" formatted="false">Szerokość okienka na ekranie głównym w % szerokości ekranu</string>
+    <string name="settings_blindspot_rotate_title">Pionowe okno kamery</string>
+    <string name="settings_blindspot_rotate_desc">Obraz obrócony o 90°, okno stoi pionowo jak lusterko</string>
     <string name="settings_blindspot_position_title">Położenie okienka</string>
     <string name="settings_blindspot_position_desc">Prawa kamera. Pokazuje puste okienko nad ekranem: przeciągnij je palcem tam, gdzie ma być kamera</string>
     <string name="settings_blindspot_position_button">Ustaw położenie</string>
@@ -1410,6 +1434,34 @@
     <string name="settings_widget_left_tap_mode_label">Akcja lewego dotknięcia</string>
     <string name="settings_widget_left_tap_mode_app">Uruchamiaj aplikację</string>
     <string name="settings_widget_left_tap_mode_split">Uruchamiaj podział ekranu</string>
+    <!-- Widget button icons -->
+    <string name="widget_button_icon_hint">Ikona na przycisku widżetu</string>
+    <string name="widget_button_icon_window">Okno</string>
+    <string name="widget_button_icon_sunroof">Szyberdach</string>
+    <string name="widget_button_icon_trunk">Bagażnik</string>
+    <string name="widget_button_icon_front_trunk">Przedni bagażnik</string>
+    <string name="widget_button_icon_lock">Blokada</string>
+    <string name="widget_button_icon_unlock">Odblokowanie</string>
+    <string name="widget_button_icon_ac">Klimatyzacja</string>
+    <string name="widget_button_icon_fan">Wentylacja</string>
+    <string name="widget_button_icon_heat">Ogrzewanie</string>
+    <string name="widget_button_icon_seat">Fotel</string>
+    <string name="widget_button_icon_light">Światła</string>
+    <string name="widget_button_icon_mirror">Lusterka</string>
+    <string name="widget_button_icon_camera">Kamera</string>
+    <string name="widget_button_icon_navigation">Nawigacja</string>
+    <string name="widget_button_icon_cluster">Zegary</string>
+    <string name="widget_button_icon_car">Samochód</string>
+    <string name="widget_button_icon_home">Ekran główny</string>
+    <string name="widget_button_icon_music">Muzyka</string>
+    <string name="widget_button_icon_phone">Połączenie</string>
+    <string name="widget_button_icon_youtube">YouTube</string>
+    <string name="widget_button_icon_split">Podział ekranu</string>
+    <string name="widget_button_icon_sentry">Wartownik</string>
+    <string name="widget_button_icon_wifi">Wi-Fi</string>
+    <string name="widget_button_icon_charge">Ładowanie</string>
+    <string name="widget_button_icon_fridge">Lodówka</string>
+    <string name="widget_button_icon_star">Ulubione</string>
     <!-- Split-screen settings section -->
     <string name="settings_section_split_title">Podział ekranu</string>
     <string name="settings_split_enable_title">Podział ekranu 1/3 + 2/3</string>

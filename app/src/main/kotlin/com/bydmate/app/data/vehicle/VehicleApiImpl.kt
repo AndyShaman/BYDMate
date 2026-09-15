@@ -361,34 +361,127 @@ class VehicleApiImpl @Inject constructor(
      * "no evidence", never as a failure.
      */
     private suspend fun verifyWindowBurst(checks: List<WindowVerify>): String? {
-        val pending = pendingPanes(checks).toMutableList()
-        repeat(WINDOW_VERIFY_ATTEMPTS) {
-            if (pending.isEmpty()) return null
-            delay(WINDOW_VERIFY_DELAY_MS)
-            val settled = pending.filter { paneSettled(it) }
-            settled.forEach { logWindowVerdict(it, null) }
-            pending.removeAll(settled)
-        }
-        if (pending.isEmpty()) return null
-        pending.forEach { pane ->
+        val samples = sampleWindows(checks)
+        val failed = retryOnPercentChannel(watchPanes(samples.pending), samples.blind)
+        if (failed.isEmpty()) return null
+        failed.forEach { pane ->
             logWindowVerdict(pane, "не сдвинулось")
             logWrite(pane.check.actionName, pane.check.entry.dev, pane.check.entry.writeFid,
                 pane.check.value, null, false, "window_noop", pane.check.entry.validated)
         }
-        val panes = pending.map { paneLabel(it.check.actionName) }
+        val panes = failed.map { paneLabel(it.check.actionName) }
         return if (panes.size == 1) "${panes[0]} не сдвинулось с места, команда не сработала"
         else "не сдвинулись с места: " + panes.joinToString(", ")
     }
 
-    /** Panes worth watching: the "before" sample resolved, was readable, and is not already
-     *  at the requested position. Everything else is "no evidence" and stays out. */
-    private suspend fun pendingPanes(checks: List<WindowVerify>): List<PendingPane> =
-        checks.mapNotNull { check ->
+    /** Watches [pending] until each pane shows movement; returns the ones that never did. */
+    private suspend fun watchPanes(pending: List<PendingPane>): List<PendingPane> {
+        val left = pending.toMutableList()
+        repeat(WINDOW_VERIFY_ATTEMPTS) {
+            if (left.isEmpty()) return emptyList()
+            delay(WINDOW_VERIFY_DELAY_MS)
+            val settled = left.filter { paneSettled(it) }
+            settled.forEach { logWindowVerdict(it, null) }
+            left.removeAll(settled)
+        }
+        return left
+    }
+
+    /**
+     * Second chance for the dedicated open/close fids on a unit that has already been fixed
+     * on the PERCENT channel (#197, DiLink 3.0 trinket): there the open/close family answers
+     * status=1 and moves nothing, while the percent family on the same door works. Re-send the
+     * same door as a percent write (100 = open, 0 = close) and judge THAT write instead.
+     *
+     * Needs a pane that was SEEN not to move: that observation is the evidence, and without it
+     * nothing is re-sent — a percent-capable unit whose position reads happen to fail must keep
+     * producing exactly the writes it produced before (#79 invariant). Once one pane in the
+     * burst is proven stuck, the doors whose position could not be read at all (raw 255 on the
+     * passenger/rear doors of that firmware) are re-sent with it: the same firmware moved them
+     * with the same accepted-but-dead fid. Exactly one retry per command — the percent write
+     * itself is never eligible for another.
+     *
+     * Returns the panes that must still be reported as failures.
+     */
+    private suspend fun retryOnPercentChannel(
+        stuck: List<PendingPane>,
+        blind: List<WindowVerify>,
+    ): List<PendingPane> {
+        if (stuck.isEmpty() || windowChannel.decidedChannel() != WindowChannel.PERCENT) return stuck
+        val retried = mutableListOf<WindowVerify>()
+        val notRetried = mutableListOf<PendingPane>()
+        val stagger = WriteStagger()
+        for (pane in stuck) {
+            if (!resendOnPercent(pane.check, "ctrl did not move", retried, stagger)) notRetried += pane
+        }
+        blind.forEach { resendOnPercent(it, "readback blind", retried, stagger) }
+        if (retried.isEmpty()) return stuck
+        return notRetried + watchPanes(sampleWindows(retried).pending)
+    }
+
+    /** Re-sends one door on its percent fid; false when there is no percent twin or the
+     *  write produced no check to judge (allowlist miss, helper failure). */
+    private suspend fun resendOnPercent(
+        check: WindowVerify,
+        reason: String,
+        into: MutableList<WindowVerify>,
+        stagger: WriteStagger,
+    ): Boolean {
+        val posAction = percentTwin(check.actionName) ?: return false
+        val before = into.size
+        stagger.pace()
+        Log.i(TAG, "window fallback: ${check.actionName} $reason, channel=PERCENT -> " +
+            "$posAction=${check.target}")
+        doWrite(posAction, check.target, verifyInto = into)
+        return into.size > before
+    }
+
+    /**
+     * Keeps the fallback writes [COMPOSITE_WRITE_STAGGER_MS] apart, exactly as the composite
+     * dispatch spaces its own burst: on Song L a back-to-back series of window writes all answer
+     * status=1, but the first panes never move.
+     */
+    private class WriteStagger {
+        private var sent = false
+
+        suspend fun pace() {
+            if (sent) delay(COMPOSITE_WRITE_STAGGER_MS)
+            sent = true
+        }
+    }
+
+    /** Percent fid of the door a dedicated open/close write names, or null for anything else. */
+    private fun percentTwin(actionName: String): String? {
+        val a = actionName.lowercase()
+        if (!a.startsWith("window_")) return null
+        val door = when {
+            a.endsWith("_open") -> a.removeSuffix("_open")
+            a.endsWith("_close") -> a.removeSuffix("_close")
+            else -> return null
+        }
+        return "${door}_pos"
+    }
+
+    /** Panes worth watching (the "before" sample resolved, was readable, and is not already at
+     *  the requested position) and panes whose position could not be read at all. Everything
+     *  else is "no evidence" and stays out of both lists. */
+    private suspend fun sampleWindows(checks: List<WindowVerify>): WindowSamples {
+        val pending = mutableListOf<PendingPane>()
+        val blind = mutableListOf<WindowVerify>()
+        for (check in checks) {
             val sample = withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { check.before.await() }
             val before = sample?.second?.let { SentinelDecoder.decodeInt(it) }
-            if (before == null || kotlin.math.abs(before - check.target) <= WINDOW_POSITION_TOLERANCE_PCT) null
-            else PendingPane(check, sample.first, before)
+            when {
+                before == null -> blind += check
+                kotlin.math.abs(before - check.target) <= WINDOW_POSITION_TOLERANCE_PCT -> Unit
+                else -> pending += PendingPane(check, sample!!.first, before)
+            }
         }
+        return WindowSamples(pending, blind)
+    }
+
+    /** The two kinds of pane a burst leaves behind after its "before" samples. */
+    private class WindowSamples(val pending: List<PendingPane>, val blind: List<WindowVerify>)
 
     /** One more read of a pane: true when it moved, or when the read gives no evidence. */
     private suspend fun paneSettled(pane: PendingPane): Boolean {

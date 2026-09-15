@@ -41,7 +41,13 @@
 
 # The helper package runs under app_process via reflection (the bydmate_helper
 # binder daemon: HelperDaemon.main entry + HelperBinderProtocol transaction codes).
+# This also covers com.bydmate.app.helper.push, whose listener subclasses the vendor
+# framework instantiates and calls back by name.
 -keep class com.bydmate.app.helper.** { *; }
+
+# The push listeners extend hidden BYD framework classes that exist only on the head unit
+# (see the compileOnly :bydauto-stubs module), so R8 never sees their supertypes.
+-dontwarn android.hardware.**
 
 # HiddenApiBypass reflects into hidden framework APIs (ServiceManager) at runtime.
 -keep class org.lsposed.hiddenapibypass.** { *; }
