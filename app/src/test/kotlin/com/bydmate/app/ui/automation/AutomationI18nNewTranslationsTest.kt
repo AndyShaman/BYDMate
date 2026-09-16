@@ -103,8 +103,12 @@ class AutomationI18nNewTranslationsTest {
             }
         }
         for (a in ACTION_COMMANDS) {
-            assertEquals("action name ${a.command}", lc.getString(a.nameRes), a.localizedName(ctx))
-            assertEquals("action category ${a.command}", lc.getString(a.categoryRes), a.localizedCategory(ctx))
+            val id = a.toggleTarget ?: a.command
+            // A toggle entry reads as «<цель>: переключить», so its name goes through the wrapper.
+            val name = a.toggleTarget?.let { lc.getString(R.string.auto_act_toggle_catalog, lc.getString(a.nameRes)) }
+                ?: lc.getString(a.nameRes)
+            assertEquals("action name $id", name, a.localizedName(ctx))
+            assertEquals("action category $id", lc.getString(a.categoryRes), a.localizedCategory(ctx))
         }
         // Real pt text per type (fallback would yield the ru string instead).
         assertEquals("Clima", lc.getString(R.string.auto_cat_climate))

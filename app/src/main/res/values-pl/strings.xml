@@ -493,11 +493,14 @@
     <string name="automation_action_cluster_projection_off">Wyłącz</string>
     <string name="automation_action_toggle">Przełącz</string>
     <string name="automation_action_toggle_display_name">Przełącz: %1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s: przełącz</string>
+    <string name="automation_action_toggle_short">Przełącz</string>
     <string name="toggle_target_trunk">Bagażnik</string>
     <string name="toggle_target_front_trunk">Przedni bagażnik</string>
     <string name="toggle_target_sunroof">Szyberdach</string>
     <string name="toggle_target_locks">Zamki drzwi</string>
     <string name="toggle_target_cluster">Wyświetlanie na wskaźnikach</string>
+    <string name="toggle_target_sentry">Tryb ochrony</string>
     <string name="toggle_target_hazard">Światła awaryjne</string>
     <string name="toggle_target_climate">Klimatyzacja</string>
     <string name="toggle_target_seat_heat_driver">Podgrzewanie fotela kierowcy</string>

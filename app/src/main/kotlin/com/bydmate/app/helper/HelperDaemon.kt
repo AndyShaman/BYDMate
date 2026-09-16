@@ -512,6 +512,12 @@ fun main(args: Array<String>) {
                     true
                 }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
 
+                HelperBinderProtocol.TX_GET_GLOBAL_SETTING -> runCatching {
+                    val value = readGlobalSetting(data.readString() ?: "")
+                    reply?.writeInt(if (value != null) 0 else -1); reply?.writeInt(value ?: 0)
+                    true
+                }.getOrElse { reply?.writeInt(-1); reply?.writeInt(0); true }
+
                 HelperBinderProtocol.TX_ENABLE_NOTIFICATION_LISTENER -> runCatching {
                     val ok = enableNotificationListener()
                     reply?.writeInt(if (ok) 0 else -1); reply?.writeInt(0)
@@ -1784,11 +1790,19 @@ private const val CLUSTER_DIAG_MIN_INTERVAL_MS = 60_000L
  * firmware can print megabytes or hang, and neither may stall the daemon's binder thread. stdout is
  * drained on a background thread into a buffer capped at [maxBytes]; if the process outlives
  * [timeoutMs] it is killed and whatever was read is returned with a `[timeout Nms]` marker line.
- * Used ONLY by the diagnostic snapshots ([logClusterDisplayDiag], [logA11yFrameworkState]) — the
- * production callers stay on [shExec]/[shExecMerged].
+ * Used by the diagnostic snapshots ([logClusterDisplayDiag], [logA11yFrameworkState]) and by
+ * [readGlobalSetting], which runs on the binder thread — the other callers stay on
+ * [shExec]/[shExecMerged]. [args] land as `$1`, `$2`, … so a value never goes into the script.
  */
-private fun shExecBounded(script: String, timeoutMs: Long = 4000L, maxBytes: Int = 64 * 1024): String {
-    val process = ProcessBuilder("sh", "-c", script).redirectErrorStream(true).start()
+internal fun shExecBounded(
+    script: String,
+    timeoutMs: Long = 4000L,
+    maxBytes: Int = 64 * 1024,
+    vararg args: String,
+): String {
+    val cmd = arrayListOf("sh", "-c", script, "sh")
+    cmd.addAll(args)
+    val process = ProcessBuilder(cmd).redirectErrorStream(true).start()
     val buffer = StringBuilder()
     val reader = Thread {
         runCatching {
@@ -2189,6 +2203,35 @@ private fun setHotspot(ctx: Context, enable: Boolean): Boolean {
  */
 internal fun globalSettingAllowed(key: String, value: Int): Boolean =
     key in setOf("sentrymode_enabled_switch", "enable_freeform_support") && value in 0..1
+
+/** Keys [HelperBinderProtocol.TX_GET_GLOBAL_SETTING] may read back: the write whitelist's keys. */
+internal fun globalSettingReadable(key: String): Boolean =
+    key in setOf("sentrymode_enabled_switch", "enable_freeform_support")
+
+/** How long the read below waits for `settings get global` before it gives up on it. */
+internal const val GLOBAL_SETTING_READ_TIMEOUT_MS = 2000L
+
+/** A settings value is a handful of bytes; anything longer is not one and is not worth buffering. */
+private const val GLOBAL_SETTING_READ_MAX_BYTES = 256
+
+/**
+ * Read side of [globalSettingAllowed]: the same narrow key set, so this stays a sentry/freeform
+ * channel and not a generic settings passthrough. The shell call is bounded — this runs on the
+ * binder thread the app blocks on, and a `settings` that never returns would pin it (and the
+ * helper mutex behind it) forever. Not whitelisted, not a number, or the bound expired -> null,
+ * and the caller refuses the toggle instead of guessing a state.
+ */
+internal fun readGlobalSetting(key: String): Int? {
+    if (!globalSettingReadable(key)) return null
+    val out = runCatching {
+        shExecBounded("settings get global \"\$1\"", GLOBAL_SETTING_READ_TIMEOUT_MS, GLOBAL_SETTING_READ_MAX_BYTES, key)
+    }.getOrElse { return null }
+    return parseGlobalSettingValue(out)
+}
+
+/** First line of `settings get global` as an Int; "null", noise or a `[timeout …]` marker -> null. */
+internal fun parseGlobalSettingValue(output: String): Int? =
+    output.lineSequence().firstOrNull()?.trim()?.toIntOrNull()
 
 /**
  * Expands a flattened component string to a canonical `pkg/fully.qualified.Class`, mirroring

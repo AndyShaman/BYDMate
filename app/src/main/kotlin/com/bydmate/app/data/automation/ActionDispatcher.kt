@@ -204,9 +204,13 @@ class ActionDispatcher @Inject constructor(
             // A toggle resolves to its command only at dispatch time, against the live
             // state. Locks and the rear trunk can resolve to an unlock / a trunk open,
             // so they are treated as dangerous whichever way they would flip.
-            "toggle" -> action.payload == TOGGLE_LOCKS || action.payload == TOGGLE_TRUNK
+            // Sentry rides here too: a flip may be a disable, same tier as the explicit "0".
+            "toggle" -> action.payload in setOf(TOGGLE_LOCKS, TOGGLE_TRUNK, TOGGLE_SENTRY)
             else -> false
         }
+
+        /** Settings.Global master switch of the BYD sentry mode (Centuri). */
+        internal const val SENTRY_SETTING_KEY = "sentrymode_enabled_switch"
 
         // --- toggle targets ("toggle" action payload) ---
 
@@ -215,6 +219,7 @@ class ActionDispatcher @Inject constructor(
         internal const val TOGGLE_SUNROOF = "sunroof"
         internal const val TOGGLE_LOCKS = "locks"
         internal const val TOGGLE_CLUSTER = "cluster"
+        internal const val TOGGLE_SENTRY = "sentry"
         internal const val TOGGLE_HAZARD = "hazard"
         internal const val TOGGLE_CLIMATE = "climate"
         internal const val TOGGLE_SEAT_HEAT_DRIVER = "seat_heat_driver"
@@ -225,7 +230,7 @@ class ActionDispatcher @Inject constructor(
         /** Targets a "toggle" action can flip, in picker order. */
         internal val TOGGLE_TARGETS = listOf(
             TOGGLE_TRUNK, TOGGLE_FRONT_TRUNK, TOGGLE_SUNROOF, TOGGLE_LOCKS, TOGGLE_CLUSTER,
-            TOGGLE_HAZARD, TOGGLE_CLIMATE,
+            TOGGLE_SENTRY, TOGGLE_HAZARD, TOGGLE_CLIMATE,
             TOGGLE_SEAT_HEAT_DRIVER, TOGGLE_SEAT_HEAT_PASSENGER,
             TOGGLE_SEAT_VENT_DRIVER, TOGGLE_SEAT_VENT_PASSENGER,
         )
@@ -237,6 +242,7 @@ class ActionDispatcher @Inject constructor(
             TOGGLE_SUNROOF -> R.string.toggle_target_sunroof
             TOGGLE_LOCKS -> R.string.toggle_target_locks
             TOGGLE_CLUSTER -> R.string.toggle_target_cluster
+            TOGGLE_SENTRY -> R.string.toggle_target_sentry
             TOGGLE_HAZARD -> R.string.toggle_target_hazard
             TOGGLE_CLIMATE -> R.string.toggle_target_climate
             TOGGLE_SEAT_HEAT_DRIVER -> R.string.toggle_target_seat_heat_driver
@@ -276,7 +282,7 @@ class ActionDispatcher @Inject constructor(
             state: Int?,
             lastSeatLevel: Int = SeatLevelMemory.DEFAULT_LEVEL,
         ): ToggleResolution {
-            if (target !in TOGGLE_TARGETS || target == TOGGLE_CLUSTER) {
+            if (target !in TOGGLE_TARGETS || target == TOGGLE_CLUSTER || target == TOGGLE_SENTRY) {
                 return ToggleResolution.UnknownTarget
             }
             val value = state ?: return ToggleResolution.StateUnknown
@@ -482,7 +488,7 @@ class ActionDispatcher @Inject constructor(
             "0" -> 0
             else -> return DispatchResult(false, "Некорректное состояние охранного режима")
         }
-        val ok = helper.putGlobalSetting("sentrymode_enabled_switch", value)
+        val ok = helper.putGlobalSetting(SENTRY_SETTING_KEY, value)
         return if (ok) DispatchResult(true)
         else DispatchResult(false, "Не удалось переключить охранный режим")
     }
@@ -561,6 +567,7 @@ class ActionDispatcher @Inject constructor(
         val src = if (polled != null) "live" else "step"
 
         if (target == TOGGLE_CLUSTER) return dispatchClusterToggle(action, live, src)
+        if (target == TOGGLE_SENTRY) return dispatchSentryToggle(action, live)
 
         val state = toggleState(target, live)
         val lastLevel = seatLevelMemory.lastLevel(target)
@@ -611,6 +618,24 @@ class ActionDispatcher @Inject constructor(
             action.copy(command = "cluster_projection", kind = "cluster_projection", payload = payload),
             live,
         )
+    }
+
+    /**
+     * Sentry target: the state lives in Settings.Global, not in the vehicle snapshot, so it is
+     * read back through the same daemon channel the write goes through. 1 = armed -> turn it
+     * off, anything else -> turn it on. An unreadable state is never guessed.
+     */
+    private suspend fun dispatchSentryToggle(action: ActionDef, live: DiParsData?): DispatchResult {
+        val lc = context.appLocalizedContext()
+        val state = helper.getGlobalSetting(SENTRY_SETTING_KEY)
+        if (state == null) {
+            Log.w(TAG, "toggle $TOGGLE_SENTRY live=null -> refused (unknown state)")
+            val name = lc.getString(R.string.toggle_target_sentry)
+            return DispatchResult(false, lc.getString(R.string.toggle_state_unknown, name))
+        }
+        val payload = if (state == 1) "0" else "1"
+        Log.i(TAG, "toggle $TOGGLE_SENTRY live=$state -> $payload")
+        return dispatch(action.copy(command = "sentry", kind = "sentry", payload = payload), live)
     }
 
     /** "speak": say the payload text verbatim via the voice coordinator (orb + duck + TTS). */

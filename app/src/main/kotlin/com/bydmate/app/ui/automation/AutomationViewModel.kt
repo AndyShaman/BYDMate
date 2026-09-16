@@ -46,7 +46,12 @@ data class TriggerParamOption(
 data class ActionOption(
     val command: String,
     @StringRes val nameRes: Int,
-    @StringRes val categoryRes: Int
+    @StringRes val categoryRes: Int,
+    /**
+     * Set on the «… переключить» entries that sit next to an on/off pair: picking one stores a
+     * `toggle` action on this target instead of the command above, which stays empty for them.
+     */
+    val toggleTarget: String? = null,
 )
 
 internal fun currentLang(context: Context): String =
@@ -65,8 +70,28 @@ fun TriggerParamOption.localizedEnumLabel(value: String, context: Context): Stri
     enumValues?.firstOrNull { it.first == value }
         ?.let { context.appLocalizedContext().getString(it.second) } ?: value
 
-fun ActionOption.localizedName(context: Context): String =
-    context.appLocalizedContext().getString(nameRes)
+fun ActionOption.localizedName(context: Context): String {
+    val lc = context.appLocalizedContext()
+    // A toggle entry reuses the target's own name and reads as «Багажник: переключить».
+    return if (toggleTarget != null) lc.getString(R.string.auto_act_toggle_catalog, lc.getString(nameRes))
+    else lc.getString(nameRes)
+}
+
+/**
+ * The action a catalog pick stores: a toggle entry produces exactly the ActionDef the retired
+ * «Переключить» kind picker produced, so an old rule and a new one are the same row.
+ */
+fun actionDefFor(option: ActionOption, context: Context): ActionDef =
+    if (option.toggleTarget != null) {
+        ActionDef(
+            command = "",
+            displayName = toggleDisplayName(context, option.toggleTarget),
+            kind = "toggle",
+            payload = option.toggleTarget,
+        )
+    } else {
+        ActionDef(option.command, option.localizedName(context))
+    }
 
 fun ActionOption.localizedCategory(context: Context): String =
     context.appLocalizedContext().getString(categoryRes)
@@ -173,6 +198,7 @@ val ACTION_COMMANDS = listOf(
         ActionOption("吹前挡", R.string.auto_act_windshield_defog_on, R.string.auto_cat_climate),
         ActionOption("关闭吹前挡", R.string.auto_act_windshield_defog_off, R.string.auto_cat_climate),
         ActionOption("关闭空调", R.string.auto_act_ac_off, R.string.auto_cat_climate),
+        ActionOption("", R.string.toggle_target_climate, R.string.auto_cat_climate, toggleTarget = ActionDispatcher.TOGGLE_CLIMATE),
         ActionOption("空调自动", R.string.auto_act_ac_auto_on, R.string.auto_cat_climate),
         ActionOption("空调手动", R.string.auto_act_ac_auto_off, R.string.auto_cat_climate),
         ActionOption("主驾座椅加热1档", R.string.auto_act_driver_heat_1, R.string.auto_cat_seats),
@@ -181,24 +207,28 @@ val ACTION_COMMANDS = listOf(
         ActionOption("主驾座椅加热4档", R.string.auto_act_driver_heat_4, R.string.auto_cat_seats),
         ActionOption("主驾座椅加热5档", R.string.auto_act_driver_heat_5, R.string.auto_cat_seats),
         ActionOption("主驾座椅加热关闭", R.string.auto_act_driver_heat_off, R.string.auto_cat_seats),
+        ActionOption("", R.string.toggle_target_seat_heat_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_DRIVER),
         ActionOption("副驾座椅加热1档", R.string.auto_act_passenger_heat_1, R.string.auto_cat_seats),
         ActionOption("副驾座椅加热2档", R.string.auto_act_passenger_heat_2, R.string.auto_cat_seats),
         ActionOption("副驾座椅加热3档", R.string.auto_act_passenger_heat_3, R.string.auto_cat_seats),
         ActionOption("副驾座椅加热4档", R.string.auto_act_passenger_heat_4, R.string.auto_cat_seats),
         ActionOption("副驾座椅加热5档", R.string.auto_act_passenger_heat_5, R.string.auto_cat_seats),
         ActionOption("副驾座椅加热关闭", R.string.auto_act_passenger_heat_off, R.string.auto_cat_seats),
+        ActionOption("", R.string.toggle_target_seat_heat_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_HEAT_PASSENGER),
         ActionOption("主驾座椅通风1档", R.string.auto_act_driver_vent_1, R.string.auto_cat_seats),
         ActionOption("主驾座椅通风2档", R.string.auto_act_driver_vent_2, R.string.auto_cat_seats),
         ActionOption("主驾座椅通风3档", R.string.auto_act_driver_vent_3, R.string.auto_cat_seats),
         ActionOption("主驾座椅通风4档", R.string.auto_act_driver_vent_4, R.string.auto_cat_seats),
         ActionOption("主驾座椅通风5档", R.string.auto_act_driver_vent_5, R.string.auto_cat_seats),
         ActionOption("主驾座椅通风关闭", R.string.auto_act_driver_vent_off, R.string.auto_cat_seats),
+        ActionOption("", R.string.toggle_target_seat_vent_driver, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_DRIVER),
         ActionOption("副驾座椅通风1档", R.string.auto_act_passenger_vent_1, R.string.auto_cat_seats),
         ActionOption("副驾座椅通风2档", R.string.auto_act_passenger_vent_2, R.string.auto_cat_seats),
         ActionOption("副驾座椅通风3档", R.string.auto_act_passenger_vent_3, R.string.auto_cat_seats),
         ActionOption("副驾座椅通风4档", R.string.auto_act_passenger_vent_4, R.string.auto_cat_seats),
         ActionOption("副驾座椅通风5档", R.string.auto_act_passenger_vent_5, R.string.auto_cat_seats),
         ActionOption("副驾座椅通风关闭", R.string.auto_act_passenger_vent_off, R.string.auto_cat_seats),
+        ActionOption("", R.string.toggle_target_seat_vent_passenger, R.string.auto_cat_seats, toggleTarget = ActionDispatcher.TOGGLE_SEAT_VENT_PASSENGER),
         ActionOption("后视镜加热", R.string.auto_act_mirror_heat_on, R.string.auto_cat_mirrors),
         ActionOption("关闭后视镜加热", R.string.auto_act_mirror_heat_off, R.string.auto_cat_mirrors),
         ActionOption("氛围灯打开", R.string.auto_act_ambient_light_on, R.string.auto_cat_light),
@@ -207,13 +237,16 @@ val ACTION_COMMANDS = listOf(
         ActionOption("关闭日行灯", R.string.auto_act_drl_off, R.string.auto_cat_light),
         ActionOption("双闪打开", R.string.auto_act_hazard_on, R.string.auto_cat_light),
         ActionOption("双闪关闭", R.string.auto_act_hazard_off, R.string.auto_cat_light),
+        ActionOption("", R.string.toggle_target_hazard, R.string.auto_cat_light, toggleTarget = ActionDispatcher.TOGGLE_HAZARD),
         ActionOption("打开车内灯", R.string.auto_act_interior_light_on, R.string.auto_cat_light),
         ActionOption("关闭车内灯", R.string.auto_act_interior_light_off, R.string.auto_cat_light),
         ActionOption("车门上锁", R.string.auto_act_lock_doors, R.string.auto_cat_locks),
         ActionOption("车门解锁", R.string.auto_act_unlock_doors, R.string.auto_cat_locks),
+        ActionOption("", R.string.toggle_target_locks, R.string.auto_cat_locks, toggleTarget = ActionDispatcher.TOGGLE_LOCKS),
         ActionOption("天窗打开100", R.string.auto_act_sunroof_open_100, R.string.auto_cat_sunroof),
         ActionOption("天窗打开50", R.string.auto_act_sunroof_open_50, R.string.auto_cat_sunroof),
         ActionOption("天窗打开0", R.string.auto_act_sunroof_close, R.string.auto_cat_sunroof),
+        ActionOption("", R.string.toggle_target_sunroof, R.string.auto_cat_sunroof, toggleTarget = ActionDispatcher.TOGGLE_SUNROOF),
         ActionOption("遮阳帘打开", R.string.auto_act_sunshade_open, R.string.auto_cat_sunroof),
         ActionOption("遮阳帘关闭", R.string.auto_act_sunshade_close, R.string.auto_cat_sunroof),
         ActionOption("天窗停止", R.string.auto_act_sunroof_stop, R.string.auto_cat_sunroof),
@@ -221,8 +254,10 @@ val ACTION_COMMANDS = listOf(
         ActionOption("天窗舒适打开", R.string.auto_act_sunroof_comfort, R.string.auto_cat_sunroof),
         ActionOption("开后备箱", R.string.auto_act_open_trunk, R.string.auto_cat_body),
         ActionOption("关后备箱", R.string.auto_act_close_trunk, R.string.auto_cat_body),
+        ActionOption("", R.string.toggle_target_trunk, R.string.auto_cat_body, toggleTarget = ActionDispatcher.TOGGLE_TRUNK),
         ActionOption("前备箱打开", R.string.auto_act_open_front_trunk, R.string.auto_cat_body),
         ActionOption("前备箱关闭", R.string.auto_act_close_front_trunk, R.string.auto_cat_body),
+        ActionOption("", R.string.toggle_target_front_trunk, R.string.auto_cat_body, toggleTarget = ActionDispatcher.TOGGLE_FRONT_TRUNK),
         ActionOption("冰箱制冷", R.string.auto_act_fridge_cool, R.string.auto_cat_fridge),
         ActionOption("冰箱制热", R.string.auto_act_fridge_heat, R.string.auto_cat_fridge),
         ActionOption("冰箱关闭", R.string.auto_act_fridge_off, R.string.auto_cat_fridge),
@@ -809,6 +844,28 @@ fun newClusterAction(context: Context): ActionDef = ActionDef(
     kind = "cluster_projection",
     payload = "1"
 )
+
+/**
+ * A kind that has its own control row AND a toggle target: sentry and the cluster projection.
+ * Their row shows three states, and «Переключить» stores a `toggle` action on [toggleTarget]
+ * instead of the row's own [kind], so the same target has one storage shape everywhere.
+ */
+data class ToggleRowSpec(val kind: String, val command: String, val toggleTarget: String)
+
+val SENTRY_ROW = ToggleRowSpec("sentry", "sentry", ActionDispatcher.TOGGLE_SENTRY)
+val CLUSTER_ROW = ToggleRowSpec("cluster_projection", "cluster_projection", ActionDispatcher.TOGGLE_CLUSTER)
+
+/**
+ * The three-state row that edits [action], or null when it belongs to another control. A stored
+ * toggle on one of these targets comes back to its own row, so «Вкл» and «Выкл» stay reachable.
+ */
+fun toggleRowSpecFor(action: ActionDef): ToggleRowSpec? = listOf(SENTRY_ROW, CLUSTER_ROW).firstOrNull {
+    action.kind == it.kind || (action.kind == "toggle" && action.payload == it.toggleTarget)
+}
+
+/** What the «Вкл» / «Выкл» chips store: the row's own kind again, even after a «Переключить». */
+fun rowStateAction(spec: ToggleRowSpec, payload: String, displayName: String): ActionDef =
+    ActionDef(command = spec.command, displayName = displayName, kind = spec.kind, payload = payload)
 
 /**
  * "toggle": one action that flips a panel (rear/front trunk, sunroof), the door

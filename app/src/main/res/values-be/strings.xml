@@ -493,11 +493,14 @@
     <string name="automation_action_cluster_projection_off">Адключыць</string>
     <string name="automation_action_toggle">Пераключыць</string>
     <string name="automation_action_toggle_display_name">Пераключыць: %1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s: пераключыць</string>
+    <string name="automation_action_toggle_short">Пераключыць</string>
     <string name="toggle_target_trunk">Багажнік</string>
     <string name="toggle_target_front_trunk">Пярэдні багажнік</string>
     <string name="toggle_target_sunroof">Люк</string>
     <string name="toggle_target_locks">Замкі дзвярэй</string>
     <string name="toggle_target_cluster">Вывад на прыборку</string>
+    <string name="toggle_target_sentry">Рэжым аховы</string>
     <string name="toggle_target_hazard">Аварыйка</string>
     <string name="toggle_target_climate">Клімат</string>
     <string name="toggle_target_seat_heat_driver">Падагрэў сядзення кіроўцы</string>

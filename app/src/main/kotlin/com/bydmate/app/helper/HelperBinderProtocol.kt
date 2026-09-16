@@ -436,6 +436,17 @@ object HelperBinderProtocol {
      */
     val TX_REC_STATUS: Int = IBinder.FIRST_CALL_TRANSACTION + 50  // 51
 
+    /**
+     * Reads one Settings.Global key under shell uid (`settings get global`), the read side of
+     * [TX_PUT_GLOBAL_SETTING] and bounded by the same key whitelist. Feeds the sentry toggle,
+     * which has to know the current state before it can flip it.
+     *
+     * Request: [String key] -> [int status (0 = ok, -1 = not readable / not whitelisted),
+     *   int value]. An old daemon without this handler makes transact return false → the client
+     * returns null and the toggle reports an unknown state instead of guessing.
+     */
+    val TX_GET_GLOBAL_SETTING: Int = IBinder.FIRST_CALL_TRANSACTION + 51  // 52
+
     /** Status codes of the TX_SPLIT37_* verbs. Distinct from the (status, value) autoservice
      *  convention: 2 says the firmware has no native split surface at all (methods absent on the
      *  IActivityTaskManager proxy), which is a verdict, unlike 1 = the call threw. The split is
