@@ -52,6 +52,9 @@ object ForegroundHintFilter {
         service: AccessibilityService,
         pkg: String,
     ): Pair<Boolean, Boolean>? {
+        // getWindowsOnAllDisplays() is API 30; on Android 10 (DiLink 3.0) there is only the
+        // main display anyway, so «unreadable» keeps the pre-existing pass-through behaviour.
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return null
         val byDisplay = runCatching { service.windowsOnAllDisplays }.getOrNull() ?: return null
         var onMain = false
         var onOther = false
