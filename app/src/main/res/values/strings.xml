@@ -493,11 +493,14 @@
     <string name="automation_action_cluster_projection_off">Отключить</string>
     <string name="automation_action_toggle">Переключить</string>
     <string name="automation_action_toggle_display_name">Переключить: %1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s: переключить</string>
+    <string name="automation_action_toggle_short">Переключить</string>
     <string name="toggle_target_trunk">Багажник</string>
     <string name="toggle_target_front_trunk">Передний багажник</string>
     <string name="toggle_target_sunroof">Люк</string>
     <string name="toggle_target_locks">Замки дверей</string>
     <string name="toggle_target_cluster">Вывод на приборку</string>
+    <string name="toggle_target_sentry">Режим охраны</string>
     <string name="toggle_target_hazard">Аварийка</string>
     <string name="toggle_target_climate">Климат</string>
     <string name="toggle_target_seat_heat_driver">Подогрев сиденья водителя</string>

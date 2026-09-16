@@ -328,4 +328,18 @@ class ActionDispatcherToggleTest {
         assertEquals(stateUnknown(R.string.toggle_target_seat_heat_passenger), result.reason)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
+
+    // ── rules saved before the picker change ────────────────────────────────────
+
+    @Test fun `a rule stored by v3_16 still dispatches to the same command`() = runTest {
+        // Verbatim row shape of the retired «Переключить» kind picker, as it sits in the DB.
+        val stored = """[{"command":"","displayName":"Переключить: Багажник","kind":"toggle","payload":"trunk"}]"""
+        val action = ActionDef.listFromJson(stored).single()
+        assertTrue(dispatcher.dispatch(action, snapshot(trunk = 2)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("开后备箱") }
+
+        val sunroofRule = """[{"command":"","displayName":"Переключить: Люк","kind":"toggle","payload":"sunroof"}]"""
+        assertTrue(dispatcher.dispatch(ActionDef.listFromJson(sunroofRule).single(), snapshot(sunroof = 0)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("天窗打开100") }
+    }
 }

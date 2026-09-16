@@ -568,7 +568,7 @@ private fun EditorDialog(
                         AddActionButton(
                             onAddParam = {
                                 val a = ACTION_COMMANDS.first()
-                                onUpdate { copy(actions = actions + ActionDef(a.command, a.localizedName(context))) }
+                                onUpdate { copy(actions = actions + actionDefFor(a, context)) }
                             },
                             onAddNotification = {
                                 onUpdate { copy(actions = actions + newNotificationAction(context)) }
@@ -608,9 +608,6 @@ private fun EditorDialog(
                             },
                             onAddCluster = {
                                 onUpdate { copy(actions = actions + newClusterAction(context)) }
-                            },
-                            onAddToggle = {
-                                onUpdate { copy(actions = actions + newToggleAction(context)) }
                             },
                             onAddSplitScreen = {
                                 onUpdate { copy(actions = actions + newSplitScreenAction(context)) }
@@ -1484,8 +1481,16 @@ private fun ActionRow(
                 HotspotActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "cluster_projection" ->
                 ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
-            "toggle" ->
-                ToggleActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            // A toggle on sentry or the cluster goes back to its own three-state row, so the
+            // user can return to Вкл/Выкл; every other target is edited by the target dropdown.
+            "toggle" -> when (toggleRowSpecFor(action)) {
+                SENTRY_ROW ->
+                    SentryActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+                CLUSTER_ROW ->
+                    ClusterActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+                else ->
+                    ToggleActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
+            }
             "speak" ->
                 SpeakActionControls(action = action, onUpdate = onUpdate, modifier = Modifier.weight(1f))
             "agent_query" ->
@@ -1529,10 +1534,7 @@ private fun ParamActionControls(
         items = ACTION_COMMANDS.map { it.localizedName(context) },
         categories = ACTION_COMMANDS.map { it.localizedCategory(context) },
         modifier = modifier,
-        onSelect = { idx ->
-            val a = ACTION_COMMANDS[idx]
-            onUpdate(ActionDef(a.command, a.localizedName(context)))
-        }
+        onSelect = { idx -> onUpdate(actionDefFor(ACTION_COMMANDS[idx], context)) }
     )
 }
 
@@ -1672,33 +1674,74 @@ private fun SentryActionControls(
     onUpdate: (ActionDef) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isEnabled = action.payload == "1"
-    val onLabel = stringResource(R.string.automation_action_sentry_on)
-    val offLabel = stringResource(R.string.automation_action_sentry_off)
-    val displayLabel = stringResource(R.string.automation_action_sentry)
-
-    Row(
+    val context = LocalContext.current
+    OnOffToggleControls(
+        action = action,
+        displayLabel = stringResource(R.string.automation_action_sentry),
+        onLabel = stringResource(R.string.automation_action_sentry_on),
+        offLabel = stringResource(R.string.automation_action_sentry_off),
+        spec = SENTRY_ROW,
+        context = context,
+        onUpdate = onUpdate,
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    )
+}
+
+/**
+ * On / off / «переключить» for a kind that has its own control row and a state the car can be
+ * asked for. The first two store the row's own kind with payload "1"/"0" — also when the row
+ * currently holds a toggle, so «Переключить» is never a one-way door; the third stores the very
+ * same `toggle` action the catalog entries store, so one target has one storage shape.
+ */
+@Composable
+private fun OnOffToggleControls(
+    action: ActionDef,
+    displayLabel: String,
+    onLabel: String,
+    offLabel: String,
+    spec: ToggleRowSpec,
+    context: Context,
+    onUpdate: (ActionDef) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val toggleLabel = stringResource(R.string.automation_action_toggle_short)
+    val isToggle = action.kind == "toggle"
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
         Text(displayLabel, fontSize = 13.sp, color = TextMuted)
         Spacer(Modifier.weight(1f))
-        Text(
-            if (isEnabled) onLabel else offLabel,
-            fontSize = 13.sp,
-            color = if (isEnabled) AccentGreen else TextSecondary
-        )
-        Spacer(Modifier.width(6.dp))
-        Switch(
-            checked = isEnabled,
-            onCheckedChange = { checked ->
-                val payload = if (checked) "1" else "0"
-                val name = if (checked) onLabel else offLabel
-                onUpdate(action.copy(payload = payload, displayName = "$displayLabel: $name"))
-            },
-            colors = bydSwitchColors()
-        )
+        StateChip(onLabel, selected = !isToggle && action.payload == "1") {
+            onUpdate(rowStateAction(spec, "1", "$displayLabel: $onLabel"))
+        }
+        Spacer(Modifier.width(4.dp))
+        StateChip(offLabel, selected = !isToggle && action.payload == "0") {
+            onUpdate(rowStateAction(spec, "0", "$displayLabel: $offLabel"))
+        }
+        Spacer(Modifier.width(4.dp))
+        StateChip(toggleLabel, selected = isToggle) {
+            onUpdate(
+                ActionDef(
+                    command = "",
+                    displayName = toggleDisplayName(context, spec.toggleTarget),
+                    kind = "toggle",
+                    payload = spec.toggleTarget,
+                )
+            )
+        }
     }
+}
+
+@Composable
+private fun StateChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    Text(
+        label,
+        fontSize = 12.sp,
+        color = if (selected) AccentGreen else TextSecondary,
+        modifier = Modifier
+            .background(CardSurface, RoundedCornerShape(6.dp))
+            .border(1.dp, if (selected) AccentGreen else CardBorder, RoundedCornerShape(6.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+    )
 }
 
 // --- Hotspot Action Controls ---
@@ -1746,33 +1789,17 @@ private fun ClusterActionControls(
     onUpdate: (ActionDef) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val isEnabled = action.payload == "1"
-    val onLabel = stringResource(R.string.automation_action_cluster_projection_on)
-    val offLabel = stringResource(R.string.automation_action_cluster_projection_off)
-    val displayLabel = stringResource(R.string.automation_action_cluster_projection)
-
-    Row(
+    val context = LocalContext.current
+    OnOffToggleControls(
+        action = action,
+        displayLabel = stringResource(R.string.automation_action_cluster_projection),
+        onLabel = stringResource(R.string.automation_action_cluster_projection_on),
+        offLabel = stringResource(R.string.automation_action_cluster_projection_off),
+        spec = CLUSTER_ROW,
+        context = context,
+        onUpdate = onUpdate,
         modifier = modifier,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(displayLabel, fontSize = 13.sp, color = TextMuted)
-        Spacer(Modifier.weight(1f))
-        Text(
-            if (isEnabled) onLabel else offLabel,
-            fontSize = 13.sp,
-            color = if (isEnabled) AccentGreen else TextSecondary
-        )
-        Spacer(Modifier.width(6.dp))
-        Switch(
-            checked = isEnabled,
-            onCheckedChange = { checked ->
-                val payload = if (checked) "1" else "0"
-                val name = if (checked) onLabel else offLabel
-                onUpdate(action.copy(payload = payload, displayName = "$displayLabel: $name"))
-            },
-            colors = bydSwitchColors()
-        )
-    }
+    )
 }
 
 // --- Toggle Action Controls ---
@@ -2102,7 +2129,6 @@ private fun AddActionButton(
     onAddSpeak: () -> Unit,
     onAddAgentQuery: () -> Unit,
     onAddCluster: () -> Unit,
-    onAddToggle: () -> Unit,
     onAddSplitScreen: () -> Unit,
     onAddSplitScreenClose: () -> Unit,
     onAddSplitScreenToggle: () -> Unit,
@@ -2184,10 +2210,6 @@ private fun AddActionButton(
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
                 onClick = { menuExpanded = false; onAddCluster() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_toggle), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddToggle() }
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.automation_action_split_screen), fontSize = 13.sp) },

@@ -436,11 +436,14 @@
     <string name="automation_action_cluster_projection_off">Disable</string>
     <string name="automation_action_toggle">Toggle</string>
     <string name="automation_action_toggle_display_name">Toggle: %1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s: toggle</string>
+    <string name="automation_action_toggle_short">Toggle</string>
     <string name="toggle_target_trunk">Trunk</string>
     <string name="toggle_target_front_trunk">Front trunk</string>
     <string name="toggle_target_sunroof">Sunroof</string>
     <string name="toggle_target_locks">Door locks</string>
     <string name="toggle_target_cluster">Projection to cluster</string>
+    <string name="toggle_target_sentry">Sentry mode</string>
     <string name="toggle_target_hazard">Hazard lights</string>
     <string name="toggle_target_climate">Climate</string>
     <string name="toggle_target_seat_heat_driver">Driver seat heating</string>

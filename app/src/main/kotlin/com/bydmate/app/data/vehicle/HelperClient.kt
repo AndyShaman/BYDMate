@@ -254,6 +254,10 @@ interface HelperClient {
      *  Daemon-whitelisted to sentrymode_enabled_switch and enable_freeform_support. */
     suspend fun putGlobalSetting(key: String, value: Int): Boolean
 
+    /** Reads Settings.Global [key] back through the daemon; null when it is unreadable or the
+     *  daemon is too old to answer. Same whitelist as [putGlobalSetting]. */
+    suspend fun getGlobalSetting(key: String): Int?
+
     /** Disable ([hidden]=true) or re-enable the native BYD assistant family via `pm disable-user/enable`
      *  under shell uid. Daemon-whitelisted to com.byd.autovoice (+ .engine/.tts). Reversible. */
     suspend fun setAppHidden(packageName: String, hidden: Boolean): Boolean
@@ -655,6 +659,10 @@ open class HelperClientImpl @Inject constructor() : HelperClient {
         statusOk(HelperBinderProtocol.TX_PUT_GLOBAL_SETTING) {
             it.writeString(key); it.writeInt(value)
         }
+
+    override suspend fun getGlobalSetting(key: String): Int? =
+        transact(HelperBinderProtocol.TX_GET_GLOBAL_SETTING) { it.writeString(key) }
+            ?.let { (status, value) -> if (readAccepted(status)) value else null }
 
     override suspend fun setClusterContainerMode(on: Boolean): Boolean =
         statusOk(HelperBinderProtocol.TX_SET_CLUSTER_MODE) { it.writeInt(if (on) 1 else 0) }

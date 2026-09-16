@@ -428,11 +428,14 @@
     <string name="automation_action_cluster_projection_off">Desativar</string>
     <string name="automation_action_toggle">Alternar</string>
     <string name="automation_action_toggle_display_name">Alternar: %1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s: alternar</string>
+    <string name="automation_action_toggle_short">Alternar</string>
     <string name="toggle_target_trunk">Porta-malas</string>
     <string name="toggle_target_front_trunk">Porta-malas dianteiro</string>
     <string name="toggle_target_sunroof">Teto solar</string>
     <string name="toggle_target_locks">Travas das portas</string>
     <string name="toggle_target_cluster">Projeção no painel de instrumentos</string>
+    <string name="toggle_target_sentry">Modo sentinela</string>
     <string name="toggle_target_hazard">Piscas de emergência</string>
     <string name="toggle_target_climate">Climatização</string>
     <string name="toggle_target_seat_heat_driver">Aquecimento do banco do condutor</string>

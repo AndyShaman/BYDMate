@@ -1108,11 +1108,14 @@
     <string name="automation_action_cluster_projection_off">关闭</string>
     <string name="automation_action_toggle">切换</string>
     <string name="automation_action_toggle_display_name">切换：%1$s</string>
+    <string name="auto_act_toggle_catalog">%1$s：切换</string>
+    <string name="automation_action_toggle_short">切换</string>
     <string name="toggle_target_trunk">后备箱</string>
     <string name="toggle_target_front_trunk">前备箱</string>
     <string name="toggle_target_sunroof">天窗</string>
     <string name="toggle_target_locks">车门锁</string>
     <string name="toggle_target_cluster">投射到仪表盘</string>
+    <string name="toggle_target_sentry">哨兵模式</string>
     <string name="toggle_target_hazard">双闪</string>
     <string name="toggle_target_climate">空调</string>
     <string name="toggle_target_seat_heat_driver">主驾座椅加热</string>

@@ -425,13 +425,16 @@ class AutomationI18nGoldenTest {
     )
 
     @Test fun action_names_and_categories_match_baseline_all_locales() {
-        for (a in ACTION_COMMANDS) {
+        // The «… переключить» entries carry no command of their own; their names are built
+        // from the toggle-target baseline and checked in toggle_catalog_entries_*.
+        val commandOptions = ACTION_COMMANDS.filter { it.toggleTarget == null }
+        for (a in commandOptions) {
             val n = actName.getValue(a.command); val c = actCat.getValue(a.command)
             lang("ru"); assertEquals("name ru ${a.command}", n.first,  a.localizedName(ctx)); assertEquals("cat ru ${a.command}", c.first,  a.localizedCategory(ctx))
             lang("en"); assertEquals("name en ${a.command}", n.second, a.localizedName(ctx)); assertEquals("cat en ${a.command}", c.second, a.localizedCategory(ctx))
             lang("zh"); assertEquals("name zh ${a.command}", n.third,  a.localizedName(ctx)); assertEquals("cat zh ${a.command}", c.third,  a.localizedCategory(ctx))
         }
-        assertEquals(actName.size, ACTION_COMMANDS.size)
+        assertEquals(actName.size, commandOptions.size)
     }
 
     @Test fun param_names_and_categories_match_baseline_all_locales() {
@@ -452,6 +455,7 @@ class AutomationI18nGoldenTest {
         "sunroof" to Triple("Люк", "Sunroof", "天窗"),
         "locks" to Triple("Замки дверей", "Door locks", "车门锁"),
         "cluster" to Triple("Вывод на приборку", "Projection to cluster", "投射到仪表盘"),
+        "sentry" to Triple("Режим охраны", "Sentry mode", "哨兵模式"),
         "hazard" to Triple("Аварийка", "Hazard lights", "双闪"),
         "climate" to Triple("Климат", "Climate", "空调"),
         "seat_heat_driver" to Triple("Подогрев сиденья водителя", "Driver seat heating", "主驾座椅加热"),
@@ -473,6 +477,16 @@ class AutomationI18nGoldenTest {
             lang("zh"); assertEquals("toggle zh $target", n.third, toggleName(target))
         }
         assertEquals(toggleTargetName.size, ActionDispatcher.TOGGLE_TARGETS.size)
+    }
+
+    @Test fun toggle_catalog_entries_read_as_the_target_plus_toggle() {
+        val format = Triple("%s: переключить", "%s: toggle", "%s：切换")
+        for (option in ACTION_COMMANDS.filter { it.toggleTarget != null }) {
+            val n = toggleTargetName.getValue(option.toggleTarget!!)
+            lang("ru"); assertEquals(format.first.format(n.first), option.localizedName(ctx))
+            lang("en"); assertEquals(format.second.format(n.second), option.localizedName(ctx))
+            lang("zh"); assertEquals(format.third.format(n.third), option.localizedName(ctx))
+        }
     }
 
     @Test fun param_units_and_enum_labels_match_baseline_ru() {
