@@ -69,6 +69,25 @@
     <string name="settings_tariff_future_note">新电价将应用于未来行程。\n已计算的行程不会改变。</string>
     <string name="settings_recalc_all_button">重新计算所有行程</string>
     <string name="settings_recalc_note">按当前电价重新计算\n所有行程的费用。</string>
+    <string name="settings_tariff_periods_title">电价与时段</string>
+    <string name="settings_tariff_periods_button">打开</string>
+    <string name="settings_tariff_periods_hint">添加一个带日期的时段，该日期之后的记录会自动重算。</string>
+    <string name="settings_tariff_periods_empty">未设置时段</string>
+    <string name="settings_tariff_periods_summary">家充 %1$s，直流 %2$s %3$s/kWh，损耗 %4$s%% / %5$s%%</string>
+    <string name="settings_tariff_periods_summary_since">自 %1$s：%2$s</string>
+    <string name="settings_tariff_period_add">添加时段</string>
+    <string name="settings_tariff_period_delete">删除时段</string>
+    <string name="settings_tariff_period_start_label">生效日期</string>
+    <string name="settings_tariff_period_date_taken">该日期已有资费区间，请另选日期。</string>
+    <string name="settings_tariff_period_from_start">自记录开始</string>
+    <string name="settings_tariff_loss_ac_label" formatted="false">交流损耗, %</string>
+    <string name="settings_tariff_loss_dc_label" formatted="false">直流损耗, %</string>
+    <string name="settings_tariff_loss_hint">这是估算值。如需精确，请在充电卡片中填写电表读数。</string>
+    <string name="settings_tariff_losses_measured">电表实测损耗：交流 %1$s%%（%2$d），直流 %3$s%%（%4$d）</string>
+    <string name="settings_tariff_rule_home">家充</string>
+    <string name="settings_tariff_rule_dc">直流</string>
+    <string name="settings_tariff_rule_charges">按实际充电</string>
+    <string name="settings_tariff_recalc_done">已重算：充电 %1$d 次，行程 %2$d 次</string>
     <string name="settings_consumption_section_header">能耗阈值</string>
     <string name="settings_consumption_good_label">良好 &lt; (kWh/100km)</string>
     <string name="settings_consumption_bad_label">较差 &gt; (kWh/100km)</string>
@@ -287,6 +306,10 @@
     <string name="charges_edit_cost_label">费用：</string>
     <string name="charges_edit_tariff_label">%1$s/kWh：</string>
     <string name="charges_edit_save_button">保存</string>
+    <string name="charges_edit_meter_label">电表：</string>
+    <string name="charges_edit_meter_used">按电表计算</string>
+    <string name="charges_edit_loss_estimate">含 %1$.0f%% 损耗</string>
+    <string name="charges_edit_follow_period">按时段计算</string>
 
     <!-- Automation screen -->
     <string name="automation_tab_title">自动化</string>

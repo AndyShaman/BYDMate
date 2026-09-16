@@ -106,6 +106,25 @@
     <string name="settings_tariff_future_note">A nova tarifa se aplica a viagens futuras.\nViagens já calculadas não mudarão.</string>
     <string name="settings_recalc_all_button">Recalcular todas as viagens</string>
     <string name="settings_recalc_note">Recalcula o custo de todas as viagens\nusando a tarifa atual.</string>
+    <string name="settings_tariff_periods_title">Tarifas e períodos</string>
+    <string name="settings_tariff_periods_button">Abrir</string>
+    <string name="settings_tariff_periods_hint">Adicione um período com a data desejada e tudo depois dela será recalculado automaticamente.</string>
+    <string name="settings_tariff_periods_empty">Nenhum período definido</string>
+    <string name="settings_tariff_periods_summary">casa %1$s, DC %2$s %3$s/kWh, perdas %4$s%% / %5$s%%</string>
+    <string name="settings_tariff_periods_summary_since">desde %1$s: %2$s</string>
+    <string name="settings_tariff_period_add">Adicionar período</string>
+    <string name="settings_tariff_period_delete">Excluir período</string>
+    <string name="settings_tariff_period_start_label">Válido a partir de</string>
+    <string name="settings_tariff_period_date_taken">Já existe um período nessa data, escolha outra data.</string>
+    <string name="settings_tariff_period_from_start">desde o início do histórico</string>
+    <string name="settings_tariff_loss_ac_label" formatted="false">Perdas AC, %</string>
+    <string name="settings_tariff_loss_dc_label" formatted="false">Perdas DC, %</string>
+    <string name="settings_tariff_loss_hint">Estimativa. Para refinar, informe a leitura do medidor no cartão da recarga.</string>
+    <string name="settings_tariff_losses_measured">Suas perdas medidas: AC %1$s%% (%2$d), DC %3$s%% (%4$d)</string>
+    <string name="settings_tariff_rule_home">Casa</string>
+    <string name="settings_tariff_rule_dc">DC</string>
+    <string name="settings_tariff_rule_charges">Por recargas</string>
+    <string name="settings_tariff_recalc_done">Recalculado: %1$d recargas, %2$d viagens</string>
     <string name="settings_consumption_section_header">Limites de consumo</string>
     <string name="settings_consumption_good_label">Bom &lt; (kWh/100km)</string>
     <string name="settings_consumption_bad_label">Ruim &gt; (kWh/100km)</string>
@@ -299,6 +318,10 @@
     <string name="charges_edit_cost_label">Custo:</string>
     <string name="charges_edit_tariff_label">%1$s/kWh:</string>
     <string name="charges_edit_save_button">Salvar</string>
+    <string name="charges_edit_meter_label">Medidor:</string>
+    <string name="charges_edit_meter_used">usando o medidor</string>
+    <string name="charges_edit_loss_estimate">com perdas de %1$.0f%%</string>
+    <string name="charges_edit_follow_period">Calcular pelo período</string>
     <string name="automation_tab_title">Automação</string>
     <string name="automation_filter_all">Tudo</string>
     <string name="automation_filter_active">Ativo</string>

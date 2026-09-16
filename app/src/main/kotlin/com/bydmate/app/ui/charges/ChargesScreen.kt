@@ -202,8 +202,7 @@ fun ChargesScreen(
         state.editingCharge?.let { charge ->
             ChargeEditDialog(
                 charge = charge,
-                homeTariff = state.homeTariff,
-                dcTariff = state.dcTariff,
+                schedule = state.tariffSchedule,
                 batteryCapacityKwh = state.effectiveCapacityKwh,
                 currencySymbol = state.currencySymbol,
                 onDismiss = { viewModel.onDismissEdit() },

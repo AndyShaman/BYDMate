@@ -99,6 +99,7 @@ class DashboardViewModelTest {
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
         override suspend fun getAllSnapshot(): List<TripEntity> = emptyList()
+        override suspend fun getWithEnergyInRange(from: Long, to: Long): List<com.bydmate.app.data.local.entity.TripEntity> = emptyList()
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
         override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
@@ -156,6 +157,9 @@ class DashboardViewModelTest {
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
         override suspend fun getCompletedSince(since: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun getInRangeAsc(from: Long, to: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun getCompletedForPricing(until: Long): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
+        override suspend fun getWithMeterReading(): List<com.bydmate.app.data.local.entity.ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: com.bydmate.app.data.local.entity.ChargeEntity) {}
     }

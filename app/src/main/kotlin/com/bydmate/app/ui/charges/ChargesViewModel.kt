@@ -10,6 +10,8 @@ import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.domain.cost.CostCalculator
+import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.data.repository.equivalentFullCycles
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.util.appLocalizedContext
@@ -80,8 +82,8 @@ data class ChargesUiState(
     val selectedChargeForAction: ChargeEntity? = null,
     val editingCharge: ChargeEntity? = null,
     val deleteConfirmCharge: ChargeEntity? = null,
-    val homeTariff: Double = 0.20,
-    val dcTariff: Double = 0.73,
+    /** Tariff periods, so the edit dialog prices a backdated session by the right rate. */
+    val tariffSchedule: TariffSchedule = TariffSchedule(emptyList()),
 ) {
     /** SOC→kWh conversions use the aged capacity, not the nominal one (#28). */
     val effectiveCapacityKwh: Double get() = nominalCapacityKwh * sohFactor
@@ -93,7 +95,8 @@ class ChargesViewModel @Inject constructor(
     private val chargeRepository: ChargeRepository,
     private val batterySnapshotDao: BatterySnapshotDao,
     private val settingsRepository: SettingsRepository,
-    private val batteryStateRepository: BatteryStateRepository
+    private val batteryStateRepository: BatteryStateRepository,
+    private val costCalculator: CostCalculator
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ChargesUiState())
@@ -105,14 +108,12 @@ class ChargesViewModel @Inject constructor(
         viewModelScope.launch {
             val symbol = settingsRepository.getCurrencySymbol()
             val nominal = settingsRepository.getBatteryCapacity()
-            val home = settingsRepository.getHomeTariff()
-            val dc = settingsRepository.getDcTariff()
+            val schedule = costCalculator.schedule()
             _uiState.update {
                 it.copy(
                     currencySymbol = symbol,
                     nominalCapacityKwh = nominal,
-                    homeTariff = home,
-                    dcTariff = dc,
+                    tariffSchedule = schedule,
                 )
             }
         }
@@ -404,11 +405,17 @@ class ChargesViewModel @Inject constructor(
 
     fun onSaveEdit(updated: ChargeEntity) {
         viewModelScope.launch {
+            // Moving a session to another date changes the pack price on both sides of the
+            // move, so the re-pricing has to start at the earlier of the two dates.
+            val previousStart = chargeRepository.getChargeById(updated.id)?.startTs
             if (updated.id == 0L) {
                 chargeRepository.insertCharge(updated)
             } else {
                 chargeRepository.updateCharge(updated)
             }
+            // A meter reading changes what a kWh in the pack cost, so every trip after this
+            // session has to be re-priced when the `charges` rule is in force.
+            costCalculator.recalculate(minOf(updated.startTs, previousStart ?: updated.startTs), Long.MAX_VALUE)
             _uiState.update { it.copy(editingCharge = null) }
             loadAll()
             loadLifetimeStats()

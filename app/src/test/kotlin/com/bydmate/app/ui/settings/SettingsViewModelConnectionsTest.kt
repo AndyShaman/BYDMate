@@ -117,6 +117,7 @@ class SettingsViewModelConnectionsTest {
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
         override suspend fun getAllSnapshot(): List<TripEntity> = emptyList()
+        override suspend fun getWithEnergyInRange(from: Long, to: Long): List<TripEntity> = emptyList()
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
         override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
@@ -157,6 +158,9 @@ class SettingsViewModelConnectionsTest {
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
         override suspend fun getCompletedSince(since: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getInRangeAsc(from: Long, to: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getCompletedForPricing(until: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getWithMeterReading(): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {}
     }
@@ -220,7 +224,7 @@ class SettingsViewModelConnectionsTest {
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
-            mockk<TripTombstoneDao>(relaxed = true)
+            mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true)
         )
 
         val insightsClient = OpenRouterClient(httpClient)
@@ -288,6 +292,8 @@ class SettingsViewModelConnectionsTest {
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
             voiceJournal = com.bydmate.app.voice.VoiceJournal(),
+            tariffPeriodDao = mockk(relaxed = true),
+            costCalculator = mockk(relaxed = true),
         )
     }
 

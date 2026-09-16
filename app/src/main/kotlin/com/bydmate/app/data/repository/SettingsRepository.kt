@@ -234,6 +234,18 @@ open class SettingsRepository @Inject constructor(
     suspend fun getTripCostTariffKey(): String =
         getString(KEY_TRIP_COST_TARIFF, "home")
 
+    /**
+     * Mirrors the period in force today into the three flat tariff keys. Nothing reads a
+     * period directly except [com.bydmate.app.domain.cost.CostCalculator]; the Welcome
+     * Wizard and every pre-period reader keep working off these keys.
+     */
+    suspend fun mirrorCurrentTariffPeriod(homeRate: Double, dcRate: Double, tripRule: String) =
+        setStrings(mapOf(
+            KEY_HOME_TARIFF to homeRate.toString(),
+            KEY_DC_TARIFF to dcRate.toString(),
+            KEY_TRIP_COST_TARIFF to tripRule,
+        ))
+
     suspend fun getConsumptionGoodThreshold(): Double =
         getString(KEY_CONSUMPTION_GOOD, DEFAULT_CONSUMPTION_GOOD).parseNumericSetting() ?: 20.0
 

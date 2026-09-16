@@ -14,6 +14,7 @@ import com.bydmate.app.data.local.dao.PlaceDao
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.dao.SettingsDao
+import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripTombstoneDao
@@ -317,6 +318,47 @@ object AppModule {
         }
     }
 
+    internal val MIGRATION_19_20 = object : Migration(19, 20) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("""
+                CREATE TABLE IF NOT EXISTS `tariff_periods` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `start_ts` INTEGER NOT NULL,
+                    `home_rate` REAL NOT NULL,
+                    `dc_rate` REAL NOT NULL,
+                    `ac_loss_pct` REAL NOT NULL,
+                    `dc_loss_pct` REAL NOT NULL,
+                    `trip_rule` TEXT NOT NULL
+                )
+            """.trimIndent())
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_tariff_periods_start_ts` ON `tariff_periods` (`start_ts`)")
+            db.execSQL("ALTER TABLE charges ADD COLUMN meter_kwh REAL")
+            db.execSQL("ALTER TABLE charges ADD COLUMN cost_manual INTEGER NOT NULL DEFAULT 0")
+            // Seed the first period (start_ts = 0, covers the whole history) from the flat
+            // settings the user already has. Existing `cost` values stay exactly as they are;
+            // a recalculation only happens when the user adds or edits a period later.
+            // The default only wins when the stored value is blank or not a number: a tariff of
+            // 0 is legitimate (free charging at work) and must survive the upgrade. A numeric
+            // string holds at least one digit and nothing outside digits and dots.
+            db.execSQL("""
+                INSERT INTO tariff_periods (start_ts, home_rate, dc_rate, ac_loss_pct, dc_loss_pct, trip_rule)
+                SELECT 0,
+                    COALESCE((SELECT CAST(REPLACE(value, ',', '.') AS REAL) FROM settings
+                              WHERE key = 'home_tariff'
+                                AND REPLACE(value, ',', '.') GLOB '*[0-9]*'
+                                AND REPLACE(value, ',', '.') NOT GLOB '*[^0-9.]*'), 0.20),
+                    COALESCE((SELECT CAST(REPLACE(value, ',', '.') AS REAL) FROM settings
+                              WHERE key = 'dc_tariff'
+                                AND REPLACE(value, ',', '.') GLOB '*[0-9]*'
+                                AND REPLACE(value, ',', '.') NOT GLOB '*[^0-9.]*'), 0.73),
+                    10.0, 5.0,
+                    COALESCE((SELECT value FROM settings
+                              WHERE key = 'trip_cost_tariff' AND value IS NOT NULL AND value != ''), 'home')
+                WHERE NOT EXISTS (SELECT 1 FROM tariff_periods)
+            """.trimIndent())
+        }
+    }
+
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase {
@@ -325,7 +367,7 @@ object AppModule {
             AppDatabase::class.java,
             "bydmate.db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20)
             .build()
     }
 
@@ -348,6 +390,9 @@ object AppModule {
 
     @Provides
     fun provideTripTombstoneDao(db: AppDatabase): TripTombstoneDao = db.tripTombstoneDao()
+
+    @Provides
+    fun provideTariffPeriodDao(db: AppDatabase): TariffPeriodDao = db.tariffPeriodDao()
 
     @Provides
     @Singleton
