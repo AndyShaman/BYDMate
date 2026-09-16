@@ -434,7 +434,12 @@ class AgentTools @Inject constructor(
                 .put("lat", JSONObject().put("type", "number")
                     .put("description", "Широта точки, если известны точные координаты (например из find_chargers)"))
                 .put("lon", JSONObject().put("type", "number")
-                    .put("description", "Долгота точки")),
+                    .put("description", "Долгота точки"))
+                .put("go", JSONObject().put("type", "boolean")
+                    .put("description", "true, когда водитель сказал поехали/вези/едем/повёз - " +
+                        "начать движение по маршруту, кнопку Поехали нажмёт приложение. " +
+                        "false (по умолчанию) для построй/покажи/проложи маршрут - только " +
+                        "построить, водитель нажмёт Поехали сам")),
             emptyList(),
         ))
         put(tool(
@@ -680,6 +685,9 @@ class AgentTools @Inject constructor(
                                     .put("description", "Только для kind=navigate: широта"))
                                 .put("lon", JSONObject().put("type", "number")
                                     .put("description", "Только для kind=navigate: долгота"))
+                                .put("go", JSONObject().put("type", "boolean")
+                                    .put("description", "Только для kind=navigate: true - сразу начать " +
+                                        "движение по маршруту (нажать Поехали), false - только построить"))
                                 .put("url", JSONObject().put("type", "string")
                                     .put("description", "Только для kind=url: ссылка со схемой, например https://"))
                                 .put("mode", JSONObject().put("type", "string")
@@ -1380,21 +1388,23 @@ class AgentTools @Inject constructor(
 
     private suspend fun navigateTo(args: JSONObject): String {
         val destination = args.optString("destination").trim()
+        // «поехали туда» vs «построй маршрут»: only the first one lets us press «Поехали».
+        val go = args.optBoolean("go", false)
         if (args.has("lat") && args.has("lon")) {
             val label = destination.ifEmpty { "точка" }
-            return dispatchRoute(args.getDouble("lat"), args.getDouble("lon"), "destination", label)
+            return dispatchRoute(args.getDouble("lat"), args.getDouble("lon"), "destination", label, go)
         }
         if (destination.isEmpty()) return """{"error":"не указано, куда ехать"}"""
-        homeWorkTarget(destination)?.let { return navigateHomeWork(it) }
+        homeWorkTarget(destination)?.let { return navigateHomeWork(it, go) }
         val placesResult = runCatchingCancellable { placeRepository.getAllSnapshot() }
         val place = placesResult.getOrNull()?.firstOrNull { it.name.equals(destination, ignoreCase = true) }
-        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name)
+        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, go)
         // Free text: geocode (Open-Meteo, city-level) so the Navigator builds a real route from
         // the current position instead of just opening map search (field defect APK 336: «маршрут
         // до Орши» opened a search window). Street-level addresses do not geocode and fall back.
         val geo = runCatchingCancellable { weatherClient.geocode(destination) }
             .getOrNull()?.getOrNull()
-        if (geo != null) return dispatchRoute(geo.lat, geo.lon, "destination", geo.name)
+        if (geo != null) return dispatchRoute(geo.lat, geo.lon, "destination", geo.name, go)
         val result = dispatchNavigate("Навигация", JSONObject().put("query", destination))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
@@ -1447,11 +1457,12 @@ class AgentTools @Inject constructor(
 
     // "домой"/"на работу": the BYDMate Place wins (exact coordinates, range assessment works),
     // then the Navigator's own saved Home/Work via its exported shortcut actions.
-    private suspend fun navigateHomeWork(target: HomeWork): String {
+    private suspend fun navigateHomeWork(target: HomeWork, go: Boolean): String {
         val place = runCatchingCancellable { placeRepository.getAllSnapshot() }
             .getOrNull()?.firstOrNull { it.name.equals(target.placeName, ignoreCase = true) }
-        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name)
-        val result = dispatchNavigate("Навигация", JSONObject().put("shortcut", target.shortcut))
+        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, go)
+        val result = dispatchNavigate("Навигация",
+            JSONObject().put("shortcut", target.shortcut).put("go", go))
         if (!result.success) return JSONObject().put("error",
             result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
                 "или сохрани точку \"${target.placeName}\" в Навигаторе")).toString()
@@ -1460,8 +1471,11 @@ class AgentTools @Inject constructor(
                 "маршрут построится по нему; запас хода не оценивался, координаты неизвестны").toString()
     }
 
-    private suspend fun dispatchRoute(lat: Double, lon: Double, labelKey: String, label: String): String {
-        val result = dispatchNavigate("Навигация", JSONObject().put("lat", lat).put("lon", lon))
+    private suspend fun dispatchRoute(
+        lat: Double, lon: Double, labelKey: String, label: String, go: Boolean = false,
+    ): String {
+        val result = dispatchNavigate("Навигация",
+            JSONObject().put("lat", lat).put("lon", lon).put("go", go))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
         val json = JSONObject().put("ok", true).put("mode", "route").put(labelKey, label)
@@ -2219,7 +2233,8 @@ class AgentTools @Inject constructor(
                     return Built.Error("не указаны координаты lat/lon")
                 }
                 Built.Value(ActionDef(command = "navigate", displayName = "Маршрут", kind = "navigate",
-                    payload = JSONObject().put("lat", lat).put("lon", lon).toString()))
+                    payload = JSONObject().put("lat", lat).put("lon", lon)
+                        .put("go", a.optBoolean("go", false)).toString()))
             }
             "url" -> {
                 val url = a.optString("url").trim()

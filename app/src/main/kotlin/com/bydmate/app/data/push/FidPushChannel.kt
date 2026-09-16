@@ -62,6 +62,9 @@ class FidPushChannel @Inject constructor(
     @Volatile var resubscribes: Int = 0
         private set
 
+    /** elapsedRealtime of the last installed subscription; 0 = none in force. */
+    @Volatile private var subscribedAtElapsed: Long = 0L
+
     /** fid → FidMap field, for the address table the current subscription was built from. */
     @Volatile private var fieldByFid: Map<Int, String> = emptyMap()
 
@@ -85,6 +88,7 @@ class FidPushChannel @Inject constructor(
         }
         results = table
         fieldByFid = fields.indices.associate { subs[it].fid to fields[it] }
+        subscribedAtElapsed = android.os.SystemClock.elapsedRealtime()
         resubscribes++
         val ok = table.count { it.outcome == FID_PUSH_OK }
         Log.i(TAG, "resubscribe ($reason): ok=$ok failed=${table.size - ok}")
@@ -119,7 +123,31 @@ class FidPushChannel @Inject constructor(
             lines += "delivery: packets=${status.packets} events=${status.events} coalesced=${status.coalesced}"
         }
         lines += "resubscribes=$resubscribes"
+        // Subscribed, accepted, silent — while the poll keeps reading the field. The one
+        // shape a "push is live" verdict cannot be read off the table above.
+        lines += FidPushDiagnostics.pollVsPushLines(
+            rows = pollPushRows(local, outcomes, rows),
+            sinceSubscribeMs = if (subscribedAtElapsed == 0L) 0L else nowElapsed - subscribedAtElapsed,
+        )
         return lines
+    }
+
+    private fun pollPushRows(
+        local: List<FidPushResult>,
+        outcomes: Map<Int, String>,
+        rows: Map<Int, com.bydmate.app.helper.push.FidPushStatusRow>,
+    ): List<FidPushDiagnostics.PollPushRow> {
+        val polled = com.bydmate.app.data.nativestack.PollFieldValues.latest()
+        return local.map { result ->
+            val field = fieldByFid[result.fid] ?: "?"
+            FidPushDiagnostics.PollPushRow(
+                field = field,
+                fid = result.fid,
+                subscribed = outcomes[result.fid] == FID_PUSH_OK,
+                events = rows[result.fid]?.events ?: 0,
+                pollValue = polled[field],
+            )
+        }
     }
 
     private companion object {

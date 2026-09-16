@@ -15,5 +15,7 @@ data class TripPointEntity(
     val timestamp: Long,
     val lat: Double,
     val lon: Double,
-    @ColumnInfo(name = "speed_kmh") val speedKmh: Double? = null
+    @ColumnInfo(name = "speed_kmh") val speedKmh: Double? = null,
+    /** Metres above sea level as the fix reported it; written only, nothing reads it yet. */
+    val altitude: Double? = null
 )

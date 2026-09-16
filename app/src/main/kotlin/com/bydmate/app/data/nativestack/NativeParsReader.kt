@@ -223,6 +223,9 @@ class NativeParsReader @Inject constructor(
         windowRrPrimaryRaw: Int?,
         rememberSticky: Boolean = true,
     ): DiParsData? {
+        // What the poll read this tick, for the `poll≠push` dump comparison. Shadow snapshots
+        // are compared and thrown away, so they must not overwrite the returned tick's values.
+        if (rememberSticky) PollFieldValues.record(decoded)
         // Battery capacity comes from user settings, not from autoservice.
         val batteryCapacityKwh = settings.getBatteryCapacity()
 

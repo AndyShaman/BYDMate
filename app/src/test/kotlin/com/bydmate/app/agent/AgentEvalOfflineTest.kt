@@ -67,8 +67,8 @@ class AgentEvalOfflineTest {
     ).also { it.ruleWatchScope = CoroutineScope(Dispatchers.Unconfined) }
 
     @Test fun the_set_covers_all_three_classes() {
-        assertEquals(33, AgentEvalCases.ALL.size)
-        assertEquals(18, AgentEvalCases.ACT.size)
+        assertEquals(36, AgentEvalCases.ALL.size)
+        assertEquals(21, AgentEvalCases.ACT.size)
         assertEquals(8, AgentEvalCases.NO_ACT.size)
         assertEquals(7, AgentEvalCases.AUTOMATION.size)
         val duplicates = AgentEvalCases.ALL.groupBy { it.utterance }.filterValues { it.size > 1 }

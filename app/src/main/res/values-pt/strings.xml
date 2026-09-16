@@ -145,8 +145,6 @@
     <string name="settings_abrp_telemetry_label">Dados ao vivo -&gt; A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">Dados ao vivo (SoC, potência, temperaturas, hodômetro, pressão dos pneus) são enviados para a API de Telemetria do Iternio para um plano atualizado no ABRP. O GPS não é enviado por padrão.</string>
     <string name="settings_abrp_token_label">Token de dados ao vivo do ABRP</string>
-    <string name="settings_abrp_location_label">Enviar coordenadas ao ABRP</string>
-    <string name="settings_abrp_location_description">Adiciona a posição GPS e o rumo do carro à telemetria. Desligado por padrão: o ABRP no DiLink lê a localização por conta própria. Ative se a seta do carro no ABRP ficar atrás da posição real.</string>
     <string name="settings_abrp_save_button">Salvar ABRP</string>
     <string name="settings_webhook_section_header">Webhook - telemetria</string>
     <string name="settings_webhook_label">Dados ao vivo -&gt; seu próprio servidor</string>
@@ -412,6 +410,12 @@
     <string name="toggle_target_sunroof">Teto solar</string>
     <string name="toggle_target_locks">Travas das portas</string>
     <string name="toggle_target_cluster">Projeção no painel de instrumentos</string>
+    <string name="toggle_target_hazard">Piscas de emergência</string>
+    <string name="toggle_target_climate">Climatização</string>
+    <string name="toggle_target_seat_heat_driver">Aquecimento do banco do condutor</string>
+    <string name="toggle_target_seat_heat_passenger">Aquecimento do banco do passageiro</string>
+    <string name="toggle_target_seat_vent_driver">Ventilação do banco do condutor</string>
+    <string name="toggle_target_seat_vent_passenger">Ventilação do banco do passageiro</string>
     <string name="toggle_state_unknown">%1$s: estado desconhecido</string>
     <string name="toggle_trunk_moving">O porta-malas está em movimento</string>
     <string name="toggle_unknown_target">Destino de alternância desconhecido: %1$s</string>
@@ -1339,6 +1343,9 @@
     <string name="tech_card_history">Bateria · histórico</string>
     <string name="tech_label_hv_voltage">tensão HV</string>
     <string name="tech_label_power">potência</string>
+    <string name="tech_label_full_cycles">ciclos completos</string>
+    <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
+    <string name="tech_caption_full_cycles_empty">aparece após o primeiro carregamento</string>
     <string name="tech_label_battery_power">potência da bateria</string>
     <string name="tech_label_max_charge">potência máx. de carga</string>
     <string name="tech_label_max_discharge">potência disponível da bateria</string>
@@ -1381,4 +1388,23 @@
     <string name="tech_hint_compressor">Quantos watts consome o compressor do ar condicionado e da bomba de calor. É o principal consumidor além dos motores: no calor do verão e no frio do inverno reduz bastante a autonomia.</string>
     <string name="tech_hint_tyres">Pressão e temperatura de cada roda a partir dos sensores nos pneus. A pressão sobe 0,2…0,3 bar à medida que os pneus aquecem durante a viagem, é normal. Se uma roda estiver bastante abaixo das outras, verifique se está a perder ar.</string>
     <string name="tech_order_hint">Mantenha o cartão premido para mudar a ordem</string>
+    <string name="trips_temp_chip">Temperatura</string>
+    <string name="trips_temp_title">Consumo e temperatura</string>
+    <string name="trips_temp_period_all">desde sempre</string>
+    <string name="trips_temp_card_chart">CONSUMO FACE À TEMPERATURA</string>
+    <string name="trips_temp_card_stats">NÚMEROS</string>
+    <string name="trips_temp_not_enough">O gráfico aparece com %1$d viagens com temperatura: por agora %2$d</string>
+    <string name="trips_temp_narrow_note">Por agora todas as viagens a %1$s…%2$s °C</string>
+    <string name="trips_temp_count">Viagens com temperatura</string>
+    <string name="trips_temp_median_cold">Mediana abaixo de 0 °C</string>
+    <string name="trips_temp_median_mild">Mediana a 0…+15 °C</string>
+    <string name="trips_temp_median_warm">Mediana acima de +15 °C</string>
+    <string name="trips_temp_winter_diff">Inverno face a verão</string>
+    <string name="trips_temp_percent">%1$s%%</string>
+    <string name="trips_temp_kwh_per_100">%1$.1f kWh/100km</string>
+    <string name="trips_temp_verdict_header">CONCLUSÃO</string>
+    <string name="trips_temp_verdict_winter">No frio o carro gasta mais %1$d%% do que no calor. É normal — no inverno carregue com margem.</string>
+    <string name="trips_temp_verdict_not_higher">No frio o carro não gasta mais do que no calor (diferença %1$s%%). Ainda não se vê um acréscimo de inverno nas suas viagens.</string>
+    <string name="trips_temp_verdict_narrow">Por agora todas as viagens a %1$s…%2$s °C — ainda não há frio nem calor para comparar.</string>
+    <string name="trips_temp_verdict_none">Ainda não há com que comparar: faltam viagens no frio e no calor.</string>
 </resources>

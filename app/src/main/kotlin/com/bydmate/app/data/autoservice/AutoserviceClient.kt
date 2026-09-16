@@ -164,7 +164,9 @@ class AutoserviceClientImpl @Inject constructor(
             batteryType = getInt("batteryType"),
             chargingCapacityKwh = getFloat("chargingCapacity"),
             bmsState = getInt("bmsState"),
-            readAtMs = System.currentTimeMillis()
+            readAtMs = System.currentTimeMillis(),
+            chargerConnectState = getInt("chargerConnectState"),
+            chargeConnectIndicator = getInt("chargeConnectIndicator")
         )
     }
 

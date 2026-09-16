@@ -144,8 +144,6 @@
     <string name="settings_abrp_telemetry_label">Live data -> A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">Live data (SOC, power, temperatures, odometer, tire pressure) is sent to the Iternio Telemetry API for an up-to-date plan in ABRP. GPS is not sent by default.</string>
     <string name="settings_abrp_token_label">Live data token from ABRP</string>
-    <string name="settings_abrp_location_label">Send coordinates to ABRP</string>
-    <string name="settings_abrp_location_description">Adds the car GPS position and heading to telemetry. Off by default: ABRP on DiLink reads location itself. Turn on if the ABRP car marker lags behind the real position.</string>
     <string name="settings_abrp_save_button">Save ABRP</string>
     <string name="settings_webhook_section_header">Webhook - telemetry</string>
     <string name="settings_webhook_label">Live data -> your own server</string>
@@ -420,6 +418,12 @@
     <string name="toggle_target_sunroof">Sunroof</string>
     <string name="toggle_target_locks">Door locks</string>
     <string name="toggle_target_cluster">Projection to cluster</string>
+    <string name="toggle_target_hazard">Hazard lights</string>
+    <string name="toggle_target_climate">Climate</string>
+    <string name="toggle_target_seat_heat_driver">Driver seat heating</string>
+    <string name="toggle_target_seat_heat_passenger">Passenger seat heating</string>
+    <string name="toggle_target_seat_vent_driver">Driver seat ventilation</string>
+    <string name="toggle_target_seat_vent_passenger">Passenger seat ventilation</string>
     <string name="toggle_state_unknown">%1$s: state unknown</string>
     <string name="toggle_trunk_moving">Trunk is moving</string>
     <string name="toggle_unknown_target">Unknown toggle target: %1$s</string>
@@ -1343,6 +1347,9 @@
     <string name="tech_card_history">Battery · history</string>
     <string name="tech_label_hv_voltage">HV voltage</string>
     <string name="tech_label_power">power</string>
+    <string name="tech_label_full_cycles">full cycles</string>
+    <string name="tech_caption_full_cycles">%1$s kWh ÷ %2$s</string>
+    <string name="tech_caption_full_cycles_empty">appears after the first charge</string>
     <string name="tech_label_battery_power">battery power</string>
     <string name="tech_label_max_charge">max charge power</string>
     <string name="tech_label_max_discharge">available battery power</string>
@@ -1385,4 +1392,23 @@
     <string name="tech_hint_compressor">How many watts the air conditioning and heat pump compressor draws. It is the main consumer besides the motors: in summer heat and in winter frost it noticeably eats into the range.</string>
     <string name="tech_hint_tyres">Pressure and temperature of each wheel from the sensors in the tyres. Pressure rises by 0.2…0.3 bar as the tyres warm up on a trip, that is normal. If one wheel is noticeably lower than the others, check whether it is losing air.</string>
     <string name="tech_order_hint">Hold a card to change the order</string>
+    <string name="trips_temp_chip">Temperature</string>
+    <string name="trips_temp_title">Consumption and temperature</string>
+    <string name="trips_temp_period_all">all time</string>
+    <string name="trips_temp_card_chart">CONSUMPTION VS TEMPERATURE</string>
+    <string name="trips_temp_card_stats">NUMBERS</string>
+    <string name="trips_temp_not_enough">The chart appears once there are %1$d trips with a temperature: %2$d so far</string>
+    <string name="trips_temp_narrow_note">So far every trip was at %1$s…%2$s °C</string>
+    <string name="trips_temp_count">Trips with a temperature</string>
+    <string name="trips_temp_median_cold">Median below 0 °C</string>
+    <string name="trips_temp_median_mild">Median at 0…+15 °C</string>
+    <string name="trips_temp_median_warm">Median above +15 °C</string>
+    <string name="trips_temp_winter_diff">Winter vs summer</string>
+    <string name="trips_temp_percent">%1$s%%</string>
+    <string name="trips_temp_kwh_per_100">%1$.1f kWh/100km</string>
+    <string name="trips_temp_verdict_header">VERDICT</string>
+    <string name="trips_temp_verdict_winter">In the cold the car uses %1$d%% more than in the warm. That is normal — charge with a margin in winter.</string>
+    <string name="trips_temp_verdict_not_higher">In the cold the car does not use more than in the warm (difference %1$s%%). No winter penalty shows in your trips yet.</string>
+    <string name="trips_temp_verdict_narrow">So far every trip was at %1$s…%2$s °C — there is no cold or heat to compare with yet.</string>
+    <string name="trips_temp_verdict_none">Nothing to compare yet: trips in the cold and in the warm are both needed.</string>
 </resources>

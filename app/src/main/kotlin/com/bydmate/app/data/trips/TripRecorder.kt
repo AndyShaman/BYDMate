@@ -26,6 +26,8 @@ class TripRecorder @Inject constructor(
         val startSoc: Int?,
         val startMileage: Double?,
         val startTotalElec: Double? = null,
+        /** Outside temperature when the trip opened, °C — kept in memory only. */
+        val startExteriorTemp: Int? = null,
     )
     internal var open: Open? = null
 
@@ -54,7 +56,8 @@ class TripRecorder @Inject constructor(
 
     private suspend fun openTrip(data: DiParsData) {
         val startTs = now()
-        open = Open(startTs, data.soc, data.mileage, data.totalElecConsumption)
+        open = Open(startTs, data.soc, data.mileage, data.totalElecConsumption, data.exteriorTemp)
+        Log.i(TAG, "trip open: ts=$startTs soc=${data.soc} ext_temp=${data.exteriorTemp}")
         // Spec §96-100: persist open trip to last_state so cold-start can resume.
         val updated = lastStateDao.openTrip(
             startTs = startTs,
@@ -128,9 +131,13 @@ class TripRecorder @Inject constructor(
                 kwhPer100km = per100,
                 socStart = open.startSoc,
                 socEnd = end.soc,
+                exteriorTemp = open.startExteriorTemp,
+                exteriorTempEnd = end.exteriorTemp,
                 source = TripSource.NATIVE_POLLING,
             )
         )
+        Log.i(TAG, "trip close: km=$distance kwh=$kwh " +
+            "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp}")
         this.open = null
         lastStateDao.clearOpenTrip()
     }

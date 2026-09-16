@@ -68,7 +68,7 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ALICE_ENDPOINT = "alice_endpoint"
         const val KEY_ALICE_API_KEY = "alice_api_key"
         const val KEY_ALICE_ENABLED = "alice_enabled"
-        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). GPS передаётся только если включён KEY_ABRP_SEND_LOCATION. */
+        /** Передавать живые данные DiPars в A Better Route Planner (Iternio Telemetry API). Координаты в ABRP не уходят никогда. */
         const val KEY_ABRP_ENABLED = "abrp_telemetry_enabled"
         /** API-ключ приложения Iternio ([abetterrouteplanner.com/resources/api](https://abetterrouteplanner.com/resources/api)). */
         const val KEY_ABRP_API_KEY = "abrp_api_key"
@@ -76,7 +76,12 @@ open class SettingsRepository @Inject constructor(
         const val KEY_ABRP_USER_TOKEN = "abrp_user_token"
         /** Необязательный код модели автомобиля из библиотеки ABRP. */
         const val KEY_ABRP_CAR_MODEL = "abrp_car_model"
-        /** Отправлять GPS-координаты и курс в телеметрию ABRP (opt-in, по умолчанию выкл). */
+        /**
+         * УСТАРЕЛО (волна 2026-09-16): координаты в ABRP не отправляются никогда — ABRP сам
+         * читает GPS на головном устройстве и склеивает две позиции, из-за чего машина на карте
+         * прыгает. Константа оставлена, чтобы старое сохранённое значение никому не мешало.
+         */
+        @Deprecated("ABRP position is never sent; the setting is gone from the UI")
         const val KEY_ABRP_SEND_LOCATION = "abrp_send_location"
         /** Слать тот же JSON телеметрии POST-запросом на свой URL. Работает независимо от ABRP. */
         const val KEY_WEBHOOK_ENABLED = "webhook_enabled"

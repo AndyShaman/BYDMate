@@ -214,6 +214,9 @@ class TrackingService : Service(), LocationListener {
     // (exponential backoff). We refuse to send until `now >= iternioCooldownUntilMs`.
     @Volatile private var iternioCooldownUntilMs: Long = 0L
     @Volatile private var iternioConsecutive5xx: Int = 0
+    // Last cadence state we logged. A trip log has to show the moment the app decided
+    // «стоим» — the interval change is otherwise invisible from the outside.
+    @Volatile private var lastTelemetryState: IternioIntervalPolicy.TelemetryState? = null
     // Webhook cooldown: user endpoints go down for days (VPS off, tunnel gone).
     // Flat 60 s after any failure — a dead URL then costs one request per minute
     // instead of one per second while driving.
@@ -1064,7 +1067,13 @@ class TrackingService : Service(), LocationListener {
                 if (!abrpOn && !webhookOn) return@launch
 
                 val state = IternioIntervalPolicy.classifyFromDiPars(data)
-                val intervalMs = IternioIntervalPolicy.intervalSec(state) * 1000L
+                val intervalSec = IternioIntervalPolicy.intervalSec(state)
+                val intervalMs = intervalSec * 1000L
+                if (state != lastTelemetryState) {
+                    Log.i(TAG, "Iternio state: ${lastTelemetryState ?: "-"} -> $state " +
+                        "(gear=${data.gear} speed=${data.speed} gun=${data.chargeGunState})")
+                    lastTelemetryState = state
+                }
                 synchronized(telemetryLock) {
                     if (snapshotMs - lastTelemetryMs < intervalMs) return@launch
                 }
@@ -1086,10 +1095,6 @@ class TrackingService : Service(), LocationListener {
                     ""
                 ).trim().takeIf { it.isNotEmpty() }
 
-                val abrpSendLocation = settingsRepository.getString(
-                    com.bydmate.app.data.repository.SettingsRepository.KEY_ABRP_SEND_LOCATION,
-                    "false"
-                ) == "true"
                 val webhookSendLocation = settingsRepository.getString(
                     com.bydmate.app.data.repository.SettingsRepository.KEY_WEBHOOK_SEND_LOCATION,
                     "false"
@@ -1112,8 +1117,8 @@ class TrackingService : Service(), LocationListener {
                 // 1 Hz. Null → client falls back to DiPars power.
                 val enginePowerKw: Int? = enginePowerKwFromSnapshot(data)
 
-                // Built once per tick and shared: the GPS fields are the only
-                // per-target difference, so they go into a copy (see [withLocation]).
+                // Built once per tick and shared: the webhook's own GPS toggle is the only
+                // per-target difference, so those fields go into a copy (see [withLocation]).
                 val telemetry = iternioTelemetryClient.buildTelemetry(
                     data = data,
                     nominalCapacityKwh = settingsRepository.getBatteryCapacity(),
@@ -1129,14 +1134,24 @@ class TrackingService : Service(), LocationListener {
                 var delivered = false
 
                 if (sendToIternio) {
-                    val location = locationForTelemetry(abrpSendLocation, _lastLocation.value, snapshotMs)
+                    // NO position ever goes to ABRP: it merges telemetry position with the GPS it
+                    // reads on the head unit itself, and the car marker jumps between the two
+                    // sources (ABRP tickets, June 2026). The webhook keeps its own toggle.
+                    // Every real send is logged: without this line a trip log shows nothing
+                    // between two ABRP failures, and «данных нет» has no diagnosis.
+                    Log.i(TAG, "Iternio send: state=$state interval=${intervalSec}s " +
+                        "gear=${data.gear} speed=${data.speed} soc=${data.soc} " +
+                        "hv=${data.hvVoltage ?: "-"}/${data.hvCurrent ?: "-"} " +
+                        "setpoint=${data.acTemp ?: "-"}")
+                    val sentAtMs = System.currentTimeMillis()
                     iternioTelemetryClient.sendTelemetry(
                         apiKey = apiKey,
                         userToken = token,
-                        telemetry = withLocation(telemetry, location),
+                        telemetry = telemetry,
                     ).onSuccess {
                         delivered = true
                         iternioConsecutive5xx = 0
+                        Log.i(TAG, "Iternio sent ok ${System.currentTimeMillis() - sentAtMs}ms")
                     }.onFailure { e ->
                         when (e) {
                             is IternioRateLimitException -> {

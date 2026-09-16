@@ -1,0 +1,28 @@
+{
+  "source": "bydmate_logs_20260916_091100.txt",
+  "recorded": "2026-09-16 09:11, Leopard 3, engine RUNNING, charge plug inserted then removed",
+  "note": "gunConnectState (fid 876609586) stays at 1=NONE for the whole recording; only chargerConnectState (fid 89128973, 0-1-0) and chargeConnectIndicator (fid 710934572, 2-1-2) report the plug",
+  "samples": [
+    {
+      "t": "09:11:05",
+      "event": "plug out",
+      "chargeGunState": 1,
+      "chargerConnectState": 0,
+      "chargeConnectIndicator": 2
+    },
+    {
+      "t": "09:11:15",
+      "event": "plug in",
+      "chargeGunState": 1,
+      "chargerConnectState": 1,
+      "chargeConnectIndicator": 1
+    },
+    {
+      "t": "09:11:39",
+      "event": "plug out",
+      "chargeGunState": 1,
+      "chargerConnectState": 0,
+      "chargeConnectIndicator": 2
+    }
+  ]
+}

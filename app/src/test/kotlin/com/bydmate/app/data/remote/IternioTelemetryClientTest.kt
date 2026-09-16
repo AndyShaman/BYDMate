@@ -74,6 +74,9 @@ class IternioTelemetryClientTest {
         chargeGunState: Int? = 1,
         chargingStatus: Int? = 0,
         gear: Int? = 4,
+        acTemp: Int? = 22,
+        hvVoltage: Int? = null,
+        hvCurrent: Double? = null,
     ): DiParsData = DiParsData(
         soc = soc, speed = speed, mileage = 12345.0, power = power,
         chargeGunState = chargeGunState,
@@ -82,13 +85,14 @@ class IternioTelemetryClientTest {
         totalElecConsumption = null,
         voltage12v = 12.6, maxCellVoltage = 3.31, minCellVoltage = 3.30,
         exteriorTemp = 18, gear = gear, powerState = 2, insideTemp = 22,
-        acStatus = 1, acTemp = 22, fanLevel = 2, acCirc = 0,
+        acStatus = 1, acTemp = acTemp, fanLevel = 2, acCirc = 0,
         doorFL = 0, doorFR = 0, doorRL = 0, doorRR = 0,
         windowFL = 0, windowFR = 0, windowRL = 0, windowRR = 0,
         sunroof = 0, trunk = 0, hood = 0, seatbeltFL = 1, lockFL = 2,
         tirePressFL = 240, tirePressFR = 241, tirePressRL = 239, tirePressRR = 242,
         driveMode = 1, workMode = 1, autoPark = 0, rain = 0,
-        lightLow = 0, drl = 1
+        lightLow = 0, drl = 1,
+        hvVoltage = hvVoltage, hvCurrent = hvCurrent,
     )
 
     @Test
@@ -519,30 +523,18 @@ class IternioTelemetryClientTest {
     }
 
     @Test
-    fun `lat lon heading sent when coordinates provided`() = runTest {
+    fun `Iternio payload never carries lat lon even when a fresh location exists`() = runTest {
+        // The position is deliberately absent from this sink: ABRP merges a telemetry position
+        // with the GPS it reads on the head unit itself, and the car marker jumps between the
+        // two. TrackingService keeps a fresh fix for the webhook, and passes none here.
         val cap = CapturingInterceptor()
         val client = makeClient(cap)
-        val result = client.send(
-            apiKey = "k", userToken = "t", data = drivingData(),
-            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
-            latitude = 55.751244, longitude = 37.618423, headingDeg = 132.5,
-        )
-        assertTrue(result.isSuccess)
-        val tlm = cap.lastTlmJson!!
-        assertEquals(55.751244, tlm.getDouble("lat"), 1e-9)
-        assertEquals(37.618423, tlm.getDouble("lon"), 1e-9)
-        assertEquals(132.5, tlm.getDouble("heading"), 1e-9)
-    }
 
-    @Test
-    fun `heading alone is not sent without coordinates`() = runTest {
-        val cap = CapturingInterceptor()
-        val client = makeClient(cap)
         val result = client.send(
             apiKey = "k", userToken = "t", data = drivingData(),
             nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
-            headingDeg = 90.0,
         )
+
         assertTrue(result.isSuccess)
         val tlm = cap.lastTlmJson!!
         assertFalse(tlm.has("lat"))
@@ -550,16 +542,97 @@ class IternioTelemetryClientTest {
         assertFalse(tlm.has("heading"))
     }
 
+    // --- wave 2026-09-16: climate set point, traction V/A, charging power sign ---
+
     @Test
-    fun `latitude without longitude sends no GPS fields`() = runTest {
+    fun `hvac setpoint is sent when the dial reads a real temperature`() = runTest {
         val cap = CapturingInterceptor()
         val client = makeClient(cap)
-        val result = client.send(
-            apiKey = "k", userToken = "t", data = drivingData(),
+
+        client.send(
+            apiKey = "k", userToken = "t", data = drivingData(acTemp = 21),
             nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
-            latitude = 55.0,
         )
-        assertTrue(result.isSuccess)
-        assertFalse(cap.lastTlmJson!!.has("lat"))
+
+        assertEquals(21, cap.lastTlmJson!!.getInt("hvac_setpoint"))
+    }
+
+    @Test
+    fun `hvac setpoint outside the dial range is not sent`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+
+        // 85 is what the fid answers when the climate device is silent, not a set point.
+        client.send(
+            apiKey = "k", userToken = "t", data = drivingData(acTemp = 85),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        assertFalse(cap.lastTlmJson!!.has("hvac_setpoint"))
+    }
+
+    @Test
+    fun `traction voltage and current go out with the Iternio sign convention`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+
+        // Driving: current flows OUT of the pack, positive on both sides.
+        client.send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(hvVoltage = 396, hvCurrent = 63.5),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        val tlm = cap.lastTlmJson!!
+        assertEquals(396, tlm.getInt("voltage"))
+        assertEquals(63.5, tlm.getDouble("current"), 0.001)
+    }
+
+    @Test
+    fun `an implausible traction voltage keeps both fields out of the payload`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+
+        client.send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(hvVoltage = 0, hvCurrent = 63.5),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        assertFalse(cap.lastTlmJson!!.has("voltage"))
+    }
+
+    @Test
+    fun `charging power is negative and computed from V and A, not from the motor`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+
+        // Gun = AC, motor power 0: without V/A the payload would claim 0 kW on a charging car.
+        client.send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 0.0, chargeGunState = 2, speed = 0, gear = 1,
+                hvVoltage = 400, hvCurrent = -16.0),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+        )
+
+        val tlm = cap.lastTlmJson!!
+        assertEquals(1, tlm.getInt("is_charging"))
+        assertEquals(-6.4, tlm.getDouble("power"), 0.001)
+        assertEquals(-16.0, tlm.getDouble("current"), 0.001)
+    }
+
+    @Test
+    fun `charging without V and A keeps the old power source`() = runTest {
+        val cap = CapturingInterceptor()
+        val client = makeClient(cap)
+
+        client.send(
+            apiKey = "k", userToken = "t",
+            data = drivingData(power = 0.0, chargeGunState = 2, speed = 0, gear = 1),
+            nominalCapacityKwh = 72.9, battery = null, charging = null, carModel = null,
+            enginePowerKw = 7,
+        )
+
+        assertEquals(7.0, cap.lastTlmJson!!.getDouble("power"), 0.001)
     }
 }

@@ -11,6 +11,7 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -37,6 +38,17 @@ class HistoryImporter @Inject constructor(
         // Mirror of TrackingService.SESSION_IDLE_CLOSE_MS — the idle gap after which an
         // open SOC session is considered finished and promotable to a completed bookmark.
         private const val PENDING_SESSION_IDLE_CLOSE_MS = 10_000L
+
+        /** A just-finished trip may borrow the live outside temperature; an older one may not. */
+        internal const val FRESH_TEMP_WINDOW_MS = 10 * 60 * 1000L
+
+        /**
+         * Outside temperature to store on an imported energydata trip. energydata itself
+         * carries no temperature, so the only honest source is the live snapshot — and only
+         * while the drive has just ended; anything older gets null instead of a wrong number.
+         */
+        internal fun importedExteriorTemp(endTsMs: Long, nowMs: Long, liveTemp: Int?): Int? =
+            liveTemp?.takeIf { nowMs >= endTsMs && nowMs - endTsMs <= FRESH_TEMP_WINDOW_MS }
     }
 
     private val syncMutex = Mutex()
@@ -111,6 +123,10 @@ class HistoryImporter @Inject constructor(
         var implausibleKwh = 0
         var maxTs = lastImportTs
         val capacity = settingsRepository.getBatteryCapacity()
+        // One read of the live snapshot for the whole batch: the drive that just ended is the
+        // only one close enough in time for this temperature to belong to it.
+        val nowMs = System.currentTimeMillis()
+        val liveExteriorTemp = TrackingService.lastData.value?.exteriorTemp
 
         for (byd in bydRecords) {
             val startTsMs = byd.startTimestamp * 1000L
@@ -214,6 +230,7 @@ class HistoryImporter @Inject constructor(
                     avgSpeedKmh = avgSpeed,
                     socStart = socStart,
                     socEnd = socEnd,
+                    exteriorTempEnd = importedExteriorTemp(endTsMs, nowMs, liveExteriorTemp),
                     source = "energydata",
                     bydId = byd.id
                 )
@@ -225,6 +242,7 @@ class HistoryImporter @Inject constructor(
 
         Log.d(TAG, "Sync done: $tripsImported trips, $idleDrainsImported idle, $skippedDuplicate dups, " +
             "$implausibleKwh implausible kwh")
+        Log.i(TAG, "import temp: live=${liveExteriorTemp ?: "-"} window=${FRESH_TEMP_WINDOW_MS / 60_000}min")
         return ImportResult(
             trips = tripsImported,
             idleDrains = idleDrainsImported,

@@ -76,6 +76,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -1832,6 +1833,22 @@ private fun ToggleActionControls(
 
 // --- Catalog Dropdown (with category headers) ---
 
+/**
+ * Which category headers start open when the catalog is opened: only the one holding the
+ * current pick, so the list opens as a short table of contents instead of a page the driver
+ * has to scroll through. Nothing matches on a free-typed or empty selection — then every
+ * category starts collapsed. Pure, so the rule is testable without a UI.
+ */
+internal fun expandedCategoriesFor(
+    selected: String,
+    items: List<String>,
+    categories: List<String>,
+): Set<String> {
+    val index = items.indexOf(selected)
+    if (index < 0 || index >= categories.size) return emptySet()
+    return setOf(categories[index])
+}
+
 @Composable
 private fun CatalogDropdown(
     selected: String,
@@ -1841,6 +1858,12 @@ private fun CatalogDropdown(
     onSelect: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Rebuilt on every open: the driver always starts from the category of the current pick.
+    val openCategories = remember(expanded, selected) {
+        mutableStateMapOf<String, Boolean>().apply {
+            expandedCategoriesFor(selected, items, categories).forEach { put(it, true) }
+        }
+    }
     Box(modifier = modifier) {
         Text(
             selected,
@@ -1863,16 +1886,24 @@ private fun CatalogDropdown(
                 val cat = categories[idx]
                 if (cat != lastCat) {
                     lastCat = cat
+                    val open = openCategories[cat] == true
                     DropdownMenuItem(
-                        text = { Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted) },
-                        onClick = {},
-                        enabled = false
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(if (open) "▼" else "▶", fontSize = 11.sp, color = AccentGreen)
+                                Spacer(Modifier.width(6.dp))
+                                Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                            }
+                        },
+                        onClick = { openCategories[cat] = !open }
                     )
                 }
-                DropdownMenuItem(
-                    text = { Text(item, fontSize = 13.sp) },
-                    onClick = { expanded = false; onSelect(idx) }
-                )
+                if (openCategories[cat] == true) {
+                    DropdownMenuItem(
+                        text = { Text(item, fontSize = 13.sp) },
+                        onClick = { expanded = false; onSelect(idx) }
+                    )
+                }
             }
         }
     }

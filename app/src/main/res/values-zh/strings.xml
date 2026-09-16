@@ -109,8 +109,6 @@
     <string name="settings_abrp_telemetry_label">实时数据 -> A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">实时数据（SOC、功率、温度、里程表、胎压）发送至 Iternio Telemetry API，用于在 ABRP 中获得最新的路线规划。默认不发送 GPS 坐标。</string>
     <string name="settings_abrp_token_label">ABRP 实时数据令牌</string>
-    <string name="settings_abrp_location_label">向 ABRP 发送坐标</string>
-    <string name="settings_abrp_location_description">将车辆的 GPS 位置和航向加入遥测。默认关闭：DiLink 上的 ABRP 会自行读取位置。若 ABRP 中的车辆箭头落后于实际位置，可开启此项。</string>
     <string name="settings_abrp_save_button">保存 ABRP</string>
     <string name="settings_webhook_section_header">Webhook - 遥测</string>
     <string name="settings_webhook_label">实时数据 -> 自己的服务器</string>
@@ -1092,6 +1090,12 @@
     <string name="toggle_target_sunroof">天窗</string>
     <string name="toggle_target_locks">车门锁</string>
     <string name="toggle_target_cluster">投射到仪表盘</string>
+    <string name="toggle_target_hazard">双闪</string>
+    <string name="toggle_target_climate">空调</string>
+    <string name="toggle_target_seat_heat_driver">主驾座椅加热</string>
+    <string name="toggle_target_seat_heat_passenger">副驾座椅加热</string>
+    <string name="toggle_target_seat_vent_driver">主驾座椅通风</string>
+    <string name="toggle_target_seat_vent_passenger">副驾座椅通风</string>
     <string name="toggle_state_unknown">%1$s：状态未知</string>
     <string name="toggle_trunk_moving">后备箱正在动作</string>
     <string name="toggle_unknown_target">未知的切换对象：%1$s</string>
@@ -1457,6 +1461,9 @@
     <string name="tech_card_history">电池 · 历史</string>
     <string name="tech_label_hv_voltage">高压电压</string>
     <string name="tech_label_power">功率</string>
+    <string name="tech_label_full_cycles">完整循环</string>
+    <string name="tech_caption_full_cycles">%1$s 千瓦时 ÷ %2$s</string>
+    <string name="tech_caption_full_cycles_empty">首次充电后显示</string>
     <string name="tech_label_battery_power">电池功率</string>
     <string name="tech_label_max_charge">最大充电功率</string>
     <string name="tech_label_max_discharge">电池可用功率</string>
@@ -1499,4 +1506,23 @@
     <string name="tech_hint_compressor">空调与热泵压缩机消耗多少瓦。它是除电机之外的主要用电设备：夏天酷热、冬天严寒时会明显缩短续航。</string>
     <string name="tech_hint_tyres">来自胎压传感器的每个车轮的压力和温度。行驶中轮胎升温后压力会升高 0,2…0,3 bar，属于正常。若某个车轮明显低于其他，请检查是否漏气。</string>
     <string name="tech_order_hint">长按卡片可调整顺序</string>
+    <string name="trips_temp_chip">温度</string>
+    <string name="trips_temp_title">能耗与温度</string>
+    <string name="trips_temp_period_all">全部时间</string>
+    <string name="trips_temp_card_chart">能耗与温度对比</string>
+    <string name="trips_temp_card_stats">数据</string>
+    <string name="trips_temp_not_enough">累计 %1$d 次带温度的行程后显示图表：目前 %2$d 次</string>
+    <string name="trips_temp_narrow_note">目前所有行程都在 %1$s…%2$s °C</string>
+    <string name="trips_temp_count">带温度的行程</string>
+    <string name="trips_temp_median_cold">低于 0 °C 中位数</string>
+    <string name="trips_temp_median_mild">0…+15 °C 中位数</string>
+    <string name="trips_temp_median_warm">高于 +15 °C 中位数</string>
+    <string name="trips_temp_winter_diff">冬夏差异</string>
+    <string name="trips_temp_percent">%1$s%%</string>
+    <string name="trips_temp_kwh_per_100">%1$.1f 千瓦时/100公里</string>
+    <string name="trips_temp_verdict_header">结论</string>
+    <string name="trips_temp_verdict_winter">寒冷时的能耗比温暖时高 %1$d%%。这很正常，冬季请留出电量余量。</string>
+    <string name="trips_temp_verdict_not_higher">寒冷时的能耗并不高于温暖时（差值 %1$s%%）。您的行程中暂未看到冬季额外能耗。</string>
+    <string name="trips_temp_verdict_narrow">目前所有行程都在 %1$s…%2$s °C，暂时没有寒冷或炎热的数据可比。</string>
+    <string name="trips_temp_verdict_none">暂时无法比较：需要寒冷和温暖天气各自的行程。</string>
 </resources>

@@ -63,6 +63,7 @@ import java.util.Date
 
 @Composable
 fun TripsScreen(
+    onOpenTemperature: () -> Unit = {},
     viewModel: TripsViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
@@ -84,6 +85,9 @@ fun TripsScreen(
             TripsChip(stringResource(R.string.trips_filter_all), state.filter == TripFilter.ALL) { viewModel.setFilter(TripFilter.ALL) }
             TripsChip(stringResource(R.string.trips_filter_trips_only), state.filter == TripFilter.TRIPS_ONLY) { viewModel.setFilter(TripFilter.TRIPS_ONLY) }
             TripsChip(stringResource(R.string.trips_filter_stops_only), state.filter == TripFilter.STOPS_ONLY) { viewModel.setFilter(TripFilter.STOPS_ONLY) }
+            Spacer(modifier = Modifier.weight(1f))
+            // Opens the «Расход и температура» screen; it is not a period, so it never latches.
+            TemperatureChip(onOpenTemperature)
         }
 
         Spacer(modifier = Modifier.height(8.dp))
@@ -462,6 +466,26 @@ private fun TripsChip(label: String, selected: Boolean, onClick: () -> Unit) {
             selectedBorderColor = Color.Transparent,
             enabled = true,
             selected = selected
+        )
+    )
+}
+
+/** Same chip shape as the period row, outlined green to read as a door, not a filter. */
+@Composable
+private fun TemperatureChip(onClick: () -> Unit) {
+    FilterChip(
+        selected = false,
+        onClick = onClick,
+        label = { Text(stringResource(R.string.trips_temp_chip), fontSize = 12.sp) },
+        shape = RoundedCornerShape(8.dp),
+        colors = FilterChipDefaults.filterChipColors(
+            containerColor = CardSurface,
+            labelColor = AccentGreen,
+        ),
+        border = FilterChipDefaults.filterChipBorder(
+            borderColor = AccentGreen,
+            enabled = true,
+            selected = false
         )
     )
 }

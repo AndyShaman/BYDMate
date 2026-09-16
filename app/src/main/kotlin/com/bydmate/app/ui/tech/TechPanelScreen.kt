@@ -46,6 +46,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -350,6 +351,7 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
             valueColor = insulationColor(insulationMohm),
             hintKey = "insulation", onHint = onHint,
         )
+        FullCyclesRow(state)
         Hint(state.openHint, "soh", R.string.tech_hint_soh)
         Hint(state.openHint, "hvVoltage", R.string.tech_hint_hv_voltage)
         Hint(state.openHint, "power", R.string.tech_hint_motor_power)
@@ -357,6 +359,25 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
         Hint(state.openHint, "voltage12v", R.string.tech_hint_12v)
         Hint(state.openHint, "insulation", R.string.tech_hint_insulation)
     }
+}
+
+/**
+ * «Полных циклов» — how many full pack charges the logged sessions add up to, with the sum it
+ * was divided by right under the value so the number is not a black box.
+ */
+@Composable
+private fun FullCyclesRow(state: TechPanelUiState) {
+    val cycles = TechPanelVisuals.fullCycles(state.lifetimeChargedKwh, state.nominalCapacityKwh)
+    TechRow(stringResource(R.string.tech_label_full_cycles), cycles?.value ?: DASH)
+    Text(
+        cycles
+            ?.let { stringResource(R.string.tech_caption_full_cycles, it.totalKwh, it.capacity) }
+            ?: stringResource(R.string.tech_caption_full_cycles_empty),
+        color = TextMuted,
+        fontSize = 10.sp,
+        modifier = Modifier.fillMaxWidth(),
+        textAlign = TextAlign.End,
+    )
 }
 
 @Composable
@@ -557,8 +578,9 @@ private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modif
 // Building blocks (visual style carried over from the battery-health dialog)
 // ============================================================================
 
+// internal: the «Расход и температура» screen is drawn out of the same card.
 @Composable
-private fun TechCard(
+internal fun TechCard(
     header: String,
     hintKey: String? = null,
     onHint: (String) -> Unit = {},
@@ -582,7 +604,7 @@ private fun TechCard(
 }
 
 @Composable
-private fun SectionHeader(text: String) {
+internal fun SectionHeader(text: String) {
     Text(
         text,
         color = TextMuted,
@@ -593,7 +615,7 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun TechRow(
+internal fun TechRow(
     label: String,
     value: String,
     valueColor: Color = TextPrimary,
