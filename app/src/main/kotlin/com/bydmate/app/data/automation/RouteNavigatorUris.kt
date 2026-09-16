@@ -50,4 +50,19 @@ object RouteNavigatorUris {
     fun route(navigator: String, lat: Double, lon: Double): String =
         if (normalize(navigator) == DGIS) "dgis://2gis.ru/routeSearch/rsType/car/to/$lon,$lat"
         else "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
+
+    /**
+     * Yandex Maps' own dialect (#200), reached per command with `app="maps"` and never from the
+     * settings choice above — Maps is a separate app from the Navigator and speaks `yandexmaps://`.
+     * The route form leaves the start point empty (`rtext=~to`, "from me"); that form is absent
+     * from Yandex' public docs but is what current Maps builds honour.
+     */
+    const val MAPS = "maps"
+
+    fun mapsSearch(query: String): String = "yandexmaps://maps.yandex.ru/?text=${Uri.encode(query)}"
+
+    /** Pin without a route. The `pt` dialect carries no caption, so the label stays in the log. */
+    fun mapsShowPoint(lat: Double, lon: Double): String = "yandexmaps://maps.yandex.ru/?pt=$lat,$lon&z=14"
+
+    fun mapsRoute(lat: Double, lon: Double): String = "yandexmaps://maps.yandex.ru/?rtext=~$lat,$lon&rtt=auto"
 }

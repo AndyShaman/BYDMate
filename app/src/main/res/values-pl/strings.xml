@@ -1442,6 +1442,7 @@
     <string name="split_picker_title_narrow">Wybierz aplikację do wąskiego panelu (1/3)</string>
     <string name="split_freeform_reboot_hint">Podział ekranu włączy się po restarcie auta</string>
     <string name="split_freeform_unsupported_hint">Podział ekranu jest niedostępny w oprogramowaniu tego auta</string>
+    <string name="navigate_maps_shortcut_failed">Mapy nie przyjęły trasy: dodaj Miejsce «Dom» lub «Praca» w BYDMate</string>
     <string name="split_launch_failed">Nie udało się uruchomić podziału ekranu</string>
     <string name="split_launch_failed_adb">Nie udało się uruchomić podziału ekranu: wymagany jest odblokowany ADB</string>
     <!-- Automation action: split_screen -->

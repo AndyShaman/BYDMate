@@ -174,18 +174,30 @@ class AgentTools @Inject constructor(
         }
     }
 
-    /** Test seam - did the Navigator reach the foreground since [sinceMs]? Combines UsageStats
-     *  ACTIVITY_RESUMED with the live a11y window package: Android 12 blocks background activity
+    /** Test seam - which packages came to the front since [sinceMs]: the UsageStats
+     *  ACTIVITY_RESUMED one and the live a11y window one. Android 12 blocks background activity
      *  starts SILENTLY, so a non-throwing startActivity alone is not proof. */
-    internal var naviForegroundCheck: (Long) -> Boolean = { sinceMs ->
+    internal var foregroundPackagesSince: (Long) -> List<String> = { sinceMs ->
         val viaEvents = runCatching {
             val usm = context.getSystemService(Context.USAGE_STATS_SERVICE)
                 as android.app.usage.UsageStatsManager
             CameraStateMonitor.latestResumed(usm, sinceMs, System.currentTimeMillis() + 1)?.first
-        }.getOrNull() == NaviRouteHolder.NAVI_PACKAGE
-        viaEvents || runCatching {
+        }.getOrNull()
+        val viaWindow = runCatching {
             SteeringWheelKeyService.instance?.rootInActiveWindow?.packageName?.toString()
-        }.getOrNull() == NaviRouteHolder.NAVI_PACKAGE
+        }.getOrNull()
+        listOfNotNull(viaEvents, viaWindow)
+    }
+
+    /** Test seam - did the Navigator reach the foreground since [sinceMs]? */
+    internal var naviForegroundCheck: (Long) -> Boolean = { sinceMs ->
+        NaviRouteHolder.NAVI_PACKAGE in foregroundPackagesSince(sinceMs)
+    }
+
+    /** The same question for app="maps" (#200): Maps ships under several store package names,
+     *  and waiting for the Navigator there would call a working route a failure. */
+    internal var mapsForegroundCheck: (Long) -> Boolean = { sinceMs ->
+        foregroundPackagesSince(sinceMs).any { it in NavPackages.YANDEX_MAPS }
     }
 
     /** Test seam - poll interval for the navigate foreground verification. */
@@ -199,17 +211,22 @@ class AgentTools @Inject constructor(
     // surfaced before letting the LLM claim the route was built.
     private suspend fun dispatchNavigate(displayName: String, payload: JSONObject): DispatchResult {
         val since = System.currentTimeMillis() - 1_000L
+        // The route went to whichever app the payload named, so that is the app whose arrival
+        // proves it: waiting for the Navigator after an app="maps" route fails a working route.
+        val maps = payload.optString("app") == "maps"
+        val surfaced = if (maps) mapsForegroundCheck else naviForegroundCheck
+        val appName = if (maps) "Яндекс Карты" else "Навигатор"
         val result = actionDispatcher.dispatch(
             ActionDef(command = "", displayName = displayName, kind = "navigate",
                 payload = payload.toString()), data = null)
         if (!result.success) return result
         repeat(naviVerifyAttempts) {
-            if (runCatching { naviForegroundCheck(since) }.getOrDefault(false)) return result
+            if (runCatching { surfaced(since) }.getOrDefault(false)) return result
             delay(naviVerifyIntervalMs)
         }
         return DispatchResult(false,
-            "интент отправлен, но Навигатор не вышел на передний план: маршрут скорее всего " +
-                "не построен, предложи пользователю открыть Навигатор вручную")
+            "интент отправлен, но $appName не вышел на передний план: маршрут скорее всего " +
+                "не построен, предложи пользователю открыть приложение вручную")
     }
 
     /**
@@ -433,7 +450,9 @@ class AgentTools @Inject constructor(
         }
         put(tool(
             "navigate_to",
-            "Построить маршрут в Навигаторе от текущей позиции. Команды поехали домой, до дома, " +
+            "Построить маршрут от текущей позиции: по умолчанию в Яндекс Навигаторе, " +
+                "app=\"maps\" - в Яндекс Картах (когда пользователь явно просит Карты). " +
+                "Команды поехали домой, до дома, " +
                 "на работу - ЭТОТ инструмент: передай destination \"Дом\" или \"Работа\", маршрут " +
                 "построится по Месту BYDMate или по адресу, сохранённому в самом Навигаторе. " +
                 "destination: имя сохранённого Места, город или населённый пункт (маршрут строится " +
@@ -451,29 +470,43 @@ class AgentTools @Inject constructor(
                     .put("description", "true, когда водитель сказал поехали/вези/едем/повёз - " +
                         "начать движение по маршруту, кнопку Поехали нажмёт приложение. " +
                         "false (по умолчанию) для построй/покажи/проложи маршрут - только " +
-                        "построить, водитель нажмёт Поехали сам")),
+                        "построить, водитель нажмёт Поехали сам"))
+                .put("app", JSONObject().put("type", "string")
+                    .put("enum", JSONArray().put("navigator").put("maps"))
+                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
+                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
         put(tool(
             "search_on_map",
-            "Открыть поиск места в Яндекс Навигаторе: на карте появится выдача, пользователь сам " +
+            "Открыть поиск места в Яндекс Навигаторе (app=\"maps\" - в Яндекс Картах, если " +
+                "пользователь просит именно Карты): на карте появится выдача, пользователь сам " +
                 "выберет точку. Использовать для команд вроде: поищи кафе, найди заправку, " +
                 "где ближайшая аптека. Если пользователь просит ПОЕХАТЬ куда-то, в том числе " +
                 "домой или на работу, используй navigate_to.",
             JSONObject().put("query", JSONObject().put("type", "string")
-                .put("description", "Что искать: название места или категория")),
+                .put("description", "Что искать: название места или категория"))
+                .put("app", JSONObject().put("type", "string")
+                    .put("enum", JSONArray().put("navigator").put("maps"))
+                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
+                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             listOf("query"),
         ))
         put(tool(
             "show_point_on_map",
-            "Показать точку на карте Навигатора БЕЗ построения маршрута: команды вроде " +
+            "Показать точку на карте БЕЗ построения маршрута (по умолчанию Навигатор, " +
+                "app=\"maps\" - Яндекс Карты): команды вроде " +
                 "покажи на карте, где находится. destination: имя Места, город или адрес; " +
                 "либо lat/lon, если координаты известны (например из find_chargers). " +
                 "Для маршрута используй navigate_to, для поиска по категории search_on_map.",
             JSONObject().put("destination", JSONObject().put("type", "string")
                 .put("description", "Что показать: имя Места, адрес или название"))
                 .put("lat", JSONObject().put("type", "number").put("description", "Широта, если известна"))
-                .put("lon", JSONObject().put("type", "number").put("description", "Долгота")),
+                .put("lon", JSONObject().put("type", "number").put("description", "Долгота"))
+                .put("app", JSONObject().put("type", "string")
+                    .put("enum", JSONArray().put("navigator").put("maps"))
+                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
+                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
         put(tool(
@@ -1425,26 +1458,36 @@ class AgentTools @Inject constructor(
 
     // --- navigation ---
 
+    // app rides the navigate payload only when the driver named Maps explicitly: without it
+    // the dispatcher's default (Navigator) path stays byte-identical. #200.
+    private fun JSONObject.putApp(app: String): JSONObject = if (app.isEmpty()) this else put("app", app)
+
+    private fun navApp(args: JSONObject): String =
+        if (args.optString("app").trim().equals("maps", ignoreCase = true)) "maps" else ""
+
+    /** Per-command options of a route: «поехали» vs «построй маршрут», and which map app. */
+    private data class NavOptions(val go: Boolean = false, val app: String = "")
+
     private suspend fun navigateTo(args: JSONObject): String {
         val destination = args.optString("destination").trim()
         // «поехали туда» vs «построй маршрут»: only the first one lets us press «Поехали».
-        val go = args.optBoolean("go", false)
+        val opts = NavOptions(args.optBoolean("go", false), navApp(args))
         if (args.has("lat") && args.has("lon")) {
             val label = destination.ifEmpty { "точка" }
-            return dispatchRoute(args.getDouble("lat"), args.getDouble("lon"), "destination", label, go)
+            return dispatchRoute(args.getDouble("lat"), args.getDouble("lon"), "destination", label, opts)
         }
         if (destination.isEmpty()) return """{"error":"не указано, куда ехать"}"""
-        homeWorkTarget(destination)?.let { return navigateHomeWork(it, go) }
+        homeWorkTarget(destination)?.let { return navigateHomeWork(it, opts) }
         val placesResult = runCatchingCancellable { placeRepository.getAllSnapshot() }
         val place = placesResult.getOrNull()?.firstOrNull { it.name.equals(destination, ignoreCase = true) }
-        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, go)
+        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, opts)
         // Free text: geocode (Open-Meteo, city-level) so the Navigator builds a real route from
         // the current position instead of just opening map search (field defect APK 336: «маршрут
         // до Орши» opened a search window). Street-level addresses do not geocode and fall back.
         val geo = runCatchingCancellable { weatherClient.geocode(destination) }
             .getOrNull()?.getOrNull()
-        if (geo != null) return dispatchRoute(geo.lat, geo.lon, "destination", geo.name, go)
-        val result = dispatchNavigate("Навигация", JSONObject().put("query", destination))
+        if (geo != null) return dispatchRoute(geo.lat, geo.lon, "destination", geo.name, opts)
+        val result = dispatchNavigate("Навигация", JSONObject().put("query", destination).putApp(opts.app))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
         return JSONObject().put("ok", true).put("mode", "search")
@@ -1454,7 +1497,7 @@ class AgentTools @Inject constructor(
     private suspend fun searchOnMap(args: JSONObject): String {
         val query = args.optString("query").trim()
         if (query.isEmpty()) return """{"error":"не указано, что искать"}"""
-        val result = dispatchNavigate("Поиск на карте", JSONObject().put("query", query))
+        val result = dispatchNavigate("Поиск на карте", JSONObject().put("query", query).putApp(navApp(args)))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
         return JSONObject().put("ok", true).put("mode", "search")
@@ -1476,10 +1519,11 @@ class AgentTools @Inject constructor(
         }
         // No coordinates found (street-level address etc.): degrade to map search so the
         // user still sees the point in the Navigator's search results.
-        if (coords == null) return searchOnMap(JSONObject().put("query", destination))
+        if (coords == null) return searchOnMap(
+            JSONObject().put("query", destination).putApp(navApp(args)))
         val result = dispatchNavigate("Точка на карте",
             JSONObject().put("show", true).put("lat", coords.first)
-                .put("lon", coords.second).put("label", coords.third))
+                .put("lon", coords.second).put("label", coords.third).putApp(navApp(args)))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
         return JSONObject().put("ok", true).put("mode", "show").put("point", coords.third).toString()
@@ -1496,12 +1540,12 @@ class AgentTools @Inject constructor(
 
     // "домой"/"на работу": the BYDMate Place wins (exact coordinates, range assessment works),
     // then the Navigator's own saved Home/Work via its exported shortcut actions.
-    private suspend fun navigateHomeWork(target: HomeWork, go: Boolean): String {
+    private suspend fun navigateHomeWork(target: HomeWork, opts: NavOptions): String {
         val place = runCatchingCancellable { placeRepository.getAllSnapshot() }
             .getOrNull()?.firstOrNull { it.name.equals(target.placeName, ignoreCase = true) }
-        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, go)
+        if (place != null) return dispatchRoute(place.lat, place.lon, "place", place.name, opts)
         val result = dispatchNavigate("Навигация",
-            JSONObject().put("shortcut", target.shortcut).put("go", go))
+            JSONObject().put("shortcut", target.shortcut).put("go", opts.go).putApp(opts.app))
         if (!result.success) return JSONObject().put("error",
             result.reason ?: ("адрес не найден: добавь Место \"${target.placeName}\" в BYDMate " +
                 "или сохрани точку \"${target.placeName}\" в Навигаторе")).toString()
@@ -1511,10 +1555,10 @@ class AgentTools @Inject constructor(
     }
 
     private suspend fun dispatchRoute(
-        lat: Double, lon: Double, labelKey: String, label: String, go: Boolean = false,
+        lat: Double, lon: Double, labelKey: String, label: String, opts: NavOptions = NavOptions(),
     ): String {
         val result = dispatchNavigate("Навигация",
-            JSONObject().put("lat", lat).put("lon", lon).put("go", go))
+            JSONObject().put("lat", lat).put("lon", lon).put("go", opts.go).putApp(opts.app))
         if (!result.success) return JSONObject()
             .put("error", result.reason ?: "не получилось открыть Навигатор").toString()
         val json = JSONObject().put("ok", true).put("mode", "route").put(labelKey, label)

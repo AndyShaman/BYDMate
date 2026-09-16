@@ -1813,7 +1813,10 @@ class SettingsViewModel @Inject constructor(
                 // and the front-trunk value semantics are still an assumption (FidMap).
                 appendLine(
                     "age_s=$ageS gear=${live.gear} speed=${live.speed} powerState=${live.powerState} " +
-                        "soc=${live.soc} trunk=${live.trunk} frontTrunk=${live.frontTrunk}"
+                        "soc=${live.soc} trunk=${live.trunk} frontTrunk=${live.frontTrunk} " +
+                        // #210: the Главная slot shows both, so a "no outside temperature"
+                        // report has to be checkable against what the car actually reported.
+                        "insideTemp=${live.insideTemp} exteriorTemp=${live.exteriorTemp}"
                 )
                 // Charging plug: the gun state the detector uses plus the two backup signals,
                 // so a running car with the plug in can be compared against a parked one.

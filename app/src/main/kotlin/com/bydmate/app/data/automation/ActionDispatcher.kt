@@ -23,6 +23,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.media.MediaSessionListenerService
+import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.split.SplitPair
 import com.bydmate.app.split.SplitSessionManager
@@ -895,10 +896,11 @@ class ActionDispatcher @Inject constructor(
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
         val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
         // Only a Yandex ROUTE ends on a «Поехали» screen: show-only drops a pin, search opens a
-        // result list, and 2GIS has no such node at all.
+        // result list, and 2GIS has no such node at all. Maps is excluded too: the a11y read
+        // that finds and presses «Поехали» looks at the Navigator's window, not Maps'.
         val routeMode = !payload.optBoolean("show", false) &&
             payload.optString("query").isBlank()
-        val autoGoSupported = routeMode &&
+        val autoGoSupported = routeMode && !isMapsRequest(payload) &&
             (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
         val go = autoGoRequested(payload)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
@@ -972,6 +974,9 @@ class ActionDispatcher @Inject constructor(
     }
 
     private fun sendNavigateIntent(payload: JSONObject, shortcut: String?): DispatchResult {
+        // app="maps" (voice: «…в Яндекс Картах») mirrors the whole command set into Yandex Maps;
+        // any other value, including none, keeps the Navigator/2GIS path below untouched.
+        if (isMapsRequest(payload)) return navigateMaps(payload, shortcut)
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
         // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
@@ -1017,6 +1022,66 @@ class ActionDispatcher @Inject constructor(
             RouteNavigatorUris.route(navigator, lat, lon),
             "navigate:$lat,$lon", fallbackReason,
         )
+    }
+
+    /** Per-command target of a navigate payload: Maps only when the driver named it. */
+    private fun isMapsRequest(payload: JSONObject): Boolean =
+        payload.optString("app").trim().equals(RouteNavigatorUris.MAPS, ignoreCase = true)
+
+    /**
+     * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
+     * (#200, from a user patch). URI intents are not package-pinned — the scheme resolves to
+     * whichever store variant of Maps is installed.
+     */
+    private fun navigateMaps(payload: JSONObject, shortcut: String?): DispatchResult {
+        // Home/Work: the shortcut actions carry the yandexmaps prefix even in the Navigator
+        // (shared engine), so Maps plausibly exports them too — try each store variant, then
+        // fall through to the honest "save a BYDMate Place" advice.
+        if (shortcut != null) {
+            val intentAction = when (shortcut) {
+                "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
+                "work" -> "ru.yandex.yandexmaps.action.ROUTE_TO_WORK_SHORTCUT"
+                else -> return DispatchResult(false, "неизвестный shortcut: $shortcut")
+            }
+            var failure: DispatchResult? = null
+            for (pkg in NavPackages.YANDEX_MAPS) {
+                Log.i(TAG, "navigate app=maps kind=shortcut target=$shortcut pkg=$pkg")
+                val intent = Intent(intentAction).setPackage(pkg)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                val result = tryStartActivity(intent, "navigate_maps_shortcut:$shortcut")
+                if (result.success) return result
+                failure = result
+            }
+            Log.w(TAG, "navigate app=maps kind=shortcut target=$shortcut -> no package accepted it")
+            return DispatchResult(false, context.getString(R.string.navigate_maps_shortcut_failed))
+        }
+        // Free-text destination: Maps opens its own search, since the agent has no coordinates
+        // for an arbitrary street-level address.
+        val query = payload.optString("query").takeIf(String::isNotBlank)
+        if (query != null) return startMapsIntent(
+            RouteNavigatorUris.MODE_SEARCH, RouteNavigatorUris.mapsSearch(query), "navigate_maps_search:$query")
+        val lat = payload.optDouble("lat", Double.NaN)
+        val lon = payload.optDouble("lon", Double.NaN)
+        if (lat.isNaN() || lon.isNaN()) return DispatchResult(false, "lat/lon не заданы")
+        if (payload.optBoolean("show", false)) {
+            val desc = payload.optString("label").takeIf(String::isNotBlank)
+            return startMapsIntent(
+                RouteNavigatorUris.MODE_SHOW, RouteNavigatorUris.mapsShowPoint(lat, lon),
+                "navigate_maps_show:$lat,$lon" + (desc?.let { " ($it)" } ?: ""))
+        }
+        return startMapsIntent(
+            RouteNavigatorUris.MODE_ROUTE, RouteNavigatorUris.mapsRoute(lat, lon), "navigate_maps:$lat,$lon")
+    }
+
+    /** [startNavigate] for the Maps dialect: no package pin, no 2GIS fallback reason. */
+    private fun startMapsIntent(mode: String, uri: String, label: String): DispatchResult {
+        Log.i(TAG, "navigate app=maps kind=$mode uri=$uri")
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val result = tryStartActivity(intent, label)
+        Log.i(TAG, "navigate app=maps intent sent label=$label ok=${result.success}" +
+            (result.reason?.let { " reason=$it" } ?: ""))
+        return result
     }
 
     /**

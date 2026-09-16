@@ -1404,6 +1404,7 @@
     <string name="split_picker_title_narrow">选择窄屏区域 (1/3) 的应用</string>
     <string name="split_freeform_reboot_hint">重启车机后将启用分屏</string>
     <string name="split_freeform_unsupported_hint">此车机固件不支持分屏</string>
+    <string name="navigate_maps_shortcut_failed">地图未接受该路线：请在 BYDMate 中添加「家」或「公司」地点</string>
     <string name="split_launch_failed">启动分屏失败</string>
     <string name="split_launch_failed_adb">启动分屏失败：需要已解锁的 ADB</string>
     <!-- Automation action: split_screen -->

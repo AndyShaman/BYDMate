@@ -1444,6 +1444,7 @@
     <string name="split_picker_title_narrow">Выберите приложение для узкой панели (1/3)</string>
     <string name="split_freeform_reboot_hint">Разделение экрана включится после перезагрузки машины</string>
     <string name="split_freeform_unsupported_hint">Разделение экрана недоступно на прошивке этой машины</string>
+    <string name="navigate_maps_shortcut_failed">Карты не приняли маршрут: добавьте Место «Дом» или «Работа» в BYDMate</string>
     <string name="split_launch_failed">Не удалось запустить разделение экрана</string>
     <string name="split_launch_failed_adb">Не удалось запустить разделение экрана: требуется разблокированный ADB</string>
     <!-- Automation action: split_screen -->
