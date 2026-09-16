@@ -31,6 +31,7 @@ class HistoryImporterTombstoneTest {
         settingsRepository = mockk<SettingsRepository>(relaxed = true),
         lastSessionRepository = mockk<LastSessionRepository>(relaxed = true),
         tripTombstoneDao = tombstoneDao,
+        costCalculator = mockk(relaxed = true),
     )
 
     private val record = BydTripRecord(

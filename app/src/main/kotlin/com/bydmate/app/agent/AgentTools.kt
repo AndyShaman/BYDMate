@@ -35,6 +35,7 @@ import com.bydmate.app.data.vehicle.CommandTranslator
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.domain.calculator.RangeEstimate
+import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.cluster.SteeringWheelKeyService
 import com.bydmate.app.data.camera.CameraStateMonitor
 import com.bydmate.app.media.NaviRouteHolder
@@ -110,6 +111,17 @@ class AgentTools @Inject constructor(
     internal fun injectSplit(prefs: SplitPreferences, mgr: SplitSessionManager) {
         splitPrefs = prefs
         splitMgr = mgr
+    }
+
+    // Same method-injection reason as splitPrefs above: keeps every existing test constructor
+    // call intact. Null until Hilt injects it; add_charge then leaves the session unpriced
+    // rather than inventing a rate.
+    private var costCalculator: CostCalculator? = null
+
+    /** Called by Hilt after construction; call manually in unit tests that add charges. */
+    @Inject
+    internal fun injectCostCalculator(calculator: CostCalculator) {
+        costCalculator = calculator
     }
 
     // Same method-injection reason as splitPrefs above: keeps every existing test constructor
@@ -1141,35 +1153,35 @@ class AgentTools @Inject constructor(
         val kwh = kwhFromSoc ?: kwhManual
             ?: return """{"error":"нужен либо процент заряда с и по, либо количество кВтч"}"""
 
-        val tariff = if (args.has("tariff")) {
+        val spokenTariff = if (args.has("tariff")) {
             args.optDouble("tariff").takeIf { it >= 0.0 } ?: return BAD_ARGS_ERROR
-        } else runCatchingCancellable {
-            if (type == "DC") settingsRepository.getDcTariff() else settingsRepository.getHomeTariff()
-        }.getOrDefault(0.0)
-        val cost = kwh * tariff
+        } else null
 
         val startTs = args.optString("date").trim().let { dateStr ->
             if (dateStr.isEmpty()) System.currentTimeMillis()
             else parseDayToNoon(dateStr) ?: return """{"error":"дата должна быть в формате ГГГГ-ММ-ДД"}"""
         }
 
-        runCatchingCancellable {
-            chargeDao.insert(
-                ChargeEntity(
-                    id = 0L,
-                    startTs = startTs,
-                    endTs = startTs + 3_600_000L,
-                    type = type,
-                    gunState = 2,
-                    detectionSource = "manual",
-                    socStart = socStart,
-                    socEnd = socEnd,
-                    kwhCharged = kwh,
-                    kwhChargedSoc = kwhFromSoc,
-                    cost = cost,
-                )
+        val cost = chargeCost(spokenTariff, startTs, type, kwh)
+        val tariff = if (kwh > 0.0) cost / kwh else 0.0
+
+        val saved = saveManualCharge(
+            ChargeEntity(
+                id = 0L,
+                startTs = startTs,
+                endTs = startTs + 3_600_000L,
+                type = type,
+                gunState = 2,
+                detectionSource = "manual",
+                socStart = socStart,
+                socEnd = socEnd,
+                kwhCharged = kwh,
+                kwhChargedSoc = kwhFromSoc,
+                cost = cost,
+                costManual = spokenTariff != null,
             )
-        }.getOrElse { return INTERNAL_ERROR }
+        )
+        if (!saved) return INTERNAL_ERROR
 
         val currency = runCatchingCancellable { settingsRepository.getCurrency() }.getOrNull()
         return JSONObject()
@@ -1184,6 +1196,33 @@ class AgentTools @Inject constructor(
             .put("tariff", tariff)
             .apply { currency?.let { put("currency", it.symbol) } }
             .toString()
+    }
+
+    /**
+     * Stores a hand-entered session and re-prices what it can affect: a backdated charge
+     * changes what a kWh in the pack cost from that day on, so the trips already priced
+     * after it have to be re-priced too. False when the row could not be written.
+     */
+    private suspend fun saveManualCharge(charge: ChargeEntity): Boolean {
+        runCatchingCancellable { chargeDao.insert(charge) }.getOrElse { return false }
+        runCatchingCancellable { costCalculator?.recalculate(charge.startTs, Long.MAX_VALUE) }
+        return true
+    }
+
+    /**
+     * A spoken rate is the user pricing the session by hand; without one the period covering
+     * that date decides, losses included.
+     */
+    private suspend fun chargeCost(
+        spokenTariff: Double?,
+        startTs: Long,
+        type: String,
+        kwh: Double,
+    ): Double {
+        if (spokenTariff != null) return kwh * spokenTariff
+        return runCatchingCancellable {
+            costCalculator?.costForNewCharge(startTs = startTs, type = type, kwhCharged = kwh)
+        }.getOrNull() ?: 0.0
     }
 
     private suspend fun statsSummary(args: JSONObject): String {

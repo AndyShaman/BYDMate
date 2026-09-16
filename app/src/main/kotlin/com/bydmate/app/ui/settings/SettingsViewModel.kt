@@ -34,7 +34,12 @@ import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.LlmHttpException
 import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.remote.OpenRouterModel
+import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.local.entity.PlaceEntity
+import com.bydmate.app.data.local.entity.TariffPeriodEntity
+import com.bydmate.app.domain.cost.CostCalculator
+import com.bydmate.app.domain.cost.MeasuredLosses
+import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -131,9 +136,14 @@ data class SettingsUiState(
     val showModelPicker: Boolean = false,
     val availableModels: List<OpenRouterModel> = emptyList(),
     val modelsLoading: Boolean = false,
-    val tariffSaveStatus: String? = null,
-    val recalcStatus: String? = null,
-    val showRecalcConfirm: Boolean = false,
+    /** Newest period first — the order the «Тарифы и периоды» dialog lists them in. */
+    val tariffPeriods: List<TariffPeriodEntity> = emptyList(),
+    val showTariffPeriodsDialog: Boolean = false,
+    val tariffRecalcStatus: String? = null,
+    /** Why the last period could not be saved; shown in the dialog, cleared on the next try. */
+    val tariffPeriodError: String? = null,
+    /** Losses derived from the meter readings the driver typed in; null until one exists. */
+    val measuredLosses: MeasuredLosses? = null,
     // Hidden Smart Home settings (unlocked by tapping version 7 times)
     val devModeUnlocked: Boolean = false,
     val aliceEndpoint: String = "",
@@ -270,6 +280,8 @@ class SettingsViewModel @Inject constructor(
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
     private val voiceJournal: VoiceJournal,
+    private val tariffPeriodDao: TariffPeriodDao,
+    private val costCalculator: CostCalculator,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -322,6 +334,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
+        loadTariffPeriods()
         observeLogRecorder()
         refreshFidRecorder()
     }
@@ -589,44 +602,92 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { settingsRepository.resetManualRangeTable() }
     }
 
-    /** Update tariff in UI only (no DB save until explicit "Save" press). */
-    fun updateHomeTariff(value: String) {
-        _uiState.update { it.copy(homeTariff = value) }
-    }
-
-    fun updateDcTariff(value: String) {
-        _uiState.update { it.copy(dcTariff = value) }
-    }
-
-    /** Save tariffs to DB and calculate costs for new trips. */
-    fun saveTariffs() {
-        val state = _uiState.value
+    /** Reloads the periods list and the measured-losses hint behind the «Тарифы» section. */
+    private fun loadTariffPeriods() {
         viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_HOME_TARIFF, state.homeTariff)
-            settingsRepository.setString(SettingsRepository.KEY_DC_TARIFF, state.dcTariff)
-            val tariff = settingsRepository.getTripCostTariff()
-            historyImporter.calculateMissingCosts(tariff)
-            _uiState.update { it.copy(tariffSaveStatus = appContext.getString(R.string.settings_saved)) }
-            delay(2000)
-            _uiState.update { it.copy(tariffSaveStatus = null) }
-        }
-    }
-
-    /** Recalculate cost for ALL trips using current tariff. */
-    fun recalculateAllCosts() {
-        viewModelScope.launch {
-            val tariff = settingsRepository.getTripCostTariff()
-            val allTrips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
-            var count = 0
-            for (trip in allTrips) {
-                val kwh = trip.kwhConsumed ?: continue
-                tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
-                count++
+            val periods = costCalculator.schedule().periods
+            _uiState.update {
+                it.copy(
+                    tariffPeriods = periods.sortedByDescending { p -> p.startTs },
+                    measuredLosses = costCalculator.measuredLosses(),
+                )
             }
-            _uiState.update { it.copy(recalcStatus = appContext.getString(R.string.settings_recalc_done, count)) }
-            delay(3000)
-            _uiState.update { it.copy(recalcStatus = null) }
         }
+    }
+
+    fun showTariffPeriods() {
+        loadTariffPeriods()
+        _uiState.update { it.copy(showTariffPeriodsDialog = true) }
+    }
+
+    fun hideTariffPeriods() {
+        _uiState.update {
+            it.copy(showTariffPeriodsDialog = false, tariffRecalcStatus = null, tariffPeriodError = null)
+        }
+    }
+
+    /**
+     * Saves one period (new or edited) and re-prices everything from the earliest date it can
+     * affect: a period added today with a September start makes September recount by itself.
+     */
+    fun saveTariffPeriod(period: TariffPeriodEntity) {
+        viewModelScope.launch {
+            // `start_ts` is unique: writing a date another period already holds would throw.
+            val occupant = tariffPeriodDao.getByStartTs(period.startTs)
+            if (occupant != null && occupant.id != period.id) {
+                Log.w(CostCalculator.TAG, "period save rejected start=${period.startTs} taken by id=${occupant.id}")
+                _uiState.update {
+                    it.copy(tariffPeriodError = appContext.getString(R.string.settings_tariff_period_date_taken))
+                }
+                return@launch
+            }
+            val before = tariffPeriodDao.getAllAsc()
+            val previousStart = before.find { it.id == period.id }?.startTs
+            val wasEarliest = before.firstOrNull()?.id == period.id
+            if (period.id == 0L) tariffPeriodDao.insert(period) else tariffPeriodDao.update(period)
+            Log.i(CostCalculator.TAG, "period saved start=${period.startTs} home=${period.homeRate} " +
+                "dc=${period.dcRate} loss=${period.acLossPct}/${period.dcLossPct} rule=${period.tripRule}")
+            // The earliest period also covers everything before its own date, so touching it
+            // has to re-price the whole history, not just the span from its start_ts.
+            val becameEarliest = tariffPeriodDao.getAllAsc().firstOrNull()?.startTs == period.startTs
+            val from = if (wasEarliest || becameEarliest) 0L
+            else minOf(period.startTs, previousStart ?: period.startTs)
+            _uiState.update { it.copy(tariffPeriodError = null) }
+            applyTariffChange(from)
+        }
+    }
+
+    /** Deletes a period; the one before it takes over its span, so that span is re-priced. */
+    fun deleteTariffPeriod(period: TariffPeriodEntity) {
+        viewModelScope.launch {
+            if (tariffPeriodDao.count() <= 1) return@launch
+            val wasEarliest = tariffPeriodDao.getAllAsc().firstOrNull()?.id == period.id
+            tariffPeriodDao.delete(period)
+            Log.i(CostCalculator.TAG, "period deleted start=${period.startTs} wasEarliest=$wasEarliest")
+            // Dropping the earliest period hands its span to the next one, which then covers
+            // everything before itself as well.
+            applyTariffChange(if (wasEarliest) 0L else period.startTs)
+        }
+    }
+
+    /** Mirror the period in force into the flat settings keys, then recalculate from [fromTs]. */
+    private suspend fun applyTariffChange(fromTs: Long) {
+        val schedule = costCalculator.schedule()
+        schedule.periodAt(System.currentTimeMillis())?.let { current ->
+            settingsRepository.mirrorCurrentTariffPeriod(current.homeRate, current.dcRate, current.tripRule)
+        }
+        val result = costCalculator.recalculate(fromTs, Long.MAX_VALUE)
+        _uiState.update {
+            it.copy(
+                tariffPeriods = schedule.periods.sortedByDescending { p -> p.startTs },
+                measuredLosses = costCalculator.measuredLosses(),
+                tariffRecalcStatus = appContext.getString(
+                    R.string.settings_tariff_recalc_done, result.charges, result.trips
+                ),
+            )
+        }
+        delay(4000)
+        _uiState.update { it.copy(tariffRecalcStatus = null) }
     }
 
     /** Save distance units preference (km or miles). */
@@ -635,21 +696,6 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_UNITS, value)
         }
-    }
-
-    /** Save trip cost tariff preference. */
-    fun saveTripCostTariff(value: String) {
-        _uiState.update { it.copy(tripCostTariff = value) }
-        viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_TRIP_COST_TARIFF, value)
-        }
-    }
-
-    fun showRecalcConfirm() { _uiState.update { it.copy(showRecalcConfirm = true) } }
-    fun hideRecalcConfirm() { _uiState.update { it.copy(showRecalcConfirm = false) } }
-    fun confirmRecalc() {
-        _uiState.update { it.copy(showRecalcConfirm = false) }
-        recalculateAllCosts()
     }
 
     /** Save currency preference. */
@@ -684,7 +730,7 @@ class SettingsViewModel @Inject constructor(
                 val trips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
                 val tripsFile = File(downloadsDir, "bydmate_trips_$timestamp.csv")
                 FileWriter(tripsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost,exterior_temp\n")
+                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost,exterior_temp,tariff_rate\n")
                     for (trip in trips) {
                         writer.append("${trip.id},${trip.startTs},${trip.endTs ?: ""},")
                         writer.append("${trip.distanceKm ?: ""},${trip.kwhConsumed ?: ""},")
@@ -692,15 +738,20 @@ class SettingsViewModel @Inject constructor(
                         writer.append("${trip.socEnd ?: ""},${trip.tempAvgC ?: ""},")
                         writer.append("${trip.avgSpeedKmh ?: ""},${trip.batTempAvg ?: ""},")
                         writer.append("${trip.batTempMax ?: ""},${trip.batTempMin ?: ""},")
-                        writer.append("${trip.cost ?: ""},${trip.exteriorTemp ?: ""}\n")
+                        val tripRate = trip.cost?.let { c ->
+                            trip.kwhConsumed?.takeIf { it > 0.0 }?.let { kwh -> c / kwh }
+                        }
+                        writer.append("${trip.cost ?: ""},${trip.exteriorTemp ?: ""},")
+                        writer.append("${tripRate ?: ""}\n")
                     }
                 }
 
-                // Export charges
+                // Export charges — the period gives the rate and the losses behind each cost
+                val schedule = costCalculator.schedule()
                 val charges = chargeRepository.getAllCharges().firstOrNull() ?: emptyList()
                 val chargesFile = File(downloadsDir, "bydmate_charges_$timestamp.csv")
                 FileWriter(chargesFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw,status,cell_voltage_min,cell_voltage_max,voltage_12v,exterior_temp,merged_count\n")
+                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw,status,cell_voltage_min,cell_voltage_max,voltage_12v,exterior_temp,merged_count,meter_kwh,cost_manual,tariff_rate,loss_pct\n")
                     for (charge in charges) {
                         writer.append("${charge.id},${charge.startTs},${charge.endTs ?: ""},")
                         writer.append("${charge.socStart ?: ""},${charge.socEnd ?: ""},")
@@ -712,7 +763,28 @@ class SettingsViewModel @Inject constructor(
                         writer.append("${charge.avgPowerKw ?: ""},${charge.status},")
                         writer.append("${charge.cellVoltageMin ?: ""},${charge.cellVoltageMax ?: ""},")
                         writer.append("${charge.voltage12v ?: ""},${charge.exteriorTemp ?: ""},")
-                        writer.append("${charge.mergedCount}\n")
+                        val chargePeriod = schedule.periodAt(charge.startTs)
+                        val lossPct = chargePeriod?.let { TariffSchedule.lossPctFor(it, charge.type) }
+                        val paidKwh = chargePeriod?.let {
+                            TariffSchedule.energyPaid(it, charge.type, charge.kwhCharged, charge.meterKwh)
+                        }
+                        val chargeRate = charge.cost?.let { c ->
+                            paidKwh?.takeIf { it > 0.0 }?.let { paid -> c / paid }
+                        }
+                        writer.append("${charge.mergedCount},${charge.meterKwh ?: ""},")
+                        writer.append("${charge.costManual},${chargeRate ?: ""},")
+                        writer.append("${lossPct ?: ""}\n")
+                    }
+                }
+
+                // Export tariff periods — the price history behind every cost above
+                val periodsFile = File(downloadsDir, "bydmate_tariff_periods_$timestamp.csv")
+                FileWriter(periodsFile).use { writer ->
+                    writer.append("id,start_ts,home_rate,dc_rate,ac_loss_pct,dc_loss_pct,trip_rule,currency\n")
+                    for (p in schedule.periods) {
+                        writer.append("${p.id},${p.startTs},${p.homeRate},${p.dcRate},")
+                        writer.append("${p.acLossPct},${p.dcLossPct},${p.tripRule},")
+                        writer.append("${_uiState.value.currency}\n")
                     }
                 }
 
@@ -1694,6 +1766,18 @@ class SettingsViewModel @Inject constructor(
                 )
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
+            }
+
+            appendLine("--- tariff periods ---")
+            try {
+                val schedule = costCalculator.schedule()
+                val current = schedule.periodAt(System.currentTimeMillis())
+                appendLine("periods=${schedule.periods.size} current=" + (current?.let {
+                    "start=${it.startTs} home=${it.homeRate} dc=${it.dcRate} " +
+                        "loss=${it.acLossPct}/${it.dcLossPct} rule=${it.tripRule}"
+                } ?: "(none)"))
+            } catch (e: Exception) {
+                appendLine("(failed to gather tariff periods: ${e.message})")
             }
 
             appendLine("--- charging catch-up ---")

@@ -15,6 +15,7 @@ import com.bydmate.app.data.local.dao.ChargePointDao
 import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.local.dao.SettingsDao
+import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.data.local.dao.TripCounterStats
@@ -26,6 +27,7 @@ import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.local.entity.ChargePointEntity
 import com.bydmate.app.data.local.entity.IdleDrainEntity
 import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.entity.TripPointEntity
 import com.bydmate.app.data.remote.InsightsManager
@@ -107,7 +109,7 @@ class SettingsViewModelTest {
         override fun getAll(): Flow<List<SettingEntity>> = flowOf(emptyList())
     }
 
-    private class StubTripDao : TripDao {
+    private open class StubTripDao : TripDao {
         override suspend fun insert(trip: TripEntity): Long = 0L
         override suspend fun update(trip: TripEntity) {}
         override fun getAll(): Flow<List<TripEntity>> = flowOf(emptyList())
@@ -124,6 +126,7 @@ class SettingsViewModelTest {
         override suspend fun getLiveTrips(): List<TripEntity> = emptyList()
         override suspend fun getByStartTsRange(minTs: Long, maxTs: Long): TripEntity? = null
         override suspend fun getAllSnapshot(): List<TripEntity> = emptyList()
+        override suspend fun getWithEnergyInRange(from: Long, to: Long): List<TripEntity> = emptyList()
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
         override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
@@ -147,7 +150,7 @@ class SettingsViewModelTest {
         override suspend fun deleteByTripId(tripId: Long): Int = 0
     }
 
-    private class StubChargeDao : ChargeDao {
+    private open class StubChargeDao : ChargeDao {
         override suspend fun insert(charge: ChargeEntity): Long = 0L
         override suspend fun update(charge: ChargeEntity) {}
         override fun getAll(): Flow<List<ChargeEntity>> = flowOf(emptyList())
@@ -164,6 +167,9 @@ class SettingsViewModelTest {
         override suspend fun hasLegacyCharges(): Boolean = false
         override suspend fun deleteEmpty(): Int = 0
         override suspend fun getCompletedSince(since: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getInRangeAsc(from: Long, to: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getCompletedForPricing(until: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getWithMeterReading(): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {}
     }
@@ -216,6 +222,35 @@ class SettingsViewModelTest {
 
     private lateinit var settingsDao: FakeSettingsDao
 
+    // Tariff fixture: fields rather than factory parameters, the factory is long enough.
+    private var exportTrips: List<TripEntity> = emptyList()
+    private var exportCharges: List<ChargeEntity> = emptyList()
+    private var exportCostCalculator: com.bydmate.app.domain.cost.CostCalculator? = null
+    private var tariffPeriodDaoOverride: TariffPeriodDao? = null
+
+    /** In-memory stand-in for the Room DAO, including the unique `start_ts` constraint. */
+    private class FakeTariffPeriodDao(initial: List<TariffPeriodEntity>) : TariffPeriodDao {
+        val rows = initial.toMutableList()
+        private var nextId = (initial.maxOfOrNull { it.id } ?: 0L) + 1L
+        override suspend fun insert(period: TariffPeriodEntity): Long {
+            val id = if (period.id == 0L) nextId++ else period.id
+            rows.removeAll { it.id == id || it.startTs == period.startTs }
+            rows.add(period.copy(id = id))
+            return id
+        }
+        override suspend fun update(period: TariffPeriodEntity) {
+            check(rows.none { it.id != period.id && it.startTs == period.startTs }) {
+                "UNIQUE constraint failed: tariff_periods.start_ts"
+            }
+            rows.replaceAll { if (it.id == period.id) period else it }
+        }
+        override suspend fun delete(period: TariffPeriodEntity) { rows.removeAll { it.id == period.id } }
+        override suspend fun getAllAsc(): List<TariffPeriodEntity> = rows.sortedBy { it.startTs }
+        override fun observeAll(): Flow<List<TariffPeriodEntity>> = flowOf(rows.sortedByDescending { it.startTs })
+        override suspend fun getByStartTs(startTs: Long): TariffPeriodEntity? = rows.find { it.startTs == startTs }
+        override suspend fun count(): Int = rows.size
+    }
+
     private fun buildViewModel(
         updateChecker: UpdateChecker? = null,
         ttsModelManager: com.bydmate.app.voice.TtsModelManager? = null,
@@ -229,11 +264,15 @@ class SettingsViewModelTest {
         settingsDao = FakeSettingsDao()
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
-        val tripDao = StubTripDao()
+        val tripDao = object : StubTripDao() {
+            override fun getAll(): Flow<List<TripEntity>> = flowOf(exportTrips)
+        }
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
-        val chargeDao = StubChargeDao()
+        val chargeDao = object : StubChargeDao() {
+            override fun getAll(): Flow<List<ChargeEntity>> = flowOf(exportCharges)
+        }
         val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
 
@@ -244,7 +283,7 @@ class SettingsViewModelTest {
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
-            mockk<TripTombstoneDao>(relaxed = true)
+            mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true)
         )
 
         val openRouterClient = OpenRouterClient(httpClient)
@@ -315,6 +354,8 @@ class SettingsViewModelTest {
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
             voiceJournal = voiceJournal,
+            tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
+            costCalculator = exportCostCalculator ?: mockk(relaxed = true),
         )
     }
 
@@ -1460,5 +1501,127 @@ class SettingsViewModelTest {
         } finally {
             publicDir.setWritable(true)
         }
+    }
+
+    // --- CSV export: the tariff wave added rate/loss columns and a periods file ---
+
+    private fun exportedFile(prefix: String): File =
+        publicDumpDir().listFiles().orEmpty()
+            .filter { it.name.startsWith(prefix) }
+            .maxByOrNull { it.lastModified() }
+            ?: error("no $prefix file in ${publicDumpDir().absolutePath}")
+
+    @Test
+    fun `csv export carries the tariff columns and a periods file`() = runTest {
+        val period = com.bydmate.app.data.local.entity.TariffPeriodEntity(
+            id = 7, startTs = 1_700_000_000_000L, homeRate = 0.30, dcRate = 0.80,
+            acLossPct = 10.0, dcLossPct = 5.0, tripRule = "home",
+        )
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        coEvery { calculator.schedule() } returns
+            com.bydmate.app.domain.cost.TariffSchedule(listOf(period))
+        exportTrips = listOf(
+            TripEntity(id = 1, startTs = period.startTs, kwhConsumed = 10.0, cost = 3.0)
+        )
+        exportCharges = listOf(
+            ChargeEntity(id = 2, startTs = period.startTs, kwhCharged = 9.0, type = "AC", cost = 3.0)
+        )
+        exportCostCalculator = calculator
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.exportCsv()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val trips = exportedFile("bydmate_trips_").readLines()
+        assertTrue("trips header must end with tariff_rate, was: ${trips[0]}",
+            trips[0].endsWith(",tariff_rate"))
+        assertTrue("trip row must carry its rate, was: ${trips[1]}", trips[1].endsWith(",0.3"))
+
+        val charges = exportedFile("bydmate_charges_").readLines()
+        assertTrue("charges header must carry the new columns, was: ${charges[0]}",
+            charges[0].endsWith(",meter_kwh,cost_manual,tariff_rate,loss_pct"))
+        // 9 kWh into the pack at 10% AC losses = 10 kWh paid, 3.00 / 10 = 0.30
+        assertTrue("charge row must end with rate and loss, was: ${charges[1]}",
+            charges[1].endsWith(",,false,0.3,10.0"))
+
+        val periods = exportedFile("bydmate_tariff_periods_").readLines()
+        assertEquals("id,start_ts,home_rate,dc_rate,ac_loss_pct,dc_loss_pct,trip_rule,currency", periods[0])
+        assertEquals("7,${period.startTs},0.3,0.8,10.0,5.0,home,BYN", periods[1])
+    }
+
+    // --- Tariff periods: the unique start date and the reach of a recalculation ---
+
+    private val augustStart = 1_754_006_400_000L   // 01.08.2026
+    private val septemberStart = 1_756_684_800_000L // 01.09.2026
+
+    private fun twoPeriods() = FakeTariffPeriodDao(
+        listOf(
+            TariffPeriodEntity(id = 1, startTs = augustStart, homeRate = 0.10, dcRate = 0.50),
+            TariffPeriodEntity(id = 2, startTs = septemberStart, homeRate = 0.20, dcRate = 0.60),
+        )
+    )
+
+    @Test
+    fun `saving a period onto a date another one holds is refused instead of crashing`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveTariffPeriod(dao.rows.first { it.id == 2L }.copy(startTs = augustStart))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue("the dialog must say why", vm.uiState.value.tariffPeriodError != null)
+        assertEquals(septemberStart, dao.rows.first { it.id == 2L }.startTs)
+        assertEquals(2, dao.rows.size)
+    }
+
+    // The earliest period also prices everything before its own date, so editing or deleting
+    // it has to re-price the whole history, not just the span from its start.
+    @Test
+    fun `editing the earliest period recalculates the whole history`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calculator
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveTariffPeriod(dao.rows.first { it.id == 1L }.copy(homeRate = 0.99))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { calculator.recalculate(0L, Long.MAX_VALUE) }
+    }
+
+    @Test
+    fun `deleting the earliest period recalculates the whole history`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calculator
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.deleteTariffPeriod(dao.rows.first { it.id == 1L })
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { calculator.recalculate(0L, Long.MAX_VALUE) }
+        assertEquals(1, dao.rows.size)
+    }
+
+    @Test
+    fun `editing a later period recalculates only from its own date`() = runTest {
+        val dao = twoPeriods()
+        tariffPeriodDaoOverride = dao
+        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
+        exportCostCalculator = calculator
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveTariffPeriod(dao.rows.first { it.id == 2L }.copy(homeRate = 0.42))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { calculator.recalculate(septemberStart, Long.MAX_VALUE) }
     }
 }

@@ -6,8 +6,10 @@ import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.local.dao.ChargeDao
 import com.bydmate.app.data.local.dao.RuleDao
+import com.bydmate.app.data.local.dao.TariffPeriodDao
 import com.bydmate.app.data.local.dao.TripDao
 import com.bydmate.app.data.local.entity.ChargeEntity
+import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.remote.OpenRouterClient
@@ -15,6 +17,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.SettingsRepository.Currency
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
+import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -46,7 +49,7 @@ class AgentToolsAddChargeTest {
 
     private val context = mockk<Context>(relaxed = true)
 
-    private fun tools() = AgentTools(
+    private fun tools(costCalculator: CostCalculator? = null) = AgentTools(
         gate, battery, range, tripDao, chargeDao, dispatcher, ruleDao, engine, places, weather,
         exa, openRouterClient, settingsRepository, contactLookup, context,
         mockk<ClusterVoiceControl>(relaxed = true),
@@ -54,18 +57,32 @@ class AgentToolsAddChargeTest {
         mockk<InsightsManager>(relaxed = true),
         mockk<ZaiSearchClient>(relaxed = true),
         mockk<LlmConnectionResolver>(relaxed = true),
-    )
+    ).also { tools -> costCalculator?.let { tools.injectCostCalculator(it) } }
+
+    /**
+     * A real calculator over an empty period table: the first read seeds one period out of the
+     * flat tariff settings, so this is the settings-priced path the agent takes on a fresh car.
+     */
+    private fun settingsPricedCalculator(): CostCalculator {
+        val periodDao = mockk<TariffPeriodDao>(relaxed = true)
+        val stored = mutableListOf<TariffPeriodEntity>()
+        coEvery { periodDao.getAllAsc() } answers { stored.toList() }
+        coEvery { periodDao.insert(any()) } answers { stored.add(firstArg()); 1L }
+        coEvery { settingsRepository.getTripCostTariffKey() } returns "home"
+        return CostCalculator(periodDao, chargeDao, tripDao, settingsRepository)
+    }
 
     private fun call(name: String, args: String) = AgentToolCall("1", name, args)
 
     @Test fun add_charge_soc_path_inserts_derived_kwh_and_cost() = runTest {
         coEvery { settingsRepository.getBatteryCapacity() } returns 72.9
+        coEvery { settingsRepository.getHomeTariff() } returns 5.0
         coEvery { settingsRepository.getDcTariff() } returns 17.0
         coEvery { settingsRepository.getCurrency() } returns Currency("RUB", "₽")
         val slot = slot<ChargeEntity>()
         coEvery { chargeDao.insert(capture(slot)) } returns 1L
 
-        val out = JSONObject(tools().execute(call("add_charge",
+        val out = JSONObject(tools(settingsPricedCalculator()).execute(call("add_charge",
             """{"type":"DC","soc_start":30,"soc_end":80}""")))
 
         assertTrue(out.getBoolean("ok"))
@@ -75,7 +92,8 @@ class AgentToolsAddChargeTest {
         assertEquals(80, e.socEnd)
         assertEquals(36.45, e.kwhCharged!!, 0.01)      // (80-30)/100*72.9
         assertEquals(36.45, e.kwhChargedSoc!!, 0.01)
-        assertEquals(619.65, e.cost!!, 0.5)            // 36.45*17.0
+        // 36.45 kWh into the pack at the default 5% DC losses = 38.37 kWh paid, at 17.0
+        assertEquals(36.45 / 0.95 * 17.0, e.cost!!, 0.5)
         assertEquals("manual", e.detectionSource)
         assertEquals(36.45, out.getDouble("kwh"), 0.01)
     }
@@ -87,12 +105,16 @@ class AgentToolsAddChargeTest {
         val slot = slot<ChargeEntity>()
         coEvery { chargeDao.insert(capture(slot)) } returns 1L
 
-        val out = JSONObject(tools().execute(call("add_charge", """{"kwh":20}""")))
+        coEvery { settingsRepository.getDcTariff() } returns 17.0
+
+        val out = JSONObject(tools(settingsPricedCalculator())
+            .execute(call("add_charge", """{"kwh":20}""")))
 
         assertTrue(out.getBoolean("ok"))
         assertEquals("AC", slot.captured.type)
         assertEquals(20.0, slot.captured.kwhCharged!!, 0.001)
-        assertEquals(100.0, slot.captured.cost!!, 0.001)
+        // 20 kWh into the pack at the default 10% AC losses = 22.22 kWh paid, at 5.0
+        assertEquals(20.0 / 0.9 * 5.0, slot.captured.cost!!, 0.001)
         assertNull(slot.captured.socStart)
     }
 
@@ -123,6 +145,21 @@ class AgentToolsAddChargeTest {
         assertEquals(java.util.Calendar.JULY, cal.get(java.util.Calendar.MONTH))
         assertEquals(1, cal.get(java.util.Calendar.DAY_OF_MONTH))
         assertEquals(slot.captured.startTs + 3_600_000L, slot.captured.endTs)
+    }
+
+    // A session entered for a past date changes what a kWh in the pack cost from that day on,
+    // so the trips already priced after it have to be re-priced too.
+    @Test fun add_charge_backdated_repricesLaterTrips() = runTest {
+        coEvery { settingsRepository.getBatteryCapacity() } returns 72.9
+        coEvery { settingsRepository.getCurrency() } returns Currency("RUB", "₽")
+        coEvery { chargeDao.insert(any()) } returns 1L
+        val calculator = mockk<CostCalculator>(relaxed = true)
+        val slot = slot<ChargeEntity>()
+        coEvery { chargeDao.insert(capture(slot)) } returns 1L
+
+        tools(calculator).execute(call("add_charge", """{"kwh":5,"tariff":4,"date":"2026-07-01"}"""))
+
+        coVerify { calculator.recalculate(slot.captured.startTs, Long.MAX_VALUE) }
     }
 
     @Test fun add_charge_rejects_missing_amount() = runTest {

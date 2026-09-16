@@ -11,6 +11,7 @@ import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.repository.LastSessionRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.service.TrackingService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -30,6 +31,7 @@ class HistoryImporter @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val lastSessionRepository: LastSessionRepository,
     private val tripTombstoneDao: TripTombstoneDao,
+    private val costCalculator: CostCalculator,
 ) {
     companion object {
         private const val TAG = "HistoryImporter"
@@ -323,18 +325,14 @@ class HistoryImporter @Inject constructor(
     }
 
     /**
-     * Calculate cost for trips that have kWh but no cost yet.
+     * Calculate cost for trips that have kWh but no cost yet. Each trip is priced by the
+     * tariff period covering its own date, so a backfilled import lands at the rate that
+     * was in force back then, not at today's one.
      */
-    suspend fun calculateMissingCosts(tariff: Double) {
+    suspend fun calculateMissingCosts() {
         try {
-            val trips = tripDao.getTripsWithoutCost()
-            var calculated = 0
-            for (trip in trips) {
-                val kwh = trip.kwhConsumed ?: continue
-                tripRepository.updateTrip(trip.copy(cost = kwh * tariff))
-                calculated++
-            }
-            Log.d(TAG, "calculateMissingCosts: $calculated trips, tariff=$tariff")
+            val calculated = costCalculator.priceUncostedTrips(tripDao.getTripsWithoutCost())
+            Log.d(TAG, "calculateMissingCosts: $calculated trips")
         } catch (e: Exception) {
             Log.e(TAG, "calculateMissingCosts failed", e)
         }
@@ -584,7 +582,7 @@ class HistoryImporter @Inject constructor(
         val r = syncFromEnergyData()
         recalculateConsumptionFromEnergyData()
         repairImplausibleKwh()
-        calculateMissingCosts(settingsRepository.getTripCostTariff())
+        calculateMissingCosts()
         attachGpsPoints()
         return r
     }

@@ -107,6 +107,27 @@ interface ChargeDao {
     """)
     suspend fun deletePhantomAutoserviceRows(): Int
 
+    /** Recalculation input: every charge whose start falls inside the period being re-priced. */
+    @Query("SELECT * FROM charges WHERE start_ts >= :from AND start_ts <= :to ORDER BY start_ts ASC")
+    suspend fun getInRangeAsc(from: Long, to: Long): List<ChargeEntity>
+
+    /**
+     * Full priced history up to [until], ascending — the input of the weighted-average
+     * battery price. Ranges never truncate it: a trip in September is priced off charges
+     * that happened before the recalculated range started.
+     */
+    @Query("""
+        SELECT * FROM charges
+        WHERE status = 'COMPLETED' AND start_ts <= :until
+          AND kwh_charged IS NOT NULL AND kwh_charged > 0 AND cost IS NOT NULL
+        ORDER BY start_ts ASC
+    """)
+    suspend fun getCompletedForPricing(until: Long): List<ChargeEntity>
+
+    /** Sessions where the driver typed in a meter reading — the measured-losses hint. */
+    @Query("SELECT * FROM charges WHERE meter_kwh IS NOT NULL AND kwh_charged IS NOT NULL AND kwh_charged > 0")
+    suspend fun getWithMeterReading(): List<ChargeEntity>
+
     @androidx.room.Delete
     suspend fun delete(charge: ChargeEntity)
 }

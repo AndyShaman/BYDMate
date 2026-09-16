@@ -70,6 +70,9 @@ class AutoserviceChargingDetectorTest {
             inserted.removeAll { it.kwhCharged == null || (it.kwhCharged ?: 0.0) < 0.05 }
             return before - inserted.size
         }
+        override suspend fun getInRangeAsc(from: Long, to: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getCompletedForPricing(until: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getWithMeterReading(): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int {
             val before = inserted.size
             inserted.removeAll { ch ->
@@ -192,6 +195,7 @@ class AutoserviceChargingDetectorTest {
             stateStore = stateStore,
             classifier = classifier,
             settings = settings,
+            costCalculator = mockk(relaxed = true),
             parsReader = FakeParsReader(diParsData),
             journal = journal
         )

@@ -112,6 +112,25 @@
     <string name="settings_tariff_future_note">Nowa taryfa dotyczy przyszłych przejazdów.\nJuż policzone przejazdy się nie zmienią.</string>
     <string name="settings_recalc_all_button">Przelicz wszystkie przejazdy</string>
     <string name="settings_recalc_note">Przeliczy koszt wszystkich przejazdów\nwedług bieżącej taryfy.</string>
+    <string name="settings_tariff_periods_title">Taryfy i okresy</string>
+    <string name="settings_tariff_periods_button">Otwórz</string>
+    <string name="settings_tariff_periods_hint">Dodaj okres z potrzebną datą, a wszystko po niej przeliczy się samo.</string>
+    <string name="settings_tariff_periods_empty">Brak okresu</string>
+    <string name="settings_tariff_periods_summary">dom %1$s, DC %2$s %3$s/kWh, straty %4$s%% / %5$s%%</string>
+    <string name="settings_tariff_periods_summary_since">od %1$s: %2$s</string>
+    <string name="settings_tariff_period_add">Dodaj okres</string>
+    <string name="settings_tariff_period_delete">Usuń okres</string>
+    <string name="settings_tariff_period_start_label">Obowiązuje od</string>
+    <string name="settings_tariff_period_date_taken">Na tę datę istnieje już okres, wybierz inną datę.</string>
+    <string name="settings_tariff_period_from_start">od początku historii</string>
+    <string name="settings_tariff_loss_ac_label" formatted="false">Straty AC, %</string>
+    <string name="settings_tariff_loss_dc_label" formatted="false">Straty DC, %</string>
+    <string name="settings_tariff_loss_hint">Szacunek. Aby go uściślić, wpisz odczyt licznika w karcie ładowania.</string>
+    <string name="settings_tariff_losses_measured">Twoje straty z licznika: AC %1$s%% (%2$d), DC %3$s%% (%4$d)</string>
+    <string name="settings_tariff_rule_home">Dom</string>
+    <string name="settings_tariff_rule_dc">DC</string>
+    <string name="settings_tariff_rule_charges">Wg ładowań</string>
+    <string name="settings_tariff_recalc_done">Przeliczono: ładowań %1$d, przejazdów %2$d</string>
     <string name="settings_consumption_section_header">Progi zużycia</string>
     <string name="settings_consumption_good_label">Dobre &lt; (kWh/100 km)</string>
     <string name="settings_consumption_bad_label">Złe &gt; (kWh/100 km)</string>
@@ -333,6 +352,10 @@
     <string name="charges_edit_cost_label">Koszt:</string>
     <string name="charges_edit_tariff_label">%1$s/kWh:</string>
     <string name="charges_edit_save_button">Zapisz</string>
+    <string name="charges_edit_meter_label">Licznik:</string>
+    <string name="charges_edit_meter_used">liczymy wg licznika</string>
+    <string name="charges_edit_loss_estimate">ze stratami %1$.0f%%</string>
+    <string name="charges_edit_follow_period">Licz wg okresu</string>
 
     <!-- Automation screen -->
     <string name="automation_tab_title">Automatyzacja</string>

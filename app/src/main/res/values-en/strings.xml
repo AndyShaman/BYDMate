@@ -105,6 +105,25 @@
     <string name="settings_tariff_future_note">The new tariff applies to future trips.\nTrips already calculated will not change.</string>
     <string name="settings_recalc_all_button">Recalculate all trips</string>
     <string name="settings_recalc_note">Recalculates the cost of all trips\nusing the current tariff.</string>
+    <string name="settings_tariff_periods_title">Tariffs and periods</string>
+    <string name="settings_tariff_periods_button">Open</string>
+    <string name="settings_tariff_periods_hint">Add a period with the date you need and everything after it is recalculated automatically.</string>
+    <string name="settings_tariff_periods_empty">No period set</string>
+    <string name="settings_tariff_periods_summary">home %1$s, DC %2$s %3$s/kWh, losses %4$s%% / %5$s%%</string>
+    <string name="settings_tariff_periods_summary_since">since %1$s: %2$s</string>
+    <string name="settings_tariff_period_add">Add period</string>
+    <string name="settings_tariff_period_delete">Delete period</string>
+    <string name="settings_tariff_period_start_label">Applies from</string>
+    <string name="settings_tariff_period_date_taken">A period already starts on that date, pick another one.</string>
+    <string name="settings_tariff_period_from_start">from the beginning</string>
+    <string name="settings_tariff_loss_ac_label" formatted="false">AC losses, %</string>
+    <string name="settings_tariff_loss_dc_label" formatted="false">DC losses, %</string>
+    <string name="settings_tariff_loss_hint">An estimate. To refine it, enter the meter reading in the charge card.</string>
+    <string name="settings_tariff_losses_measured">Your measured losses: AC %1$s%% (%2$d), DC %3$s%% (%4$d)</string>
+    <string name="settings_tariff_rule_home">Home</string>
+    <string name="settings_tariff_rule_dc">DC</string>
+    <string name="settings_tariff_rule_charges">By charges</string>
+    <string name="settings_tariff_recalc_done">Recalculated: %1$d charges, %2$d trips</string>
     <string name="settings_consumption_section_header">Consumption thresholds</string>
     <string name="settings_consumption_good_label">Good &lt; (kWh/100km)</string>
     <string name="settings_consumption_bad_label">Bad &gt; (kWh/100km)</string>
@@ -302,6 +321,10 @@
     <string name="charges_edit_cost_label">Cost:</string>
     <string name="charges_edit_tariff_label">%1$s/kWh:</string>
     <string name="charges_edit_save_button">Save</string>
+    <string name="charges_edit_meter_label">Meter:</string>
+    <string name="charges_edit_meter_used">using the meter</string>
+    <string name="charges_edit_loss_estimate">with %1$.0f%% losses</string>
+    <string name="charges_edit_follow_period">Use period rate</string>
     <string name="automation_tab_title">Automation</string>
     <string name="automation_filter_all">All</string>
     <string name="automation_filter_active">Active</string>

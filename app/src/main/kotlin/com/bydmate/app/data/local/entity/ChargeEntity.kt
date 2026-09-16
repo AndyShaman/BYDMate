@@ -39,5 +39,10 @@ data class ChargeEntity(
     @ColumnInfo(name = "lifetime_kwh_at_start") val lifetimeKwhAtStart: Double? = null,
     @ColumnInfo(name = "lifetime_kwh_at_finish") val lifetimeKwhAtFinish: Double? = null,
     @ColumnInfo(name = "gun_state") val gunState: Int? = null,
-    @ColumnInfo(name = "detection_source") val detectionSource: String? = null
+    @ColumnInfo(name = "detection_source") val detectionSource: String? = null,
+    // v20: tariff periods + charging losses
+    /** Meter/receipt reading in kWh, entered by hand. Wins over the loss estimate. */
+    @ColumnInfo(name = "meter_kwh") val meterKwh: Double? = null,
+    /** True once the user set the price by hand — such a row is never recalculated. */
+    @ColumnInfo(name = "cost_manual") val costManual: Boolean = false
 )

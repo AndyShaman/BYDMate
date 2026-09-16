@@ -47,6 +47,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.ChargeEntity
+import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
@@ -63,19 +64,20 @@ import java.util.TimeZone
 /**
  * Edit dialog for a charge row (long-press → bottom sheet → "Изменить").
  *
- * Inputs: type (AC/DC), socStart, socEnd, tariff per kWh.
+ * Inputs: type (AC/DC), socStart, socEnd, meter reading, tariff per kWh.
  * kWh is derived: when both SOC values are present and socEnd > socStart, it is
  * computed as (socEnd - socStart) / 100 × batteryCapacityKwh and rendered read-only.
  * If SOC is incomplete (e.g. DC station with only a kWh readout), kWh becomes
  * an editable manual input as a fallback.
- * Cost = finalKwh × tariff, displayed as a computed preview.
+ * Cost = paid energy × tariff, where paid energy is the meter reading when one is typed
+ * in, otherwise the pack intake grossed up by the period's losses. Touching the tariff or
+ * the meter marks the row as priced by hand, and a recalculation then skips it.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChargeEditDialog(
     charge: ChargeEntity,
-    homeTariff: Double,
-    dcTariff: Double,
+    schedule: TariffSchedule,
     batteryCapacityKwh: Double,
     currencySymbol: String,
     onDismiss: () -> Unit,
@@ -87,25 +89,34 @@ fun ChargeEditDialog(
     var kwhText by remember(charge.id) {
         mutableStateOf(charge.kwhCharged?.let { "%.2f".format(it) } ?: "")
     }
-    // tariff_per_kwh = cost / kwh (existing record), or settings default by type
-    var tariffText by remember(charge.id) {
-        val existing = if (charge.cost != null && (charge.kwhCharged ?: 0.0) > 0.01)
-            charge.cost / charge.kwhCharged!! else null
-        val initial = existing ?: if (type == "DC") dcTariff else homeTariff
-        mutableStateOf("%.3f".format(initial))
+    var meterText by remember(charge.id) {
+        mutableStateOf(charge.meterKwh?.let { "%.2f".format(it) } ?: "")
     }
-
-    // Auto-fill tariff on AC↔DC switch — only when user hasn't manually edited the field
-    var tariffEditedByUser by remember(charge.id) { mutableStateOf(false) }
-    LaunchedEffect(type) {
-        if (!tariffEditedByUser) {
-            val auto = if (type == "DC") dcTariff else homeTariff
-            tariffText = "%.3f".format(auto)
-        }
-    }
-
     var startTs by remember(charge.id) { mutableStateOf(charge.startTs) }
     var showDatePicker by remember(charge.id) { mutableStateOf(false) }
+
+    // Rates follow the period covering the edited date, so backdating a session re-reads
+    // the price that was in force then.
+    val period = schedule.periodAt(startTs)
+    val periodRate = period?.let { TariffSchedule.rateFor(it, type) } ?: 0.0
+    val lossPct = period?.let { TariffSchedule.lossPctFor(it, type) } ?: 0.0
+
+    // tariff_per_kwh = cost / paid energy (hand-priced record), or the period rate
+    var tariffText by remember(charge.id) {
+        val paidKwh = period?.let {
+            TariffSchedule.energyPaid(it, charge.type, charge.kwhCharged, charge.meterKwh)
+        }
+        val existing = if (charge.costManual && charge.cost != null && (paidKwh ?: 0.0) > 0.01)
+            charge.cost / paidKwh!! else null
+        mutableStateOf("%.3f".format(existing ?: periodRate))
+    }
+    var costManual by remember(charge.id) { mutableStateOf(charge.costManual) }
+
+    // Auto-fill tariff on AC↔DC switch and on a date change — only while the row still
+    // follows its period.
+    LaunchedEffect(type, startTs) {
+        if (!costManual) tariffText = "%.3f".format(periodRate)
+    }
 
     Dialog(
         onDismissRequest = onDismiss,
@@ -188,7 +199,11 @@ fun ChargeEditDialog(
                     val kwhDisplay = computedKwh?.let { "%.2f".format(it) } ?: kwhText
                     val tariff = tariffText.replace(',', '.').toDoubleOrNull()
                     val finalKwh = computedKwh ?: kwhText.replace(',', '.').toDoubleOrNull()
-                    val computedCost = if (finalKwh != null && tariff != null) finalKwh * tariff else null
+                    val meterKwh = meterText.replace(',', '.').toDoubleOrNull()?.takeIf { it > 0.0 }
+                    // Paid energy: the meter beats the estimate, the estimate grosses the pack
+                    // intake up by the period's losses.
+                    val paidKwh = meterKwh ?: finalKwh?.let { it / (1.0 - lossPct / 100.0) }
+                    val computedCost = if (paidKwh != null && tariff != null) paidKwh * tariff else null
 
                     // SOC start / end
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -254,6 +269,34 @@ fun ChargeEditDialog(
                         }
                     }
 
+                    // Meter reading — optional; what the wall socket actually billed.
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            stringResource(R.string.charges_edit_meter_label),
+                            color = TextSecondary,
+                            fontSize = 13.sp,
+                            modifier = Modifier.width(80.dp)
+                        )
+                        OutlinedTextField(
+                            value = meterText,
+                            onValueChange = {
+                                meterText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }
+                                if (meterText.isNotBlank()) costManual = true
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            modifier = Modifier.width(120.dp),
+                            colors = darkFieldColors(),
+                            singleLine = true,
+                        )
+                        Text(
+                            if (meterKwh != null) stringResource(R.string.charges_edit_meter_used)
+                            else stringResource(R.string.charges_edit_loss_estimate, lossPct),
+                            color = TextMuted,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+
                     // Tariff per kWh
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
@@ -266,7 +309,7 @@ fun ChargeEditDialog(
                             value = tariffText,
                             onValueChange = {
                                 tariffText = it.filter { ch -> ch.isDigit() || ch == '.' || ch == ',' }
-                                tariffEditedByUser = true
+                                costManual = true
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
                             modifier = Modifier.width(120.dp),
@@ -298,6 +341,20 @@ fun ChargeEditDialog(
                             .padding(top = 8.dp),
                         horizontalArrangement = Arrangement.End
                     ) {
+                        if (costManual) {
+                            TextButton(onClick = {
+                                costManual = false
+                                meterText = ""
+                                tariffText = "%.3f".format(periodRate)
+                            }) {
+                                Text(
+                                    stringResource(R.string.charges_edit_follow_period),
+                                    color = AccentGreen,
+                                    fontSize = 14.sp
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                        }
                         TextButton(onClick = onDismiss) {
                             Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
                         }
@@ -314,6 +371,8 @@ fun ChargeEditDialog(
                                         kwhCharged = finalKwh,
                                         kwhChargedSoc = computedKwh,
                                         cost = computedCost,
+                                        meterKwh = meterKwh,
+                                        costManual = costManual,
                                     )
                                 )
                             },

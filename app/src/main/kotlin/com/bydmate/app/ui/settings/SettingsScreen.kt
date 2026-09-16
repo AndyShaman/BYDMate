@@ -138,6 +138,8 @@ import com.bydmate.app.split.Split37Engine
 import com.bydmate.app.split.SplitFreeformVerdict
 import com.bydmate.app.split.SplitRole
 import com.bydmate.app.split.applyPick
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
@@ -166,33 +168,17 @@ fun SettingsScreen(
     // The fid recorder runs in the daemon, so its switch is re-read every time the screen opens.
     LaunchedEffect(Unit) { viewModel.refreshFidRecorder() }
 
-    // Recalculate confirmation dialog
-    if (state.showRecalcConfirm) {
-        val tariffLabel = when (state.tripCostTariff) {
-            "home" -> state.homeTariff
-            "dc" -> state.dcTariff
-            else -> state.tripCostTariff
-        }
-        AlertDialog(
-            onDismissRequest = { viewModel.hideRecalcConfirm() },
-            title = { Text(stringResource(R.string.settings_recalc_dialog_title), color = TextPrimary) },
-            text = {
-                Text(
-                    stringResource(R.string.settings_recalc_dialog_text, tariffLabel, state.currencySymbol),
-                    color = TextSecondary
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.confirmRecalc() }) {
-                    Text(stringResource(R.string.settings_recalc_confirm_button), color = AccentOrange)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.hideRecalcConfirm() }) {
-                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
-                }
-            },
-            containerColor = CardSurface
+    // Tariff periods — floating window, so the price history never crowds the settings list
+    if (state.showTariffPeriodsDialog) {
+        TariffPeriodsDialog(
+            periods = state.tariffPeriods,
+            currencySymbol = state.currencySymbol,
+            measuredLosses = state.measuredLosses,
+            recalcStatus = state.tariffRecalcStatus,
+            errorText = state.tariffPeriodError,
+            onSave = { viewModel.saveTariffPeriod(it) },
+            onDelete = { viewModel.deleteTariffPeriod(it) },
+            onDismiss = { viewModel.hideTariffPeriods() },
         )
     }
 
@@ -393,6 +379,28 @@ private fun RailItem(
     }
 }
 
+/**
+ * One-line description of the period in force today, shown under the «Тарифы и периоды»
+ * button so the section stays compact but still tells the driver what is being charged.
+ */
+@Composable
+private fun currentTariffPeriodSummary(state: SettingsUiState): String {
+    val current = state.tariffPeriods.firstOrNull { it.startTs <= System.currentTimeMillis() }
+        ?: state.tariffPeriods.lastOrNull()
+        ?: return stringResource(R.string.settings_tariff_periods_empty)
+    val date = remember(current.startTs) {
+        if (current.startTs <= 0L) null
+        else SimpleDateFormat("dd.MM.yyyy", Locale.getDefault()).format(Date(current.startTs))
+    }
+    val rates = stringResource(
+        R.string.settings_tariff_periods_summary,
+        "%.2f".format(current.homeRate), "%.2f".format(current.dcRate), state.currencySymbol,
+        "%.0f".format(current.acLossPct), "%.0f".format(current.dcLossPct),
+    )
+    return if (date == null) rates
+    else stringResource(R.string.settings_tariff_periods_summary_since, date, rates)
+}
+
 @Composable
 private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel) {
     SectionHeader(text = stringResource(R.string.settings_battery_section_header))
@@ -413,70 +421,22 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
             )
             SettingHint(stringResource(R.string.settings_battery_capacity_desc))
             SettingDivider()
-            SettingsTextField(
-                label = stringResource(R.string.settings_tariff_home_label, state.currencySymbol),
-                value = state.homeTariff,
-                onValueChange = { viewModel.updateHomeTariff(it) },
-                keyboardType = KeyboardType.Decimal
-            )
-            SettingHint(stringResource(R.string.settings_tariff_home_desc))
-            SettingDivider()
-            SettingsTextField(
-                label = stringResource(R.string.settings_tariff_dc_label, state.currencySymbol),
-                value = state.dcTariff,
-                onValueChange = { viewModel.updateDcTariff(it) },
-                keyboardType = KeyboardType.Decimal
-            )
-            SettingHint(stringResource(R.string.settings_tariff_dc_desc))
-            SettingDivider()
-            val customChipLabel = stringResource(R.string.settings_tariff_trip_custom_chip)
-            val tariffOptions = listOf("AC", "DC", customChipLabel)
-            val tariffSelectedIndex = when {
-                state.tripCostTariff == "home" -> 0
-                state.tripCostTariff == "dc" -> 1
-                else -> 2
-            }
             SettingChipRow(
-                title = stringResource(R.string.settings_tariff_trip_label),
-                description = stringResource(R.string.settings_tariff_trip_desc),
-                options = tariffOptions,
-                selectedIndex = tariffSelectedIndex,
-                onSelect = { index ->
-                    when (index) {
-                        0 -> viewModel.saveTripCostTariff("home")
-                        1 -> viewModel.saveTripCostTariff("dc")
-                        else -> viewModel.saveTripCostTariff(state.homeTariff)
-                    }
-                }
+                title = stringResource(R.string.settings_app_currency_label),
+                options = SettingsRepository.CURRENCIES.map { it.code },
+                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
+                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
             )
-            if (state.tripCostTariff != "home" && state.tripCostTariff != "dc") {
-                SettingsTextField(
-                    label = stringResource(R.string.settings_tariff_custom_label, state.currencySymbol),
-                    value = state.tripCostTariff,
-                    onValueChange = { viewModel.saveTripCostTariff(it) },
-                    keyboardType = KeyboardType.Decimal
-                )
-            }
             SettingDivider()
             SettingActionRow(
-                title = stringResource(R.string.settings_save_tariffs_button),
-                description = stringResource(R.string.settings_tariff_future_note),
-                buttonLabel = stringResource(R.string.settings_save_tariffs_button),
-                onClick = { viewModel.saveTariffs() },
+                title = stringResource(R.string.settings_tariff_periods_title),
+                description = currentTariffPeriodSummary(state),
+                buttonLabel = stringResource(R.string.settings_tariff_periods_button),
+                onClick = { viewModel.showTariffPeriods() },
                 style = SettingButtonStyle.Primary
             )
-            state.tariffSaveStatus?.let {
-                Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
-            SettingDivider()
-            SettingActionRow(
-                title = stringResource(R.string.settings_recalc_all_button),
-                description = stringResource(R.string.settings_recalc_note),
-                buttonLabel = stringResource(R.string.settings_recalc_all_button),
-                onClick = { viewModel.showRecalcConfirm() },
-                style = SettingButtonStyle.Warning
-            )
-            state.recalcStatus?.let {
+            SettingHint(stringResource(R.string.settings_tariff_periods_hint))
+            state.tariffRecalcStatus?.let {
                 Text(it, color = AccentGreen, fontSize = 12.sp)
             }
         }
@@ -2335,12 +2295,6 @@ private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
                 options = listOf(stringResource(R.string.settings_unit_km), stringResource(R.string.settings_unit_miles)),
                 selectedIndex = if (state.units == "km") 0 else 1,
                 onSelect = { idx -> viewModel.saveUnits(if (idx == 0) "km" else "miles") },
-            )
-            SettingChipRow(
-                title = stringResource(R.string.settings_app_currency_label),
-                options = SettingsRepository.CURRENCIES.map { it.code },
-                selectedIndex = SettingsRepository.CURRENCIES.indexOfFirst { it.code == state.currency }.coerceAtLeast(0),
-                onSelect = { idx -> viewModel.saveCurrency(SettingsRepository.CURRENCIES[idx].code) },
             )
             SettingChipRow(
                 title = stringResource(R.string.settings_map_tile_source_label),

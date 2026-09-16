@@ -22,6 +22,7 @@ import android.content.Context
 import android.content.res.Configuration
 import android.content.res.Resources
 import android.os.LocaleList
+import io.mockk.coVerify
 import io.mockk.every
 import java.util.Locale
 import kotlinx.coroutines.flow.Flow
@@ -90,7 +91,8 @@ class ChargesViewModelTest {
             lastUpdated = charge
         }
         override fun getAll(): Flow<List<ChargeEntity>> = chargesFlow
-        override suspend fun getById(id: Long): ChargeEntity? = null
+        override suspend fun getById(id: Long): ChargeEntity? =
+            chargesFlow.value.find { it.id == id }
         override fun getByDateRange(from: Long, to: Long): Flow<List<ChargeEntity>> =
             flowOf(chargesFlow.value.filter { it.startTs in from..to })
         override suspend fun getPeriodSummary(from: Long, to: Long): ChargeSummary =
@@ -109,6 +111,9 @@ class ChargesViewModelTest {
             chargesFlow.value = after
             return before.size - after.size
         }
+        override suspend fun getInRangeAsc(from: Long, to: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getCompletedForPricing(until: Long): List<ChargeEntity> = emptyList()
+        override suspend fun getWithMeterReading(): List<ChargeEntity> = emptyList()
         override suspend fun deletePhantomAutoserviceRows(): Int = 0
         override suspend fun delete(charge: ChargeEntity) {
             chargesFlow.value = chargesFlow.value.filter { it.id != charge.id }
@@ -173,6 +178,9 @@ class ChargesViewModelTest {
 
     // ─── Factory ──────────────────────────────────────────────────────────────
 
+    /** Held as a field so a test can verify the re-pricing range without a new factory arg. */
+    private val costCalculator: com.bydmate.app.domain.cost.CostCalculator = mockk(relaxed = true)
+
     private fun buildViewModel(
         chargesFlow: MutableStateFlow<List<ChargeEntity>> = MutableStateFlow(emptyList()),
         autoserviceCharges: List<ChargeEntity> = emptyList(),
@@ -218,7 +226,9 @@ class ChargesViewModelTest {
         // appLocalizedContext() rebuilds a localized context via createConfigurationContext;
         // route it back to the same mock so locale ("ru") and getString stubs still apply.
         every { ctx.createConfigurationContext(any()) } returns ctx
-        return ChargesViewModel(ctx, chargeRepo, snapshotDao, settingsRepo, batteryStateRepo) to chargeDao
+        return ChargesViewModel(
+            ctx, chargeRepo, snapshotDao, settingsRepo, batteryStateRepo, costCalculator
+        ) to chargeDao
     }
 
     // ─── Helper ───────────────────────────────────────────────────────────────
@@ -644,6 +654,22 @@ class ChargesViewModelTest {
         assertEquals("DC", dao.lastUpdated!!.type)
         assertEquals(null, dao.lastInserted)
         assertEquals(null, vm.uiState.value.editingCharge)
+    }
+
+    // Moving a session backwards changes the pack price between the two dates, so the trips
+    // in that gap must be re-priced as well: recalculation starts at the earlier date.
+    @Test
+    fun `onSaveEdit_movedDate_recalculatesFromTheEarlierDate`() = runTest {
+        val sep1 = 1_756_684_800_000L
+        val sep10 = sep1 + 9 * 24 * 60 * 60 * 1000L
+        val existing = makeCharge(id = 4, startTs = sep1, kwhCharged = 10.0)
+        val (vm, _) = buildViewModelAndDao(chargesFlow = MutableStateFlow(listOf(existing)))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.onSaveEdit(existing.copy(startTs = sep10))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        coVerify { costCalculator.recalculate(sep1, Long.MAX_VALUE) }
     }
 
     @Test

@@ -8,6 +8,7 @@ import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.domain.cost.CostCalculator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.sync.Mutex
@@ -61,6 +62,7 @@ class AutoserviceChargingDetector @Inject constructor(
     private val stateStore: ChargingStateStore,
     private val classifier: ChargingTypeClassifier,
     private val settings: SettingsRepository,
+    private val costCalculator: CostCalculator,
     private val parsReader: ParsReader,
     private val journal: CatchUpJournal
 ) {
@@ -451,8 +453,8 @@ class AutoserviceChargingDetector @Inject constructor(
             val type = classifier.fromGunState(charging?.gunConnectState)
                 ?: classifier.fromObservedPowerKw(observedKwAbs)
                 ?: classifier.heuristicByPower(delta, elapsedHours)
-            val tariff = if (type == "DC") settings.getDcTariff() else settings.getHomeTariff()
-            val cost = delta * tariff
+            // Priced through the tariff period covering this session, losses included.
+            val cost = costCalculator.costForNewCharge(startTs = now, type = type, kwhCharged = delta)
 
             // Step 9: build ChargeEntity (lifetimeKwhAtStart/Finish null — legacy columns only)
             val charge = ChargeEntity(

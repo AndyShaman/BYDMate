@@ -112,6 +112,25 @@
     <string name="settings_tariff_future_note">Новы тарыф ужываецца да будучых паездак.\nУжо палічаныя паездкі не зменяцца.</string>
     <string name="settings_recalc_all_button">Пералічыць усе паездкі</string>
     <string name="settings_recalc_note">Пералічыць кошт усіх паездак\nпа бягучым тарыфе.</string>
+    <string name="settings_tariff_periods_title">Тарыфы і перыяды</string>
+    <string name="settings_tariff_periods_button">Адкрыць</string>
+    <string name="settings_tariff_periods_hint">Дадайце перыяд з патрэбнай датай, і ўсё пасля яе пералічыцца само.</string>
+    <string name="settings_tariff_periods_empty">Перыяд не зададзены</string>
+    <string name="settings_tariff_periods_summary">дом %1$s, DC %2$s %3$s/кВт·гадз, страты %4$s%% / %5$s%%</string>
+    <string name="settings_tariff_periods_summary_since">з %1$s: %2$s</string>
+    <string name="settings_tariff_period_add">Дадаць перыяд</string>
+    <string name="settings_tariff_period_delete">Выдаліць перыяд</string>
+    <string name="settings_tariff_period_start_label">Дзейнічае з</string>
+    <string name="settings_tariff_period_date_taken">На гэтую дату ўжо ёсць перыяд, выберыце іншую дату.</string>
+    <string name="settings_tariff_period_from_start">з пачатку гісторыі</string>
+    <string name="settings_tariff_loss_ac_label" formatted="false">Страты AC, %</string>
+    <string name="settings_tariff_loss_dc_label" formatted="false">Страты DC, %</string>
+    <string name="settings_tariff_loss_hint">Ацэнка. Каб удакладніць, упішыце паказанне лічыльніка ў картцы зарадкі.</string>
+    <string name="settings_tariff_losses_measured">Вашы страты па лічыльніку: AC %1$s%% (%2$d), DC %3$s%% (%4$d)</string>
+    <string name="settings_tariff_rule_home">Дом</string>
+    <string name="settings_tariff_rule_dc">DC</string>
+    <string name="settings_tariff_rule_charges">Па зарадках</string>
+    <string name="settings_tariff_recalc_done">Пералічана: зарадак %1$d, паездак %2$d</string>
     <string name="settings_consumption_section_header">Парогі расходу</string>
     <string name="settings_consumption_good_label">Добры &lt; (кВт·гадз/100км)</string>
     <string name="settings_consumption_bad_label">Дрэнны &gt; (кВт·гадз/100км)</string>
@@ -333,6 +352,10 @@
     <string name="charges_edit_cost_label">Кошт:</string>
     <string name="charges_edit_tariff_label">%1$s/кВт·гадз:</string>
     <string name="charges_edit_save_button">Захаваць</string>
+    <string name="charges_edit_meter_label">Лічыльнік:</string>
+    <string name="charges_edit_meter_used">лічым па лічыльніку</string>
+    <string name="charges_edit_loss_estimate">са стратамі %1$.0f%%</string>
+    <string name="charges_edit_follow_period">Лічыць па перыядзе</string>
 
     <!-- Automation screen -->
     <string name="automation_tab_title">Аўтаматызацыя</string>

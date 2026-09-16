@@ -388,7 +388,9 @@ class LogRecorder internal constructor(
             // Consumption-vs-temperature screen: one line per open with the sample counts.
             "TripTemperature:*",
             // Trip recorder: open/close lines carry the outside temperature of both ends.
-            "TripRecorder:*"
+            "TripRecorder:*",
+            // Tariff periods: period saves, recalculation totals and the per-trip price choice.
+            "TARIFF:*"
         )
     }
 }

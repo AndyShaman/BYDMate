@@ -19,6 +19,7 @@ class AutoserviceChargingDetectorOnSampleTest {
             stateStore = mockk(relaxed = true),
             classifier = mockk(relaxed = true),
             settings = mockk(relaxed = true),
+            costCalculator = mockk(relaxed = true),
             parsReader = mockk<ParsReader>(relaxed = true),
             journal = mockk(relaxed = true),
         )
