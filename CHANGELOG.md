@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.17.0] - 2026-09-16
+
 ### Новое
 - Тарифы стали историей цен: в настройках «Тарифы и периоды» открываются отдельным окном, в каждом периоде своя дата начала, цена дома и на быстрых зарядках, потери и правило расчёта поездок
 - Тариф можно поменять задним числом: добавьте период с нужной датой, и все зарядки и поездки после неё пересчитаются сами
@@ -1120,7 +1122,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.16.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...HEAD
+[3.17.0]: https://github.com/AndyShaman/BYDMate/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/AndyShaman/BYDMate/compare/v3.15.5...v3.16.0
 [3.15.5]: https://github.com/AndyShaman/BYDMate/compare/v3.15.4...v3.15.5
 [3.15.4]: https://github.com/AndyShaman/BYDMate/compare/v3.15.3...v3.15.4
