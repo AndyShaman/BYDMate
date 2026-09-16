@@ -1,6 +1,12 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.repository.equivalentFullCycles
+import java.text.DecimalFormat
+import java.text.DecimalFormatSymbols
+import java.text.NumberFormat
+import java.util.Locale
 import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Scale and threshold maths behind the small graphics on the «Техника» screen, kept out of the
@@ -40,6 +46,31 @@ internal object TechPanelVisuals {
      * Marks the tyres whose pressure is more than 10% off the average of the reported ones.
      * With fewer than two readings there is nothing to compare against, so nothing is flagged.
      */
+    /** Ready-to-draw parts of the «Полных циклов» row: «87» plus «6 340 кВт·ч ÷ 72,9». */
+    data class FullCycles(val value: String, val totalKwh: String, val capacity: String)
+
+    /**
+     * Full charge cycles of the pack, from the same lifetime kWh the «Зарядки» screen sums.
+     * Null while the app has not seen a single charging session — there is nothing to divide
+     * yet, and a «0» would read as a measured value. Grouping and the decimal separator follow
+     * the device locale, like every other number on this screen.
+     */
+    fun fullCycles(
+        totalKwhAdded: Double?,
+        nominalCapacityKwh: Double,
+        locale: Locale = Locale.getDefault(),
+    ): FullCycles? {
+        if (totalKwhAdded == null || totalKwhAdded <= 0.0 || nominalCapacityKwh <= 0.0) return null
+        val cycles = equivalentFullCycles(totalKwhAdded, nominalCapacityKwh)
+        val kwh = NumberFormat.getIntegerInstance(locale)
+        val capacity = DecimalFormat("0.#", DecimalFormatSymbols.getInstance(locale))
+        return FullCycles(
+            value = cycles.roundToInt().toString(),
+            totalKwh = kwh.format(totalKwhAdded),
+            capacity = capacity.format(nominalCapacityKwh),
+        )
+    }
+
     fun tyreDeviates(pressures: List<Int?>): List<Boolean> {
         val known = pressures.filterNotNull()
         if (known.size < 2) return List(pressures.size) { false }

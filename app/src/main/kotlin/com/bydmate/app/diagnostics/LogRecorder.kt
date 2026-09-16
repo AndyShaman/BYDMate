@@ -381,7 +381,14 @@ class LogRecorder internal constructor(
             // Firmware fid catalog: where it came from and every address it moved.
             "FidCatalog:*",
             // Agent wave: one line per model round, tool call and finished turn.
-            "AgentLoop:*"
+            "AgentLoop:*",
+            // Auto-«Поехали»: the click on the Navigator's route preview (ActionDispatcher
+            // carries the split exit/restore and the wait lines around it).
+            "NaviGoButton:*",
+            // Consumption-vs-temperature screen: one line per open with the sample counts.
+            "TripTemperature:*",
+            // Trip recorder: open/close lines carry the outside temperature of both ends.
+            "TripRecorder:*"
         )
     }
 }

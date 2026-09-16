@@ -154,8 +154,6 @@
     <string name="settings_abrp_telemetry_label">Живые данные -> A Better Route Planner</string>
     <string name="settings_abrp_telemetry_description">Живые данные (SOC, мощность, температуры, одометр, давление шин) отправляются в Iternio Telemetry API для актуального плана в ABRP. GPS по умолчанию не передаётся.</string>
     <string name="settings_abrp_token_label">Токен живых данных из ABRP</string>
-    <string name="settings_abrp_location_label">Отправлять координаты в ABRP</string>
-    <string name="settings_abrp_location_description">Добавляет GPS-позицию и курс машины в телеметрию. По умолчанию выключено: ABRP на ДиЛинке читает координаты сам. Включите, если стрелка машины в ABRP отстаёт от реального положения.</string>
     <string name="settings_abrp_save_button">Сохранить ABRP</string>
     <string name="settings_webhook_section_header">Вебхук - телеметрия</string>
     <string name="settings_webhook_label">Живые данные -> свой сервер</string>
@@ -477,6 +475,12 @@
     <string name="toggle_target_sunroof">Люк</string>
     <string name="toggle_target_locks">Замки дверей</string>
     <string name="toggle_target_cluster">Вывод на приборку</string>
+    <string name="toggle_target_hazard">Аварийка</string>
+    <string name="toggle_target_climate">Климат</string>
+    <string name="toggle_target_seat_heat_driver">Подогрев сиденья водителя</string>
+    <string name="toggle_target_seat_heat_passenger">Подогрев сиденья пассажира</string>
+    <string name="toggle_target_seat_vent_driver">Обдув сиденья водителя</string>
+    <string name="toggle_target_seat_vent_passenger">Обдув сиденья пассажира</string>
     <string name="toggle_state_unknown">%1$s: состояние неизвестно</string>
     <string name="toggle_trunk_moving">Багажник движется</string>
     <string name="toggle_unknown_target">Неизвестная цель переключения: %1$s</string>
@@ -1497,6 +1501,9 @@
     <string name="tech_card_history">Батарея · история</string>
     <string name="tech_label_hv_voltage">напряжение HV</string>
     <string name="tech_label_power">мощность</string>
+    <string name="tech_label_full_cycles">Полных циклов</string>
+    <string name="tech_caption_full_cycles">%1$s кВт·ч ÷ %2$s</string>
+    <string name="tech_caption_full_cycles_empty">появится после первой зарядки</string>
     <string name="tech_label_battery_power">мощность батареи</string>
     <string name="tech_label_max_charge">макс. мощность заряда</string>
     <string name="tech_label_max_discharge">доступная мощность батареи</string>
@@ -1550,4 +1557,23 @@
     <string name="tech_hint_compressor">Сколько ватт потребляет компрессор кондиционера и теплового насоса. Это главный потребитель кроме моторов: летом в жару и зимой в мороз он заметно съедает запас хода.</string>
     <string name="tech_hint_tyres">Давление и температура каждого колеса от датчиков в шинах. Давление растёт на 0,2…0,3 бар по мере прогрева в поездке, это нормально. Одно колесо заметно ниже других: проверьте, не спускает ли.</string>
     <string name="tech_order_hint">Удерживайте карточку, чтобы поменять порядок</string>
+    <string name="trips_temp_chip">Температура</string>
+    <string name="trips_temp_title">Расход и температура</string>
+    <string name="trips_temp_period_all">за всё время</string>
+    <string name="trips_temp_card_chart">РАСХОД ПРОТИВ ТЕМПЕРАТУРЫ</string>
+    <string name="trips_temp_card_stats">ЦИФРЫ</string>
+    <string name="trips_temp_not_enough">График появится, когда наберётся %1$d поездок с температурой: пока %2$d</string>
+    <string name="trips_temp_narrow_note">Пока все поездки при %1$s…%2$s °C</string>
+    <string name="trips_temp_count">Поездок с температурой</string>
+    <string name="trips_temp_median_cold">Медиана при &lt; 0 °C</string>
+    <string name="trips_temp_median_mild">Медиана при 0…+15 °C</string>
+    <string name="trips_temp_median_warm">Медиана при &gt; +15 °C</string>
+    <string name="trips_temp_winter_diff">Разница зима/лето</string>
+    <string name="trips_temp_percent">%1$s%%</string>
+    <string name="trips_temp_kwh_per_100">%1$.1f кВт·ч/100км</string>
+    <string name="trips_temp_verdict_header">ВЫВОД</string>
+    <string name="trips_temp_verdict_winter">В холод расход выше, чем в тепло, на %1$d%%. Это нормально — зимой заряжайте с запасом.</string>
+    <string name="trips_temp_verdict_not_higher">В холод расход не выше, чем в тепло (разница %1$s%%). Зимней надбавки по вашим поездкам пока не видно.</string>
+    <string name="trips_temp_verdict_narrow">Пока все поездки при %1$s…%2$s °C — сравнить с холодом или жарой пока не с чем.</string>
+    <string name="trips_temp_verdict_none">Пока сравнивать не с чем: нужны поездки и в холод, и в тепло.</string>
 </resources>

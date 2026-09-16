@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.After
+import org.junit.Before
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -76,6 +77,12 @@ class ActionDispatcherToggleTest {
 
     @After fun restoreLiveSnapshot() {
         dispatcher.liveSnapshot = defaultLiveSnapshot
+    }
+
+    /** The seat memory lives in prefs; each test starts from the untaught default. */
+    @Before fun clearSeatMemory() {
+        app.getSharedPreferences("seat_level_memory", android.content.Context.MODE_PRIVATE)
+            .edit().clear().commit()
     }
 
     private val defaultLiveSnapshot = dispatcher.liveSnapshot
@@ -227,6 +234,98 @@ class ActionDispatcherToggleTest {
         val result = dispatcher.dispatch(toggle("hood"), snapshot())
         assertFalse(result.success)
         assertEquals(app.appLocalizedContext().getString(R.string.toggle_unknown_target, "hood"), result.reason)
+        coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
+    }
+
+    // ── hazard lights ───────────────────────────────────────────────────────────
+
+    @Test fun `running hazard lights are switched off`() = runTest {
+        assertTrue(dispatcher.dispatch(toggle("hazard"), snapshot().copy(turnSignal = 6)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("双闪关闭") }
+    }
+
+    /** Off, a turn signal or an unknown mask all mean «not blinking both sides» — turn them on. */
+    @Test fun `anything but the hazard mask switches them on`() = runTest {
+        assertTrue(dispatcher.dispatch(toggle("hazard"), snapshot().copy(turnSignal = 1)).success)
+        assertTrue(dispatcher.dispatch(toggle("hazard"), snapshot().copy(turnSignal = 4)).success)
+        coVerify(exactly = 2) { vehicleApi.dispatch("双闪打开") }
+    }
+
+    @Test fun `hazard without a reading is refused`() = runTest {
+        val result = dispatcher.dispatch(toggle("hazard"), snapshot().copy(turnSignal = null))
+        assertFalse(result.success)
+        assertEquals(stateUnknown(R.string.toggle_target_hazard), result.reason)
+        coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
+    }
+
+    // ── climate ─────────────────────────────────────────────────────────────────
+
+    @Test fun `running climate is switched off and a stopped one goes to auto`() = runTest {
+        assertTrue(dispatcher.dispatch(toggle("climate"), snapshot().copy(acStatus = 1)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("关闭空调") }
+
+        assertTrue(dispatcher.dispatch(toggle("climate"), snapshot().copy(acStatus = 0)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("自动空调") }
+    }
+
+    @Test fun `climate without a reading is refused`() = runTest {
+        val result = dispatcher.dispatch(toggle("climate"), snapshot().copy(acStatus = null))
+        assertFalse(result.success)
+        assertEquals(stateUnknown(R.string.toggle_target_climate), result.reason)
+    }
+
+    // ── seats ───────────────────────────────────────────────────────────────────
+
+    @Test fun `a heating driver seat is switched off`() = runTest {
+        assertTrue(dispatcher.dispatch(toggle("seat_heat_driver"), snapshot().copy(seatHeatDriver = 2)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("主驾座椅加热关闭") }
+    }
+
+    /** Without a step of their own the driver gets the middle one. */
+    @Test fun `a cold driver seat comes back at the default step`() = runTest {
+        assertTrue(dispatcher.dispatch(toggle("seat_heat_driver"), snapshot().copy(seatHeatDriver = 0)).success)
+        coVerify(exactly = 1) { vehicleApi.dispatch("主驾座椅加热3档") }
+    }
+
+    /** The step the driver asked for last is the one the toggle brings back. */
+    @Test fun `the remembered step is used when the seat comes back on`() = runTest {
+        dispatcher.dispatch(
+            ActionDef(command = "主驾座椅加热5档", displayName = "", kind = "param"),
+            snapshot(),
+        )
+        assertTrue(dispatcher.dispatch(toggle("seat_heat_driver"), snapshot().copy(seatHeatDriver = 0)).success)
+        // Twice: the command that taught the memory, then the one the toggle resolved to.
+        coVerify(exactly = 2) { vehicleApi.dispatch("主驾座椅加热5档") }
+    }
+
+    /** Each seat and each function remembers its own step. */
+    @Test fun `ventilation and the passenger seat keep their own memory`() = runTest {
+        dispatcher.dispatch(
+            ActionDef(command = "副驾座椅通风1档", displayName = "", kind = "param"),
+            snapshot(),
+        )
+        assertTrue(
+            dispatcher.dispatch(toggle("seat_vent_passenger"), snapshot().copy(seatVentPassenger = 0)).success
+        )
+        coVerify(exactly = 2) { vehicleApi.dispatch("副驾座椅通风1档") }
+
+        assertTrue(
+            dispatcher.dispatch(toggle("seat_vent_driver"), snapshot().copy(seatVentDriver = 0)).success
+        )
+        coVerify(exactly = 1) { vehicleApi.dispatch("主驾座椅通风3档") }
+    }
+
+    @Test fun `a blowing passenger seat is switched off`() = runTest {
+        assertTrue(
+            dispatcher.dispatch(toggle("seat_vent_passenger"), snapshot().copy(seatVentPassenger = 4)).success
+        )
+        coVerify(exactly = 1) { vehicleApi.dispatch("副驾座椅通风关闭") }
+    }
+
+    @Test fun `a seat without a reading is refused`() = runTest {
+        val result = dispatcher.dispatch(toggle("seat_heat_passenger"), snapshot().copy(seatHeatPassenger = null))
+        assertFalse(result.success)
+        assertEquals(stateUnknown(R.string.toggle_target_seat_heat_passenger), result.reason)
         coVerify(exactly = 0) { vehicleApi.dispatch(any()) }
     }
 }

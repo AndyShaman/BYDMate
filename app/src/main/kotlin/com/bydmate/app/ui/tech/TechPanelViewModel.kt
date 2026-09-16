@@ -2,6 +2,7 @@ package com.bydmate.app.ui.tech
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryStateRepository
@@ -74,6 +75,10 @@ data class TechPanelUiState(
     val lifetimeKwh: Float? = null,
     val avgSocSinceCharge: Int? = null,
     val avgSocAllTime: Int? = null,
+    /** Everything the app has ever seen charged into the pack, kWh; null until the first session. */
+    val lifetimeChargedKwh: Double? = null,
+    /** Pack size from settings, the divisor of the full-cycle count. */
+    val nominalCapacityKwh: Double = 0.0,
 ) {
     val cellDelta: Double?
         get() = if (cellMin != null && cellMax != null) cellMax - cellMin else null
@@ -140,6 +145,7 @@ class TechPanelViewModel @Inject constructor(
     private val batteryStateRepository: BatteryStateRepository,
     private val avgSocProvider: AvgSocProvider,
     private val settingsRepository: SettingsRepository,
+    private val chargeRepository: ChargeRepository,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(TechPanelUiState())
@@ -150,6 +156,7 @@ class TechPanelViewModel @Inject constructor(
         viewModelScope.launch { loadBatteryState() }
         viewModelScope.launch { loadAvgSoc() }
         viewModelScope.launch { loadCardOrder() }
+        viewModelScope.launch { loadFullCycles() }
     }
 
     /** One open hint at a time: tapping the open one closes it, any other replaces it. */
@@ -247,6 +254,18 @@ class TechPanelViewModel @Inject constructor(
                     lifetimeKwh = state.lifetimeKwh,
                 )
             }
+        }
+    }
+
+    /**
+     * Lifetime charged kWh for the «Полных циклов» row — the same repository sum the «Зарядки»
+     * screen divides, read once on open. A car with no logged session keeps the dash.
+     */
+    private suspend fun loadFullCycles() {
+        val nominal = runCatching { settingsRepository.getBatteryCapacity() }.getOrNull() ?: return
+        val stats = runCatching { chargeRepository.getLifetimeStats() }.getOrNull()
+        _uiState.update {
+            it.copy(lifetimeChargedKwh = stats?.totalKwhAdded, nominalCapacityKwh = nominal)
         }
     }
 

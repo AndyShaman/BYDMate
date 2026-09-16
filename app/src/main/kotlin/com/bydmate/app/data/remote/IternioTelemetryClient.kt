@@ -12,6 +12,8 @@ import okhttp3.Request
 import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.round
 
 /**
  * Sends live vehicle telemetry to the legacy Iternio Telemetry API
@@ -54,6 +56,14 @@ class IternioTelemetryClient @Inject constructor(
         // anything beyond is a sentinel or Parcel parse glitch.
         private const val POWER_MIN_KW = -300
         private const val POWER_MAX_KW = 500
+        // Traction-battery envelope on a 400 V pack. Below 200 V the reading is a sentinel or a
+        // BMS that is not talking, not a live bus.
+        private const val HV_VOLT_MIN = 200
+        private const val HV_VOLT_MAX = 900
+        private const val HV_AMP_MAX = 2000.0
+        // Climate set point range of the DiLink dial; anything outside is not a set point.
+        private const val HVAC_SETPOINT_MIN = 15
+        private const val HVAC_SETPOINT_MAX = 32
     }
 
     /**
@@ -84,12 +94,10 @@ class IternioTelemetryClient @Inject constructor(
      *                    plots samples at the moment of measurement, not at
      *                    the moment our HTTP call lands. Defaults to now when
      *                    null (call-time fallback).
-     * @param latitude Optional GPS latitude. Sent only together with [longitude];
-     *                 the caller passes coordinates only when the user enabled the
-     *                 opt-in Settings toggle (default OFF).
-     * @param longitude Optional GPS longitude, see [latitude].
-     * @param headingDeg Optional course over ground in degrees; sent only when
-     *                   both coordinates are present.
+     *
+     * NO position is ever part of this payload (wave 2026-09-16): ABRP merges a telemetry
+     * position with the GPS it reads on the head unit itself, and the car marker jumps between
+     * the two sources (ABRP tickets, June 2026). ABRP on DiLink reads GPS itself.
      */
     suspend fun send(
         apiKey: String,
@@ -101,9 +109,6 @@ class IternioTelemetryClient @Inject constructor(
         carModel: String?,
         enginePowerKw: Int? = null,
         sampleTimeMs: Long? = null,
-        latitude: Double? = null,
-        longitude: Double? = null,
-        headingDeg: Double? = null,
     ): Result<Unit> = withContext(Dispatchers.IO) {
         val token = userToken.trim()
         if (token.isEmpty()) return@withContext Result.failure(IllegalArgumentException("пустой токен"))
@@ -116,9 +121,6 @@ class IternioTelemetryClient @Inject constructor(
                 carModel = carModel,
                 enginePowerKw = enginePowerKw,
                 sampleTimeMs = sampleTimeMs,
-                latitude = latitude,
-                longitude = longitude,
-                headingDeg = headingDeg,
             )
         } catch (e: Exception) {
             Log.w(TAG, "отправка не удалась: ${e.message}")
@@ -145,9 +147,6 @@ class IternioTelemetryClient @Inject constructor(
         carModel: String?,
         enginePowerKw: Int? = null,
         sampleTimeMs: Long? = null,
-        latitude: Double? = null,
-        longitude: Double? = null,
-        headingDeg: Double? = null,
     ): JSONObject? {
         val soc = data.soc ?: return null
 
@@ -165,14 +164,32 @@ class IternioTelemetryClient @Inject constructor(
         // shows up as `power_source=zero_fallback`, distinct from a
         // genuine 0 kW snapshot during coast/standstill.
         val sanePower = enginePowerKw?.takeIf { it in POWER_MIN_KW..POWER_MAX_KW }
-        val powerKw: Double = sanePower?.toDouble() ?: data.power ?: 0.0
+        val isChargingNow = isCharging(data, charging)
+        // Traction battery V/A. Our hvCurrent already follows the Iternio convention —
+        // discharge positive, charge negative (FidMap: «negative = charging», #153) — so the
+        // reading goes out as it is read.
+        val hvVolt = data.hvVoltage?.takeIf { it in HV_VOLT_MIN..HV_VOLT_MAX }
+        val hvAmp = data.hvCurrent?.takeIf { it.isFinite() && abs(it) <= HV_AMP_MAX }
+        // ENG_POW is the MOTOR, so it reads 0 on a charging car. With V and A in hand the real
+        // input power is known, and Iternio wants input negative.
+        val chargePowerKw = if (isChargingNow && hvVolt != null && hvAmp != null) {
+            -(abs(hvVolt * hvAmp) / 1000.0).let { kw -> round(kw * 10) / 10 }
+        } else null
+        val powerKw: Double = chargePowerKw ?: sanePower?.toDouble() ?: data.power ?: 0.0
         val powerSource = when {
+            chargePowerKw != null -> "hv_charging"
             sanePower != null -> "autoservice"
             data.power != null -> "diplus"
             else -> "zero_fallback"
         }
         telemetry.put("power", powerKw)
-        Log.d(TAG, "power=$powerKw source=$powerSource")
+        hvVolt?.let { telemetry.put("voltage", it) }
+        hvAmp?.let { telemetry.put("current", it) }
+        // Climate set point — what the driver asked for, not the cabin reading.
+        data.acTemp?.takeIf { it in HVAC_SETPOINT_MIN..HVAC_SETPOINT_MAX }?.let {
+            telemetry.put("hvac_setpoint", it)
+        }
+        Log.d(TAG, "power=$powerKw source=$powerSource hv=$hvVolt/$hvAmp")
 
         data.avgBatTemp?.let { telemetry.put("batt_temp", it) }
         data.exteriorTemp?.let { telemetry.put("ext_temp", it) }
@@ -184,14 +201,7 @@ class IternioTelemetryClient @Inject constructor(
         data.tirePressRL?.let { telemetry.put("tire_pressure_rl", it) }
         data.tirePressRR?.let { telemetry.put("tire_pressure_rr", it) }
 
-        // GPS opt-in: both coordinates or nothing; a lone heading is useless to ABRP.
-        if (latitude != null && longitude != null) {
-            telemetry.put("lat", latitude)
-            telemetry.put("lon", longitude)
-            headingDeg?.let { telemetry.put("heading", it) }
-        }
-
-        telemetry.put("is_charging", if (isCharging(data, charging)) 1 else 0)
+        telemetry.put("is_charging", if (isChargingNow) 1 else 0)
         data.gear?.let { telemetry.put("is_parked", if (it == 1) 1 else 0) }
 
         // Autoservice-only enrichment — Leopard 3 etc. SoH lets ABRP derate

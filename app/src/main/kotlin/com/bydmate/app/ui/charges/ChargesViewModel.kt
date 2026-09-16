@@ -10,6 +10,7 @@ import com.bydmate.app.data.local.dao.ChargeSummary
 import com.bydmate.app.data.local.entity.ChargeEntity
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.data.repository.equivalentFullCycles
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -311,7 +312,7 @@ class ChargesViewModel @Inject constructor(
             val stats = runCatching { chargeRepository.getLifetimeStats() }.getOrNull()
                 ?: return@launch
             val nominal = _uiState.value.nominalCapacityKwh
-            val equiv = if (nominal > 0) stats.totalKwhAdded / nominal else 0.0
+            val equiv = equivalentFullCycles(stats.totalKwhAdded, nominal)
             _uiState.update {
                 it.copy(
                     lifetimeAcKwh = stats.acKwh,

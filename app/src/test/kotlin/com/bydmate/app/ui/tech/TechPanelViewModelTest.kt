@@ -5,6 +5,8 @@ import com.bydmate.app.data.nativestack.motorSplitPercent
 import com.bydmate.app.domain.battery.AvgSoc
 import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
+import com.bydmate.app.data.repository.ChargeRepository
+import com.bydmate.app.data.repository.LifetimeChargingStats
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
@@ -84,6 +86,8 @@ class TechPanelViewModelTest {
     private fun buildViewModel(
         battery: BatteryState? = null,
         avg: AvgSoc = AvgSoc(null, null),
+        lifetimeCharged: LifetimeChargingStats? = null,
+        capacityKwh: Double = 72.9,
     ): TechPanelViewModel {
         val repo = mockk<BatteryStateRepository>()
         coEvery { repo.refresh() } returns (
@@ -91,7 +95,12 @@ class TechPanelViewModelTest {
             )
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns avg
-        return scoped(TechPanelViewModel(repo, avgProvider, settings()))
+        val charges = mockk<ChargeRepository>()
+        coEvery { charges.getLifetimeStats() } returns (
+            lifetimeCharged ?: LifetimeChargingStats(0.0, 0.0, 0.0, 0)
+            )
+        val settings = settings().also { coEvery { it.getBatteryCapacity() } returns capacityKwh }
+        return scoped(TechPanelViewModel(repo, avgProvider, settings, charges))
     }
 
     // --- null mapping -------------------------------------------------------
@@ -175,7 +184,7 @@ class TechPanelViewModelTest {
         val avgProvider = mockk<AvgSocProvider>()
         coEvery { avgProvider.compute(any()) } returns AvgSoc(null, null)
 
-        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings()))
+        val vm = scoped(TechPanelViewModel(repo, avgProvider, settings(), mockk(relaxed = true)))
         testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(false, vm.uiState.value.autoserviceOnline)
@@ -364,5 +373,20 @@ class TechPanelViewModelTest {
             soc = 43,
         )
         assertEquals(listOf(TechCard.MOTORS, TechCard.BATTERY_NOW), state.visibleCards)
+    }
+
+    // --- full cycles --------------------------------------------------------
+
+    /** The row divides the logged charging sum by the pack size from settings. */
+    @Test
+    fun `lifetime charged kWh and the pack size reach the state`() = runTest {
+        val vm = buildViewModel(
+            lifetimeCharged = LifetimeChargingStats(totalKwhAdded = 6340.0, acKwh = 6000.0, dcKwh = 340.0, sessionCount = 90),
+            capacityKwh = 72.9,
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(6340.0, vm.uiState.value.lifetimeChargedKwh!!, 1e-9)
+        assertEquals(72.9, vm.uiState.value.nominalCapacityKwh, 1e-9)
     }
 }

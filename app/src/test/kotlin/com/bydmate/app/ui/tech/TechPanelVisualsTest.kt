@@ -2,7 +2,9 @@ package com.bydmate.app.ui.tech
 
 import com.bydmate.app.ui.tech.TechPanelVisuals.TempZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Test
+import java.util.Locale
 
 class TechPanelVisualsTest {
 
@@ -66,5 +68,30 @@ class TechPanelVisualsTest {
             listOf(false, false, false, false),
             TechPanelVisuals.tyreDeviates(listOf(180, null, null, null)),
         )
+    }
+
+    // --- full cycles ---
+
+    @Test
+    fun `full cycles round the quotient and show the sum they came from`() {
+        val cycles = TechPanelVisuals.fullCycles(6340.0, 72.9, Locale("ru"))!!
+        assertEquals("87", cycles.value)
+        assertEquals("6 340", cycles.totalKwh.replace('\u00A0', ' '))
+        assertEquals("72,9", cycles.capacity)
+    }
+
+    @Test
+    fun `full cycles follow the locale separators`() {
+        val cycles = TechPanelVisuals.fullCycles(6340.0, 72.9, Locale.US)!!
+        assertEquals("87", cycles.value)
+        assertEquals("6,340", cycles.totalKwh)
+        assertEquals("72.9", cycles.capacity)
+    }
+
+    @Test
+    fun `no charging session and no pack size leave the row empty`() {
+        assertNull(TechPanelVisuals.fullCycles(null, 72.9, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(0.0, 72.9, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(6340.0, 0.0, Locale.US))
     }
 }

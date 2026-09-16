@@ -110,7 +110,9 @@ class TripTracker @Inject constructor(
                     timestamp = now,
                     lat = location.latitude,
                     lon = location.longitude,
-                    speedKmh = speed.toDouble()
+                    speedKmh = speed.toDouble(),
+                    // Elevation is stored for a later climb correction; nothing reads it yet.
+                    altitude = if (location.hasAltitude()) location.altitude else null,
                 )
             )
             if (pendingPoints.size % 10 == 1) {

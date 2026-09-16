@@ -250,7 +250,9 @@ fun AppNavigation(
             composable(Screen.Dashboard.route) {
                 DashboardScreen(onOpenTechPanel = { navController.navigate("tech_panel") })
             }
-            composable(Screen.Trips.route) { TripsScreen() }
+            composable(Screen.Trips.route) {
+                TripsScreen(onOpenTemperature = { navController.navigate("trip_temperature") })
+            }
             composable(Screen.Charges.route) {
                 ChargesScreen(onNavigateSettings = { navController.navigate(Screen.Settings.route) })
             }
@@ -260,6 +262,9 @@ fun AppNavigation(
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },
                     onNavigateToVoiceJournal = { navController.navigate("voice_journal") },
                 )
+            }
+            composable("trip_temperature") {
+                com.bydmate.app.ui.trips.TripTemperatureScreen(onBack = { navController.popBackStack() })
             }
             composable("tech_panel") {
                 com.bydmate.app.ui.tech.TechPanelScreen(onBack = { navController.popBackStack() })

@@ -68,6 +68,14 @@ class ActionDispatcher @Inject constructor(
         private val BLOCKED_PATTERNS = listOf("发送CAN", "执行SHELL", "下电")
 
         /**
+         * Did the driver ask to START moving («поехали туда»), not just to build the route?
+         * Show-only ("где находится X") drops a pin and has nothing to start, so it ignores
+         * the flag. Pure -- unit-testable without Android.
+         */
+        internal fun autoGoRequested(payload: JSONObject): Boolean =
+            payload.optBoolean("go", false) && !payload.optBoolean("show", false)
+
+        /**
          * True if [command] would OPEN a side window (车窗/主驾/副驾/后左/后右) --
          * gated above 120 km/h. Sunroof (天窗) and sunshade (遮阳帘) are NOT
          * included: sunroof has its own lower threshold, sunshade is interior and
@@ -207,10 +215,19 @@ class ActionDispatcher @Inject constructor(
         internal const val TOGGLE_SUNROOF = "sunroof"
         internal const val TOGGLE_LOCKS = "locks"
         internal const val TOGGLE_CLUSTER = "cluster"
+        internal const val TOGGLE_HAZARD = "hazard"
+        internal const val TOGGLE_CLIMATE = "climate"
+        internal const val TOGGLE_SEAT_HEAT_DRIVER = "seat_heat_driver"
+        internal const val TOGGLE_SEAT_HEAT_PASSENGER = "seat_heat_passenger"
+        internal const val TOGGLE_SEAT_VENT_DRIVER = "seat_vent_driver"
+        internal const val TOGGLE_SEAT_VENT_PASSENGER = "seat_vent_passenger"
 
         /** Targets a "toggle" action can flip, in picker order. */
         internal val TOGGLE_TARGETS = listOf(
             TOGGLE_TRUNK, TOGGLE_FRONT_TRUNK, TOGGLE_SUNROOF, TOGGLE_LOCKS, TOGGLE_CLUSTER,
+            TOGGLE_HAZARD, TOGGLE_CLIMATE,
+            TOGGLE_SEAT_HEAT_DRIVER, TOGGLE_SEAT_HEAT_PASSENGER,
+            TOGGLE_SEAT_VENT_DRIVER, TOGGLE_SEAT_VENT_PASSENGER,
         )
 
         /** Localized name of a toggle target; null when the id is not a known target. */
@@ -220,6 +237,12 @@ class ActionDispatcher @Inject constructor(
             TOGGLE_SUNROOF -> R.string.toggle_target_sunroof
             TOGGLE_LOCKS -> R.string.toggle_target_locks
             TOGGLE_CLUSTER -> R.string.toggle_target_cluster
+            TOGGLE_HAZARD -> R.string.toggle_target_hazard
+            TOGGLE_CLIMATE -> R.string.toggle_target_climate
+            TOGGLE_SEAT_HEAT_DRIVER -> R.string.toggle_target_seat_heat_driver
+            TOGGLE_SEAT_HEAT_PASSENGER -> R.string.toggle_target_seat_heat_passenger
+            TOGGLE_SEAT_VENT_DRIVER -> R.string.toggle_target_seat_vent_driver
+            TOGGLE_SEAT_VENT_PASSENGER -> R.string.toggle_target_seat_vent_passenger
             else -> null
         }
 
@@ -241,22 +264,59 @@ class ActionDispatcher @Inject constructor(
          *   frontTrunk  2=closed, 1=open, 3=moving (measured on-car 2026-09-15)
          *   sunroof     aperture percent, 0=closed
          *   lockFL      1=unlocked, 2=locked
+         *   turnSignal  6=hazard on (the mask holds while it blinks), anything else = off
+         *   acStatus    0=off, 1=on
+         *   seat steps  0=off, 1..5=level
          * The cluster target has no snapshot field and is resolved by the caller.
+         * [lastSeatLevel] is the step a seat is turned back on with; it only matters for the
+         * seat targets, where the snapshot says «off» but not «off from which step».
          */
-        internal fun resolveToggleCommand(target: String, state: Int?): ToggleResolution {
+        internal fun resolveToggleCommand(
+            target: String,
+            state: Int?,
+            lastSeatLevel: Int = SeatLevelMemory.DEFAULT_LEVEL,
+        ): ToggleResolution {
             if (target !in TOGGLE_TARGETS || target == TOGGLE_CLUSTER) {
                 return ToggleResolution.UnknownTarget
             }
             val value = state ?: return ToggleResolution.StateUnknown
+            SeatLevelMemory.SEAT_COMMAND_PREFIX[target]?.let { prefix ->
+                return resolveSeatToggle(value, prefix, lastSeatLevel)
+            }
             return when (target) {
                 TOGGLE_TRUNK -> resolveHatchToggle(value, "开后备箱", "关后备箱")
                 TOGGLE_FRONT_TRUNK -> resolveHatchToggle(value, "前备箱打开", "前备箱关闭")
                 TOGGLE_SUNROOF -> ToggleResolution.Command(
                     if (value == 0) "天窗打开100" else "天窗打开0"
                 )
+                TOGGLE_HAZARD -> ToggleResolution.Command(
+                    if (value == TURN_SIGNAL_HAZARD) "双闪关闭" else "双闪打开"
+                )
+                TOGGLE_CLIMATE -> resolveClimateToggle(value)
                 else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
             }
         }
+
+        /** Hazard blinkers: the turn-signal mask reads 6 while they run. */
+        private const val TURN_SIGNAL_HAZARD = 6
+
+        /** Climate: 1=on, 0=off; a firmware answering anything else is not reporting a state. */
+        private fun resolveClimateToggle(value: Int): ToggleResolution = when (value) {
+            1 -> ToggleResolution.Command("关闭空调")
+            0 -> ToggleResolution.Command("自动空调")
+            else -> ToggleResolution.StateUnknown
+        }
+
+        /**
+         * A seat running at any step goes off; a seat that is off comes back at [lastLevel] —
+         * the step the driver last asked for through the app, or the middle one.
+         */
+        private fun resolveSeatToggle(value: Int, prefix: String, lastLevel: Int): ToggleResolution =
+            when {
+                value > 0 -> ToggleResolution.Command("${prefix}关闭")
+                value == 0 -> ToggleResolution.Command("$prefix${lastLevel}档")
+                else -> ToggleResolution.StateUnknown
+            }
 
         /**
          * Hatch position (front and rear share the enum): 2=closed, 1=open; any other
@@ -363,6 +423,9 @@ class ActionDispatcher @Inject constructor(
     // Test seam: real impl asks MediaSessionManager for active sessions via our listener component.
     /** Test seam -- the freshest poll a "toggle" resolves its state against. */
     internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
+
+    /** Last seat step asked for per seat, so a «toggle» can bring the seat back to it. */
+    internal var seatLevelMemory = SeatLevelMemory(context)
 
     /** Test seam -- how long to wait for the cluster projection to actually come up. */
     internal var clusterPollIntervalMs = 500L
@@ -499,14 +562,9 @@ class ActionDispatcher @Inject constructor(
 
         if (target == TOGGLE_CLUSTER) return dispatchClusterToggle(action, live, src)
 
-        val state = when (target) {
-            TOGGLE_TRUNK -> live?.trunk
-            TOGGLE_FRONT_TRUNK -> live?.frontTrunk
-            TOGGLE_SUNROOF -> live?.sunroof
-            TOGGLE_LOCKS -> live?.lockFL
-            else -> null
-        }
-        return when (val resolution = resolveToggleCommand(target, state)) {
+        val state = toggleState(target, live)
+        val lastLevel = seatLevelMemory.lastLevel(target)
+        return when (val resolution = resolveToggleCommand(target, state, lastLevel)) {
             is ToggleResolution.Command -> {
                 Log.i(TAG, "toggle $target: src=$src state=$state -> ${resolution.command}")
                 dispatch(action.copy(command = resolution.command, kind = "param", payload = null), live)
@@ -520,6 +578,21 @@ class ActionDispatcher @Inject constructor(
                 DispatchResult(false, lc.getString(R.string.toggle_state_unknown, targetName))
             }
         }
+    }
+
+    /** Snapshot field each toggle target reads its current state from. */
+    private fun toggleState(target: String, live: DiParsData?): Int? = when (target) {
+        TOGGLE_TRUNK -> live?.trunk
+        TOGGLE_FRONT_TRUNK -> live?.frontTrunk
+        TOGGLE_SUNROOF -> live?.sunroof
+        TOGGLE_LOCKS -> live?.lockFL
+        TOGGLE_HAZARD -> live?.turnSignal
+        TOGGLE_CLIMATE -> live?.acStatus
+        TOGGLE_SEAT_HEAT_DRIVER -> live?.seatHeatDriver
+        TOGGLE_SEAT_HEAT_PASSENGER -> live?.seatHeatPassenger
+        TOGGLE_SEAT_VENT_DRIVER -> live?.seatVentDriver
+        TOGGLE_SEAT_VENT_PASSENGER -> live?.seatVentPassenger
+        else -> null
     }
 
     /**
@@ -675,6 +748,8 @@ class ActionDispatcher @Inject constructor(
         }
         val result = vehicleApi.dispatch(action.command)
         val success = result.isSuccess
+        // A seat step the driver asked for is the one a later «toggle» brings back.
+        if (success) seatLevelMemory.remember(action.command)
         val reason = if (!success) {
             result.exceptionOrNull()?.message ?: "dispatch failed"
         } else null
@@ -782,13 +857,100 @@ class ActionDispatcher @Inject constructor(
         return result
     }
 
-    private fun navigate(action: ActionDef): DispatchResult {
+    /**
+     * Route dispatch. Two things happen around the intent itself (wave 2026-09-16):
+     *
+     * - with a split session standing, the firmware would answer the launch with startFullWindow
+     *   and the Navigator would lose the route — so the split is ended, the route is built, and
+     *   the pair is restarted. See [NavigateSplitFlow].
+     * - `go` = the driver said «поехали», not «построй маршрут»: then «Поехали» on the route
+     *   preview is pressed for him.
+     */
+    private suspend fun navigate(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
+        val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
+        // Only a Yandex ROUTE ends on a «Поехали» screen: show-only drops a pin, search opens a
+        // result list, and 2GIS has no such node at all.
+        val routeMode = !payload.optBoolean("show", false) &&
+            payload.optString("query").isBlank()
+        val autoGoSupported = routeMode &&
+            (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
+        val go = autoGoRequested(payload)
+        val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
+            override fun activeSplitPair(): SplitPair? =
+                (splitSessionManager.state.value as? SplitSessionState.Active)?.pair
+
+            override suspend fun exitSplit(): Boolean {
+                splitSessionManager.exit()
+                return splitSessionManager.state.value !is SplitSessionState.Active
+            }
+
+            override suspend fun restoreSplit(pair: SplitPair): String? =
+                when (splitSessionManager.start(pair)) {
+                    SplitStartResult.OK -> null
+                    SplitStartResult.FREEFORM_UNAVAILABLE -> freeformUnavailableHint()
+                    SplitStartResult.LAUNCH_FAILED -> context.getString(R.string.split_launch_failed)
+                    SplitStartResult.DISABLED -> context.getString(R.string.split_feature_disabled)
+                }
+
+            override suspend fun sendIntent(): DispatchResult = sendNavigateIntent(payload, shortcut)
+
+            override fun a11yConnected(): Boolean =
+                com.bydmate.app.cluster.SteeringWheelKeyService.isConnected
+
+            override fun goButtonVisible(): Boolean =
+                withNavigatorRoot { com.bydmate.app.media.NaviGoButton.visible(it) }
+
+            override fun clickGo(): Boolean =
+                withNavigatorRoot { com.bydmate.app.media.NaviGoButton.click(it) }
+
+            override suspend fun wait(ms: Long) = delay(ms)
+
+            // The split session's own transitions are journalled by SplitSessionManager; this
+            // is the navigate side of the story and lives in the log with the other dispatches.
+            override fun log(line: String) {
+                Log.i(TAG, line)
+            }
+        })
+        return flow.run(go = go, autoGoSupported = autoGoSupported)
+    }
+
+    /**
+     * Runs [block] on the Navigator's a11y window — the same read the HUD uses, including the
+     * minimized and cluster-projected cases — and recycles the node afterwards.
+     */
+    private fun withNavigatorRoot(
+        block: (android.view.accessibility.AccessibilityNodeInfo?) -> Boolean,
+    ): Boolean {
+        val root = com.bydmate.app.cluster.SteeringWheelKeyService.instance?.findNavigatorRoot()
+            ?: return false
+        return try {
+            block(root)
+        } finally {
+            @Suppress("DEPRECATION") runCatching { root.recycle() }
+        }
+    }
+
+    /** Which map app routes go to, plus the reason text when 2GIS was replaced by Yandex (#190). */
+    private fun resolveNavigator(): Pair<String, String?> {
+        val chosen = RouteNavigatorUris.normalize(
+            context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
+                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))
+        val fellBack = chosen == RouteNavigatorUris.DGIS &&
+            !isPackageInstalled(RouteNavigatorUris.DGIS_PACKAGE)
+        if (fellBack) Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
+        return if (fellBack) {
+            RouteNavigatorUris.YANDEX to "2ГИС не установлен, открыт Яндекс Навигатор"
+        } else {
+            chosen to null
+        }
+    }
+
+    private fun sendNavigateIntent(payload: JSONObject, shortcut: String?): DispatchResult {
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
         // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
         // a Navigator update drops them.
-        val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
         if (shortcut != null) {
             val intentAction = when (shortcut) {
                 "home" -> "ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT"
@@ -802,14 +964,7 @@ class ActionDispatcher @Inject constructor(
         }
         // #190: which map app the user picked for routes and map search. 2GIS that is not
         // installed falls back to Yandex for this action, and says so in the result reason.
-        val chosen = RouteNavigatorUris.normalize(
-            context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))
-        val fellBack = chosen == RouteNavigatorUris.DGIS &&
-            !isPackageInstalled(RouteNavigatorUris.DGIS_PACKAGE)
-        if (fellBack) Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
-        val navigator = if (fellBack) RouteNavigatorUris.YANDEX else chosen
-        val fallbackReason = if (fellBack) "2ГИС не установлен, открыт Яндекс Навигатор" else null
+        val (navigator, fallbackReason) = resolveNavigator()
         // Free-text destination: open the map search (route needs coordinates,
         // which the agent does not have for arbitrary addresses).
         val query = payload.optString("query").takeIf(String::isNotBlank)
@@ -855,6 +1010,7 @@ class ActionDispatcher @Inject constructor(
             intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
         }
         val result = tryStartActivity(intent, label)
+        Log.i(TAG, "navigate: intent sent label=$label ok=${result.success}")
         return if (result.success && fallbackReason != null) result.copy(reason = fallbackReason)
         else result
     }

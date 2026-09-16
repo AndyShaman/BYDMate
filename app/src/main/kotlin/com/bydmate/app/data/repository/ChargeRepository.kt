@@ -16,6 +16,14 @@ data class LifetimeChargingStats(
     val sessionCount: Int
 )
 
+/**
+ * Full-cycle equivalent of everything ever pumped into the pack: total kWh divided by the
+ * nominal capacity. Shared by the «Зарядки» stats and the «Техника» battery card so both
+ * screens show the same number from the same source.
+ */
+fun equivalentFullCycles(totalKwhAdded: Double, nominalCapacityKwh: Double): Double =
+    if (nominalCapacityKwh > 0) totalKwhAdded / nominalCapacityKwh else 0.0
+
 @Singleton
 class ChargeRepository @Inject constructor(
     private val chargeDao: ChargeDao,

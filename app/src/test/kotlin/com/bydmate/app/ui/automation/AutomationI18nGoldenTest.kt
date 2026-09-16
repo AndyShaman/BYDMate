@@ -452,6 +452,12 @@ class AutomationI18nGoldenTest {
         "sunroof" to Triple("Люк", "Sunroof", "天窗"),
         "locks" to Triple("Замки дверей", "Door locks", "车门锁"),
         "cluster" to Triple("Вывод на приборку", "Projection to cluster", "投射到仪表盘"),
+        "hazard" to Triple("Аварийка", "Hazard lights", "双闪"),
+        "climate" to Triple("Климат", "Climate", "空调"),
+        "seat_heat_driver" to Triple("Подогрев сиденья водителя", "Driver seat heating", "主驾座椅加热"),
+        "seat_heat_passenger" to Triple("Подогрев сиденья пассажира", "Passenger seat heating", "副驾座椅加热"),
+        "seat_vent_driver" to Triple("Обдув сиденья водителя", "Driver seat ventilation", "主驾座椅通风"),
+        "seat_vent_passenger" to Triple("Обдув сиденья пассажира", "Passenger seat ventilation", "副驾座椅通风"),
     )
 
     private fun toggleName(target: String): String {

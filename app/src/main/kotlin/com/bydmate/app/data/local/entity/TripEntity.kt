@@ -24,7 +24,10 @@ data class TripEntity(
     @ColumnInfo(name = "bat_temp_max") val batTempMax: Double? = null,
     @ColumnInfo(name = "bat_temp_min") val batTempMin: Double? = null,
     val cost: Double? = null,
+    /** Outside temperature at the start of the drive, °C; null on trips recorded before it was collected. */
     @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null,
+    /** Outside temperature at the finish, °C. */
+    @ColumnInfo(name = "exterior_temp_end") val exteriorTempEnd: Int? = null,
     @ColumnInfo(name = "source", defaultValue = "live") val source: String = "live",
     @ColumnInfo(name = "byd_id") val bydId: Long? = null
 )

@@ -115,6 +115,26 @@ class AutoserviceChargingDetector @Inject constructor(
         const val ODOMETER_MOVED_EPSILON_KM = 1.0f
         // Gun not connected — autoservice gunConnectState value meaning "no gun".
         private const val GUN_STATE_NONE = 1
+        // chargerConnectState (fid 89128973, dev 1009): 1 = plug physically in.
+        private const val CHARGER_CONNECT_PLUGGED = 1
+        // chargeConnectIndicator (fid 710934572, dev 1007): 1 = plug in, 2 = plug out.
+        private const val CHARGE_INDICATOR_PLUGGED = 1
+
+        /**
+         * Is the charge plug physically in?
+         *
+         * gunConnectState alone answers "no gun" on a RUNNING car with the plug inserted
+         * (measured 2026-09-16: charger 0→1→0 and indicator 2→1→2 while the gun fid never
+         * left 1) — the AC session was then eaten by catch-up instead of being deferred to
+         * the live disconnect edge. The two plug fids are therefore consulted FIRST, and
+         * only ever to say "plugged": a firmware where they sit at a steady 0 falls through
+         * to the gun exactly as before, so no car loses the old behaviour.
+         */
+        internal fun plugInserted(charger: Int?, indicator: Int?, gun: Int?): Boolean = when {
+            charger == CHARGER_CONNECT_PLUGGED -> true
+            indicator == CHARGE_INDICATOR_PLUGGED -> true
+            else -> gun != null && gun != 0 && gun != GUN_STATE_NONE
+        }
         // A transient gun-fid glitch clears within a read or two; a gun fid
         // that stays silent across this many consecutive runs while sibling
         // fids answer is unsupported firmware — stop deferring so charge
@@ -163,7 +183,9 @@ class AutoserviceChargingDetector @Inject constructor(
      */
     suspend fun recordParkedAnchor(data: DiParsData, now: Long = System.currentTimeMillis()): Boolean {
         val gun = data.chargeGunState
-        val gunConnected = gun != null && gun != GUN_STATE_NONE && gun != 0
+        val gunConnected = plugInserted(
+            data.chargerConnectState, data.chargeConnectIndicator, gun
+        )
         if (gunConnected) return false                 // live charge — keep the start anchor
         val soc = data.soc?.takeIf { it in 0..100 } ?: return false
         return mutex.withLock {
@@ -271,7 +293,14 @@ class AutoserviceChargingDetector @Inject constructor(
             // is the steady-state value doesn't permanently block charge logging.
             val gunResolved = gun?.takeIf { it != 0 }
             if (gunResolved != null) consecutiveGunGlitches = 0
-            val gunIsConnected = gunResolved != null && gunResolved != GUN_STATE_NONE
+            val gunIsConnected = plugInserted(
+                charging?.chargerConnectState, charging?.chargeConnectIndicator, gunResolved
+            )
+            android.util.Log.i(
+                TAG,
+                "plug: charger=${charging?.chargerConnectState} " +
+                    "indicator=${charging?.chargeConnectIndicator} gun=$gun → plugged=$gunIsConnected"
+            )
             // Only DYNAMIC charging fids vouch for the gun fid. batteryType is
             // a constant (LFP) that stays readable on firmwares where the gun
             // fid is simply unsupported — counting it turned every catch-up

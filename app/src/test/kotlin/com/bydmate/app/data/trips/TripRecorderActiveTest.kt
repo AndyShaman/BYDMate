@@ -149,4 +149,28 @@ class TripRecorderActiveTest {
         coVerify(exactly = 1) { tripDao.insert(any()) }
         coVerify(exactly = 1) { lastState.clearOpenTrip() }
     }
+
+    /** Outside temperature is sampled at both ends of the drive, straight off the snapshot. */
+    @Test fun `close writes the start and finish outside temperature`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0, exteriorTemp = -7))
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 110.0, exteriorTemp = -3))
+
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertEquals(-7, captured.captured.exteriorTemp)
+        assertEquals(-3, captured.captured.exteriorTempEnd)
+    }
+
+    /** A firmware without the outside-temperature fid leaves both ends empty, not zero. */
+    @Test fun `no temperature in the snapshot leaves both ends null`() = runTest {
+        val (rec, tripDao, _) = setup()
+        rec.consume(diParsData(powerState = 2, soc = 80, mileage = 100.0))
+        rec.consume(diParsData(powerState = 1, soc = 70, mileage = 110.0))
+
+        val captured = slot<TripEntity>()
+        coVerify(exactly = 1) { tripDao.insert(capture(captured)) }
+        assertNull(captured.captured.exteriorTemp)
+        assertNull(captured.captured.exteriorTempEnd)
+    }
 }
