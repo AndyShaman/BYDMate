@@ -1289,6 +1289,7 @@
     <string name="split_picker_title_narrow">Choose an app for the narrow pane (1/3)</string>
     <string name="split_freeform_reboot_hint">Split screen will activate after restarting the car</string>
     <string name="split_freeform_unsupported_hint">Split screen is not available on this car\'s firmware</string>
+    <string name="navigate_maps_shortcut_failed">Maps did not accept the route: add a «Home» or «Work» Place in BYDMate</string>
     <string name="split_launch_failed">Failed to launch split screen</string>
     <string name="split_launch_failed_adb">Failed to launch split screen: unlocked ADB is required</string>
     <!-- Automation action: split_screen -->

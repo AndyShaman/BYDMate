@@ -71,4 +71,18 @@ class RouteNavigatorUrisTest {
             RouteNavigatorUris.showPoint(RouteNavigatorUris.DGIS, 55.75, 37.62, "Кафе"),
         )
     }
+
+    /** #200: the Maps dialect is per-command and never reachable from the settings value. */
+    @Test fun `maps links use the yandexmaps scheme`() {
+        assertEquals("yandexmaps://maps.yandex.ru/?rtext=~55.75,37.62&rtt=auto",
+            RouteNavigatorUris.mapsRoute(55.75, 37.62))
+        assertEquals("yandexmaps://maps.yandex.ru/?pt=55.75,37.62&z=14",
+            RouteNavigatorUris.mapsShowPoint(55.75, 37.62))
+        assertEquals("yandexmaps://maps.yandex.ru/?text=%D0%BA%D0%B0%D1%84%D0%B5",
+            RouteNavigatorUris.mapsSearch("кафе"))
+    }
+
+    @Test fun `the settings selection never becomes maps`() {
+        assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize(RouteNavigatorUris.MAPS))
+    }
 }

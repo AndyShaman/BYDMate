@@ -173,7 +173,7 @@ fun DashboardScreen(
                             Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) {
                                 CornerStat(
                                     icon = Icons.Outlined.DirectionsCar,
-                                    text = state.insideTemp?.let { "$it°" } ?: "—",
+                                    text = formatCabinOutside(state.insideTemp, state.exteriorTemp),
                                     iconLast = true,
                                 )
                             }
@@ -1007,6 +1007,18 @@ private fun PlaceholderText(text: String) {
  * Mirrors the IconText composable in FloatingWidgetView (icon muted gray + monospace value).
  * Set iconLast=true for the right-aligned variant where the value comes before the icon.
  */
+/**
+ * Cabin and outside temperature in the one slot the car icon already owns (#210): «22° / 8°»,
+ * cabin first. Without an outside reading the slot shows the cabin alone, exactly as before,
+ * so a car that does not report it loses nothing. Numbers only — the row carries no words.
+ */
+internal fun formatCabinOutside(inside: Int?, outside: Int?): String = when {
+    inside == null && outside == null -> "—"
+    outside == null -> "$inside°"
+    inside == null -> "— / $outside°"
+    else -> "$inside° / $outside°"
+}
+
 @Composable
 private fun CornerStat(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
