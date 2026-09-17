@@ -618,10 +618,13 @@ class VoiceController @Inject constructor(
         when (val r = automationEngine.fireVoiceRule(ruleId, gate.vehicleSnapshot())) {
             is VoiceFireResult.Fired ->
                 if (r.success) {
+                    // Fired(true) means the rule's actions were handed off to the engine's own
+                    // scope, not that they already finished (they may still contain a delay);
+                    // say "Выполняю", not "Выполнено".
                     earcon.ok(); _state.value = VoiceUiState.Done(transcript)
                     record(VoiceJournalEntry.Route.NLU, transcript, withDecodeMs(transcript, decodeMs), VoiceJournalEntry.Outcome.OK, null,
                         "NLU automation fired: ruleId=$ruleId transcript=\"$transcript\"")
-                    announce("Голос", "Услышал: «$transcript». Выполнено", "Готово")
+                    announce("Голос", "Услышал: «$transcript». Выполняю", "Выполняю")
                     scope.launch { runCatching { agentOrchestrator.noteAction(transcript) } }
                 } else {
                     earcon.fail(); _state.value = VoiceUiState.Blocked(transcript)
