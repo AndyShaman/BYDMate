@@ -591,6 +591,8 @@ class AutomationEngine @Inject constructor(
      * Honors requirePark and confirmBeforeExecute; bypasses cooldown / fireOncePerTrip
      * (anti-spam concepts for automatic triggers, irrelevant to a spoken command).
      * Param actions still pass through the per-action speed gate in ActionDispatcher.
+     * The non-confirm path launches execution in [scope] and returns [VoiceFireResult.Fired]
+     * as soon as the actions are handed off, not once they finish running.
      */
     suspend fun fireVoiceRule(ruleId: Long, data: DiParsData?): VoiceFireResult {
         val rule = ruleDao.getById(ruleId) ?: return VoiceFireResult.NotFound
@@ -641,8 +643,13 @@ class AutomationEngine @Inject constructor(
             return VoiceFireResult.Confirming
         }
 
-        val success = executeAndLog(rule, actions, snapshot, data)
-        return VoiceFireResult.Fired(success)
+        // Run in the engine's own service-lifetime scope, not the caller's coroutine (mirrors
+        // the confirm branch above): a voice-fired rule can contain a delay action, and if we
+        // suspend here on the caller's routingJob, the assistant UI disappearing (button tap
+        // or timeout) cancels that job mid-sequence, aborting the rule with actions half-run.
+        Log.i(TAG, "voice fire: rule=${rule.id} actions=${actions.size} launched in engine scope")
+        scope.launch { executeAndLog(rule, actions, snapshot, data) }
+        return VoiceFireResult.Fired(true)
     }
 
     private fun buildSnapshot(triggers: List<TriggerDef>, data: DiParsData): String {

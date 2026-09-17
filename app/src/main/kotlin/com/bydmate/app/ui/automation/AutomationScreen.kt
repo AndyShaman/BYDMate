@@ -861,7 +861,8 @@ private fun ParamTriggerControls(
                         text = { Text(paramOption.localizedEnumLabel(value, context), fontSize = 13.sp) },
                         onClick = {
                             enumExpanded = false
-                            onUpdate(trigger.copy(value = value, operator = "=="))
+                            // The chosen operator stays; picking a value must not reset it (VadimV).
+                            onUpdate(trigger.copy(value = value))
                         }
                     )
                 }
