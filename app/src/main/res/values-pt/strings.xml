@@ -107,6 +107,7 @@
     <string name="settings_recalc_all_button">Recalcular todas as viagens</string>
     <string name="settings_recalc_note">Recalcula o custo de todas as viagens\nusando a tarifa atual.</string>
     <string name="settings_tariff_periods_title">Tarifas e períodos</string>
+    <string name="settings_tariff_card_period">Período</string>
     <string name="settings_tariff_periods_button">Abrir</string>
     <string name="settings_tariff_periods_hint">Adicione um período com a data desejada e tudo depois dela será recalculado automaticamente.</string>
     <string name="settings_tariff_periods_empty">Nenhum período definido</string>
@@ -1130,6 +1131,7 @@
     <string name="settings_route_navigator_label">Navegador para rotas</string>
     <string name="settings_route_navigator_yandex">Yandex Navigator</string>
     <string name="settings_route_navigator_dgis">2GIS</string>
+    <string name="settings_route_navigator_maps">Yandex Maps</string>
     <string name="settings_route_navigator_hint">Qual aplicativo abre para rotas e busca no mapa</string>
     <string name="settings_agent_memory_title">Memória sobre o motorista</string>
     <string name="settings_agent_memory_hint">O agente memoriza o nome e as preferências constantes quando você lhe diz isso. Diga “esqueça …” para remover um fato</string>

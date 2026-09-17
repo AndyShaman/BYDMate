@@ -1,9 +1,8 @@
 package com.bydmate.app.ui.settings
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,17 +11,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -32,6 +31,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,25 +39,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.R
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_CHARGES
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_DC
 import com.bydmate.app.data.local.entity.TariffPeriodEntity.Companion.TRIP_RULE_HOME
 import com.bydmate.app.domain.cost.MeasuredLosses
+import com.bydmate.app.ui.tech.TechCard
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.AccentOrange
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.CardSurfaceElevated
 import com.bydmate.app.ui.theme.NavyDark
+import com.bydmate.app.ui.theme.NavyDeep
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
@@ -67,121 +70,142 @@ import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
+/** Width of the period column; the form takes the rest of the screen. */
+private val LIST_WIDTH = 260.dp
+
+/** Every field of the form: the label column, then the input next to it. */
+private val FIELD_LABEL_WIDTH = 150.dp
+private val FIELD_INPUT_WIDTH = 120.dp
+
+/** Rates carry three decimals, the loss percentages are whole numbers. */
+private const val RATE_DECIMALS = 3
+private const val LOSS_DECIMALS = 0
+
 /**
- * Floating price-history window: the list of periods on the left, the form of the selected
- * one on the right. Saving a period re-prices everything from its date onwards, which is how
- * a rate entered in the middle of the month reaches the charges already recorded that month.
+ * Price-history screen, built like «Техника»: the list of periods on the left, the form of the
+ * selected one on the right. Saving a period re-prices everything from its date onwards, which
+ * is how a rate entered in the middle of the month reaches the charges already recorded that
+ * month.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TariffPeriodsDialog(
-    periods: List<TariffPeriodEntity>,
-    currencySymbol: String,
-    measuredLosses: MeasuredLosses?,
-    recalcStatus: String?,
-    errorText: String?,
-    onSave: (TariffPeriodEntity) -> Unit,
-    onDelete: (TariffPeriodEntity) -> Unit,
-    onDismiss: () -> Unit,
+fun TariffPeriodsScreen(
+    onBack: () -> Unit,
+    viewModel: SettingsViewModel = hiltViewModel(),
 ) {
-    // Newest first, mirroring the list order the caller passes in.
-    val sorted = remember(periods) { periods.sortedByDescending { it.startTs } }
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    // Newest first, mirroring the list order the view model keeps.
+    val sorted = remember(state.tariffPeriods) { state.tariffPeriods.sortedByDescending { it.startTs } }
     var draft by remember { mutableStateOf(sorted.firstOrNull()) }
     var showDatePicker by remember { mutableStateOf(false) }
     // Bumped on every switch of the edited period, so the text fields re-seed from it instead
     // of showing the rates of the one edited before.
     var formKey by remember { mutableStateOf(0) }
-    LaunchedEffect(periods) {
+    LaunchedEffect(state.tariffPeriods) {
         draft = sorted.firstOrNull()
         formKey++
     }
+    // Leaving the screen drops the recalc status and the error, as closing the window did.
+    DisposableEffect(Unit) {
+        onDispose { viewModel.hideTariffPeriods() }
+    }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+    ) {
+        // Header in the «Техника» shape; the hint sits where that screen keeps its status.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
-                border = BorderStroke(1.dp, CardBorder),
+            Box(
                 modifier = Modifier
-                    .padding(horizontal = 24.dp, vertical = 16.dp)
-                    .fillMaxWidth(0.82f)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember { MutableInteractionSource() }
-                    ) { /* absorb clicks: the form has inputs */ }
+                    .size(28.dp)
+                    .border(1.5.dp, TextMuted, CircleShape)
+                    .clickable { onBack() },
+                contentAlignment = Alignment.Center
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text(
-                        stringResource(R.string.settings_tariff_periods_title),
-                        color = TextPrimary,
-                        fontSize = 16.sp,
-                        fontWeight = FontWeight.Bold,
+                Text("‹", color = TextSecondary, fontSize = 16.sp)
+            }
+            Text(
+                stringResource(R.string.settings_tariff_periods_title),
+                color = AccentGreen,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                modifier = Modifier.padding(start = 14.dp)
+            )
+            Box(modifier = Modifier.weight(1f))
+            Text(
+                stringResource(R.string.settings_tariff_periods_hint),
+                color = TextMuted,
+                fontSize = 11.sp
+            )
+        }
+        Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            PeriodList(
+                periods = sorted,
+                selectedId = draft?.id,
+                currencySymbol = state.currencySymbol,
+                measuredLosses = state.measuredLosses,
+                onSelect = { draft = it; formKey++ },
+                onAdd = { draft = newPeriodDraft(sorted); formKey++ },
+                modifier = Modifier.width(LIST_WIDTH),
+            )
+            Spacer(modifier = Modifier.width(20.dp))
+            Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                draft?.let { current ->
+                    PeriodForm(
+                        period = current,
+                        formKey = formKey,
+                        currencySymbol = state.currencySymbol,
+                        onChange = { draft = it },
+                        onPickDate = { showDatePicker = true },
                     )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Row(modifier = Modifier.padding(top = 12.dp)) {
-                        PeriodList(
-                            periods = sorted,
-                            selectedId = draft?.id,
-                            currencySymbol = currencySymbol,
-                            measuredLosses = measuredLosses,
-                            onSelect = { draft = it; formKey++ },
-                            onAdd = { draft = newPeriodDraft(sorted); formKey++ },
-                            modifier = Modifier.width(260.dp),
-                        )
-                        Spacer(modifier = Modifier.width(20.dp))
-                        draft?.let { current ->
-                            PeriodForm(
-                                period = current,
-                                formKey = formKey,
-                                currencySymbol = currencySymbol,
-                                canDelete = sorted.size > 1 && current.id != 0L,
-                                onChange = { draft = it },
-                                onPickDate = { showDatePicker = true },
-                                onDelete = {
-                                    onDelete(current)
-                                    draft = null
-                                },
-                                modifier = Modifier.weight(1f),
-                            )
-                        }
-                    }
-                    recalcStatus?.let {
-                        Text(it, color = AccentGreen, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                    }
-                    errorText?.let {
-                        Text(it, color = AccentOrange, fontSize = 12.sp, modifier = Modifier.padding(top = 8.dp))
-                    }
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 12.dp),
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        TextButton(onClick = onDismiss) {
-                            Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
-                        }
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Button(
-                            onClick = { draft?.let(onSave) },
-                            enabled = draft != null,
-                            shape = RoundedCornerShape(8.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
-                        ) {
+                }
+                Spacer(modifier = Modifier.weight(1f))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    // The earliest period covers everything before itself, so it stays.
+                    if (sorted.size > 1 && draft?.id?.let { it != 0L } == true) {
+                        TextButton(onClick = {
+                            draft?.let { viewModel.deleteTariffPeriod(it) }
+                            draft = null
+                        }) {
                             Text(
-                                stringResource(R.string.charges_edit_save_button),
-                                color = NavyDark,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
+                                stringResource(R.string.settings_tariff_period_delete),
+                                color = AccentOrange,
+                                fontSize = 13.sp,
                             )
                         }
+                    }
+                    state.tariffRecalcStatus?.let {
+                        Text(it, color = AccentGreen, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp))
+                    }
+                    state.tariffPeriodError?.let {
+                        Text(it, color = AccentOrange, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp))
+                    }
+                    Spacer(modifier = Modifier.weight(1f))
+                    TextButton(onClick = onBack) {
+                        Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Button(
+                        onClick = { draft?.let { viewModel.saveTariffPeriod(it) } },
+                        enabled = draft != null,
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen),
+                    ) {
+                        Text(
+                            stringResource(R.string.charges_edit_save_button),
+                            color = NavyDark,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                        )
                     }
                 }
             }
@@ -225,10 +249,10 @@ private fun PeriodList(
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier.fillMaxHeight()) {
+        // The scrolling block takes the whole column, so the measured-losses line under it sits
+        // at the bottom of the screen however many periods there are.
         Column(
-            modifier = Modifier
-                .heightIn(max = 260.dp)
-                .verticalScroll(rememberScrollState()),
+            modifier = Modifier.weight(1f).verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             for (period in periods) {
@@ -260,9 +284,9 @@ private fun PeriodList(
                     )
                 }
             }
-        }
-        TextButton(onClick = onAdd, modifier = Modifier.padding(top = 4.dp)) {
-            Text(stringResource(R.string.settings_tariff_period_add), color = AccentGreen, fontSize = 13.sp)
+            TextButton(onClick = onAdd, modifier = Modifier.padding(top = 4.dp)) {
+                Text(stringResource(R.string.settings_tariff_period_add), color = AccentGreen, fontSize = 13.sp)
+            }
         }
         measuredLosses?.takeIf { it.hasAny }?.let { losses ->
             Text(
@@ -273,32 +297,31 @@ private fun PeriodList(
                 ),
                 color = TextSecondary,
                 fontSize = 11.sp,
+                modifier = Modifier.padding(top = 8.dp, start = 4.dp),
             )
         }
     }
 }
 
+/**
+ * Two cards in the «Техника» style: the dates and rates of the period, then the rule the trips
+ * of that period are costed by. The rates sit in two columns, so the form needs no scrolling.
+ */
 @Composable
 private fun PeriodForm(
     period: TariffPeriodEntity,
     formKey: Int,
     currencySymbol: String,
-    canDelete: Boolean,
     onChange: (TariffPeriodEntity) -> Unit,
     onPickDate: () -> Unit,
-    onDelete: () -> Unit,
-    modifier: Modifier = Modifier,
 ) {
-    Column(
-        modifier = modifier.verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
+    TechCard(stringResource(R.string.settings_tariff_card_period)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 stringResource(R.string.settings_tariff_period_start_label),
                 color = TextSecondary,
                 fontSize = 13.sp,
-                modifier = Modifier.width(120.dp),
+                modifier = Modifier.width(FIELD_LABEL_WIDTH),
             )
             Text(
                 periodDateLabel(period.startTs),
@@ -310,33 +333,53 @@ private fun PeriodForm(
                     .padding(vertical = 8.dp, horizontal = 4.dp),
             )
         }
-        NumberField(
-            formKey = formKey,
-            label = stringResource(R.string.settings_tariff_home_label, currencySymbol),
-            value = period.homeRate,
-            onValue = { onChange(period.copy(homeRate = it)) },
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp)) {
+            NumberField(
+                formKey = formKey,
+                label = stringResource(R.string.settings_tariff_home_label, currencySymbol),
+                value = period.homeRate,
+                decimals = RATE_DECIMALS,
+                onValue = { onChange(period.copy(homeRate = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            NumberField(
+                formKey = formKey,
+                label = stringResource(R.string.settings_tariff_dc_label, currencySymbol),
+                value = period.dcRate,
+                decimals = RATE_DECIMALS,
+                onValue = { onChange(period.copy(dcRate = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 10.dp)) {
+            NumberField(
+                formKey = formKey,
+                label = stringResource(R.string.settings_tariff_loss_ac_label),
+                value = period.acLossPct,
+                decimals = LOSS_DECIMALS,
+                onValue = { onChange(period.copy(acLossPct = it)) },
+                modifier = Modifier.weight(1f),
+            )
+            NumberField(
+                formKey = formKey,
+                label = stringResource(R.string.settings_tariff_loss_dc_label),
+                value = period.dcLossPct,
+                decimals = LOSS_DECIMALS,
+                onValue = { onChange(period.copy(dcLossPct = it)) },
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            stringResource(R.string.settings_tariff_loss_hint),
+            color = TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 10.dp),
         )
-        NumberField(
-            formKey = formKey,
-            label = stringResource(R.string.settings_tariff_dc_label, currencySymbol),
-            value = period.dcRate,
-            onValue = { onChange(period.copy(dcRate = it)) },
-        )
-        NumberField(
-            formKey = formKey,
-            label = stringResource(R.string.settings_tariff_loss_ac_label),
-            value = period.acLossPct,
-            onValue = { onChange(period.copy(acLossPct = it)) },
-        )
-        NumberField(
-            formKey = formKey,
-            label = stringResource(R.string.settings_tariff_loss_dc_label),
-            value = period.dcLossPct,
-            onValue = { onChange(period.copy(dcLossPct = it)) },
-        )
-        Text(stringResource(R.string.settings_tariff_loss_hint), color = TextMuted, fontSize = 11.sp)
+    }
 
-        Text(stringResource(R.string.settings_tariff_trip_label), color = TextSecondary, fontSize = 13.sp)
+    Spacer(modifier = Modifier.height(12.dp))
+
+    TechCard(stringResource(R.string.settings_tariff_trip_label)) {
         val isCustom = period.tripRule !in listOf(TRIP_RULE_HOME, TRIP_RULE_DC, TRIP_RULE_CHARGES)
         val options = listOf(
             TRIP_RULE_HOME to stringResource(R.string.settings_tariff_rule_home),
@@ -344,7 +387,10 @@ private fun PeriodForm(
             TRIP_RULE_CHARGES to stringResource(R.string.settings_tariff_rule_charges),
         )
         val customLabel = stringResource(R.string.settings_tariff_trip_custom_chip)
-        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            modifier = Modifier.padding(top = 6.dp),
+        ) {
             for ((rule, label) in options) {
                 RuleChip(label, period.tripRule == rule) { onChange(period.copy(tripRule = rule)) }
             }
@@ -357,16 +403,17 @@ private fun PeriodForm(
                 formKey = formKey,
                 label = stringResource(R.string.settings_tariff_custom_label, currencySymbol),
                 value = period.tripRule.replace(',', '.').toDoubleOrNull() ?: period.homeRate,
+                decimals = RATE_DECIMALS,
                 onValue = { onChange(period.copy(tripRule = "%.3f".format(Locale.US, it))) },
+                modifier = Modifier.padding(top = 8.dp),
             )
         }
-        Text(stringResource(R.string.settings_tariff_trip_desc), color = TextMuted, fontSize = 11.sp)
-
-        if (canDelete) {
-            TextButton(onClick = onDelete) {
-                Text(stringResource(R.string.settings_tariff_period_delete), color = AccentOrange, fontSize = 13.sp)
-            }
-        }
+        Text(
+            stringResource(R.string.settings_tariff_trip_desc),
+            color = TextMuted,
+            fontSize = 11.sp,
+            modifier = Modifier.padding(top = 10.dp),
+        )
     }
 }
 
@@ -385,13 +432,21 @@ private fun RuleChip(label: String, selected: Boolean, onClick: () -> Unit) {
 
 /**
  * Decimal field that keeps the raw text while typing, so "0," does not snap back. [formKey]
- * changes when another period is selected: that is the only moment the text is re-seeded.
+ * changes when another period is selected: that is the only moment the text is re-seeded, with
+ * [decimals] places.
  */
 @Composable
-private fun NumberField(formKey: Int, label: String, value: Double, onValue: (Double) -> Unit) {
-    var text by remember(formKey, label) { mutableStateOf("%.3f".format(Locale.US, value)) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(120.dp))
+private fun NumberField(
+    formKey: Int,
+    label: String,
+    value: Double,
+    decimals: Int,
+    onValue: (Double) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var text by remember(formKey, label) { mutableStateOf("%.${decimals}f".format(Locale.US, value)) }
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        Text(label, color = TextSecondary, fontSize = 13.sp, modifier = Modifier.width(FIELD_LABEL_WIDTH))
         OutlinedTextField(
             value = text,
             onValueChange = { raw ->
@@ -399,7 +454,7 @@ private fun NumberField(formKey: Int, label: String, value: Double, onValue: (Do
                 text.replace(',', '.').toDoubleOrNull()?.let(onValue)
             },
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-            modifier = Modifier.width(120.dp),
+            modifier = Modifier.width(FIELD_INPUT_WIDTH),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedTextColor = TextPrimary,
                 unfocusedTextColor = TextPrimary,

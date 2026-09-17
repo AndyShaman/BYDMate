@@ -106,6 +106,7 @@
     <string name="settings_recalc_all_button">Recalculate all trips</string>
     <string name="settings_recalc_note">Recalculates the cost of all trips\nusing the current tariff.</string>
     <string name="settings_tariff_periods_title">Tariffs and periods</string>
+    <string name="settings_tariff_card_period">Period</string>
     <string name="settings_tariff_periods_button">Open</string>
     <string name="settings_tariff_periods_hint">Add a period with the date you need and everything after it is recalculated automatically.</string>
     <string name="settings_tariff_periods_empty">No period set</string>
@@ -1138,6 +1139,7 @@
     <string name="settings_route_navigator_label">Navigator for routes</string>
     <string name="settings_route_navigator_yandex">Yandex Navigator</string>
     <string name="settings_route_navigator_dgis">2GIS</string>
+    <string name="settings_route_navigator_maps">Yandex Maps</string>
     <string name="settings_route_navigator_hint">Which app opens for routes and map search</string>
     <string name="settings_agent_memory_title">Driver memory</string>
     <string name="settings_agent_memory_hint">The agent remembers your name and lasting preferences when you tell it to. Say “forget …” to drop a single fact</string>

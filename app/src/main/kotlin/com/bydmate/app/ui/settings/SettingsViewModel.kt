@@ -1556,7 +1556,7 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
-     * Picks the map app the navigate action opens (#190): "yandex" (default) or "dgis".
+     * Picks the map app the navigate action opens (#190, #200): "yandex" (default), "dgis" or "maps".
      * Persisted in the same SharedPreferences("voice") file as the other agent settings, which
      * is where [com.bydmate.app.data.automation.ActionDispatcher] reads it on every route.
      */

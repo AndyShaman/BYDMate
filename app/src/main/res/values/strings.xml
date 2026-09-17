@@ -113,6 +113,7 @@
     <string name="settings_recalc_all_button">Пересчитать все поездки</string>
     <string name="settings_recalc_note">Пересчитает стоимость всех поездок\nпо текущему тарифу.</string>
     <string name="settings_tariff_periods_title">Тарифы и периоды</string>
+    <string name="settings_tariff_card_period">Период</string>
     <string name="settings_tariff_periods_button">Открыть</string>
     <string name="settings_tariff_periods_hint">Добавьте период с нужной датой, и всё после неё пересчитается само.</string>
     <string name="settings_tariff_periods_empty">Период не задан</string>
@@ -1292,6 +1293,7 @@
     <string name="settings_route_navigator_label">Навигатор для маршрутов</string>
     <string name="settings_route_navigator_yandex">Яндекс Навигатор</string>
     <string name="settings_route_navigator_dgis">2ГИС</string>
+    <string name="settings_route_navigator_maps">Яндекс Карты</string>
     <string name="settings_route_navigator_hint">Какое приложение открывать для маршрутов и поиска на карте</string>
     <string name="settings_agent_memory_title">Память о водителе</string>
     <string name="settings_agent_memory_hint">Агент запоминает имя и устойчивые предпочтения, когда вы ему об этом говорите. Скажите «забудь …», чтобы убрать один факт</string>
