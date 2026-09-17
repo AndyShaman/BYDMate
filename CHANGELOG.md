@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.17.1] - 2026-09-17
+
 ### Новое
 - Настройки: в «Навигатор для маршрутов» добавлены Яндекс Карты. Голосовые маршруты, поиск и точки без слова «в картах» идут в выбранное приложение (#200)
 
@@ -1129,7 +1131,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.1...HEAD
+[3.17.1]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...v3.17.1
 [3.17.0]: https://github.com/AndyShaman/BYDMate/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/AndyShaman/BYDMate/compare/v3.15.5...v3.16.0
 [3.15.5]: https://github.com/AndyShaman/BYDMate/compare/v3.15.4...v3.15.5
