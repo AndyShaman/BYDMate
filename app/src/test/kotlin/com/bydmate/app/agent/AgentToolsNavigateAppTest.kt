@@ -18,6 +18,7 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.domain.calculator.RangeCalculator
 import com.bydmate.app.voice.VoiceGate
 import io.mockk.coEvery
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import kotlinx.coroutines.test.runTest
@@ -34,7 +35,14 @@ import org.junit.Test
  */
 class AgentToolsNavigateAppTest {
 
-    private val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+    // #200: dispatchNavigate now asks the dispatcher whether the route will land on Maps
+    // (explicit app="maps" or that as the settings default) instead of reading the payload
+    // itself, so the relaxed mock needs the same "did the payload name maps" rule wired in.
+    private val dispatcher = mockk<ActionDispatcher>(relaxed = true).also {
+        every { it.willOpenMaps(any()) } answers {
+            firstArg<JSONObject>().optString("app").trim().equals("maps", ignoreCase = true)
+        }
+    }
     private val places = mockk<PlaceRepository>(relaxed = true)
 
     /** A tools instance with the production foreground check left in place. */
@@ -156,6 +164,16 @@ class AgentToolsNavigateAppTest {
             """{"query":"кафе","app":"maps"}"""))).getBoolean("ok"))
         assertTrue(JSONObject(t.execute(AgentToolCall("1", "show_point_on_map",
             """{"destination":"точка","lat":55.7,"lon":37.6,"app":"maps"}"""))).getBoolean("ok"))
+    }
+
+    /** #200: Maps as the settings default (no `app` in the payload) must wait for Maps too -
+     *  proves dispatchNavigate asks [ActionDispatcher.willOpenMaps] and not the raw payload. */
+    @Test fun `settings default maps waits for maps without an app key`() = runTest {
+        every { dispatcher.willOpenMaps(any()) } returns true
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(toolsSeeing("ru.yandex.yandexmaps").execute(AgentToolCall("1", "navigate_to",
+            """{"destination":"точка","lat":55.7,"lon":37.6}""")))
+        assertTrue(out.getBoolean("ok"))
     }
 
     @Test fun `home and work in maps wait for maps`() = runTest {

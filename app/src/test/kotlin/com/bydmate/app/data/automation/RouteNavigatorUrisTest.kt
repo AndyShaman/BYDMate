@@ -82,7 +82,8 @@ class RouteNavigatorUrisTest {
             RouteNavigatorUris.mapsSearch("кафе"))
     }
 
-    @Test fun `the settings selection never becomes maps`() {
-        assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize(RouteNavigatorUris.MAPS))
+    /** #200: Maps grew into the third settings value, alongside its per-command app="maps" use. */
+    @Test fun `maps is a valid settings selection`() {
+        assertEquals(RouteNavigatorUris.MAPS, RouteNavigatorUris.normalize(RouteNavigatorUris.MAPS))
     }
 }

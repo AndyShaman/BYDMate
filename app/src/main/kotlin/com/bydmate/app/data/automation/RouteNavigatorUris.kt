@@ -3,8 +3,8 @@ package com.bydmate.app.data.automation
 import android.net.Uri
 
 /**
- * Deep links of the map apps the `navigate` action can open (#190): Yandex Navigator (default)
- * and 2GIS, chosen by the user in settings.
+ * Deep links of the map apps the `navigate` action can open (#190, #200): Yandex Navigator
+ * (default), 2GIS or Yandex Maps, chosen by the user in settings.
  *
  * The two schemes disagree on everything except the intent action: Yandex takes named `lat`/`lon`
  * parameters, 2GIS takes a path segment with the LONGITUDE first. Keeping both shapes here means
@@ -19,6 +19,13 @@ object RouteNavigatorUris {
     const val YANDEX = "yandex"
     const val DGIS = "dgis"
 
+    /**
+     * Third settings value (#200): the same yandexmaps:// dialect that `app="maps"` reaches
+     * per-command (see below) is now also a persisted "Навигатор для маршрутов" choice, so
+     * routes/search/points without an explicit `app` land here too.
+     */
+    const val MAPS = "maps"
+
     const val YANDEX_PACKAGE = "ru.yandex.yandexnavi"
     const val DGIS_PACKAGE = "ru.dublgis.dgismobile"
 
@@ -27,8 +34,12 @@ object RouteNavigatorUris {
     const val MODE_SHOW = "show"
     const val MODE_ROUTE = "route"
 
-    /** Stored value normalised: anything unset or unknown is the Yandex default. */
-    fun normalize(value: String?): String = if (value == DGIS) DGIS else YANDEX
+    /** Stored value normalised: anything unset or unknown is the Yandex Navigator default. */
+    fun normalize(value: String?): String = when (value) {
+        DGIS -> DGIS
+        MAPS -> MAPS
+        else -> YANDEX
+    }
 
     fun packageOf(navigator: String): String =
         if (normalize(navigator) == DGIS) DGIS_PACKAGE else YANDEX_PACKAGE
@@ -52,13 +63,12 @@ object RouteNavigatorUris {
         else "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
 
     /**
-     * Yandex Maps' own dialect (#200), reached per command with `app="maps"` and never from the
-     * settings choice above — Maps is a separate app from the Navigator and speaks `yandexmaps://`.
-     * The route form leaves the start point empty (`rtext=~to`, "from me"); that form is absent
-     * from Yandex' public docs but is what current Maps builds honour.
+     * Yandex Maps' own dialect (#200), reached either per command with `app="maps"` or, since
+     * the setting grew a third value, when [MAPS] is the chosen navigator — Maps is a separate
+     * app from the Navigator and speaks `yandexmaps://`. The route form leaves the start point
+     * empty (`rtext=~to`, "from me"); that form is absent from Yandex' public docs but is what
+     * current Maps builds honour.
      */
-    const val MAPS = "maps"
-
     fun mapsSearch(query: String): String = "yandexmaps://maps.yandex.ru/?text=${Uri.encode(query)}"
 
     /** Pin without a route. The `pt` dialect carries no caption, so the label stays in the log. */

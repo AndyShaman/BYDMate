@@ -896,11 +896,13 @@ class ActionDispatcher @Inject constructor(
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
         val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
         // Only a Yandex ROUTE ends on a «Поехали» screen: show-only drops a pin, search opens a
-        // result list, and 2GIS has no such node at all. Maps is excluded too: the a11y read
-        // that finds and presses «Поехали» looks at the Navigator's window, not Maps'.
+        // result list, and 2GIS has no such node at all. Maps is excluded too, whether by
+        // app="maps" or as the settings default (#200, willOpenMaps): the a11y read that finds
+        // and presses «Поехали» looks at the Navigator's window, not Maps' - including for the
+        // Home/Work shortcut, which now can land on Maps as well.
         val routeMode = !payload.optBoolean("show", false) &&
             payload.optString("query").isBlank()
-        val autoGoSupported = routeMode && !isMapsRequest(payload) &&
+        val autoGoSupported = routeMode && !willOpenMaps(payload) &&
             (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
         val go = autoGoRequested(payload)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
@@ -958,25 +960,40 @@ class ActionDispatcher @Inject constructor(
         }
     }
 
-    /** Which map app routes go to, plus the reason text when 2GIS was replaced by Yandex (#190). */
+    /**
+     * Which map app routes go to, plus the reason text when 2GIS or Maps was replaced by
+     * Yandex Navigator because it is not installed (#190, #200).
+     */
     private fun resolveNavigator(): Pair<String, String?> {
         val chosen = RouteNavigatorUris.normalize(
             context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
                 .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))
-        val fellBack = chosen == RouteNavigatorUris.DGIS &&
+        Log.i(TAG, "navigate: navigator=$chosen")
+        val dgisFellBack = chosen == RouteNavigatorUris.DGIS &&
             !isPackageInstalled(RouteNavigatorUris.DGIS_PACKAGE)
-        if (fellBack) Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
-        return if (fellBack) {
-            RouteNavigatorUris.YANDEX to "2ГИС не установлен, открыт Яндекс Навигатор"
-        } else {
-            chosen to null
+        if (dgisFellBack) {
+            Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
+            return RouteNavigatorUris.YANDEX to "2ГИС не установлен, открыт Яндекс Навигатор"
         }
+        val mapsFellBack = chosen == RouteNavigatorUris.MAPS &&
+            NavPackages.YANDEX_MAPS.none { isPackageInstalled(it) }
+        if (mapsFellBack) {
+            Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
+            return RouteNavigatorUris.YANDEX to "Яндекс Карты не установлены, открыт Яндекс Навигатор"
+        }
+        return chosen to null
     }
 
     private fun sendNavigateIntent(payload: JSONObject, shortcut: String?): DispatchResult {
-        // app="maps" (voice: «…в Яндекс Картах») mirrors the whole command set into Yandex Maps;
-        // any other value, including none, keeps the Navigator/2GIS path below untouched.
-        if (isMapsRequest(payload)) return navigateMaps(payload, shortcut)
+        // #190/#200: which map app the user picked for routes and map search. 2GIS or Maps that
+        // is not installed falls back to Yandex Navigator for this action, and says so in the
+        // result reason.
+        val (navigator, fallbackReason) = resolveNavigator()
+        // app="maps" (voice: «…в Яндекс Картах») or Maps as the settings default mirror the
+        // whole command set, Home/Work shortcut included, into Yandex Maps.
+        if (isMapsRequest(payload) || navigator == RouteNavigatorUris.MAPS) {
+            return navigateMaps(payload, shortcut)
+        }
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
         // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
@@ -992,9 +1009,6 @@ class ActionDispatcher @Inject constructor(
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             return tryStartActivity(intent, "navigate_shortcut:$shortcut")
         }
-        // #190: which map app the user picked for routes and map search. 2GIS that is not
-        // installed falls back to Yandex for this action, and says so in the result reason.
-        val (navigator, fallbackReason) = resolveNavigator()
         // Free-text destination: open the map search (route needs coordinates,
         // which the agent does not have for arbitrary addresses).
         val query = payload.optString("query").takeIf(String::isNotBlank)
@@ -1027,6 +1041,15 @@ class ActionDispatcher @Inject constructor(
     /** Per-command target of a navigate payload: Maps only when the driver named it. */
     private fun isMapsRequest(payload: JSONObject): Boolean =
         payload.optString("app").trim().equals(RouteNavigatorUris.MAPS, ignoreCase = true)
+
+    /**
+     * Whether [navigate]/[sendNavigateIntent] will land on Yandex Maps for this payload, either
+     * because it named `app="maps"` or because that is the settings default (#200), Home/Work
+     * shortcut included — used by [com.bydmate.app.agent.AgentTools] to pick the right
+     * foreground-verification app. Mirrors [sendNavigateIntent]'s own routing exactly.
+     */
+    fun willOpenMaps(payload: JSONObject): Boolean =
+        isMapsRequest(payload) || resolveNavigator().first == RouteNavigatorUris.MAPS
 
     /**
      * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
