@@ -162,25 +162,12 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
     onNavigateToAgentChat: () -> Unit = {},
     onNavigateToVoiceJournal: () -> Unit = {},
+    onNavigateToTariffPeriods: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
 
     // The fid recorder runs in the daemon, so its switch is re-read every time the screen opens.
     LaunchedEffect(Unit) { viewModel.refreshFidRecorder() }
-
-    // Tariff periods — floating window, so the price history never crowds the settings list
-    if (state.showTariffPeriodsDialog) {
-        TariffPeriodsDialog(
-            periods = state.tariffPeriods,
-            currencySymbol = state.currencySymbol,
-            measuredLosses = state.measuredLosses,
-            recalcStatus = state.tariffRecalcStatus,
-            errorText = state.tariffPeriodError,
-            onSave = { viewModel.saveTariffPeriod(it) },
-            onDelete = { viewModel.deleteTariffPeriod(it) },
-            onDismiss = { viewModel.hideTariffPeriods() },
-        )
-    }
 
     // Manual range calculation table dialog
     if (state.showManualRangeTableDialog) {
@@ -270,7 +257,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     when (safeSelected) {
-                        SettingsSection.BATTERY -> BatterySection(state, viewModel)
+                        SettingsSection.BATTERY -> BatterySection(state, viewModel, onNavigateToTariffPeriods)
                         SettingsSection.INTEGRATIONS -> IntegrationsSection(state, viewModel)
                         SettingsSection.VOICE -> VoiceSettingsContent(state, viewModel, onNavigateToVoiceJournal, onNavigateToAgentChat)
                         SettingsSection.WIDGET -> WidgetSection()
@@ -402,7 +389,11 @@ private fun currentTariffPeriodSummary(state: SettingsUiState): String {
 }
 
 @Composable
-private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel) {
+private fun BatterySection(
+    state: SettingsUiState,
+    viewModel: SettingsViewModel,
+    onOpenTariffPeriods: () -> Unit,
+) {
     SectionHeader(text = stringResource(R.string.settings_battery_section_header))
     Card(
         shape = RoundedCornerShape(12.dp),
@@ -432,7 +423,7 @@ private fun BatterySection(state: SettingsUiState, viewModel: SettingsViewModel)
                 title = stringResource(R.string.settings_tariff_periods_title),
                 description = currentTariffPeriodSummary(state),
                 buttonLabel = stringResource(R.string.settings_tariff_periods_button),
-                onClick = { viewModel.showTariffPeriods() },
+                onClick = { viewModel.showTariffPeriods(); onOpenTariffPeriods() },
                 style = SettingButtonStyle.Primary
             )
             SettingHint(stringResource(R.string.settings_tariff_periods_hint))
@@ -2480,10 +2471,11 @@ private fun VoiceSettingsContent(
                 onSelect = { viewModel.setAgentGender(genderIds[it]) },
             )
             SettingDivider()
-            // #190: the map app every route/search command opens (voice agent and automation).
+            // #190/#200: the map app every route/search command opens (voice agent and automation).
             val routeNavigatorIds = listOf(
                 com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
                 com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
+                com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
             )
             SettingChipRow(
                 title = stringResource(R.string.settings_route_navigator_label),
@@ -2491,6 +2483,7 @@ private fun VoiceSettingsContent(
                 options = listOf(
                     stringResource(R.string.settings_route_navigator_yandex),
                     stringResource(R.string.settings_route_navigator_dgis),
+                    stringResource(R.string.settings_route_navigator_maps),
                 ),
                 selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
                 onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },

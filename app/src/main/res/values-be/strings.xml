@@ -113,6 +113,7 @@
     <string name="settings_recalc_all_button">Пералічыць усе паездкі</string>
     <string name="settings_recalc_note">Пералічыць кошт усіх паездак\nпа бягучым тарыфе.</string>
     <string name="settings_tariff_periods_title">Тарыфы і перыяды</string>
+    <string name="settings_tariff_card_period">Перыяд</string>
     <string name="settings_tariff_periods_button">Адкрыць</string>
     <string name="settings_tariff_periods_hint">Дадайце перыяд з патрэбнай датай, і ўсё пасля яе пералічыцца само.</string>
     <string name="settings_tariff_periods_empty">Перыяд не зададзены</string>
@@ -1290,6 +1291,7 @@
     <string name="settings_route_navigator_label">Навігатар для маршрутаў</string>
     <string name="settings_route_navigator_yandex">Яндэкс Навігатар</string>
     <string name="settings_route_navigator_dgis">2ГІС</string>
+    <string name="settings_route_navigator_maps">Яндэкс Карты</string>
     <string name="settings_route_navigator_hint">Якую праграму адкрываць для маршрутаў і пошуку на карце</string>
     <string name="settings_agent_memory_title">Памяць пра кіроўцу</string>
     <string name="settings_agent_memory_hint">Агент запамінае імя і ўстойлівыя перавагі, калі вы яму пра гэта кажаце. Скажыце «забудзь …», каб прыбраць адзін факт</string>

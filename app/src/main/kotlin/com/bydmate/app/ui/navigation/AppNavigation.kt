@@ -261,6 +261,7 @@ fun AppNavigation(
                 SettingsScreen(
                     onNavigateToAgentChat = { navController.navigate("agent_chat") },
                     onNavigateToVoiceJournal = { navController.navigate("voice_journal") },
+                    onNavigateToTariffPeriods = { navController.navigate("tariff_periods") },
                 )
             }
             composable("trip_temperature") {
@@ -268,6 +269,15 @@ fun AppNavigation(
             }
             composable("tech_panel") {
                 com.bydmate.app.ui.tech.TechPanelScreen(onBack = { navController.popBackStack() })
+            }
+            composable("tariff_periods") { entry ->
+                // The settings entry's own view model: the periods list, the recalc status and
+                // the summary line under the «Открыть» button all live in that one instance.
+                val settingsEntry = remember(entry) { navController.getBackStackEntry(Screen.Settings.route) }
+                com.bydmate.app.ui.settings.TariffPeriodsScreen(
+                    onBack = { navController.popBackStack() },
+                    viewModel = hiltViewModel(settingsEntry),
+                )
             }
             composable("agent_chat") {
                 com.bydmate.app.ui.debug.AgentChatScreen(onBack = { navController.popBackStack() })
