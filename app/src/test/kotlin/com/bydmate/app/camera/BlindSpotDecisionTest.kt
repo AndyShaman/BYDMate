@@ -115,6 +115,39 @@ class BlindSpotArmedTest {
     }
 }
 
+class BlindSpotArmedReasonTest {
+
+    @Test fun `disabled feature reports disabled regardless of speed or gear`() {
+        assertEquals(
+            "disabled",
+            blindSpotArmedReason(enabled = false, gear = 4, speedKmh = 80, thresholdKmh = 20))
+    }
+
+    @Test fun `speed below the warm band names the gap`() {
+        assertEquals(
+            "speed 0 < 15",
+            blindSpotArmedReason(enabled = true, gear = 4, speedKmh = 0, thresholdKmh = 20))
+    }
+
+    @Test fun `speed inside the warm band is ok`() {
+        assertEquals(
+            "ok",
+            blindSpotArmedReason(enabled = true, gear = 4, speedKmh = 30, thresholdKmh = 20))
+    }
+
+    @Test fun `reverse gear wins over speed`() {
+        assertEquals(
+            "reverse",
+            blindSpotArmedReason(enabled = true, gear = 2, speedKmh = 80, thresholdKmh = 20))
+    }
+
+    @Test fun `missing speed is its own reason`() {
+        assertEquals(
+            "no speed",
+            blindSpotArmedReason(enabled = true, gear = 4, speedKmh = null, thresholdKmh = 20))
+    }
+}
+
 class BlindSpotFrameStallTest {
 
     private fun stalled(

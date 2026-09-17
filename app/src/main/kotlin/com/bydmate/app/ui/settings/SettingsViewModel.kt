@@ -282,6 +282,7 @@ class SettingsViewModel @Inject constructor(
     private val voiceJournal: VoiceJournal,
     private val tariffPeriodDao: TariffPeriodDao,
     private val costCalculator: CostCalculator,
+    private val blindSpotController: com.bydmate.app.camera.BlindSpotController,
 ) : ViewModel() {
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
@@ -1984,6 +1985,11 @@ class SettingsViewModel @Inject constructor(
                     appendLine("pkg $pkg: $state")
                 }
             } catch (e: Exception) { appendLine("(failed to gather hud state: ${e.message})") }
+
+            appendLine("--- blind spot ---")
+            try {
+                blindSpotController.dumpLines().forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("(failed to gather blind spot state: ${e.message})") }
 
             appendLine("--- cluster ---")
             try {

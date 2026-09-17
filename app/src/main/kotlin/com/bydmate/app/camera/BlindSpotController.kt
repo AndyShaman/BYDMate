@@ -136,6 +136,13 @@ class BlindSpotController @Inject constructor(
     private var lastRequestedSide = BlindSpotSide.NONE
     /** Last seen state of the factory 360 view, so only the transition is logged. */
     private var lastNativeCameraForeground = false
+    /** Last raw turn-signal mask seen on the push channel, for the dump; null until one arrives. */
+    @Volatile private var lastTurnSignal: Int? = null
+    /** elapsedRealtime of [lastTurnSignal]. */
+    @Volatile private var lastTurnSignalAt = 0L
+    /** Last arming decision from the 1 s poll and why, for the dump; also drives the transition log. */
+    @Volatile private var lastArmed = false
+    @Volatile private var lastArmedReason = "unknown"
     private var cameraOpen = false
     private var compositorPowered = false   // last CONFIRMED compositor state
     private var compositorTarget = false    // last requested state, in flight or applied
@@ -154,6 +161,10 @@ class BlindSpotController @Inject constructor(
         pushWatcher = scope.launch {
             fidPush.events.collect { event ->
                 if (isWakeFid(event.fid)) wake.trySend(Unit)
+                if (event.fid == com.bydmate.app.data.nativestack.FidAddresses.fid("turnSignal")) {
+                    lastTurnSignal = event.intValue
+                    lastTurnSignalAt = SystemClock.elapsedRealtime()
+                }
             }
         }
     }
@@ -180,7 +191,38 @@ class BlindSpotController @Inject constructor(
      */
     fun onPollSnapshot(data: DiParsData) {
         val armed = blindSpotArmed(prefs.enabled, data.gear, data.speed, prefs.thresholdKmh)
+        val reason = blindSpotArmedReason(prefs.enabled, data.gear, data.speed, prefs.thresholdKmh)
+        if (armed != lastArmed) {
+            Log.i(TAG, "armed=$armed reason=$reason speed=${data.speed} gear=${data.gear}")
+            lastArmed = armed
+        }
+        lastArmedReason = reason
         if (armed) startFastLoop() else stopFastLoop()
+    }
+
+    /** Dump lines for the settings dump's "--- blind spot ---" section: enable switch, threshold,
+     *  the arming gate and why, the last turn-signal push, and whether the vendor camera stack
+     *  and the factory 360 view are in the way. */
+    fun dumpLines(): List<String> {
+        val turnSignal = lastTurnSignal
+        val cameraStack = when {
+            !discovered -> "untested"
+            probe.cameraId >= 0 -> "available"
+            else -> "unavailable"
+        }
+        return listOf(
+            "enabled=${prefs.enabled}",
+            "threshold_kmh=${prefs.thresholdKmh}",
+            "armed=$lastArmed",
+            "reason=$lastArmedReason",
+            if (turnSignal != null) {
+                "last_turn_signal=$turnSignal age=${SystemClock.elapsedRealtime() - lastTurnSignalAt}ms"
+            } else {
+                "last_turn_signal=(none)"
+            },
+            "native_camera_foreground=${cameraStateMonitor.active.value}",
+            "camera_stack=$cameraStack",
+        )
     }
 
     private fun startFastLoop() {
