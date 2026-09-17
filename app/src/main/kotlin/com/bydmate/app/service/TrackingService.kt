@@ -67,6 +67,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import java.io.File
 import javax.inject.Inject
@@ -118,6 +120,12 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // AutomationEngine.evaluate now has two callers (the poll tick and every push event), and
+    // its per-rule gates are read-then-write across several steps: cooldown, once-per-trip,
+    // serviceStartConsumed, updateLastTriggered. Two overlapping calls could pass the same
+    // rule and dispatch its actions twice, so evaluate runs one at a time. Actions are
+    // dispatched inside the engine's own scope, so the lock is held for the rule scan only.
+    private val evaluateMutex = Mutex()
     private var pollingJob: Job? = null
     // Trigger 2 for the ADB restore: Android refuses to enable wireless debugging without a
     // Wi-Fi connection, so a Wi-Fi network appearing is the moment a blocked attempt can run.
@@ -337,6 +345,31 @@ class TrackingService : Service(), LocationListener {
          * as a failed/timed-out dedicated read used to.
          */
         internal fun enginePowerKwFromSnapshot(data: DiParsData): Int? = data.power?.toInt()
+
+        /**
+         * The pushed fields [applyPushEvent] re-evaluates the automation rules on, straight
+         * off the event. They are the discrete state a rule triggers on — gear, doors,
+         * windows, lights, belts, occupancy — where waiting for the next poll tick means a
+         * rule firing up to a whole PARKED tick (5 s) late: P→R happens standing still, so
+         * the loop is at its slowest exactly when a reverse-gear rule must act now.
+         *
+         * Continuous readings (speed, power, soc, temps, currents, mileage) stay out: they
+         * push constantly and their rules are threshold-based, so the poll tick is timely
+         * enough for them. Every name here is a field FidPushApplier patches (pinned by
+         * TrackingServicePushEvaluateTest, hence internal) and one a rule can trigger on —
+         * a field AutomationEngine.getParamValue does not read would only cost an evaluate
+         * that no rule can act on.
+         */
+        internal val PUSH_EVALUATE_FIELDS: Set<String> = setOf(
+            "gear", "turnSignal", "powerState", "workMode",
+            "doorFL", "doorFR", "doorRL", "doorRR",
+            "windowFL", "windowFR", "windowRL", "windowRR",
+            "sunroof", "trunk", "hood", "lockFL",
+            "seatbeltFL", "seatbeltFR",
+            "occupancyFL", "occupancyFR", "occupancyRL", "occupancyRM", "occupancyRR",
+            "acStatus", "acCirc", "lightLow", "drl", "lightLevel",
+            "keyBatteryStatus",
+        )
 
         private val _lastData = MutableStateFlow<DiParsData?>(null)
         val lastData: StateFlow<DiParsData?> = _lastData
@@ -827,6 +860,26 @@ class TrackingService : Service(), LocationListener {
         )
         if (applied && pushLogThrottle.shouldLog(field)) {
             Log.i("FidPush", "push fid=${event.fid} $field=${event.intValue}/${event.doubleValue} applied")
+        }
+        // A rule that watches this field must not wait for the next poll tick (up to 5 s
+        // while parked). Same snapshot and same session id the poll subscriber passes, on
+        // serviceScope so the binder callback thread is free the moment the patch lands.
+        if (applied && field in PUSH_EVALUATE_FIELDS) {
+            // Throttled on its own key: a window travelling end to end pushes its percent
+            // ~100 times, and every one of them does evaluate — only the line is rationed.
+            if (pushLogThrottle.shouldLog("eval:$field")) Log.i("FidPush", "push $field -> evaluate")
+            // Snapshot and session are captured HERE, on the thread that just patched them:
+            // the coroutine may start after further pushes landed, and the rule must see the
+            // state of its own event, not whatever the snapshot holds by the time it runs.
+            val data = _lastData.value ?: return
+            val sessionId = _sessionStartedAt.value
+            serviceScope.launch {
+                try {
+                    evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Automation evaluate threw on push $field: ${e.message}", e)
+                }
+            }
         }
     }
 
@@ -1534,7 +1587,7 @@ class TrackingService : Service(), LocationListener {
 
                     // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                     // Live power integration removed — motor power ≠ total battery drain.
-                    automationEngine.evaluate(data, sessionId)
+                    evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
                     updateNotification(data)
                     maybeLogSessionSummary(nowMs, data, sessionId)
                     maybeSendIternioTelemetry(data, nowMs)
