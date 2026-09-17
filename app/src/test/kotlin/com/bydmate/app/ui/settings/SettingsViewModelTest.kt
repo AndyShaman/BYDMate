@@ -356,6 +356,7 @@ class SettingsViewModelTest {
             voiceJournal = voiceJournal,
             tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
             costCalculator = exportCostCalculator ?: mockk(relaxed = true),
+            blindSpotController = mockk(relaxed = true),
         )
     }
 

@@ -77,6 +77,19 @@ fun blindSpotArmed(enabled: Boolean, gear: Int?, speedKmh: Int?, thresholdKmh: I
     enabled && gear != BLIND_SPOT_GEAR_REVERSE && speedKmh != null &&
         speedKmh >= thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH
 
+/**
+ * Human-readable reason [blindSpotArmed] is false, for the dump: which of the three gates
+ * (switch, gear, speed) is holding the pipeline down, or "ok" once armed.
+ */
+fun blindSpotArmedReason(enabled: Boolean, gear: Int?, speedKmh: Int?, thresholdKmh: Int): String = when {
+    !enabled -> "disabled"
+    gear == BLIND_SPOT_GEAR_REVERSE -> "reverse"
+    speedKmh == null -> "no speed"
+    speedKmh < thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH ->
+        "speed $speedKmh < ${thresholdKmh - BLIND_SPOT_WARM_HYSTERESIS_KMH}"
+    else -> "ok"
+}
+
 /** A shown window whose vendor stream has been silent this long is frozen, not idle. */
 const val BLIND_SPOT_STALL_MS = 1_500L
 

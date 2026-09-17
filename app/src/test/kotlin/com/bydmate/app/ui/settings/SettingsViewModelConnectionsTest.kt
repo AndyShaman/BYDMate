@@ -294,6 +294,7 @@ class SettingsViewModelConnectionsTest {
             voiceJournal = com.bydmate.app.voice.VoiceJournal(),
             tariffPeriodDao = mockk(relaxed = true),
             costCalculator = mockk(relaxed = true),
+            blindSpotController = mockk(relaxed = true),
         )
     }
 
