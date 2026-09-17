@@ -211,9 +211,10 @@ class AgentTools @Inject constructor(
     // surfaced before letting the LLM claim the route was built.
     private suspend fun dispatchNavigate(displayName: String, payload: JSONObject): DispatchResult {
         val since = System.currentTimeMillis() - 1_000L
-        // The route went to whichever app the payload named, so that is the app whose arrival
-        // proves it: waiting for the Navigator after an app="maps" route fails a working route.
-        val maps = payload.optString("app") == "maps"
+        // The route went to whichever app the payload named or the settings default resolved
+        // to (#200), so that is the app whose arrival proves it: waiting for the Navigator on
+        // a Maps route (explicit app="maps" or Maps chosen in settings) fails a working route.
+        val maps = actionDispatcher.willOpenMaps(payload)
         val surfaced = if (maps) mapsForegroundCheck else naviForegroundCheck
         val appName = if (maps) "Яндекс Карты" else "Навигатор"
         val result = actionDispatcher.dispatch(
@@ -450,9 +451,9 @@ class AgentTools @Inject constructor(
         }
         put(tool(
             "navigate_to",
-            "Построить маршрут от текущей позиции: по умолчанию в Яндекс Навигаторе, " +
-                "app=\"maps\" - в Яндекс Картах (когда пользователь явно просит Карты). " +
-                "Команды поехали домой, до дома, " +
+            "Построить маршрут от текущей позиции: по умолчанию в приложении, выбранном в " +
+                "настройках (Навигатор/2ГИС/Карты), app=\"maps\" - явно в Яндекс Картах, если " +
+                "пользователь просит именно их. Команды поехали домой, до дома, " +
                 "на работу - ЭТОТ инструмент: передай destination \"Дом\" или \"Работа\", маршрут " +
                 "построится по Месту BYDMate или по адресу, сохранённому в самом Навигаторе. " +
                 "destination: имя сохранённого Места, город или населённый пункт (маршрут строится " +
@@ -473,29 +474,29 @@ class AgentTools @Inject constructor(
                         "построить, водитель нажмёт Поехали сам"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
-                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                        "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
         put(tool(
             "search_on_map",
-            "Открыть поиск места в Яндекс Навигаторе (app=\"maps\" - в Яндекс Картах, если " +
-                "пользователь просит именно Карты): на карте появится выдача, пользователь сам " +
-                "выберет точку. Использовать для команд вроде: поищи кафе, найди заправку, " +
+            "Открыть поиск места в приложении, выбранном в настройках (app=\"maps\" - явно в " +
+                "Яндекс Картах, если пользователь просит именно их): на карте появится выдача, " +
+                "пользователь сам выберет точку. Использовать для команд вроде: поищи кафе, найди заправку, " +
                 "где ближайшая аптека. Если пользователь просит ПОЕХАТЬ куда-то, в том числе " +
                 "домой или на работу, используй navigate_to.",
             JSONObject().put("query", JSONObject().put("type", "string")
                 .put("description", "Что искать: название места или категория"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
-                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                        "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             listOf("query"),
         ))
         put(tool(
             "show_point_on_map",
-            "Показать точку на карте БЕЗ построения маршрута (по умолчанию Навигатор, " +
-                "app=\"maps\" - Яндекс Карты): команды вроде " +
+            "Показать точку на карте БЕЗ построения маршрута (по умолчанию приложение из " +
+                "настроек, app=\"maps\" - явно Яндекс Карты): команды вроде " +
                 "покажи на карте, где находится. destination: имя Места, город или адрес; " +
                 "либо lat/lon, если координаты известны (например из find_chargers). " +
                 "Для маршрута используй navigate_to, для поиска по категории search_on_map.",
@@ -505,8 +506,8 @@ class AgentTools @Inject constructor(
                 .put("lon", JSONObject().put("type", "number").put("description", "Долгота"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = Яндекс Навигатор (по умолчанию), " +
-                        "maps = Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                        "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
         put(tool(

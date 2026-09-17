@@ -122,6 +122,96 @@ class ActionDispatcherNavigateTest {
             shadowOf(app).nextStartedActivity.dataString)
     }
 
+    /** #200: the setting sends the route to Yandex Maps' own dialect, no package pin. */
+    @Test fun maps_selected_and_installed_opens_maps() = runTest {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        assertEquals(null, res.reason)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("yandexmaps://maps.yandex.ru/?rtext=~57.0,36.0&rtt=auto", intent.dataString)
+        assertEquals(null, intent.`package`)
+    }
+
+    /** Maps chosen but absent: the action still works, through Yandex Navigator, and says why. */
+    @Test fun maps_selected_but_missing_falls_back_to_yandex() = runTest {
+        selectNavigator(RouteNavigatorUris.MAPS)
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        assertTrue("the reason must mention the fallback: ${res.reason}",
+            res.reason!!.contains("Яндекс Карты"))
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("yandexnavi://build_route_on_map?lat_to=57.0&lon_to=36.0", intent.dataString)
+        assertEquals(null, intent.`package`)
+    }
+
+    @Test fun maps_search_and_show_use_the_yandexmaps_scheme() = runTest {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+
+        dispatcher.dispatch(actionDef("""{"query":"кафе"}"""), null)
+        assertTrue(shadowOf(app).nextStartedActivity.dataString!!
+            .startsWith("yandexmaps://maps.yandex.ru/?text="))
+
+        dispatcher.dispatch(actionDef("""{"show":true,"lat":55.75,"lon":37.62}"""), null)
+        assertEquals("yandexmaps://maps.yandex.ru/?pt=55.75,37.62&z=14",
+            shadowOf(app).nextStartedActivity.dataString)
+    }
+
+    /** Maps chosen also covers «поехали домой/на работу» - navigateMaps() has its own
+     *  ROUTE_TO_HOME/WORK dialect for that. */
+    @Test fun maps_selected_home_shortcut_uses_the_maps_action() = runTest {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+
+        val res = dispatcher.dispatch(actionDef("""{"shortcut":"home"}"""), null)
+        assertTrue(res.success)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("ru.yandex.yandexmaps.action.ROUTE_TO_HOME_SHORTCUT", intent.action)
+        assertEquals("ru.yandex.yandexmaps", intent.`package`)
+    }
+
+    /**
+     * Review P2: with Maps chosen, «поехали домой» (go=true) must not wait for the Navigator's
+     * «Поехали» button - that a11y read only ever looks at the Navigator's window. Without the
+     * fix autoGoSupported stays true for any shortcut, and the dispatch fails with the
+     * "не удалось проверить маршрут" a11y timeout even though Maps opened successfully.
+     */
+    @Test fun maps_selected_home_shortcut_with_go_skips_auto_go_wait() = runTest {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+
+        val res = dispatcher.dispatch(actionDef("""{"shortcut":"home","go":true}"""), null)
+        assertTrue("go on a Maps shortcut must not wait for the Navigator's «Поехали»: ${res.reason}",
+            res.success)
+    }
+
+    // --- willOpenMaps: what AgentTools asks to pick the right foreground-verification app ---
+
+    @Test fun willOpenMaps_true_for_explicit_app_maps() {
+        assertTrue(dispatcher.willOpenMaps(org.json.JSONObject("""{"app":"maps"}""")))
+    }
+
+    @Test fun willOpenMaps_true_when_settings_default_is_maps_and_installed() {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+        assertTrue(dispatcher.willOpenMaps(org.json.JSONObject("""{"lat":57.0,"lon":36.0}""")))
+    }
+
+    @Test fun willOpenMaps_false_when_settings_default_is_maps_but_not_installed() {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        assertFalse(dispatcher.willOpenMaps(org.json.JSONObject("""{"lat":57.0,"lon":36.0}""")))
+    }
+
+    @Test fun willOpenMaps_true_for_shortcut_when_settings_default_is_maps() {
+        selectNavigator(RouteNavigatorUris.MAPS)
+        installYandexMaps()
+        assertTrue(dispatcher.willOpenMaps(org.json.JSONObject("""{"shortcut":"home"}""")))
+    }
+
     private fun selectNavigator(value: String) {
         app.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, android.content.Context.MODE_PRIVATE)
             .edit().putString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, value).commit()
@@ -135,6 +225,19 @@ class ActionDispatcherNavigateTest {
             android.content.ComponentName("ru.dublgis.dgismobile", "ru.dublgis.dgismobile.Main"))
         pm.addIntentFilterForActivity(
             android.content.ComponentName("ru.dublgis.dgismobile", "ru.dublgis.dgismobile.Main"),
+            android.content.IntentFilter(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            },
+        )
+    }
+
+    /** Same as [installDgis], for one of the store variants of Yandex Maps (#200). */
+    private fun installYandexMaps() {
+        val pm = shadowOf(app.packageManager)
+        pm.addActivityIfNotPresent(
+            android.content.ComponentName("ru.yandex.yandexmaps", "ru.yandex.yandexmaps.Main"))
+        pm.addIntentFilterForActivity(
+            android.content.ComponentName("ru.yandex.yandexmaps", "ru.yandex.yandexmaps.Main"),
             android.content.IntentFilter(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             },
