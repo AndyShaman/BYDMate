@@ -51,6 +51,18 @@ class HistoryImporter @Inject constructor(
          */
         internal fun importedExteriorTemp(endTsMs: Long, nowMs: Long, liveTemp: Int?): Int? =
             liveTemp?.takeIf { nowMs >= endTsMs && nowMs - endTsMs <= FRESH_TEMP_WINDOW_MS }
+
+        /**
+         * End temperature for an imported trip: the reading the matched driving session
+         * recorded while the car was on, else the live-snapshot fallback above (which only
+         * fires for a drive that has just ended).
+         */
+        internal fun importedTempEnd(
+            sessionTemp: Int?,
+            endTsMs: Long,
+            nowMs: Long,
+            liveTemp: Int?,
+        ): Int? = sessionTemp ?: importedExteriorTemp(endTsMs, nowMs, liveTemp)
     }
 
     private val syncMutex = Mutex()
@@ -123,6 +135,7 @@ class HistoryImporter @Inject constructor(
         var idleDrainsImported = 0
         var skippedDuplicate = 0
         var implausibleKwh = 0
+        var tempFromSession = 0
         var maxTs = lastImportTs
         val capacity = settingsRepository.getBatteryCapacity()
         // One read of the live snapshot for the whole batch: the drive that just ended is the
@@ -215,6 +228,12 @@ class HistoryImporter @Inject constructor(
             val sessionMatch = lastSessionRepository.takeMatch(endTsMs)
             val socStart = sessionMatch?.startSoc
             val socEnd = sessionMatch?.endSoc
+            // The session bookmark carries the outside temperature too — energydata has
+            // none, and the live fid is only readable while the car is on.
+            val tempStart = sessionMatch?.startExteriorTemp
+            val tempEnd = importedTempEnd(
+                sessionMatch?.endExteriorTemp, endTsMs, nowMs, liveExteriorTemp)
+            if (tempStart != null || sessionMatch?.endExteriorTemp != null) tempFromSession++
 
             // Insert all records (including zero-km) as trips for visibility. The SOC pair
             // read above is what the sanity bound falls back on when BYD's own kWh is impossible.
@@ -232,7 +251,8 @@ class HistoryImporter @Inject constructor(
                     avgSpeedKmh = avgSpeed,
                     socStart = socStart,
                     socEnd = socEnd,
-                    exteriorTempEnd = importedExteriorTemp(endTsMs, nowMs, liveExteriorTemp),
+                    exteriorTemp = tempStart,
+                    exteriorTempEnd = tempEnd,
                     source = "energydata",
                     bydId = byd.id
                 )
@@ -244,7 +264,8 @@ class HistoryImporter @Inject constructor(
 
         Log.d(TAG, "Sync done: $tripsImported trips, $idleDrainsImported idle, $skippedDuplicate dups, " +
             "$implausibleKwh implausible kwh")
-        Log.i(TAG, "import temp: live=${liveExteriorTemp ?: "-"} window=${FRESH_TEMP_WINDOW_MS / 60_000}min")
+        Log.i(TAG, "import temp: from_session=$tempFromSession/$tripsImported " +
+            "live=${liveExteriorTemp ?: "-"} window=${FRESH_TEMP_WINDOW_MS / 60_000}min")
         return ImportResult(
             trips = tripsImported,
             idleDrains = idleDrainsImported,

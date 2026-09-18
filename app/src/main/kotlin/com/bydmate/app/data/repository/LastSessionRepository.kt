@@ -11,7 +11,9 @@ import kotlin.math.abs
 /**
  * Holds SOC bookmarks for completed driving sessions so HistoryImporter can
  * graft socStart/socEnd onto trips imported from energydata (which carries no
- * SOC of its own).
+ * SOC of its own). The outside temperature rides along in the same bookmark:
+ * energydata has no temperature either, and the live fid is only readable while
+ * the car is on — i.e. during the very session recorded here.
  *
  * A session's SOC is read live during driving (the same value sent to ABRP and
  * shown in the widget); the matching TripEntity is created later, when
@@ -43,6 +45,8 @@ class LastSessionRepository @Inject constructor(
         val endSoc: Int?,
         val startTs: Long?,
         val endTs: Long?,
+        val startExteriorTemp: Int? = null,
+        val endExteriorTemp: Int? = null,
     )
 
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -61,10 +65,17 @@ class LastSessionRepository @Inject constructor(
     private var lastPersistedSoc: Int? = null
     private var lastPersistedTs: Long = 0L
 
-    fun onSessionStart(soc: Int?, ts: Long) = synchronized(lock) {
+    fun onSessionStart(soc: Int?, ts: Long, exteriorTemp: Int?) = synchronized(lock) {
         // Seed end = start so a session that ends before any further tick still
-        // carries a sane endSoc.
-        pending = Snapshot(startSoc = soc, endSoc = soc, startTs = ts, endTs = ts)
+        // carries a sane endSoc (and end temperature).
+        pending = Snapshot(
+            startSoc = soc,
+            endSoc = soc,
+            startTs = ts,
+            endTs = ts,
+            startExteriorTemp = exteriorTemp,
+            endExteriorTemp = exteriorTemp,
+        )
         persistPendingLocked()
     }
 
@@ -107,7 +118,23 @@ class LastSessionRepository @Inject constructor(
         persistPendingLocked()
     }
 
-    fun onSessionEnd(soc: Int?, ts: Long) = synchronized(lock) {
+    /**
+     * Track the live outside temperature as the running session start/end, mirroring
+     * [updateLiveSoc]. Memory only: the temperature is written to disk by the next gated
+     * [updateLiveSoc] write or by [onSessionEnd], so a hard power-cut can lose at most
+     * [HEARTBEAT_MS] of temperature drift — irrelevant for a value that moves by a degree
+     * over minutes, and not worth a prefs write of its own on the hot path.
+     * No-op when no session is in progress.
+     */
+    fun updateLiveExteriorTemp(temp: Int) = synchronized(lock) {
+        val p = pending ?: return
+        pending = p.copy(
+            startExteriorTemp = p.startExteriorTemp ?: temp,
+            endExteriorTemp = temp,
+        )
+    }
+
+    fun onSessionEnd(soc: Int?, ts: Long, exteriorTemp: Int?) = synchronized(lock) {
         val p = pending
         val startTs = p?.startTs
         // Store only completed sessions with a real window. A null startTs means
@@ -115,9 +142,18 @@ class LastSessionRepository @Inject constructor(
         // without a start there is nothing reliable to window-match on, so skip it.
         if (startTs != null) {
             // Engine-off can sentinel-out the SOC fid at the closing tick; fall back
-            // to the last live reading rather than storing a null end.
+            // to the last live reading rather than storing a null end. Same for the
+            // temperature fid.
             val endSoc = soc ?: p.endSoc
-            completed.add(Snapshot(startSoc = p.startSoc, endSoc = endSoc, startTs = startTs, endTs = ts))
+            val endTemp = exteriorTemp ?: p.endExteriorTemp
+            completed.add(Snapshot(
+                startSoc = p.startSoc,
+                endSoc = endSoc,
+                startTs = startTs,
+                endTs = ts,
+                startExteriorTemp = p.startExteriorTemp,
+                endExteriorTemp = endTemp,
+            ))
             trimLocked(ts)
             persistCompletedLocked()
         }
@@ -144,7 +180,10 @@ class LastSessionRepository @Inject constructor(
         }
         if (now - refTs >= idleMs) {
             if (p.startTs != null) {
-                completed.add(Snapshot(p.startSoc, p.endSoc, p.startTs, p.endTs ?: p.startTs))
+                completed.add(Snapshot(
+                    p.startSoc, p.endSoc, p.startTs, p.endTs ?: p.startTs,
+                    p.startExteriorTemp, p.endExteriorTemp,
+                ))
                 trimLocked(now)
                 persistCompletedLocked()
             }
@@ -185,6 +224,8 @@ class LastSessionRepository @Inject constructor(
         put("endSoc", s.endSoc ?: JSONObject.NULL)
         put("startTs", s.startTs ?: JSONObject.NULL)
         put("endTs", s.endTs ?: JSONObject.NULL)
+        put("startExtTemp", s.startExteriorTemp ?: JSONObject.NULL)
+        put("endExtTemp", s.endExteriorTemp ?: JSONObject.NULL)
     }
 
     private fun snapshotFromJson(o: JSONObject): Snapshot = Snapshot(
@@ -192,7 +233,14 @@ class LastSessionRepository @Inject constructor(
         endSoc = if (o.isNull("endSoc")) null else o.getInt("endSoc"),
         startTs = if (o.isNull("startTs")) null else o.getLong("startTs"),
         endTs = if (o.isNull("endTs")) null else o.getLong("endTs"),
+        // Bookmarks written before the temperature was carried have no such keys —
+        // read them as unknown instead of throwing the whole bookmark away.
+        startExteriorTemp = optTemp(o, "startExtTemp"),
+        endExteriorTemp = optTemp(o, "endExtTemp"),
     )
+
+    private fun optTemp(o: JSONObject, key: String): Int? =
+        if (!o.has(key) || o.isNull(key)) null else o.getInt(key)
 
     private fun persistCompletedLocked() {
         val arr = JSONArray()
