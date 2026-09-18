@@ -1,11 +1,35 @@
 package com.bydmate.app.camera
 
+import android.os.SystemClock
 import android.util.Log
 import android.view.Surface
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.lang.reflect.Proxy
+
+/** Separators a firmware packs several camera tags into one string with. */
+private val TAG_SEPARATORS = Regex("[,;|\\s]+")
+
+/** Decoration around a tag in such a string: "[pano_h, front]" is a list, not a tag named "[pano_h". */
+private const val TAG_TRIM_CHARS = "[]{}()\"'"
+
+/**
+ * Camera tags as the firmware reports them, in whatever shape getValidCameraTag answers with:
+ * a separated string, an array, a collection or a single value. Distinct, order preserved.
+ */
+internal fun parseCameraTags(raw: Any?): List<String> {
+    val parts = when (raw) {
+        null -> emptyList()
+        is String -> raw.split(TAG_SEPARATORS)
+        is Array<*> -> raw.mapNotNull { it?.toString() }
+        is Collection<*> -> raw.mapNotNull { it?.toString() }
+        else -> listOf(raw.toString())
+    }
+    return parts.map { part -> part.trim { it.isWhitespace() || it in TAG_TRIM_CHARS } }
+        .filter { it.isNotBlank() }
+        .distinct()
+}
 
 /**
  * Reflection access to the hidden android.hardware.AVMCamera stack.
@@ -20,32 +44,68 @@ class AvmCameraProbe {
     private val bound = linkedMapOf<Int, Surface>()
     var cameraId: Int = -1; private set
 
+    /** Lines the LAST [discover] run wrote, for the dump; empty until one has run. */
+    var discoverJournal: List<String> = emptyList(); private set
+
+    /** elapsedRealtime of the last [discover] run — the same clock the fast loop measures its
+     *  re-discover cool-down on; 0 until one has run. */
+    var lastDiscoverAt: Long = 0L; private set
+
+    /**
+     * Looks the camera up, first under the tags this fleet is known to use, then under the tags
+     * the firmware itself reports: the known ones come from Leopard 3 / Sea Lion, and the other
+     * DiLink generations name their cameras differently (Song DiLink 4.0, 2026-09-18: none of the
+     * four answered). The known tags stay first so the cars that already work keep their path.
+     */
     fun discover(): Boolean {
-        return try {
+        val journal = mutableListOf<String>()
+        val note: (String) -> Unit = { line -> journal += line; append(line) }
+        lastDiscoverAt = SystemClock.elapsedRealtime()
+        try {
             val info = Class.forName("android.hardware.BmmCameraInfo")
             val count = info.getMethod("getCameraNumbers").invoke(null)
-            append("getCameraNumbers=$count")
+            note("getCameraNumbers=$count")
+            // Tags this firmware names its own cameras with; none when it will not say.
+            var firmwareTags = emptyList<String>()
             runCatching {
-                append("getValidCameraTag=${info.getMethod("getValidCameraTag").invoke(null)}")
-            }.onFailure { append("getValidCameraTag failed: $it") }
-            for (tag in CAMERA_TAGS) {
-                val id = (info.getMethod("getCameraId", String::class.java)
-                    .invoke(null, tag) as Number).toInt()
-                append("getCameraId($tag)=$id")
-                if (id >= 0 && cameraId < 0) {
-                    cameraId = id
-                    runCatching {
-                        val w = info.getMethod("getDefaultPreviewWidth", Int::class.java).invoke(null, id)
-                        val h = info.getMethod("getDefaultPreviewHeight", Int::class.java).invoke(null, id)
-                        append("defaultPreview=${w}x$h")
-                    }
-                }
-            }
-            cameraId >= 0
+                val raw = info.getMethod("getValidCameraTag").invoke(null)
+                note("getValidCameraTag=$raw")
+                firmwareTags = parseCameraTags(raw)
+            }.onFailure { note("getValidCameraTag failed: $it") }
+            for (tag in CAMERA_TAGS) claimTag(info, tag, "", note)
+            if (cameraId < 0) sweepFirmwareTags(info, firmwareTags, note)
         } catch (e: Throwable) {
-            append("discover failed: ${e.javaClass.simpleName}: ${e.message}")
-            false
+            note("discover failed: ${e.javaClass.simpleName}: ${e.message}")
+        } finally {
+            discoverJournal = journal.toList()
         }
+        return cameraId >= 0
+    }
+
+    /** Second pass, for the cars the known tags do not cover; the first tag that answers wins. */
+    private fun sweepFirmwareTags(info: Class<*>, tags: List<String>, note: (String) -> Unit) {
+        for (tag in tags.filterNot { it in CAMERA_TAGS }) {
+            // One unknown tag the vendor stack refuses must not hide the ones after it.
+            val claimed = runCatching { claimTag(info, tag, " via firmware tag", note) }
+                .onFailure { note("getCameraId($tag) failed: $it") }
+                .getOrDefault(false)
+            if (claimed) break
+        }
+    }
+
+    /** Reads the id behind one tag; adopts it, with its default preview size, if it is the first. */
+    private fun claimTag(info: Class<*>, tag: String, suffix: String, note: (String) -> Unit): Boolean {
+        val id = (info.getMethod("getCameraId", String::class.java)
+            .invoke(null, tag) as Number).toInt()
+        note("getCameraId($tag)=$id$suffix")
+        if (id < 0 || cameraId >= 0) return false
+        cameraId = id
+        runCatching {
+            val w = info.getMethod("getDefaultPreviewWidth", Int::class.java).invoke(null, id)
+            val h = info.getMethod("getDefaultPreviewHeight", Int::class.java).invoke(null, id)
+            note("defaultPreview=${w}x$h")
+        }
+        return true
     }
 
     fun open(previewIndex: Int, surface: Surface): Boolean = openBound(mapOf(previewIndex to surface))
