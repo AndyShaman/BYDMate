@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.tech
 
 import com.bydmate.app.data.repository.equivalentFullCycles
+import com.bydmate.app.data.repository.fullCycleKwh
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
 import java.text.NumberFormat
@@ -50,23 +51,26 @@ internal object TechPanelVisuals {
     data class FullCycles(val value: String, val totalKwh: String, val capacity: String)
 
     /**
-     * Full charge cycles of the pack, from the same lifetime kWh the «Зарядки» screen sums.
-     * Null while the app has not seen a single charging session — there is nothing to divide
-     * yet, and a «0» would read as a measured value. Grouping and the decimal separator follow
-     * the device locale, like every other number on this screen.
+     * Full charge cycles of the pack, off the BMS lifetime counter when the car reports one and
+     * off the app's own charging sum otherwise ([fullCycleKwh]) — the same choice the «Зарядки»
+     * screen makes. Null while neither source has anything to divide; a «0» would read as a
+     * measured value. Grouping and the decimal separator follow the device locale, like every
+     * other number on this screen.
      */
     fun fullCycles(
-        totalKwhAdded: Double?,
+        bmsLifetimeKwh: Double?,
+        chargedKwh: Double?,
         nominalCapacityKwh: Double,
         locale: Locale = Locale.getDefault(),
     ): FullCycles? {
-        if (totalKwhAdded == null || totalKwhAdded <= 0.0 || nominalCapacityKwh <= 0.0) return null
-        val cycles = equivalentFullCycles(totalKwhAdded, nominalCapacityKwh)
+        val totalKwh = fullCycleKwh(bmsLifetimeKwh, chargedKwh) ?: return null
+        if (nominalCapacityKwh <= 0.0) return null
+        val cycles = equivalentFullCycles(totalKwh, nominalCapacityKwh)
         val kwh = NumberFormat.getIntegerInstance(locale)
         val capacity = DecimalFormat("0.#", DecimalFormatSymbols.getInstance(locale))
         return FullCycles(
             value = cycles.roundToInt().toString(),
-            totalKwh = kwh.format(totalKwhAdded),
+            totalKwh = kwh.format(totalKwh),
             capacity = capacity.format(nominalCapacityKwh),
         )
     }

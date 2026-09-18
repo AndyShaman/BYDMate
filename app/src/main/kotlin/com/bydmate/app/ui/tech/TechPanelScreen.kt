@@ -351,7 +351,6 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
             valueColor = insulationColor(insulationMohm),
             hintKey = "insulation", onHint = onHint,
         )
-        FullCyclesRow(state)
         Hint(state.openHint, "soh", R.string.tech_hint_soh)
         Hint(state.openHint, "hvVoltage", R.string.tech_hint_hv_voltage)
         Hint(state.openHint, "power", R.string.tech_hint_motor_power)
@@ -362,12 +361,14 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
 }
 
 /**
- * «Полных циклов» — how many full pack charges the logged sessions add up to, with the sum it
+ * «Полных циклов» — how many full pack charges the car has taken, off the BMS lifetime counter
+ * right above it and off the app's own charging sum on a car that reports none, with the sum it
  * was divided by right under the value so the number is not a black box.
  */
 @Composable
 private fun FullCyclesRow(state: TechPanelUiState) {
-    val cycles = TechPanelVisuals.fullCycles(state.lifetimeChargedKwh, state.nominalCapacityKwh)
+    val cycles = TechPanelVisuals.fullCycles(
+        state.lifetimeKwh?.toDouble(), state.lifetimeChargedKwh, state.nominalCapacityKwh)
     TechRow(stringResource(R.string.tech_label_full_cycles), cycles?.value ?: DASH)
     Text(
         cycles
@@ -559,6 +560,7 @@ private fun HistoryCard(state: TechPanelUiState, onHint: (String) -> Unit, modif
             stringResource(R.string.battery_health_pumped_label),
             state.lifetimeKwh?.let { stringResource(R.string.battery_health_pumped_value, it) } ?: DASH,
         )
+        FullCyclesRow(state)
         TechRow(
             stringResource(R.string.battery_health_avg_since_charge_label),
             state.avgSocSinceCharge?.let { "$it%" } ?: DASH,

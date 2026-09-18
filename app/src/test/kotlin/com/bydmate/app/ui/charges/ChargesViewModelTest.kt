@@ -516,6 +516,31 @@ class ChargesViewModelTest {
         assertEquals(1.0, vm.uiState.value.equivCycles, 0.01)
     }
 
+    /**
+     * The BMS counter covers the whole life of the car, the app's own sum only what it saw since
+     * install, so the cycles must come off the BMS wherever the car reports one (field 2026-09-18:
+     * 10 963 kWh counted against 1 557 kWh logged).
+     */
+    @Test
+    fun `loadLifetimeStats_bmsCounter_winsOverLoggedCharges`() = runTest {
+        val now = System.currentTimeMillis()
+        val vm = buildViewModel(
+            autoserviceCharges = listOf(makeCharge(1, now, kwhCharged = 1557.0, gunState = 2)),
+            batteryReading = BatteryReading(
+                sohPercent = null,
+                socPercent = null,
+                lifetimeKwh = 10963f,
+                lifetimeMileageKm = 55000f,
+                voltage12v = 14f,
+                readAtMs = 0L
+            ),
+            batteryCapacityKwh = "87"
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(126.0, vm.uiState.value.equivCycles, 0.1)
+    }
+
     @Test
     fun `loadLifetimeStats_acDcSplit_correct`() = runTest {
         val now = System.currentTimeMillis()

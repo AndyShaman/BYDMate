@@ -111,7 +111,12 @@ data class TechPanelUiState(
             tyreTempFL, tyreTempFR, tyreTempRL, tyreTempRR,
         )
     val showHistory: Boolean
-        get() = anyOf(lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime)
+        get() = anyOf(
+            lifetimeKm, lifetimeKwh, avgSocSinceCharge, avgSocAllTime,
+            // The «Полных циклов» row lives here; a car that logged charges but answers no
+            // lifetime counter still has a number to show. A zero sum has nothing to divide.
+            lifetimeChargedKwh?.takeIf { it > 0.0 },
+        )
 
     /** [cardOrder] without the cards this car has no data for. */
     val visibleCards: List<TechCard>
@@ -258,8 +263,9 @@ class TechPanelViewModel @Inject constructor(
     }
 
     /**
-     * Lifetime charged kWh for the «Полных циклов» row — the same repository sum the «Зарядки»
-     * screen divides, read once on open. A car with no logged session keeps the dash.
+     * Lifetime charged kWh for the «Полных циклов» row — the app's own sum of logged sessions,
+     * read once on open. Only the fallback divisor: a car that reports a BMS lifetime counter
+     * uses that instead, and one with neither keeps the dash.
      */
     private suspend fun loadFullCycles() {
         val nominal = runCatching { settingsRepository.getBatteryCapacity() }.getOrNull() ?: return

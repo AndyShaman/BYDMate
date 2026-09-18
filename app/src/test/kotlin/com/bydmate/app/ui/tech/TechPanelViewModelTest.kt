@@ -377,7 +377,7 @@ class TechPanelViewModelTest {
 
     // --- full cycles --------------------------------------------------------
 
-    /** The row divides the logged charging sum by the pack size from settings. */
+    /** The fallback divisor of the row: the logged charging sum and the pack size from settings. */
     @Test
     fun `lifetime charged kWh and the pack size reach the state`() = runTest {
         val vm = buildViewModel(
@@ -388,5 +388,19 @@ class TechPanelViewModelTest {
 
         assertEquals(6340.0, vm.uiState.value.lifetimeChargedKwh!!, 1e-9)
         assertEquals(72.9, vm.uiState.value.nominalCapacityKwh, 1e-9)
+    }
+
+    /** The row moved into «Батарея · история», so a car whose only number is the logged sum
+     *  must still open that card — otherwise the cycles would disappear with it. */
+    @Test
+    fun `logged charges alone open the history card`() = runTest {
+        val vm = buildViewModel(
+            lifetimeCharged = LifetimeChargingStats(totalKwhAdded = 1557.0, acKwh = 1557.0, dcKwh = 0.0, sessionCount = 40),
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = vm.uiState.value
+        assertNull(state.lifetimeKwh)
+        assertTrue(state.showHistory)
     }
 }

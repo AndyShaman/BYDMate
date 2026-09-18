@@ -13,6 +13,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.data.repository.equivalentFullCycles
+import com.bydmate.app.data.repository.fullCycleKwh
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -67,7 +68,6 @@ data class ChargesUiState(
     val lifetimeAcKwh: Double = 0.0,
     val lifetimeDcKwh: Double = 0.0,
     val lifetimeTotalKwh: Double = 0.0,
-    val equivCycles: Double = 0.0,
     val nominalCapacityKwh: Double = 72.9,
     // BMS-reported SOH as a 0..1 factor; 1.0 when unavailable or implausible (#28)
     val sohFactor: Double = 1.0,
@@ -87,6 +87,16 @@ data class ChargesUiState(
 ) {
     /** SOC→kWh conversions use the aged capacity, not the nominal one (#28). */
     val effectiveCapacityKwh: Double get() = nominalCapacityKwh * sohFactor
+
+    /**
+     * Full pack cycles, from the BMS lifetime counter when the car reports one and from our own
+     * charging sum otherwise — the same source the «Техника» screen divides, so the two screens
+     * cannot disagree. Derived rather than stored: the BMS read and the database sum land in
+     * this state from two independent coroutines, and whichever arrives last must be counted.
+     */
+    val equivCycles: Double
+        get() = fullCycleKwh(bmsLifetimeKwh, lifetimeTotalKwh)
+            ?.let { equivalentFullCycles(it, nominalCapacityKwh) } ?: 0.0
 }
 
 @HiltViewModel
@@ -312,14 +322,11 @@ class ChargesViewModel @Inject constructor(
         viewModelScope.launch {
             val stats = runCatching { chargeRepository.getLifetimeStats() }.getOrNull()
                 ?: return@launch
-            val nominal = _uiState.value.nominalCapacityKwh
-            val equiv = equivalentFullCycles(stats.totalKwhAdded, nominal)
             _uiState.update {
                 it.copy(
                     lifetimeAcKwh = stats.acKwh,
                     lifetimeDcKwh = stats.dcKwh,
                     lifetimeTotalKwh = stats.totalKwhAdded,
-                    equivCycles = equiv
                 )
             }
         }

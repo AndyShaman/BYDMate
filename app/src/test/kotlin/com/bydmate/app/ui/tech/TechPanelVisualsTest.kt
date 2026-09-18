@@ -74,7 +74,7 @@ class TechPanelVisualsTest {
 
     @Test
     fun `full cycles round the quotient and show the sum they came from`() {
-        val cycles = TechPanelVisuals.fullCycles(6340.0, 72.9, Locale("ru"))!!
+        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, Locale("ru"))!!
         assertEquals("87", cycles.value)
         assertEquals("6 340", cycles.totalKwh.replace('\u00A0', ' '))
         assertEquals("72,9", cycles.capacity)
@@ -82,16 +82,34 @@ class TechPanelVisualsTest {
 
     @Test
     fun `full cycles follow the locale separators`() {
-        val cycles = TechPanelVisuals.fullCycles(6340.0, 72.9, Locale.US)!!
+        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, Locale.US)!!
         assertEquals("87", cycles.value)
         assertEquals("6,340", cycles.totalKwh)
         assertEquals("72.9", cycles.capacity)
     }
 
+    /**
+     * Field case (Song, 3 years, 2026-09-18): the app has logged 1 557 kWh since it was
+     * installed, the BMS counted 10 963 over the life of the car — 18 cycles against 126.
+     */
     @Test
-    fun `no charging session and no pack size leave the row empty`() {
-        assertNull(TechPanelVisuals.fullCycles(null, 72.9, Locale.US))
-        assertNull(TechPanelVisuals.fullCycles(0.0, 72.9, Locale.US))
-        assertNull(TechPanelVisuals.fullCycles(6340.0, 0.0, Locale.US))
+    fun `the BMS counter is divided, not the app's own charging sum`() {
+        val cycles = TechPanelVisuals.fullCycles(10963.0, 1557.0, 87.0, Locale.US)!!
+        assertEquals("126", cycles.value)
+        assertEquals("10,963", cycles.totalKwh)
+    }
+
+    @Test
+    fun `a car that reports no BMS counter falls back to the charging sum`() {
+        assertEquals("18", TechPanelVisuals.fullCycles(null, 1557.0, 87.0, Locale.US)!!.value)
+        assertEquals("18", TechPanelVisuals.fullCycles(0.0, 1557.0, 87.0, Locale.US)!!.value)
+    }
+
+    @Test
+    fun `no source and no pack size leave the row empty`() {
+        assertNull(TechPanelVisuals.fullCycles(null, null, 72.9, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(null, 0.0, 72.9, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(0.0, 0.0, 72.9, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(10963.0, 6340.0, 0.0, Locale.US))
     }
 }
