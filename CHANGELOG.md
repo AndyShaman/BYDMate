@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.17.2] - 2026-09-18
+
 ### Исправления
 - Автоматизации: при выборе значения из списка (передача, поворотник и другие) выбранный оператор больше не сбрасывается на «равно»
 - Голос: правило, запущенное голосом, больше не обрывается, когда исчезает окно ассистента; пауза и действия после неё выполняются до конца, ассистент отвечает «Выполняю» в начале
@@ -1137,7 +1139,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.1...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.2...HEAD
+[3.17.2]: https://github.com/AndyShaman/BYDMate/compare/v3.17.1...v3.17.2
 [3.17.1]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...v3.17.1
 [3.17.0]: https://github.com/AndyShaman/BYDMate/compare/v3.16.0...v3.17.0
 [3.16.0]: https://github.com/AndyShaman/BYDMate/compare/v3.15.5...v3.16.0
