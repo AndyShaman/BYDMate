@@ -180,9 +180,11 @@ class FidMapTest {
         assertTrue("FidMap has no entry for $missing", missing.isEmpty())
     }
 
-    @Test fun `every entry carries a catalog symbol except the one that has none`() {
+    @Test fun `every entry carries a catalog symbol`() {
+        // windowRRGen3 used to be the one exception; it now shares windowRR's symbol as an
+        // alias fid so the collision guard treats both as the same field (#216).
         val withoutSymbol = FidMap.all.filter { it.symbol == null }.map { it.field }
-        assertEquals(listOf("windowRRGen3"), withoutSymbol)
+        assertEquals(emptyList<String>(), withoutSymbol)
     }
 
     @Test fun `field names are unique across the polled and extra tables`() {

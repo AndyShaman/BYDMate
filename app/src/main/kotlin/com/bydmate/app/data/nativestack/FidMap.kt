@@ -96,7 +96,10 @@ object FidMap {
         // DiLink 3.0 catalogs expose the RR window percent under a different fid
         // (BODYWORK_WINDOW_RIGHT_REAR_PERCENT 0x4b900018). Same semantics, read as a
         // fallback when the DiLink 5.0 fid above returns a link error (#79).
-        FidEntry("windowRRGen3",         1001, 1267728408,   5, Decoder.INT_PERCENT),
+        // Symbol matches windowRR above: without it the collision guard in FidResolver
+        // treats this address as belonging to a different, unnamed entry and rejects
+        // windowRR's catalog candidate on DiLink 3.0 (#216).
+        FidEntry("windowRRGen3",         1001, 1267728408,   5, Decoder.INT_PERCENT, symbol = "Bodywork.BODYWORK_WINDOW_RIGHT_REAR_PERCENT"),
         // Percent fid (live Leopard 3 2026-07-30): 0=closed, 7=vent detent, 50=half, 100=open
         FidEntry("sunroof",              1001, 1101004808,   5, Decoder.INT_PERCENT, symbol = "Bodywork.BODYWORK_MOON_ROOF_OPEN_PERCENT"),
         // Tailgate position, same enum family as frontTrunk below: 2=closed, 1=open,
