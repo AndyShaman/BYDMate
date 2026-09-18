@@ -139,7 +139,10 @@ const val BLIND_SPOT_MAX_READ_FAILURES = 2
 class BlindSpotTelemetryGate {
     private var lastValidAt = 0L
     private var armedAt = 0L
-    private var readFailures = 0
+
+    /** Batch reads that failed in a row; read by the controller for the loss log line. */
+    var readFailures = 0
+        private set
     private var lastValid: BlindSpotSample? = null
 
     /** Called when the loop starts, so the lost-telemetry timer counts from the arming point. */
