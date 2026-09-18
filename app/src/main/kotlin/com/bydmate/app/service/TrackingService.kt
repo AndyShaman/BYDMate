@@ -960,10 +960,11 @@ class TrackingService : Service(), LocationListener {
                 sessionStartMileageKm = data.mileage
                 sessionStartTotalElecKwh = data.totalElecConsumption
                 _liveWholeSession.value = true
-                lastSessionRepository.onSessionStart(soc = data.soc, ts = now)
+                lastSessionRepository.onSessionStart(
+                    soc = data.soc, ts = now, exteriorTemp = data.exteriorTemp)
                 Log.i(TAG, "Widget session START at $now " +
                     "(powerOn=$powerOn, driving=$driving, mileageStart=${data.mileage}, " +
-                    "totalElecStart=${data.totalElecConsumption})")
+                    "totalElecStart=${data.totalElecConsumption}, extTemp=${data.exteriorTemp})")
             } else {
                 // Lazy-init both baselines if DiPars was unready at the exact session-start tick.
                 // For a restored session whose baselines were missing, _liveWholeSession is already
@@ -980,12 +981,18 @@ class TrackingService : Service(), LocationListener {
             // widget) as the running session end on every active tick, so a hard
             // power-cut at ignition-off can't drop it. Also lazily fills the start
             // SOC if it sentinelled-out at the start tick. Single source: data.soc.
+            // The outside temperature goes first: energydata carries none, so the session
+            // bookmark is the only way an imported trip gets its start/end temperature, and
+            // the gated SOC write below is what puts this tick's reading on disk.
+            data.exteriorTemp?.let { lastSessionRepository.updateLiveExteriorTemp(it) }
             data.soc?.let { lastSessionRepository.updateLiveSoc(it, now) }
         } else if (currentSession != null) {
             val idleFor = now - sessionLastActiveTs
             if (idleFor >= SESSION_IDLE_CLOSE_MS) {
-                Log.i(TAG, "Widget session END (idle ${idleFor / 1000}s, powerOn=$powerOn, driving=$driving)")
-                lastSessionRepository.onSessionEnd(soc = data.soc, ts = now)
+                Log.i(TAG, "Widget session END (idle ${idleFor / 1000}s, powerOn=$powerOn, " +
+                    "driving=$driving, extTemp=${data.exteriorTemp})")
+                lastSessionRepository.onSessionEnd(
+                    soc = data.soc, ts = now, exteriorTemp = data.exteriorTemp)
                 _sessionStartedAt.value = null
                 sessionStartMileageKm = null
                 sessionStartTotalElecKwh = null

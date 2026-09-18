@@ -28,8 +28,8 @@ class LastSessionRepositoryTest {
     @Test
     fun `completed session matched by endTs containment then consumed`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 80, ts = 1_000L)
-        repo.onSessionEnd(soc = 60, ts = 2_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
 
         val m = repo.takeMatch(2_000L)
         assertEquals(80, m?.startSoc)
@@ -41,8 +41,8 @@ class LastSessionRepositoryTest {
     @Test
     fun `endTs within tolerance after session end still matches`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 90, ts = 10_000L)
-        repo.onSessionEnd(soc = 70, ts = 20_000L)
+        repo.onSessionStart(soc = 90, ts = 10_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 20_000L, exteriorTemp = null)
         // trip endTs 25s after session end — inside the +30s tolerance
         assertEquals(70, repo.takeMatch(25_000L)?.endSoc)
     }
@@ -51,8 +51,8 @@ class LastSessionRepositoryTest {
     fun `bookmarks survive a process restart (persisted)`() {
         val context = ctx()
         val repo1 = LastSessionRepository(context)
-        repo1.onSessionStart(soc = 55, ts = 1_000L)
-        repo1.onSessionEnd(soc = 40, ts = 2_000L)
+        repo1.onSessionStart(soc = 55, ts = 1_000L, exteriorTemp = null)
+        repo1.onSessionEnd(soc = 40, ts = 2_000L, exteriorTemp = null)
 
         // New instance, same Context — simulates a process restart
         val repo2 = LastSessionRepository(context)
@@ -64,10 +64,10 @@ class LastSessionRepositoryTest {
     @Test
     fun `multiple sessions each match independently`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 80, ts = 1_000L)
-        repo.onSessionEnd(soc = 70, ts = 2_000L)
-        repo.onSessionStart(soc = 65, ts = 5_000L)
-        repo.onSessionEnd(soc = 50, ts = 6_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 2_000L, exteriorTemp = null)
+        repo.onSessionStart(soc = 65, ts = 5_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 50, ts = 6_000L, exteriorTemp = null)
 
         assertEquals(50, repo.takeMatch(6_000L)?.endSoc)
         assertEquals(70, repo.takeMatch(2_000L)?.endSoc)
@@ -77,42 +77,42 @@ class LastSessionRepositoryTest {
     fun `best match picks the session whose end is nearest the trip end`() {
         val repo = LastSessionRepository(ctx())
         // two overlapping windows both contain tripEnd = 2_500
-        repo.onSessionStart(soc = 80, ts = 1_000L)
-        repo.onSessionEnd(soc = 70, ts = 2_000L)   // end 2000, |2500-2000| = 500
-        repo.onSessionStart(soc = 60, ts = 1_500L)
-        repo.onSessionEnd(soc = 55, ts = 2_400L)   // end 2400, |2500-2400| = 100 -> nearest
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 2_000L, exteriorTemp = null)   // end 2000, |2500-2000| = 500
+        repo.onSessionStart(soc = 60, ts = 1_500L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 55, ts = 2_400L, exteriorTemp = null)   // end 2400, |2500-2400| = 100 -> nearest
         assertEquals(55, repo.takeMatch(2_500L)?.endSoc)
     }
 
     @Test
     fun `lazy init fills start soc captured null at session start tick`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = null, ts = 1_000L)  // cold-start sentinel
+        repo.onSessionStart(soc = null, ts = 1_000L, exteriorTemp = null)  // cold-start sentinel
         repo.fillStartSocIfMissing(77)
-        repo.onSessionEnd(soc = 60, ts = 2_000L)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
         assertEquals(77, repo.takeMatch(2_000L)?.startSoc)
     }
 
     @Test
     fun `lazy init does not overwrite an already captured start soc`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 90, ts = 1_000L)
+        repo.onSessionStart(soc = 90, ts = 1_000L, exteriorTemp = null)
         repo.fillStartSocIfMissing(50)
-        repo.onSessionEnd(soc = 60, ts = 2_000L)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
         assertEquals(90, repo.takeMatch(2_000L)?.startSoc)
     }
 
     @Test
     fun `pending session not yet ended is not matchable`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         assertNull(repo.takeMatch(1_000L))
     }
 
     @Test
     fun `session end without a prior start is not stored`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionEnd(soc = 70, ts = 5_000L)  // no start -> no window to match on
+        repo.onSessionEnd(soc = 70, ts = 5_000L, exteriorTemp = null)  // no start -> no window to match on
         assertNull(repo.takeMatch(5_000L))
     }
 
@@ -122,8 +122,8 @@ class LastSessionRepositoryTest {
         // 25 isolated sessions (spacing 100s >> 30s tolerance); window n = [n*100k .. n*100k+10k]
         for (n in 1..25) {
             val start = n * 100_000L
-            repo.onSessionStart(soc = 100, ts = start)
-            repo.onSessionEnd(soc = 90, ts = start + 10_000L)
+            repo.onSessionStart(soc = 100, ts = start, exteriorTemp = null)
+            repo.onSessionEnd(soc = 90, ts = start + 10_000L, exteriorTemp = null)
         }
         // session #1 (end 110_000) dropped by the count cap (keeps last 20)
         assertNull(repo.takeMatch(110_000L))
@@ -135,11 +135,11 @@ class LastSessionRepositoryTest {
     fun `bookmark older than max age is trimmed`() {
         val repo = LastSessionRepository(ctx())
         val day = 86_400_000L
-        repo.onSessionStart(soc = 80, ts = 1_000L)
-        repo.onSessionEnd(soc = 70, ts = 2_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
+        repo.onSessionEnd(soc = 70, ts = 2_000L, exteriorTemp = null)
         // a new session 8 days later triggers age-trim of the stale one
-        repo.onSessionStart(soc = 60, ts = 8 * day)
-        repo.onSessionEnd(soc = 50, ts = 8 * day + 1_000L)
+        repo.onSessionStart(soc = 60, ts = 8 * day, exteriorTemp = null)
+        repo.onSessionEnd(soc = 50, ts = 8 * day + 1_000L, exteriorTemp = null)
         assertNull("stale bookmark should be age-trimmed", repo.takeMatch(2_000L))
         assertEquals(50, repo.takeMatch(8 * day + 1_000L)?.endSoc)
     }
@@ -148,7 +148,7 @@ class LastSessionRepositoryTest {
     fun `live soc persisted each tick survives a power-cut and reconciles to a bookmark`() {
         val context = ctx()
         val repo1 = LastSessionRepository(context)
-        repo1.onSessionStart(soc = 80, ts = 1_000L)
+        repo1.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         repo1.updateLiveSoc(soc = 75, ts = 2_000L)
         repo1.updateLiveSoc(soc = 72, ts = 3_000L)
         // power-cut at ignition-off: onSessionEnd never fires, process dies
@@ -165,7 +165,7 @@ class LastSessionRepositoryTest {
     @Test
     fun `open session still live is not reconciled`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         repo.updateLiveSoc(soc = 75, ts = 2_000L)
         // only 10s since the last tick — still driving, must not close
         repo.reconcileStaleOpenSession(now = 2_000L + 10_000L, idleMs = 30_000L)
@@ -182,10 +182,10 @@ class LastSessionRepositoryTest {
     @Test
     fun `onSessionEnd falls back to last live soc when the end-tick soc is null`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         repo.updateLiveSoc(soc = 60, ts = 2_000L)
         // engine-off sentinels-out the SOC fid at the closing tick
-        repo.onSessionEnd(soc = null, ts = 3_000L)
+        repo.onSessionEnd(soc = null, ts = 3_000L, exteriorTemp = null)
         assertEquals(60, repo.takeMatch(3_000L)?.endSoc)
     }
 
@@ -198,7 +198,7 @@ class LastSessionRepositoryTest {
         // HistoryImporter.doSync now reconciles first; this locks in that contract.
         val context = ctx()
         val repo1 = LastSessionRepository(context)
-        repo1.onSessionStart(soc = 88, ts = 1_000_000L)
+        repo1.onSessionStart(soc = 88, ts = 1_000_000L, exteriorTemp = null)
         repo1.updateLiveSoc(soc = 84, ts = 1_060_000L)   // ~1 min drive, power-cut, no onSessionEnd
 
         // Fresh process at next ignition-on; the energydata trip ended at 1_060_000.
@@ -215,10 +215,91 @@ class LastSessionRepositoryTest {
     @Test
     fun `updateLiveSoc fills start soc when it was null at the start tick`() {
         val repo = LastSessionRepository(ctx())
-        repo.onSessionStart(soc = null, ts = 1_000L)   // cold-start sentinel
+        repo.onSessionStart(soc = null, ts = 1_000L, exteriorTemp = null)   // cold-start sentinel
         repo.updateLiveSoc(soc = 77, ts = 2_000L)
-        repo.onSessionEnd(soc = 60, ts = 3_000L)
+        repo.onSessionEnd(soc = 60, ts = 3_000L, exteriorTemp = null)
         assertEquals(77, repo.takeMatch(3_000L)?.startSoc)
+    }
+
+    @Test
+    fun `start temperature is seeded at session start`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = 5)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = 9)
+
+        val m = repo.takeMatch(2_000L)
+        assertEquals(5, m?.startExteriorTemp)
+        assertEquals(9, m?.endExteriorTemp)
+    }
+
+    @Test
+    fun `live temperature fills the start when it was null at the start tick`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)  // temp fid not ready yet
+        repo.updateLiveExteriorTemp(7)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = 7)
+
+        assertEquals(7, repo.takeMatch(2_000L)?.startExteriorTemp)
+    }
+
+    @Test
+    fun `end temperature is the last live reading`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = 5)
+        repo.updateLiveExteriorTemp(6)
+        repo.updateLiveExteriorTemp(8)
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = 8)
+
+        val m = repo.takeMatch(2_000L)
+        assertEquals(5, m?.startExteriorTemp)
+        assertEquals(8, m?.endExteriorTemp)
+    }
+
+    @Test
+    fun `onSessionEnd falls back to the last live temperature when the end-tick temp is null`() {
+        val repo = LastSessionRepository(ctx())
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = 5)
+        repo.updateLiveExteriorTemp(8)
+        // engine-off sentinels the temperature fid at the closing tick
+        repo.onSessionEnd(soc = 60, ts = 2_000L, exteriorTemp = null)
+
+        assertEquals(8, repo.takeMatch(2_000L)?.endExteriorTemp)
+    }
+
+    @Test
+    fun `a completed bookmark written before temperatures existed still loads`() {
+        val context = ctx()
+        // Exactly what an older version wrote: no temperature keys at all.
+        context.getSharedPreferences("session_soc_bookmarks", Context.MODE_PRIVATE).edit()
+            .putString(
+                "completed_sessions",
+                """[{"startSoc":80,"endSoc":60,"startTs":1000,"endTs":2000}]""")
+            .commit()
+
+        val m = LastSessionRepository(context).takeMatch(2_000L)
+        assertEquals(80, m?.startSoc)
+        assertEquals(60, m?.endSoc)
+        assertNull(m?.startExteriorTemp)
+        assertNull(m?.endExteriorTemp)
+    }
+
+    @Test
+    fun `a pending bookmark written before temperatures existed still reconciles`() {
+        val context = ctx()
+        context.getSharedPreferences("session_soc_bookmarks", Context.MODE_PRIVATE).edit()
+            .putString(
+                "pending_session",
+                """{"startSoc":88,"endSoc":84,"startTs":1000,"endTs":2000}""")
+            .commit()
+
+        val repo = LastSessionRepository(context)
+        repo.reconcileStaleOpenSession(now = 2_000L + 40_000L, idleMs = 30_000L)
+
+        val m = repo.takeMatch(2_000L)
+        assertEquals(88, m?.startSoc)
+        assertEquals(84, m?.endSoc)
+        assertNull(m?.startExteriorTemp)
+        assertNull(m?.endExteriorTemp)
     }
 
     /**
@@ -251,7 +332,7 @@ class LastSessionRepositoryTest {
     fun `updateLiveSoc skips the prefs write when soc is unchanged within the heartbeat window`() {
         val (ctx, writeCount) = mockCountingPrefs()
         val repo = LastSessionRepository(ctx)
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         val afterStart = writeCount[0]
 
         repo.updateLiveSoc(soc = 75, ts = 2_000L)   // first live tick -- no prior persisted soc, always writes
@@ -274,7 +355,7 @@ class LastSessionRepositoryTest {
     fun `updateLiveSoc forces a write within END_TOLERANCE_MS even with an unchanged soc`() {
         val (ctx, writeCount) = mockCountingPrefs()
         val repo = LastSessionRepository(ctx)
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         repo.updateLiveSoc(soc = 75, ts = 2_000L)
         val afterFirstTick = writeCount[0]
 
@@ -293,12 +374,12 @@ class LastSessionRepositoryTest {
     fun `session end always persists regardless of the updateLiveSoc gate`() {
         val (ctx, writeCount) = mockCountingPrefs()
         val repo = LastSessionRepository(ctx)
-        repo.onSessionStart(soc = 80, ts = 1_000L)
+        repo.onSessionStart(soc = 80, ts = 1_000L, exteriorTemp = null)
         repo.updateLiveSoc(soc = 75, ts = 2_000L)
         repo.updateLiveSoc(soc = 75, ts = 2_500L)   // gate-skipped, but pending stays accurate in memory
         val beforeEnd = writeCount[0]
 
-        repo.onSessionEnd(soc = 75, ts = 3_000L)
+        repo.onSessionEnd(soc = 75, ts = 3_000L, exteriorTemp = null)
 
         assertTrue("onSessionEnd must always persist", writeCount[0] > beforeEnd)
         assertEquals(75, repo.takeMatch(3_000L)?.endSoc)
