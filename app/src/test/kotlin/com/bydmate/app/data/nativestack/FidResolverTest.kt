@@ -36,7 +36,7 @@ class FidResolverTest {
     fun `leopard 3 catalog leaves every entry on its constant`() = runTest {
         val outcome = FidResolver.resolve(FidMap.all, catalog("leopard3"), alwaysPlausible, "test")
         FidMap.all.forEach { entry ->
-            if (entry.field == STALE_BY_DESIGN) return@forEach
+            if (entry.field == STALE_BY_DESIGN || entry.field == "windowRRGen3") return@forEach
             val address = outcome.table.address(entry.field)
             assertEquals("device moved for ${entry.field}", entry.device, address.device)
             assertEquals("fid moved for ${entry.field}", entry.fid, address.fid)
@@ -44,10 +44,13 @@ class FidResolverTest {
         // The one deliberate exception: this constant answers a sentinel on Leopard 3 and
         // was kept only as a fallback, so its symbol is expected to move it (see FidMap).
         assertEquals(1145045000, outcome.table.fid(STALE_BY_DESIGN))
+        // windowRRGen3 shares windowRR's symbol as an alias fid (#216): on a catalog that
+        // knows the real address, the fallback guess follows the same resolved address.
+        assertEquals(947912752, outcome.table.fid("windowRRGen3"))
         assertEquals(
-            "only $STALE_BY_DESIGN may move on Leopard 3",
-            listOf(STALE_BY_DESIGN),
-            outcome.table.notes.filter { it.outcome != FidResolution.CONST }.map { it.field },
+            "only $STALE_BY_DESIGN and windowRRGen3 may move on Leopard 3",
+            listOf(STALE_BY_DESIGN, "windowRRGen3").sorted(),
+            outcome.table.notes.filter { it.outcome != FidResolution.CONST }.map { it.field }.sorted(),
         )
     }
 
@@ -78,9 +81,10 @@ class FidResolverTest {
             assertNull("$field unexpectedly present", songPlus.fidOf(entry.symbol!!))
             assertEquals(entry.fid, outcome.table.fid(field))
         }
-        // No symbol at all: nothing to resolve against, ever.
-        assertNull(FidMap.byField.getValue("windowRRGen3").symbol)
-        assertEquals(1267728408, outcome.table.fid("windowRRGen3"))
+        // windowRRGen3 shares windowRR's symbol as an alias fid (#216), so on a catalog that
+        // moves that symbol both fields follow it together.
+        assertEquals(947912744, outcome.table.fid("windowRR"))
+        assertEquals(947912744, outcome.table.fid("windowRRGen3"))
     }
 
     @Test
@@ -203,6 +207,26 @@ class FidResolverTest {
         val diLink4 = FidResolver.resolve(FidMap.all, catalog("dilink4"), alwaysPlausible, "test")
         assertEquals(FidMap.byField.getValue("mileage").fid, diLink4.table.fid("mileage"))
         assertEquals(0.1, diLink4.table.scale("mileage"), 0.0)
+    }
+
+    @Test
+    fun `issue 216 windowRR resolves via the DiLink 3 gen3 alias fid instead of being rejected`() = runTest {
+        // Yuan UP 2024 (DiLink 3.0) catalog: RR window percent lives at 1267728408, the
+        // address windowRRGen3 already occupies as a constant. Before windowRRGen3 carried
+        // the same symbol, that made it a foreign occupant and rejected windowRR's candidate.
+        val catalog = FidCatalog(
+            mapOf(
+                "Bodywork.BODYWORK_WINDOW_LEFT_FRONT_PERCENT" to 947912728,
+                "Bodywork.BODYWORK_WINDOW_RIGHT_FRONT_PERCENT" to 1267728400,
+                "Bodywork.BODYWORK_WINDOW_LEFT_REAR_PERCENT" to 947912736,
+                "Bodywork.BODYWORK_WINDOW_RIGHT_REAR_PERCENT" to 1267728408,
+            ),
+            mapOf("BODYWORK" to 1001),
+        )
+        val outcome = FidResolver.resolve(FidMap.all, catalog, alwaysPlausible, "test")
+        val note = outcome.table.notes.first { it.field == "windowRR" }
+        assertEquals(FidResolution.CATALOG, note.outcome)
+        assertEquals(1267728408, outcome.table.fid("windowRR"))
     }
 
     @Test
