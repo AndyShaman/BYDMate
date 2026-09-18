@@ -1203,6 +1203,7 @@
     <string name="settings_voice_enable_label">Komendy głosowe</string>
     <string name="settings_voice_enable_description">Komendy przyciskiem kierownicy bez internetu</string>
     <string name="settings_voice_model_downloading">Pobieranie… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">Rozpakowywanie… %1$d%%</string>
     <string name="voice_listening">Słucham</string>
     <string name="voice_thinking">Myślę</string>
     <string name="voice_error_model_missing">Model głosowy nie jest pobrany. Pobierz go w Ustawieniach, sekcja Asystent głosowy.</string>
@@ -1215,6 +1216,7 @@
     <string name="settings_asr_gigaam_download">Pobierz (%1$s)</string>
     <string name="settings_asr_gigaam_delete">Usuń model</string>
     <string name="settings_asr_gigaam_download_failed">Nie udało się pobrać modelu</string>
+    <string name="settings_asr_gigaam_no_space">Za mało miejsca: potrzeba %1$d MB, wolne %2$d MB</string>
 
     <string name="settings_voice_button_label">Przypisz przycisk</string>
     <string name="settings_voice_button_current">Bieżący: %1$s</string>

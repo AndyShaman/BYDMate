@@ -14,6 +14,8 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.IOException
+import java.io.InputStream
 
 /** Downloads and unpacks the GigaAM v3 Russian ASR model (sherpa-onnx nemo-ctc archive:
  *  model.int8.onnx + tokens.txt under one top-level dir) plus the standalone silero VAD
@@ -21,7 +23,23 @@ import java.io.File
 class GigaAmModelManager(
     private val context: Context,
     private val http: OkHttpClient,
+    /** Free bytes on the volume backing filesDir and cacheDir -- the same /data partition
+     *  on every DiLink head unit. Injectable so unit tests never depend on the host disk. */
+    private val usableSpace: () -> Long = { context.filesDir.usableSpace },
 ) {
+    /** Which stage of [download] a reported percentage belongs to. The unpack of a ~226 MiB
+     *  bzip2 archive takes minutes on a DiLink 3 and pulls nothing over the network, so the
+     *  UI must be able to label it as something other than "Downloading" (issue: progress
+     *  appears stuck at 99% on Song Plus / DiLink 3.0). */
+    enum class Phase { DOWNLOAD, UNPACK, VAD }
+
+    /** Thrown by [download] when the storage precheck refuses to start. Carries both numbers
+     *  so the UI can tell the user how much needs freeing instead of just "failed". */
+    class InsufficientStorageException(
+        val requiredBytes: Long,
+        val availableBytes: Long,
+    ) : IOException("needs $requiredBytes free bytes, only $availableBytes available")
+
     private fun baseDir() = File(context.filesDir, "asr/gigaam-v3-ru")
 
     private fun stagingDir() = File(context.filesDir, "asr/.staging-gigaam-v3-ru")
@@ -63,14 +81,21 @@ class GigaAmModelManager(
         }
     }
 
-    suspend fun download(onProgress: (Int) -> Unit): Result<Unit> =
+    suspend fun download(onProgress: (Phase, Int) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                // Precheck before the first byte: the peak need is the archive in cacheDir plus
+                // its same-size unpack in staging. Without this the run dies ~450 MB and many
+                // minutes in, as an opaque "unpack produced incomplete model dir".
+                val free = usableSpace()
+                if (free < REQUIRED_FREE_BYTES) throw InsufficientStorageException(REQUIRED_FREE_BYTES, free)
                 val tmpArchive = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
                 val tmpVad = File(context.cacheDir, "silero_vad.onnx.tmp")
                 try {
-                    // Model archive: 0..MODEL_WEIGHT of the combined progress.
-                    downloadToFile(MODEL_URL, tmpArchive) { pct -> onProgress((pct * MODEL_WEIGHT) / 100) }
+                    // Model archive: 0..DOWNLOAD_WEIGHT of the combined progress.
+                    downloadToFile(MODEL_URL, tmpArchive) { pct ->
+                        onProgress(Phase.DOWNLOAD, (pct * DOWNLOAD_WEIGHT) / 100)
+                    }
                     ensureActive()
                     diskMutex.withLock {
                         // Checked under the lock: a delete that cancelled us has
@@ -82,7 +107,10 @@ class GigaAmModelManager(
                         staging.deleteRecursively()
                         staging.mkdirs()
                         try {
-                            untarFlatten(tmpArchive, staging)
+                            // Unpack: DOWNLOAD_WEIGHT..UNPACK_END of the combined progress.
+                            untarFlatten(tmpArchive, staging) { pct ->
+                                onProgress(Phase.UNPACK, DOWNLOAD_WEIGHT + (pct * (UNPACK_END - DOWNLOAD_WEIGHT)) / 100)
+                            }
                             check(isModelComplete(staging)) { "unpack produced incomplete model dir" }
                             // Atomic publish: the final dir only ever appears as a
                             // fully verified unpack, so a process kill mid-unpack can
@@ -100,9 +128,9 @@ class GigaAmModelManager(
                     }
                     ensureActive()
 
-                    // VAD: MODEL_WEIGHT..100 of the combined progress.
+                    // VAD: UNPACK_END..100 of the combined progress.
                     downloadToFile(VAD_URL, tmpVad) { pct ->
-                        onProgress(MODEL_WEIGHT + (pct * (100 - MODEL_WEIGHT)) / 100)
+                        onProgress(Phase.VAD, UNPACK_END + (pct * (100 - UNPACK_END)) / 100)
                     }
                     ensureActive()
                     diskMutex.withLock {
@@ -111,6 +139,9 @@ class GigaAmModelManager(
                         vadFile().delete()
                         check(tmpVad.renameTo(vadFile())) { "failed to publish VAD file" }
                     }
+                    // Explicit 100: a chunked VAD response has no contentLength, so the loop
+                    // above would never emit a final tick and the bar would stop short.
+                    onProgress(Phase.VAD, 100)
                     // Cancelled between commit and return: don't report success --
                     // the serialized delete() removes the files, state must not flip.
                     ensureActive()
@@ -149,10 +180,21 @@ class GigaAmModelManager(
     /** Archive has a single top-level folder; flatten it into [target].
      *  Tar Slip guard mirrors TtsModelManager.untarFlatten. Suspend: the model is a
      *  single ~226 MiB entry and diskMutex is held for the whole unpack, so the
-     *  per-entry copy loop must stay cancellable (chunked copy + ensureActive). */
-    internal suspend fun untarFlatten(archive: File, target: File) {
+     *  per-entry copy loop must stay cancellable (chunked copy + ensureActive).
+     *
+     *  [onProgress] reports 0..100 measured on the *compressed* archive file, not on the
+     *  bytes written: the single tar entry gives no usable intermediate position, while the
+     *  file position is exact and monotonic whatever the compression ratio turns out to be.
+     *  It fires only when the whole percent changes, so a 226 MiB unpack costs ~100 calls. */
+    internal suspend fun untarFlatten(archive: File, target: File, onProgress: (Int) -> Unit = {}) {
         val canonicalTarget = target.canonicalFile
-        BZip2CompressorInputStream(BufferedInputStream(archive.inputStream())).use { bz ->
+        val totalBytes = archive.length().coerceAtLeast(1L)
+        var lastPct = -1
+        val counting = CountingInputStream(archive.inputStream()) { consumed ->
+            val pct = ((consumed * 100) / totalBytes).toInt().coerceIn(0, 100)
+            if (pct != lastPct) { lastPct = pct; onProgress(pct) }
+        }
+        BZip2CompressorInputStream(BufferedInputStream(counting)).use { bz ->
             TarArchiveInputStream(bz).use { tar ->
                 var entry = tar.nextEntry
                 while (entry != null) {
@@ -186,6 +228,9 @@ class GigaAmModelManager(
                 }
             }
         }
+        // The tar stream stops at the end-of-archive marker and may leave the last few
+        // compressed bytes unread, so the counter alone would stall at 99.
+        onProgress(100)
     }
 
     companion object {
@@ -196,8 +241,42 @@ class GigaAmModelManager(
             "https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
         const val MODEL_SIZE_LABEL = "226 МБ"
 
-        /** Percentage of the combined progress spent on the (much larger) model archive;
-         *  the remainder covers the small standalone VAD file. */
-        private const val MODEL_WEIGHT = 99
+        /** Uncompressed size ~= download size: an int8 .onnx barely compresses. */
+        const val MODEL_ARCHIVE_BYTES = 226L * 1024 * 1024
+
+        /** Peak on-disk need: the archive in cacheDir plus its same-size unpack in staging
+         *  (the previous model dir is only deleted once the unpack verifies), with ~10%
+         *  headroom for the VAD file and filesystem overhead. DiLink 3 ships a small /data
+         *  that is often nearly full, so this is checked before the first byte is pulled. */
+        const val REQUIRED_FREE_BYTES = MODEL_ARCHIVE_BYTES * 22 / 10
+
+        /** Slice of the combined progress spent pulling the model archive. The rest is split
+         *  between the unpack (DOWNLOAD_WEIGHT..UNPACK_END) and the small standalone VAD file. */
+        private const val DOWNLOAD_WEIGHT = 90
+        private const val UNPACK_END = 98
+    }
+}
+
+/** Counts bytes pulled from [delegate] and reports the running total. Used to drive unpack
+ *  progress from the archive file position; no commons-compress equivalent is available on
+ *  the version pinned here. */
+private class CountingInputStream(
+    private val delegate: InputStream,
+    private val onCount: (Long) -> Unit,
+) : InputStream() {
+    private var count = 0L
+
+    override fun read(): Int = delegate.read().also { if (it >= 0) bump(1) }
+
+    override fun read(b: ByteArray, off: Int, len: Int): Int =
+        delegate.read(b, off, len).also { if (it > 0) bump(it.toLong()) }
+
+    override fun available(): Int = delegate.available()
+
+    override fun close() = delegate.close()
+
+    private fun bump(n: Long) {
+        count += n
+        onCount(count)
     }
 }
