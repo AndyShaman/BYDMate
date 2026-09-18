@@ -8,10 +8,12 @@
 
 ## [Unreleased]
 
+## [3.17.3] - 2026-09-18
+
 ### Исправления
 - Слепые зоны: камера снова открывается на машинах, где прошивка держит скорость под другим адресом (Song с DiLink 4.0). Раньше на таких машинах она молчала и ничего не писала в лог
 - Батарея: «Полных циклов» теперь считается по счётчику BMS, а не по зарядкам, записанным приложением, и строка переехала в карточку «Батарея · история». У машины с большим пробегом цифра была занижена в разы
-- Окна: правое заднее окно на DiLink 3.0 (Yuan UP) снова читается — адрес из каталога прошивки больше не отбрасывался
+- Окна: правое заднее окно на DiLink 3.0 (Yuan UP) снова читается, адрес из каталога прошивки больше не отбрасывается
 
 ## [3.17.2] - 2026-09-18
 
@@ -1144,7 +1146,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.2...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.3...HEAD
+[3.17.3]: https://github.com/AndyShaman/BYDMate/compare/v3.17.2...v3.17.3
 [3.17.2]: https://github.com/AndyShaman/BYDMate/compare/v3.17.1...v3.17.2
 [3.17.1]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...v3.17.1
 [3.17.0]: https://github.com/AndyShaman/BYDMate/compare/v3.16.0...v3.17.0
