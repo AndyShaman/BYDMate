@@ -24,6 +24,16 @@ data class LifetimeChargingStats(
 fun equivalentFullCycles(totalKwhAdded: Double, nominalCapacityKwh: Double): Double =
     if (nominalCapacityKwh > 0) totalKwhAdded / nominalCapacityKwh else 0.0
 
+/**
+ * kWh the full-cycle count is divided from: the BMS lifetime counter when the car reports one,
+ * the app's own sum of logged sessions otherwise. The BMS counts the whole life of the car, our
+ * sum only what the app saw since it was installed, so the two are nowhere near each other on a
+ * car that answers (field 2026-09-18: 10 963 kWh from the BMS against 1 557 kWh logged — 126
+ * cycles against 18). Null when neither source has anything to divide.
+ */
+fun fullCycleKwh(bmsLifetimeKwh: Double?, chargedKwh: Double?): Double? =
+    bmsLifetimeKwh?.takeIf { it > 0.0 } ?: chargedKwh?.takeIf { it > 0.0 }
+
 @Singleton
 class ChargeRepository @Inject constructor(
     private val chargeDao: ChargeDao,

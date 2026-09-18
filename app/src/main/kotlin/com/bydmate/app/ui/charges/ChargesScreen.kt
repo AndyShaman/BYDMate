@@ -183,7 +183,7 @@ fun ChargesScreen(
                 currencySymbol = state.currencySymbol,
                 bmsLifetimeKm = state.bmsLifetimeKm,
                 bmsLifetimeKwh = state.bmsLifetimeKwh,
-                nominalCapacityKwh = state.nominalCapacityKwh,
+                equivCycles = state.equivCycles,
                 sohSeries = state.sohSeries,
                 cellDeltaSeries = state.cellDeltaSeries,
                 batTempSeries = state.batTempSeries,
@@ -527,7 +527,7 @@ private fun ChargesStatsPanel(
     currencySymbol: String,
     bmsLifetimeKm: Double?,
     bmsLifetimeKwh: Double?,
-    nominalCapacityKwh: Double,
+    equivCycles: Double,
     sohSeries: List<Float>,
     cellDeltaSeries: List<Float>,
     batTempSeries: List<Float>,
@@ -556,7 +556,6 @@ private fun ChargesStatsPanel(
 
         SectionLabel(stringResource(R.string.charges_stats_lifetime_label))
         if (bmsLifetimeKwh != null) {
-            val equiv = if (nominalCapacityKwh > 0) bmsLifetimeKwh / nominalCapacityKwh else 0.0
             val avgPer100 = if (bmsLifetimeKm != null && bmsLifetimeKm > 0)
                 bmsLifetimeKwh / bmsLifetimeKm * 100.0 else null
             Column(
@@ -568,7 +567,7 @@ private fun ChargesStatsPanel(
             ) {
                 StatRow(stringResource(R.string.charges_stats_pumped_total), stringResource(R.string.charges_kwh_value, bmsLifetimeKwh), AccentGreen)
                 Spacer(modifier = Modifier.height(4.dp))
-                StatRow(stringResource(R.string.charges_stats_equiv_cycles), "%.1f".format(equiv), TextPrimary)
+                StatRow(stringResource(R.string.charges_stats_equiv_cycles), "%.1f".format(equivCycles), TextPrimary)
                 Spacer(modifier = Modifier.height(4.dp))
                 StatRow(
                     stringResource(R.string.charges_stats_bms_mileage),
