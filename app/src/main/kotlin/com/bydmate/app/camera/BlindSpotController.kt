@@ -167,7 +167,7 @@ class BlindSpotController @Inject constructor(
     private var shownSide = BlindSpotSide.NONE
     /** elapsedRealtime of the last transition to a shown side; the stall watchdog counts from here. */
     private var shownAt = 0L
-    private var lastRequestedSide = BlindSpotSide.NONE
+    private val backoff = BlindSpotBackoff()
     /** Last seen state of the factory 360 view, so only the transition is logged. */
     private var lastNativeCameraForeground = false
     /** Last raw turn-signal mask seen on the push channel, for the dump; null until one arrives. */
@@ -187,7 +187,6 @@ class BlindSpotController @Inject constructor(
     private var windowsAttachedAt = 0L
     private var cameraOpenedAt = 0L
     private var coolingSince = 0L
-    private var retryAt = 0L
     private var tearingDown = false
 
     /** Called from TrackingService.onCreate; the scope dies with the service, and so does the loop. */
@@ -390,10 +389,7 @@ class BlindSpotController @Inject constructor(
 
         // A fresh signal cancels the error backoff once: the driver is asking for the view now.
         // Edge, not level — otherwise a held blinker would retry the camera every tick.
-        if (decision.show != lastRequestedSide) {
-            if (decision.show != BlindSpotSide.NONE) retryAt = 0L
-            lastRequestedSide = decision.show
-        }
+        backoff.request(decision.show)
 
         if (decision.cameraWarm) {
             coolingSince = 0L
@@ -417,7 +413,21 @@ class BlindSpotController @Inject constructor(
 
     /** Brings up the windows and the camera, and watches the two ways they fail to start. */
     private suspend fun ensureWarm(now: Long) {
-        if (now < retryAt) return
+        if (backoff.blocked(now)) return
+
+        // The camera lookup comes before the windows: a car with no camera stack at all (Song
+        // DiLink 4.0, 2026-09-18 — BmmCameraInfo missing) must not get windows that nothing will
+        // ever draw into, flashing on every blinker tick.
+        if (!discovered || (probe.cameraId < 0 && now - probe.lastDiscoverAt >= REDISCOVER_MS)) {
+            discovered = true
+            withContext(cameraDispatcher()) { probe.discover() }
+            Log.i(TAG, "camera discover: id=${probe.cameraId} " + probe.discoverJournal.joinToString(" | "))
+        }
+        if (probe.cameraId < 0) {
+            clusterJournal.append("camera: none found, next lookup in ${REDISCOVER_MS / 1000} s")
+            backoff.fail(now, REDISCOVER_MS)
+            return
+        }
 
         if (clusterWindow == null && pipWindow == null) {
             attachWindows()
@@ -437,21 +447,7 @@ class BlindSpotController @Inject constructor(
                 if (now - windowsAttachedAt >= SURFACE_TIMEOUT_MS) failCamera("no surface", now)
                 return
             }
-            val opened = withContext(cameraDispatcher()) {
-                // Retried, not once-only: the tag sweep can come up empty because the firmware
-                // was not ready yet (Song DiLink 4.0, 2026-09-18 — no id for any known tag), and
-                // a car whose camera is simply absent must not be asked every 150 ms either.
-                if (!discovered || (probe.cameraId < 0 && now - probe.lastDiscoverAt >= REDISCOVER_MS)) {
-                    discovered = true
-                    probe.discover()
-                    Log.i(
-                        TAG,
-                        "camera discover: id=${probe.cameraId} " +
-                            probe.discoverJournal.joinToString(" | "),
-                    )
-                }
-                probe.cameraId >= 0 && probe.openWarm(surfaces)
-            }
+            val opened = withContext(cameraDispatcher()) { probe.openWarm(surfaces) }
             if (!opened) {
                 failCamera("open failed", now)
                 return
@@ -496,7 +492,7 @@ class BlindSpotController @Inject constructor(
         Log.w(TAG, "camera error: $reason; retry in ${RETRY_DELAY_MS / 1000} s")
         clusterJournal.append("camera: error $reason, retry in ${RETRY_DELAY_MS / 1000} s")
         awaitTeardown(reason)
-        retryAt = now + RETRY_DELAY_MS
+        backoff.fail(now, RETRY_DELAY_MS)
     }
 
     private fun attachedWindowCount(): Int =
@@ -808,7 +804,6 @@ class BlindSpotController @Inject constructor(
         } finally {
             // No windows left, so nothing is shown regardless of where the flips left them.
             shownSide = BlindSpotSide.NONE
-            lastRequestedSide = BlindSpotSide.NONE
             // Nothing is shown any more, so the widget comes back even if applyShow above failed.
             syncWidgetSuppression()
             windowsAttachedAt = 0L
