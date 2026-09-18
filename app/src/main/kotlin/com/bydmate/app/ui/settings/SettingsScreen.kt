@@ -2689,8 +2689,15 @@ private fun VoiceSettingsContent(
         Column(modifier = Modifier.padding(horizontal = 12.dp)) {
             val gigaAmDownloading = state.gigaAmDownloadProgress >= 0
             if (gigaAmDownloading) {
+                // The unpack pulls nothing over the network and runs for minutes on a
+                // DiLink 3; labelling it "Downloading" is what made it read as a hang.
+                val phaseLabel = when (state.gigaAmDownloadPhase) {
+                    com.bydmate.app.voice.GigaAmModelManager.Phase.UNPACK ->
+                        R.string.settings_voice_model_unpacking
+                    else -> R.string.settings_voice_model_downloading
+                }
                 Text(
-                    stringResource(R.string.settings_voice_model_downloading, state.gigaAmDownloadProgress),
+                    stringResource(phaseLabel, state.gigaAmDownloadProgress),
                     color = TextSecondary, fontSize = 12.sp,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -2713,8 +2720,17 @@ private fun VoiceSettingsContent(
                     )
                 } else {
                     if (state.gigaAmDownloadFailed) {
+                        val shortfall = state.gigaAmSpaceShortfall
                         Text(
-                            stringResource(R.string.settings_asr_gigaam_download_failed),
+                            if (shortfall != null) {
+                                stringResource(
+                                    R.string.settings_asr_gigaam_no_space,
+                                    shortfall.requiredMb,
+                                    shortfall.availableMb,
+                                )
+                            } else {
+                                stringResource(R.string.settings_asr_gigaam_download_failed)
+                            },
                             color = SocRed, fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 4.dp),
                         )

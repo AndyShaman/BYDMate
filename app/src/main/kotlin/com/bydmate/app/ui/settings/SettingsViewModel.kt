@@ -97,6 +97,20 @@ import javax.inject.Inject
  * UI state for the Settings screen.
  * Contains current setting values and export operation status.
  */
+/** Numbers behind a refused model download, in MB, ready for the error string. */
+data class SpaceShortfall(val requiredMb: Long, val availableMb: Long) {
+    companion object {
+        private const val BYTES_PER_MB = 1024L * 1024L
+
+        /** Maps the manager's storage failure onto UI numbers; any other failure (network,
+         *  corrupt archive) is not a shortfall and yields null, so the generic error shows. */
+        fun from(error: Throwable?): SpaceShortfall? =
+            (error as? GigaAmModelManager.InsufficientStorageException)?.let {
+                SpaceShortfall(it.requiredBytes / BYTES_PER_MB, it.availableBytes / BYTES_PER_MB)
+            }
+    }
+}
+
 data class SettingsUiState(
     val batteryCapacity: String = SettingsRepository.DEFAULT_BATTERY_CAPACITY,
     val homeTariff: String = SettingsRepository.DEFAULT_HOME_TARIFF,
@@ -189,8 +203,14 @@ data class SettingsUiState(
     val minimaxKeySet: Boolean = false,
     // GigaAM v3 ASR settings (free-form Russian speech recognition, offline)
     val gigaAmModelReady: Boolean = false,
-    val gigaAmDownloadProgress: Int = -1,   // -1 = idle, 0..100 = downloading
+    val gigaAmDownloadProgress: Int = -1,   // -1 = idle, 0..100 = in progress
+    /** Which stage [gigaAmDownloadProgress] is currently in; null while idle. The unpack
+     *  stage pulls nothing over the network and takes minutes on a DiLink 3, so the UI
+     *  labels it separately instead of leaving a frozen "Downloading" bar. */
+    val gigaAmDownloadPhase: GigaAmModelManager.Phase? = null,
     val gigaAmDownloadFailed: Boolean = false,
+    /** Non-null when the failure was the storage precheck rather than the network. */
+    val gigaAmSpaceShortfall: SpaceShortfall? = null,
     /** When true, the native BYD voice assistant is disabled (pm disable-user). */
     val disableNativeAssistant: Boolean = false,
     // Voice agent (Phase 1, hidden)
@@ -1491,19 +1511,29 @@ class SettingsViewModel @Inject constructor(
     fun downloadGigaAmModel() {
         if (_uiState.value.gigaAmDownloadProgress >= 0) return   // already downloading
         gigaAmDownloadJob = viewModelScope.launch {
-            _uiState.update { it.copy(gigaAmDownloadProgress = 0, gigaAmDownloadFailed = false) }
-            val result = gigaAmModelManager.download { pct ->
+            _uiState.update {
+                it.copy(
+                    gigaAmDownloadProgress = 0,
+                    gigaAmDownloadPhase = GigaAmModelManager.Phase.DOWNLOAD,
+                    gigaAmDownloadFailed = false,
+                    gigaAmSpaceShortfall = null,
+                )
+            }
+            val result = gigaAmModelManager.download { phase, pct ->
                 // A late delivery after deleteGigaAmModel() reset progress to -1 (idle) must
                 // not resurrect an in-progress state.
                 _uiState.update {
-                    if (it.gigaAmDownloadProgress < 0) it else it.copy(gigaAmDownloadProgress = pct)
+                    if (it.gigaAmDownloadProgress < 0) it
+                    else it.copy(gigaAmDownloadProgress = pct, gigaAmDownloadPhase = phase)
                 }
             }
             _uiState.update {
                 it.copy(
                     gigaAmDownloadProgress = -1,
+                    gigaAmDownloadPhase = null,
                     gigaAmModelReady = gigaAmModelManager.isReady(),
                     gigaAmDownloadFailed = result.isFailure,
+                    gigaAmSpaceShortfall = SpaceShortfall.from(result.exceptionOrNull()),
                 )
             }
             // Pre-warm the recognizer right after a successful download so the first PTT
@@ -1518,7 +1548,15 @@ class SettingsViewModel @Inject constructor(
     fun deleteGigaAmModel() {
         gigaAmDownloadJob?.cancel()
         gigaAmDownloadJob = null
-        _uiState.update { it.copy(gigaAmModelReady = false, gigaAmDownloadProgress = -1, gigaAmDownloadFailed = false) }
+        _uiState.update {
+            it.copy(
+                gigaAmModelReady = false,
+                gigaAmDownloadProgress = -1,
+                gigaAmDownloadPhase = null,
+                gigaAmDownloadFailed = false,
+                gigaAmSpaceShortfall = null,
+            )
+        }
         // Suspend delete: serialized against download's commit section inside
         // the manager, so a cancelled download can't recreate the files after us.
         viewModelScope.launch { gigaAmModelManager.delete() }
