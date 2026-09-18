@@ -424,8 +424,10 @@ class BlindSpotController @Inject constructor(
             Log.i(TAG, "camera discover: id=${probe.cameraId} " + probe.discoverJournal.joinToString(" | "))
         }
         if (probe.cameraId < 0) {
+            // Wait out the rest of the lookup interval, not a fresh one: a blinker pulled again
+            // at second 50 must not push the next lookup from 60 to 110.
             clusterJournal.append("camera: none found, next lookup in ${REDISCOVER_MS / 1000} s")
-            backoff.fail(now, REDISCOVER_MS)
+            backoff.fail(probe.lastDiscoverAt, REDISCOVER_MS)
             return
         }
 
