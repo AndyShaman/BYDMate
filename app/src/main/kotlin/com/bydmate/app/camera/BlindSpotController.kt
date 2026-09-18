@@ -28,6 +28,7 @@ import com.bydmate.app.cluster.MAX_PROJECTION_PCT
 import com.bydmate.app.cluster.cameraNeedsCompositor
 import com.bydmate.app.cluster.geometryFor
 import com.bydmate.app.data.camera.CameraStateMonitor
+import com.bydmate.app.data.nativestack.FidAddresses
 import com.bydmate.app.data.push.FidPushChannel
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.autoservice.SentinelDecoder
@@ -53,6 +54,39 @@ import java.util.concurrent.Executors
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.roundToInt
+
+/** Transacts the fast loop reads its telemetry by (Leopard 3, on-car 2026-07-31). */
+internal const val BLIND_SPOT_TX_INT = 5
+internal const val BLIND_SPOT_TX_FLOAT = 7
+
+/** Fast-loop telemetry in batch order: FidMap field name and the transact it answers on. */
+private val BLIND_SPOT_BATCH_FIELDS = listOf(
+    "turnSignal" to BLIND_SPOT_TX_INT,     // turn signal mask: 1=off 2=L 4=R 6=hazard
+    "speed" to BLIND_SPOT_TX_FLOAT,        // km/h
+    "gear" to BLIND_SPOT_TX_INT,           // gear: 1=P 2=R 3=N 4=D
+)
+
+private val BLIND_SPOT_BSD_FIELDS = listOf(
+    "bsdLeft" to BLIND_SPOT_TX_INT,
+    "bsdRight" to BLIND_SPOT_TX_INT,
+)
+
+/** Fields the fast loop reads this tick, in the order the INDEX_* constants expect. */
+internal fun blindSpotBatchFields(withBsd: Boolean): List<Pair<String, Int>> =
+    if (withBsd) BLIND_SPOT_BATCH_FIELDS + BLIND_SPOT_BSD_FIELDS else BLIND_SPOT_BATCH_FIELDS
+
+/**
+ * The batch at the addresses in force right now. Read out of [FidAddresses] on every tick and
+ * never cached: the firmware catalog can keep any of these fids somewhere else (Song DiLink 4.0,
+ * dump 2026-09-18: speed moved to 303038472), and the resolved table is installed after the app
+ * has already started — a loop holding the compiled constant reads a sentinel forever, which the
+ * loss watchdog turns into a camera that never opens.
+ */
+internal fun blindSpotBatchItems(withBsd: Boolean): List<BatchReadItem> =
+    blindSpotBatchFields(withBsd).map { (field, tx) ->
+        val address = FidAddresses.of(field)
+        BatchReadItem(tx, address.device, address.fid)
+    }
 
 /**
  * Turn signal → blind-spot camera.
@@ -143,6 +177,8 @@ class BlindSpotController @Inject constructor(
     /** Last arming decision from the 1 s poll and why, for the dump; also drives the transition log. */
     @Volatile private var lastArmed = false
     @Volatile private var lastArmedReason = "unknown"
+    /** True while the loss watchdog is closing the pipeline, so only the transition is logged. */
+    private var telemetryLost = false
     private var cameraOpen = false
     private var compositorPowered = false   // last CONFIRMED compositor state
     private var compositorTarget = false    // last requested state, in flight or applied
@@ -201,8 +237,8 @@ class BlindSpotController @Inject constructor(
     }
 
     /** Dump lines for the settings dump's "--- blind spot ---" section: enable switch, threshold,
-     *  the arming gate and why, the last turn-signal push, and whether the vendor camera stack
-     *  and the factory 360 view are in the way. */
+     *  the arming gate and why, the last turn-signal push, the addresses the fast loop reads on
+     *  this car, and whether the vendor camera stack and the factory 360 view are in the way. */
     fun dumpLines(): List<String> {
         val turnSignal = lastTurnSignal
         val cameraStack = when {
@@ -220,6 +256,10 @@ class BlindSpotController @Inject constructor(
             } else {
                 "last_turn_signal=(none)"
             },
+            "batch=" + blindSpotBatchFields(prefs.bsdGlow).joinToString(" ") { (field, _) ->
+                val address = FidAddresses.of(field)
+                "$field ${address.device}/${address.fid}"
+            },
             "native_camera_foreground=${cameraStateMonitor.active.value}",
             "camera_stack=$cameraStack",
         )
@@ -230,6 +270,7 @@ class BlindSpotController @Inject constructor(
         val scope = serviceScope ?: return
         Log.i(TAG, "fast loop start")
         telemetry.reset(SystemClock.elapsedRealtime())
+        telemetryLost = false
         fastLoop = scope.launch(Dispatchers.Main) {
             while (isActive) {
                 tick()
@@ -291,16 +332,27 @@ class BlindSpotController @Inject constructor(
         }
 
         val glow = prefs.bsdGlow
-        val pairs = helper.readBatch(if (glow) BATCH_WITH_BSD else BATCH_CORE)
+        val pairs = helper.readBatch(blindSpotBatchItems(glow))
         val now = SystemClock.elapsedRealtime()
         val sample = pairs?.let {
             BlindSpotSample(it.intAt(INDEX_BLINK), it.floatAt(INDEX_SPEED), it.intAt(INDEX_GEAR))
         }
         val state = telemetry.onSample(sample, now)
         if (state.mustClose) {
+            // Edge, not level: a held loss must not write a line every 150 ms, but a silent
+            // exit leaves nothing in the log at all (Song DiLink 4.0, 2026-09-18).
+            if (!telemetryLost) {
+                telemetryLost = true
+                Log.w(
+                    TAG,
+                    "telemetry lost: blink=${sample?.blink} speed=${sample?.speedKmh} " +
+                        "gear=${sample?.gear} readFailures=${telemetry.readFailures}",
+                )
+            }
             if (anythingUp()) awaitTeardown("telemetry lost")
             return
         }
+        telemetryLost = false
 
         // A missing gear is not "not reverse": fall back to the last snapshot that read cleanly,
         // which the loss watchdog above keeps younger than 3 s.
@@ -984,18 +1036,6 @@ class BlindSpotController @Inject constructor(
         /** Suppression key handed to WidgetController while a window covers the main screen. */
         const val WIDGET_SUPPRESS_REASON = "blind-spot camera"
 
-        // Telemetry read through the daemon (Leopard 3, on-car 2026-07-31).
-        const val TX_INT = 5
-        const val TX_FLOAT = 7
-        val BATCH_CORE = listOf(
-            BatchReadItem(TX_INT, 1004, 950009900),      // turn signal mask: 1=off 2=L 4=R 6=hazard
-            BatchReadItem(TX_FLOAT, 1013, -1807745016),  // speed, km/h
-            BatchReadItem(TX_INT, 1011, 555745336),      // gear: 1=P 2=R 3=N 4=D
-        )
-        val BATCH_WITH_BSD = BATCH_CORE + listOf(
-            BatchReadItem(TX_INT, 1038, 1098907664),     // BSD left
-            BatchReadItem(TX_INT, 1038, 1098907666),     // BSD right
-        )
         const val INDEX_BLINK = 0
         const val INDEX_SPEED = 1
         const val INDEX_GEAR = 2
