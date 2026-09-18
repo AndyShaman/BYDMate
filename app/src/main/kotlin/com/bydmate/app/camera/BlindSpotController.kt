@@ -238,7 +238,9 @@ class BlindSpotController @Inject constructor(
 
     /** Dump lines for the settings dump's "--- blind spot ---" section: enable switch, threshold,
      *  the arming gate and why, the last turn-signal push, the addresses the fast loop reads on
-     *  this car, and whether the vendor camera stack and the factory 360 view are in the way. */
+     *  this car, whether the vendor camera stack and the factory 360 view are in the way, and the
+     *  camera lookup itself — the probe journal runs before log recording starts, so without these
+     *  two lines a car that finds no camera sends a dump that cannot say why. */
     fun dumpLines(): List<String> {
         val turnSignal = lastTurnSignal
         val cameraStack = when {
@@ -262,6 +264,10 @@ class BlindSpotController @Inject constructor(
             },
             "native_camera_foreground=${cameraStateMonitor.active.value}",
             "camera_stack=$cameraStack",
+            "camera_probe=" +
+                probe.discoverJournal.joinToString(" | ").ifEmpty { "(not run)" },
+            "camera_log=" +
+                probe.log.value.takeLast(DUMP_LOG_LINES).joinToString(" | ").ifEmpty { "(empty)" },
         )
     }
 
@@ -432,9 +438,17 @@ class BlindSpotController @Inject constructor(
                 return
             }
             val opened = withContext(cameraDispatcher()) {
-                if (!discovered) {
+                // Retried, not once-only: the tag sweep can come up empty because the firmware
+                // was not ready yet (Song DiLink 4.0, 2026-09-18 — no id for any known tag), and
+                // a car whose camera is simply absent must not be asked every 150 ms either.
+                if (!discovered || (probe.cameraId < 0 && now - probe.lastDiscoverAt >= REDISCOVER_MS)) {
                     discovered = true
                     probe.discover()
+                    Log.i(
+                        TAG,
+                        "camera discover: id=${probe.cameraId} " +
+                            probe.discoverJournal.joinToString(" | "),
+                    )
                 }
                 probe.cameraId >= 0 && probe.openWarm(surfaces)
             }
@@ -1057,6 +1071,10 @@ class BlindSpotController @Inject constructor(
         const val SURFACE_TIMEOUT_MS = 8_000L
         const val FIRST_FRAME_TIMEOUT_MS = 3_000L
         const val RETRY_DELAY_MS = 3_000L
+        /** Quiet time between two camera lookups on a car where none of the tags answered. */
+        const val REDISCOVER_MS = 60_000L
+        /** Probe log lines carried into the dump; the rest stays in the in-memory ring. */
+        const val DUMP_LOG_LINES = 12
         const val GLOW_HALF_PERIOD_MS = 800L
         const val GLOW_MIN_ALPHA = 0.35f
         const val GLOW_STROKE_DP = 12f
