@@ -50,6 +50,12 @@ object RouteNavigatorUris {
         else -> YANDEX_PACKAGE
     }
 
+    fun intentPackage(navigator: String): String? = when (normalize(navigator)) {
+        DGIS -> DGIS_PACKAGE
+        WAZE -> WAZE_PACKAGE
+        else -> null
+    }
+
     /** Free-text search on the map ("найди кафе"). */
     fun search(navigator: String, query: String): String = when (normalize(navigator)) {
         DGIS -> "dgis://2gis.ru/search/${Uri.encode(query)}"

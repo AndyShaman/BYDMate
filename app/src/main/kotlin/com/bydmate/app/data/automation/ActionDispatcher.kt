@@ -960,32 +960,8 @@ class ActionDispatcher @Inject constructor(
         }
     }
 
-    /**
-     * Which map app routes go to, plus the reason text when 2GIS or Maps was replaced by
-     * Yandex Navigator because it is not installed (#190, #200).
-     */
-    private fun resolveNavigator(): Pair<String, String?> {
-        val chosen = RouteNavigatorUris.normalize(
-            context.getSharedPreferences(RouteNavigatorUris.PREFS_NAME, Context.MODE_PRIVATE)
-                .getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))
-        Log.i(TAG, "navigate: navigator=$chosen")
-        val dgisFellBack = chosen == RouteNavigatorUris.DGIS &&
-            !isPackageInstalled(RouteNavigatorUris.DGIS_PACKAGE)
-        if (dgisFellBack) {
-            Log.i(TAG, "navigate: 2gis not installed, falling back to yandex")
-            return RouteNavigatorUris.YANDEX to "2ГИС не установлен, открыт Яндекс Навигатор"
-        }
-        val mapsFellBack = chosen == RouteNavigatorUris.MAPS &&
-            NavPackages.YANDEX_MAPS.none { isPackageInstalled(it) }
-        if (mapsFellBack) {
-            Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
-            return RouteNavigatorUris.YANDEX to "Яндекс Карты не установлены, открыт Яндекс Навигатор"
-        }
-        if (chosen == RouteNavigatorUris.WAZE && !isPackageInstalled(RouteNavigatorUris.WAZE_PACKAGE)) {
-            return RouteNavigatorUris.YANDEX to "Waze не установлен, открыт Яндекс Навигатор"
-        }
-        return chosen to null
-    }
+    private fun resolveNavigator(): Pair<String, String?> =
+        RouteNavigatorResolver.resolve(context, ::isPackageInstalled) { Log.i(TAG, it) }
 
     private fun sendNavigateIntent(payload: JSONObject, shortcut: String?): DispatchResult {
         // #190/#200: which map app the user picked for routes and map search. 2GIS or Maps that
@@ -1137,10 +1113,7 @@ class ActionDispatcher @Inject constructor(
         Log.i(TAG, "navigate: app=$navigator mode=$mode uri=$uri")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        when (navigator) {
-            RouteNavigatorUris.DGIS -> intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
-            RouteNavigatorUris.WAZE -> intent.setPackage(RouteNavigatorUris.WAZE_PACKAGE)
-        }
+        RouteNavigatorUris.intentPackage(navigator)?.let(intent::setPackage)
         val result = tryStartActivity(intent, label)
         Log.i(TAG, "navigate: intent sent label=$label ok=${result.success}")
         return if (result.success && fallbackReason != null) result.copy(reason = fallbackReason)
