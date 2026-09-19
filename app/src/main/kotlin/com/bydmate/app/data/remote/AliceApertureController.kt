@@ -137,12 +137,6 @@ class AliceApertureController @Inject constructor(
         return null
     }
 
-    private fun reached(value: Int, spec: WaitSpec): Boolean {
-        if (near(value, spec.target, spec.tolerance)) return true
-        if (!spec.directional) return false
-        return if (spec.opening) value >= spec.target else value <= spec.target
-    }
-
     private fun blockOpening(command: String, opening: Boolean, speed: Int?): Result<Unit>? {
         if (!opening) return null
         val reason = ActionDispatcher.speedGateBlockReason(command, speed) ?: return null
@@ -151,12 +145,6 @@ class AliceApertureController @Inject constructor(
 
     private suspend fun gatedDispatch(command: String, speed: Int?): Result<Unit> =
         blockOpening(command, true, speed) ?: vehicleApi.dispatch(command)
-
-    private fun near(value: Int, target: Int, tolerance: Int): Boolean =
-        abs(value - target) <= tolerance
-
-    private fun failure(message: String): Result<Unit> =
-        Result.failure(IllegalStateException(message))
 
     private fun windowChannel(action: String): WindowChannel? = when (action) {
         "window.driver.position" -> WindowChannel(
@@ -178,15 +166,6 @@ class AliceApertureController @Inject constructor(
         else -> null
     }
 
-    private data class WaitSpec(
-        val target: Int,
-        val opening: Boolean,
-        val timeoutMs: Long,
-        val sampleMs: Long,
-        val tolerance: Int,
-        val directional: Boolean = true,
-    )
-
     private data class WindowChannel(
         val open: String,
         val close: String,
@@ -202,3 +181,24 @@ class AliceApertureController @Inject constructor(
         private const val SUNROOF_STOP = "天窗停止"
     }
 }
+
+private data class WaitSpec(
+    val target: Int,
+    val opening: Boolean,
+    val timeoutMs: Long,
+    val sampleMs: Long,
+    val tolerance: Int,
+    val directional: Boolean = true,
+)
+
+private fun reached(value: Int, spec: WaitSpec): Boolean {
+    if (near(value, spec.target, spec.tolerance)) return true
+    if (!spec.directional) return false
+    return if (spec.opening) value >= spec.target else value <= spec.target
+}
+
+private fun near(value: Int, target: Int, tolerance: Int): Boolean =
+    abs(value - target) <= tolerance
+
+private fun failure(message: String): Result<Unit> =
+    Result.failure(IllegalStateException(message))

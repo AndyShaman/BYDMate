@@ -16,15 +16,11 @@ internal class YandexAliceLauncher(
     private val voiceController: () -> VoiceController,
 ) {
     private val handler = Handler(Looper.getMainLooper())
+    private val ui = YandexAliceUiDriver(service)
 
     private var pending = false
     private var generation = 0
     private var attempt = 0
-    private var coldClicks = 0
-    private var lastColdClick = 0L
-    private var exactClicks = 0
-    private var lastExactClick = 0L
-    private var lastUiClick = 0L
     private var lastTrigger = 0L
     private var listening = false
     private var suppressNativeUntil = 0L
@@ -82,159 +78,14 @@ internal class YandexAliceLauncher(
         handler.postDelayed({ retry(expectedGeneration) }, RETRY_MS)
     }
 
-    private fun advance(): Boolean {
-        val roots = yandexRoots()
-        if (roots.isEmpty()) return false
-
-        return when (stepExact(roots)) {
-            Step.DONE -> true
-            Step.PROGRESS -> false
-            Step.NONE -> advanceAfterExact(roots)
-        }
-    }
-
-    private fun advanceAfterExact(roots: List<AccessibilityNodeInfo>): Boolean {
-        if (stepDescription(roots) == Step.DONE) return true
-        if (stepColdId(roots) == Step.PROGRESS) return false
-        stepColdScan(roots)
-        return false
-    }
-
-    private fun stepExact(roots: List<AccessibilityNodeInfo>): Step {
-        val now = SystemClock.elapsedRealtime()
-        val coldChain = coldClicks > 0
-        val allowed = !coldChain || exactClicks == 0 || now - lastExactClick >= UI_DEBOUNCE_MS
-        if (!allowed) return Step.NONE
-
-        val node = roots.flatMap { root ->
-            runCatching { root.findAccessibilityNodeInfosByViewId(EXACT_VIEW_ID) }
-                .getOrNull().orEmpty()
-        }.firstOrNull() ?: return Step.NONE
-
-        val terminal = !coldChain || exactClicks > 0
-        if (!click(node, terminal)) return Step.NONE
-        if (coldChain) {
-            exactClicks++
-            lastExactClick = now
-        }
-        if (!terminal) return Step.PROGRESS
-
-        listening = true
-        return Step.DONE
-    }
-
-    private fun stepDescription(roots: List<AccessibilityNodeInfo>): Step {
-        val node = findNode(roots) {
-            val description = it.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-            description == "голосовой помощник" || description == "voice assistant"
-        } ?: return Step.NONE
-
-        if (!click(node, terminal = true)) return Step.NONE
-        listening = true
-        return Step.DONE
-    }
-
-    private fun stepColdId(roots: List<AccessibilityNodeInfo>): Step {
-        if (coldClicks >= MAX_COLD_CLICKS) return Step.NONE
-        val now = SystemClock.elapsedRealtime()
-        if (coldClicks > 0 && now - lastColdClick < COLD_RETRY_MS) return Step.NONE
-
-        val node = findByViewIds(roots, COLD_VIEW_IDS) ?: return Step.NONE
-        if (!click(node, terminal = false)) return Step.NONE
-
-        coldClicks++
-        lastColdClick = now
-        return Step.PROGRESS
-    }
-
-    private fun stepColdScan(roots: List<AccessibilityNodeInfo>): Step {
-        if (coldClicks != 0) return Step.NONE
-        val node = findNode(roots) {
-            val id = it.viewIdResourceName?.lowercase(Locale.ROOT).orEmpty()
-            val description = it.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
-            id.contains(COLD_ID_FAMILY) || description in COLD_DESCRIPTIONS
-        } ?: return Step.NONE
-
-        if (!click(node, terminal = false)) return Step.NONE
-        coldClicks = 1
-        lastColdClick = SystemClock.elapsedRealtime()
-        return Step.PROGRESS
-    }
-
-    private fun findByViewIds(
-        roots: List<AccessibilityNodeInfo>,
-        ids: List<String>,
-    ): AccessibilityNodeInfo? {
-        roots.forEach { root ->
-            ids.forEach { id ->
-                val found = runCatching { root.findAccessibilityNodeInfosByViewId(id) }
-                    .getOrNull().orEmpty().firstOrNull()
-                if (found != null) return found
-            }
-        }
-        return null
-    }
-
-    private fun findNode(
-        roots: List<AccessibilityNodeInfo>,
-        matches: (AccessibilityNodeInfo) -> Boolean,
-    ): AccessibilityNodeInfo? {
-        roots.forEach { root ->
-            val queue = ArrayDeque<AccessibilityNodeInfo>()
-            queue.add(root)
-            var visited = 0
-            while (queue.isNotEmpty() && visited < NODE_SCAN_LIMIT) {
-                val node = queue.removeFirst()
-                visited++
-                if (matches(node)) return node
-                repeat(node.childCount) { index ->
-                    runCatching { node.getChild(index) }.getOrNull()?.let(queue::addLast)
-                }
-            }
-        }
-        return null
-    }
-
-    private fun click(node: AccessibilityNodeInfo, terminal: Boolean): Boolean {
-        val target = clickableTarget(node) ?: return false
-        val now = SystemClock.elapsedRealtime()
-        if (now - lastUiClick < UI_DEBOUNCE_MS) return false
-        if (!runCatching { target.performAction(AccessibilityNodeInfo.ACTION_CLICK) }.getOrDefault(false)) {
-            return false
-        }
-
-        lastUiClick = now
-        if (terminal) {
+    private fun advance(): Boolean = when (ui.advance()) {
+        AliceUiStep.DONE -> {
             pending = false
+            listening = true
             generation++
+            true
         }
-        return true
-    }
-
-    private fun clickableTarget(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
-        var target: AccessibilityNodeInfo? = node
-        var hops = 0
-        while (target != null && !target.isClickable && hops < MAX_PARENT_HOPS) {
-            target = runCatching { target.parent }.getOrNull()
-            hops++
-        }
-        return target?.takeIf { it.isClickable }
-    }
-
-    private fun yandexRoots(): List<AccessibilityNodeInfo> {
-        val roots = mutableListOf<AccessibilityNodeInfo>()
-        addYandexRoot(roots, runCatching { service.rootInActiveWindow }.getOrNull())
-        runCatching { service.windows }.getOrNull().orEmpty().forEach { window ->
-            addYandexRoot(roots, runCatching { window.root }.getOrNull())
-        }
-        return roots
-    }
-
-    private fun addYandexRoot(
-        roots: MutableList<AccessibilityNodeInfo>,
-        root: AccessibilityNodeInfo?,
-    ) {
-        if (root?.packageName?.toString() == YANDEX_PACKAGE) roots += root
+        AliceUiStep.PROGRESS, AliceUiStep.NONE -> false
     }
 
     private fun shouldSuppressNative(event: AccessibilityEvent, packageName: String): Boolean =
@@ -260,11 +111,8 @@ internal class YandexAliceLauncher(
         handler.removeCallbacksAndMessages(null)
         pending = false
         attempt = 0
-        coldClicks = 0
-        lastColdClick = 0L
-        exactClicks = 0
-        lastExactClick = 0L
         listening = false
+        ui.resetAttempt()
         generation++
     }
 
@@ -274,34 +122,192 @@ internal class YandexAliceLauncher(
         generation++
         voiceController().endExternalAssistantAudio()
     }
+}
 
-    private enum class Step { NONE, PROGRESS, DONE }
+private class YandexAliceUiDriver(
+    private val service: AccessibilityService,
+) {
+    private var coldClicks = 0
+    private var lastColdClick = 0L
+    private var exactClicks = 0
+    private var lastExactClick = 0L
+    private var lastUiClick = 0L
 
-    companion object {
-        private const val YANDEX_PACKAGE = "com.yandex.browser"
-        private const val BYD_VOICE_PACKAGE = "com.byd.vrassistant"
-        private const val EXACT_VIEW_ID = "com.yandex.browser:id/alice_input_quarknyx"
-        private const val COLD_ID_FAMILY = "bro_omnibox_button_microphone"
-        private val COLD_VIEW_IDS = listOf(
-            "com.yandex.browser:id/bro_omnibox_button_mic",
-            "com.yandex.browser:id/bro_omnibox_button_microphone_inactive",
-        )
-        private val COLD_DESCRIPTIONS = setOf(
-            "активировать голосовой поиск",
-            "голосовой поиск",
-            "activate voice search",
-            "voice search",
-        )
-        private const val WARMUP_MS = 150L
-        private const val RETRY_MS = 180L
-        private const val COLD_RETRY_MS = 900L
-        private const val UI_DEBOUNCE_MS = 800L
-        private const val TRIGGER_DEBOUNCE_MS = 900L
-        private const val NATIVE_SUPPRESS_MS = 4000L
-        private const val EXIT_GRACE_MS = 1200L
-        private const val MAX_ATTEMPTS = 90
-        private const val MAX_COLD_CLICKS = 3
-        private const val MAX_PARENT_HOPS = 4
-        private const val NODE_SCAN_LIMIT = 600
+    fun resetAttempt() {
+        coldClicks = 0
+        lastColdClick = 0L
+        exactClicks = 0
+        lastExactClick = 0L
+    }
+
+    fun advance(): AliceUiStep {
+        val roots = yandexRoots(service)
+        if (roots.isEmpty()) return AliceUiStep.NONE
+        return when (val exact = stepExact(roots)) {
+            AliceUiStep.NONE -> advanceAfterExact(roots)
+            else -> exact
+        }
+    }
+
+    private fun advanceAfterExact(roots: List<AccessibilityNodeInfo>): AliceUiStep {
+        val description = stepDescription(roots)
+        if (description == AliceUiStep.DONE) return description
+        val coldId = stepColdId(roots)
+        if (coldId == AliceUiStep.PROGRESS) return coldId
+        return stepColdScan(roots)
+    }
+
+    private fun stepExact(roots: List<AccessibilityNodeInfo>): AliceUiStep {
+        val now = SystemClock.elapsedRealtime()
+        val coldChain = coldClicks > 0
+        if (coldChain && exactClicks > 0 && now - lastExactClick < UI_DEBOUNCE_MS) {
+            return AliceUiStep.NONE
+        }
+
+        val node = roots.asSequence().flatMap { root ->
+            runCatching { root.findAccessibilityNodeInfosByViewId(EXACT_VIEW_ID) }
+                .getOrNull().orEmpty().asSequence()
+        }.firstOrNull() ?: return AliceUiStep.NONE
+
+        if (!click(node)) return AliceUiStep.NONE
+        if (!coldChain) return AliceUiStep.DONE
+
+        exactClicks++
+        lastExactClick = now
+        return if (exactClicks > 1) AliceUiStep.DONE else AliceUiStep.PROGRESS
+    }
+
+    private fun stepDescription(roots: List<AccessibilityNodeInfo>): AliceUiStep {
+        val node = findNode(roots) {
+            val description = it.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            description == "голосовой помощник" || description == "voice assistant"
+        } ?: return AliceUiStep.NONE
+        return if (click(node)) AliceUiStep.DONE else AliceUiStep.NONE
+    }
+
+    private fun stepColdId(roots: List<AccessibilityNodeInfo>): AliceUiStep {
+        if (coldClicks >= MAX_COLD_CLICKS) return AliceUiStep.NONE
+        val now = SystemClock.elapsedRealtime()
+        if (coldClicks > 0 && now - lastColdClick < COLD_RETRY_MS) return AliceUiStep.NONE
+
+        val node = findByViewIds(roots, COLD_VIEW_IDS) ?: return AliceUiStep.NONE
+        if (!click(node)) return AliceUiStep.NONE
+
+        coldClicks++
+        lastColdClick = now
+        return AliceUiStep.PROGRESS
+    }
+
+    private fun stepColdScan(roots: List<AccessibilityNodeInfo>): AliceUiStep {
+        if (coldClicks != 0) return AliceUiStep.NONE
+        val node = findNode(roots) {
+            val id = it.viewIdResourceName?.lowercase(Locale.ROOT).orEmpty()
+            val description = it.contentDescription?.toString()?.trim()?.lowercase(Locale.ROOT).orEmpty()
+            id.contains(COLD_ID_FAMILY) || description in COLD_DESCRIPTIONS
+        } ?: return AliceUiStep.NONE
+
+        if (!click(node)) return AliceUiStep.NONE
+        coldClicks = 1
+        lastColdClick = SystemClock.elapsedRealtime()
+        return AliceUiStep.PROGRESS
+    }
+
+    private fun click(node: AccessibilityNodeInfo): Boolean {
+        val target = clickableTarget(node) ?: return false
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastUiClick < UI_DEBOUNCE_MS) return false
+        if (!runCatching { target.performAction(AccessibilityNodeInfo.ACTION_CLICK) }.getOrDefault(false)) {
+            return false
+        }
+        lastUiClick = now
+        return true
     }
 }
+
+private enum class AliceUiStep { NONE, PROGRESS, DONE }
+
+private fun findByViewIds(
+    roots: List<AccessibilityNodeInfo>,
+    ids: List<String>,
+): AccessibilityNodeInfo? {
+    roots.forEach { root ->
+        ids.forEach { id ->
+            val found = runCatching { root.findAccessibilityNodeInfosByViewId(id) }
+                .getOrNull().orEmpty().firstOrNull()
+            if (found != null) return found
+        }
+    }
+    return null
+}
+
+private fun findNode(
+    roots: List<AccessibilityNodeInfo>,
+    matches: (AccessibilityNodeInfo) -> Boolean,
+): AccessibilityNodeInfo? {
+    roots.forEach { root ->
+        val queue = ArrayDeque<AccessibilityNodeInfo>()
+        queue.add(root)
+        var visited = 0
+        while (queue.isNotEmpty() && visited < NODE_SCAN_LIMIT) {
+            val node = queue.removeFirst()
+            visited++
+            if (matches(node)) return node
+            repeat(node.childCount) { index ->
+                runCatching { node.getChild(index) }.getOrNull()?.let(queue::addLast)
+            }
+        }
+    }
+    return null
+}
+
+private fun clickableTarget(node: AccessibilityNodeInfo): AccessibilityNodeInfo? {
+    var target: AccessibilityNodeInfo? = node
+    var hops = 0
+    while (target != null && !target.isClickable && hops < MAX_PARENT_HOPS) {
+        target = runCatching { target.parent }.getOrNull()
+        hops++
+    }
+    return target?.takeIf { it.isClickable }
+}
+
+private fun yandexRoots(service: AccessibilityService): List<AccessibilityNodeInfo> {
+    val roots = mutableListOf<AccessibilityNodeInfo>()
+    addYandexRoot(roots, runCatching { service.rootInActiveWindow }.getOrNull())
+    runCatching { service.windows }.getOrNull().orEmpty().forEach { window ->
+        addYandexRoot(roots, runCatching { window.root }.getOrNull())
+    }
+    return roots
+}
+
+private fun addYandexRoot(
+    roots: MutableList<AccessibilityNodeInfo>,
+    root: AccessibilityNodeInfo?,
+) {
+    if (root?.packageName?.toString() == YANDEX_PACKAGE) roots += root
+}
+
+private const val YANDEX_PACKAGE = "com.yandex.browser"
+private const val BYD_VOICE_PACKAGE = "com.byd.vrassistant"
+private const val EXACT_VIEW_ID = "com.yandex.browser:id/alice_input_quarknyx"
+private const val COLD_ID_FAMILY = "bro_omnibox_button_microphone"
+private val COLD_VIEW_IDS = listOf(
+    "com.yandex.browser:id/bro_omnibox_button_mic",
+    "com.yandex.browser:id/bro_omnibox_button_microphone_inactive",
+)
+private val COLD_DESCRIPTIONS = setOf(
+    "активировать голосовой поиск",
+    "голосовой поиск",
+    "activate voice search",
+    "voice search",
+)
+private const val WARMUP_MS = 150L
+private const val RETRY_MS = 180L
+private const val COLD_RETRY_MS = 900L
+private const val UI_DEBOUNCE_MS = 800L
+private const val TRIGGER_DEBOUNCE_MS = 900L
+private const val NATIVE_SUPPRESS_MS = 4000L
+private const val EXIT_GRACE_MS = 1200L
+private const val MAX_ATTEMPTS = 90
+private const val MAX_COLD_CLICKS = 3
+private const val MAX_PARENT_HOPS = 4
+private const val NODE_SCAN_LIMIT = 600

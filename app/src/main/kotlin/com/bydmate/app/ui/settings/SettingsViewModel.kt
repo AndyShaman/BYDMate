@@ -1147,7 +1147,6 @@ class SettingsViewModel @Inject constructor(
             .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, enabled).apply()
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            TrackingService.setAlicePollingEnabled(enabled)
         }
     }
 

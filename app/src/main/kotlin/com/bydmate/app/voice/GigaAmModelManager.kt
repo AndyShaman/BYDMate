@@ -179,20 +179,9 @@ class GigaAmModelManager(
         val offset = if (append) requestedOffset else 0L
         val total = responseTotal(response, offset)
 
-        var written = offset
         body.byteStream().use { input ->
             FileOutputStream(dest, append).use { output ->
-                val buffer = ByteArray(64 * 1024)
-                var count = input.read(buffer)
-                while (count >= 0) {
-                    coroutineContext.ensureActive()
-                    if (count > 0) {
-                        output.write(buffer, 0, count)
-                        written += count
-                        reportProgress(written, total, onProgress)
-                    }
-                    count = input.read(buffer)
-                }
+                copyResponseBody(input, output, offset, total, onProgress)
                 output.fd.sync()
             }
         }
@@ -201,6 +190,26 @@ class GigaAmModelManager(
             error("incomplete download: ${dest.length()}/${total}")
         }
         onProgress(100)
+    }
+
+    private suspend fun copyResponseBody(
+        input: java.io.InputStream,
+        output: FileOutputStream,
+        offset: Long,
+        total: Long?,
+        onProgress: (Int) -> Unit,
+    ) {
+        var written = offset
+        val buffer = ByteArray(64 * 1024)
+        while (true) {
+            coroutineContext.ensureActive()
+            val count = input.read(buffer)
+            if (count < 0) return
+            if (count == 0) continue
+            output.write(buffer, 0, count)
+            written += count
+            reportProgress(written, total, onProgress)
+        }
     }
 
     private fun responseTotal(response: Response, offset: Long): Long? =

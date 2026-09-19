@@ -516,13 +516,6 @@ class TrackingService : Service(), LocationListener {
         fun steeringKeyAssigned(keyCode: Int): Boolean =
             instance?.automationEngine?.steeringKeyCodes?.value?.contains(keyCode) == true
 
-        fun setAlicePollingEnabled(enabled: Boolean) {
-            instance?.let { service ->
-                if (enabled) service.alicePollingManager.start()
-                else service.alicePollingManager.stop()
-            }
-        }
-
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
             context.startForegroundService(intent)
@@ -790,10 +783,12 @@ class TrackingService : Service(), LocationListener {
         ChainLog.append(this, "TrackingService fully started")
 
         serviceScope.launch {
-            val enabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
-            getSharedPreferences("voice", Context.MODE_PRIVATE)
-                .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, enabled).apply()
-            if (enabled) alicePollingManager.start()
+            settingsRepository.observeString(SettingsRepository.KEY_ALICE_ENABLED).collect { value ->
+                val enabled = value == "true"
+                getSharedPreferences("voice", Context.MODE_PRIVATE)
+                    .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, enabled).apply()
+                if (enabled) alicePollingManager.start() else alicePollingManager.stop()
+            }
         }
 
         // v2.0: event-based sync on service start

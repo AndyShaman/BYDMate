@@ -32,8 +32,9 @@ class AliceAppActionDispatcher @Inject constructor(
         action: String,
         data: DiParsData?,
     ): Result<Unit> {
-        val packageName = installedPackage(candidates)
-            ?: if (action == "app.tiktok.open") findLauncherPackage(TIKTOK_LABELS) else null
+        val packageName = candidates.firstOrNull {
+            context.packageManager.getLaunchIntentForPackage(it) != null
+        } ?: if (action == "app.tiktok.open") findLauncherPackage(TIKTOK_LABELS) else null
             ?: return Result.failure(IllegalStateException("app_not_installed"))
 
         val payload = JSONObject().put("packageName", packageName).toString()
@@ -99,9 +100,6 @@ class AliceAppActionDispatcher @Inject constructor(
             else -> NavPackages.YANDEX_NAVI.toList()
         }
     }
-
-    private fun installedPackage(candidates: List<String>): String? =
-        candidates.firstOrNull { context.packageManager.getLaunchIntentForPackage(it) != null }
 
     private fun findLauncherPackage(names: Set<String>): String? {
         val intent = android.content.Intent(android.content.Intent.ACTION_MAIN)
