@@ -252,6 +252,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // Same value-less competitor entry problem and same per-model readback fid
             // divergence as ac_wind_level above, so no readbackFid here either (#201).
             WriteEntry("ac_wind_mode", 1000, 501219336, null, 1, 5, "climate", false, "competitor-actions ac_wind_mode; AirConditioningService decompiled; #201"),
+            WriteEntry("ac_wind_mode_ext", 1000, 501219336, null, 6, 7, "climate", false, "BYD e2 live log; #201"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),
