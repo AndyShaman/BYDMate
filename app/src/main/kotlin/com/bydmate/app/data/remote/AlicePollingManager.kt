@@ -139,11 +139,19 @@ class AlicePollingManager @Inject constructor(
             ?: return Result.failure(IllegalArgumentException("unsupported_action"))
 
         val data = latestData
+        rearTrunkBlock(resolved.vehicleCommand, data)?.let { return it }
         val blocked = ActionDispatcher.safetyBlockReason(resolved.vehicleCommand, data)
             ?: ActionDispatcher.speedGateBlockReason(resolved.vehicleCommand, data?.speed)
         if (blocked != null) return Result.failure(IllegalStateException(blocked.javaClass.simpleName))
 
         return vehicleApi.dispatch(resolved.vehicleCommand)
+    }
+
+    private fun rearTrunkBlock(command: String, data: DiParsData?): Result<Unit>? {
+        if (!ActionDispatcher.isRearTrunkOpenCommand(command)) return null
+        val speed = data?.speed ?: return Result.failure(IllegalStateException("rear_trunk_speed_unknown"))
+        if (speed != 0) return Result.failure(IllegalStateException("rear_trunk_requires_standstill"))
+        return null
     }
 
     private fun reportState(endpoint: String, apiKey: String) {
