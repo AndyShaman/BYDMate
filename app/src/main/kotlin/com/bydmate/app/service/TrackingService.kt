@@ -1423,7 +1423,6 @@ class TrackingService : Service(), LocationListener {
                     _lastData.value = data
                     lastDataAtMs = System.currentTimeMillis()
                     blindSpotController.onPollSnapshot(data)
-                    alicePollingManager.latestData = data
                     // Cache for AutoserviceChargingDetector — avoids extra parsReader.fetch() inside runCatchUp.
                     autoserviceDetector.onSample(data)
                     // Roll the charge-start anchor forward while driving/parked so a
