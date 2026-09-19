@@ -78,7 +78,7 @@ class AliceApertureController @Inject constructor(
         if (channel.write(target).isFailure) return false
         val reached = waitForTarget(
             channel.read,
-            WaitSpec(target, opening = true, 1500L, 100L, 6, directional = false),
+            WaitSpec(target, true, 1500L, 100L, 6, false),
         ) ?: return false
         delay(150L)
         val settled = channel.read() ?: reached
