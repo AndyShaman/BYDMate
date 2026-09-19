@@ -42,7 +42,6 @@ class AliceAppActionDispatcher @Inject constructor(
 
     private fun packageCandidates(action: String): List<String>? = when (action) {
         "app.navigation.open" -> selectedNavigationPackages()
-        "app.waze.open" -> listOf("com.waze")
         "app.music.open" -> listOf("ru.yandex.music")
         "app.youtube.open" -> listOf("anddea.youtube", "com.google.android.youtube")
         "app.browser.open" -> listOf("com.yandex.browser")
