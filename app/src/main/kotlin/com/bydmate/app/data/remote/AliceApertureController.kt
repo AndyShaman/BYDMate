@@ -11,58 +11,121 @@ import kotlin.math.abs
 class AliceApertureController @Inject constructor(
     private val vehicleApi: VehicleApi,
 ) {
+    @Volatile
+    var latestData: DiParsData? = null
+
     suspend fun positionWindow(action: String, target: Int, speed: Int?): Result<Unit> {
-        if (target !in 0..100) return Result.failure(IllegalArgumentException("invalid_window_position"))
+        if (target !in 0..100) return failure("invalid_window_position")
+        val channel = windowChannel(action) ?: return failure("unknown_window")
+        windowEndpoint(channel, target, speed)?.let { return it }
 
-        val channel = windowChannel(action) ?: return Result.failure(IllegalArgumentException("unknown_window"))
-        if (target == 0) return vehicleApi.dispatch(channel.close)
-        if (target == 100) {
-            ActionDispatcher.speedGateBlockReason(channel.open, speed)?.let {
-                return Result.failure(IllegalStateException(it.javaClass.simpleName))
-            }
-            return vehicleApi.dispatch(channel.open)
-        }
+        val start = channel.read() ?: return failure("window_position_unavailable")
+        if (near(start, target, 2)) return Result.success(Unit)
+        blockOpening(channel.open, target > start, speed)?.let { return it }
 
-        val start = channel.read()
-            ?: return Result.failure(IllegalStateException("window_position_unavailable"))
-        if (abs(start - target) <= 2) return Result.success(Unit)
+        if (tryNativeWindowPosition(channel, target)) return Result.success(Unit)
+        return moveWindowToTarget(channel, target, start, speed)
+    }
+
+    suspend fun positionSunroof(target: Int, data: DiParsData?): Result<Unit> {
+        if (target !in 0..100) return failure("invalid_sunroof_position")
+        sunroofEndpoint(target, data?.speed)?.let { return it }
+
+        val start = data?.sunroof ?: return failure("sunroof_position_unavailable")
+        if (near(start, target, 2)) return Result.success(Unit)
 
         val opening = target > start
-        if (opening) {
-            ActionDispatcher.speedGateBlockReason(channel.open, speed)?.let {
-                return Result.failure(IllegalStateException(it.javaClass.simpleName))
-            }
-        }
+        val command = if (opening) SUNROOF_OPEN else SUNROOF_CLOSE
+        blockOpening(command, opening, data.speed)?.let { return it }
 
-        val native = channel.write(target)
-        if (native.isSuccess && waitForWindow(channel, start, target, opening, 1500L)) {
-            return Result.success(Unit)
-        }
-
-        val current = channel.read() ?: start
-        val movingOpen = target > current
-        if (movingOpen) {
-            ActionDispatcher.speedGateBlockReason(channel.open, speed)?.let {
-                return Result.failure(IllegalStateException(it.javaClass.simpleName))
-            }
-        }
-
-        val started = vehicleApi.dispatch(if (movingOpen) channel.open else channel.close)
+        val started = vehicleApi.dispatch(command)
         if (started.isFailure) return started
 
-        val deadline = System.currentTimeMillis() + 12_000L
-        var reached = false
-        while (System.currentTimeMillis() < deadline) {
-            delay(40L)
-            val value = channel.read() ?: continue
-            if ((movingOpen && value >= target) || (!movingOpen && value <= target) || abs(value - target) <= 1) {
-                reached = true
-                break
-            }
-        }
-
-        val stopped = vehicleApi.dispatch(channel.stop)
+        val reached = waitForTarget(
+            read = { latestData?.sunroof },
+            target = target,
+            opening = opening,
+            timeoutMs = 15_000L,
+            sampleMs = 75L,
+            tolerance = 2,
+        )
+        val stopped = vehicleApi.dispatch(SUNROOF_STOP)
         if (stopped.isFailure) return stopped
+
+        delay(300L)
+        val final = latestData?.sunroof ?: reached
+        return if (reached != null && final != null && near(final, target, 4)) {
+            Result.success(Unit)
+        } else {
+            failure("sunroof_position_miss")
+        }
+    }
+
+    private suspend fun windowEndpoint(
+        channel: WindowChannel,
+        target: Int,
+        speed: Int?,
+    ): Result<Unit>? = when (target) {
+        0 -> vehicleApi.dispatch(channel.close)
+        100 -> gatedDispatch(channel.open, speed)
+        else -> null
+    }
+
+    private suspend fun sunroofEndpoint(target: Int, speed: Int?): Result<Unit>? = when (target) {
+        0 -> vehicleApi.dispatch(SUNROOF_CLOSE)
+        50 -> gatedDispatch(SUNROOF_HALF, speed)
+        100 -> gatedDispatch(SUNROOF_OPEN, speed)
+        else -> null
+    }
+
+    private suspend fun tryNativeWindowPosition(channel: WindowChannel, target: Int): Boolean {
+        if (channel.write(target).isFailure) return false
+        val reached = waitForTarget(
+            read = channel.read,
+            target = target,
+            opening = true,
+            timeoutMs = 1500L,
+            sampleMs = 100L,
+            tolerance = 6,
+            directional = false,
+        ) ?: return false
+        delay(150L)
+        val settled = channel.read() ?: reached
+        return near(settled, target, 6)
+    }
+
+    private suspend fun moveWindowToTarget(
+        channel: WindowChannel,
+        target: Int,
+        start: Int,
+        speed: Int?,
+    ): Result<Unit> {
+        val current = channel.read() ?: start
+        val opening = target > current
+        blockOpening(channel.open, opening, speed)?.let { return it }
+
+        val started = vehicleApi.dispatch(if (opening) channel.open else channel.close)
+        if (started.isFailure) return started
+
+        val reached = waitForTarget(
+            read = channel.read,
+            target = target,
+            opening = opening,
+            timeoutMs = 12_000L,
+            sampleMs = 40L,
+            tolerance = 1,
+        )
+        val final = stopWindow(channel)
+        return if (reached != null && final != null && near(final, target, 6)) {
+            Result.success(Unit)
+        } else {
+            failure("window_position_miss")
+        }
+    }
+
+    private suspend fun stopWindow(channel: WindowChannel): Int? {
+        val firstStop = vehicleApi.dispatch(channel.stop)
+        if (firstStop.isFailure) return null
         delay(120L)
         val first = channel.read()
         delay(120L)
@@ -71,89 +134,53 @@ class AliceApertureController @Inject constructor(
             vehicleApi.dispatch(channel.stop)
         }
         delay(180L)
-        val final = channel.read()
-
-        return if (reached && final != null && abs(final - target) <= 6) {
-            Result.success(Unit)
-        } else {
-            Result.failure(IllegalStateException("window_position_miss"))
-        }
+        return channel.read()
     }
 
-    suspend fun positionSunroof(target: Int, data: DiParsData?): Result<Unit> {
-        if (target !in 0..100) return Result.failure(IllegalArgumentException("invalid_sunroof_position"))
-        if (target == 0) return vehicleApi.dispatch("天窗打开0")
-        if (target == 50) return gatedDispatch("天窗打开50", data?.speed)
-        if (target == 100) return gatedDispatch("天窗打开100", data?.speed)
-
-        val start = data?.sunroof ?: return Result.failure(IllegalStateException("sunroof_position_unavailable"))
-        if (abs(start - target) <= 2) return Result.success(Unit)
-
-        val command = if (target > start) "天窗打开100" else "天窗打开0"
-        if (target > start) {
-            ActionDispatcher.speedGateBlockReason(command, data.speed)?.let {
-                return Result.failure(IllegalStateException(it.javaClass.simpleName))
-            }
-        }
-
-        val started = vehicleApi.dispatch(command)
-        if (started.isFailure) return started
-
-        val deadline = System.currentTimeMillis() + 15_000L
-        var last = start
-        var reached = false
-        while (System.currentTimeMillis() < deadline) {
-            delay(75L)
-            val value = latestSunroof() ?: continue
-            last = value
-            if ((target > start && value >= target) || (target < start && value <= target) || abs(value - target) <= 2) {
-                reached = true
-                break
-            }
-        }
-
-        val stopped = vehicleApi.dispatch("天窗停止")
-        if (stopped.isFailure) return stopped
-        delay(300L)
-        val final = latestSunroof() ?: last
-
-        return if (reached && abs(final - target) <= 4) {
-            Result.success(Unit)
-        } else {
-            Result.failure(IllegalStateException("sunroof_position_miss"))
-        }
-    }
-
-    @Volatile
-    var latestData: DiParsData? = null
-
-    private fun latestSunroof(): Int? = latestData?.sunroof
-
-    private suspend fun gatedDispatch(command: String, speed: Int?): Result<Unit> {
-        ActionDispatcher.speedGateBlockReason(command, speed)?.let {
-            return Result.failure(IllegalStateException(it.javaClass.simpleName))
-        }
-        return vehicleApi.dispatch(command)
-    }
-
-    private suspend fun waitForWindow(
-        channel: WindowChannel,
-        start: Int,
+    private suspend fun waitForTarget(
+        read: suspend () -> Int?,
         target: Int,
         opening: Boolean,
         timeoutMs: Long,
-    ): Boolean {
+        sampleMs: Long,
+        tolerance: Int,
+        directional: Boolean = true,
+    ): Int? {
         val deadline = System.currentTimeMillis() + timeoutMs
-        var moved = false
         while (System.currentTimeMillis() < deadline) {
-            delay(100L)
-            val value = channel.read() ?: continue
-            if (abs(value - start) >= 2) moved = true
-            if (abs(value - target) <= 6) return true
-            if (moved && ((opening && value > target + 6) || (!opening && value < target - 6))) return false
+            delay(sampleMs)
+            val value = read()
+            if (value != null && reached(value, target, opening, tolerance, directional)) return value
         }
-        return false
+        return null
     }
+
+    private fun reached(
+        value: Int,
+        target: Int,
+        opening: Boolean,
+        tolerance: Int,
+        directional: Boolean,
+    ): Boolean {
+        if (near(value, target, tolerance)) return true
+        if (!directional) return false
+        return if (opening) value >= target else value <= target
+    }
+
+    private fun blockOpening(command: String, opening: Boolean, speed: Int?): Result<Unit>? {
+        if (!opening) return null
+        val reason = ActionDispatcher.speedGateBlockReason(command, speed) ?: return null
+        return failure(reason.javaClass.simpleName)
+    }
+
+    private suspend fun gatedDispatch(command: String, speed: Int?): Result<Unit> =
+        blockOpening(command, true, speed) ?: vehicleApi.dispatch(command)
+
+    private fun near(value: Int, target: Int, tolerance: Int): Boolean =
+        abs(value - target) <= tolerance
+
+    private fun failure(message: String): Result<Unit> =
+        Result.failure(IllegalStateException(message))
 
     private fun windowChannel(action: String): WindowChannel? = when (action) {
         "window.driver.position" -> WindowChannel(
@@ -182,4 +209,11 @@ class AliceApertureController @Inject constructor(
         val read: suspend () -> Int?,
         val write: suspend (Int) -> Result<Unit>,
     )
+
+    companion object {
+        private const val SUNROOF_OPEN = "天窗打开100"
+        private const val SUNROOF_HALF = "天窗打开50"
+        private const val SUNROOF_CLOSE = "天窗打开0"
+        private const val SUNROOF_STOP = "天窗停止"
+    }
 }
