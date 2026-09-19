@@ -42,12 +42,8 @@ class AliceApertureController @Inject constructor(
         if (started.isFailure) return started
 
         val reached = waitForTarget(
-            read = { latestData?.sunroof },
-            target = target,
-            opening = opening,
-            timeoutMs = 15_000L,
-            sampleMs = 75L,
-            tolerance = 2,
+            { latestData?.sunroof },
+            WaitSpec(target, opening, 15_000L, 75L, 2),
         )
         val stopped = vehicleApi.dispatch(SUNROOF_STOP)
         if (stopped.isFailure) return stopped
@@ -81,13 +77,8 @@ class AliceApertureController @Inject constructor(
     private suspend fun tryNativeWindowPosition(channel: WindowChannel, target: Int): Boolean {
         if (channel.write(target).isFailure) return false
         val reached = waitForTarget(
-            read = channel.read,
-            target = target,
-            opening = true,
-            timeoutMs = 1500L,
-            sampleMs = 100L,
-            tolerance = 6,
-            directional = false,
+            channel.read,
+            WaitSpec(target, opening = true, 1500L, 100L, 6, directional = false),
         ) ?: return false
         delay(150L)
         val settled = channel.read() ?: reached
@@ -108,12 +99,8 @@ class AliceApertureController @Inject constructor(
         if (started.isFailure) return started
 
         val reached = waitForTarget(
-            read = channel.read,
-            target = target,
-            opening = opening,
-            timeoutMs = 12_000L,
-            sampleMs = 40L,
-            tolerance = 1,
+            channel.read,
+            WaitSpec(target, opening, 12_000L, 40L, 1),
         )
         val final = stopWindow(channel)
         return if (reached != null && final != null && near(final, target, 6)) {
@@ -139,32 +126,21 @@ class AliceApertureController @Inject constructor(
 
     private suspend fun waitForTarget(
         read: suspend () -> Int?,
-        target: Int,
-        opening: Boolean,
-        timeoutMs: Long,
-        sampleMs: Long,
-        tolerance: Int,
-        directional: Boolean = true,
+        spec: WaitSpec,
     ): Int? {
-        val deadline = System.currentTimeMillis() + timeoutMs
+        val deadline = System.currentTimeMillis() + spec.timeoutMs
         while (System.currentTimeMillis() < deadline) {
-            delay(sampleMs)
+            delay(spec.sampleMs)
             val value = read()
-            if (value != null && reached(value, target, opening, tolerance, directional)) return value
+            if (value != null && reached(value, spec)) return value
         }
         return null
     }
 
-    private fun reached(
-        value: Int,
-        target: Int,
-        opening: Boolean,
-        tolerance: Int,
-        directional: Boolean,
-    ): Boolean {
-        if (near(value, target, tolerance)) return true
-        if (!directional) return false
-        return if (opening) value >= target else value <= target
+    private fun reached(value: Int, spec: WaitSpec): Boolean {
+        if (near(value, spec.target, spec.tolerance)) return true
+        if (!spec.directional) return false
+        return if (spec.opening) value >= spec.target else value <= spec.target
     }
 
     private fun blockOpening(command: String, opening: Boolean, speed: Int?): Result<Unit>? {
@@ -201,6 +177,15 @@ class AliceApertureController @Inject constructor(
         )
         else -> null
     }
+
+    private data class WaitSpec(
+        val target: Int,
+        val opening: Boolean,
+        val timeoutMs: Long,
+        val sampleMs: Long,
+        val tolerance: Int,
+        val directional: Boolean = true,
+    )
 
     private data class WindowChannel(
         val open: String,
