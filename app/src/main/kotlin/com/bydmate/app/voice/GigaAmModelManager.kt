@@ -14,6 +14,7 @@ import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.BufferedInputStream
 import java.io.File
+import java.io.FileOutputStream
 
 /** Downloads and unpacks the GigaAM v3 Russian ASR model (sherpa-onnx nemo-ctc archive:
  *  model.int8.onnx + tokens.txt under one top-level dir) plus the standalone silero VAD
@@ -33,6 +34,10 @@ class GigaAmModelManager(
     private fun legacyStagingDir() = File(context.filesDir, "asr/.staging-gigaam-v2-ru")
 
     private fun vadFile() = File(context.filesDir, "asr/silero_vad.onnx")
+
+    private fun modelDownloadFile() = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
+
+    private fun vadDownloadFile() = File(context.cacheDir, "silero_vad.onnx.tmp")
 
     fun modelPath(): String = File(baseDir(), "model.int8.onnx").absolutePath
 
@@ -60,14 +65,16 @@ class GigaAmModelManager(
             legacyDir().deleteRecursively()
             legacyStagingDir().deleteRecursively()
             vadFile().delete()
+            modelDownloadFile().delete()
+            vadDownloadFile().delete()
         }
     }
 
     suspend fun download(onProgress: (Int) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
-                val tmpArchive = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
-                val tmpVad = File(context.cacheDir, "silero_vad.onnx.tmp")
+                val tmpArchive = modelDownloadFile()
+                val tmpVad = vadDownloadFile()
                 try {
                     // Model archive: 0..MODEL_WEIGHT of the combined progress.
                     downloadToFile(MODEL_URL, tmpArchive) { pct -> onProgress((pct * MODEL_WEIGHT) / 100) }
@@ -95,9 +102,11 @@ class GigaAmModelManager(
                             legacyStagingDir().deleteRecursively()
                         } catch (t: Throwable) {
                             staging.deleteRecursively()
+                            tmpArchive.delete()
                             throw t
                         }
                     }
+                    tmpArchive.delete()
                     ensureActive()
 
                     // VAD: MODEL_WEIGHT..100 of the combined progress.
@@ -115,34 +124,69 @@ class GigaAmModelManager(
                     // the serialized delete() removes the files, state must not flip.
                     ensureActive()
                 } finally {
-                    tmpArchive.delete()
-                    tmpVad.delete()
+                    if (isReady()) {
+                        tmpArchive.delete()
+                        tmpVad.delete()
+                    }
                 }
             }.onFailure { if (it is CancellationException) throw it }
         }
 
     private suspend fun downloadToFile(url: String, dest: File, onProgress: (Int) -> Unit) {
-        http.newCall(Request.Builder().url(url).build()).execute().use { resp ->
-            if (!resp.isSuccessful) error("HTTP ${resp.code}")
-            val body = resp.body ?: error("empty response body")
-            val total = body.contentLength()
-            var read = 0L
-            body.byteStream().use { input ->
-                dest.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    while (true) {
-                        coroutineContext.ensureActive()
-                        val n = input.read(buf); if (n < 0) break
-                        out.write(buf, 0, n); read += n
-                        if (total > 0) onProgress(((read * 100) / total).toInt())
-                    }
-                    // fsync before the caller's rename-publish: the head unit powers off
-                    // with the car (no clean shutdown), and a rename whose data blocks
-                    // never hit flash survives as a full-size file of garbage (field
-                    // defect: Sea Lion 07 crash loop on a corrupt model, 2026-07-16).
-                    out.fd.sync()
+        var resumedFrom = if (dest.isFile) dest.length() else 0L
+        var resetTried = false
+
+        while (true) {
+            val request = Request.Builder().url(url).apply {
+                if (resumedFrom > 0L) header("Range", "bytes=${resumedFrom}-")
+            }.build()
+
+            http.newCall(request).execute().use { resp ->
+                if (resp.code == 416 && resumedFrom > 0L && !resetTried) {
+                    dest.delete()
+                    resumedFrom = 0L
+                    resetTried = true
+                    return@use
                 }
+                if (!resp.isSuccessful) error("HTTP ${resp.code}")
+
+                val body = resp.body ?: error("empty response body")
+                val append = resumedFrom > 0L && resp.code == 206
+                if (!append) resumedFrom = 0L
+
+                val total = if (resp.code == 206) {
+                    resp.header("Content-Range")
+                        ?.substringAfter('/')
+                        ?.toLongOrNull()
+                        ?: (resumedFrom + body.contentLength()).takeIf { it > 0L }
+                } else {
+                    body.contentLength().takeIf { it > 0L }
+                }
+
+                var read = resumedFrom
+                body.byteStream().use { input ->
+                    FileOutputStream(dest, append).use { out ->
+                        val buf = ByteArray(64 * 1024)
+                        while (true) {
+                            coroutineContext.ensureActive()
+                            val n = input.read(buf)
+                            if (n < 0) break
+                            out.write(buf, 0, n)
+                            read += n
+                            if (total != null) onProgress(((read * 100) / total).toInt().coerceIn(0, 100))
+                        }
+                        out.fd.sync()
+                    }
+                }
+
+                if (total != null && dest.length() != total) {
+                    error("incomplete download: ${dest.length()}/${total}")
+                }
+                onProgress(100)
+                return
             }
+
+            if (resetTried && resumedFrom == 0L) continue
         }
     }
 
