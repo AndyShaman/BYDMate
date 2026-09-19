@@ -1592,4 +1592,14 @@
     <string name="trips_temp_verdict_not_higher">Na zimno auto nie bierze więcej niż w cieple (różnica %1$s%%). Zimowej nadwyżki w Twoich przejazdach na razie nie widać.</string>
     <string name="trips_temp_verdict_narrow">Na razie wszystkie przejazdy przy %1$s…%2$s °C — nie ma jeszcze z czym porównać.</string>
     <string name="trips_temp_verdict_none">Na razie nie ma z czym porównać: potrzebne przejazdy i na zimno, i w cieple.</string>
+
+    <string name="settings_alice_provider_header">Asystent głosowy</string>
+    <string name="settings_voice_provider_label">Asystent</string>
+    <string name="settings_voice_provider_hint">Wybierz asystenta głosowego obsługiwanego przyciskiem na kierownicy</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
+    <string name="settings_alice_provider_title">Yandex Alice</string>
+    <string name="settings_alice_provider_desc">Używaj Alice zamiast wbudowanego asystenta głosowego BYDMate</string>
+    <string name="settings_alice_endpoint">URL endpointu</string>
+    <string name="settings_alice_api_key">Klucz API</string>
+    <string name="settings_alice_autosave_hint">Endpoint i klucz są zapisywane automatycznie</string>
 </resources>

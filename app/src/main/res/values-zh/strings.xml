@@ -1554,4 +1554,14 @@
     <string name="trips_temp_verdict_not_higher">寒冷时的能耗并不高于温暖时（差值 %1$s%%）。您的行程中暂未看到冬季额外能耗。</string>
     <string name="trips_temp_verdict_narrow">目前所有行程都在 %1$s…%2$s °C，暂时没有寒冷或炎热的数据可比。</string>
     <string name="trips_temp_verdict_none">暂时无法比较：需要寒冷和温暖天气各自的行程。</string>
+
+    <string name="settings_alice_provider_header">语音助手</string>
+    <string name="settings_voice_provider_label">助手</string>
+    <string name="settings_voice_provider_hint">选择方向盘按键要控制的语音助手</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
+    <string name="settings_alice_provider_title">Yandex Alice</string>
+    <string name="settings_alice_provider_desc">使用 Alice 替代 BYDMate 内置语音助手</string>
+    <string name="settings_alice_endpoint">Endpoint URL</string>
+    <string name="settings_alice_api_key">API Key</string>
+    <string name="settings_alice_autosave_hint">Endpoint 和密钥会自动保存</string>
 </resources>
