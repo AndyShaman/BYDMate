@@ -82,32 +82,7 @@ class SteeringWheelKeyService : AccessibilityService() {
                 LearnAction.CONSUME -> true
             }
         }
-        // Voice check: runs after learn-mode, before star decision. Returns true only when voice is
-        // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
-        val voicePrefs = applicationContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
-        val voiceEnabled = voicePrefs.getBoolean("voice_enabled", false)
-        val aliceEnabled = voicePrefs.getBoolean("alice_enabled", false)
-        val voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)
-
-        if (voiceEnabled && aliceEnabled && android.os.Build.VERSION.SDK_INT <= 29) {
-            if (event.keyCode == 327) return true
-            if (event.keyCode == 304) {
-                if (isDown && event.repeatCount == 0) aliceLauncher.trigger()
-                return true
-            }
-        }
-
-        when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey)) {
-            VoiceKeyDecision.TRIGGER -> {
-                if (event.repeatCount == 0) {
-                    if (aliceEnabled) aliceLauncher.trigger()
-                    else entryPoint().voiceController().onPttPressed()
-                }
-                return true
-            }
-            VoiceKeyDecision.CONSUME -> return true
-            VoiceKeyDecision.IGNORE -> {}
-        }
+        handleVoiceKey(event, isDown)?.let { return it }
         // Volume-knob press: runs before the star decision, own switch, default off. The key is
         // consumed whenever the feature is on — even when no MediaSession answers — because the
         // alternative is the firmware's source switch, which is exactly what the user turned this
@@ -144,6 +119,33 @@ class SteeringWheelKeyService : AccessibilityService() {
                 SteeringKeyDecision.CONSUME -> true
                 SteeringKeyDecision.PASS_THROUGH -> false
             }
+        }
+    }
+
+    private fun handleVoiceKey(event: KeyEvent, isDown: Boolean): Boolean? {
+        val voicePrefs = applicationContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+        val voiceEnabled = voicePrefs.getBoolean("voice_enabled", false)
+        val aliceEnabled = voicePrefs.getBoolean("alice_enabled", false)
+        val voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)
+
+        if (voiceEnabled && aliceEnabled && android.os.Build.VERSION.SDK_INT <= 29) {
+            if (event.keyCode == 327) return true
+            if (event.keyCode == 304) {
+                if (isDown && event.repeatCount == 0) aliceLauncher.trigger()
+                return true
+            }
+        }
+
+        return when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey)) {
+            VoiceKeyDecision.TRIGGER -> {
+                if (event.repeatCount == 0) {
+                    if (aliceEnabled) aliceLauncher.trigger()
+                    else entryPoint().voiceController().onPttPressed()
+                }
+                true
+            }
+            VoiceKeyDecision.CONSUME -> true
+            VoiceKeyDecision.IGNORE -> null
         }
     }
 
