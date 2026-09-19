@@ -902,7 +902,7 @@ class ActionDispatcher @Inject constructor(
         // Home/Work shortcut, which now can land on Maps as well.
         val routeMode = !payload.optBoolean("show", false) &&
             payload.optString("query").isBlank()
-        val autoGoSupported = routeMode && !willOpenMaps(payload) &&
+        val autoGoSupported = routeMode && !willOpenMaps(payload) && !willOpenWaze(payload) &&
             (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
         val go = autoGoRequested(payload)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
@@ -981,6 +981,9 @@ class ActionDispatcher @Inject constructor(
             Log.i(TAG, "navigate: yandex maps not installed, falling back to yandex")
             return RouteNavigatorUris.YANDEX to "Яндекс Карты не установлены, открыт Яндекс Навигатор"
         }
+        if (chosen == RouteNavigatorUris.WAZE && !isPackageInstalled(RouteNavigatorUris.WAZE_PACKAGE)) {
+            return RouteNavigatorUris.YANDEX to "Waze не установлен, открыт Яндекс Навигатор"
+        }
         return chosen to null
     }
 
@@ -993,6 +996,18 @@ class ActionDispatcher @Inject constructor(
         // whole command set, Home/Work shortcut included, into Yandex Maps.
         if (isMapsRequest(payload) || navigator == RouteNavigatorUris.MAPS) {
             return navigateMaps(payload, shortcut)
+        }
+        if (navigator == RouteNavigatorUris.WAZE && shortcut != null) {
+            if (shortcut !in setOf("home", "work")) {
+                return DispatchResult(false, "неизвестный shortcut: $shortcut")
+            }
+            return startNavigate(
+                navigator,
+                RouteNavigatorUris.MODE_ROUTE,
+                "https://waze.com/ul?favorite=$shortcut&navigate=yes",
+                "navigate_waze_shortcut:$shortcut",
+                fallbackReason,
+            )
         }
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
@@ -1050,6 +1065,9 @@ class ActionDispatcher @Inject constructor(
      */
     fun willOpenMaps(payload: JSONObject): Boolean =
         isMapsRequest(payload) || resolveNavigator().first == RouteNavigatorUris.MAPS
+
+    fun willOpenWaze(payload: JSONObject): Boolean =
+        !isMapsRequest(payload) && resolveNavigator().first == RouteNavigatorUris.WAZE
 
     /**
      * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
@@ -1119,8 +1137,9 @@ class ActionDispatcher @Inject constructor(
         Log.i(TAG, "navigate: app=$navigator mode=$mode uri=$uri")
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(uri))
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        if (navigator == RouteNavigatorUris.DGIS) {
-            intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
+        when (navigator) {
+            RouteNavigatorUris.DGIS -> intent.setPackage(RouteNavigatorUris.DGIS_PACKAGE)
+            RouteNavigatorUris.WAZE -> intent.setPackage(RouteNavigatorUris.WAZE_PACKAGE)
         }
         val result = tryStartActivity(intent, label)
         Log.i(TAG, "navigate: intent sent label=$label ok=${result.success}")

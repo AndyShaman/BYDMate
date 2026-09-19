@@ -20,11 +20,13 @@ class RouteNavigatorUrisTest {
         assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize(""))
         assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize("2gis"))
         assertEquals(RouteNavigatorUris.DGIS, RouteNavigatorUris.normalize("dgis"))
+        assertEquals(RouteNavigatorUris.WAZE, RouteNavigatorUris.normalize("waze"))
     }
 
     @Test fun `packages follow the selection`() {
         assertEquals("ru.yandex.yandexnavi", RouteNavigatorUris.packageOf(RouteNavigatorUris.YANDEX))
         assertEquals("ru.dublgis.dgismobile", RouteNavigatorUris.packageOf(RouteNavigatorUris.DGIS))
+        assertEquals("com.waze", RouteNavigatorUris.packageOf(RouteNavigatorUris.WAZE))
     }
 
     @Test fun `yandex links are unchanged`() {
@@ -69,6 +71,21 @@ class RouteNavigatorUrisTest {
         assertEquals(
             RouteNavigatorUris.showPoint(RouteNavigatorUris.DGIS, 55.75, 37.62, null),
             RouteNavigatorUris.showPoint(RouteNavigatorUris.DGIS, 55.75, 37.62, "Кафе"),
+        )
+    }
+
+    @Test fun `waze links use the official deep-link format`() {
+        assertEquals(
+            "https://waze.com/ul?q=%D0%BA%D0%B0%D1%84%D0%B5",
+            RouteNavigatorUris.search(RouteNavigatorUris.WAZE, "кафе"),
+        )
+        assertEquals(
+            "https://waze.com/ul?ll=55.75,37.62",
+            RouteNavigatorUris.showPoint(RouteNavigatorUris.WAZE, 55.75, 37.62, "Кафе"),
+        )
+        assertEquals(
+            "https://waze.com/ul?ll=57.0,36.0&navigate=yes",
+            RouteNavigatorUris.route(RouteNavigatorUris.WAZE, 57.0, 36.0),
         )
     }
 

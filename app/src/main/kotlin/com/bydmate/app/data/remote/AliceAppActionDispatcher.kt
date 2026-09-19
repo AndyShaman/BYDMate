@@ -95,6 +95,7 @@ class AliceAppActionDispatcher @Inject constructor(
         return when (RouteNavigatorUris.normalize(prefs.getString(RouteNavigatorUris.KEY_ROUTE_NAVIGATOR, null))) {
             RouteNavigatorUris.DGIS -> listOf(RouteNavigatorUris.DGIS_PACKAGE)
             RouteNavigatorUris.MAPS -> NavPackages.YANDEX_MAPS.toList()
+            RouteNavigatorUris.WAZE -> listOf(RouteNavigatorUris.WAZE_PACKAGE)
             else -> NavPackages.YANDEX_NAVI.toList()
         }
     }

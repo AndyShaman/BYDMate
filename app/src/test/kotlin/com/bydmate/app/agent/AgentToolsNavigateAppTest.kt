@@ -42,6 +42,7 @@ class AgentToolsNavigateAppTest {
         every { it.willOpenMaps(any()) } answers {
             firstArg<JSONObject>().optString("app").trim().equals("maps", ignoreCase = true)
         }
+        every { it.willOpenWaze(any()) } returns false
     }
     private val places = mockk<PlaceRepository>(relaxed = true)
 
@@ -172,6 +173,14 @@ class AgentToolsNavigateAppTest {
         every { dispatcher.willOpenMaps(any()) } returns true
         coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
         val out = JSONObject(toolsSeeing("ru.yandex.yandexmaps").execute(AgentToolCall("1", "navigate_to",
+            """{"destination":"точка","lat":55.7,"lon":37.6}""")))
+        assertTrue(out.getBoolean("ok"))
+    }
+
+    @Test fun `settings default waze waits for waze`() = runTest {
+        every { dispatcher.willOpenWaze(any()) } returns true
+        coEvery { dispatcher.dispatch(any(), any()) } returns DispatchResult(true)
+        val out = JSONObject(toolsSeeing("com.waze").execute(AgentToolCall("1", "navigate_to",
             """{"destination":"точка","lat":55.7,"lon":37.6}""")))
         assertTrue(out.getBoolean("ok"))
     }

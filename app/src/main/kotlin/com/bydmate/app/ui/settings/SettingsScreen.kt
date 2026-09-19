@@ -2448,6 +2448,25 @@ private fun VoiceSettingsContent(
         }
     }
 
+    val routeNavigatorIds = listOf(
+        com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
+        com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
+        com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
+        com.bydmate.app.data.automation.RouteNavigatorUris.WAZE,
+    )
+    SettingChipRow(
+        title = stringResource(R.string.settings_route_navigator_label),
+        description = stringResource(R.string.settings_route_navigator_hint),
+        options = listOf(
+            stringResource(R.string.settings_route_navigator_yandex),
+            stringResource(R.string.settings_route_navigator_dgis),
+            stringResource(R.string.settings_route_navigator_maps),
+            "Waze",
+        ),
+        selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
+        onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
+    )
+
     if (!state.aliceEnabled) {
     // --- Section 1: Агент (enable toggle, name, persona, gender, debug tools) ---
     SectionHeader(text = stringResource(R.string.settings_agent_section_header))
@@ -2505,24 +2524,6 @@ private fun VoiceSettingsContent(
                 ),
                 selectedIndex = genderIds.indexOf(state.agentGender).coerceAtLeast(0),
                 onSelect = { viewModel.setAgentGender(genderIds[it]) },
-            )
-            SettingDivider()
-            // #190/#200: the map app every route/search command opens (voice agent and automation).
-            val routeNavigatorIds = listOf(
-                com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
-                com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
-                com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
-            )
-            SettingChipRow(
-                title = stringResource(R.string.settings_route_navigator_label),
-                description = stringResource(R.string.settings_route_navigator_hint),
-                options = listOf(
-                    stringResource(R.string.settings_route_navigator_yandex),
-                    stringResource(R.string.settings_route_navigator_dgis),
-                    stringResource(R.string.settings_route_navigator_maps),
-                ),
-                selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
-                onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
             )
         }
     }

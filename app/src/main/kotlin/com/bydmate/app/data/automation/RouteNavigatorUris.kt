@@ -18,6 +18,7 @@ object RouteNavigatorUris {
 
     const val YANDEX = "yandex"
     const val DGIS = "dgis"
+    const val WAZE = "waze"
 
     /**
      * Third settings value (#200): the same yandexmaps:// dialect that `app="maps"` reaches
@@ -28,6 +29,7 @@ object RouteNavigatorUris {
 
     const val YANDEX_PACKAGE = "ru.yandex.yandexnavi"
     const val DGIS_PACKAGE = "ru.dublgis.dgismobile"
+    const val WAZE_PACKAGE = "com.waze"
 
     /** Log/diagnostic names of the three deep links. */
     const val MODE_SEARCH = "search"
@@ -38,29 +40,41 @@ object RouteNavigatorUris {
     fun normalize(value: String?): String = when (value) {
         DGIS -> DGIS
         MAPS -> MAPS
+        WAZE -> WAZE
         else -> YANDEX
     }
 
-    fun packageOf(navigator: String): String =
-        if (normalize(navigator) == DGIS) DGIS_PACKAGE else YANDEX_PACKAGE
+    fun packageOf(navigator: String): String = when (normalize(navigator)) {
+        DGIS -> DGIS_PACKAGE
+        WAZE -> WAZE_PACKAGE
+        else -> YANDEX_PACKAGE
+    }
 
     /** Free-text search on the map ("найди кафе"). */
-    fun search(navigator: String, query: String): String =
-        if (normalize(navigator) == DGIS) "dgis://2gis.ru/search/${Uri.encode(query)}"
-        else "yandexnavi://map_search?text=${Uri.encode(query)}"
+    fun search(navigator: String, query: String): String = when (normalize(navigator)) {
+        DGIS -> "dgis://2gis.ru/search/${Uri.encode(query)}"
+        WAZE -> "https://waze.com/ul?q=${Uri.encode(query)}"
+        else -> "yandexnavi://map_search?text=${Uri.encode(query)}"
+    }
 
-    /** Pin without a route. [label] is the pin caption — Yandex only, the 2GIS geo link takes none. */
+    /** Pin without a route. */
     fun showPoint(navigator: String, lat: Double, lon: Double, label: String?): String =
-        if (normalize(navigator) == DGIS) "dgis://2gis.ru/geo/$lon,$lat"
-        else buildString {
-            append("yandexnavi://show_point_on_map?lat=$lat&lon=$lon&zoom=14")
-            if (label != null) append("&desc=${Uri.encode(label)}")
+        when (normalize(navigator)) {
+            DGIS -> "dgis://2gis.ru/geo/$lon,$lat"
+            WAZE -> "https://waze.com/ul?ll=$lat,$lon"
+            else -> buildString {
+                append("yandexnavi://show_point_on_map?lat=$lat&lon=$lon&zoom=14")
+                if (label != null) append("&desc=${Uri.encode(label)}")
+            }
         }
 
     /** Car route to the point. */
     fun route(navigator: String, lat: Double, lon: Double): String =
-        if (normalize(navigator) == DGIS) "dgis://2gis.ru/routeSearch/rsType/car/to/$lon,$lat"
-        else "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
+        when (normalize(navigator)) {
+            DGIS -> "dgis://2gis.ru/routeSearch/rsType/car/to/$lon,$lat"
+            WAZE -> "https://waze.com/ul?ll=$lat,$lon&navigate=yes"
+            else -> "yandexnavi://build_route_on_map?lat_to=$lat&lon_to=$lon"
+        }
 
     /**
      * Yandex Maps' own dialect (#200), reached either per command with `app="maps"` or, since
