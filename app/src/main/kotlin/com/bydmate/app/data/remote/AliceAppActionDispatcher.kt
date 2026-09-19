@@ -18,7 +18,7 @@ class AliceAppActionDispatcher @Inject constructor(
 ) {
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
 
-    suspend fun dispatch(json: JSONObject, data: DiParsData): Result<Unit>? {
+    suspend fun dispatch(json: JSONObject, data: DiParsData?): Result<Unit>? {
         val action = json.optString("action").trim().lowercase()
 
         val packageCandidates = when (action) {
