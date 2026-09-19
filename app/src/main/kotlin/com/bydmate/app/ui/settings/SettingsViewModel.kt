@@ -256,7 +256,6 @@ class SettingsViewModel @Inject constructor(
     private val ruStressMarker: RuStressMarker,
     private val gigaAmModelManager: GigaAmModelManager,
     private val continuousAsr: ContinuousAsr,
-    private val alicePollingManager: com.bydmate.app.data.remote.AlicePollingManager,
     private val ttsEngine: TtsEngine,
     private val voiceController: VoiceController,
     private val seatChannelStore: SeatChannelStore,
@@ -1148,7 +1147,7 @@ class SettingsViewModel @Inject constructor(
             .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, enabled).apply()
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            if (enabled) alicePollingManager.start() else alicePollingManager.stop()
+            TrackingService.setAlicePollingEnabled(enabled)
         }
     }
 
