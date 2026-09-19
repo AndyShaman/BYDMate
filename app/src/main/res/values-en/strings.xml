@@ -1442,6 +1442,9 @@
     <string name="trips_temp_verdict_none">Nothing to compare yet: trips in the cold and in the warm are both needed.</string>
 
     <string name="settings_alice_provider_header">Voice assistant</string>
+    <string name="settings_voice_provider_label">Assistant</string>
+    <string name="settings_voice_provider_hint">Choose which voice assistant the steering-wheel button controls</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
     <string name="settings_alice_provider_title">Yandex Alice</string>
     <string name="settings_alice_provider_desc">Use Alice instead of the built-in BYDMate voice assistant</string>
     <string name="settings_alice_endpoint">Endpoint URL</string>

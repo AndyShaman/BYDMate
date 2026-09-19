@@ -2420,16 +2420,21 @@ private fun VoiceSettingsContent(
         modifier = Modifier.fillMaxWidth(),
     ) {
         Column(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
+            modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            SettingToggleRow(
-                title = stringResource(R.string.settings_alice_provider_title),
-                description = stringResource(R.string.settings_alice_provider_desc),
-                checked = state.aliceEnabled,
-                onCheckedChange = { viewModel.toggleAlice(it) },
+            SettingChipRow(
+                title = stringResource(R.string.settings_voice_provider_label),
+                description = stringResource(R.string.settings_voice_provider_hint),
+                options = listOf(
+                    stringResource(R.string.settings_voice_provider_local),
+                    stringResource(R.string.settings_alice_provider_title),
+                ),
+                selectedIndex = if (state.aliceEnabled) 1 else 0,
+                onSelect = { viewModel.toggleAlice(it == 1) },
             )
             if (state.aliceEnabled) {
+                SettingDivider()
                 SettingsTextField(
                     label = stringResource(R.string.settings_alice_endpoint),
                     value = state.aliceEndpoint,

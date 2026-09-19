@@ -1607,6 +1607,9 @@
     <string name="trips_temp_verdict_none">Пока сравнивать не с чем: нужны поездки и в холод, и в тепло.</string>
 
     <string name="settings_alice_provider_header">Голосовой помощник</string>
+    <string name="settings_voice_provider_label">Помощник</string>
+    <string name="settings_voice_provider_hint">Выберите, какой голосовой помощник будет использовать кнопка на руле</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
     <string name="settings_alice_provider_title">Яндекс Алиса</string>
     <string name="settings_alice_provider_desc">Использовать Алису вместо встроенного голосового помощника BYDMate</string>
     <string name="settings_alice_endpoint">Endpoint URL</string>
