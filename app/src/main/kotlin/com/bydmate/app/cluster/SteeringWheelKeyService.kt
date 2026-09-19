@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 class SteeringWheelKeyService : AccessibilityService() {
 
     private var cachedEntryPoint: ClusterEntryPoint? = null
+    private val aliceLauncher by lazy { YandexAliceLauncher(this) { entryPoint().voiceController() } }
     private val prefs: SharedPreferences by lazy {
         applicationContext.getSharedPreferences(ClusterProjectionManager.PREFS_NAME, Context.MODE_PRIVATE)
     }
@@ -85,14 +86,25 @@ class SteeringWheelKeyService : AccessibilityService() {
         // enabled and the configured voice key is pressed (isDown). Non-voice keys fall through.
         val voicePrefs = applicationContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
         val voiceEnabled = voicePrefs.getBoolean("voice_enabled", false)
+        val aliceEnabled = voicePrefs.getBoolean("alice_enabled", false)
         val voiceKey = voicePrefs.getInt("voice_keycode", DEFAULT_VOICE_KEYCODE)
-        when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey)) {
-            VoiceKeyDecision.TRIGGER -> {
-                entryPoint().voiceController().onPttPressed()
+
+        if (voiceEnabled && aliceEnabled && android.os.Build.VERSION.SDK_INT <= 29) {
+            if (event.keyCode == 327) return true
+            if (event.keyCode == 304) {
+                if (isDown && event.repeatCount == 0) aliceLauncher.trigger()
                 return true
             }
-            // Swallow the matching key's UP edge too — otherwise it falls through to the
-            // native BYD assistant, which owns the same hardware keycode (Finding 2).
+        }
+
+        when (voiceDecision(event.keyCode, isDown, voiceEnabled, voiceKey)) {
+            VoiceKeyDecision.TRIGGER -> {
+                if (event.repeatCount == 0) {
+                    if (aliceEnabled) aliceLauncher.trigger()
+                    else entryPoint().voiceController().onPttPressed()
+                }
+                return true
+            }
             VoiceKeyDecision.CONSUME -> return true
             VoiceKeyDecision.IGNORE -> {}
         }
@@ -166,6 +178,7 @@ class SteeringWheelKeyService : AccessibilityService() {
     // Single volatile read when the HUD feature is off - see NavA11yFeed.enabled.
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         NavA11yFeed.onEvent(this, event)
+        aliceLauncher.onAccessibilityEvent(event)
         // Whoever just took the MAIN screen, reported the moment it happens: the blind-spot
         // window has to be gone before the native 360 view is drawn, and the UsageStats poll is
         // half a second behind. Events from the cluster are dropped by the filter, and the poll
@@ -188,6 +201,7 @@ class SteeringWheelKeyService : AccessibilityService() {
     }
 
     override fun onDestroy() {
+        aliceLauncher.destroy()
         instance = null
         isConnected = false
         super.onDestroy()
