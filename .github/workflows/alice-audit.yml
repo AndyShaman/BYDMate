@@ -16,3 +16,11 @@ jobs:
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
       - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:detekt --stacktrace
+      - name: Build debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: BYDMate-alice-dilink3-${{ github.sha }}
+          path: app/build/outputs/apk/debug/*.apk
+          retention-days: 14
