@@ -1440,4 +1440,11 @@
     <string name="trips_temp_verdict_not_higher">In the cold the car does not use more than in the warm (difference %1$s%%). No winter penalty shows in your trips yet.</string>
     <string name="trips_temp_verdict_narrow">So far every trip was at %1$s…%2$s °C — there is no cold or heat to compare with yet.</string>
     <string name="trips_temp_verdict_none">Nothing to compare yet: trips in the cold and in the warm are both needed.</string>
+
+    <string name="settings_alice_provider_header">Voice assistant</string>
+    <string name="settings_alice_provider_title">Yandex Alice</string>
+    <string name="settings_alice_provider_desc">Use Alice instead of the built-in BYDMate voice assistant</string>
+    <string name="settings_alice_endpoint">Endpoint URL</string>
+    <string name="settings_alice_api_key">API Key</string>
+    <string name="settings_alice_autosave_hint">Endpoint and key are saved automatically</string>
 </resources>
