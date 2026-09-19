@@ -58,10 +58,10 @@ class AliceAppActionDispatcher @Inject constructor(
     private fun actionDef(action: String, json: JSONObject): ActionDef? = when (action) {
         "navigation.cluster_on" -> ActionDef("", "Alice", "cluster_projection", "1")
         "navigation.cluster_off" -> ActionDef("", "Alice", "cluster_projection", "0")
-        "media.volume_up" -> volumeAction("+1")
-        "media.volume_down" -> volumeAction("-1")
-        "media.mute" -> volumeAction("mute")
-        "media.unmute" -> volumeAction("unmute")
+        "media.volume_up" -> aliceVolumeAction("+1")
+        "media.volume_down" -> aliceVolumeAction("-1")
+        "media.mute" -> aliceVolumeAction("mute")
+        "media.unmute" -> aliceVolumeAction("unmute")
         "media.volume" -> absoluteVolumeAction(json)
         else -> null
     }
@@ -69,11 +69,8 @@ class AliceAppActionDispatcher @Inject constructor(
     private fun absoluteVolumeAction(json: JSONObject): ActionDef? {
         val percent = json.optInt("value", -1).takeIf { it in 0..100 } ?: return null
         val max = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC).coerceAtLeast(1)
-        return volumeAction((percent * max / 100.0).toInt().toString())
+        return aliceVolumeAction((percent * max / 100.0).toInt().toString())
     }
-
-    private fun volumeAction(value: String) =
-        ActionDef("media_volume", "Alice", "media_volume", value)
 
     private fun mediaKey(action: String): Int? = when (action) {
         "media.play" -> KeyEvent.KEYCODE_MEDIA_PLAY
@@ -122,3 +119,6 @@ class AliceAppActionDispatcher @Inject constructor(
         private val TIKTOK_LABELS = setOf("tiktok", "tik tok", "тикток", "тик ток")
     }
 }
+
+private fun aliceVolumeAction(value: String): ActionDef =
+    ActionDef("media_volume", "Alice", "media_volume", value)

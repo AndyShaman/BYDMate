@@ -63,14 +63,14 @@ class AliceApertureController @Inject constructor(
         speed: Int?,
     ): Result<Unit>? = when (target) {
         0 -> vehicleApi.dispatch(channel.close)
-        100 -> gatedDispatch(channel.open, speed)
+        100 -> blockOpening(channel.open, true, speed) ?: vehicleApi.dispatch(channel.open)
         else -> null
     }
 
     private suspend fun sunroofEndpoint(target: Int, speed: Int?): Result<Unit>? = when (target) {
         0 -> vehicleApi.dispatch(SUNROOF_CLOSE)
-        50 -> gatedDispatch(SUNROOF_HALF, speed)
-        100 -> gatedDispatch(SUNROOF_OPEN, speed)
+        50 -> blockOpening(SUNROOF_HALF, true, speed) ?: vehicleApi.dispatch(SUNROOF_HALF)
+        100 -> blockOpening(SUNROOF_OPEN, true, speed) ?: vehicleApi.dispatch(SUNROOF_OPEN)
         else -> null
     }
 
@@ -142,9 +142,6 @@ class AliceApertureController @Inject constructor(
         val reason = ActionDispatcher.speedGateBlockReason(command, speed) ?: return null
         return failure(reason.javaClass.simpleName)
     }
-
-    private suspend fun gatedDispatch(command: String, speed: Int?): Result<Unit> =
-        blockOpening(command, true, speed) ?: vehicleApi.dispatch(command)
 
     private fun windowChannel(action: String): WindowChannel? = when (action) {
         "window.driver.position" -> WindowChannel(
