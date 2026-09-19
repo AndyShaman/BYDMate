@@ -516,6 +516,13 @@ class TrackingService : Service(), LocationListener {
         fun steeringKeyAssigned(keyCode: Int): Boolean =
             instance?.automationEngine?.steeringKeyCodes?.value?.contains(keyCode) == true
 
+        fun setAlicePollingEnabled(enabled: Boolean) {
+            instance?.let { service ->
+                if (enabled) service.alicePollingManager.start()
+                else service.alicePollingManager.stop()
+            }
+        }
+
         fun start(context: Context) {
             val intent = Intent(context, TrackingService::class.java)
             context.startForegroundService(intent)
