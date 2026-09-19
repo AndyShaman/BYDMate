@@ -100,13 +100,10 @@ class AlicePollingManager @Inject constructor(
         }
 
         val results = mutableListOf<AckResult>()
-        for (index in 0 until commands.length()) {
-            val command = commands.optJSONObject(index) ?: continue
-            val id = command.optString("id")
-            if (id.isBlank()) continue
-            val action = command.optString("action").trim().lowercase()
-            val result = execute(command, action)
-            results += AckResult(id, result.isSuccess, result.exceptionOrNull()?.message?.take(160))
+        repeat(commands.length()) { index ->
+            commands.optJSONObject(index)?.let { command ->
+                processCommand(command)?.let(results::add)
+            }
         }
 
         if (results.isNotEmpty()) ack(endpoint, apiKey, results)
@@ -118,8 +115,15 @@ class AlicePollingManager @Inject constructor(
         }
     }
 
+    private suspend fun processCommand(command: JSONObject): AckResult? {
+        val id = command.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val action = command.optString("action").trim().lowercase()
+        val result = execute(command, action)
+        return AckResult(id, result.isSuccess, result.exceptionOrNull()?.message?.take(160))
+    }
+
     private suspend fun execute(json: JSONObject, action: String): Result<Unit> {
-        if (action in WINDOW_POSITION_ACTIONS) {
+        if (action in windowPositionActions) {
             val target = json.valueInt() ?: return Result.failure(IllegalArgumentException("invalid_window_position"))
             return apertureController.positionWindow(action, target, latestData?.speed)
         }
@@ -199,7 +203,7 @@ class AlicePollingManager @Inject constructor(
 
     private data class AckResult(val id: String, val success: Boolean, val error: String?)
 
-    private val WINDOW_POSITION_ACTIONS = setOf(
+    private val windowPositionActions = setOf(
         "window.driver.position",
         "window.passenger.position",
         "window.rear_left.position",
