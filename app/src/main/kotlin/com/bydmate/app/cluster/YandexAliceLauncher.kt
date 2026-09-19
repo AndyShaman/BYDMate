@@ -102,29 +102,25 @@ internal class YandexAliceLauncher(
 
     private fun stepExact(roots: List<AccessibilityNodeInfo>): Step {
         val now = SystemClock.elapsedRealtime()
-        for (root in roots) {
-            val nodes = runCatching { root.findAccessibilityNodeInfosByViewId(EXACT_VIEW_ID) }
+        val coldChain = coldClicks > 0
+        val allowed = !coldChain || exactClicks == 0 || now - lastExactClick >= UI_DEBOUNCE_MS
+        if (!allowed) return Step.NONE
+
+        val node = roots.flatMap { root ->
+            runCatching { root.findAccessibilityNodeInfosByViewId(EXACT_VIEW_ID) }
                 .getOrNull().orEmpty()
-            for (node in nodes) {
-                val coldChain = coldClicks > 0
-                val allowed = !coldChain || exactClicks == 0 || now - lastExactClick >= UI_DEBOUNCE_MS
-                if (allowed) {
-                    val terminal = !coldChain || exactClicks > 0
-                    if (click(node, terminal)) {
-                        if (coldChain) {
-                            exactClicks++
-                            lastExactClick = now
-                        }
-                        if (terminal) {
-                            listening = true
-                            return Step.DONE
-                        }
-                        return Step.PROGRESS
-                    }
-                }
-            }
+        }.firstOrNull() ?: return Step.NONE
+
+        val terminal = !coldChain || exactClicks > 0
+        if (!click(node, terminal)) return Step.NONE
+        if (coldChain) {
+            exactClicks++
+            lastExactClick = now
         }
-        return Step.NONE
+        if (!terminal) return Step.PROGRESS
+
+        listening = true
+        return Step.DONE
     }
 
     private fun stepDescription(roots: List<AccessibilityNodeInfo>): Step {
