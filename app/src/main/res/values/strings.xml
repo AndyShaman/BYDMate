@@ -1605,4 +1605,11 @@
     <string name="trips_temp_verdict_not_higher">В холод расход не выше, чем в тепло (разница %1$s%%). Зимней надбавки по вашим поездкам пока не видно.</string>
     <string name="trips_temp_verdict_narrow">Пока все поездки при %1$s…%2$s °C — сравнить с холодом или жарой пока не с чем.</string>
     <string name="trips_temp_verdict_none">Пока сравнивать не с чем: нужны поездки и в холод, и в тепло.</string>
+
+    <string name="settings_alice_provider_header">Голосовой помощник</string>
+    <string name="settings_alice_provider_title">Яндекс Алиса</string>
+    <string name="settings_alice_provider_desc">Использовать Алису вместо встроенного голосового помощника BYDMate</string>
+    <string name="settings_alice_endpoint">Endpoint URL</string>
+    <string name="settings_alice_api_key">API Key</string>
+    <string name="settings_alice_autosave_hint">Endpoint и ключ сохраняются автоматически</string>
 </resources>
