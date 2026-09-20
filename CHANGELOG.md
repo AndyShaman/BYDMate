@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.17.4] - 2026-09-20
+
 ### Новое
 - Остаток энергии батареи в кВт·ч по данным BMS
 - В дамп диагностики добавлена проба параметров ДВС для гибридов (#184)
@@ -1156,7 +1158,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.3...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.4...HEAD
+[3.17.4]: https://github.com/AndyShaman/BYDMate/compare/v3.17.3...v3.17.4
 [3.17.3]: https://github.com/AndyShaman/BYDMate/compare/v3.17.2...v3.17.3
 [3.17.2]: https://github.com/AndyShaman/BYDMate/compare/v3.17.1...v3.17.2
 [3.17.1]: https://github.com/AndyShaman/BYDMate/compare/v3.17.0...v3.17.1
