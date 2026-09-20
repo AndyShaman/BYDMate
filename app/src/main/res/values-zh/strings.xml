@@ -1166,6 +1166,7 @@
     <string name="settings_voice_enable_label">语音指令</string>
     <string name="settings_voice_enable_description">方向盘按键离线语音控制</string>
     <string name="settings_voice_model_downloading">下载中… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">解压中… %1$d%%</string>
     <string name="voice_listening">聆听中</string>
     <string name="voice_thinking">思考中</string>
     <string name="voice_error_model_missing">语音模型尚未下载。请在设置的语音助手部分下载。</string>
@@ -1178,6 +1179,7 @@
     <string name="settings_asr_gigaam_download">下载（%1$s）</string>
     <string name="settings_asr_gigaam_delete">删除模型</string>
     <string name="settings_asr_gigaam_download_failed">模型下载失败</string>
+    <string name="settings_asr_gigaam_no_space">空间不足：需要 %1$d MB，可用 %2$d MB</string>
 
     <string name="settings_voice_button_label">分配按键</string>
     <string name="settings_voice_button_current">当前：%1$s</string>

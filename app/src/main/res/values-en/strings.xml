@@ -1051,6 +1051,7 @@
     <string name="settings_voice_enable_label">Voice commands</string>
     <string name="settings_voice_enable_description">Steering-wheel commands, fully offline</string>
     <string name="settings_voice_model_downloading">Downloading… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">Unpacking… %1$d%%</string>
     <string name="voice_listening">Listening</string>
     <string name="voice_thinking">Thinking</string>
     <string name="voice_error_model_missing">Voice model is not downloaded. Get it in Settings, Voice agent section.</string>
@@ -1063,6 +1064,7 @@
     <string name="settings_asr_gigaam_download">Download (%1$s)</string>
     <string name="settings_asr_gigaam_delete">Delete model</string>
     <string name="settings_asr_gigaam_download_failed">Failed to download the model</string>
+    <string name="settings_asr_gigaam_no_space">Not enough space: %1$d MB needed, %2$d MB free</string>
 
     <string name="settings_voice_button_label">Assign button</string>
     <string name="settings_voice_button_current">Current: %1$s</string>

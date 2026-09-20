@@ -1202,6 +1202,7 @@
     <string name="settings_voice_enable_label">Comandos de voz</string>
     <string name="settings_voice_enable_description">Comandos pelo botão do volante, totalmente offline</string>
     <string name="settings_voice_model_downloading">Baixando… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">Descompactando… %1$d%%</string>
     <string name="voice_listening">Ouvindo</string>
     <string name="voice_thinking">Pensando</string>
     <string name="voice_error_model_missing">O modelo de voz não está baixado. Baixe-o em Configurações, seção Agente de voz.</string>
@@ -1212,6 +1213,7 @@
     <string name="settings_asr_gigaam_download">Baixar (%1$s)</string>
     <string name="settings_asr_gigaam_delete">Excluir modelo</string>
     <string name="settings_asr_gigaam_download_failed">Falha ao baixar o modelo</string>
+    <string name="settings_asr_gigaam_no_space">Espaço insuficiente: %1$d MB necessários, %2$d MB livres</string>
     <string name="settings_voice_button_label">Atribuir botão</string>
     <string name="settings_voice_button_current">Atual: %1$s</string>
     <string name="settings_voice_a11y_hint">O acionamento pelo botão do volante requer o serviço de acessibilidade (ativado automaticamente na seção Tela).</string>
