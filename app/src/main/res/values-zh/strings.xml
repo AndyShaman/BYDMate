@@ -1488,6 +1488,7 @@
     <string name="tech_card_climate">空调</string>
     <string name="tech_card_tyres">轮胎 · 胎压 / 温度</string>
     <string name="tech_card_history">电池 · 历史</string>
+    <string name="tech_label_remain_kwh">剩余电量</string>
     <string name="tech_label_hv_voltage">高压电压</string>
     <string name="tech_label_power">功率</string>
     <string name="tech_label_full_cycles">完整循环</string>
@@ -1515,6 +1516,8 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
     <string name="tech_value_percent_per_hour">%1$.2f %%/小时</string>
     <string name="tech_value_deg">%1$d°</string>
@@ -1524,6 +1527,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">电池健康度：相比新电池还剩多少容量。新车为 100%，随着年份缓慢下降。该数值由车辆自己计算。</string>
+    <string name="tech_hint_remain_kwh">电池里还剩多少电量，由车辆自己报告。</string>
     <string name="tech_hint_hv_voltage">动力电池的电压。充电时升高，放电时降低，这台车大约在 450…560 V。单看意义不大，结合功率一起看才有用。</string>
     <string name="tech_hint_motor_power">此刻电机的功率：车辆向车轮输出多少动力，或在能量回收时从车轮回收多少。停车时为 0。该数值由车辆自己计算。</string>
     <string name="tech_hint_power">电池此刻输出多少能量。正值：车辆在消耗（加速、空调）。负值：电池在吸收能量，可能是制动能量回收，也可能是在充电桩充电。第二个数值：电量下降的速度，每小时百分比。停车时代表车载电子设备的耗电。</string>

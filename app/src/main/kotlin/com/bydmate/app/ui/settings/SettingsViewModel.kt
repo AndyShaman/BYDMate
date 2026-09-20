@@ -1817,7 +1817,8 @@ class SettingsViewModel @Inject constructor(
                         "soc=${live.soc} trunk=${live.trunk} frontTrunk=${live.frontTrunk} " +
                         // #210: the Главная slot shows both, so a "no outside temperature"
                         // report has to be checkable against what the car actually reported.
-                        "insideTemp=${live.insideTemp} exteriorTemp=${live.exteriorTemp}"
+                        "insideTemp=${live.insideTemp} exteriorTemp=${live.exteriorTemp} " +
+                        "remainKwh=${live.batteryRemainKwh}"
                 )
                 // Charging plug: the gun state the detector uses plus the two backup signals,
                 // so a running car with the plug in can be compared against a parked one.
@@ -1827,6 +1828,15 @@ class SettingsViewModel @Inject constructor(
                         "connectIndicator=${live.chargeConnectIndicator}"
                 )
             }
+
+            // ICE-side addresses nothing in the app reads yet (#184). A DM-i owner sends this
+            // dump with the engine running and the raw words say which of them are live there.
+            appendLine("--- hybrid probe ---")
+            try {
+                HybridProbeDiagnostics
+                    .format(helperClient.readBatch(HybridProbeDiagnostics.batchItems()))
+                    .forEach { appendLine(it) }
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
 
             // Automation rules (#177): issue reports about a rule that "does nothing"
             // are undiagnosable without the rule itself. Action payloads stay out —

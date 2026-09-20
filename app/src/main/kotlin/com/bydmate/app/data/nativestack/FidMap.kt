@@ -46,6 +46,9 @@ object FidMap {
         FidEntry("mileage",              1014, 1246765072,   5, Decoder.INT_SCALED,  scale = 0.1, catalogScale = 1.0, symbol = "Statistic.STATISTIC_TOTAL_MILEAGE"),
         FidEntry("power",                1012, 339738656,    5, Decoder.INT_RAW, symbol = "Engine.ENGINE_POWER"),
         FidEntry("totalElecConsumption", 1014, 1032871984,   7, Decoder.FLOAT_KWH, symbol = "Statistic.STATISTIC_TOTAL_ELEC_CONSUMPTION"),
+        // Energy left in the pack as the BMS itself reports it (72.0 kWh at 100% SOC / 95% SoH
+        // on Leopard 3, 2026-09-20). Float-only fid: transact 5 answers -10013.
+        FidEntry("batteryRemainKwh",     1005, 882901008,    7, Decoder.FLOAT_KWH, symbol = "Power.POWER_BATTERY_REMAIN_ELECTRICITY"),
         FidEntry("voltage12v",           1001, 1128267816,   7, Decoder.FLOAT_VOLT, symbol = "Ota.OTA_BATTERY_POWER_VOLTAGE"),
         // Battery
         FidEntry("maxCellVoltage",       1014, 1147142192,   5, Decoder.INT_SCALED,  scale = 0.001, symbol = "Statistic.STATISTIC_HIGHEST_BATTERY_VOLTAGE"),

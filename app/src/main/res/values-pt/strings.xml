@@ -1370,6 +1370,7 @@
     <string name="tech_card_climate">Climatização</string>
     <string name="tech_card_tyres">Pneus · pressão / temperatura</string>
     <string name="tech_card_history">Bateria · histórico</string>
+    <string name="tech_label_remain_kwh">Restante</string>
     <string name="tech_label_hv_voltage">tensão HV</string>
     <string name="tech_label_power">potência</string>
     <string name="tech_label_full_cycles">ciclos completos</string>
@@ -1397,6 +1398,8 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
     <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
     <string name="tech_value_deg">%1$d°</string>
@@ -1406,6 +1409,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Saúde da bateria: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. O valor é calculado pelo próprio carro.</string>
+    <string name="tech_hint_remain_kwh">Quanta energia resta na bateria, segundo o próprio carro.</string>
     <string name="tech_hint_hv_voltage">Tensão da bateria de tração. Sobe ao carregar e desce à medida que descarrega, neste carro cerca de 450…560 V. Por si só diz pouco, é útil junto com a potência.</string>
     <string name="tech_hint_motor_power">Potência nos motores elétricos agora: quanto o carro está a entregar às rodas ou a receber delas durante a regeneração. Zero quando parado. O valor é calculado pelo próprio carro.</string>
     <string name="tech_hint_power">Quanta energia a bateria está a entregar agora. Positivo: o carro está a gastar (aceleração, climatização). Negativo: a bateria está a receber energia, seja regeneração ao travar seja carregamento num carregador. Segundo número: a que velocidade a carga está a esgotar-se, por cento à hora. Quando parado é o consumo da eletrónica de bordo.</string>

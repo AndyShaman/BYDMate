@@ -1526,6 +1526,7 @@
     <string name="tech_card_climate">Klimatyzacja</string>
     <string name="tech_card_tyres">Opony · ciśnienie / temperatura</string>
     <string name="tech_card_history">Akumulator · historia</string>
+    <string name="tech_label_remain_kwh">Pozostało</string>
     <string name="tech_label_hv_voltage">napięcie HV</string>
     <string name="tech_label_power">moc</string>
     <string name="tech_label_full_cycles">pełne cykle</string>
@@ -1553,6 +1554,8 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
     <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
     <string name="tech_value_deg">%1$d°</string>
@@ -1562,6 +1565,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Kondycja akumulatora: ile pojemności zostało w porównaniu z nowym. 100% w nowym samochodzie, powoli spada z latami. Wartość wylicza sam samochód.</string>
+    <string name="tech_hint_remain_kwh">Ile energii zostało w akumulatorze według danych samego samochodu.</string>
     <string name="tech_hint_hv_voltage">Napięcie akumulatora trakcyjnego. Rośnie podczas ładowania i spada w miarę rozładowania, w tym samochodzie około 450…560 V. Samo w sobie niewiele mówi, przydaje się razem z mocą.</string>
     <string name="tech_hint_motor_power">Moc na silnikach elektrycznych w tej chwili: tyle samochód oddaje na koła albo odbiera z nich podczas rekuperacji. Na postoju 0. Wartość wylicza sam samochód.</string>
     <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator przyjmuje energię: rekuperacja przy hamowaniu albo ładowanie ze stacji. Druga liczba: jak szybko ubywa ładunku, procent na godzinę. Na postoju to zużycie przez elektronikę pokładową.</string>

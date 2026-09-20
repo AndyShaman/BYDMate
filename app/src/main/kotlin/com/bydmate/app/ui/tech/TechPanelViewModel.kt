@@ -32,6 +32,8 @@ data class TechPanelUiState(
     val showOrderHint: Boolean = false,
     // Батарея · сейчас
     val soc: Int? = null,
+    /** Energy left in the pack as the BMS reports it, kWh — not derived from SoC. */
+    val remainKwh: Double? = null,
     val soh: Float? = null,
     val batTemp: Int? = null,
     val hvVoltage: Int? = null,
@@ -94,7 +96,10 @@ data class TechPanelUiState(
         } else null
 
     val showBatteryNow: Boolean
-        get() = anyOf(soc, soh, batTemp, hvVoltage, powerKw, batteryPowerW, voltage12v, insulationKohm)
+        get() = anyOf(
+            soc, remainKwh, soh, batTemp, hvVoltage, powerKw, batteryPowerW,
+            voltage12v, insulationKohm,
+        )
     val showLimitsAndCells: Boolean
         get() = anyOf(bmsMaxChargeKw, bmsMaxDischargeKw, cellMin, cellMax)
     val showMotors: Boolean
@@ -203,6 +208,7 @@ class TechPanelViewModel @Inject constructor(
                         it.copy(
                             autoserviceOnline = connected,
                             soc = data?.soc,
+                            remainKwh = data?.batteryRemainKwh,
                             batTemp = data?.avgBatTemp,
                             hvVoltage = data?.hvVoltage,
                             powerKw = data?.power,
