@@ -67,6 +67,8 @@
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
+        <!-- Google Maps package visibility for the route navigator selector. -->
+        <package android:name="com.google.android.apps.maps" />
         <!-- SOME/IP gateway capability probe (HudSomeIpBridge.isServicePresent) -->
         <package android:name="com.ts.car.someip.service" />
     </queries>
