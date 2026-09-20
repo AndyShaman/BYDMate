@@ -2152,4 +2152,568 @@ const WINDOW_ACTION_PREFIX = {
 async function handleWindowAction(
   env,
   deviceId,
-  capabi
+  capability
+) {
+  const prefix =
+    WINDOW_ACTION_PREFIX[
+      deviceId
+    ];
+
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (!prefix) {
+    return actionError(
+      type,
+      state.instance ||
+        "unknown",
+      "DEVICE_NOT_FOUND",
+      "Window device not found"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? `${prefix}.open`
+        : `${prefix}.close`
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.range" &&
+    state.instance === "open"
+  ) {
+    const value =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            Number(
+              state.value
+            )
+          )
+        )
+      );
+
+    if (
+      !Number.isFinite(
+        value
+      )
+    ) {
+      return actionError(
+        type,
+        "open",
+        "INVALID_ACTION",
+        "Invalid window position"
+      );
+    }
+
+    await enqueueCommand(
+      env,
+      `${prefix}.position`,
+      value
+    );
+
+    return actionDone(
+      type,
+      "open"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "Window capability is not supported"
+  );
+}
+
+async function handleAllWindowsAction(
+  env,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "window.all.open"
+        : "window.all.close"
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.range" &&
+    state.instance === "open"
+  ) {
+    const raw =
+      Number(
+        state.value
+      );
+
+    if (
+      !Number.isFinite(
+        raw
+      )
+    ) {
+      return actionError(
+        type,
+        "open",
+        "INVALID_ACTION",
+        "Invalid window position"
+      );
+    }
+
+    const value =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          Math.round(
+            raw
+          )
+        )
+      );
+
+    if (value === 0) {
+      await enqueueCommand(
+        env,
+        "window.all.close"
+      );
+    } else if (
+      value === 50
+    ) {
+      await enqueueCommand(
+        env,
+        "window.all.half"
+      );
+    } else if (
+      value === 100
+    ) {
+      await enqueueCommand(
+        env,
+        "window.all.open"
+      );
+    } else {
+      await enqueueMany(
+        env,
+        [
+          {
+            action:
+              "window.driver.position",
+            value,
+          },
+          {
+            action:
+              "window.passenger.position",
+            value,
+          },
+          {
+            action:
+              "window.rear_left.position",
+            value,
+          },
+          {
+            action:
+              "window.rear_right.position",
+            value,
+          },
+        ]
+      );
+    }
+
+    return actionDone(
+      type,
+      "open"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "All-windows capability is not supported"
+  );
+}
+
+
+/* ======================================================
+   SEAT ACTIONS
+   ====================================================== */
+
+const SEAT_ACTIONS = {
+  [DEVICE.seatDriverHeat]: {
+    actions: [
+      "seat.driver.heat",
+    ],
+    instance: "heat",
+    weak: "min",
+    strong: "max",
+  },
+
+  [DEVICE.seatPassengerHeat]: {
+    actions: [
+      "seat.passenger.heat",
+    ],
+    instance: "heat",
+    weak: "min",
+    strong: "max",
+  },
+
+  [DEVICE.seatDriverVent]: {
+    actions: [
+      "seat.driver.vent",
+    ],
+    instance: "fan_speed",
+    weak: "low",
+    strong: "high",
+  },
+
+  [DEVICE.seatPassengerVent]: {
+    actions: [
+      "seat.passenger.vent",
+    ],
+    instance: "fan_speed",
+    weak: "low",
+    strong: "high",
+  },
+
+  [DEVICE.seatBothHeat]: {
+    actions: [
+      "seat.driver.heat",
+      "seat.passenger.heat",
+    ],
+    instance: "heat",
+    weak: "min",
+    strong: "max",
+  },
+
+  [DEVICE.seatBothVent]: {
+    actions: [
+      "seat.driver.vent",
+      "seat.passenger.vent",
+    ],
+    instance: "fan_speed",
+    weak: "low",
+    strong: "high",
+  },
+};
+
+async function enqueueSeatLevel(
+  env,
+  actions,
+  level
+) {
+  await enqueueMany(
+    env,
+    actions.map(
+      (action) => ({
+        action,
+        value: level,
+      })
+    )
+  );
+}
+
+async function handleSeatAction(
+  env,
+  deviceId,
+  capability
+) {
+  const config =
+    SEAT_ACTIONS[
+      deviceId
+    ];
+
+  if (!config) {
+    return actionError(
+      capability.type ||
+        "",
+      capability.state
+        ?.instance ||
+        "unknown",
+      "DEVICE_NOT_FOUND",
+      "Seat device not found"
+    );
+  }
+
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    const level =
+      Boolean(
+        state.value
+      )
+        ? 1
+        : 0;
+
+    await enqueueSeatLevel(
+      env,
+      config.actions,
+      level
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.mode" &&
+    state.instance ===
+      config.instance
+  ) {
+    let level;
+
+    if (
+      state.value ===
+        config.weak
+    ) {
+      level = 1;
+    } else if (
+      state.value ===
+        config.strong
+    ) {
+      level = 2;
+    } else {
+      return actionError(
+        type,
+        config.instance,
+        "INVALID_ACTION",
+        "Unsupported seat comfort level"
+      );
+    }
+
+    await enqueueSeatLevel(
+      env,
+      config.actions,
+      level
+    );
+
+    return actionDone(
+      type,
+      config.instance
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "Seat capability is not supported by BYDMate"
+  );
+}
+
+
+/* ======================================================
+   SIMPLE BINARY VEHICLE DEVICES
+   ====================================================== */
+   
+async function handleSunroofAction(
+  env,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+      Boolean(state.value)
+        ? "sunroof.open"
+        : "sunroof.close"
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.range" &&
+    state.instance === "open"
+  ) {
+    const raw =
+      Number(state.value);
+
+    if (!Number.isFinite(raw)) {
+      return actionError(
+        type,
+        "open",
+        "INVALID_ACTION",
+        "Invalid sunroof position"
+      );
+    }
+
+    // Yandex exposes 10% steps. Keep 0/50/100 on the car's native
+    // detents; every other step is positioned locally by BYDMate 5.4
+    // using live sunroof percentage readback + STOP at the target.
+    const value = Math.max(
+      0,
+      Math.min(
+        100,
+        Math.round(raw / 10) * 10
+      )
+    );
+
+    if (value === 0) {
+      await enqueueCommand(
+        env,
+        "sunroof.close"
+      );
+    } else if (value === 50) {
+      await enqueueCommand(
+        env,
+        "sunroof.tilt"
+      );
+    } else if (value === 100) {
+      await enqueueCommand(
+        env,
+        "sunroof.open"
+      );
+    } else {
+      await enqueueCommand(
+        env,
+        "sunroof.position",
+        value
+      );
+    }
+
+    return actionDone(
+      type,
+      "open"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance || "unknown",
+    "INVALID_ACTION",
+    "Sunroof capability is not supported"
+  );
+}
+
+const BINARY_ACTIONS = {
+  [DEVICE.autoClimate]: {
+    on:
+      "climate.auto_on",
+    off:
+      "climate.auto_off",
+  },
+
+  [DEVICE.recirculation]: {
+    on:
+      "climate.recirculation_inner",
+    off:
+      "climate.recirculation_outer",
+  },
+
+  [DEVICE.frontDefrost]: {
+    on:
+      "climate.front_defrost_on",
+    off:
+      "climate.front_defrost_off",
+  },
+
+  [DEVICE.rearDefrost]: {
+    on:
+      "climate.rear_defrost_on",
+    off:
+      "climate.rear_defrost_off",
+  },
+
+  [DEVICE.cabinVentilation]: {
+    on:
+      "climate.flow_only_on",
+    off:
+      "climate.flow_only_off",
+  },
+
+  [DEVICE.interiorLight]: {
+    on:
+      "light.interior_on",
+    off:
+      "light.interior_off",
+  },
+
+  [DEVICE.ambientLight]: {
+    on:
+      "light.ambient_on",
+    off:
+      "light.ambient_off",
+  },
+
+  [DEVICE.drl]: {
+    on:
+      "light.drl_on",
+    off:
+      "light.drl_off",
+  },
+
+  [DEVICE.hazard]: {
+    on:
+      "light.hazard_on",
+    off:
+      "light.hazard_off",
+  },
+
+  // For openable car
