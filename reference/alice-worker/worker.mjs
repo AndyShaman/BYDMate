@@ -948,16 +948,6 @@ function yandexDevices() {
       "devices.types.openable",
       [
         onOffCapability(true),
-      ]
-    ),
-
-    baseDevice(
-      DEVICE.sunroof,
-      "Люк",
-      "Панорамный люк BYD",
-      "devices.types.openable",
-      [
-        onOffCapability(true),
 
         rangeCapability(
           "open",
