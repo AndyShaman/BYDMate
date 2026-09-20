@@ -1,0 +1,16 @@
+[Unit]
+Description=BYDMate Alice reference bridge
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bydmate
+WorkingDirectory=/opt/bydmate-alice
+EnvironmentFile=/opt/bydmate-alice/.env
+ExecStart=/usr/bin/node /opt/bydmate-alice/server.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
