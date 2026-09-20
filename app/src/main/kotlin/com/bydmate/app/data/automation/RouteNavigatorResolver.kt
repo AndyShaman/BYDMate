@@ -35,6 +35,12 @@ internal object RouteNavigatorResolver {
             return RouteNavigatorUris.YANDEX to "Waze не установлен, открыт Яндекс Навигатор"
         }
 
+        if (chosen == RouteNavigatorUris.GOOGLE_MAPS &&
+            !isPackageInstalled(RouteNavigatorUris.GOOGLE_MAPS_PACKAGE)
+        ) {
+            return RouteNavigatorUris.YANDEX to "Google Maps не установлен, открыт Яндекс Навигатор"
+        }
+
         return chosen to null
     }
 }
