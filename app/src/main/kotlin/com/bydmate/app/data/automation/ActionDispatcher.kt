@@ -986,7 +986,7 @@ class ActionDispatcher @Inject constructor(
                 fallbackReason,
             )
         }
-        if (navigator == RouteNavigatorUris.GOOGLE_MAPS && shortcut != null) {
+        shortcut?.takeIf { navigator == RouteNavigatorUris.GOOGLE_MAPS }?.let {
             return DispatchResult(false, "Google Maps: shortcut home/work пока не поддерживается")
         }
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
