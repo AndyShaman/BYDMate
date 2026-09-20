@@ -205,6 +205,10 @@ class AgentTools @Inject constructor(
         RouteNavigatorUris.WAZE_PACKAGE in foregroundPackagesSince(sinceMs)
     }
 
+    internal var googleMapsForegroundCheck: (Long) -> Boolean = { sinceMs ->
+        RouteNavigatorUris.GOOGLE_MAPS_PACKAGE in foregroundPackagesSince(sinceMs)
+    }
+
     /** Test seam - poll interval for the navigate foreground verification. */
     internal var naviVerifyIntervalMs = 500L
 
@@ -221,14 +225,17 @@ class AgentTools @Inject constructor(
         // a Maps route (explicit app="maps" or Maps chosen in settings) fails a working route.
         val maps = actionDispatcher.willOpenMaps(payload)
         val waze = actionDispatcher.willOpenWaze(payload)
+        val googleMaps = actionDispatcher.willOpenGoogleMaps(payload)
         val surfaced = when {
             maps -> mapsForegroundCheck
             waze -> wazeForegroundCheck
+            googleMaps -> googleMapsForegroundCheck
             else -> naviForegroundCheck
         }
         val appName = when {
             maps -> "Яндекс Карты"
             waze -> "Waze"
+            googleMaps -> "Google Maps"
             else -> "Навигатор"
         }
         val result = actionDispatcher.dispatch(
@@ -488,7 +495,7 @@ class AgentTools @Inject constructor(
                         "построить, водитель нажмёт Поехали сам"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты/Waze/Google Maps, по умолчанию), " +
                         "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
@@ -503,7 +510,7 @@ class AgentTools @Inject constructor(
                 .put("description", "Что искать: название места или категория"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты/Waze/Google Maps, по умолчанию), " +
                         "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             listOf("query"),
         ))
@@ -520,7 +527,7 @@ class AgentTools @Inject constructor(
                 .put("lon", JSONObject().put("type", "number").put("description", "Долгота"))
                 .put("app", JSONObject().put("type", "string")
                     .put("enum", JSONArray().put("navigator").put("maps"))
-                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты, по умолчанию), " +
+                    .put("description", "navigator = приложение из настроек (Навигатор/2ГИС/Карты/Waze/Google Maps, по умолчанию), " +
                         "maps = явно Яндекс Карты; maps передавай только когда пользователь явно просит Яндекс Карты")),
             emptyList(),
         ))
