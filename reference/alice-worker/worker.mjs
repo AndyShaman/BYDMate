@@ -3344,4 +3344,469 @@ async function manualSend() {
   ) {
     await send(
       action
-  
+     );
+  } else {
+    await send(
+      action,
+      Number(
+        rawValue
+      )
+    );
+  }
+}
+
+async function status() {
+  await api(
+    '/api/debug'
+  );
+}
+</script>
+
+</body>
+</html>`,
+    {
+      headers: {
+        "content-type":
+          "text/html; charset=utf-8",
+
+        "cache-control":
+          "no-store",
+      },
+    }
+  );
+}
+
+
+/* ======================================================
+   WORKER
+   ====================================================== */
+
+export default {
+  async fetch(
+    request,
+    env
+  ) {
+    const url =
+      new URL(
+        request.url
+      );
+
+    /*
+     * Dashboard
+     */
+    if (
+      request.method ===
+        "GET" &&
+      url.pathname === "/"
+    ) {
+      return dashboard();
+    }
+
+
+    /*
+     * Health
+     */
+    if (
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/health"
+    ) {
+      return json({
+        ok: true,
+        service:
+          "bydmate-alice",
+        bridge:
+          "5.7",
+        devices:
+          yandexDevices().length,
+        actions:
+          ALLOWED_ACTIONS.size,
+      });
+    }
+
+
+    /*
+     * Yandex endpoint availability check
+     */
+    if (
+      request.method ===
+        "HEAD" &&
+      (
+        url.pathname ===
+          "/v1.0" ||
+        url.pathname ===
+          "/v1.0/"
+      )
+    ) {
+      return new Response(
+        null,
+        {
+          status: 200,
+        }
+      );
+    }
+
+
+    /* ==================================================
+       YANDEX SMART HOME
+       ================================================== */
+
+    if (
+      url.pathname.startsWith(
+        "/v1.0/user/"
+      )
+    ) {
+      const user =
+        await yandexUser(
+          request,
+          env
+        );
+
+      if (!user) {
+        return new Response(
+          null,
+          {
+            status: 401,
+          }
+        );
+      }
+
+      const reqId =
+        requestId(
+          request
+        );
+
+
+      /*
+       * UNLINK
+       */
+      if (
+        request.method ===
+          "POST" &&
+        url.pathname ===
+          "/v1.0/user/unlink"
+      ) {
+        return json({
+          request_id:
+            reqId,
+        });
+      }
+
+
+      /*
+       * DISCOVERY
+       */
+      if (
+        request.method ===
+          "GET" &&
+        url.pathname ===
+          "/v1.0/user/devices"
+      ) {
+        return json({
+          request_id:
+            reqId,
+
+          payload: {
+            user_id:
+              String(
+                user.id
+              ),
+
+            devices:
+              yandexDevices(),
+          },
+        });
+      }
+
+
+      /*
+       * QUERY
+       */
+      if (
+        request.method ===
+          "POST" &&
+        url.pathname ===
+          "/v1.0/user/devices/query"
+      ) {
+        await ensureDb(env);
+
+        const body =
+          await request.json();
+
+        const requested =
+          Array.isArray(
+            body.devices
+          )
+            ? body.devices
+            : [];
+
+        const carState =
+          await getCarState(
+            env
+          );
+
+        return json({
+          request_id:
+            reqId,
+
+          payload: {
+            devices:
+              requested.map(
+                (device) =>
+                  queryDevice(
+                    device.id,
+                    carState
+                  )
+              ),
+          },
+        });
+      }
+
+
+      /*
+       * ACTION
+       */
+      if (
+        request.method ===
+          "POST" &&
+        url.pathname ===
+          "/v1.0/user/devices/action"
+      ) {
+        await ensureDb(env);
+
+        const body =
+          await request.json();
+
+        const requestedDevices =
+          body &&
+          body.payload &&
+          Array.isArray(
+            body.payload.devices
+          )
+            ? body.payload.devices
+            : [];
+
+        const carState =
+          await getCarState(
+            env
+          );
+
+        const results =
+          [];
+
+        for (
+          const device
+          of requestedDevices
+        ) {
+          const capabilities =
+            Array.isArray(
+              device.capabilities
+            )
+              ? device.capabilities
+              : [];
+
+          const capabilityResults =
+            [];
+
+          for (
+            const capability
+            of capabilities
+          ) {
+            try {
+              if (
+                device.id ===
+                  DEVICE.climate
+              ) {
+                capabilityResults.push(
+                  await handleClimateAction(
+                    env,
+                    capability,
+                    carState
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                device.id ===
+                  DEVICE.fan
+              ) {
+                capabilityResults.push(
+                  await handleFanAction(
+                    env,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                WINDOW_ACTION_PREFIX[
+                  device.id
+                ]
+              ) {
+                capabilityResults.push(
+                  await handleWindowAction(
+                    env,
+                    device.id,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                device.id ===
+                  DEVICE.allWindows
+              ) {
+                capabilityResults.push(
+                  await handleAllWindowsAction(
+                    env,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                SEAT_ACTIONS[
+                  device.id
+                ]
+              ) {
+                capabilityResults.push(
+                  await handleSeatAction(
+                    env,
+                    device.id,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                device.id ===
+                  DEVICE.sunroof
+              ) {
+                capabilityResults.push(
+                  await handleSunroofAction(
+                    env,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+              
+              if (
+                device.id ===
+                  DEVICE.media
+              ) {
+                capabilityResults.push(
+                  await handleMediaAction(
+                    env,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                APP_ACTIONS[
+                  device.id
+                ]
+              ) {
+                capabilityResults.push(
+                  await handleOneShotAction(
+                    env,
+                    APP_ACTIONS[
+                      device.id
+                    ],
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                ONE_SHOT_ACTIONS[
+                  device.id
+                ]
+              ) {
+                capabilityResults.push(
+                  await handleOneShotAction(
+                    env,
+                    ONE_SHOT_ACTIONS[
+                      device.id
+                    ],
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              if (
+                BINARY_ACTIONS[
+                  device.id
+                ]
+              ) {
+                capabilityResults.push(
+                  await handleBinaryAction(
+                    env,
+                    device.id,
+                    capability
+                  )
+                );
+
+                continue;
+              }
+
+              capabilityResults.push(
+                actionError(
+                  capability.type ||
+                    "",
+                  capability.state
+                    ?.instance ||
+                    "unknown",
+                  "DEVICE_NOT_FOUND",
+                  "BYDMate device not found"
+                )
+              );
+
+            } catch (error) {
+              capabilityResults.push(
+                actionError(
+                  capability.type ||
+                    "",
+                  capability.state
+                    ?.instance ||
+                    "unknown",
+                  "INTERNAL_ERROR",
+                  String(
+                    error.message ||
+                    error
+                  )
+                )
+              );
+            }
+          }
+
+          results.push({
+            id:
+              device.id,
+
+            capabilities:
+              capabilityResults,
+          });
+        }
+
+        return json({
+          
