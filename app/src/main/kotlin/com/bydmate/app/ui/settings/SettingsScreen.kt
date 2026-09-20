@@ -2413,6 +2413,68 @@ private fun VoiceSettingsContent(
         ActivityResultContracts.RequestPermission()
     ) { granted -> contactsPermGranted = granted }
 
+    SectionHeader(text = stringResource(R.string.settings_alice_provider_header))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            SettingChipRow(
+                title = stringResource(R.string.settings_voice_provider_label),
+                description = stringResource(R.string.settings_voice_provider_hint),
+                options = listOf(
+                    stringResource(R.string.settings_voice_provider_local),
+                    stringResource(R.string.settings_alice_provider_title),
+                ),
+                selectedIndex = if (state.aliceEnabled) 1 else 0,
+                onSelect = { viewModel.toggleAlice(it == 1) },
+            )
+            if (state.aliceEnabled) {
+                SettingDivider()
+                SettingsTextField(
+                    label = stringResource(R.string.settings_alice_endpoint),
+                    value = state.aliceEndpoint,
+                    onValueChange = { viewModel.updateAliceEndpoint(it) },
+                    keyboardType = KeyboardType.Uri,
+                )
+                SettingsTextField(
+                    label = stringResource(R.string.settings_alice_api_key),
+                    value = state.aliceApiKey,
+                    onValueChange = { viewModel.updateAliceApiKey(it) },
+                    keyboardType = KeyboardType.Password,
+                    secret = true,
+                )
+                SettingHint(stringResource(R.string.settings_alice_autosave_hint))
+            }
+        }
+    }
+
+    val routeNavigatorIds = listOf(
+        com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
+        com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
+        com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
+        com.bydmate.app.data.automation.RouteNavigatorUris.WAZE,
+        com.bydmate.app.data.automation.RouteNavigatorUris.GOOGLE_MAPS,
+    )
+    SettingChipRow(
+        title = stringResource(R.string.settings_route_navigator_label),
+        description = stringResource(R.string.settings_route_navigator_hint),
+        options = listOf(
+            stringResource(R.string.settings_route_navigator_yandex),
+            stringResource(R.string.settings_route_navigator_dgis),
+            stringResource(R.string.settings_route_navigator_maps),
+            "Waze",
+            "Google Maps",
+        ),
+        selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
+        onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
+    )
+
+    if (!state.aliceEnabled) {
     // --- Section 1: Агент (enable toggle, name, persona, gender, debug tools) ---
     SectionHeader(text = stringResource(R.string.settings_agent_section_header))
 
@@ -2469,24 +2531,6 @@ private fun VoiceSettingsContent(
                 ),
                 selectedIndex = genderIds.indexOf(state.agentGender).coerceAtLeast(0),
                 onSelect = { viewModel.setAgentGender(genderIds[it]) },
-            )
-            SettingDivider()
-            // #190/#200: the map app every route/search command opens (voice agent and automation).
-            val routeNavigatorIds = listOf(
-                com.bydmate.app.data.automation.RouteNavigatorUris.YANDEX,
-                com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
-                com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
-            )
-            SettingChipRow(
-                title = stringResource(R.string.settings_route_navigator_label),
-                description = stringResource(R.string.settings_route_navigator_hint),
-                options = listOf(
-                    stringResource(R.string.settings_route_navigator_yandex),
-                    stringResource(R.string.settings_route_navigator_dgis),
-                    stringResource(R.string.settings_route_navigator_maps),
-                ),
-                selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
-                onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
             )
         }
     }
@@ -2733,6 +2777,8 @@ private fun VoiceSettingsContent(
         }
     }
 
+    }
+
     // --- Section 5: Кнопка и микрофон ---
     SectionHeader(text = stringResource(R.string.settings_voice_button_mic_header))
 
@@ -2748,7 +2794,7 @@ private fun VoiceSettingsContent(
                 description = stringResource(R.string.settings_voice_enable_description),
                 checked = state.voiceEnabled,
                 onCheckedChange = { on ->
-                    if (on && !hasAudioPerm()) {
+                    if (on && !state.aliceEnabled && !hasAudioPerm()) {
                         pendingVoiceAction = "ENABLE"
                         audioPermLauncher.launch(Manifest.permission.RECORD_AUDIO)
                     } else {
@@ -3015,16 +3061,6 @@ private fun SmartHomeSection(state: SettingsUiState, viewModel: SettingsViewMode
                 keyboardType = KeyboardType.Password,
                 secret = true
             )
-            SettingActionRow(
-                title = "Сохранить",
-                buttonLabel = "Сохранить",
-                onClick = { viewModel.saveAliceSettings() },
-                style = SettingButtonStyle.Primary,
-                enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank(),
-            )
-            state.aliceSaveStatus?.let {
-                Text(it, color = AccentGreen, fontSize = 12.sp)
-            }
             SettingHint("Polling опрашивает Worker каждую секунду\nи выполняет команды через D+ API")
         }
     }

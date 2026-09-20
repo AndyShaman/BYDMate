@@ -20,11 +20,18 @@ class RouteNavigatorUrisTest {
         assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize(""))
         assertEquals(RouteNavigatorUris.YANDEX, RouteNavigatorUris.normalize("2gis"))
         assertEquals(RouteNavigatorUris.DGIS, RouteNavigatorUris.normalize("dgis"))
+        assertEquals(RouteNavigatorUris.WAZE, RouteNavigatorUris.normalize("waze"))
+        assertEquals(RouteNavigatorUris.GOOGLE_MAPS, RouteNavigatorUris.normalize("google_maps"))
     }
 
     @Test fun `packages follow the selection`() {
         assertEquals("ru.yandex.yandexnavi", RouteNavigatorUris.packageOf(RouteNavigatorUris.YANDEX))
         assertEquals("ru.dublgis.dgismobile", RouteNavigatorUris.packageOf(RouteNavigatorUris.DGIS))
+        assertEquals("com.waze", RouteNavigatorUris.packageOf(RouteNavigatorUris.WAZE))
+        assertEquals(
+            "com.google.android.apps.maps",
+            RouteNavigatorUris.packageOf(RouteNavigatorUris.GOOGLE_MAPS),
+        )
     }
 
     @Test fun `yandex links are unchanged`() {
@@ -69,6 +76,36 @@ class RouteNavigatorUrisTest {
         assertEquals(
             RouteNavigatorUris.showPoint(RouteNavigatorUris.DGIS, 55.75, 37.62, null),
             RouteNavigatorUris.showPoint(RouteNavigatorUris.DGIS, 55.75, 37.62, "Кафе"),
+        )
+    }
+
+    @Test fun `waze links use the official deep-link format`() {
+        assertEquals(
+            "https://waze.com/ul?q=%D0%BA%D0%B0%D1%84%D0%B5",
+            RouteNavigatorUris.search(RouteNavigatorUris.WAZE, "кафе"),
+        )
+        assertEquals(
+            "https://waze.com/ul?ll=55.75,37.62",
+            RouteNavigatorUris.showPoint(RouteNavigatorUris.WAZE, 55.75, 37.62, "Кафе"),
+        )
+        assertEquals(
+            "https://waze.com/ul?ll=57.0,36.0&navigate=yes",
+            RouteNavigatorUris.route(RouteNavigatorUris.WAZE, 57.0, 36.0),
+        )
+    }
+
+    @Test fun `google maps uses official maps urls`() {
+        assertEquals(
+            "https://www.google.com/maps/search/?api=1&query=%D0%BA%D0%B0%D1%84%D0%B5",
+            RouteNavigatorUris.search(RouteNavigatorUris.GOOGLE_MAPS, "кафе"),
+        )
+        assertEquals(
+            "https://www.google.com/maps/search/?api=1&query=55.75%2C37.62%20(%D0%9A%D0%B0%D1%84%D0%B5)",
+            RouteNavigatorUris.showPoint(RouteNavigatorUris.GOOGLE_MAPS, 55.75, 37.62, "Кафе"),
+        )
+        assertEquals(
+            "https://www.google.com/maps/dir/?api=1&destination=57.0%2C36.0&travelmode=driving&dir_action=navigate",
+            RouteNavigatorUris.route(RouteNavigatorUris.GOOGLE_MAPS, 57.0, 36.0),
         )
     }
 

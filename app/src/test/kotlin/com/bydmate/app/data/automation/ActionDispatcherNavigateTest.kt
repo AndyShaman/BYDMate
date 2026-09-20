@@ -122,6 +122,66 @@ class ActionDispatcherNavigateTest {
             shadowOf(app).nextStartedActivity.dataString)
     }
 
+    @Test fun waze_selected_and_installed_opens_waze() = runTest {
+        selectNavigator(RouteNavigatorUris.WAZE)
+        installWaze()
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("https://waze.com/ul?ll=57.0,36.0&navigate=yes", intent.dataString)
+        assertEquals("com.waze", intent.`package`)
+    }
+
+    @Test fun waze_selected_but_missing_falls_back_to_yandex() = runTest {
+        selectNavigator(RouteNavigatorUris.WAZE)
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        assertTrue(res.reason!!.contains("Waze"))
+        assertEquals(
+            "yandexnavi://build_route_on_map?lat_to=57.0&lon_to=36.0",
+            shadowOf(app).nextStartedActivity.dataString,
+        )
+    }
+
+    @Test fun waze_home_shortcut_uses_favorite_deep_link() = runTest {
+        selectNavigator(RouteNavigatorUris.WAZE)
+        installWaze()
+
+        val res = dispatcher.dispatch(actionDef("""{"shortcut":"home","go":true}"""), null)
+        assertTrue(res.success)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals("https://waze.com/ul?favorite=home&navigate=yes", intent.dataString)
+        assertEquals("com.waze", intent.`package`)
+    }
+
+    @Test fun google_maps_selected_and_installed_opens_google_maps() = runTest {
+        selectNavigator(RouteNavigatorUris.GOOGLE_MAPS)
+        installGoogleMaps()
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        val intent = shadowOf(app).nextStartedActivity
+        assertEquals(
+            "https://www.google.com/maps/dir/?api=1&destination=57.0%2C36.0&travelmode=driving&dir_action=navigate",
+            intent.dataString,
+        )
+        assertEquals("com.google.android.apps.maps", intent.`package`)
+    }
+
+    @Test fun google_maps_selected_but_missing_falls_back_to_yandex() = runTest {
+        selectNavigator(RouteNavigatorUris.GOOGLE_MAPS)
+
+        val res = dispatcher.dispatch(actionDef("""{"lat":57.0,"lon":36.0}"""), null)
+        assertTrue(res.success)
+        assertTrue(res.reason!!.contains("Google Maps"))
+        assertEquals(
+            "yandexnavi://build_route_on_map?lat_to=57.0&lon_to=36.0",
+            shadowOf(app).nextStartedActivity.dataString,
+        )
+    }
+
     /** #200: the setting sends the route to Yandex Maps' own dialect, no package pin. */
     @Test fun maps_selected_and_installed_opens_maps() = runTest {
         selectNavigator(RouteNavigatorUris.MAPS)
@@ -225,6 +285,31 @@ class ActionDispatcherNavigateTest {
             android.content.ComponentName("ru.dublgis.dgismobile", "ru.dublgis.dgismobile.Main"))
         pm.addIntentFilterForActivity(
             android.content.ComponentName("ru.dublgis.dgismobile", "ru.dublgis.dgismobile.Main"),
+            android.content.IntentFilter(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            },
+        )
+    }
+
+    private fun installWaze() {
+        val pm = shadowOf(app.packageManager)
+        pm.addActivityIfNotPresent(
+            android.content.ComponentName("com.waze", "com.waze.Main"))
+        pm.addIntentFilterForActivity(
+            android.content.ComponentName("com.waze", "com.waze.Main"),
+            android.content.IntentFilter(Intent.ACTION_MAIN).apply {
+                addCategory(Intent.CATEGORY_LAUNCHER)
+            },
+        )
+    }
+
+    private fun installGoogleMaps() {
+        val pm = shadowOf(app.packageManager)
+        pm.addActivityIfNotPresent(
+            android.content.ComponentName("com.google.android.apps.maps", "com.google.android.apps.maps.Main"),
+        )
+        pm.addIntentFilterForActivity(
+            android.content.ComponentName("com.google.android.apps.maps", "com.google.android.apps.maps.Main"),
             android.content.IntentFilter(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
             },

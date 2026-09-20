@@ -66,6 +66,9 @@ class VoiceController @Inject constructor(
 
     private val busy = AtomicBoolean(false)
     @Volatile private var sessionJob: Job? = null
+    private val externalAssistantDuckLock = Any()
+    @Volatile private var externalAssistantDuckSaved: Int? = null
+    private val externalAssistantDuckGeneration = AtomicInteger(0)
     @Volatile private var routingJob: Job? = null
     @Volatile private var cancellableAskJob: Job? = null
     // Busy drops are Log.i-only by contract (no journal/earcon/state change), so tests have no
@@ -80,6 +83,29 @@ class VoiceController @Inject constructor(
      * Used by VoiceAutomationActions to gate speak/agent_query actions.
      */
     fun sessionActive(): Boolean = listening.value || busy.get()
+
+    fun beginExternalAssistantAudio() {
+        synchronized(externalAssistantDuckLock) {
+            if (externalAssistantDuckSaved == null) {
+                externalAssistantDuckSaved = runCatching {
+                    audioCapture.duckMusicForExternalAssistant()
+                }.getOrNull()
+            }
+        }
+        val generation = externalAssistantDuckGeneration.incrementAndGet()
+        scope.launch {
+            delay(60_000L)
+            if (externalAssistantDuckGeneration.get() == generation) endExternalAssistantAudio()
+        }
+    }
+
+    fun endExternalAssistantAudio() {
+        val saved = synchronized(externalAssistantDuckLock) {
+            externalAssistantDuckSaved.also { externalAssistantDuckSaved = null }
+        }
+        externalAssistantDuckGeneration.incrementAndGet()
+        if (saved != null) runCatching { audioCapture.restoreMusic(saved) }
+    }
 
     /** Test seams, same rationale as [lastSpeakingSeenMs]: deterministic await conditions
      *  instead of fixed sleeps, no public API surface added. */

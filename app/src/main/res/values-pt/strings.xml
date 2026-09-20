@@ -1436,4 +1436,14 @@
     <string name="trips_temp_verdict_not_higher">No frio o carro não gasta mais do que no calor (diferença %1$s%%). Ainda não se vê um acréscimo de inverno nas suas viagens.</string>
     <string name="trips_temp_verdict_narrow">Por agora todas as viagens a %1$s…%2$s °C — ainda não há frio nem calor para comparar.</string>
     <string name="trips_temp_verdict_none">Ainda não há com que comparar: faltam viagens no frio e no calor.</string>
+
+    <string name="settings_alice_provider_header">Assistente de voz</string>
+    <string name="settings_voice_provider_label">Assistente</string>
+    <string name="settings_voice_provider_hint">Escolha qual assistente de voz será controlado pelo botão do volante</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
+    <string name="settings_alice_provider_title">Yandex Alice</string>
+    <string name="settings_alice_provider_desc">Usar Alice em vez do assistente de voz integrado do BYDMate</string>
+    <string name="settings_alice_endpoint">URL do endpoint</string>
+    <string name="settings_alice_api_key">Chave API</string>
+    <string name="settings_alice_autosave_hint">O endpoint e a chave são salvos automaticamente</string>
 </resources>

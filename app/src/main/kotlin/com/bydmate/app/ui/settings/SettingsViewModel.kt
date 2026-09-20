@@ -425,6 +425,8 @@ class SettingsViewModel @Inject constructor(
             val aliceEndpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "")
             val aliceApiKey = settingsRepository.getString(SettingsRepository.KEY_ALICE_API_KEY, "")
             val aliceEnabled = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENABLED, "false") == "true"
+            appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+                .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, aliceEnabled).apply()
 
             val abrpEnabled = settingsRepository.getString(SettingsRepository.KEY_ABRP_ENABLED, "false") == "true"
             val abrpApiKey = settingsRepository.getString(SettingsRepository.KEY_ABRP_API_KEY, "")
@@ -1127,27 +1129,22 @@ class SettingsViewModel @Inject constructor(
 
     fun updateAliceEndpoint(value: String) {
         _uiState.update { it.copy(aliceEndpoint = value) }
+        viewModelScope.launch {
+            settingsRepository.setString(SettingsRepository.KEY_ALICE_ENDPOINT, value.trim())
+        }
     }
 
     fun updateAliceApiKey(value: String) {
         _uiState.update { it.copy(aliceApiKey = value) }
-    }
-
-    fun saveAliceSettings() {
-        val state = _uiState.value
         viewModelScope.launch {
-            settingsRepository.setString(SettingsRepository.KEY_ALICE_ENDPOINT, state.aliceEndpoint)
-            settingsRepository.setString(SettingsRepository.KEY_ALICE_API_KEY, state.aliceApiKey)
-            val enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank()
-            settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = appContext.getString(R.string.settings_saved)) }
-            delay(2000)
-            _uiState.update { it.copy(aliceSaveStatus = null) }
+            settingsRepository.setString(SettingsRepository.KEY_ALICE_API_KEY, value)
         }
     }
 
     fun toggleAlice(enabled: Boolean) {
         _uiState.update { it.copy(aliceEnabled = enabled) }
+        appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
+            .edit().putBoolean(SettingsRepository.KEY_ALICE_ENABLED, enabled).apply()
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
         }

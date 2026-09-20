@@ -1592,4 +1592,14 @@
     <string name="trips_temp_verdict_not_higher">У холад расход не вышэйшы, чым у цяпло (розніца %1$s%%). Зімовай надбаўкі па вашых паездках пакуль не відаць.</string>
     <string name="trips_temp_verdict_narrow">Пакуль усе паездкі пры %1$s…%2$s °C — параўнаць з холадам ці спёкай пакуль няма з чым.</string>
     <string name="trips_temp_verdict_none">Пакуль параўноўваць няма з чым: патрэбны паездкі і ў холад, і ў цяпло.</string>
+
+    <string name="settings_alice_provider_header">Галасавы памочнік</string>
+    <string name="settings_voice_provider_label">Памочнік</string>
+    <string name="settings_voice_provider_hint">Выберыце, які галасавы памочнік будзе выкарыстоўваць кнопка на рулі</string>
+    <string name="settings_voice_provider_local">BYDMate / TTS</string>
+    <string name="settings_alice_provider_title">Яндекс Алиса</string>
+    <string name="settings_alice_provider_desc">Выкарыстоўваць Алісу замест убудаванага галасавога памочніка BYDMate</string>
+    <string name="settings_alice_endpoint">Endpoint URL</string>
+    <string name="settings_alice_api_key">API Key</string>
+    <string name="settings_alice_autosave_hint">Endpoint і ключ захоўваюцца аўтаматычна</string>
 </resources>

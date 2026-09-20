@@ -380,6 +380,20 @@ class CommandTranslatorTest {
         }
     }
 
+    @Test fun `extended airflow values use isolated allowlist action`() {
+        assertEquals("ac_wind_mode_ext", one("吹面吹脚除霜")?.actionName)
+        assertEquals(6, one("吹面吹脚除霜")?.value)
+        assertEquals("ac_wind_mode_ext", one("吹面除霜")?.actionName)
+        assertEquals(7, one("吹面除霜")?.value)
+    }
+
+    @Test fun `window stop commands use shared ctrl family value 3`() {
+        assertEquals("window_driver_ctrl", one("主驾停止")?.actionName)
+        assertEquals(3, one("主驾停止")?.value)
+        assertEquals("window_rear_right_ctrl", one("后右停止")?.actionName)
+        assertEquals(3, one("后右停止")?.value)
+    }
+
     // 吹前挡 drives defrost_front_on on a different fid — the new 除霜 entry must not
     // have shadowed it.
     @Test fun `windshield defrost command still maps to defrost_front_on`() {

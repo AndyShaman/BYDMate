@@ -1,9 +1,9 @@
 package com.bydmate.app.data.remote
 
-import android.util.Log
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.vehicle.VehicleApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -23,48 +23,52 @@ import javax.inject.Singleton
 
 @Singleton
 class AlicePollingManager @Inject constructor(
-    private val httpClient: OkHttpClient,
     private val settingsRepository: SettingsRepository,
     private val sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop,
     private val vehicleApi: VehicleApi,
+    private val appDispatcher: AliceAppActionDispatcher,
+    private val apertureController: AliceApertureController,
 ) {
-    // Fast client with short timeouts for polling (main httpClient has 15s)
-    private val pollClient = OkHttpClient.Builder()
+    companion object {
+        private const val LONG_POLL_MS = 2000
+        private const val IDLE_DELAY_MS = 100L
+        private const val STATE_REPORT_EVERY = 10
+    }
+
+    private val client = OkHttpClient.Builder()
         .connectTimeout(3, TimeUnit.SECONDS)
-        .readTimeout(3, TimeUnit.SECONDS)
+        .readTimeout(4, TimeUnit.SECONDS)
         .writeTimeout(3, TimeUnit.SECONDS)
         .build()
-    companion object {
-        private const val TAG = "AlicePolling"
-        private const val POLL_INTERVAL_MS = 2500L
-        private const val STATE_REPORT_EVERY = 10 // every 10th poll (~25s)
-    }
 
     private var scope: CoroutineScope? = null
     private var pollingJob: Job? = null
     private var pollCount = 0
 
-    // Set by TrackingService from DiPlus data — no extra DiPlus calls
-    @Volatile var latestData: DiParsData? = null
+    @Volatile
+    var latestData: DiParsData? = null
+        private set
 
     fun start() {
         if (pollingJob?.isActive == true) return
-        val s = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        scope = s
-        // Flow collector: Alice's own subscription to the shared loop so it
-        // doesn't depend on TrackingService writing latestData on every tick.
-        s.launch {
-            sharedAdaptiveLoop.flow.collect { data -> latestData = data }
+        val owner = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        scope = owner
+        owner.launch {
+            sharedAdaptiveLoop.flow.collect {
+                latestData = it
+                apertureController.latestData = it
+            }
         }
-        pollingJob = s.launch {
-            Log.i(TAG, "Polling started")
+        pollingJob = owner.launch {
             while (true) {
                 try {
                     poll()
-                } catch (e: Exception) {
-                    Log.e(TAG, "Poll error: ${e.message}")
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    delay(1000L)
                 }
-                delay(POLL_INTERVAL_MS)
+                delay(IDLE_DELAY_MS)
             }
         }
     }
@@ -74,116 +78,143 @@ class AlicePollingManager @Inject constructor(
         pollingJob = null
         scope?.cancel()
         scope = null
-        Log.i(TAG, "Polling stopped")
     }
 
-    val isRunning: Boolean get() = pollingJob?.isActive == true
+    val isRunning: Boolean
+        get() = pollingJob?.isActive == true
 
     private suspend fun poll() {
-        val endpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "")
+        val endpoint = settingsRepository.getString(SettingsRepository.KEY_ALICE_ENDPOINT, "").trimEnd('/')
         val apiKey = settingsRepository.getString(SettingsRepository.KEY_ALICE_API_KEY, "")
         if (endpoint.isBlank() || apiKey.isBlank()) return
 
         val request = Request.Builder()
-            .url("$endpoint/api/poll")
+            .url("$endpoint/api/poll?wait_ms=$LONG_POLL_MS")
             .header("X-Api-Key", apiKey)
             .build()
 
-        val t0 = System.currentTimeMillis()
-        val (elapsed, commands) = pollClient.newCall(request).execute().use { response ->
-            val ms = System.currentTimeMillis() - t0
-            if (!response.isSuccessful) {
-                Log.w(TAG, "Poll HTTP ${response.code} (${ms}ms)")
-                return
-            }
+        val commands = client.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) return
             val body = response.body?.string() ?: return
-            val json = JSONObject(body)
-            ms to (json.optJSONArray("commands") ?: return)
+            JSONObject(body).optJSONArray("commands") ?: return
         }
 
-        if (commands.length() == 0) {
-            Log.d(TAG, "Poll OK (${elapsed}ms) - empty")
-            // Report real device state every Nth poll
-            pollCount++
-            if (pollCount >= STATE_REPORT_EVERY) {
-                pollCount = 0
-                reportState(endpoint, apiKey)
+        val results = mutableListOf<AckResult>()
+        repeat(commands.length()) { index ->
+            commands.optJSONObject(index)?.let { command ->
+                processCommand(command)?.let(results::add)
             }
-            return
-        }
-        Log.i(TAG, "Received ${commands.length()} command(s) (${elapsed}ms)")
-
-        val ackIds = mutableListOf<String>()
-        for (i in 0 until commands.length()) {
-            val cmd = commands.getJSONObject(i)
-            val id = cmd.getString("id")
-            val command = cmd.getString("command")
-            Log.i(TAG, "Executing: '$command' (id=$id)")
-            // Alice bypasses ActionDispatcher (raw vehicleApi), so the door-unlock
-            // speed gate is applied here explicitly. Ack anyway so VPS won't retry.
-            // Log-only path — the BlockReason is never shown to a user, so it is not localized.
-            val unlockBlock = ActionDispatcher.unlockGateBlockReason(command, latestData?.speed)
-            if (unlockBlock != null) {
-                Log.w(TAG, "Blocked: '$command' → $unlockBlock")
-                ackIds.add(id)
-                continue
-            }
-            val result = vehicleApi.dispatch(command)
-            val success = result.isSuccess
-            Log.i(TAG, "Result: $command → ${if (success) "OK" else "FAIL: ${result.exceptionOrNull()?.message}"}")
-            // Crowd-validation: ack regardless of success. Unmapped/Unsupported commands
-            // get a "done" signal to VPS so Alice does not retry forever. The vehicle_write_log
-            // DAO row carries the actual outcome for diagnostics.
-            ackIds.add(id)
         }
 
-        if (ackIds.isNotEmpty()) {
-            ack(endpoint, apiKey, ackIds)
+        if (results.isNotEmpty()) ack(endpoint, apiKey, results)
+
+        pollCount++
+        if (pollCount >= STATE_REPORT_EVERY) {
+            pollCount = 0
+            reportState(endpoint, apiKey)
         }
+    }
+
+    private suspend fun processCommand(command: JSONObject): AckResult? {
+        val id = command.optString("id").takeIf { it.isNotBlank() } ?: return null
+        val action = command.optString("action").trim().lowercase()
+        val result = execute(command, action)
+        return AckResult(id, result.isSuccess, result.exceptionOrNull()?.message?.take(160))
+    }
+
+    private suspend fun execute(json: JSONObject, action: String): Result<Unit> {
+        if (action in windowPositionActions) {
+            val target = json.valueInt() ?: return Result.failure(IllegalArgumentException("invalid_window_position"))
+            return apertureController.positionWindow(action, target, latestData?.speed)
+        }
+
+        if (action == "sunroof.position") {
+            val target = json.valueInt() ?: return Result.failure(IllegalArgumentException("invalid_sunroof_position"))
+            return apertureController.positionSunroof(target, latestData)
+        }
+
+        appDispatcher.dispatch(json, latestData)?.let { return it }
+
+        val resolved = AliceBridgeCommandTranslator.resolve(json)
+            ?: return Result.failure(IllegalArgumentException("unsupported_action"))
+
+        val data = latestData
+        rearTrunkBlock(resolved.vehicleCommand, data)?.let { return it }
+        val blocked = ActionDispatcher.safetyBlockReason(resolved.vehicleCommand, data)
+            ?: ActionDispatcher.speedGateBlockReason(resolved.vehicleCommand, data?.speed)
+        if (blocked != null) return Result.failure(IllegalStateException(blocked.javaClass.simpleName))
+
+        return vehicleApi.dispatch(resolved.vehicleCommand)
+    }
+
+    private fun rearTrunkBlock(command: String, data: DiParsData?): Result<Unit>? {
+        if (!ActionDispatcher.isRearTrunkOpenCommand(command)) return null
+        val speed = data?.speed ?: return Result.failure(IllegalStateException("rear_trunk_speed_unknown"))
+        if (speed != 0) return Result.failure(IllegalStateException("rear_trunk_requires_standstill"))
+        return null
     }
 
     private fun reportState(endpoint: String, apiKey: String) {
         val data = latestData ?: return
-        try {
-            val json = JSONObject().apply {
-                data.windowFL?.let { put("windowFL", it) }
-                data.windowFR?.let { put("windowFR", it) }
-                data.windowRL?.let { put("windowRL", it) }
-                data.windowRR?.let { put("windowRR", it) }
-                data.sunroof?.let { put("sunroof", it) }
-                data.trunk?.let { put("trunk", it) }
-                data.lockFL?.let { put("lockFL", it) }
-                data.acStatus?.let { put("acStatus", it) }
-                data.acTemp?.let { put("acTemp", it) }
-                data.acCirc?.let { put("acCirc", it) }
-                data.insideTemp?.let { put("insideTemp", it) }
-            }
-            val request = Request.Builder()
-                .url("$endpoint/api/state")
-                .header("X-Api-Key", apiKey)
-                .post(json.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-            pollClient.newCall(request).execute().close()
-            Log.d(TAG, "State reported")
-        } catch (e: Exception) {
-            Log.e(TAG, "State report failed: ${e.message}")
+        val body = JSONObject().apply {
+            data.soc?.let { put("soc", it) }
+            data.windowFL?.let { put("windowFL", it) }
+            data.windowFR?.let { put("windowFR", it) }
+            data.windowRL?.let { put("windowRL", it) }
+            data.windowRR?.let { put("windowRR", it) }
+            data.sunroof?.let { put("sunroof", it) }
+            data.trunk?.let { put("trunk", it) }
+            data.lockFL?.let { put("lockFL", it) }
+            data.acStatus?.let { put("acStatus", it) }
+            data.acTemp?.let { put("acTemp", it) }
+            data.acCirc?.let { put("acCirc", it) }
+            data.fanLevel?.let { put("fanLevel", it) }
+            data.acWindMode?.let { put("acWindMode", it) }
+            data.insideTemp?.let { put("insideTemp", it) }
+            data.exteriorTemp?.let { put("exteriorTemp", it) }
         }
+
+        val request = Request.Builder()
+            .url("$endpoint/api/state")
+            .header("X-Api-Key", apiKey)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        runCatching { client.newCall(request).execute().close() }
     }
 
-    private fun ack(endpoint: String, apiKey: String, ids: List<String>) {
-        try {
-            val json = JSONObject().apply {
-                put("ids", JSONArray(ids))
-            }
-            val request = Request.Builder()
-                .url("$endpoint/api/ack")
-                .header("X-Api-Key", apiKey)
-                .post(json.toString().toRequestBody("application/json".toMediaType()))
-                .build()
-            pollClient.newCall(request).execute().close()
-            Log.i(TAG, "Acked ${ids.size} command(s)")
-        } catch (e: Exception) {
-            Log.e(TAG, "Ack failed: ${e.message}")
+    private fun ack(endpoint: String, apiKey: String, results: List<AckResult>) {
+        val body = JSONObject().apply {
+            put("ids", JSONArray(results.map { it.id }))
+            put("results", JSONArray().apply {
+                results.forEach { result ->
+                    put(JSONObject().apply {
+                        put("id", result.id)
+                        put("success", result.success)
+                        result.error?.let { put("error", it) }
+                    })
+                }
+            })
         }
+        val request = Request.Builder()
+            .url("$endpoint/api/ack")
+            .header("X-Api-Key", apiKey)
+            .post(body.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+        runCatching { client.newCall(request).execute().close() }
     }
+
+    private fun JSONObject.valueInt(): Int? = when (val value = opt("value")) {
+        is Number -> value.toInt()
+        is String -> value.toIntOrNull()
+        else -> null
+    }
+
+    private data class AckResult(val id: String, val success: Boolean, val error: String?)
+
+    private val windowPositionActions = setOf(
+        "window.driver.position",
+        "window.passenger.position",
+        "window.rear_left.position",
+        "window.rear_right.position",
+    )
 }
