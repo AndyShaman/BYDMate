@@ -945,4 +945,564 @@ function yandexDevices() {
       DEVICE.sunroof,
       "Люк",
       "Панорамный люк BYD",
-      "devices.types
+      "devices.types.openable",
+      [
+        onOffCapability(true),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.sunroof,
+      "Люк",
+      "Панорамный люк BYD",
+      "devices.types.openable",
+      [
+        onOffCapability(true),
+
+        rangeCapability(
+          "open",
+          0,
+          100,
+          10,
+          "unit.percent",
+          false,
+          true
+        ),
+      ]
+    ),
+    
+    oneShotDevice(
+      DEVICE.sunroofVent,
+      "Проветривание крыши",
+      "Приподнять панорамный люк для проветривания"
+    ),
+
+    oneShotDevice(
+      DEVICE.sunroofComfort,
+      "Комфортное открытие крыши",
+      "Комфортное открытие панорамной крыши BYD"
+    ),
+
+    baseDevice(
+      DEVICE.sunshade,
+      "Шторка",
+      "Шторка панорамной крыши BYD",
+      "devices.types.openable",
+      [
+        onOffCapability(false),
+      ]
+    ),
+
+    // Sensors
+    baseDevice(
+      DEVICE.battery,
+      "Заряд батареи",
+      "Уровень заряда тяговой батареи BYD",
+      "devices.types.sensor",
+      [],
+      [
+        floatProperty(
+          "battery_level",
+          "unit.percent"
+        ),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.insideTemp,
+      "Датчик салона",
+      "Температура воздуха в салоне BYD",
+      "devices.types.sensor.climate",
+      [],
+      [
+        floatProperty(
+          "temperature",
+          "unit.temperature.celsius"
+        ),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.outsideTemp,
+      "Наружный датчик машины",
+      "Наружная температура автомобиля BYD",
+      "devices.types.sensor.climate",
+      [],
+      [
+        floatProperty(
+          "temperature",
+          "unit.temperature.celsius"
+        ),
+      ]
+    ),
+
+    // Applications
+    appDevice(
+      DEVICE.waze,
+      "Навигация",
+      "Открыть навигацию на экране автомобиля"
+    ),
+
+    appDevice(
+      DEVICE.music,
+      "Яндекс Музыка",
+      "Открыть Яндекс Музыку"
+    ),
+
+    appDevice(
+      DEVICE.youtube,
+      "YouTube Premium",
+      "Открыть YouTube"
+    ),
+
+    appDevice(
+      DEVICE.browser,
+      "Браузер",
+      "Открыть браузер автомобиля"
+    ),
+
+    appDevice(
+      DEVICE.carSettings,
+      "Настройки машины",
+      "Открыть штатные настройки автомобиля BYD"
+    ),
+
+    appDevice(
+      DEVICE.camera,
+      "Камера 360",
+      "Открыть штатную систему кругового обзора BYD"
+    ),
+
+    appDevice(
+      DEVICE.dashcam,
+      "Регистратор",
+      "Открыть штатный видеорегистратор BYD"
+    ),
+
+    appDevice(
+      DEVICE.files,
+      "Файлы",
+      "Открыть файловый менеджер BYD"
+    ),
+
+    appDevice(
+      DEVICE.sentry,
+      "Сэнтри",
+      "Открыть выбранное приложение охранного режима"
+    ),
+
+    appDevice(
+      DEVICE.abrp,
+      "ABRP",
+      "Открыть A Better Routeplanner"
+    ),
+
+    appDevice(
+      DEVICE.mediaCenter,
+      "Медиацентр",
+      "Открыть штатный медиацентр BYD"
+    ),
+
+    appDevice(
+      DEVICE.tiktok,
+      "TikTok",
+      "Открыть приложение TikTok"
+    ),
+
+    // Navigation projection
+    baseDevice(
+      DEVICE.clusterNavigation,
+      "Навигатор на приборке",
+      "Проекция выбранного навигатора на приборную панель",
+      "devices.types.switch",
+      [
+        onOffCapability(false),
+      ]
+    ),
+
+    // Media controls
+    baseDevice(
+      DEVICE.media,
+      "Медиа",
+      "Управление воспроизведением и громкостью автомобиля",
+      "devices.types.media_device",
+      [
+        onOffCapability(false),
+
+        toggleCapability(
+          "pause",
+          false
+        ),
+
+        toggleCapability(
+          "mute",
+          false
+        ),
+
+        rangeCapability(
+          "volume",
+          0,
+          100,
+          5,
+          "unit.percent",
+          false,
+          true
+        ),
+      ]
+    ),
+
+    oneShotDevice(
+      DEVICE.mediaNext,
+      "Следующая",
+      "Переключить на следующий трек"
+    ),
+
+    oneShotDevice(
+      DEVICE.mediaPrevious,
+      "Предыдущая",
+      "Переключить на предыдущий трек"
+    ),
+  ];
+}
+
+
+/* ======================================================
+   QUERY HELPERS
+   ====================================================== */
+
+function onOffState(value) {
+  return {
+    type:
+      "devices.capabilities.on_off",
+
+    state: {
+      instance: "on",
+      value: Boolean(value),
+    },
+  };
+}
+
+function rangeState(
+  instance,
+  value
+) {
+  return {
+    type:
+      "devices.capabilities.range",
+
+    state: {
+      instance,
+      value:
+        Number(value),
+    },
+  };
+}
+
+function modeState(
+  instance,
+  value
+) {
+  return {
+    type:
+      "devices.capabilities.mode",
+
+    state: {
+      instance,
+      value,
+    },
+  };
+}
+
+function floatPropertyState(
+  instance,
+  value
+) {
+  return {
+    type:
+      "devices.properties.float",
+
+    state: {
+      instance,
+      value:
+        Number(value),
+    },
+  };
+}
+
+function fanModeFromLevel(
+  level
+) {
+  const value =
+      Number(level);
+
+  if (!Number.isFinite(value)) {
+    return null;
+  }
+
+  if (value >= 7) {
+    return "turbo";
+  }
+
+  if (value >= 5) {
+    return "high";
+  }
+
+  if (value >= 3) {
+    return "medium";
+  }
+
+  if (value >= 1) {
+    return "low";
+  }
+
+  return null;
+}
+
+const APP_ACTIONS = {
+  [DEVICE.waze]:
+    "app.navigation.open",
+
+  [DEVICE.yandexNavi]:
+    "app.yandex_navi.open",
+
+  [DEVICE.yandexMaps]:
+    "app.yandex_maps.open",
+
+  [DEVICE.music]:
+    "app.music.open",
+
+  [DEVICE.youtube]:
+    "app.youtube.open",
+
+  [DEVICE.browser]:
+    "app.browser.open",
+
+  [DEVICE.carSettings]:
+    "app.car_settings.open",
+
+  [DEVICE.androidSettings]:
+    "app.android_settings.open",
+
+  [DEVICE.camera]:
+    "app.camera.open",
+
+  [DEVICE.dashcam]:
+    "app.dashcam.open",
+
+  [DEVICE.files]:
+    "app.files.open",
+
+  [DEVICE.driveModes]:
+    "app.drive_modes.open",
+
+  [DEVICE.sentry]:
+    "app.sentry.open",
+
+  [DEVICE.abrp]:
+    "app.abrp.open",
+
+  [DEVICE.mediaCenter]:
+    "app.media_center.open",
+
+  [DEVICE.phone]:
+    "app.phone.open",
+
+  [DEVICE.radio]:
+    "app.radio.open",
+
+  [DEVICE.bydmate]:
+    "app.bydmate.open",
+
+  [DEVICE.tiktok]:
+    "app.tiktok.open",
+};
+
+const ONE_SHOT_ACTIONS = {
+  [DEVICE.airflowFace]:
+    "climate.airflow_face",
+
+  [DEVICE.airflowFaceFeet]:
+    "climate.airflow_face_feet",
+
+  [DEVICE.airflowFeet]:
+    "climate.airflow_feet",
+
+  [DEVICE.airflowFeetWindshield]:
+    "climate.airflow_feet_windshield",
+
+  [DEVICE.airflowWindshield]:
+    "climate.airflow_windshield",
+
+  [DEVICE.airflowFaceFeetWindshield]:
+    "climate.airflow_face_feet_windshield",
+
+  [DEVICE.airflowFaceWindshield]:
+    "climate.airflow_face_windshield",
+
+  [DEVICE.windowsVent]:
+    "window.all.vent",
+
+  [DEVICE.sunroofComfort]:
+    "sunroof.comfort",
+
+  [DEVICE.sunroofStop]:
+    "sunroof.stop",
+
+  [DEVICE.mediaNext]:
+    "media.next",
+
+  [DEVICE.mediaPrevious]:
+    "media.previous",
+};
+
+function isActionOnlyDevice(
+  id
+) {
+  return (
+    Object.prototype.hasOwnProperty.call(
+      APP_ACTIONS,
+      id
+    ) ||
+    Object.prototype.hasOwnProperty.call(
+      ONE_SHOT_ACTIONS,
+      id
+    ) ||
+    id ===
+      DEVICE.fan ||
+    id ===
+      DEVICE.rearDefrost ||
+    id ===
+      DEVICE.cabinVentilation ||
+    id ===
+      DEVICE.interiorLight ||
+    id ===
+      DEVICE.ambientLight ||
+    id ===
+      DEVICE.sunshade ||
+    id ===
+      DEVICE.clusterNavigation ||
+    id ===
+      DEVICE.media ||
+    id ===
+      DEVICE.seatDriverHeat ||
+    id ===
+      DEVICE.seatDriverVent ||
+    id ===
+      DEVICE.seatPassengerHeat ||
+    id ===
+      DEVICE.seatPassengerVent ||
+    id ===
+      DEVICE.seatBothHeat ||
+    id ===
+      DEVICE.seatBothVent ||
+    id ===
+      DEVICE.allWindows
+  );
+}
+
+function queryDevice(
+  id,
+  carState
+) {
+  /*
+   * Action-only devices do not depend on fresh vehicle telemetry.
+   */
+  if (
+    isActionOnlyDevice(
+      id
+    )
+  ) {
+    return {
+      id,
+      capabilities: [],
+      properties: [],
+    };
+  }
+
+  if (!carState) {
+    return {
+      id,
+
+      error_code:
+        "DEVICE_UNREACHABLE",
+
+      error_message:
+        "BYDMate has not reported vehicle state yet",
+    };
+  }
+
+  const data =
+    carState.data || {};
+
+
+  /*
+   * Sensors
+   */
+  if (
+    id ===
+      DEVICE.battery
+  ) {
+    const soc =
+      Number(
+        data.soc
+      );
+
+    if (
+      !Number.isFinite(
+        soc
+      )
+    ) {
+      return {
+        id,
+
+        error_code:
+          "DEVICE_UNREACHABLE",
+
+        error_message:
+          "Battery SOC is unavailable",
+      };
+    }
+
+    return {
+      id,
+
+      capabilities: [],
+
+      properties: [
+        floatPropertyState(
+          "battery_level",
+          Math.max(
+            0,
+            Math.min(
+              100,
+              soc
+            )
+          )
+        ),
+      ],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.insideTemp ||
+    id ===
+      DEVICE.outsideTemp
+  ) {
+    const value =
+      Number(
+        id ===
+          DEVICE.insideTemp
+          ? data.insideTemp
+          : data.exteriorTemp
+      );
+
+    if (
+      !Number.isFinite(
+        value
+      )
+    ) {
+      return {
+        id,
+
+       
