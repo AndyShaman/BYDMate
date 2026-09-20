@@ -495,6 +495,32 @@ class GigaAmModelManagerTest {
     }
 
     @Test
+    fun `leftovers of an interrupted run are cleared before the storage precheck`() = runBlocking {
+        val filesDir = tmp.newFolder("files22")
+        // What a power-off mid-unpack leaves behind: the archive in cacheDir (== filesDir in
+        // these tests) and a half-written staging dir.
+        val staleArchive = File(filesDir, "gigaam-v3-ru.tar.bz2").apply { writeText("stale-archive") }
+        val staleStaging = File(filesDir, "asr/.staging-gigaam-v3-ru").apply { mkdirs() }
+        File(staleStaging, "model.int8.onnx").writeText("half")
+        val archive = makeArchive(mapOf("top/model.int8.onnx" to "new", "top/tokens.txt" to "new"))
+        // The volume only meets the requirement once the leftovers are gone, measured at
+        // precheck time, not at construction.
+        val ctx = mockk<Context>()
+        every { ctx.filesDir } returns filesDir
+        every { ctx.cacheDir } returns filesDir
+        val m = GigaAmModelManager(ctx, clientFor(archive, "v".toByteArray())) {
+            if (staleArchive.exists() || staleStaging.exists()) {
+                GigaAmModelManager.REQUIRED_FREE_BYTES - 1
+            } else {
+                GigaAmModelManager.REQUIRED_FREE_BYTES
+            }
+        }
+
+        assertTrue(m.download { _, _ -> }.isSuccess)
+        assertTrue(m.isReady())
+    }
+
+    @Test
     fun `storage precheck leaves an existing model untouched`() = runBlocking {
         val filesDir = tmp.newFolder("files21")
         val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
