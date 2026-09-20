@@ -2716,4 +2716,632 @@ const BINARY_ACTIONS = {
       "light.hazard_off",
   },
 
-  // For openable car
+  // For openable cards ON = open/unlocked, OFF = close/locked.
+  [DEVICE.locks]: {
+    on:
+      "doors.unlock",
+    off:
+      "doors.lock",
+  },
+
+  [DEVICE.rearTrunk]: {
+    on:
+      "trunk.rear.open",
+    off:
+      "trunk.rear.close",
+  },
+
+  [DEVICE.frontTrunk]: {
+    on:
+      "trunk.front.open",
+    off:
+      "trunk.front.close",
+  },
+
+  [DEVICE.sunroof]: {
+  on:
+    "sunroof.open",
+  off:
+    "sunroof.close",
+},
+
+[DEVICE.sunroofVent]: {
+  on:
+    "sunroof.vent",
+  off:
+    "sunroof.close",
+},
+
+[DEVICE.sunshade]: {
+  on:
+    "sunshade.open",
+  off:
+    "sunshade.close",
+},
+
+[DEVICE.sunroofTilt]: {
+  on:
+    "sunroof.tilt",
+  off:
+    "sunroof.close",
+},
+
+  [DEVICE.clusterNavigation]: {
+    on:
+      "navigation.cluster_on",
+    off:
+      "navigation.cluster_off",
+  },
+};
+
+async function handleBinaryAction(
+  env,
+  deviceId,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type !==
+      "devices.capabilities.on_off" ||
+    state.instance !== "on"
+  ) {
+    return actionError(
+      type,
+      state.instance ||
+        "unknown",
+      "INVALID_ACTION",
+      "Capability is not supported by BYDMate"
+    );
+  }
+
+  const mapping =
+    BINARY_ACTIONS[
+      deviceId
+    ];
+
+  if (!mapping) {
+    return actionError(
+      type,
+      "on",
+      "INVALID_ACTION",
+      "BYDMate device is not controllable"
+    );
+  }
+
+  const enabled =
+    Boolean(
+      state.value
+    );
+
+  await enqueueCommand(
+    env,
+
+    enabled
+      ? mapping.on
+      : mapping.off
+  );
+
+  return actionDone(
+    type,
+    "on"
+  );
+}
+
+
+/* ======================================================
+   APP / ONE-SHOT ACTIONS
+   ====================================================== */
+
+async function handleOneShotAction(
+  env,
+  action,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type !==
+      "devices.capabilities.on_off" ||
+    state.instance !== "on"
+  ) {
+    return actionError(
+      type,
+      state.instance ||
+        "unknown",
+      "INVALID_ACTION",
+      "One-shot capability is not supported"
+    );
+  }
+
+  /*
+   * Yandex may send OFF after toggling a card.
+   * One-shot actions have no persistent OFF state, so OFF is a successful no-op.
+   */
+  if (
+    Boolean(
+      state.value
+    )
+  ) {
+    await enqueueCommand(
+      env,
+      action
+    );
+  }
+
+  return actionDone(
+    type,
+    "on"
+  );
+}
+
+
+/* ======================================================
+   MEDIA ACTION
+   ====================================================== */
+
+async function handleMediaAction(
+  env,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "media.play"
+        : "media.pause"
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.toggle" &&
+    state.instance ===
+      "pause"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "media.pause"
+        : "media.play"
+    );
+
+    return actionDone(
+      type,
+      "pause"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.toggle" &&
+    state.instance ===
+      "mute"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "media.mute"
+        : "media.unmute"
+    );
+
+    return actionDone(
+      type,
+      "mute"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.range" &&
+    state.instance ===
+      "volume"
+  ) {
+    const value =
+      Number(
+        state.value
+      );
+
+    if (
+      !Number.isFinite(
+        value
+      )
+    ) {
+      return actionError(
+        type,
+        "volume",
+        "INVALID_ACTION",
+        "Invalid volume"
+      );
+    }
+
+    if (
+      state.relative
+    ) {
+      if (value > 0) {
+        await enqueueCommand(
+          env,
+          "media.volume_up"
+        );
+      } else if (
+        value < 0
+      ) {
+        await enqueueCommand(
+          env,
+          "media.volume_down"
+        );
+      }
+    } else {
+      await enqueueCommand(
+        env,
+        "media.volume",
+        Math.max(
+          0,
+          Math.min(
+            100,
+            Math.round(
+              value
+            )
+          )
+        )
+      );
+    }
+
+    return actionDone(
+      type,
+      "volume"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "Media capability is not supported"
+  );
+}
+
+
+/* ======================================================
+   TEST DASHBOARD
+   ====================================================== */
+
+function dashboard() {
+  return new Response(
+    `<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1"
+>
+<title>BYDmate Alice Bridge 5.7</title>
+<style>
+body{
+  font-family:sans-serif;
+  max-width:980px;
+  margin:30px auto;
+  padding:0 16px;
+  background:#111;
+  color:#eee
+}
+input,button{
+  font-size:16px;
+  padding:10px;
+  margin:4px 2px
+}
+input{
+  box-sizing:border-box
+}
+#key{
+  width:100%
+}
+.action{
+  width:68%
+}
+.value{
+  width:25%
+}
+button{
+  cursor:pointer
+}
+section{
+  border-top:1px solid #444;
+  margin-top:20px;
+  padding-top:12px
+}
+pre{
+  white-space:pre-wrap;
+  background:#222;
+  padding:12px
+}
+small{
+  color:#aaa
+}
+</style>
+</head>
+<body>
+
+<h2>BYDmate Alice Bridge 5.7</h2>
+
+<input
+  id="key"
+  type="password"
+  placeholder="BYDMate API key"
+>
+
+<section>
+<h3>Manual semantic command</h3>
+
+<input
+  id="action"
+  class="action"
+  placeholder="action, e.g. app.navigation.open"
+>
+
+<input
+  id="value"
+  class="value"
+  type="number"
+  placeholder="value optional"
+>
+
+<button onclick="manualSend()">
+Send
+</button>
+</section>
+
+<section>
+<h3>Climate</h3>
+
+<button onclick="send('climate.on')">
+Climate ON
+</button>
+
+<button onclick="send('climate.off')">
+Climate OFF
+</button>
+
+<button onclick="send('climate.temperature',22)">
+22°C
+</button>
+
+<button onclick="send('climate.fan_level',3)">
+Fan 3
+</button>
+
+<button onclick="send('climate.front_defrost_on')">
+Front defrost ON
+</button>
+
+<button onclick="send('climate.front_defrost_off')">
+Front defrost OFF
+</button>
+
+<button onclick="send('climate.recirculation_inner')">
+Recirculation
+</button>
+
+<button onclick="send('climate.recirculation_outer')">
+Fresh air
+</button>
+</section>
+
+<section>
+<h3>Apps</h3>
+
+<button onclick="send('app.navigation.open')">
+Navigation
+</button>
+
+<button onclick="send('app.tiktok.open')">
+TikTok
+</button>
+
+<button onclick="send('app.yandex_navi.open')">
+Yandex Navi
+</button>
+
+<button onclick="send('app.car_settings.open')">
+Car Settings
+</button>
+
+<button onclick="send('app.camera.open')">
+Camera
+</button>
+
+<button onclick="send('app.youtube.open')">
+YouTube
+</button>
+
+<button onclick="send('app.music.open')">
+Music
+</button>
+
+<button onclick="send('app.browser.open')">
+Browser
+</button>
+
+<button onclick="send('app.drive_modes.open')">
+Drive modes
+</button>
+</section>
+
+<section>
+<h3>Media</h3>
+
+<button onclick="send('media.play')">
+Play
+</button>
+
+<button onclick="send('media.pause')">
+Pause
+</button>
+
+<button onclick="send('media.next')">
+Next
+</button>
+
+<button onclick="send('media.volume_up')">
+Volume +
+</button>
+
+<button onclick="send('media.volume_down')">
+Volume -
+</button>
+</section>
+
+<section>
+<h3>Debug</h3>
+
+<button onclick="status()">
+Refresh status
+</button>
+
+<small>
+The Worker accepts semantic commands only. No raw BYD FID/package command input is exposed.
+</small>
+</section>
+
+<pre id="out">Ready</pre>
+
+<script>
+const out =
+  document.getElementById('out');
+
+async function api(
+  path,
+  options = {}
+) {
+  const key =
+    document.getElementById(
+      'key'
+    ).value;
+
+  options.headers = {
+    ...(options.headers || {}),
+    'X-Api-Key':
+      key,
+    'Content-Type':
+      'application/json'
+  };
+
+  const r =
+    await fetch(
+      path,
+      options
+    );
+
+  const text =
+    await r.text();
+
+  let body;
+
+  try {
+    body =
+      JSON.parse(text);
+  } catch {
+    body =
+      text;
+  }
+
+  out.textContent =
+    JSON.stringify(
+      body,
+      null,
+      2
+    );
+
+  if (!r.ok) {
+    throw new Error(
+      'HTTP ' +
+      r.status
+    );
+  }
+
+  return body;
+}
+
+async function send(
+  action,
+  value
+) {
+  const body = {
+    action
+  };
+
+  if (
+    value !== undefined
+  ) {
+    body.value =
+      value;
+  }
+
+  await api(
+    '/api/enqueue',
+    {
+      method:
+        'POST',
+      body:
+        JSON.stringify(
+          body
+        )
+    }
+  );
+}
+
+async function manualSend() {
+  const action =
+    document.getElementById(
+      'action'
+    ).value.trim();
+
+  const rawValue =
+    document.getElementById(
+      'value'
+    ).value;
+
+  if (!action) {
+    return;
+  }
+
+  if (
+    rawValue === ''
+  ) {
+    await send(
+      action
+  
