@@ -1374,6 +1374,7 @@
     <string name="tech_card_climate">Climate</string>
     <string name="tech_card_tyres">Tyres · pressure / temperature</string>
     <string name="tech_card_history">Battery · history</string>
+    <string name="tech_label_remain_kwh">Remaining</string>
     <string name="tech_label_hv_voltage">HV voltage</string>
     <string name="tech_label_power">power</string>
     <string name="tech_label_full_cycles">full cycles</string>
@@ -1401,6 +1402,8 @@
     <string name="tech_value_mv">%1$d mV</string>
     <string name="tech_value_volt">%1$d V</string>
     <string name="tech_value_kw">%1$d kW</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f kWh</string>
     <string name="tech_value_watt">%1$d W</string>
     <string name="tech_value_percent_per_hour">%1$.2f %%/h</string>
     <string name="tech_value_deg">%1$d°</string>
@@ -1410,6 +1413,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
     <string name="tech_hint_soh" formatted="false">Battery health: how much of the original capacity is left. 100% on a new car, slowly decreasing over the years. The car itself calculates this value.</string>
+    <string name="tech_hint_remain_kwh">How much energy is left in the battery, as the car itself reports it.</string>
     <string name="tech_hint_hv_voltage">Voltage of the traction battery. It rises while charging and falls as the pack discharges, roughly 450…560 V on this car. On its own it says little, it is useful together with power.</string>
     <string name="tech_hint_motor_power">Power at the electric motors right now: how much the car sends to the wheels or takes back from them while regenerating. Zero when parked. The car itself calculates this value.</string>
     <string name="tech_hint_power">How much energy the battery is giving out right now. Plus: the car is spending it (acceleration, climate). Minus: the battery is taking energy in, either regeneration while braking or charging from a charger. Second number: how fast the charge is draining, percent per hour. When parked this is the onboard electronics draw.</string>

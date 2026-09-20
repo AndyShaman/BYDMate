@@ -303,6 +303,11 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
     TechCard(stringResource(R.string.tech_card_battery_now), modifier = modifier) {
         TechRow("SoC", state.soc?.let { "$it%" } ?: DASH)
         TechRow(
+            stringResource(R.string.tech_label_remain_kwh),
+            state.remainKwh?.let { stringResource(R.string.tech_value_kwh, it) } ?: DASH,
+            hintKey = "remainKwh", onHint = onHint,
+        )
+        TechRow(
             "SoH",
             state.soh?.let { "%.0f%%".format(it) } ?: DASH,
             valueColor = if (state.soh != null) AccentGreen else TextPrimary,
@@ -351,6 +356,7 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
             valueColor = insulationColor(insulationMohm),
             hintKey = "insulation", onHint = onHint,
         )
+        Hint(state.openHint, "remainKwh", R.string.tech_hint_remain_kwh)
         Hint(state.openHint, "soh", R.string.tech_hint_soh)
         Hint(state.openHint, "hvVoltage", R.string.tech_hint_hv_voltage)
         Hint(state.openHint, "power", R.string.tech_hint_motor_power)

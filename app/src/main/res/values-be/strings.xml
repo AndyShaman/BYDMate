@@ -1526,6 +1526,7 @@
     <string name="tech_card_climate">Клімат</string>
     <string name="tech_card_tyres">Шыны · ціск / тэмпература</string>
     <string name="tech_card_history">Батарэя · гісторыя</string>
+    <string name="tech_label_remain_kwh">Астатак</string>
     <string name="tech_label_hv_voltage">напруга HV</string>
     <string name="tech_label_power">магутнасць</string>
     <string name="tech_label_full_cycles">поўных цыклаў</string>
@@ -1553,6 +1554,8 @@
     <string name="tech_value_mv">%1$d мВ</string>
     <string name="tech_value_volt">%1$d В</string>
     <string name="tech_value_kw">%1$d кВт</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f кВт·гадз</string>
     <string name="tech_value_watt">%1$d Вт</string>
     <string name="tech_value_percent_per_hour">%1$.2f %%/гадз</string>
     <string name="tech_value_deg">%1$d°</string>
@@ -1562,6 +1565,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здароўе батарэі: колькі ёмістасці засталося ад новай. 100% у новай машыны, павольна зніжаецца з гадамі. Значэнне лічыць сама машына.</string>
+    <string name="tech_hint_remain_kwh">Колькі энергіі засталося ў батарэі паводле дадзеных самой машыны.</string>
     <string name="tech_hint_hv_voltage">Напруга цягавай батарэі. Расце пры зарадцы і падае па меры разрадкі, у гэтай машыны прыкладна 450…560 В. Сама па сабе ні пра што не гаворыць, карысна разам з магутнасцю.</string>
     <string name="tech_hint_motor_power">Магутнасць на электраматорах прама зараз: столькі машына аддае на колы або забірае з іх пры рэкуперацыі. На прыпынку 0. Значэнне лічыць сама машына.</string>
     <string name="tech_hint_power">Колькі энергіі батарэя аддае прама зараз. Плюс: машына траціць (разгон, клімат). Мінус: батарэя прымае энергію: рэкуперацыя пры тармажэнні ці зарадка ад станцыі. Другая лічба: з якой хуткасцю сыходзіць зарад, працэнтаў за гадзіну. На прыпынку гэта расход бартавой электронікі.</string>

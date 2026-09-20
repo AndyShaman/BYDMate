@@ -183,6 +183,7 @@ object FidPushApplier {
         "speed" to { d, v -> d.copy(speed = v.toInt()) },
         "mileage" to { d, v -> d.copy(mileage = v) },
         "totalElecConsumption" to { d, v -> d.copy(totalElecConsumption = v) },
+        "batteryRemainKwh" to { d, v -> d.copy(batteryRemainKwh = v) },
         "voltage12v" to { d, v -> d.copy(voltage12v = v) },
         "maxCellVoltage" to { d, v -> d.copy(maxCellVoltage = v) },
         "minCellVoltage" to { d, v -> d.copy(minCellVoltage = v) },

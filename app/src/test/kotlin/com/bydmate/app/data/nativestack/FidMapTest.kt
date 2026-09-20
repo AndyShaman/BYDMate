@@ -58,6 +58,15 @@ class FidMapTest {
         assertEquals("Bodywork.BODYWORK_FRONT_HATCH_CURRENT_POSITION", entry.symbol)
     }
 
+    @Test fun `BMS remaining-energy fid is mapped as a float read`() {
+        val entry = FidMap.entries.single { it.field == "batteryRemainKwh" }
+        assertEquals(1005, entry.device)
+        assertEquals(882901008, entry.fid)
+        assertEquals(7, entry.transact)
+        assertEquals(Decoder.FLOAT_KWH, entry.decoder)
+        assertEquals("Power.POWER_BATTERY_REMAIN_ELECTRICITY", entry.symbol)
+    }
+
     @Test fun `turn signal read fid is mapped`() {
         val entry = FidMap.entries.single { it.field == "turnSignal" }
         assertEquals(1004, entry.device)

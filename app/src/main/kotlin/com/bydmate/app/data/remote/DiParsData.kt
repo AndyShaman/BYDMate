@@ -99,4 +99,6 @@ data class DiParsData(
     // Charging plug backup signals (2026-09-15): diagnostics only, nothing decides on them yet.
     val chargerConnectState: Int? = null,     // Charging.CHARGING_CHARGER_CONNECT_STATE
     val chargeConnectIndicator: Int? = null,  // instrument cluster charge-connect indicator
+    // Energy left in the pack straight from the BMS, kWh (2026-09-20). Not derived from SOC.
+    val batteryRemainKwh: Double? = null,
 )

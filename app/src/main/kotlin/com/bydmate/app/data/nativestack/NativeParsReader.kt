@@ -311,6 +311,7 @@ class NativeParsReader @Inject constructor(
             chargingStatus      = chargingStatus,  // derived from chargeGunState + bmsState (see above)
             batteryCapacityKwh  = batteryCapacityKwh,
             totalElecConsumption = field<Double>("totalElecConsumption"),
+            batteryRemainKwh    = field<Double>("batteryRemainKwh"),
             voltage12v          = voltage12v,
             maxCellVoltage      = maxCellVoltage,
             minCellVoltage      = minCellVoltage,

@@ -1528,6 +1528,7 @@
     <string name="tech_card_climate">Климат</string>
     <string name="tech_card_tyres">Шины · давление / температура</string>
     <string name="tech_card_history">Батарея · история</string>
+    <string name="tech_label_remain_kwh">Остаток</string>
     <string name="tech_label_hv_voltage">напряжение HV</string>
     <string name="tech_label_power">мощность</string>
     <string name="tech_label_full_cycles">Полных циклов</string>
@@ -1559,6 +1560,8 @@
     <string name="tech_value_volt">%1$d В</string>
     <!-- %1$d = kilowatts -->
     <string name="tech_value_kw">%1$d кВт</string>
+    <!-- %1$.1f = kilowatt-hours -->
+    <string name="tech_value_kwh">%1$.1f кВт·ч</string>
     <!-- %1$d = watts -->
     <string name="tech_value_watt">%1$d Вт</string>
     <!-- %1$.2f = percent of battery per hour -->
@@ -1575,6 +1578,7 @@
     <string name="tech_value_tyre_pressure">%1$.2f бар</string>
     <string name="tech_value_cell_scale">%1$.2f В</string>
     <string name="tech_hint_soh" formatted="false">Здоровье батареи: сколько ёмкости осталось от новой. 100% у новой машины, медленно снижается с годами. Значение считает сама машина.</string>
+    <string name="tech_hint_remain_kwh">Сколько энергии осталось в батарее по данным самой машины.</string>
     <string name="tech_hint_hv_voltage">Напряжение тяговой батареи. Растёт при зарядке и падает по мере разряда, у этой машины примерно 450…560 В. Само по себе ни о чём не говорит, полезно вместе с мощностью.</string>
     <string name="tech_hint_motor_power">Мощность на электромоторах прямо сейчас: столько машина отдаёт на колёса или забирает с них при рекуперации. На стоянке 0. Значение считает сама машина.</string>
     <string name="tech_hint_power">Сколько энергии батарея отдаёт прямо сейчас. Плюс: машина тратит (разгон, климат). Минус: батарея принимает энергию: рекуперация при торможении или зарядка от станции. Второе число: с какой скоростью уходит заряд, процентов в час. На стоянке это расход бортовой электроники.</string>

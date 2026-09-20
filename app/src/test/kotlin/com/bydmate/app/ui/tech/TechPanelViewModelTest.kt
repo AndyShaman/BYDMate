@@ -7,6 +7,8 @@ import com.bydmate.app.domain.battery.AvgSocProvider
 import com.bydmate.app.domain.battery.BatteryState
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.LifetimeChargingStats
+import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.data.remote.diParsData
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import com.bydmate.app.service.TrackingService
@@ -49,6 +51,7 @@ class TechPanelViewModelTest {
     @After fun tearDown() {
         store.clear()
         connectedFlow().value = true
+        liveDataFlow().value = null
         Dispatchers.resetMain()
     }
 
@@ -60,6 +63,15 @@ class TechPanelViewModelTest {
             .getDeclaredField("_vehicleDataConnected")
             .apply { isAccessible = true }
             .get(null) as MutableStateFlow<Boolean>
+    }
+
+    /** The poll snapshot the screen reads, reached the same way as the transport flag above. */
+    private fun liveDataFlow(): MutableStateFlow<DiParsData?> {
+        @Suppress("UNCHECKED_CAST")
+        return TrackingService::class.java
+            .getDeclaredField("_lastData")
+            .apply { isAccessible = true }
+            .get(null) as MutableStateFlow<DiParsData?>
     }
 
     /** Scoped so [store] can clear it; a bare constructor call leaks its viewModelScope. */
@@ -169,6 +181,38 @@ class TechPanelViewModelTest {
         // Nothing live arrived, so the vehicle-side cards stay hidden.
         assertFalse(state.showMotors)
         assertFalse(state.showTyres)
+    }
+
+    /** The BMS remaining energy rides the poll snapshot, and alone it opens the battery card. */
+    @Test
+    fun `remaining energy from the poll snapshot reaches the battery card`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.remainKwh)
+
+        liveDataFlow().value = diParsData().copy(batteryRemainKwh = 72.0)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(72.0, vm.uiState.value.remainKwh!!, 0.001)
+        assertTrue("remaining energy alone must open the battery card", vm.uiState.value.showBatteryNow)
+    }
+
+    /**
+     * The row follows the snapshot, it does not hold the last number: a car that stops
+     * answering the fid must show «—», not a reading taken minutes ago.
+     */
+    @Test
+    fun `remaining energy goes back to null when the fid stops answering`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        liveDataFlow().value = diParsData().copy(batteryRemainKwh = 72.0)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(72.0, vm.uiState.value.remainKwh!!, 0.001)
+
+        liveDataFlow().value = diParsData(soc = 95)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.remainKwh)
     }
 
     /**

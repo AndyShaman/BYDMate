@@ -309,6 +309,34 @@ class NativeParsReaderTest {
         assertEquals(45.3f, data.motorCurrentRear!!, 0.01f)
     }
 
+    /** The BMS remaining-energy float must reach the snapshot the Dashboard and «Техника» read. */
+    @Test
+    fun `battery remaining energy decodes into DiParsData`() = runTest {
+        val auto = mockk<AutoserviceClient>()
+        coEvery { auto.isAvailable() } returns true
+        coEvery { auto.getInt(any(), any()) } returns null
+        coEvery { auto.getIntRaw(any(), any()) } returns null
+        coEvery { auto.getFloat(any(), any()) } returns null
+        coEvery { auto.getFloat(fid("soc").device, fid("soc").fid) } returns 100.0f
+        coEvery {
+            auto.getFloat(fid("batteryRemainKwh").device, fid("batteryRemainKwh").fid)
+        } returns java.lang.Float.intBitsToFloat(0x42900000)
+
+        val settings = mockk<SettingsRepository>()
+        coEvery { settings.getBatteryCapacity() } returns 72.9
+
+        val data = nativeReader(auto, settings).fetch()
+        assertNotNull(data)
+        assertEquals(72.0, data!!.batteryRemainKwh!!, 0.001)
+    }
+
+    /** A car that does not report it answers the float sentinel, which the client filters. */
+    @Test
+    fun `battery remaining energy stays null without a reading`() = runTest {
+        val data = sensorReader().fetch()
+        assertNull(data!!.batteryRemainKwh)
+    }
+
     @Test
     fun `rain derived 1 when auto wipers on and relay firing`() = runTest {
         val data = sensorReader("autoWipers" to 1, "wiperRelay" to 5).fetch()
