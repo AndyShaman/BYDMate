@@ -2458,6 +2458,7 @@ private fun VoiceSettingsContent(
         com.bydmate.app.data.automation.RouteNavigatorUris.DGIS,
         com.bydmate.app.data.automation.RouteNavigatorUris.MAPS,
         com.bydmate.app.data.automation.RouteNavigatorUris.WAZE,
+        com.bydmate.app.data.automation.RouteNavigatorUris.GOOGLE_MAPS,
     )
     SettingChipRow(
         title = stringResource(R.string.settings_route_navigator_label),
@@ -2467,6 +2468,7 @@ private fun VoiceSettingsContent(
             stringResource(R.string.settings_route_navigator_dgis),
             stringResource(R.string.settings_route_navigator_maps),
             "Waze",
+            "Google Maps",
         ),
         selectedIndex = routeNavigatorIds.indexOf(state.routeNavigator).coerceAtLeast(0),
         onSelect = { viewModel.setRouteNavigator(routeNavigatorIds[it]) },
