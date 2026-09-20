@@ -3809,4 +3809,337 @@ export default {
         }
 
         return json({
-          
+          request_id:
+            reqId,
+
+          payload: {
+            devices:
+              results,
+          },
+        });
+      }
+    }
+
+
+    /* ==================================================
+       PRIVATE BYDMATE API
+       ================================================== */
+
+    if (
+      url.pathname.startsWith(
+        "/api/"
+      ) &&
+      !authorized(
+        request,
+        env
+      )
+    ) {
+      return json(
+        {
+          error:
+            "unauthorized",
+        },
+        401
+      );
+    }
+
+    if (
+      url.pathname.startsWith(
+        "/api/"
+      )
+    ) {
+      await ensureDb(env);
+    }
+
+
+    /*
+     * POLL
+     */
+    if (
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/api/poll"
+    ) {
+      const requested =
+        Number(
+          url.searchParams.get(
+            "wait_ms"
+          ) || 0
+        );
+
+      const waitMs =
+        Math.min(
+          Math.max(
+            requested,
+            0
+          ),
+          2500
+        );
+
+      const started =
+        Date.now();
+
+      while (true) {
+        const commands =
+          await pendingCommands(
+            env
+          );
+
+        if (
+          commands.length > 0
+        ) {
+          return json({
+            commands,
+          });
+        }
+
+        if (
+          Date.now() -
+            started >=
+          waitMs
+        ) {
+          return json({
+            commands: [],
+          });
+        }
+
+        await new Promise(
+          (resolve) =>
+            setTimeout(
+              resolve,
+              1000
+            )
+        );
+      }
+    }
+
+
+    /*
+     * MANUAL ENQUEUE
+     */
+    if (
+      request.method ===
+        "POST" &&
+      url.pathname ===
+        "/api/enqueue"
+    ) {
+      const body =
+        await request.json();
+
+      const action =
+        String(
+          body.action || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      if (
+        !ALLOWED_ACTIONS.has(
+          action
+        )
+      ) {
+        return json(
+          {
+            error:
+              "unsupported_action",
+            action,
+          },
+          400
+        );
+      }
+
+      const result =
+        await enqueueCommand(
+          env,
+          action,
+          body.value
+        );
+
+      return json({
+        ok: true,
+        ...result,
+      });
+    }
+
+
+    /*
+     * ACK
+     */
+    if (
+      request.method ===
+        "POST" &&
+      url.pathname ===
+        "/api/ack"
+    ) {
+      const body =
+        await request.json();
+
+      const results =
+        Array.isArray(
+          body.results
+        )
+          ? body.results
+          : [];
+
+      for (
+        const result
+        of results
+      ) {
+        if (
+          !result ||
+          !result.id
+        ) {
+          continue;
+        }
+
+        if (result.success) {
+          await env.DB.prepare(`
+            DELETE FROM commands
+            WHERE id = ?
+          `)
+            .bind(
+              String(
+                result.id
+              )
+            )
+            .run();
+        } else {
+          await env.DB.prepare(`
+            UPDATE commands
+
+            SET
+              acked = 1,
+              success = 0,
+              error = ?
+
+            WHERE id = ?
+          `)
+            .bind(
+              result.error
+                ? String(
+                    result.error
+                  )
+                : "command_failed",
+
+              String(
+                result.id
+              )
+            )
+            .run();
+        }
+      }
+
+      return json({
+        ok: true,
+      });
+    }
+
+
+    /*
+     * STATE
+     */
+    if (
+      request.method ===
+        "POST" &&
+      url.pathname ===
+        "/api/state"
+    ) {
+      const body =
+        await request.json();
+
+      await env.DB.prepare(`
+        INSERT INTO car_state (
+          id,
+          body,
+          updated_at
+        )
+
+        VALUES (
+          1,
+          ?,
+          ?
+        )
+
+        ON CONFLICT(id)
+
+        DO UPDATE SET
+          body =
+            excluded.body,
+
+          updated_at =
+            excluded.updated_at
+      `)
+        .bind(
+          JSON.stringify(
+            body
+          ),
+          Date.now()
+        )
+        .run();
+
+      return json({
+        ok: true,
+      });
+    }
+
+
+    /*
+     * DEBUG
+     */
+    if (
+      request.method ===
+        "GET" &&
+      url.pathname ===
+        "/api/debug"
+    ) {
+      const state =
+        await getCarState(
+          env
+        );
+
+      const commands =
+        await env.DB.prepare(`
+          SELECT
+            id,
+            action,
+            value,
+            created_at,
+            acked,
+            success,
+            error
+
+          FROM commands
+
+          ORDER BY
+            created_at DESC
+
+          LIMIT 50
+        `).all();
+
+      return json({
+        bridge:
+          "5.7",
+
+        allowed_actions:
+          Array.from(
+            ALLOWED_ACTIONS
+          ),
+
+        state,
+
+        commands:
+          commands.results,
+      });
+    }
+
+
+    return json(
+      {
+        error:
+          "not_found",
+      },
+      404
+    );
+  },
+};
