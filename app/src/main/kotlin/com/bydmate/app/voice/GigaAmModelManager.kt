@@ -84,13 +84,20 @@ class GigaAmModelManager(
     suspend fun download(onProgress: (Phase, Int) -> Unit): Result<Unit> =
         withContext(Dispatchers.IO) {
             runCatching {
+                val tmpArchive = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
+                val tmpVad = File(context.cacheDir, "silero_vad.onnx.tmp")
+                // Leftovers of a run the car's power-off killed before `finally` ran: the
+                // archive in cacheDir and a half-written staging dir. They would count as
+                // occupied space in the precheck below and refuse every retry although
+                // freeing them is enough, with no delete button until a model is ready.
+                tmpArchive.delete()
+                tmpVad.delete()
+                diskMutex.withLock { stagingDir().deleteRecursively() }
                 // Precheck before the first byte: the peak need is the archive in cacheDir plus
                 // its same-size unpack in staging. Without this the run dies ~450 MB and many
                 // minutes in, as an opaque "unpack produced incomplete model dir".
                 val free = usableSpace()
                 if (free < REQUIRED_FREE_BYTES) throw InsufficientStorageException(REQUIRED_FREE_BYTES, free)
-                val tmpArchive = File(context.cacheDir, "gigaam-v3-ru.tar.bz2")
-                val tmpVad = File(context.cacheDir, "silero_vad.onnx.tmp")
                 try {
                     // Model archive: 0..DOWNLOAD_WEIGHT of the combined progress.
                     downloadToFile(MODEL_URL, tmpArchive) { pct ->
@@ -199,31 +206,7 @@ class GigaAmModelManager(
                 var entry = tar.nextEntry
                 while (entry != null) {
                     coroutineContext.ensureActive()
-                    val rel = entry.name.substringAfter('/')
-                    if (rel.isNotBlank()) {
-                        val outFile = File(target, rel)
-                        val canonicalOut = outFile.canonicalFile
-                        if (canonicalOut.path != canonicalTarget.path &&
-                            !canonicalOut.path.startsWith(canonicalTarget.path + File.separator)) {
-                            entry = tar.nextEntry; continue
-                        }
-                        if (entry.isDirectory) outFile.mkdirs()
-                        else {
-                            outFile.parentFile?.mkdirs()
-                            outFile.outputStream().use { out ->
-                                val buf = ByteArray(64 * 1024)
-                                while (true) {
-                                    coroutineContext.ensureActive()
-                                    val n = tar.read(buf); if (n < 0) break
-                                    out.write(buf, 0, n)
-                                }
-                                // fsync before the staging dir is rename-published: an
-                                // abrupt power-off after the rename must not leave a
-                                // "complete" model dir whose data blocks are garbage.
-                                out.fd.sync()
-                            }
-                        }
-                    }
+                    extractEntry(tar, entry.name, entry.isDirectory, target, canonicalTarget)
                     entry = tar.nextEntry
                 }
             }
@@ -231,6 +214,41 @@ class GigaAmModelManager(
         // The tar stream stops at the end-of-archive marker and may leave the last few
         // compressed bytes unread, so the counter alone would stall at 99.
         onProgress(100)
+    }
+
+    /** One tar entry into [target] with its top-level folder stripped; entries that would
+     *  land outside [canonicalTarget] (Tar Slip) are skipped. */
+    private suspend fun extractEntry(
+        tar: TarArchiveInputStream,
+        name: String,
+        isDirectory: Boolean,
+        target: File,
+        canonicalTarget: File,
+    ) {
+        val rel = name.substringAfter('/')
+        if (rel.isBlank()) return
+        val outFile = File(target, rel)
+        val canonicalOut = outFile.canonicalFile
+        if (canonicalOut.path != canonicalTarget.path &&
+            !canonicalOut.path.startsWith(canonicalTarget.path + File.separator)) return
+        if (isDirectory) outFile.mkdirs() else copyEntry(tar, outFile)
+    }
+
+    /** Chunked, cancellable copy of the current tar entry into [outFile]. */
+    private suspend fun copyEntry(tar: TarArchiveInputStream, outFile: File) {
+        outFile.parentFile?.mkdirs()
+        outFile.outputStream().use { out ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+                coroutineContext.ensureActive()
+                val n = tar.read(buf); if (n < 0) break
+                out.write(buf, 0, n)
+            }
+            // fsync before the staging dir is rename-published: an
+            // abrupt power-off after the rename must not leave a
+            // "complete" model dir whose data blocks are garbage.
+            out.fd.sync()
+        }
     }
 
     companion object {
