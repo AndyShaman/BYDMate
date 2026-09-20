@@ -903,6 +903,7 @@ class ActionDispatcher @Inject constructor(
         val routeMode = !payload.optBoolean("show", false) &&
             payload.optString("query").isBlank()
         val autoGoSupported = routeMode && !willOpenMaps(payload) && !willOpenWaze(payload) &&
+            !willOpenGoogleMaps(payload) &&
             (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
         val go = autoGoRequested(payload)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
@@ -985,6 +986,9 @@ class ActionDispatcher @Inject constructor(
                 fallbackReason,
             )
         }
+        if (navigator == RouteNavigatorUris.GOOGLE_MAPS && shortcut != null) {
+            return DispatchResult(false, "Google Maps: shortcut home/work пока не поддерживается")
+        }
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
         // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
@@ -1044,6 +1048,9 @@ class ActionDispatcher @Inject constructor(
 
     fun willOpenWaze(payload: JSONObject): Boolean =
         !isMapsRequest(payload) && resolveNavigator().first == RouteNavigatorUris.WAZE
+
+    fun willOpenGoogleMaps(payload: JSONObject): Boolean =
+        !isMapsRequest(payload) && resolveNavigator().first == RouteNavigatorUris.GOOGLE_MAPS
 
     /**
      * The app="maps" mirror of [sendNavigateIntent] on Yandex Maps' own yandexmaps:// dialect
