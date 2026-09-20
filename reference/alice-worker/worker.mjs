@@ -394,3 +394,555 @@ async function enqueueCommand(
 
   await env.DB.prepare(`
     INSERT INTO commands (
+    id,
+      action,
+      value,
+      created_at
+    )
+    VALUES (?, ?, ?, ?)
+  `)
+    .bind(
+      id,
+      action,
+      normalizedValue,
+      Date.now()
+    )
+    .run();
+
+  return {
+    id,
+    action,
+    value: normalizedValue,
+  };
+}
+
+async function enqueueMany(
+  env,
+  commands
+) {
+  const results = [];
+
+  for (const command of commands) {
+    results.push(
+      await enqueueCommand(
+        env,
+        command.action,
+        command.value
+      )
+    );
+  }
+
+  return results;
+}
+
+async function getCarState(env) {
+  const row =
+    await env.DB.prepare(`
+      SELECT body, updated_at
+      FROM car_state
+      WHERE id = 1
+    `).first();
+
+  if (!row) {
+    return null;
+  }
+
+  try {
+    return {
+      updated_at: row.updated_at,
+      data: JSON.parse(row.body),
+    };
+  } catch {
+    return null;
+  }
+}
+
+
+/* ======================================================
+   YANDEX CAPABILITIES / PROPERTIES
+   ====================================================== */
+
+function onOffCapability(
+  retrievable = false
+) {
+  return {
+    type:
+      "devices.capabilities.on_off",
+    retrievable,
+    reportable: false,
+  };
+}
+
+function modeCapability(
+  instance,
+  modes,
+  retrievable = false
+) {
+  return {
+    type:
+      "devices.capabilities.mode",
+    retrievable,
+    reportable: false,
+    parameters: {
+      instance,
+      modes:
+        modes.map((value) => ({
+          value,
+        })),
+    },
+  };
+}
+
+function toggleCapability(
+  instance,
+  retrievable = false
+) {
+  return {
+    type:
+      "devices.capabilities.toggle",
+    retrievable,
+    reportable: false,
+    parameters: {
+      instance,
+    },
+  };
+}
+
+function rangeCapability(
+  instance,
+  min,
+  max,
+  precision = 1,
+  unit = null,
+  retrievable = false,
+  randomAccess = true
+) {
+  const parameters = {
+    instance,
+    random_access:
+      randomAccess,
+    range: {
+      min,
+      max,
+      precision,
+    },
+  };
+
+  if (unit) {
+    parameters.unit = unit;
+  }
+
+  return {
+    type:
+      "devices.capabilities.range",
+    retrievable,
+    reportable: false,
+    parameters,
+  };
+}
+
+function floatProperty(
+  instance,
+  unit
+) {
+  return {
+    type:
+      "devices.properties.float",
+    retrievable: true,
+    reportable: false,
+    parameters: {
+      instance,
+      unit,
+    },
+  };
+}
+
+function baseDevice(
+  id,
+  name,
+  description,
+  type,
+  capabilities = [],
+  properties = []
+) {
+  return {
+    id,
+    name,
+    description,
+    room: "Машина",
+    type,
+    status_info: {
+      reportable: false,
+    },
+    capabilities,
+    properties,
+    device_info: {
+      manufacturer: "BYDMate",
+      model: name,
+      sw_version: "5.7",
+    },
+  };
+}
+
+function appDevice(
+  id,
+  name,
+  description
+) {
+  return baseDevice(
+    id,
+    name,
+    description,
+    "devices.types.openable",
+    [
+      onOffCapability(false),
+    ]
+  );
+}
+
+function oneShotDevice(
+  id,
+  name,
+  description
+) {
+  return baseDevice(
+    id,
+    name,
+    description,
+    "devices.types.switch",
+    [
+      onOffCapability(false),
+    ]
+  );
+}
+
+
+/* ======================================================
+   DEVICE DESCRIPTIONS
+   ====================================================== */
+
+function climateDevice() {
+  return baseDevice(
+    DEVICE.climate,
+    "Климат",
+    "Климатическая система автомобиля BYD",
+    "devices.types.thermostat.ac",
+    [
+      onOffCapability(true),
+      rangeCapability(
+        "temperature",
+        16,
+        30,
+        1,
+        "unit.temperature.celsius",
+        true,
+        true
+      ),
+    ]
+  );
+}
+
+function fanDevice() {
+  return baseDevice(
+    DEVICE.fan,
+    "Обдув BYD",
+    "Обдув и скорость вентилятора климатической системы BYD",
+    "devices.types.ventilation.fan",
+    [
+      onOffCapability(false),
+
+      modeCapability(
+        "fan_speed",
+        [
+          "low",
+          "medium",
+          "high",
+          "turbo",
+        ],
+        false
+      ),
+    ]
+  );
+}
+
+function seatHeatDevice(
+  id,
+  name,
+  description
+) {
+  return baseDevice(
+    id,
+    name,
+    description,
+    "devices.types.switch",
+    [
+      onOffCapability(false),
+
+      modeCapability(
+        "heat",
+        [
+          "min",
+          "max",
+        ],
+        false
+      ),
+    ]
+  );
+}
+
+function seatVentDevice(
+  id,
+  name,
+  description
+) {
+  return baseDevice(
+    id,
+    name,
+    description,
+    "devices.types.ventilation.fan",
+    [
+      onOffCapability(false),
+
+      modeCapability(
+        "fan_speed",
+        [
+          "low",
+          "high",
+        ],
+        false
+      ),
+    ]
+  );
+}
+
+function windowDevice(
+  id,
+  name,
+  description
+) {
+  return baseDevice(
+    id,
+    name,
+    description,
+    "devices.types.openable",
+    [
+      onOffCapability(true),
+
+      rangeCapability(
+        "open",
+        0,
+        100,
+        1,
+        "unit.percent",
+        true,
+        true
+      ),
+    ]
+  );
+}
+
+function yandexDevices() {
+  return [
+    // Climate
+    climateDevice(),
+
+    baseDevice(
+      DEVICE.recirculation,
+      "Рециркуляция",
+      "Рециркуляция воздуха в салоне BYD",
+      "devices.types.switch",
+      [
+        onOffCapability(true),
+      ]
+    ),
+
+    fanDevice(),
+
+    oneShotDevice(
+      DEVICE.airflowFace,
+      "Воздух в лицо",
+      "Направить поток климатической системы BYD в лицо"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowFaceFeet,
+      "Воздух в лицо и ноги",
+      "Направить поток климатической системы BYD в лицо и ноги"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowFeet,
+      "Воздух в ноги",
+      "Направить поток климатической системы BYD в ноги"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowFeetWindshield,
+      "Воздух в ноги и на стекло",
+      "Направить поток климатической системы BYD в ноги и на лобовое стекло"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowWindshield,
+      "Воздух наверх",
+      "Направить поток климатической системы BYD на лобовое стекло"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowFaceFeetWindshield,
+      "Воздух в лицо, ноги и наверх",
+      "Направить поток климатической системы BYD одновременно в лицо, ноги и на лобовое стекло"
+    ),
+
+    oneShotDevice(
+      DEVICE.airflowFaceWindshield,
+      "Воздух в лицо и наверх",
+      "Направить поток климатической системы BYD одновременно в лицо и на лобовое стекло"
+    ),
+
+    baseDevice(
+      DEVICE.frontDefrost,
+      "Разморозка лобового стекла",
+      "Интенсивная разморозка лобового стекла BYD",
+      "devices.types.switch",
+      [
+        onOffCapability(true),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.rearDefrost,
+      "Обогрев заднего стекла",
+      "Обогрев заднего стекла и зеркал BYD",
+      "devices.types.switch",
+      [
+        onOffCapability(false),
+      ]
+    ),
+
+    // Windows
+    windowDevice(
+      DEVICE.windowDriver,
+      "Окно водителя",
+      "Переднее водительское окно BYD"
+    ),
+
+    windowDevice(
+      DEVICE.windowPassenger,
+      "Окно пассажира",
+      "Переднее пассажирское окно BYD"
+    ),
+
+    windowDevice(
+      DEVICE.windowRearLeft,
+      "Заднее левое окно",
+      "Заднее левое окно BYD"
+    ),
+
+    windowDevice(
+      DEVICE.windowRearRight,
+      "Заднее правое окно",
+      "Заднее правое окно BYD"
+    ),
+
+    baseDevice(
+      DEVICE.allWindows,
+      "Все окна",
+      "Все четыре окна BYD",
+      "devices.types.openable",
+      [
+        onOffCapability(false),
+
+        rangeCapability(
+          "open",
+          0,
+          100,
+          1,
+          "unit.percent",
+          false,
+          true
+        ),
+      ]
+    ),
+
+    oneShotDevice(
+      DEVICE.windowsVent,
+      "Проветри машину",
+      "Приоткрыть все окна для проветривания"
+    ),
+
+    // Seats
+    seatHeatDevice(
+      DEVICE.seatDriverHeat,
+      "Подогрев водителя",
+      "Подогрев водительского сиденья BYD"
+    ),
+
+    seatVentDevice(
+      DEVICE.seatDriverVent,
+      "Вентиляция водителя",
+      "Вентиляция водительского сиденья BYD"
+    ),
+
+    seatHeatDevice(
+      DEVICE.seatPassengerHeat,
+      "Подогрев пассажира",
+      "Подогрев пассажирского сиденья BYD"
+    ),
+
+    seatVentDevice(
+      DEVICE.seatPassengerVent,
+      "Вентиляция пассажира",
+      "Вентиляция пассажирского сиденья BYD"
+    ),
+
+    seatHeatDevice(
+      DEVICE.seatBothHeat,
+      "Подогрев сидений",
+      "Подогрев водительского и пассажирского сидений BYD"
+    ),
+
+    seatVentDevice(
+      DEVICE.seatBothVent,
+      "Вентиляция сидений",
+      "Вентиляция водительского и пассажирского сидений BYD"
+    ),
+
+    // Lights
+    baseDevice(
+      DEVICE.interiorLight,
+      "Свет салона",
+      "Основной свет салона BYD",
+      "devices.types.light",
+      [
+        onOffCapability(false),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.ambientLight,
+      "Подсветка салона",
+      "Ambient-подсветка салона BYD",
+      "devices.types.light",
+      [
+        onOffCapability(false),
+      ]
+    ),
+
+    // Body
+
+    baseDevice(
+      DEVICE.rearTrunk,
+      "Багажник",
+      "Задний багажник BYD",
+      "devices.types.openable",
+      [
+        onOffCapability(true),
+      ]
+    ),
+
+    baseDevice(
+      DEVICE.sunroof,
+      "Люк",
+      "Панорамный люк BYD",
+      "devices.types
