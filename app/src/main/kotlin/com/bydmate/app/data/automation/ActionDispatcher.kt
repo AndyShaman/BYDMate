@@ -974,21 +974,12 @@ class ActionDispatcher @Inject constructor(
         if (isMapsRequest(payload) || navigator == RouteNavigatorUris.MAPS) {
             return navigateMaps(payload, shortcut)
         }
-        if (navigator == RouteNavigatorUris.WAZE && shortcut != null) {
-            if (shortcut !in setOf("home", "work")) {
-                return DispatchResult(false, "неизвестный shortcut: $shortcut")
-            }
-            return startNavigate(
-                navigator,
-                RouteNavigatorUris.MODE_ROUTE,
-                "https://waze.com/ul?favorite=$shortcut&navigate=yes",
-                "navigate_waze_shortcut:$shortcut",
-                fallbackReason,
-            )
-        }
-        shortcut?.takeIf { navigator == RouteNavigatorUris.GOOGLE_MAPS }?.let {
-            return DispatchResult(false, "Google Maps: shortcut home/work пока не поддерживается")
-        }
+        specialNavigatorShortcut(
+            navigator,
+            shortcut,
+            fallbackReason,
+            ::startNavigate,
+        )?.let { return it }
         // Navigator's own saved Home/Work: exported shortcut actions on its MapActivity
         // resolve the address internally, so no coordinates are needed. Undocumented
         // (launcher-shortcut contract); tryStartActivity degrades to a clear error if
@@ -1257,4 +1248,30 @@ class ActionDispatcher @Inject constructor(
 
     private fun nm(): NotificationManager =
         context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+}
+
+
+private fun specialNavigatorShortcut(
+    navigator: String,
+    shortcut: String?,
+    fallbackReason: String?,
+    startNavigate: (String, String, String, String, String?) -> DispatchResult,
+): DispatchResult? {
+    shortcut ?: return null
+    if (navigator == RouteNavigatorUris.WAZE) {
+        if (shortcut !in setOf("home", "work")) {
+            return DispatchResult(false, "неизвестный shortcut: $shortcut")
+        }
+        return startNavigate(
+            navigator,
+            RouteNavigatorUris.MODE_ROUTE,
+            "https://waze.com/ul?favorite=$shortcut&navigate=yes",
+            "navigate_waze_shortcut:$shortcut",
+            fallbackReason,
+        )
+    }
+    if (navigator == RouteNavigatorUris.GOOGLE_MAPS) {
+        return DispatchResult(false, "Google Maps: shortcut home/work пока не поддерживается")
+    }
+    return null
 }
