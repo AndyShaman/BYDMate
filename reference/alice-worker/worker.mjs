@@ -1505,4 +1505,651 @@ function queryDevice(
       return {
         id,
 
-       
+         error_code:
+          "DEVICE_UNREACHABLE",
+
+        error_message:
+          "Temperature is unavailable",
+      };
+    }
+
+    return {
+      id,
+
+      capabilities: [],
+
+      properties: [
+        floatPropertyState(
+          "temperature",
+          value
+        ),
+      ],
+    };
+  }
+
+
+  /*
+   * Climate
+   */
+  if (
+    id === DEVICE.climate
+  ) {
+    const capabilities = [
+      onOffState(
+        Number(
+          data.acStatus
+        ) === 1
+      ),
+    ];
+
+    if (
+      data.acTemp !== undefined &&
+      data.acTemp !== null &&
+      Number.isFinite(
+        Number(
+          data.acTemp
+        )
+      )
+    ) {
+      capabilities.push(
+        rangeState(
+          "temperature",
+          Number(
+            data.acTemp
+          )
+        )
+      );
+    }
+
+    return {
+      id,
+      capabilities,
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.autoClimate
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.acCtrlMode
+          ) === 0
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.recirculation
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.acCirc
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.frontDefrost
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.acDefrostFront
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.fan
+  ) {
+    const level =
+      Number(
+        data.fanLevel
+      );
+
+    const capabilities = [];
+
+    if (
+      Number.isFinite(
+        level
+      )
+    ) {
+      capabilities.push(
+        onOffState(
+          level > 0
+        )
+      );
+
+      const mode =
+        fanModeFromLevel(
+          level
+        );
+
+      if (mode) {
+        capabilities.push(
+          modeState(
+            "fan_speed",
+            mode
+          )
+        );
+      }
+    }
+
+    return {
+      id,
+      capabilities,
+      properties: [],
+    };
+  }
+
+
+  /*
+   * Windows
+   */
+  const windowStates = {
+    [DEVICE.windowDriver]:
+      data.windowFL,
+
+    [DEVICE.windowPassenger]:
+      data.windowFR,
+
+    [DEVICE.windowRearLeft]:
+      data.windowRL,
+
+    [DEVICE.windowRearRight]:
+      data.windowRR,
+  };
+
+  if (
+    Object.prototype.hasOwnProperty.call(
+      windowStates,
+      id
+    )
+  ) {
+    const position =
+      Number(
+        windowStates[id]
+      );
+
+    if (
+      !Number.isFinite(
+        position
+      )
+    ) {
+      return {
+        id,
+
+        error_code:
+          "DEVICE_UNREACHABLE",
+
+        error_message:
+          "Window position is unavailable",
+      };
+    }
+
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          position > 0
+        ),
+
+        rangeState(
+          "open",
+          Math.max(
+            0,
+            Math.min(
+              100,
+              position
+            )
+          )
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+
+  /*
+   * Body
+   */
+  if (
+    id ===
+      DEVICE.locks
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        // openable ON = unlocked/open
+        onOffState(
+          Number(
+            data.lockFL
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.rearTrunk
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.trunk
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.frontTrunk
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.hood
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.sunroof
+  ) {
+    const value =
+      Number(
+        data.sunroof
+      );
+
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number.isFinite(
+            value
+          ) &&
+          value > 0
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.drl
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.drl
+          ) === 1
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+  if (
+    id ===
+      DEVICE.hazard
+  ) {
+    return {
+      id,
+
+      capabilities: [
+        onOffState(
+          Number(
+            data.turnSignal
+          ) === 6
+        ),
+      ],
+
+      properties: [],
+    };
+  }
+
+
+  return {
+    id,
+
+    error_code:
+      "DEVICE_NOT_FOUND",
+
+    error_message:
+      "BYDMate device not found",
+  };
+}
+
+
+/* ======================================================
+   ACTION RESPONSE HELPERS
+   ====================================================== */
+
+function actionDone(
+  type,
+  instance
+) {
+  return {
+    type,
+
+    state: {
+      instance,
+
+      action_result: {
+        status: "DONE",
+      },
+    },
+  };
+}
+
+function actionError(
+  type,
+  instance,
+  code,
+  message
+) {
+  return {
+    type,
+
+    state: {
+      instance,
+
+      action_result: {
+        status: "ERROR",
+
+        error_code:
+          code,
+
+        error_message:
+          message,
+      },
+    },
+  };
+}
+
+
+/* ======================================================
+   CLIMATE ACTION
+   ====================================================== */
+
+async function handleClimateAction(
+  env,
+  capability,
+  carState
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "climate.on"
+        : "climate.off"
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.range" &&
+    state.instance ===
+      "temperature"
+  ) {
+    let temperature =
+      Number(
+        state.value
+      );
+
+    if (
+      state.relative
+    ) {
+      const current =
+        carState &&
+        carState.data
+          ? Number(
+              carState.data.acTemp
+            )
+          : NaN;
+
+      if (
+        !Number.isFinite(
+          current
+        )
+      ) {
+        return actionError(
+          type,
+          "temperature",
+          "DEVICE_UNREACHABLE",
+          "Current climate temperature is unavailable"
+        );
+      }
+
+      temperature =
+        current +
+        temperature;
+    }
+
+    if (
+      !Number.isFinite(
+        temperature
+      )
+    ) {
+      return actionError(
+        type,
+        "temperature",
+        "INVALID_ACTION",
+        "Invalid temperature"
+      );
+    }
+
+    temperature =
+      Math.max(
+        16,
+        Math.min(
+          30,
+          Math.round(
+            temperature
+          )
+        )
+      );
+
+    await enqueueCommand(
+      env,
+      "climate.temperature",
+      temperature
+    );
+
+    return actionDone(
+      type,
+      "temperature"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "Capability is not supported by BYDMate"
+  );
+}
+
+
+/* ======================================================
+   FAN / VENTILATION ACTION
+   ====================================================== */
+
+const FAN_LEVEL_BY_MODE = {
+  low: 1,
+  medium: 3,
+  high: 5,
+  turbo: 7,
+};
+
+async function handleFanAction(
+  env,
+  capability
+) {
+  const type =
+    capability.type || "";
+
+  const state =
+    capability.state || {};
+
+  if (
+    type ===
+      "devices.capabilities.on_off" &&
+    state.instance === "on"
+  ) {
+    await enqueueCommand(
+      env,
+
+      Boolean(
+        state.value
+      )
+        ? "climate.flow_only_on"
+        : "climate.flow_only_off"
+    );
+
+    return actionDone(
+      type,
+      "on"
+    );
+  }
+
+  if (
+    type ===
+      "devices.capabilities.mode" &&
+    state.instance ===
+      "fan_speed"
+  ) {
+    const level =
+      FAN_LEVEL_BY_MODE[
+        state.value
+      ];
+
+    if (
+      !level
+    ) {
+      return actionError(
+        type,
+        "fan_speed",
+        "INVALID_ACTION",
+        "Unsupported fan speed"
+      );
+    }
+
+    await enqueueCommand(
+      env,
+      "climate.fan_level",
+      level
+    );
+
+    return actionDone(
+      type,
+      "fan_speed"
+    );
+  }
+
+  return actionError(
+    type,
+    state.instance ||
+      "unknown",
+    "INVALID_ACTION",
+    "Fan capability is not supported"
+  );
+}
+
+
+/* ======================================================
+   WINDOW ACTIONS
+   ====================================================== */
+
+const WINDOW_ACTION_PREFIX = {
+  [DEVICE.windowDriver]:
+    "window.driver",
+
+  [DEVICE.windowPassenger]:
+    "window.passenger",
+
+  [DEVICE.windowRearLeft]:
+    "window.rear_left",
+
+  [DEVICE.windowRearRight]:
+    "window.rear_right",
+};
+
+async function handleWindowAction(
+  env,
+  deviceId,
+  capabi
