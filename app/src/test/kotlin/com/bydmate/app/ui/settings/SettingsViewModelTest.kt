@@ -1073,7 +1073,7 @@ class SettingsViewModelTest {
     @Test fun `late gigaAm progress callback after delete is ignored`() = runTest {
         val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
         val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
-        val progressSlot = slot<(Int) -> Unit>()
+        val progressSlot = slot<(com.bydmate.app.voice.GigaAmModelManager.Phase, Int) -> Unit>()
         coEvery { gigaAmModelManager.download(capture(progressSlot)) } coAnswers {
             gate.await()
             Result.success(Unit)
@@ -1089,9 +1089,80 @@ class SettingsViewModelTest {
         vm.deleteGigaAmModel()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        progressSlot.captured(55) // stale progress delivery after delete reset state to idle
+        progressSlot.captured(com.bydmate.app.voice.GigaAmModelManager.Phase.UNPACK, 55) // stale delivery after delete reset state to idle
 
         assertEquals(-1, vm.uiState.value.gigaAmDownloadProgress)
+    }
+
+    /** The unpack stage must reach the UI as its own phase: labelling those minutes
+     *  "Downloading" is what made the bar read as frozen on DiLink 3 (#stuck-at-99). */
+    @Test fun `downloadGigaAmModel exposes the reported phase while in flight`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val progressSlot = slot<(com.bydmate.app.voice.GigaAmModelManager.Phase, Int) -> Unit>()
+        coEvery { gigaAmModelManager.download(capture(progressSlot)) } coAnswers {
+            gate.await()
+            Result.success(Unit)
+        }
+        coEvery { gigaAmModelManager.isReady() } returns true
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        progressSlot.captured(com.bydmate.app.voice.GigaAmModelManager.Phase.UNPACK, 94)
+        assertEquals(94, vm.uiState.value.gigaAmDownloadProgress)
+        assertEquals(
+            com.bydmate.app.voice.GigaAmModelManager.Phase.UNPACK,
+            vm.uiState.value.gigaAmDownloadPhase,
+        )
+
+        gate.complete(Unit)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        // Idle again: no stale phase left to mislabel the next run.
+        assertEquals(null, vm.uiState.value.gigaAmDownloadPhase)
+    }
+
+    @Test fun `storage failure surfaces the shortfall numbers in MB`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        val mb = 1024L * 1024L
+        coEvery { gigaAmModelManager.download(any()) } returns Result.failure(
+            com.bydmate.app.voice.GigaAmModelManager.InsufficientStorageException(
+                requiredBytes = 500 * mb,
+                availableBytes = 120 * mb,
+            )
+        )
+        coEvery { gigaAmModelManager.isReady() } returns false
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.gigaAmDownloadFailed)
+        assertEquals(
+            com.bydmate.app.ui.settings.SpaceShortfall(requiredMb = 500, availableMb = 120),
+            vm.uiState.value.gigaAmSpaceShortfall,
+        )
+    }
+
+    @Test fun `non-storage failure leaves the shortfall unset`() = runTest {
+        val gigaAmModelManager = mockk<com.bydmate.app.voice.GigaAmModelManager>(relaxed = true)
+        coEvery { gigaAmModelManager.download(any()) } returns Result.failure(RuntimeException("boom"))
+        coEvery { gigaAmModelManager.isReady() } returns false
+
+        val vm = buildViewModel(gigaAmModelManager = gigaAmModelManager)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.downloadGigaAmModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.gigaAmDownloadFailed)
+        assertEquals(null, vm.uiState.value.gigaAmSpaceShortfall)
     }
 
     @Test fun `setAgentEnabled persists and updates state`() = runTest {

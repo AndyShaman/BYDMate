@@ -1205,6 +1205,7 @@
     <string name="settings_voice_enable_label">Голосовые команды</string>
     <string name="settings_voice_enable_description">Команды кнопкой руля без интернета</string>
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">Распаковка… %1$d%%</string>
     <string name="voice_listening">Слушаю</string>
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Голосовая модель не загружена. Скачайте её в Настройках, раздел Голос-агент.</string>
@@ -1217,6 +1218,7 @@
     <string name="settings_asr_gigaam_download">Скачать (%1$s)</string>
     <string name="settings_asr_gigaam_delete">Удалить модель</string>
     <string name="settings_asr_gigaam_download_failed">Не удалось скачать модель</string>
+    <string name="settings_asr_gigaam_no_space">Недостаточно места: нужно %1$d МБ, свободно %2$d МБ</string>
 
     <string name="settings_voice_button_label">Назначить кнопку</string>
     <string name="settings_voice_button_current">Текущая: %1$s</string>

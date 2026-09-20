@@ -1203,6 +1203,7 @@
     <string name="settings_voice_enable_label">Галасавыя каманды</string>
     <string name="settings_voice_enable_description">Каманды кнопкай руля без інтэрнэту</string>
     <string name="settings_voice_model_downloading">Загрузка… %1$d%%</string>
+    <string name="settings_voice_model_unpacking">Распакоўка… %1$d%%</string>
     <string name="voice_listening">Слухаю</string>
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Галасавая мадэль не загружана. Спампуйце яе ў Наладах, раздзел Голас-агент.</string>
@@ -1215,6 +1216,7 @@
     <string name="settings_asr_gigaam_download">Спампаваць (%1$s)</string>
     <string name="settings_asr_gigaam_delete">Выдаліць мадэль</string>
     <string name="settings_asr_gigaam_download_failed">Не ўдалося спампаваць мадэль</string>
+    <string name="settings_asr_gigaam_no_space">Недастаткова месца: патрэбна %1$d МБ, вольна %2$d МБ</string>
 
     <string name="settings_voice_button_label">Прызначыць кнопку</string>
     <string name="settings_voice_button_current">Бягучая: %1$s</string>

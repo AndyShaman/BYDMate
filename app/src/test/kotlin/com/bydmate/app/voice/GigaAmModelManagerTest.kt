@@ -29,7 +29,9 @@ class GigaAmModelManagerTest {
         val ctx = mockk<Context>()
         every { ctx.filesDir } returns filesDir
         every { ctx.cacheDir } returns filesDir
-        return GigaAmModelManager(ctx, OkHttpClient())
+        // Pinned, not read from the host disk: a nearly-full CI volume must not turn
+        // every download test into a storage failure.
+        return GigaAmModelManager(ctx, OkHttpClient(), usableSpace = { Long.MAX_VALUE })
     }
 
     /** Builds a tar.bz2 with the sherpa nemo-ctc archive layout under one top-level dir. */
@@ -65,11 +67,15 @@ class GigaAmModelManagerTest {
             }
             .build()
 
-    private fun managerWith(filesDir: File, http: OkHttpClient): GigaAmModelManager {
+    private fun managerWith(
+        filesDir: File,
+        http: OkHttpClient,
+        usableSpace: Long = Long.MAX_VALUE,
+    ): GigaAmModelManager {
         val ctx = mockk<Context>()
         every { ctx.filesDir } returns filesDir
         every { ctx.cacheDir } returns filesDir
-        return GigaAmModelManager(ctx, http)
+        return GigaAmModelManager(ctx, http, usableSpace = { usableSpace })
     }
 
     // --- Step 1 (a, b): isReady() on an empty dir vs. all 3 files present ---
@@ -183,7 +189,7 @@ class GigaAmModelManagerTest {
         val client = clientFor(archive, "vad-bytes".toByteArray())
         val m = managerWith(filesDir, client)
 
-        val result = m.download { }
+        val result = m.download { _, _ -> }
 
         assertTrue(result.isSuccess)
         assertTrue(m.isReady())
@@ -201,7 +207,7 @@ class GigaAmModelManagerTest {
         val client = clientFor(archive, "vad-bytes".toByteArray())
         val m = managerWith(filesDir, client)
 
-        val result = m.download { }
+        val result = m.download { _, _ -> }
 
         assertTrue(result.isFailure)
         assertFalse(m.isReady())
@@ -223,7 +229,7 @@ class GigaAmModelManagerTest {
         val client = clientFor(archive, "vad-bytes".toByteArray())
         val m = managerWith(filesDir, client)
 
-        val result = m.download { }
+        val result = m.download { _, _ -> }
 
         assertTrue(result.isFailure)
         assertTrue(m.isReady())
@@ -258,7 +264,7 @@ class GigaAmModelManagerTest {
 
         lateinit var job: Job
         job = launch(start = CoroutineStart.LAZY) {
-            m.download { job.cancel() }   // cancel from the very first progress tick
+            m.download { _, _ -> job.cancel() }   // cancel from the very first progress tick
         }
         job.start()
         job.join()
@@ -283,7 +289,7 @@ class GigaAmModelManagerTest {
         ))
         val m = managerWith(filesDir, clientFor(archive, byteArrayOf(1, 2, 3)))
 
-        val result = m.download { }
+        val result = m.download { _, _ -> }
 
         assertTrue(result.isSuccess)
         assertTrue(File(filesDir, "asr/gigaam-v3-ru/model.int8.onnx").isFile)
@@ -311,7 +317,7 @@ class GigaAmModelManagerTest {
             .build()
         val m = managerWith(filesDir, failing)
 
-        val result = m.download { }
+        val result = m.download { _, _ -> }
 
         assertTrue(result.isFailure)
         assertTrue("legacy v2 dir must survive a failed download", legacy.exists())
@@ -348,5 +354,158 @@ class GigaAmModelManagerTest {
         File(filesDir, "asr/silero_vad.onnx").writeText("vad")
 
         assertFalse("after the APK update the model must read as not downloaded", manager(filesDir).isReady())
+    }
+
+    // --- Phased progress: the unpack of a ~226 MiB archive must not look like a hang ---
+
+    @Test
+    fun `download reports download, unpack and vad phases with monotonic progress`() = runBlocking {
+        val filesDir = tmp.newFolder("files16")
+        val archive = makeArchive(mapOf(
+            "top/model.int8.onnx" to "onnx-bytes",
+            "top/tokens.txt" to "tokens",
+        ))
+        val m = managerWith(filesDir, clientFor(archive, "vad-bytes".toByteArray()))
+
+        val ticks = mutableListOf<Pair<GigaAmModelManager.Phase, Int>>()
+        val result = m.download { phase, pct -> ticks += phase to pct }
+
+        assertTrue(result.isSuccess)
+        // Every phase is represented, in order, and the bar never goes backwards.
+        assertEquals(
+            listOf(
+                GigaAmModelManager.Phase.DOWNLOAD,
+                GigaAmModelManager.Phase.UNPACK,
+                GigaAmModelManager.Phase.VAD,
+            ),
+            ticks.map { it.first }.distinct(),
+        )
+        assertEquals(ticks.map { it.second }, ticks.map { it.second }.sorted())
+        assertEquals(100, ticks.last().second)
+        // Each phase stays inside its own slice of the combined bar.
+        ticks.forEach { (phase, pct) ->
+            val range = when (phase) {
+                GigaAmModelManager.Phase.DOWNLOAD -> 0..90
+                GigaAmModelManager.Phase.UNPACK -> 90..98
+                GigaAmModelManager.Phase.VAD -> 98..100
+            }
+            assertTrue("$phase reported $pct, outside $range", pct in range)
+        }
+    }
+
+    @Test
+    fun `unpack phase reports intermediate progress, not just its end value`() = runBlocking {
+        val filesDir = tmp.newFolder("files17")
+        // ~1 MiB of incompressible payload: the unpack must stream over many reads of the
+        // archive file, so progress has real intermediate points to report.
+        val onnxBytes = kotlin.random.Random(7).nextBytes(1_000_000)
+        val archive = tmp.newFile("gigaam-progress.tar.bz2")
+        BZip2CompressorOutputStream(archive.outputStream()).use { bz ->
+            TarArchiveOutputStream(bz).use { tar ->
+                fun put(name: String, bytes: ByteArray) {
+                    val e = TarArchiveEntry(name)
+                    e.size = bytes.size.toLong()
+                    tar.putArchiveEntry(e)
+                    tar.write(bytes)
+                    tar.closeArchiveEntry()
+                }
+                put("top/model.int8.onnx", onnxBytes)
+                put("top/tokens.txt", "t".toByteArray())
+            }
+        }
+        val m = managerWith(filesDir, clientFor(archive, "vad-bytes".toByteArray()))
+
+        val unpackTicks = mutableListOf<Int>()
+        val result = m.download { phase, pct ->
+            if (phase == GigaAmModelManager.Phase.UNPACK) unpackTicks += pct
+        }
+
+        assertTrue(result.isSuccess)
+        assertTrue("unpack must tick more than once", unpackTicks.distinct().size > 1)
+        assertEquals(98, unpackTicks.last())
+    }
+
+    @Test
+    fun `untarFlatten reports monotonic progress ending at 100`() = runBlocking {
+        val target = tmp.newFolder("target3")
+        val onnxBytes = kotlin.random.Random(11).nextBytes(1_000_000)
+        val archive = tmp.newFile("gigaam-untar.tar.bz2")
+        BZip2CompressorOutputStream(archive.outputStream()).use { bz ->
+            TarArchiveOutputStream(bz).use { tar ->
+                val e = TarArchiveEntry("top/model.int8.onnx")
+                e.size = onnxBytes.size.toLong()
+                tar.putArchiveEntry(e)
+                tar.write(onnxBytes)
+                tar.closeArchiveEntry()
+            }
+        }
+        val ticks = mutableListOf<Int>()
+        manager(tmp.newFolder("files18")).untarFlatten(archive, target) { ticks += it }
+
+        assertTrue(ticks.isNotEmpty())
+        assertEquals(ticks, ticks.sorted())
+        assertTrue("progress must never exceed 100", ticks.all { it in 0..100 })
+        assertEquals(100, ticks.last())
+    }
+
+    // --- Storage precheck: fail early and explicitly, not mid-unpack ---
+
+    @Test
+    fun `download fails fast with InsufficientStorage when the volume is too small`() = runBlocking {
+        val filesDir = tmp.newFolder("files19")
+        val archive = makeArchive(mapOf(
+            "top/model.int8.onnx" to "onnx-bytes",
+            "top/tokens.txt" to "tokens",
+        ))
+        val m = managerWith(
+            filesDir,
+            clientFor(archive, "vad-bytes".toByteArray()),
+            usableSpace = GigaAmModelManager.REQUIRED_FREE_BYTES - 1,
+        )
+
+        var ticked = false
+        val result = m.download { _, _ -> ticked = true }
+
+        val error = result.exceptionOrNull()
+        assertTrue("expected InsufficientStorageException, got $error", error is GigaAmModelManager.InsufficientStorageException)
+        error as GigaAmModelManager.InsufficientStorageException
+        assertEquals(GigaAmModelManager.REQUIRED_FREE_BYTES, error.requiredBytes)
+        assertEquals(GigaAmModelManager.REQUIRED_FREE_BYTES - 1, error.availableBytes)
+        // Nothing was attempted: no bytes pulled, no files created.
+        assertFalse("the precheck must run before any transfer", ticked)
+        assertFalse(m.isReady())
+        assertFalse(File(filesDir, "asr/gigaam-v3-ru").exists())
+    }
+
+    @Test
+    fun `download proceeds when free space exactly meets the requirement`() = runBlocking {
+        val filesDir = tmp.newFolder("files20")
+        val archive = makeArchive(mapOf(
+            "top/model.int8.onnx" to "onnx-bytes",
+            "top/tokens.txt" to "tokens",
+        ))
+        val m = managerWith(
+            filesDir,
+            clientFor(archive, "vad-bytes".toByteArray()),
+            usableSpace = GigaAmModelManager.REQUIRED_FREE_BYTES,
+        )
+
+        assertTrue(m.download { _, _ -> }.isSuccess)
+        assertTrue(m.isReady())
+    }
+
+    @Test
+    fun `storage precheck leaves an existing model untouched`() = runBlocking {
+        val filesDir = tmp.newFolder("files21")
+        val dir = File(filesDir, "asr/gigaam-v3-ru").apply { mkdirs() }
+        File(dir, "model.int8.onnx").writeText("existing-onnx")
+        File(dir, "tokens.txt").writeText("existing-tokens")
+        File(filesDir, "asr/silero_vad.onnx").writeText("existing-vad")
+        val archive = makeArchive(mapOf("top/model.int8.onnx" to "new", "top/tokens.txt" to "new"))
+        val m = managerWith(filesDir, clientFor(archive, "v".toByteArray()), usableSpace = 0L)
+
+        assertTrue(m.download { _, _ -> }.isFailure)
+        assertTrue(m.isReady())
+        assertEquals("existing-onnx", File(dir, "model.int8.onnx").readText())
     }
 }
