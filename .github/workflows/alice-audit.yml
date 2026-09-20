@@ -1,8 +1,7 @@
 name: Alice integration audit
 
 on:
-  push:
-    branches: [alice-public-integration-v3.17.3]
+  workflow_dispatch:
 
 jobs:
   audit:
