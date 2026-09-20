@@ -15,6 +15,11 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v5
+      - name: Check Alice reference bridge syntax
+        run: |
+          node --check reference/alice-worker/worker.mjs
+          node --check reference/alice-worker/server.mjs
+          node --check reference/alice-worker/d1-sqlite.mjs
       - run: ./gradlew :app:testDebugUnitTest :app:lintDebug :app:detekt --stacktrace
       - name: Build debug APK
         run: ./gradlew :app:assembleDebug --stacktrace
