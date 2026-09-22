@@ -500,21 +500,14 @@
     <string name="place_edit_lon_label">Longitude</string>
     <string name="place_edit_radius_label">Raio, m</string>
     <string name="place_edit_error_min_radius">O raio mínimo é 20 m</string>
-    <string name="welcome_step_indicator">Passo %1$d de 3</string>
-    <string name="welcome_model_step_title">Qual modelo da BYD você tem\?</string>
-    <string name="welcome_model_step_description">Isto determina a fonte de dados de viagem.\nO Titan 3 armazena os dados no banco de dados embutido da BYD (energydata).\nSong e outros modelos — apenas no DiPlus.</string>
-    <string name="welcome_model_song_label">Song / outro</string>
-    <string name="welcome_model_change_later">Você pode alterar isso mais tarde nas configurações.</string>
+    <string name="welcome_step_indicator">Passo %1$d de %2$d</string>
+    <string name="welcome_language_title">Idioma do aplicativo</string>
     <string name="welcome_next_button">Próximo</string>
     <string name="welcome_battery_section_title">Bateria</string>
-    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 kWh (BEV) ou 31.8 kWh (PHEV)</string>
+    <string name="welcome_battery_capacity_hint">Confira nas especificações do carro. Leopard 3: 72,9 kWh (BEV) ou 31,8 kWh (PHEV)</string>
     <string name="welcome_tariff_section_title">Tarifas</string>
     <string name="welcome_tariff_home_label">Carregamento residencial AC (%1$s/kWh)</string>
     <string name="welcome_tariff_dc_label">Carregamento rápido DC (%1$s/kWh)</string>
-    <string name="welcome_tariff_cost_section_title">Cálculo do custo de viagem</string>
-    <string name="welcome_tariff_home_chip">Residencial</string>
-    <string name="welcome_tariff_custom_chip">Personalizado</string>
-    <string name="welcome_tariff_cost_note">Custo = consumo × tarifa. Você pode alterar isso mais tarde nas configurações.</string>
     <string name="welcome_autostart_step_title">Inicialização automática no DiLink</string>
     <string name="welcome_autostart_step_description">Para fazer o BYDMate iniciar automaticamente quando a central multimídia ligar:</string>
     <string name="welcome_autostart_instruction_1">1. Toque no botão à direita</string>
@@ -638,7 +631,6 @@
     <string name="settings_tariff_trip_custom_chip">Personalizado</string>
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">milhas</string>
-    <string name="settings_lang_russian">Русский</string>
     <string name="settings_saved">Salvo</string>
     <string name="settings_recalc_done">Recalculado: %1$d viagens</string>
     <string name="settings_export_in_progress">Exportando...</string>
@@ -759,6 +751,8 @@
     <string name="settings_config_restore_confirm_body">Todos os dados e configurações atuais serão substituídos pelo conteúdo do backup. Isto não pode ser desfeito.</string>
     <string name="settings_config_restore_confirm_ok">Restaurar</string>
     <string name="settings_config_restore_confirm_cancel">Cancelar</string>
+    <string name="settings_config_restore_pick_title">Escolha um arquivo de backup</string>
+    <string name="settings_config_restore_pick_empty">Nenhum arquivo de exportação encontrado em Download</string>
     <string name="settings_config_export_confirm_title">Exportar configuração?</string>
     <string name="settings_config_export_confirm_body">O backup contém o histórico de viagens com rotas GPS e as suas chaves de API em texto simples. O ficheiro será guardado na pasta pública Download. Guarde-o num local seguro e não o partilhe.</string>
     <string name="settings_config_export_confirm_ok">Exportar</string>

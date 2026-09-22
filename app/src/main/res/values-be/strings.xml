@@ -589,21 +589,14 @@
     <string name="place_edit_error_min_radius">Мінімальны радыус 20 м</string>
 
     <!-- Welcome Wizard -->
-    <string name="welcome_step_indicator">Крок %1$d з 3</string>
-    <string name="welcome_model_step_title">Якая ў цябе мадэль BYD?</string>
-    <string name="welcome_model_step_description">Гэта вызначыць крыніцу даных паездак.\nTitan 3 захоўвае даныя ва ўбудаванай БД BYD (energydata).\nSong і іншыя мадэлі — толькі ў DiPlus.</string>
-    <string name="welcome_model_song_label">Song / іншая</string>
-    <string name="welcome_model_change_later">Можна памяняць пазней у наладах.</string>
+    <string name="welcome_step_indicator">Крок %1$d з %2$d</string>
+    <string name="welcome_language_title">Мова праграмы</string>
     <string name="welcome_next_button">Далей</string>
     <string name="welcome_battery_section_title">Батарэя</string>
-    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 кВт·гадз (BEV) або 31.8 кВт·гадз (PHEV)</string>
+    <string name="welcome_battery_capacity_hint">Звярыце з пашпартам машыны. Leopard 3: 72,9 кВт·гадз (BEV) або 31,8 кВт·гадз (PHEV)</string>
     <string name="welcome_tariff_section_title">Тарыфы</string>
     <string name="welcome_tariff_home_label">Хатняя зарадка (%1$s/кВт·гадз)</string>
     <string name="welcome_tariff_dc_label">Хуткая зарадка DC (%1$s/кВт·гадз)</string>
-    <string name="welcome_tariff_cost_section_title">Разлік кошту паездак</string>
-    <string name="welcome_tariff_home_chip">Хатні</string>
-    <string name="welcome_tariff_custom_chip">Свой</string>
-    <string name="welcome_tariff_cost_note">Кошт = спажыванне × тарыф. Можна змяніць пазней у наладах.</string>
     <string name="welcome_autostart_step_title">Аўтазапуск на DiLink</string>
     <string name="welcome_autostart_step_description">Каб BYDMate запускаўся аўтаматычна пры ўключэнні магнітолы:</string>
     <string name="welcome_autostart_instruction_1">1. Націсніце кнопку справа</string>
@@ -781,7 +774,6 @@
     <string name="settings_unit_km">км</string>
     <string name="settings_unit_miles">мілі</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
-    <string name="settings_lang_russian">Русский</string>
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Захавана</string>
@@ -918,6 +910,8 @@
     <string name="settings_config_restore_confirm_body">Бягучыя даныя і налады будуць цалкам заменены змесцівам бэкапа. Скасаваць гэта дзеянне немагчыма.</string>
     <string name="settings_config_restore_confirm_ok">Аднавіць</string>
     <string name="settings_config_restore_confirm_cancel">Скасаваць</string>
+    <string name="settings_config_restore_pick_title">Выберыце файл бэкапа</string>
+    <string name="settings_config_restore_pick_empty">Файлаў экспарту ў Download не знойдзена</string>
     <string name="settings_config_export_confirm_title">Экспартаваць канфігурацыю?</string>
     <string name="settings_config_export_confirm_body">Бэкап змяшчае гісторыю паездак з GPS-маршрутамі і ўведзеныя API-ключы ў незашыфраваным выглядзе. Файл будзе захаваны ў агульнадаступную папку Download. Захоўвайце яго ў надзейным месцы і не перасылайце староннім.</string>
     <string name="settings_config_export_confirm_ok">Экспартаваць</string>

@@ -1,5 +1,7 @@
 package com.bydmate.app.ui.tech
 
+import com.bydmate.app.data.repository.equivalentFullCycles
+import com.bydmate.app.data.repository.fullCycleCapacityKwh
 import com.bydmate.app.ui.tech.TechPanelVisuals.TempZone
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -74,7 +76,7 @@ class TechPanelVisualsTest {
 
     @Test
     fun `full cycles round the quotient and show the sum they came from`() {
-        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, Locale("ru"))!!
+        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, null, Locale("ru"))!!
         assertEquals("87", cycles.value)
         assertEquals("6 340", cycles.totalKwh.replace('\u00A0', ' '))
         assertEquals("72,9", cycles.capacity)
@@ -82,7 +84,7 @@ class TechPanelVisualsTest {
 
     @Test
     fun `full cycles follow the locale separators`() {
-        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, Locale.US)!!
+        val cycles = TechPanelVisuals.fullCycles(null, 6340.0, 72.9, null, Locale.US)!!
         assertEquals("87", cycles.value)
         assertEquals("6,340", cycles.totalKwh)
         assertEquals("72.9", cycles.capacity)
@@ -94,22 +96,61 @@ class TechPanelVisualsTest {
      */
     @Test
     fun `the BMS counter is divided, not the app's own charging sum`() {
-        val cycles = TechPanelVisuals.fullCycles(10963.0, 1557.0, 87.0, Locale.US)!!
+        val cycles = TechPanelVisuals.fullCycles(10963.0, 1557.0, 87.0, null, Locale.US)!!
         assertEquals("126", cycles.value)
         assertEquals("10,963", cycles.totalKwh)
     }
 
     @Test
     fun `a car that reports no BMS counter falls back to the charging sum`() {
-        assertEquals("18", TechPanelVisuals.fullCycles(null, 1557.0, 87.0, Locale.US)!!.value)
-        assertEquals("18", TechPanelVisuals.fullCycles(0.0, 1557.0, 87.0, Locale.US)!!.value)
+        assertEquals("18", TechPanelVisuals.fullCycles(null, 1557.0, 87.0, null, Locale.US)!!.value)
+        assertEquals("18", TechPanelVisuals.fullCycles(0.0, 1557.0, 87.0, null, Locale.US)!!.value)
+    }
+
+    // --- SoH-corrected divisor (#224) ---
+
+    @Test
+    fun `BMS lifetime source divides by the average capacity over the pack life`() {
+        // 87 × (100 + 90) / 200 = 82.65
+        assertEquals(82.65, fullCycleCapacityKwh(87.0, 90f, lifetimeSource = true), 1e-9)
+        assertEquals(10963.0 / 82.65, equivalentFullCycles(10963.0, 87.0, 90f, lifetimeSource = true), 1e-9)
+        val cycles = TechPanelVisuals.fullCycles(10963.0, 1557.0, 87.0, 90f, Locale.US)!!
+        assertEquals("133", cycles.value)
+        assertEquals("82.7", cycles.capacity)
+    }
+
+    @Test
+    fun `own charging sum divides by the capacity today`() {
+        // 87 × 90 / 100 = 78.3
+        assertEquals(78.3, fullCycleCapacityKwh(87.0, 90f, lifetimeSource = false), 1e-9)
+        assertEquals(1557.0 / 78.3, equivalentFullCycles(1557.0, 87.0, 90f, lifetimeSource = false), 1e-9)
+        val cycles = TechPanelVisuals.fullCycles(null, 1557.0, 87.0, 90f, Locale.US)!!
+        assertEquals("20", cycles.value)
+        assertEquals("78.3", cycles.capacity)
+    }
+
+    @Test
+    fun `no SoH keeps the nominal divisor`() {
+        assertEquals(87.0, fullCycleCapacityKwh(87.0, null, lifetimeSource = true), 0.0)
+        assertEquals(87.0, fullCycleCapacityKwh(87.0, null, lifetimeSource = false), 0.0)
+        assertEquals(10963.0 / 87.0, equivalentFullCycles(10963.0, 87.0, null, lifetimeSource = true), 1e-9)
+        assertEquals("87.0", TechPanelVisuals.fullCycles(10963.0, null, 87.0, null, Locale.US)!!.capacity)
+    }
+
+    @Test
+    fun `SoH out of range keeps the nominal divisor`() {
+        for (soh in listOf(0f, -5f, 100.5f, 250f)) {
+            assertEquals(87.0, fullCycleCapacityKwh(87.0, soh, lifetimeSource = true), 0.0)
+            assertEquals(87.0, fullCycleCapacityKwh(87.0, soh, lifetimeSource = false), 0.0)
+        }
+        assertEquals(1557.0 / 87.0, equivalentFullCycles(1557.0, 87.0, 0f, lifetimeSource = false), 1e-9)
     }
 
     @Test
     fun `no source and no pack size leave the row empty`() {
-        assertNull(TechPanelVisuals.fullCycles(null, null, 72.9, Locale.US))
-        assertNull(TechPanelVisuals.fullCycles(null, 0.0, 72.9, Locale.US))
-        assertNull(TechPanelVisuals.fullCycles(0.0, 0.0, 72.9, Locale.US))
-        assertNull(TechPanelVisuals.fullCycles(10963.0, 6340.0, 0.0, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(null, null, 72.9, null, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(null, 0.0, 72.9, null, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(0.0, 0.0, 72.9, null, Locale.US))
+        assertNull(TechPanelVisuals.fullCycles(10963.0, 6340.0, 0.0, null, Locale.US))
     }
 }

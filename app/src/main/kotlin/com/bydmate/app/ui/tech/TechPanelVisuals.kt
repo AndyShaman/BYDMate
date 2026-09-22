@@ -1,6 +1,7 @@
 package com.bydmate.app.ui.tech
 
 import com.bydmate.app.data.repository.equivalentFullCycles
+import com.bydmate.app.data.repository.fullCycleCapacityKwh
 import com.bydmate.app.data.repository.fullCycleKwh
 import java.text.DecimalFormat
 import java.text.DecimalFormatSymbols
@@ -53,25 +54,28 @@ internal object TechPanelVisuals {
     /**
      * Full charge cycles of the pack, off the BMS lifetime counter when the car reports one and
      * off the app's own charging sum otherwise ([fullCycleKwh]) — the same choice the «Зарядки»
-     * screen makes. Null while neither source has anything to divide; a «0» would read as a
-     * measured value. Grouping and the decimal separator follow the device locale, like every
-     * other number on this screen.
+     * screen makes. The divisor is corrected for SoH ([fullCycleCapacityKwh]) and the caption
+     * shows that divisor, not the nominal. Null while neither source has anything to divide; a
+     * «0» would read as a measured value. Grouping and the decimal separator follow the device
+     * locale, like every other number on this screen.
      */
     fun fullCycles(
         bmsLifetimeKwh: Double?,
         chargedKwh: Double?,
         nominalCapacityKwh: Double,
+        sohPercent: Float?,
         locale: Locale = Locale.getDefault(),
     ): FullCycles? {
         val totalKwh = fullCycleKwh(bmsLifetimeKwh, chargedKwh) ?: return null
         if (nominalCapacityKwh <= 0.0) return null
-        val cycles = equivalentFullCycles(totalKwh, nominalCapacityKwh)
+        val lifetimeSource = bmsLifetimeKwh != null && bmsLifetimeKwh > 0.0
+        val cycles = equivalentFullCycles(totalKwh, nominalCapacityKwh, sohPercent, lifetimeSource)
         val kwh = NumberFormat.getIntegerInstance(locale)
-        val capacity = DecimalFormat("0.#", DecimalFormatSymbols.getInstance(locale))
+        val capacity = DecimalFormat("0.0", DecimalFormatSymbols.getInstance(locale))
         return FullCycles(
             value = cycles.roundToInt().toString(),
             totalKwh = kwh.format(totalKwh),
-            capacity = capacity.format(nominalCapacityKwh),
+            capacity = capacity.format(fullCycleCapacityKwh(nominalCapacityKwh, sohPercent, lifetimeSource)),
         )
     }
 

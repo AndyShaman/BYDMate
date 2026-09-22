@@ -589,21 +589,14 @@
     <string name="place_edit_error_min_radius">Минимальный радиус 20 м</string>
 
     <!-- Welcome Wizard -->
-    <string name="welcome_step_indicator">Шаг %1$d из 3</string>
-    <string name="welcome_model_step_title">Какая у тебя модель BYD?</string>
-    <string name="welcome_model_step_description">Это определит источник данных поездок.\nTitan 3 хранит данные во встроенной БД BYD (energydata).\nSong и другие модели — только в DiPlus.</string>
-    <string name="welcome_model_song_label">Song / другая</string>
-    <string name="welcome_model_change_later">Можно поменять позже в настройках.</string>
+    <string name="welcome_step_indicator">Шаг %1$d из %2$d</string>
+    <string name="welcome_language_title">Язык приложения</string>
     <string name="welcome_next_button">Далее</string>
     <string name="welcome_battery_section_title">Батарея</string>
-    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 кВт·ч (BEV) или 31.8 кВт·ч (PHEV)</string>
+    <string name="welcome_battery_capacity_hint">Сверьте с паспортом машины. Leopard 3: 72,9 кВт·ч (BEV) или 31,8 кВт·ч (PHEV)</string>
     <string name="welcome_tariff_section_title">Тарифы</string>
     <string name="welcome_tariff_home_label">Домашняя зарядка (%1$s/кВт·ч)</string>
     <string name="welcome_tariff_dc_label">Быстрая зарядка DC (%1$s/кВт·ч)</string>
-    <string name="welcome_tariff_cost_section_title">Расчёт стоимости поездок</string>
-    <string name="welcome_tariff_home_chip">Домашний</string>
-    <string name="welcome_tariff_custom_chip">Свой</string>
-    <string name="welcome_tariff_cost_note">Стоимость = потребление × тариф. Можно изменить позже в настройках.</string>
     <string name="welcome_autostart_step_title">Автозапуск на DiLink</string>
     <string name="welcome_autostart_step_description">Чтобы BYDMate запускался автоматически при включении магнитолы:</string>
     <string name="welcome_autostart_instruction_1">1. Нажмите кнопку справа</string>
@@ -783,7 +776,6 @@
     <string name="settings_unit_km">км</string>
     <string name="settings_unit_miles">мили</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
-    <string name="settings_lang_russian">Русский</string>
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Сохранено</string>
@@ -920,6 +912,8 @@
     <string name="settings_config_restore_confirm_body">Текущие данные и настройки будут полностью заменены содержимым бэкапа. Отменить это действие невозможно.</string>
     <string name="settings_config_restore_confirm_ok">Восстановить</string>
     <string name="settings_config_restore_confirm_cancel">Отмена</string>
+    <string name="settings_config_restore_pick_title">Выберите файл бэкапа</string>
+    <string name="settings_config_restore_pick_empty">Файлов экспорта в Download не найдено</string>
     <string name="settings_config_export_confirm_title">Экспортировать конфигурацию?</string>
     <string name="settings_config_export_confirm_body">Бэкап содержит историю поездок с GPS-маршрутами и введённые API-ключи в незашифрованном виде. Файл будет сохранён в общедоступную папку Download. Храните его в надёжном месте и не пересылайте посторонним.</string>
     <string name="settings_config_export_confirm_ok">Экспортировать</string>
@@ -1533,7 +1527,7 @@
     <string name="tech_label_remain_kwh">Остаток</string>
     <string name="tech_label_hv_voltage">напряжение HV</string>
     <string name="tech_label_power">мощность</string>
-    <string name="tech_label_full_cycles">Полных циклов</string>
+    <string name="tech_label_full_cycles">полных циклов</string>
     <string name="tech_caption_full_cycles">%1$s кВт·ч ÷ %2$s</string>
     <string name="tech_caption_full_cycles_empty">появится после первой зарядки</string>
     <string name="tech_label_battery_power">мощность батареи</string>

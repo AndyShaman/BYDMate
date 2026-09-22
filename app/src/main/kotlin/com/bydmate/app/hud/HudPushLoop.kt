@@ -92,9 +92,18 @@ class HudPushLoop(
         val rc = sink.fireEvent(HudSomeIpBridge.TOPIC_NAVI, frame)
         framesSent++
         lastFrameTs = System.currentTimeMillis()
+        val rcChanged = rc != lastRc
         lastRc = rc
         if (rc != 0) nonZeroRcCount++
         amap?.onSnapshot(s)
+        // A drive log alone must show whether frames leave the app and with which rc
+        // (#198: the dump is often taken before the drive, so its counters read zero).
+        // Logged on the first frame of a session, on every maneuver change and whenever
+        // the rc flips; a stable maneuver with a stable rc stays silent.
+        if (!wasActive || s.maneuverGaode != journalledGaode || rcChanged) {
+            Log.i(TAG, "frame gaode=${s.maneuverGaode} dist=${s.distanceMeters}m rc=$rc sent=$framesSent" +
+                " amap=${amap?.capable == true}")
+        }
         journalManeuver(s, cameraActive)
         return true
     }
@@ -102,10 +111,10 @@ class HudPushLoop(
     /** Records what both channels carried, but only when the maneuver code or the
      *  arrow-suppression flag changed — the loop itself runs twice a second (#94). */
     private fun journalManeuver(s: NavGuidanceHub.Snapshot, suppressArrow: Boolean) {
-        val journal = maneuvers ?: return
         if (s.maneuverGaode == journalledGaode && suppressArrow == journalledSuppress) return
         journalledGaode = s.maneuverGaode
         journalledSuppress = suppressArrow
+        val journal = maneuvers ?: return
         val amapBroadcasting = amap?.capable == true
         journal.append(
             maneuverGaode = s.maneuverGaode,

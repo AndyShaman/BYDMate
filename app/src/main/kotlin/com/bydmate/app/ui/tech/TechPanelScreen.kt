@@ -374,7 +374,7 @@ private fun BatteryNowCard(state: TechPanelUiState, onHint: (String) -> Unit, mo
 @Composable
 private fun FullCyclesRow(state: TechPanelUiState) {
     val cycles = TechPanelVisuals.fullCycles(
-        state.lifetimeKwh?.toDouble(), state.lifetimeChargedKwh, state.nominalCapacityKwh)
+        state.lifetimeKwh?.toDouble(), state.lifetimeChargedKwh, state.nominalCapacityKwh, state.soh)
     TechRow(stringResource(R.string.tech_label_full_cycles), cycles?.value ?: DASH)
     Text(
         cycles

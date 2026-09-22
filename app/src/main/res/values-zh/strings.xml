@@ -507,21 +507,14 @@
     <string name="place_edit_error_min_radius">最小半径为 20 米</string>
 
     <!-- Welcome Wizard -->
-    <string name="welcome_step_indicator">第 %1$d 步，共 3 步</string>
-    <string name="welcome_model_step_title">您的 BYD 是哪款车型？</string>
-    <string name="welcome_model_step_description">这将决定行程数据来源。\n钛3 将数据存储在 BYD 内置数据库（energydata）中。\n宋及其他车型 - 仅存储在 DiPlus 中。</string>
-    <string name="welcome_model_song_label">宋 / 其他</string>
-    <string name="welcome_model_change_later">稍后可在设置中更改。</string>
+    <string name="welcome_step_indicator">第 %1$d 步，共 %2$d 步</string>
+    <string name="welcome_language_title">应用语言</string>
     <string name="welcome_next_button">下一步</string>
     <string name="welcome_battery_section_title">电池</string>
-    <string name="welcome_battery_capacity_hint">钛3：72.9 kWh（纯电）或 31.8 kWh（插混）</string>
+    <string name="welcome_battery_capacity_hint">请以车辆参数为准。钛3：72.9 kWh（纯电）或 31.8 kWh（插混）</string>
     <string name="welcome_tariff_section_title">电价</string>
     <string name="welcome_tariff_home_label">家充电价（%1$s/kWh）</string>
     <string name="welcome_tariff_dc_label">快充电价（%1$s/kWh）</string>
-    <string name="welcome_tariff_cost_section_title">行程费用计算</string>
-    <string name="welcome_tariff_home_chip">家充</string>
-    <string name="welcome_tariff_custom_chip">自定义</string>
-    <string name="welcome_tariff_cost_note">费用 = 能耗 × 电价。稍后可在设置中更改。</string>
     <string name="welcome_autostart_step_title">DiLink 自启动</string>
     <string name="welcome_autostart_step_description">要让 BYDMate 在车机开机时自动启动：</string>
     <string name="welcome_autostart_instruction_1">1. 点击右侧按钮</string>
@@ -676,7 +669,6 @@
     <string name="settings_tariff_trip_custom_chip">自定义</string>
     <string name="settings_unit_km">公里</string>
     <string name="settings_unit_miles">英里</string>
-    <string name="settings_lang_russian">Русский</string>
 
     <!-- Settings: ViewModel status strings -->
     <string name="settings_saved">已保存</string>
@@ -835,6 +827,8 @@
     <string name="settings_config_restore_button">恢复配置</string>
     <string name="settings_config_restore_confirm_body">当前所有数据和设置将被备份内容完全替换，此操作无法撤销。</string>
     <string name="settings_config_restore_confirm_cancel">取消</string>
+    <string name="settings_config_restore_pick_title">选择备份文件</string>
+    <string name="settings_config_restore_pick_empty">Download 中未找到导出文件</string>
     <string name="settings_config_restore_confirm_ok">恢复</string>
     <string name="settings_config_restore_confirm_title">恢复配置？</string>
     <string name="settings_config_export_confirm_title">导出配置？</string>

@@ -6,13 +6,10 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.core.content.FileProvider
 import android.os.Environment
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
-import androidx.core.os.LocaleListCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import android.content.Intent
-import android.net.Uri
 import android.util.Log
 import android.os.SystemClock
 import com.bydmate.app.agent.AgentOrchestrator
@@ -46,6 +43,7 @@ import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.service.UpdateChecker
+import com.bydmate.app.util.applyAppLanguage
 import com.bydmate.app.util.CrashLog
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.R
@@ -65,6 +63,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -73,7 +72,6 @@ import com.bydmate.app.data.vehicle.DumpFidsResult
 import com.bydmate.app.data.vehicle.SeatChannel
 import com.bydmate.app.data.vehicle.SeatChannelStore
 import com.bydmate.app.service.BootReceiver
-import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.cluster.DEFAULT_VOICE_KEYCODE
 import com.bydmate.app.voice.AgentPersona
 import com.bydmate.app.voice.TtsGender
@@ -177,6 +175,8 @@ data class SettingsUiState(
     val webhookSaveStatus: String? = null,
     /** Status of the last config backup/restore operation. Red if starts with error prefix. */
     val configStatus: String? = null,
+    /** Backups offered by the restore picker, newest first. Null = picker closed. */
+    val restoreCandidates: List<File>? = null,
     /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
     val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
@@ -321,17 +321,12 @@ class SettingsViewModel @Inject constructor(
     val agentPersona: StateFlow<String> = _agentPersona.asStateFlow()
 
     fun setAppLanguage(lang: String) {
-        localePreferences.setLanguage(lang)
-        AppCompatDelegate.setApplicationLocales(LocaleListCompat.forLanguageTags(lang))
+        applyAppLanguage(appContext, localePreferences, lang)
         _appLanguage.value = lang
         // Auto-select CNY when switching to Chinese
         if (lang == "zh") {
             saveCurrency("CNY")
         }
-        // Force overlay teardown so the next attach picks up the new locale.
-        // applicationContext keeps a stale Configuration after setApplicationLocales,
-        // which leaves the floating widget rendering against the old language.
-        WidgetController.relocale(appContext)  // C-5: pass context from VM, not from widgetView
     }
 
     /** Forget the remembered seat write-channel; next seat command re-probes primary→fallback. */
@@ -2478,16 +2473,37 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    /** Export zips found in the public Download folder, newest first. */
+    /** Lists the backups off the main thread (a scan of the whole Download folder), then opens the picker. */
+    // Scan behind the picker: repeated taps don't start a second one, and a closed picker
+    // must not be reopened by a late result.
+    private var restoreScanJob: Job? = null
+
+    fun openRestorePicker() {
+        if (restoreScanJob?.isActive == true) return
+        restoreScanJob = viewModelScope.launch(Dispatchers.IO) {
+            val files = backupManager.listBackups()
+            ensureActive()
+            _uiState.update { it.copy(restoreCandidates = files) }
+        }
+    }
+
+    fun closeRestorePicker() {
+        restoreScanJob?.cancel()
+        _uiState.update { it.copy(restoreCandidates = null) }
+    }
+
     /**
      * Restore the full app state from a user-picked backup zip.
      * On success the process is immediately restarted so Room re-opens the replaced DB.
      * On failure configStatus is set to the error message.
      */
-    fun restoreConfig(uri: Uri) {
+    fun restoreConfig(file: File) {
+        restoreScanJob?.cancel()
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(configStatus = appContext.getString(R.string.settings_export_in_progress)) }
             try {
-                backupManager.restore(uri)
+                backupManager.restore(file)
                 restartApp()
             } catch (e: Exception) {
                 _uiState.update {
