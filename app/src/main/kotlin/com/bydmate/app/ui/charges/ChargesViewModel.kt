@@ -71,6 +71,9 @@ data class ChargesUiState(
     val nominalCapacityKwh: Double = 72.9,
     // BMS-reported SOH as a 0..1 factor; 1.0 when unavailable or implausible (#28)
     val sohFactor: Double = 1.0,
+    // Raw BMS SoH for the full-cycle divisor, as «Техника» passes it; fullCycleCapacityKwh
+    // alone decides whether it is usable (#224)
+    val sohPercent: Float? = null,
     val sohSeries: List<Float> = emptyList(),
     val capacitySeries: List<Float> = emptyList(),
     // BMS lifetime from autoservice — distinct from sum across our charge rows
@@ -96,7 +99,13 @@ data class ChargesUiState(
      */
     val equivCycles: Double
         get() = fullCycleKwh(bmsLifetimeKwh, lifetimeTotalKwh)
-            ?.let { equivalentFullCycles(it, nominalCapacityKwh) } ?: 0.0
+            ?.let {
+                equivalentFullCycles(
+                    it, nominalCapacityKwh,
+                    sohPercent = sohPercent,
+                    lifetimeSource = bmsLifetimeKwh != null && bmsLifetimeKwh > 0.0,
+                )
+            } ?: 0.0
 }
 
 @HiltViewModel
@@ -313,6 +322,7 @@ class ChargesViewModel @Inject constructor(
                     sohFactor = state.sohPercent?.toDouble()
                         ?.takeIf { soh -> soh in AutoserviceChargingDetector.SOH_SANITY_MIN..100.0 }
                         ?.div(100.0) ?: 1.0,
+                    sohPercent = state.sohPercent?.toFloat(),
                 )
             }
         }

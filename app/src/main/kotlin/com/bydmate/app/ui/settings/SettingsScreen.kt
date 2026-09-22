@@ -124,6 +124,7 @@ import com.bydmate.app.ui.components.AppLaunchPickerDialog
 import com.bydmate.app.ui.components.MultiAppPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.util.APP_LANGUAGES
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.core.content.ContextCompat
@@ -138,6 +139,7 @@ import com.bydmate.app.split.Split37Engine
 import com.bydmate.app.split.SplitFreeformVerdict
 import com.bydmate.app.split.SplitRole
 import com.bydmate.app.split.applyPick
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -1904,17 +1906,67 @@ private fun ServiceSection(
         EntryPointAccessors.fromApplication(context.applicationContext, ClusterEntryPoint::class.java)
     }
 
-    // SAF picker for restore — must be declared at composable top level
-    val restoreLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
-        if (uri != null) viewModel.restoreConfig(uri)
-    }
-    var showRestoreConfirm by remember { mutableStateOf(false) }
+    // Own picker over Download/ instead of SAF: on some firmwares ACTION_OPEN_DOCUMENT hands
+    // back a URI without a read grant (#223). Non-null restoreCandidates = picker open.
+    var restoreTarget by remember { mutableStateOf<File?>(null) }
     var showExportConfirm by remember { mutableStateOf(false) }
 
-    // Confirm dialog for destructive restore operation
-    if (showRestoreConfirm) {
+    state.restoreCandidates?.let { files ->
         AlertDialog(
-            onDismissRequest = { showRestoreConfirm = false },
+            onDismissRequest = { viewModel.closeRestorePicker() },
+            title = {
+                Text(
+                    stringResource(R.string.settings_config_restore_pick_title),
+                    color = TextPrimary,
+                )
+            },
+            text = {
+                if (files.isEmpty()) {
+                    Text(
+                        stringResource(R.string.settings_config_restore_pick_empty),
+                        color = TextSecondary,
+                    )
+                } else {
+                    val dateFormat = remember { SimpleDateFormat("dd.MM.yyyy HH:mm", Locale.getDefault()) }
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        items(files) { file ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        viewModel.closeRestorePicker()
+                                        restoreTarget = file
+                                    }
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                Text(file.name, color = TextPrimary, fontSize = 13.sp, maxLines = 1)
+                                Text(
+                                    dateFormat.format(Date(file.lastModified())),
+                                    color = TextSecondary,
+                                    fontSize = 12.sp,
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { viewModel.closeRestorePicker() }) {
+                    Text(
+                        stringResource(R.string.settings_config_restore_confirm_cancel),
+                        color = TextSecondary,
+                    )
+                }
+            },
+            containerColor = CardSurfaceElevated,
+        )
+    }
+
+    // Confirm dialog for destructive restore operation
+    restoreTarget?.let { target ->
+        AlertDialog(
+            onDismissRequest = { restoreTarget = null },
             title = {
                 Text(
                     stringResource(R.string.settings_config_restore_confirm_title),
@@ -1929,8 +1981,8 @@ private fun ServiceSection(
             },
             confirmButton = {
                 TextButton(onClick = {
-                    showRestoreConfirm = false
-                    restoreLauncher.launch(arrayOf("application/zip"))
+                    restoreTarget = null
+                    viewModel.restoreConfig(target)
                 }) {
                     Text(
                         stringResource(R.string.settings_config_restore_confirm_ok),
@@ -1939,7 +1991,7 @@ private fun ServiceSection(
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showRestoreConfirm = false }) {
+                TextButton(onClick = { restoreTarget = null }) {
                     Text(
                         stringResource(R.string.settings_config_restore_confirm_cancel),
                         color = TextSecondary,
@@ -2213,7 +2265,7 @@ private fun ServiceSection(
                 title = stringResource(R.string.settings_config_restore_button),
                 description = stringResource(R.string.settings_config_restore_desc),
                 buttonLabel = stringResource(R.string.settings_config_restore_button),
-                onClick = { showRestoreConfirm = true },
+                onClick = { viewModel.openRestorePicker() },
             )
             if (state.configStatus != null) {
                 SettingHint(
@@ -3054,11 +3106,8 @@ private fun LanguageBlock(
     // No Activity.recreate(): MainActivity listens to LocalePreferences,
     // mutates Resources.configuration in place, and re-provides
     // LocalConfiguration so every stringResource recomposes on next frame.
-    val langCodes = listOf("ru", "en", "zh", "pt", "pl", "be")
-    val langLabels = listOf(
-        stringResource(R.string.settings_lang_russian), "English", "简体中文", "Português",
-        "Polski", "Беларуская",
-    )
+    val langCodes = APP_LANGUAGES.map { it.first }
+    val langLabels = APP_LANGUAGES.map { it.second }
     SectionHeader(text = stringResource(R.string.settings_language_title))
     Card(
         shape = RoundedCornerShape(12.dp),

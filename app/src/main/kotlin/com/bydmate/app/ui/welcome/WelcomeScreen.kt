@@ -50,6 +50,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.ui.theme.*
+import com.bydmate.app.util.APP_LANGUAGES
 
 @Composable
 fun WelcomeScreen(
@@ -77,15 +78,50 @@ fun WelcomeScreen(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            stringResource(R.string.welcome_step_indicator, state.step),
+            stringResource(R.string.welcome_step_indicator, state.step, WelcomeViewModel.TOTAL_STEPS),
             color = TextSecondary,
             fontSize = 14.sp
         )
         Spacer(modifier = Modifier.height(16.dp))
 
         when (state.step) {
-            1 -> TariffStep(state, viewModel)
-            2 -> AutoStartStep(state, viewModel)
+            1 -> LanguageStep(state, viewModel)
+            2 -> TariffStep(state, viewModel)
+            3 -> AutoStartStep(state, viewModel)
+        }
+    }
+}
+
+@Composable
+private fun LanguageStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        SectionCard(stringResource(R.string.welcome_language_title)) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier.horizontalScroll(rememberScrollState())
+            ) {
+                APP_LANGUAGES.forEach { (code, label) ->
+                    WelcomeChip(
+                        label = label,
+                        selected = state.language == code,
+                        onClick = { if (state.language != code) viewModel.setLanguage(code) }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        Button(
+            onClick = { viewModel.nextStep() },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+        ) {
+            Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -148,35 +184,27 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 )
             }
 
-            SectionCard(stringResource(R.string.welcome_tariff_cost_section_title)) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    WelcomeChip(stringResource(R.string.welcome_tariff_home_chip), state.tripCostMode == "home") { viewModel.setTripCostMode("home") }
-                    WelcomeChip("DC", state.tripCostMode == "dc") { viewModel.setTripCostMode("dc") }
-                    WelcomeChip(stringResource(R.string.welcome_tariff_custom_chip), state.tripCostMode == "custom") { viewModel.setTripCostMode("custom") }
-                }
-                if (state.tripCostMode == "custom") {
-                    WelcomeTextField(
-                        label = stringResource(R.string.settings_tariff_custom_label, state.currencySymbol),
-                        value = state.customTariff,
-                        onValueChange = { viewModel.setCustomTariff(it) }
-                    )
-                }
-                Text(
-                    stringResource(R.string.welcome_tariff_cost_note),
-                    color = TextMuted,
-                    fontSize = 11.sp
-                )
-            }
-
             Spacer(modifier = Modifier.weight(1f))
 
-            Button(
-                onClick = { viewModel.nextStep() },
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                OutlinedButton(
+                    onClick = { viewModel.prevStep() },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(stringResource(R.string.welcome_back_button), color = TextSecondary, fontSize = 14.sp)
+                }
+                Button(
+                    onClick = { viewModel.nextStep() },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                ) {
+                    Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
             }
         }
     }

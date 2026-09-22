@@ -3,7 +3,6 @@ package com.bydmate.app.data.backup
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
-import android.net.Uri
 import android.os.Environment
 import android.util.Log
 import com.bydmate.app.data.local.database.AppDatabase
@@ -11,6 +10,7 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -60,6 +60,17 @@ class BackupManager(
         private const val ENTRY_DB = "bydmate.db"
         private const val ENTRY_PREFS = "prefs.json"
         private const val ENTRY_MANIFEST = "manifest.json"
+
+        private const val BACKUP_FILE_PREFIX = "bydmate_backup_"
+        private const val BACKUP_FILE_SUFFIX = ".zip"
+
+        /** Export zips in [dir] (name mask used by export()), newest first. */
+        fun listBackupFiles(dir: File): List<File> =
+            (dir.listFiles() ?: emptyArray())
+                .filter {
+                    it.isFile && it.name.startsWith(BACKUP_FILE_PREFIX) && it.name.endsWith(BACKUP_FILE_SUFFIX)
+                }
+                .sortedByDescending { it.lastModified() }
 
         // JSON type-tag constants
         private const val T_STRING = "String"
@@ -320,7 +331,7 @@ class BackupManager(
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
-        val zipFile = File(downloadsDir, "bydmate_backup_$timestamp.zip")
+        val zipFile = File(downloadsDir, "$BACKUP_FILE_PREFIX$timestamp$BACKUP_FILE_SUFFIX")
 
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
             zip.putNextEntry(ZipEntry(ENTRY_DB))
@@ -354,6 +365,10 @@ class BackupManager(
     // Restore
     // -------------------------------------------------------------------------
 
+    /** Export zips in the public Download folder, newest first. */
+    fun listBackups(): List<File> =
+        listBackupFiles(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS))
+
     /**
      * Restore the full app state from a previously exported backup zip.
      *
@@ -363,10 +378,16 @@ class BackupManager(
      * After this function returns the caller MUST restart the process so that
      * Room opens the replaced DB file fresh.
      */
-    fun restore(uri: Uri) {
+    fun restore(file: File) {
+        // Read straight from the public Download folder via the File API: on some firmwares
+        // (Yuan Plus, DiLink 3.0) the ACTION_OPEN_DOCUMENT handler returns a URI without a
+        // read grant, so the SAF path fails with a SecurityException (#223).
+        val inputStream: InputStream = try {
+            file.inputStream()
+        } catch (e: IOException) {
+            throw IllegalStateException("Не удалось открыть файл бэкапа", e)
+        }
         // 1-2. Read + validate the zip entries under hard size limits (AC-13).
-        val inputStream: InputStream = context.contentResolver.openInputStream(uri)
-            ?: throw IllegalStateException("Не удалось открыть файл бэкапа")
         val entries = inputStream.use { readBackupEntries(it) }
 
         // ---------------------------------------------------------------------

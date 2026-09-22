@@ -589,21 +589,14 @@
     <string name="place_edit_error_min_radius">Minimalny promień to 20 m</string>
 
     <!-- Welcome Wizard -->
-    <string name="welcome_step_indicator">Krok %1$d z 3</string>
-    <string name="welcome_model_step_title">Jaki masz model BYD?</string>
-    <string name="welcome_model_step_description">To określi źródło danych przejazdów.\nTitan 3 trzyma dane we wbudowanej bazie BYD (energydata).\nSong i inne modele — tylko w DiPlus.</string>
-    <string name="welcome_model_song_label">Song / inny</string>
-    <string name="welcome_model_change_later">Można to zmienić później w ustawieniach.</string>
+    <string name="welcome_step_indicator">Krok %1$d z %2$d</string>
+    <string name="welcome_language_title">Język aplikacji</string>
     <string name="welcome_next_button">Dalej</string>
     <string name="welcome_battery_section_title">Akumulator</string>
-    <string name="welcome_battery_capacity_hint">Leopard 3: 72.9 kWh (BEV) lub 31.8 kWh (PHEV)</string>
+    <string name="welcome_battery_capacity_hint">Sprawdź w danych technicznych auta. Leopard 3: 72,9 kWh (BEV) lub 31,8 kWh (PHEV)</string>
     <string name="welcome_tariff_section_title">Taryfy</string>
     <string name="welcome_tariff_home_label">Ładowanie w domu (%1$s/kWh)</string>
     <string name="welcome_tariff_dc_label">Szybkie ładowanie DC (%1$s/kWh)</string>
-    <string name="welcome_tariff_cost_section_title">Liczenie kosztu przejazdów</string>
-    <string name="welcome_tariff_home_chip">Domowa</string>
-    <string name="welcome_tariff_custom_chip">Własna</string>
-    <string name="welcome_tariff_cost_note">Koszt = zużycie × taryfa. Można zmienić później w ustawieniach.</string>
     <string name="welcome_autostart_step_title">Autostart na DiLink</string>
     <string name="welcome_autostart_step_description">Aby BYDMate uruchamiał się automatycznie po włączeniu jednostki centralnej:</string>
     <string name="welcome_autostart_instruction_1">1. Naciśnij przycisk po prawej</string>
@@ -781,7 +774,6 @@
     <string name="settings_unit_km">km</string>
     <string name="settings_unit_miles">mile</string>
     <!-- Language names shown in language picker (intentionally NOT translated - native name) -->
-    <string name="settings_lang_russian">Русский</string>
 
     <!-- Settings: ViewModel status strings (user-visible feedback) -->
     <string name="settings_saved">Zapisano</string>
@@ -918,6 +910,8 @@
     <string name="settings_config_restore_confirm_body">Bieżące dane i ustawienia zostaną całkowicie zastąpione zawartością kopii. Tego działania nie da się cofnąć.</string>
     <string name="settings_config_restore_confirm_ok">Przywróć</string>
     <string name="settings_config_restore_confirm_cancel">Anuluj</string>
+    <string name="settings_config_restore_pick_title">Wybierz plik kopii</string>
+    <string name="settings_config_restore_pick_empty">Nie znaleziono plików eksportu w Download</string>
     <string name="settings_config_export_confirm_title">Wyeksportować konfigurację?</string>
     <string name="settings_config_export_confirm_body">Kopia zawiera historię przejazdów z trasami GPS oraz wpisane klucze API w postaci niezaszyfrowanej. Plik trafi do ogólnodostępnego folderu Download. Trzymaj go w bezpiecznym miejscu i nie przesyłaj osobom postronnym.</string>
     <string name="settings_config_export_confirm_ok">Eksportuj</string>

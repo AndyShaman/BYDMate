@@ -54,7 +54,7 @@
     <ID>CyclomaticComplexMethod:AutomationViewModel.kt$AutomationViewModel$private fun validateActions(actions: List&lt;ActionDef&gt;): String?</ID>
     <ID>CyclomaticComplexMethod:AutoserviceChargingDetector.kt$AutoserviceChargingDetector$suspend fun runCatchUp( now: Long = System.currentTimeMillis(), observedKwAbs: Double? = null ): CatchUpResult</ID>
     <ID>CyclomaticComplexMethod:AvmCameraProbe.kt$AvmCameraProbe$@Synchronized private fun openBound(surfaces: Map&lt;Int, Surface&gt;): Boolean</ID>
-    <ID>CyclomaticComplexMethod:BackupManager.kt$BackupManager$fun restore(uri: Uri)</ID>
+    <ID>CyclomaticComplexMethod:BackupManager.kt$BackupManager$fun restore(file: File)</ID>
     <ID>CyclomaticComplexMethod:BackupManager.kt$BackupManager.Companion$fun serializePrefs(data: Map&lt;String, Map&lt;String, Any?&gt;&gt;): String</ID>
     <ID>CyclomaticComplexMethod:BackupManager.kt$BackupManager.Companion$internal fun readBackupEntries( stream: InputStream, maxEntryBytes: Long = MAX_ENTRY_BYTES, maxTotalBytes: Long = MAX_TOTAL_BYTES, ): BackupEntries</ID>
     <ID>CyclomaticComplexMethod:BlindSpotController.kt$BlindSpotController$private suspend fun ensureWarm(now: Long)</ID>
@@ -387,7 +387,7 @@
     <ID>NestedBlockDepth:AgentTools.kt$AgentTools$private suspend fun routeInfo(): String</ID>
     <ID>NestedBlockDepth:AutomationEngine.kt$AutomationEngine$private suspend fun fireManualTrigger(kind: String, value: String): Int</ID>
     <ID>NestedBlockDepth:AutomationEngine.kt$AutomationEngine$suspend fun evaluate(data: DiParsData, tripStartedAt: Long?)</ID>
-    <ID>NestedBlockDepth:BackupManager.kt$BackupManager$fun restore(uri: Uri)</ID>
+    <ID>NestedBlockDepth:BackupManager.kt$BackupManager$fun restore(file: File)</ID>
     <ID>NestedBlockDepth:BackupManager.kt$BackupManager.Companion$fun deserializePrefs(json: String): Map&lt;String, Map&lt;String, Any?&gt;&gt;</ID>
     <ID>NestedBlockDepth:BackupManager.kt$BackupManager.Companion$fun serializePrefs(data: Map&lt;String, Map&lt;String, Any?&gt;&gt;): String</ID>
     <ID>NestedBlockDepth:BackupManager.kt$BackupManager.Companion$internal fun readBackupEntries( stream: InputStream, maxEntryBytes: Long = MAX_ENTRY_BYTES, maxTotalBytes: Long = MAX_TOTAL_BYTES, ): BackupEntries</ID>
@@ -435,7 +435,7 @@
     <ID>SwallowedException:SplitSessionManagerTest.kt$SplitSessionManagerTest$e: CancellationException</ID>
     <ID>SwallowedException:UpdateChecker.kt$UpdateChecker$e: Exception</ID>
     <ID>SwallowedException:VoiceController.kt$VoiceController$e: StopSession</ID>
-    <ID>ThrowsCount:BackupManager.kt$BackupManager$fun restore(uri: Uri)</ID>
+    <ID>ThrowsCount:BackupManager.kt$BackupManager$fun restore(file: File)</ID>
     <ID>ThrowsCount:BackupManager.kt$BackupManager.Companion$internal fun readBackupEntries( stream: InputStream, maxEntryBytes: Long = MAX_ENTRY_BYTES, maxTotalBytes: Long = MAX_TOTAL_BYTES, ): BackupEntries</ID>
     <ID>ThrowsCount:HelperDaemon.kt$internal fun ensureTypedFreeform( taskId: Int, liveActivityType: Int, desiredActivityType: Int, displayId: Int, component: String, shell: (String, List&lt;String&gt;) -&gt; String, sleep: (Long) -&gt; Unit, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, )</ID>
     <ID>ThrowsCount:HelperDaemon.kt$internal fun setWindowingModeCompat( taskId: Int, windowingMode: Int, freeformDisplayId: Int, desiredActivityType: Int, reflectSet: (Int, Int) -&gt; Unit, resolveComponent: () -&gt; String?, shell: (String, List&lt;String&gt;) -&gt; String, getActivityType: (Int) -&gt; Int = { _ -&gt; -1 }, stateOf: (Int) -&gt; TaskModeState? = { _ -&gt; null }, sleep: (Long) -&gt; Unit, )</ID>

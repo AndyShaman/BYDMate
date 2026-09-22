@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.location.Location
+import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
@@ -61,6 +62,22 @@ class AutomationEngine @Inject constructor(
         // armed, giving cold-start params a few polls to warm up.
         const val SERVICE_START_WINDOW_MS = 30_000L
 
+        // Kernel boot id of the DiLink session that already had its service_start window.
+        // A process restart on the same boot must not reopen it (#177).
+        private const val PREFS_NAME = "automation"
+        private const val KEY_SERVICE_START_BOOT_ID = "service_start_boot_id"
+        private const val BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
+        // Heartbeat of a live evaluate() loop on two monotonic clocks: elapsedRealtime counts
+        // deep sleep, uptimeMillis stops in it; both are immune to NTP/GPS clock corrections.
+        // The head unit sleeps on short stops without a reboot (same boot id). elapsed running
+        // ahead of uptime by more than SERVICE_START_SLEEP_MIN_MS between two ticks means the
+        // device really suspended, so this is a real car start. A plain gap in evaluate() calls
+        // (telemetry unavailable while the car is on) advances both clocks equally and is not.
+        private const val KEY_SERVICE_START_LAST_SEEN_ELAPSED = "service_start_last_seen_elapsed"
+        private const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
+        private const val SERVICE_START_SLEEP_MIN_MS = 60_000L
+        private const val SERVICE_START_HEARTBEAT_MS = 30_000L
+
         // Steering-wheel key trigger: manual only, like button_press. Fires from
         // the a11y key filter through onSteeringKey(), never from the poll.
         const val TRIGGER_KIND_STEERING_KEY = "steering_key"
@@ -82,13 +99,31 @@ class AutomationEngine @Inject constructor(
     // already responded to, so a single VALIDATED edge fires the rule at most
     // once even if the rule's other AND-conditions delay the actual fire.
     private val lastSeenNetworkAvailableAt = ConcurrentHashMap<Long, Long>()
-    // Service-start trigger: active during a short window after the first
-    // evaluate() of the process, consumed per rule on fire. The previous
+    // Service-start trigger: active during a short window after a new session
+    // starts (see evaluate()), consumed per rule on fire. The previous
     // one-shot flag raced cold-start nulls: the very first tick often carries
     // incomplete data, so "запуск BYDMate AND темп > 22" silently missed the
     // whole trip when ExtTemp was still null on tick one (issue #51).
     @Volatile private var serviceStartWindowEnd = 0L
     private val serviceStartConsumed = ConcurrentHashMap.newKeySet<Long>()
+    // Test seam: identifies the current DiLink boot. Empty string = unknown (boot_id not
+    // readable); an unknown id on either side takes no part in the new-session decision.
+    internal var bootIdProvider: () -> String = {
+        runCatching { java.io.File(BOOT_ID_PATH).readText().trim() }.getOrNull().orEmpty()
+    }
+    // Test seam: monotonic clock of evaluate() that counts deep sleep, drives the heartbeat.
+    internal var elapsedMs: () -> Long = { SystemClock.elapsedRealtime() }
+    // Test seam: monotonic clock of evaluate() that stops in deep sleep.
+    internal var uptimeMs: () -> Long = { SystemClock.uptimeMillis() }
+    // Test seam: wall clock of evaluate().
+    internal var nowMs: () -> Long = { System.currentTimeMillis() }
+    // Session state of this process: boot id, and both clocks of the previous tick (null
+    // until the first evaluate(), which seeds them from the persisted heartbeat).
+    @Volatile private var sessionBootId: String? = null
+    @Volatile private var savedBootId: String? = null
+    @Volatile private var lastTickElapsed: Long? = null
+    @Volatile private var lastTickUptime: Long? = null
+    @Volatile private var lastHeartbeatWriteElapsed: Long? = null
 
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
     // live cache so the a11y key filter can answer "is this key mine?" on the
@@ -137,10 +172,62 @@ class AutomationEngine @Inject constructor(
         val placesById = placeRepository.getAllSnapshot().associateBy { it.id }
 
         val rules = ruleDao.getEnabled()
-        val now = System.currentTimeMillis()
+        val now = nowMs()
 
-        // Arm the service_start window on the very first evaluate() of the process.
-        if (serviceStartWindowEnd == 0L) serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
+        // A new session arms the service_start window: a different kernel boot id (reboot),
+        // elapsed going backwards (reboot), or a real suspend between two ticks: elapsed ran
+        // ahead of uptime by more than SERVICE_START_SLEEP_MIN_MS (the head unit slept, whether
+        // the process died meanwhile or survived the sleep). Checked on every evaluate(), so a
+        // process that lives through a sleep still re-arms on wake-up. A telemetry pause while
+        // the car is on (no evaluate() calls, both clocks run) is not a new session.
+        // WorkManager restarting a killed process mid-session (same boot, no sleep) marks the
+        // window as already spent (-1), so service_start rules don't fire again (#177).
+        // Wall-clock time takes no part in the decision, so clock corrections can't reopen the
+        // window. Limitation: without a readable boot id, a reboot whose new elapsed already
+        // exceeds the saved one (previous session shorter than the time to app start on the
+        // new boot) is not recognised.
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val elapsed = elapsedMs()
+        val uptime = uptimeMs()
+        val firstTick = lastTickElapsed == null
+        if (firstTick) {
+            sessionBootId = bootIdProvider()
+            savedBootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)
+        }
+        val bootId = sessionBootId.orEmpty()
+        val prevElapsed: Long?
+        val prevUptime: Long?
+        if (firstTick) {
+            prevElapsed = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L).takeIf { it >= 0L }
+            prevUptime = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_UPTIME, -1L).takeIf { it >= 0L }
+        } else {
+            prevElapsed = lastTickElapsed
+            prevUptime = lastTickUptime
+        }
+        val saved = savedBootId.orEmpty()
+        val bootChanged = bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved
+        val slept = prevElapsed != null && prevUptime != null &&
+            (elapsed - prevElapsed) - (uptime - prevUptime) > SERVICE_START_SLEEP_MIN_MS
+        val newSession = bootChanged || prevElapsed == null || elapsed < prevElapsed || slept
+        if (newSession) {
+            serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
+            serviceStartConsumed.clear()
+            prefs.edit().putString(KEY_SERVICE_START_BOOT_ID, bootId).commit()
+            savedBootId = bootId
+        } else if (firstTick) {
+            Log.i(TAG, "service_start: process restarted mid-session, not re-arming")
+            serviceStartWindowEnd = -1L
+        }
+        lastTickElapsed = elapsed
+        lastTickUptime = uptime
+        val lastWrite = lastHeartbeatWriteElapsed
+        if (lastWrite == null || elapsed - lastWrite >= SERVICE_START_HEARTBEAT_MS) {
+            lastHeartbeatWriteElapsed = elapsed
+            prefs.edit()
+                .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
+                .putLong(KEY_SERVICE_START_LAST_SEEN_UPTIME, uptime)
+                .apply()
+        }
 
         // Prune per-rule state for rules that have been deleted (or disabled
         // and removed from the active set). Without this, `lastEvalResults`,

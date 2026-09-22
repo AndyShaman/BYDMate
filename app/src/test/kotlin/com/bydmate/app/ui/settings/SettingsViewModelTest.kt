@@ -50,6 +50,7 @@ import okhttp3.OkHttpClient
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
@@ -59,6 +60,7 @@ import com.bydmate.app.data.vehicle.SeatChannelStore
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.coVerifyOrder
+import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
 import io.mockk.verify
@@ -251,6 +253,9 @@ class SettingsViewModelTest {
         override suspend fun count(): Int = rows.size
     }
 
+    // Stub BackupManager: no AppDatabase available in unit tests, use mockk
+    private var backupManager: BackupManager = mockk(relaxed = true)
+
     private fun buildViewModel(
         updateChecker: UpdateChecker? = null,
         ttsModelManager: com.bydmate.app.voice.TtsModelManager? = null,
@@ -288,9 +293,6 @@ class SettingsViewModelTest {
 
         val openRouterClient = OpenRouterClient(httpClient)
         val insightsManager = InsightsManager(ctx, openRouterClient, tripDao, idleDrainDao, chargeDao, settingsRepo)
-
-        // Stub BackupManager: no AppDatabase available in unit tests, use mockk
-        val backupManager = mockk<BackupManager>(relaxed = true)
 
         // Voice deps are not exercised by most settings tests; relaxed mocks keep them inert.
         val resolvedTtsModelManager = ttsModelManager ?: mockk(relaxed = true)
@@ -1462,6 +1464,54 @@ class SettingsViewModelTest {
 
     /** Download is shared with other exports — clear only our own dumps, never the folder. */
     private fun clearDumpsIn(dir: File) = dumpFilesIn(dir).forEach { it.delete() }
+
+    @Test
+    fun `openRestorePicker lists backups off the main thread into the state, close clears it`() = runTest {
+        val files = listOf(java.io.File("/sdcard/Download/bydmate_backup_2.zip"), java.io.File("/sdcard/Download/bydmate_backup_1.zip"))
+        backupManager = mockk { every { listBackups() } returns files }
+        val vm = buildViewModel()
+        assertNull(vm.uiState.value.restoreCandidates)
+
+        vm.openRestorePicker()
+        // Runs on the real Dispatchers.IO, which the test scheduler cannot advance.
+        val deadline = System.currentTimeMillis() + 5_000
+        while (vm.uiState.value.restoreCandidates == null && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        assertEquals(files, vm.uiState.value.restoreCandidates)
+
+        vm.closeRestorePicker()
+        assertNull(vm.uiState.value.restoreCandidates)
+    }
+
+    @Test
+    fun `openRestorePicker ignores repeated taps while a scan runs, close drops its late result`() = runTest {
+        val files = listOf(java.io.File("/sdcard/Download/bydmate_backup_1.zip"))
+        val started = java.util.concurrent.CountDownLatch(1)
+        val release = java.util.concurrent.CountDownLatch(1)
+        val done = java.util.concurrent.CountDownLatch(1)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        backupManager = mockk {
+            every { listBackups() } answers {
+                calls.incrementAndGet()
+                started.countDown()
+                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
+                done.countDown()
+                files
+            }
+        }
+        val vm = buildViewModel()
+
+        vm.openRestorePicker()
+        assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        vm.openRestorePicker()
+        vm.openRestorePicker()
+        vm.closeRestorePicker()
+        release.countDown()
+        assertTrue(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
+        Thread.sleep(200)                                   // let a late update land if it would
+
+        assertEquals(1, calls.get())
+        assertNull(vm.uiState.value.restoreCandidates)
+    }
 
     /**
      * dumpFids() runs on the real [Dispatchers.IO], so the test scheduler cannot advance it —
