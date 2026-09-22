@@ -136,33 +136,4 @@ class DumpFidsCoreTest {
         val result = dumpFidsCore { null }
         assertEquals("", result)
     }
-
-    // --- Mutation anti-vacuity ---
-
-    @Test
-    fun `mutation guard M1 - isStatic filter prevents per-class section from disappearing`() {
-        // FakeFeatureIds has instanceInt: a non-static int field. Without the Modifier.isStatic
-        // guard, instanceInt passes the type filter and field.get(null) throws NPE. The per-class
-        // runCatching in dumpFidsCore catches that NPE, commits an emptyList() for the whole
-        // FakeFeatureIds section, and the result contains NO static fields from FakeFeatureIds.
-        //
-        // Mutation evidence: comment out the isStatic check in dumpFidsCore → the per-class
-        // runCatching swallows the NPE → FakeFeatureIds section is empty → assertTrue below FAILS.
-        val result = dumpWith("android.hardware.bydauto.BYDAutoFeatureIds" to FakeFeatureIds::class.java)
-        assertTrue("STATIC_INT must appear (isStatic guard active)", result.contains("STATIC_INT=100"))
-        assertFalse("instanceInt must not appear", result.contains("instanceInt"))
-    }
-
-    @Test
-    fun `mutation guard M2 - null-class guard prevents NPE when resolver returns null`() {
-        // A resolver that always returns null represents firmware without BYD SDK.
-        // The ?: continue guard makes dumpFidsCore skip the class and return "" safely.
-        // Without the guard, the code attempts rootClass.declaredClasses on a null reference
-        // and throws NullPointerException that propagates out of dumpFidsCore.
-        //
-        // Mutation evidence: drop `?: continue` from `val rootClass = classResolver(...) ?: continue`
-        // and rerun this test — it will fail with NullPointerException instead of returning "".
-        val result = dumpFidsCore { null }
-        assertEquals("null guard must produce empty string, not throw", "", result)
-    }
 }

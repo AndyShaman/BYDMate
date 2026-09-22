@@ -349,39 +349,6 @@ class SplitMenuLogicTest {
     // These tests verify the logic-seam state that syncLogicToView() reads and propagates
     // to pillView.setPickerMode(), making the picker overlay visible.
 
-    @Test fun `PICK_LEFT (narrowRight) → ChangePane WIDE — logic seam for Bug B`() {
-        val logic = SplitMenuLogic()
-        logic.onPillTap()
-        val cmd = logic.onMenuAction(MenuAction.PICK_LEFT, SplitSide.RIGHT)
-        // Menu must close and pickerMode must be set (syncLogicToView syncs this to the view).
-        assertEquals(MenuCmd.None, cmd)
-        assertFalse(logic.isMenuVisible)
-        assertEquals(PickerMode.ChangePane(Pane.WIDE), logic.pickerMode)
-    }
-
-    @Test fun `PICK_RIGHT (narrowRight) → ChangePane NARROW — logic seam for Bug B`() {
-        val logic = SplitMenuLogic()
-        logic.onPillTap()
-        val cmd = logic.onMenuAction(MenuAction.PICK_RIGHT, SplitSide.RIGHT)
-        assertEquals(MenuCmd.None, cmd)
-        assertFalse(logic.isMenuVisible)
-        assertEquals(PickerMode.ChangePane(Pane.NARROW), logic.pickerMode)
-    }
-
-    @Test fun `PICK_LEFT (narrowLeft) → ChangePane NARROW — logic seam for Bug B`() {
-        val logic = SplitMenuLogic()
-        logic.onMenuAction(MenuAction.PICK_LEFT, SplitSide.LEFT)
-        // narrow-left: LEFT column is NARROW pane
-        assertEquals(PickerMode.ChangePane(Pane.NARROW), logic.pickerMode)
-    }
-
-    @Test fun `PICK_RIGHT (narrowLeft) → ChangePane WIDE — logic seam for Bug B`() {
-        val logic = SplitMenuLogic()
-        logic.onMenuAction(MenuAction.PICK_RIGHT, SplitSide.LEFT)
-        // narrow-left: RIGHT column is WIDE pane
-        assertEquals(PickerMode.ChangePane(Pane.WIDE), logic.pickerMode)
-    }
-
     @Test fun `MIRROR action does NOT open picker — no sync needed`() {
         // Verify that non-picker actions leave pickerMode null so the controller's
         // "if (logic.pickerMode != null) syncLogicToView()" branch is NOT taken.

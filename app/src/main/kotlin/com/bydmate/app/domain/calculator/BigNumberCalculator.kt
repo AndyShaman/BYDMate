@@ -31,7 +31,7 @@ object BigNumberCalculator {
 
         if (!sessionActive) return parkingFallback()
         if (tripKm == null || tripKwh == null) return parkingFallback()
-        if (tripKwh < 0.0) return parkingFallback()  // BMS recal glitch
+        if (tripKwh <= 0.0) return parkingFallback()  // BMS recal glitch or no energy counted yet
         if (tripKm <= 0.01) return parkingFallback()
 
         val currentTripAvg = tripKwh / tripKm * 100.0

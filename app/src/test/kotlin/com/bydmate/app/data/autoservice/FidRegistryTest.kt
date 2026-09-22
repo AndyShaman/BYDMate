@@ -45,7 +45,7 @@ class FidRegistryTest {
     fun `Charging gun connect state fid is set`() {
         assertEquals(1009, FidRegistry.DEV_CHARGING)
         // exact fid value asserted to lock the const
-        assertEquals(FidRegistry.FID_GUN_CONNECT_STATE, FidRegistry.FID_GUN_CONNECT_STATE)
+        assertEquals(876609586, FidRegistry.FID_GUN_CONNECT_STATE)
     }
 
     @Test

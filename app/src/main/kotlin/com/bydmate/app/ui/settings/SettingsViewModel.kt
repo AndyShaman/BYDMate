@@ -59,6 +59,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.Job
@@ -2479,9 +2480,12 @@ class SettingsViewModel @Inject constructor(
     // must not be reopened by a late result.
     private var restoreScanJob: Job? = null
 
+    // Test seam: tests swap it for a test dispatcher so the restore scan runs on virtual time.
+    internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+
     fun openRestorePicker() {
         if (restoreScanJob?.isActive == true) return
-        restoreScanJob = viewModelScope.launch(Dispatchers.IO) {
+        restoreScanJob = viewModelScope.launch(ioDispatcher) {
             val files = backupManager.listBackups()
             ensureActive()
             _uiState.update { it.copy(restoreCandidates = files) }

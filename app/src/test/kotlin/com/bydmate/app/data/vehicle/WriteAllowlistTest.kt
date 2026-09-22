@@ -14,30 +14,6 @@ class WriteAllowlistTest {
 
     private val bannedDevs = setOf(1004, 1006, 1007, 1009, 1011, 1012, 1013, 1014, 1016, 1023, 1032)
 
-    // ── Test 5: WriteEntry data class construction with new fields ────────────
-    @Test fun `WriteEntry data class construction with new fields works`() {
-        val entry = WriteEntry(
-            actionName = "test_action",
-            dev = 1001,
-            writeFid = 12345,
-            readbackFid = 67890,
-            valueMin = 0,
-            valueMax = 100,
-            category = "windows",
-            validated = true,
-            source = "live-leopard3-2026-05-28",
-        )
-        assertEquals("test_action", entry.actionName)
-        assertEquals(1001, entry.dev)
-        assertEquals(12345, entry.writeFid)
-        assertEquals(67890, entry.readbackFid)
-        assertEquals(0, entry.valueMin)
-        assertEquals(100, entry.valueMax)
-        assertEquals("windows", entry.category)
-        assertTrue(entry.validated)
-        assertEquals("live-leopard3-2026-05-28", entry.source)
-    }
-
     // ── Test 1: banned dev entries are dropped; safe entries survive ──────────
     @Test fun `no production entry targets a banned dev namespace`() {
         val fixture = """

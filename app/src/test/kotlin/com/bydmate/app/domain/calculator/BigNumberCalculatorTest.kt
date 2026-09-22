@@ -133,7 +133,7 @@ class BigNumberCalculatorTest {
             lastTripAvg = 18.0, recentAvg25km = 0.0,
             sessionActive = true,
         )
-        assertEquals(0.0, r!!, 0.001)  // documents current behavior: 0.0/km is "valid"
+        assertEquals(18.0, r!!, 0.001)  // 0.0 kWh is not a real trip average, fallback applies
     }
 
     @Test fun `zero tripKm produces fallback even at active session`() {

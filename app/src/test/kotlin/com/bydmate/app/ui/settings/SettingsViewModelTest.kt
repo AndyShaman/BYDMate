@@ -1466,16 +1466,14 @@ class SettingsViewModelTest {
     private fun clearDumpsIn(dir: File) = dumpFilesIn(dir).forEach { it.delete() }
 
     @Test
-    fun `openRestorePicker lists backups off the main thread into the state, close clears it`() = runTest {
-        val files = listOf(java.io.File("/sdcard/Download/bydmate_backup_2.zip"), java.io.File("/sdcard/Download/bydmate_backup_1.zip"))
+    fun `openRestorePicker lists backups into the state, close clears it`() = runTest {
+        val files = listOf(File("/sdcard/Download/bydmate_backup_2.zip"), File("/sdcard/Download/bydmate_backup_1.zip"))
         backupManager = mockk { every { listBackups() } returns files }
-        val vm = buildViewModel()
+        val vm = buildViewModel().apply { ioDispatcher = testDispatcher }
         assertNull(vm.uiState.value.restoreCandidates)
 
         vm.openRestorePicker()
-        // Runs on the real Dispatchers.IO, which the test scheduler cannot advance.
-        val deadline = System.currentTimeMillis() + 5_000
-        while (vm.uiState.value.restoreCandidates == null && System.currentTimeMillis() < deadline) Thread.sleep(10)
+        testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(files, vm.uiState.value.restoreCandidates)
 
         vm.closeRestorePicker()
@@ -1483,33 +1481,30 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `openRestorePicker ignores repeated taps while a scan runs, close drops its late result`() = runTest {
-        val files = listOf(java.io.File("/sdcard/Download/bydmate_backup_1.zip"))
-        val started = java.util.concurrent.CountDownLatch(1)
-        val release = java.util.concurrent.CountDownLatch(1)
-        val done = java.util.concurrent.CountDownLatch(1)
+    fun `openRestorePicker ignores repeated taps while a scan runs`() = runTest {
         val calls = java.util.concurrent.atomic.AtomicInteger()
-        backupManager = mockk {
-            every { listBackups() } answers {
-                calls.incrementAndGet()
-                started.countDown()
-                release.await(5, java.util.concurrent.TimeUnit.SECONDS)
-                done.countDown()
-                files
-            }
-        }
-        val vm = buildViewModel()
+        backupManager = mockk { every { listBackups() } answers { calls.incrementAndGet(); emptyList() } }
+        val vm = buildViewModel().apply { ioDispatcher = testDispatcher }
 
+        vm.openRestorePicker()          // job created, not yet run on StandardTestDispatcher
         vm.openRestorePicker()
-        assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS))
         vm.openRestorePicker()
-        vm.openRestorePicker()
-        vm.closeRestorePicker()
-        release.countDown()
-        assertTrue(done.await(5, java.util.concurrent.TimeUnit.SECONDS))
-        Thread.sleep(200)                                   // let a late update land if it would
+        testDispatcher.scheduler.advanceUntilIdle()
 
         assertEquals(1, calls.get())
+    }
+
+    @Test
+    fun `closeRestorePicker during a scan drops the scan result`() = runTest {
+        val files = listOf(File("/sdcard/Download/bydmate_backup_1.zip"))
+        lateinit var vm: SettingsViewModel
+        // The scan closes the picker from inside listBackups(): ensureActive() after it must drop the result.
+        backupManager = mockk { every { listBackups() } answers { vm.closeRestorePicker(); files } }
+        vm = buildViewModel().apply { ioDispatcher = testDispatcher }
+
+        vm.openRestorePicker()
+        testDispatcher.scheduler.advanceUntilIdle()
+
         assertNull(vm.uiState.value.restoreCandidates)
     }
 
