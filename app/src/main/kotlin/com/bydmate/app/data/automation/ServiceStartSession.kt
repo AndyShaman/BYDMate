@@ -186,7 +186,11 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         val session = prefs.edit()
             .putString(KEY_SERVICE_START_BOOT_ID, bootId)
             .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
-        val cleared = commitClearingCarOff(session, generation, "service_start: session commit failed")
+        // The window opens under the lock too, so an ACC_OFF right after the commit closes it.
+        val cleared = synchronized(carOffLock) {
+            commitClearingCarOff(session, generation, "service_start: session commit failed")
+                .also { if (it) windowEnd = elapsed + SERVICE_START_WINDOW_MS }
+        }
         lastHeartbeatWriteElapsed = elapsed
         savedBootId = bootId
         if (!cleared) {
@@ -195,7 +199,6 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
             windowEnd = -1L
             return
         }
-        windowEnd = elapsed + SERVICE_START_WINDOW_MS
         consumed.clear()
         lastSessionOpenedElapsed = elapsed
     }
@@ -218,11 +221,16 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
      * The car was switched off (byd.intent.action.ACC_OFF). Persisted at once: the process is
      * force-stopped shortly after, and the next car start must open a new session. A repeated
      * broadcast keeps the marker and whether the screen was already seen off, and retries a
-     * commit that failed on disk.
+     * commit that failed on disk. An open window closes at once: the evaluate() in progress may
+     * still be walking the rules.
      */
     fun onCarOff(elapsed: Long) = synchronized(carOffLock) {
         // A repeat counts too: a tick that read the marker before it must not clear it.
         carOffGeneration++
+        if (elapsed <= windowEnd) {
+            Log.i(TAG, "service_start: ACC_OFF, window closed")
+            windowEnd = -1L
+        }
         val prefs = prefs()
         if (prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)) {
             if (carOffPersisted) {
