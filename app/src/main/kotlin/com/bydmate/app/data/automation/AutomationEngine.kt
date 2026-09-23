@@ -66,8 +66,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
         // Kernel boot id of the DiLink session that already had its service_start window.
         // A process restart on the same boot must not reopen it (#177).
-        private const val PREFS_NAME = "automation"
-        private const val KEY_SERVICE_START_BOOT_ID = "service_start_boot_id"
+        internal const val PREFS_NAME = "automation"
+        internal const val KEY_SERVICE_START_BOOT_ID = "service_start_boot_id"
         private const val BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
         // Heartbeat of a live evaluate() loop on two monotonic clocks: elapsedRealtime counts
         // deep sleep, uptimeMillis stops in it; both are immune to NTP/GPS clock corrections.
@@ -75,8 +75,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // ahead of uptime by more than SERVICE_START_SLEEP_MIN_MS between two ticks means the
         // device really suspended, so this is a real car start. A plain gap in evaluate() calls
         // (telemetry unavailable while the car is on) advances both clocks equally and is not.
-        private const val KEY_SERVICE_START_LAST_SEEN_ELAPSED = "service_start_last_seen_elapsed"
-        private const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
+        internal const val KEY_SERVICE_START_LAST_SEEN_ELAPSED = "service_start_last_seen_elapsed"
+        internal const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
         private const val SERVICE_START_SLEEP_MIN_MS = 60_000L
         private const val SERVICE_START_HEARTBEAT_MS = 30_000L
 
