@@ -189,20 +189,6 @@ class AutoBackupRunnerTest {
         assertEquals("", settings.getAutoBackupLastResult())
     }
 
-    @Test fun `manual run works with the period off, retries included`() = runTest {
-        configureTelegram()
-        settings.setAutoBackupPeriod(AutoBackupPeriod.OFF)
-        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns
-            Result.failure(TelegramSinkException(TelegramError.NO_NETWORK))
-        assertEquals(RunOutcome.RETRY, runner().run(force = true, manual = true))
-
-        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
-        assertEquals(RunOutcome.SUCCESS, runner().run(force = false, manual = true))
-
-        verify(exactly = 1) { backupManager.export(any()) }
-        assertEquals(AutoBackupRunner.RESULT_SENT, settings.getAutoBackupLastResult())
-    }
-
     // --- delivery ---
 
     @Test fun `file is pending before the upload starts, so a cancelled upload keeps it`() = runTest {
@@ -249,24 +235,6 @@ class AutoBackupRunnerTest {
 
         coVerify(exactly = 0) { sink.sendDocument(any(), any(), any(), any()) }
         assertEquals("send_error:TOO_LARGE", settings.getAutoBackupLastResult())
-        assertEquals("", settings.getAutoBackupPendingUpload())
-    }
-
-    @Test fun `forced run exports afresh even with a pending upload`() = runTest {
-        configureTelegram()
-        settings.setAutoBackupPeriod(AutoBackupPeriod.WEEKLY)
-        settings.setAutoBackupLastTs(now - 1000L)
-        val stuck = File(dir, "bydmate_backup_auto_20260901_000000.zip").apply {
-            writeBytes(ByteArray(1)); setLastModified(now - 1_000_000)
-        }
-        settings.setAutoBackupPendingUpload(stuck.absolutePath)
-        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
-
-        assertEquals(RunOutcome.SUCCESS, runner().run(force = true))
-
-        verify(exactly = 1) { backupManager.export(any()) }
-        val fresh = File(dir, "bydmate_backup_auto_20260923_100001.zip")
-        coVerify(exactly = 1) { sink.sendDocument(any(), any(), match { it.absolutePath == fresh.absolutePath }, any()) }
         assertEquals("", settings.getAutoBackupPendingUpload())
     }
 

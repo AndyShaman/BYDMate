@@ -7,7 +7,6 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
-import androidx.work.workDataOf
 import com.bydmate.app.data.repository.SettingsRepository
 import java.io.File
 import java.util.concurrent.TimeUnit
@@ -28,8 +27,6 @@ class AutoBackupScheduler @Inject constructor(
     companion object {
         private const val TAG = "AutoBackup"
         const val WORK_NAME = "auto_backup"
-        /** Own name so a scheduled run waiting for the network never holds up a manual one. */
-        const val MANUAL_WORK_NAME = "auto_backup_manual"
         /** Lets the head unit finish its own start-up (sync, modem) before the zip is built. */
         private const val START_DELAY_MIN = 2L
     }
@@ -53,27 +50,10 @@ class AutoBackupScheduler @Inject constructor(
         WorkManager.getInstance(context).enqueueUniqueWork(WORK_NAME, ExistingWorkPolicy.KEEP, request.build())
     }
 
-    /** «Выкл» or «Отключить»: drops a scheduled run that is still waiting or retrying; manual runs stay. */
+    /** «Выкл» or «Отключить»: drops a scheduled run that is still waiting or retrying. */
     fun cancelScheduled(context: Context) {
         Log.i(TAG, "scheduled run cancelled")
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
-    }
-
-    /**
-     * Manual run from Settings: a fresh export regardless of the period, last run and pending upload.
-     * Runs under [MANUAL_WORK_NAME] with no delay or constraints, so it may overlap a scheduled
-     * run: export() is serialized and each run uploads its own file. KEEP: a second tap while a
-     * manual run is in flight does not start another one.
-     */
-    fun enqueueNow(context: Context) {
-        Log.i(TAG, "manual run requested")
-        WorkManager.getInstance(context).enqueueUniqueWork(
-            MANUAL_WORK_NAME,
-            ExistingWorkPolicy.KEEP,
-            OneTimeWorkRequestBuilder<AutoBackupWorker>()
-                .setInputData(workDataOf(AutoBackupWorker.KEY_FORCE to true))
-                .build(),
-        )
     }
 }
 

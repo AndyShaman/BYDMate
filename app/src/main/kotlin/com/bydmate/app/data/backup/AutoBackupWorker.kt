@@ -22,10 +22,8 @@ class AutoBackupWorker @AssistedInject constructor(
 ) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val manual = inputData.getBoolean(KEY_FORCE, false)
         val outcome = withContext(Dispatchers.IO) {
-            AutoBackupRunner(backupManager, sink, settingsRepository)
-                .run(force = forceExport(manual, runAttemptCount), manual = manual)
+            AutoBackupRunner(backupManager, sink, settingsRepository).run()
         }
         return when (capRetries(outcome, runAttemptCount)) {
             RunOutcome.SUCCESS -> Result.success()
@@ -33,18 +31,7 @@ class AutoBackupWorker @AssistedInject constructor(
             RunOutcome.FAILURE -> Result.failure()
         }
     }
-
-    companion object {
-        /** Input flag of the manual run: export afresh even when an upload is pending. */
-        const val KEY_FORCE = "force"
-    }
 }
-
-/**
- * Only the first attempt of a manual run exports afresh; its retries deliver the pending file
- * instead of piling up new exports.
- */
-internal fun forceExport(manual: Boolean, attempt: Int): Boolean = manual && attempt == 0
 
 /** WorkManager attempt (0-based) from which a transient upload failure stops retrying: 3 attempts in all. */
 internal const val MAX_RETRY_ATTEMPT = 2
