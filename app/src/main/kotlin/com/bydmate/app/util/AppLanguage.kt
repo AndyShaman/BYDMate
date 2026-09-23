@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import com.bydmate.app.data.local.LocalePreferences
+import com.bydmate.app.ui.overlay.ListeningOverlay
 import com.bydmate.app.ui.widget.WidgetController
 
 /** App UI languages as (code, native name); shared by the Settings picker and the first-run wizard. */
@@ -27,4 +28,6 @@ fun applyAppLanguage(appContext: Context, localePreferences: LocalePreferences, 
     // applicationContext keeps a stale Configuration after setApplicationLocales,
     // which leaves the floating widget rendering against the old language.
     WidgetController.relocale(appContext)  // C-5: pass context from VM, not from widgetView
+    // The voice orb dialog may be on screen: swap its captions in place.
+    ListeningOverlay.relocale(appContext)
 }

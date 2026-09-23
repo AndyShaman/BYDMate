@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
 import com.bydmate.app.ui.theme.AccentGreen
@@ -44,6 +45,7 @@ import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.WithAppFontScale
+import com.bydmate.app.util.appLocalizedContext
 
 /**
  * Shows a SYSTEM_ALERT_WINDOW overlay asking the user to confirm execution
@@ -59,6 +61,13 @@ object ConfirmOverlayManager {
     private const val DEFAULT_TIMEOUT_MS = 15_000L
 
     fun canShow(context: Context): Boolean = Settings.canDrawOverlays(context)
+
+    /** (cancel, run) button labels in the app language; the caller's context is usually the
+     *  application one, which stays on the system locale. Resolved at every show. */
+    internal fun buttonLabels(context: Context): Pair<String, String> {
+        val lc = context.appLocalizedContext()
+        return lc.getString(R.string.confirm_overlay_cancel) to lc.getString(R.string.confirm_overlay_run)
+    }
 
     fun show(
         context: Context,
@@ -138,6 +147,7 @@ object ConfirmOverlayManager {
         }
 
         val fontScale = LocalePreferences(context).getFontScale()
+        val (cancelLabel, runLabel) = buttonLabels(context)
         composeView.setContent {
             WithAppFontScale(fontScale) {
                 Column(
@@ -176,7 +186,7 @@ object ConfirmOverlayManager {
                                 contentColor = NavyDark,
                             ),
                         ) {
-                            Text(context.getString(com.bydmate.app.R.string.confirm_overlay_cancel), fontSize = 14.sp)
+                            Text(cancelLabel, fontSize = 14.sp)
                         }
                         Button(
                             onClick = { dismiss("confirm") },
@@ -187,7 +197,7 @@ object ConfirmOverlayManager {
                                 contentColor = NavyDark,
                             ),
                         ) {
-                            Text(context.getString(com.bydmate.app.R.string.confirm_overlay_run), fontSize = 14.sp)
+                            Text(runLabel, fontSize = 14.sp)
                         }
                     }
                 }
