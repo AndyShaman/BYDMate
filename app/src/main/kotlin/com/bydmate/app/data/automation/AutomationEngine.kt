@@ -113,6 +113,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // one-shot flag raced cold-start nulls: the very first tick often carries
     // incomplete data, so "запуск BYDMate AND темп > 22" silently missed the
     // whole trip when ExtTemp was still null on tick one (issue #51).
+    // Deadline on elapsedMs(): 0 = never armed, -1 = closed for this session.
     @Volatile private var serviceStartWindowEnd = 0L
     private val serviceStartConsumed = ConcurrentHashMap.newKeySet<Long>()
     // Test seam: identifies the current DiLink boot. Empty string = unknown (boot_id not
@@ -127,8 +128,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     internal var interactiveProvider: () -> Boolean = {
         runCatching {
             (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
-        }.getOrDefault(true)
+        }.getOrElse {
+            if (!powerManagerWarned) {
+                powerManagerWarned = true
+                Log.w(TAG, "service_start: PowerManager unavailable, assuming screen on")
+            }
+            true
+        }
     }
+    @Volatile private var powerManagerWarned = false
     // Test seam: wall clock of evaluate().
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
     // Session state of this process: boot id and elapsed of the last screen-on tick, seeded
@@ -184,9 +192,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     fun serviceStartDumpLine(): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val end = serviceStartWindowEnd
+        val elapsed = elapsedMs()
         val window = when {
             end <= 0L -> "not armed"
-            nowMs() <= end -> "armed until " + SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(end))
+            elapsed <= end -> "armed until " + SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(nowMs() + end - elapsed))
             else -> "spent"
         }
         val heartbeat = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L)
@@ -219,9 +228,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // a process started with the screen off (restart after ACC_OFF) keeps the window closed
         // and decides on its first screen-on tick. A process restarted mid-drive (fresh
         // heartbeat) marks the window as already spent (-1), so service_start rules don't fire
-        // again. Wall-clock time takes no part in the decision, so clock corrections can't
-        // reopen the window. Limitation: without a readable boot id, a reboot whose new elapsed
-        // already exceeds the saved one and lies within the wake gap is not recognised.
+        // again. Wall-clock time takes no part in the decision nor in the window deadline, so
+        // clock corrections can't reopen, stretch or cut the window. Limitation: without a
+        // readable boot id, a reboot whose new elapsed already exceeds the saved one and lies
+        // within the wake gap is not recognised.
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val elapsed = elapsedMs()
         val interactive = interactiveProvider()
@@ -236,8 +246,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             if (firstTick) {
                 Log.i(TAG, "service_start: screen off at start, waiting for wake-up")
                 serviceStartWindowEnd = -1L
-            } else if (lastInteractive) {
-                Log.i(TAG, "service_start: screen off, heartbeat paused")
+            } else {
+                if (lastInteractive) Log.i(TAG, "service_start: screen off, heartbeat paused")
+                // The car went off before a service_start rule matched: it must not fire later
+                // with the screen dark.
+                if (elapsed <= serviceStartWindowEnd) {
+                    Log.i(TAG, "service_start: screen off, window closed")
+                    serviceStartWindowEnd = -1L
+                }
             }
         } else {
             val bootId = sessionBootId.orEmpty()
@@ -253,9 +269,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             }
             if (reason != null) {
                 Log.i(TAG, "service_start: new session reason=$reason gap=$gap")
-                serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
+                serviceStartWindowEnd = elapsed + SERVICE_START_WINDOW_MS
                 serviceStartConsumed.clear()
-                prefs.edit().putString(KEY_SERVICE_START_BOOT_ID, bootId).commit()
+                // One synchronous write before any rule runs: a process killed right after the
+                // fire must find this session's heartbeat, or its restart would re-arm.
+                prefs.edit()
+                    .putString(KEY_SERVICE_START_BOOT_ID, bootId)
+                    .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
+                    .commit()
+                lastHeartbeatWriteElapsed = elapsed
                 savedBootId = bootId
             } else if (!sessionDecided) {
                 Log.i(TAG, "service_start: process restarted mid-session, not re-arming gap=$gap")
@@ -319,7 +341,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                     }
                 }
 
-                val serviceStartActive = now <= serviceStartWindowEnd && rule.id !in serviceStartConsumed
+                val serviceStartActive = interactive && elapsed <= serviceStartWindowEnd &&
+                    rule.id !in serviceStartConsumed
                 val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
 

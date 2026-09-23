@@ -1,6 +1,8 @@
 package com.bydmate.app.data.automation
 
 import android.content.Context
+import android.content.ContextWrapper
+import android.content.SharedPreferences
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -65,7 +67,10 @@ class AutomationEngineEdgeTest {
         lastTriggeredAt = lastTriggeredAt,
     )
 
-    private fun setup(rulesProvider: () -> List<RuleEntity>): Pair<AutomationEngine, RuleDao> {
+    private fun setup(
+        context: Context = ApplicationProvider.getApplicationContext(),
+        rulesProvider: () -> List<RuleEntity>,
+    ): Pair<AutomationEngine, RuleDao> {
         val ruleDao = mockk<RuleDao>(relaxed = true) {
             coEvery { getEnabled() } answers { rulesProvider() }
         }
@@ -78,7 +83,7 @@ class AutomationEngineEdgeTest {
                 every { lastAvailableAt } returns 0L
                 every { probePending } returns false
             },
-            context = ApplicationProvider.getApplicationContext<Context>(),
+            context = context,
             appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
         engine.interactiveProvider = { true }  // screen on unless a test says otherwise
@@ -176,8 +181,11 @@ class AutomationEngineEdgeTest {
         fun advance(ms: Long) { elapsed += ms; wall += ms }
     }
 
-    private fun serviceStartEngine(bootId: String, unit: HeadUnit): Pair<AutomationEngine, RuleDao> {
-        val r = rule(1, listOf(serviceStartTrigger()))
+    private fun serviceStartEngine(
+        bootId: String,
+        unit: HeadUnit,
+        r: RuleEntity = rule(1, listOf(serviceStartTrigger())),
+    ): Pair<AutomationEngine, RuleDao> {
         val (engine, dao) = setup { listOf(r) }
         engine.bootIdProvider = { bootId }
         engine.elapsedMs = { unit.elapsed }
@@ -333,6 +341,78 @@ class AutomationEngineEdgeTest {
         // NTP/GPS moved the wall clock a minute; same boot, heartbeat 20 s old by elapsed.
         val dao = startProcess(bootId, e0 + 20_000L, wall = t0 + 60_000L)
         coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `service_start window ignores a wall clock correction while it is open`() = runBlocking {
+        val warm = rule(1, listOf(serviceStartTrigger(), paramTrigger("ExtTemp", ">", "22")), logic = "AND")
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit, warm)
+        engine.evaluate(diParsData(exteriorTemp = null), null)              // window armed, data cold
+        unit.elapsed += 5_000L
+        unit.wall += 3_600_000L                                             // GPS moved the clock an hour
+        engine.evaluate(diParsData(exteriorTemp = 25), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start window closes when the screen goes off before the rule matched`() = runBlocking {
+        val warm = rule(1, listOf(serviceStartTrigger(), paramTrigger("ExtTemp", ">", "22")), logic = "AND")
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit, warm)
+        engine.evaluate(diParsData(exteriorTemp = null), null)              // window armed, data cold
+        unit.advance(5_000L)
+        unit.screenOn = false                                               // car off inside the window
+        engine.evaluate(diParsData(exteriorTemp = 25), null)
+        unit.advance(5_000L)
+        unit.screenOn = true                                                // back on, same session
+        engine.evaluate(diParsData(exteriorTemp = 25), null)
+        coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+        assertTrue(engineLogs().contains("service_start: screen off, window closed"))
+    }
+
+    /** Keys of every committed and every applied edit of the prefs it wraps. */
+    private class RecordingPrefs(private val real: SharedPreferences) : SharedPreferences by real {
+        val committed = mutableListOf<Set<String>>()
+        val applied = mutableListOf<Set<String>>()
+
+        override fun edit(): SharedPreferences.Editor = Editor(real.edit())
+
+        private inner class Editor(private val e: SharedPreferences.Editor) : SharedPreferences.Editor by e {
+            private val keys = mutableSetOf<String>()
+            override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                keys += key
+                e.putString(key, value)
+                return this
+            }
+            override fun putLong(key: String, value: Long): SharedPreferences.Editor {
+                keys += key
+                e.putLong(key, value)
+                return this
+            }
+            override fun commit(): Boolean { committed += keys.toSet(); return e.commit() }
+            override fun apply() { applied += keys.toSet(); e.apply() }
+        }
+    }
+
+    @Test fun `service_start new session stores boot id and heartbeat in one synchronous write`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val prefs = RecordingPrefs(automationPrefs())
+        val context = object : ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
+                if (name == "automation") prefs else super.getSharedPreferences(name, mode)
+        }
+        val r = rule(1, listOf(serviceStartTrigger()))
+        val (engine, dao) = setup(context) { listOf(r) }
+        engine.bootIdProvider = { bootId }
+        engine.elapsedMs = { e0 + 900_000L }                                // car off 15 min, process killed
+
+        engine.evaluate(diParsData(soc = 50), null)
+
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        // A process killed right after the fire must find the new heartbeat on disk.
+        val session = setOf("service_start_boot_id", "service_start_last_seen_elapsed")
+        assertTrue(prefs.committed.toString(), prefs.committed.any { it.containsAll(session) })
+        assertTrue(prefs.applied.toString(), prefs.applied.none { "service_start_last_seen_elapsed" in it })
+        assertEquals(e0 + 900_000L, storedHeartbeat())
     }
 
     @Test fun `service_start dump line shows the window, consumption, heartbeat and boot id`() = runBlocking {
