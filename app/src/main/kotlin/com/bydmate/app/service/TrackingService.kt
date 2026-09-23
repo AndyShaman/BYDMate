@@ -120,6 +120,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var fidPushChannel: com.bydmate.app.data.push.FidPushChannel
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
+    @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // AutomationEngine.evaluate now has two callers (the poll tick and every push event), and
@@ -807,6 +808,15 @@ class TrackingService : Service(), LocationListener {
                 insightsManager.refreshIfNeeded()
             } catch (e: Exception) {
                 Log.w(TAG, "Sync failed: ${e.message}")
+            }
+        }
+
+        // Automatic backup (#237): due check at ignition, the export itself runs in a worker.
+        serviceScope.launch {
+            try {
+                autoBackupScheduler.enqueueIfDue(this@TrackingService)
+            } catch (e: Exception) {
+                Log.w(TAG, "Auto backup check failed: ${e.message}")
             }
         }
 

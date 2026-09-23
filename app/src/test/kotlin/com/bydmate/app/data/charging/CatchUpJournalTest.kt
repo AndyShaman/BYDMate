@@ -16,6 +16,8 @@ class CatchUpJournalTest {
         com.bydmate.app.data.local.dao.SettingsDao {
         private val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
+        override suspend fun getMany(keys: List<String>): List<com.bydmate.app.data.local.entity.SettingEntity> =
+            keys.mapNotNull { k -> map[k]?.let { com.bydmate.app.data.local.entity.SettingEntity(k, it) } }
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
