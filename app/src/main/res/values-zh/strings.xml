@@ -905,6 +905,8 @@
     <string name="settings_backup_close">关闭</string>
     <string name="settings_backup_now_title">手动备份</string>
     <string name="settings_backup_share_hint">备份包含密钥和行程历史，只分享给您信任的人。</string>
+    <string name="settings_config_save_sent">已发送到 Telegram</string>
+    <string name="settings_config_save_send_failed">无法发送到 Telegram：%1$s</string>
     <string name="settings_auto_backup_result_sent">已发送到 Telegram</string>
     <string name="settings_auto_backup_result_local_only">已保存在本地，未设置 Telegram</string>
     <string name="settings_auto_backup_result_send_error">发送失败：%1$s</string>

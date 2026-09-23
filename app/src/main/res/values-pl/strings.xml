@@ -986,6 +986,8 @@
     <string name="settings_backup_close">Zamknij</string>
     <string name="settings_backup_now_title">Kopia ręczna</string>
     <string name="settings_backup_share_hint">Archiwum zawiera klucze i historię przejazdów, udostępniaj je tylko zaufanym osobom.</string>
+    <string name="settings_config_save_sent">Wysłano do Telegrama</string>
+    <string name="settings_config_save_send_failed">Nie udało się wysłać do Telegrama: %1$s</string>
     <string name="settings_auto_backup_result_sent">wysłano do Telegram</string>
     <string name="settings_auto_backup_result_local_only">zapisano lokalnie, Telegram nie jest skonfigurowany</string>
     <string name="settings_auto_backup_result_send_error">błąd wysyłania: %1$s</string>

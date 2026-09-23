@@ -1,6 +1,7 @@
 package com.bydmate.app.data.repository
 
 import com.bydmate.app.data.backup.AutoBackupPeriod
+import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.backup.TgBackupConfig
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
@@ -101,6 +102,9 @@ open class SettingsRepository @Inject constructor(
         const val KEY_AUTO_BACKUP_LAST_RESULT = "auto_backup_last_result"
         /** Absolute path of an exported backup not yet delivered to Telegram; empty = none. */
         const val KEY_AUTO_BACKUP_PENDING_UPLOAD = "auto_backup_pending_upload"
+        /** Parts (#238) the automatic and the manual save export: BackupPart ids, comma separated. */
+        const val KEY_AUTO_BACKUP_PARTS = "auto_backup_parts"
+        const val KEY_MANUAL_BACKUP_PARTS = "manual_backup_parts"
         /** Telegram bot the backups go to: token (secret), private chat id, bot username. */
         const val KEY_TG_BACKUP_TOKEN = "tg_backup_token"
         const val KEY_TG_BACKUP_CHAT_ID = "tg_backup_chat_id"
@@ -482,6 +486,21 @@ open class SettingsRepository @Inject constructor(
 
     suspend fun setAutoBackupPendingUpload(path: String) =
         setString(KEY_AUTO_BACKUP_PENDING_UPLOAD, path)
+
+    suspend fun getAutoBackupParts(): Set<BackupPart> =
+        BackupPart.parseCsv(settingsDao.get(KEY_AUTO_BACKUP_PARTS))
+
+    suspend fun setAutoBackupParts(parts: Set<BackupPart>) =
+        setString(KEY_AUTO_BACKUP_PARTS, BackupPart.toCsv(parts))
+
+    fun observeAutoBackupParts(): Flow<Set<BackupPart>> =
+        observeString(KEY_AUTO_BACKUP_PARTS).map { BackupPart.parseCsv(it) }
+
+    suspend fun getManualBackupParts(): Set<BackupPart> =
+        BackupPart.parseCsv(settingsDao.get(KEY_MANUAL_BACKUP_PARTS))
+
+    suspend fun setManualBackupParts(parts: Set<BackupPart>) =
+        setString(KEY_MANUAL_BACKUP_PARTS, BackupPart.toCsv(parts))
 
     suspend fun getTgBackupToken(): String =
         getString(KEY_TG_BACKUP_TOKEN, "")

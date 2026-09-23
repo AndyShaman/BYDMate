@@ -827,6 +827,8 @@
     <string name="settings_backup_close">Fechar</string>
     <string name="settings_backup_now_title">Backup manual</string>
     <string name="settings_backup_share_hint">O arquivo contém suas chaves e o histórico de viagens, compartilhe só com quem você confia.</string>
+    <string name="settings_config_save_sent">Enviado ao Telegram</string>
+    <string name="settings_config_save_send_failed">Não foi possível enviar ao Telegram: %1$s</string>
     <string name="settings_auto_backup_result_sent">enviado ao Telegram</string>
     <string name="settings_auto_backup_result_local_only">salvo localmente, Telegram não configurado</string>
     <string name="settings_auto_backup_result_send_error">erro de envio: %1$s</string>

@@ -12,6 +12,12 @@ import java.util.Locale
 enum class RunOutcome { SUCCESS, RETRY, FAILURE }
 
 /**
+ * A manual save (#238): the file left in Download, [sent] = the bot got a copy, [sendError] = why it
+ * did not (TelegramError name or exception class); both empty when no bot is connected.
+ */
+data class ManualSaveResult(val file: File, val sent: Boolean, val sendError: String?)
+
+/**
  * One automatic backup run (#237): export → rename to the `_auto_` name → rotate → deliver to
  * the user's Telegram bot. Pure of WorkManager so it can be unit-tested; [AutoBackupWorker] only
  * maps the [RunOutcome].
@@ -91,13 +97,14 @@ class AutoBackupRunner(
     private suspend fun exportAndRotate(config: TgBackupConfig): File? {
         // export() throws a mix of IllegalStateException, IOException and SQLite errors; all of
         // them mean "no backup this time" and the next ignition retries (last_ts stays old).
-        val exported = runCatching { backupManager.export() }.getOrElse { e ->
+        val parts = settingsRepository.getAutoBackupParts()
+        val exported = runCatching { backupManager.export(parts) }.getOrElse { e ->
             Log.w(TAG, "export failed: ${e.javaClass.simpleName}: ${e.message}")
             settingsRepository.setAutoBackupLastResult(RESULT_EXPORT_ERROR)
             return null
         }
         val file = renameToAuto(exported)
-        Log.i(TAG, "exported ${file.name} ${file.length()}")
+        Log.i(TAG, "exported ${file.name} ${file.length()} parts=${BackupPart.toCsv(parts)}")
         settingsRepository.setAutoBackupLastTs(clock())
         // Pending before any network call: a run cancelled or killed mid-upload leaves the file
         // for the next attempt instead of losing it.
@@ -126,6 +133,29 @@ class AutoBackupRunner(
             .drop(KEEP_LOCAL - 1)
             .count { it.delete() }
         Log.i(TAG, "rotation deleted $deleted")
+    }
+
+    /**
+     * «Сохранить» in Settings: exports [parts] and sends one copy to the bot when it is connected.
+     * Outside the auto backup flow: no rename, rotation, pending upload or last run. Throws when
+     * the export fails.
+     */
+    suspend fun saveManual(parts: Set<BackupPart>): ManualSaveResult {
+        val file = backupManager.export(parts)
+        Log.i(TAG, "manual save ${file.name} ${file.length()} parts=${BackupPart.toCsv(parts)}")
+        val config = settingsRepository.getTgBackupConfig()
+        val chatId = config.chatId
+        if (!config.configured || chatId == null) return ManualSaveResult(file, sent = false, sendError = null)
+        if (file.length() > TelegramBackupSink.MAX_UPLOAD_BYTES) {
+            return ManualSaveResult(file, sent = false, sendError = TelegramError.TOO_LARGE.name)
+        }
+        val error = sink.sendDocument(config.token, chatId, file, caption(file)).exceptionOrNull()
+        if (error != null) Log.w(TAG, "manual send failed: ${error.javaClass.simpleName}: ${error.message}")
+        return ManualSaveResult(
+            file,
+            sent = error == null,
+            sendError = error?.let { (it as? TelegramSinkException)?.key ?: it.javaClass.simpleName },
+        )
     }
 
     private suspend fun deliver(file: File, config: TgBackupConfig): RunOutcome {
