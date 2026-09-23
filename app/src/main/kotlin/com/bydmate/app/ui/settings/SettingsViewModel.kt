@@ -2182,6 +2182,10 @@ class SettingsViewModel @Inject constructor(
                 val secure = android.provider.Settings.Secure.getString(
                     appContext.contentResolver, "enabled_accessibility_services")
                 appendLine("a11y_secure_setting: ${secure ?: "(null)"}")
+                val autoAllowLast = appContext.getSharedPreferences(
+                    com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl.PREFS_NAME, Context.MODE_PRIVATE,
+                ).getString(com.bydmate.app.data.autoservice.WifiDebuggingDialogAutoAllow.KEY_LAST_OUTCOME, null)
+                appendLine("a11y_auto_allow_last: ${autoAllowLast ?: "(none)"}")
                 val voicePrefs = appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
                 appendLine(
                     "voice_ptt: enabled=${voicePrefs.getBoolean("voice_enabled", false)} " +

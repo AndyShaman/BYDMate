@@ -8,6 +8,8 @@ import android.content.SharedPreferences
 import android.util.Log
 import android.view.KeyEvent
 import android.view.accessibility.AccessibilityEvent
+import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
+import com.bydmate.app.data.autoservice.WifiDebuggingDialogAutoAllow
 import com.bydmate.app.media.KnobPlayPause
 import com.bydmate.app.navdata.NavA11yFeed
 import com.bydmate.app.service.TrackingService
@@ -174,6 +176,12 @@ class SteeringWheelKeyService : AccessibilityService() {
             val pkg = event.packageName?.toString()
             if (pkg != null && ForegroundHintFilter.allows(this, event, pkg)) {
                 entryPoint().cameraStateMonitor().onForegroundHint(pkg)
+            }
+            // ADB restore: the wireless-debugging dialog returns on every boot on a hotspot
+            // (new BSSID each time), and nobody but us can press Allow before ADB is back.
+            if (WifiDebuggingDialogAutoAllow.isDialog(event.packageName, event.className)) {
+                WifiDebuggingDialogAutoAllow.onDialogShown(
+                    this, applicationContext, event, AdbRestorePreferencesImpl(applicationContext).isEnabled())
             }
         }
     }

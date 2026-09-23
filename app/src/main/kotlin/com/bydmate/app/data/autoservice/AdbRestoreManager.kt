@@ -87,6 +87,10 @@ class AdbRestoreManager @Inject constructor(
     // it — that is what let the dialog keep nagging for the rest of the trip.
     private var exhaustedNetwork: String? = null
 
+    // One enable attempt per process for the dialog auto-allow (see ensureAccessibilityForDialog).
+    @Volatile
+    private var a11yEnableAttempted = false
+
     /** True while the toggle is on. */
     fun isEnabled(): Boolean = prefs.isEnabled()
 
@@ -290,7 +294,9 @@ class AdbRestoreManager @Inject constructor(
                 Log.i(TAG, "self-grant WRITE_SECURE_SETTINGS over classic port: $granted")
             }
             // The grant suspended: a toggle flipped meanwhile must not be overwritten by NotNeeded.
-            transitionIfCurrent(gen, AdbRestoreState.NotNeeded, "classic port alive")
+            if (abandoned(gen)) return
+            transition(AdbRestoreState.NotNeeded, "classic port alive")
+            ensureAccessibilityForDialog(gen)
             return
         }
         if (abandoned(gen)) return
@@ -328,7 +334,7 @@ class AdbRestoreManager @Inject constructor(
             // Failed with 5555 answering would also skip the helper bootstrap.
             if (system.classicConnect()) {
                 if (abandonedAfterEnable(gen)) return
-                markRestored("port 5555 alive despite mDNS timeout")
+                markRestored(gen, "port 5555 alive despite mDNS timeout")
                 return
             }
             transition(AdbRestoreState.Failed("mDNS timeout"), "no tls service in ${DISCOVERY_TIMEOUT_MS / 1000}s")
@@ -371,7 +377,7 @@ class AdbRestoreManager @Inject constructor(
             if (abandonedAfterEnable(gen)) return TcpipOutcome.ABANDONED
             if (system.classicConnect()) {
                 if (abandonedAfterEnable(gen)) return TcpipOutcome.ABANDONED
-                markRestored("port 5555 back after $attempt check(s)")
+                markRestored(gen, "port 5555 back after $attempt check(s)")
                 return TcpipOutcome.RESTORED
             }
         }
@@ -380,7 +386,7 @@ class AdbRestoreManager @Inject constructor(
     }
 
     /** Publishes the success state and brings the helper daemon up behind it. */
-    private suspend fun markRestored(reason: String) {
+    private suspend fun markRestored(gen: Int, reason: String) {
         transition(AdbRestoreState.Restored(system.nowMs()), reason)
         runCatching { system.ensureHelperRunning() }
             .onSuccess { Log.i(TAG, "helper after restore: $it") }
@@ -391,6 +397,33 @@ class AdbRestoreManager @Inject constructor(
                 // sets rerunRequested, but nothing left to read it ever reaches that check again.
                 if (it is CancellationException) throw it
                 Log.w(TAG, "helper bootstrap after restore failed: ${it.message}")
+            }
+        ensureAccessibilityForDialog(gen)
+    }
+
+    /**
+     * Enables our accessibility service so the next boot's wireless-debugging dialog gets confirmed
+     * by it (the framework binds a11y services at boot from the Secure setting, before ADB is back).
+     * Skipped when the framework already has it bound: the daemon op removes and re-adds the entry,
+     * re-binding the service. Tried at most once per process, so a firmware that refuses the enable
+     * is not hammered by every settings trigger.
+     */
+    private suspend fun ensureAccessibilityForDialog(gen: Int) {
+        if (system.isAccessibilityServiceBound()) return
+        if (a11yEnableAttempted) {
+            Log.i(TAG, "a11y for dialog auto-allow: skipped: already attempted this process")
+            return
+        }
+        // The helper bootstrap before this suspended: a toggle switched off meanwhile must not
+        // be followed by a system-wide change the user no longer asked for.
+        if (abandoned(gen)) return
+        a11yEnableAttempted = true
+        runCatching { system.enableAccessibilityService() }
+            .onSuccess { Log.i(TAG, "a11y for dialog auto-allow: enabled=$it") }
+            .onFailure {
+                // Same as the helper bootstrap above: a cancellation must keep unwinding.
+                if (it is CancellationException) throw it
+                Log.w(TAG, "a11y for dialog auto-allow: enabled=false (${it.message})")
             }
     }
 
