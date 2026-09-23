@@ -47,6 +47,7 @@ class AutomationEngineServiceStartTest {
         triggerLogic = logic,
         triggers = TriggerDef.listToJson(triggers),
         actions = ActionDef.listToJson(listOf(ActionDef("notify", "n", "notification"))),
+        cooldownSeconds = 0,
     )
 
     private fun setup(
@@ -459,6 +460,37 @@ class AutomationEngineServiceStartTest {
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
         assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=70s"))
         assertFalse(storedCarOff())
+    }
+
+    @Test fun `ACC_OFF during the rule scan keeps the later service_start rules from firing`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val first = rule(1, listOf(serviceStartTrigger()))
+        val second = rule(2, listOf(serviceStartTrigger()))
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        coEvery { dao.getEnabled() } returns listOf(first, second)
+        var carOffPending = true
+        coEvery { dao.updateLastTriggered(1, any()) } answers {
+            if (carOffPending) {                                            // car off as rule 1 fires
+                carOffPending = false
+                engine.onCarOff()
+            }
+        }
+
+        engine.evaluate(diParsData(soc = 50), null)                         // reason=first
+
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 0) { dao.updateLastTriggered(2, any()) }
+        assertTrue(storedCarOff())
+        assertTrue(engineLogs().contains("service_start: ACC_OFF, window closed"))
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(60_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // next car start
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        coVerify(exactly = 1) { dao.updateLastTriggered(2, any()) }
+        assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=70s"))
     }
 
     @Test fun `ACC_OFF landing while a tick reads the marker waits for the dark screen`() = runBlocking {
