@@ -104,6 +104,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var lastSessionRepository: com.bydmate.app.data.repository.LastSessionRepository
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
+    @Inject lateinit var tripCounterResets: com.bydmate.app.data.trips.TripCounterResets
     @Inject lateinit var helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap
     @Inject lateinit var fidCatalogManager: FidCatalogManager
     @Inject lateinit var helperClient: com.bydmate.app.data.vehicle.HelperClient
@@ -824,6 +825,7 @@ class TrackingService : Service(), LocationListener {
                     val result = autoserviceDetector.runCatchUp()
                     Log.i(TAG, "Autoservice catch-up: ${result.outcome} (attempt ${attempt + 1})")
                     catchUpResolved = result.outcome.isResolved()
+                    applyTripAutoReset(result, wholeSession = true)
                     val retryable =
                         result.outcome == com.bydmate.app.data.charging.CatchUpOutcome.SENTINEL ||
                             result.outcome == com.bydmate.app.data.charging.CatchUpOutcome.AUTOSERVICE_UNAVAILABLE
@@ -1649,6 +1651,7 @@ class TrackingService : Service(), LocationListener {
             try {
                 val outcome = autoserviceDetector.runCatchUp(observedKwAbs = powerForClassify)
                 catchUpResolved = outcome.outcome.isResolved()
+                applyTripAutoReset(outcome, wholeSession = false)
                 Log.i(TAG, "Live end-of-charging (autoservice gun edge): ${outcome.outcome}")
             } catch (e: Exception) {
                 Log.w(TAG, "Live end-of-charging failed: ${e.message}")
@@ -1664,11 +1667,34 @@ class TrackingService : Service(), LocationListener {
             this == com.bydmate.app.data.charging.CatchUpOutcome.NO_DELTA ||
             this == com.bydmate.app.data.charging.CatchUpOutcome.BASELINE_INITIALIZED
 
+    /** Resets TRIP 1 / TRIP 2 per their auto-reset mode once a charging session lands (#235).
+     *  [wholeSession] = found by catch-up at service start or tick retry (see
+     *  TripCounterResets.resetWholeSession); false on the live gun edge.
+     *  Never throws: a failure here must not disturb catch-up handling. */
+    private suspend fun applyTripAutoReset(
+        result: com.bydmate.app.data.charging.CatchUpResult,
+        wholeSession: Boolean,
+    ) {
+        if (result.outcome != com.bydmate.app.data.charging.CatchUpOutcome.SESSION_CREATED) return
+        val chargeId = result.chargeId ?: return
+        try {
+            val charge = chargeRepository.getChargeById(chargeId)
+            if (charge == null) {
+                Log.w(TAG, "TripAutoReset: charge#$chargeId not found")
+                return
+            }
+            tripCounterResets.applyAfterCharge(charge, wholeSession)
+        } catch (e: Exception) {
+            Log.w(TAG, "TripAutoReset failed: ${e.message}")
+        }
+    }
+
     private suspend fun retryUnresolvedCatchUp() {
         if (!catchUpRetryInFlight.compareAndSet(false, true)) return
         try {
             val result = autoserviceDetector.runCatchUp()
             catchUpResolved = result.outcome.isResolved()
+            applyTripAutoReset(result, wholeSession = true)
             Log.i(TAG, "Catch-up tick retry: ${result.outcome}")
         } catch (e: Exception) {
             Log.w(TAG, "Catch-up tick retry failed: ${e.message}")

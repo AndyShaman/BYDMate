@@ -3,6 +3,7 @@ package com.bydmate.app.data.repository
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
+import com.bydmate.app.data.trips.TripAutoResetMode
 import com.bydmate.app.data.trips.TripResetState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -422,6 +423,16 @@ open class SettingsRepository @Inject constructor(
         "trip${n}_corr_ms" to state.corrMs.toString(),
         "trip${n}_corr_excl" to if (state.excludeStraddling) "1" else "0",
     ))
+
+    /** Trip 1/2 auto-reset after charging (#235); unknown or absent value = OFF. */
+    suspend fun getTripAutoResetMode(n: Int): TripAutoResetMode =
+        TripAutoResetMode.fromKey(settingsDao.get("trip${n}_auto_reset"))
+
+    suspend fun setTripAutoResetMode(n: Int, mode: TripAutoResetMode) =
+        setString("trip${n}_auto_reset", mode.key)
+
+    fun observeTripAutoResetMode(n: Int): Flow<TripAutoResetMode> =
+        observeString("trip${n}_auto_reset").map { TripAutoResetMode.fromKey(it) }
 
     suspend fun getTechCardOrder(): String =
         getString(KEY_TECH_CARD_ORDER, "")

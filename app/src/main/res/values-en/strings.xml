@@ -619,7 +619,11 @@
     <string name="dashboard_trip_avg_label">Average</string>
     <string name="dashboard_trip_avg_value">%1$s kWh/100km</string>
     <string name="dashboard_trip_cost_label">Cost</string>
-    <string name="dashboard_trip_reset_hint">Long-press a TRIP button to reset the counter</string>
+    <string name="dashboard_trip_reset_hint">Long-press a TRIP button to reset the counter manually</string>
+    <string name="dashboard_trip_auto_reset_label">Reset after charging</string>
+    <string name="dashboard_trip_auto_reset_off">Off</string>
+    <string name="dashboard_trip_auto_reset_any">Any</string>
+    <string name="dashboard_trip_auto_reset_full">To 100%</string>
 
     <string name="dashboard_battery_temp_label">battery temp.</string>
     <string name="dashboard_battery_voltage_label">12V system</string>

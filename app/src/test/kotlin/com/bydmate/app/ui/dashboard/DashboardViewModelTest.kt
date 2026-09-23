@@ -28,6 +28,7 @@ import com.bydmate.app.data.remote.OpenRouterClient
 import com.bydmate.app.data.repository.BatteryHealthRepository
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.TripCounterResets
 import com.bydmate.app.domain.battery.BatteryStateRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -297,8 +298,12 @@ class DashboardViewModelTest {
             insightsManager = resolvedInsightsManager,
             batteryStateRepository = batteryStateRepo,
             adbVerdictMonitor = adbVerdictMonitor,
+            tripCounterResets = TripCounterResets(settingsRepo).also { lastTripCounterResets = it },
         )
     }
+
+    // The shared reset owner handed to the last built VM, for resets from outside it.
+    private var lastTripCounterResets: TripCounterResets? = null
 
     // The monitor's two flows, driven directly by the tests.
     private val adbVerdictFlow = MutableStateFlow<AdbVerdict?>(null)
@@ -496,6 +501,27 @@ class DashboardViewModelTest {
 
         // After reset: resetTs = System.currentTimeMillis() >> 1 → DAO returns 0.
         assertEquals(0.0, vm.uiState.value.trip1!!.km, 0.001)
+    }
+
+    /** Auto-reset after charging (#235) runs in the service through the shared
+     *  TripCounterResets; the dashboard counter must follow it without its own reset call. */
+    @Test
+    fun `reset on shared TripCounterResets from outside the VM reaches trip1`() = runTest {
+        val vm = buildViewModel(
+            fakeAutoservice = FakeAutoservice(null, available = false),
+            tripDaoOverride = StubTripDaoForResetBehavior(),
+        )
+        val resets = lastTripCounterResets!!
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(40.0, vm.uiState.value.trip1!!.km, 0.001)
+
+        resets.reset(1)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(0.0, vm.uiState.value.trip1!!.km, 0.001)
+        assertTrue(vm.uiState.value.trip1!!.resetTs > 1L)
+        // TRIP 2 untouched.
+        assertEquals(40.0, vm.uiState.value.trip2!!.km, 0.001)
     }
 
     @Test

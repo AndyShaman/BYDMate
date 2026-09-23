@@ -11,7 +11,9 @@ import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.remote.InsightsManager
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.data.repository.TripRepository
+import com.bydmate.app.data.trips.TripAutoResetMode
 import com.bydmate.app.data.trips.TripCounterMath
+import com.bydmate.app.data.trips.TripCounterResets
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.data.trips.TripResetState
 import com.bydmate.app.domain.battery.BatteryStateRepository
@@ -95,9 +97,13 @@ data class DashboardUiState(
     val trip2: TripCounterUi? = null,
     val trip1Expanded: Boolean = false,
     val trip2Expanded: Boolean = false,
+    // Auto-reset after charging, per counter (#235).
+    val trip1AutoReset: TripAutoResetMode = TripAutoResetMode.OFF,
+    val trip2AutoReset: TripAutoResetMode = TripAutoResetMode.OFF,
 )
 
 @HiltViewModel
+@Suppress("LongParameterList") // Hilt-injected dependencies
 class DashboardViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val tripRepository: TripRepository,
@@ -106,14 +112,11 @@ class DashboardViewModel @Inject constructor(
     private val insightsManager: InsightsManager,
     private val batteryStateRepository: BatteryStateRepository,
     private val adbVerdictMonitor: AdbVerdictMonitor,
+    private val tripCounterResets: TripCounterResets,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
     val uiState: StateFlow<DashboardUiState> = _uiState.asStateFlow()
-
-    // Reset anchors for the two resettable trip counters.
-    private val trip1Reset = MutableStateFlow<TripResetState?>(null)
-    private val trip2Reset = MutableStateFlow<TripResetState?>(null)
 
     init {
         cleanupBadIdleDrainData()
@@ -418,11 +421,20 @@ class DashboardViewModel @Inject constructor(
 
     private fun observeTripCounters() {
         viewModelScope.launch {
-            trip1Reset.value = settingsRepository.getTripResetState(1)
-            trip2Reset.value = settingsRepository.getTripResetState(2)
+            tripCounterResets.load()
             val tariff = settingsRepository.getTripCostTariff()
-            launch { collectTripCounter(1, trip1Reset, tariff) }
-            launch { collectTripCounter(2, trip2Reset, tariff) }
+            launch { collectTripCounter(1, tripCounterResets.state(1), tariff) }
+            launch { collectTripCounter(2, tripCounterResets.state(2), tariff) }
+        }
+        viewModelScope.launch {
+            settingsRepository.observeTripAutoResetMode(1).collect { mode ->
+                _uiState.update { it.copy(trip1AutoReset = mode) }
+            }
+        }
+        viewModelScope.launch {
+            settingsRepository.observeTripAutoResetMode(2).collect { mode ->
+                _uiState.update { it.copy(trip2AutoReset = mode) }
+            }
         }
     }
 
@@ -454,26 +466,14 @@ class DashboardViewModel @Inject constructor(
             }
     }
 
-    /** Long-press reset: instant, no confirmation (approved design). Captures the live
-     *  session's current progress as the correction so the counter restarts from ~zero
-     *  immediately even mid-drive. When coverage is degraded the live partials are not a
-     *  valid pre-reset measurement: store zero corrections and mark the straddling row for
-     *  whole-row exclusion instead (counting restarts from the next trip). */
+    /** Long-press reset; the anchor logic lives in [TripCounterResets.reset]. */
     fun resetTripCounter(n: Int) {
-        viewModelScope.launch {
-            val now = System.currentTimeMillis()
-            val continuous = TrackingService.liveWholeSession.value &&
-                TrackingService.sessionStartedAt.value != null
-            val state = TripResetState(
-                resetTs = now,
-                corrKm = if (continuous) TrackingService.tripDistanceKm.value ?: 0.0 else 0.0,
-                corrKwh = if (continuous) TrackingService.tripKwhConsumed.value ?: 0.0 else 0.0,
-                corrMs = TrackingService.sessionStartedAt.value?.let { now - it } ?: 0L,
-                excludeStraddling = !continuous,
-            )
-            settingsRepository.setTripResetState(n, state)
-            if (n == 1) trip1Reset.value = state else trip2Reset.value = state
-        }
+        viewModelScope.launch { tripCounterResets.reset(n) }
+    }
+
+    /** Chip tap in the TRIP popup; the observed setting updates the state. */
+    fun setTripAutoReset(n: Int, mode: TripAutoResetMode) {
+        viewModelScope.launch { settingsRepository.setTripAutoResetMode(n, mode) }
     }
 
     fun toggleTripExpanded(n: Int) {

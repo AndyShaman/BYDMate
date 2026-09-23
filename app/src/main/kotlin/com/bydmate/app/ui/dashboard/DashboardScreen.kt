@@ -8,6 +8,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -66,6 +67,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
 import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.remote.DynamicMetric
+import com.bydmate.app.data.trips.TripAutoResetMode
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.domain.calculator.Trend
 import com.bydmate.app.ui.components.AdbVerdictDialog
@@ -464,13 +466,17 @@ fun DashboardScreen(
                     // TRIP 1 popup
                     state.trip1?.let { t ->
                         if (state.trip1Expanded) TripCounterDialog(
-                            stringResource(R.string.dashboard_trip1_label), t, state.currencySymbol
+                            stringResource(R.string.dashboard_trip1_label), t, state.currencySymbol,
+                            mode = state.trip1AutoReset,
+                            onModeChange = { viewModel.setTripAutoReset(1, it) },
                         ) { viewModel.toggleTripExpanded(1) }
                     }
                     // TRIP 2 popup
                     state.trip2?.let { t ->
                         if (state.trip2Expanded) TripCounterDialog(
-                            stringResource(R.string.dashboard_trip2_label), t, state.currencySymbol
+                            stringResource(R.string.dashboard_trip2_label), t, state.currencySymbol,
+                            mode = state.trip2AutoReset,
+                            onModeChange = { viewModel.setTripAutoReset(2, it) },
                         ) { viewModel.toggleTripExpanded(2) }
                     }
                 }
@@ -775,11 +781,14 @@ private fun TripDetailRow(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun TripCounterDialog(
     label: String,
     ui: TripCounterUi,
     currencySymbol: String,
+    mode: TripAutoResetMode,
+    onModeChange: (TripAutoResetMode) -> Unit,
     onDismiss: () -> Unit,
 ) {
     CardDetailDialog(title = null, borderColor = AccentGreen, onDismiss = onDismiss) {
@@ -820,6 +829,23 @@ private fun TripCounterDialog(
         HorizontalDivider(color = CardBorder)
         TripDetailRow(stringResource(R.string.dashboard_trip_cost_label),
             "%.2f %s".format(ui.cost, currencySymbol))
+        HorizontalDivider(color = CardBorder)
+        Text(stringResource(R.string.dashboard_trip_auto_reset_label), color = TextSecondary, fontSize = 12.sp)
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            TripAutoResetMode.entries.forEach { m ->
+                val chipLabel = when (m) {
+                    TripAutoResetMode.OFF -> R.string.dashboard_trip_auto_reset_off
+                    TripAutoResetMode.ANY -> R.string.dashboard_trip_auto_reset_any
+                    TripAutoResetMode.AC -> R.string.dashboard_trip_auto_reset_ac
+                    TripAutoResetMode.DC -> R.string.dashboard_trip_auto_reset_dc
+                    TripAutoResetMode.FULL -> R.string.dashboard_trip_auto_reset_full
+                }
+                TripAutoResetChip(stringResource(chipLabel), selected = m == mode) { onModeChange(m) }
+            }
+        }
         Text(stringResource(R.string.dashboard_trip_reset_hint), color = TextMuted, fontSize = 11.sp,
             modifier = Modifier.padding(top = 6.dp))
     }
@@ -966,6 +992,29 @@ private fun DashboardPeriodChip(label: String, selected: Boolean, onClick: () ->
             selectedContainerColor = AccentGreen,
             selectedLabelColor = Color.White,
             containerColor = CardSurface,
+            labelColor = TextSecondary
+        ),
+        border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(
+            borderColor = Color.Transparent,
+            selectedBorderColor = Color.Transparent,
+            enabled = true,
+            selected = selected
+        )
+    )
+}
+
+// DashboardPeriodChip on an elevated container: the TRIP popup itself is CardSurface.
+@Composable
+private fun TripAutoResetChip(label: String, selected: Boolean, onClick: () -> Unit) {
+    androidx.compose.material3.FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label, fontSize = 12.sp) },
+        shape = RoundedCornerShape(8.dp),
+        colors = androidx.compose.material3.FilterChipDefaults.filterChipColors(
+            selectedContainerColor = AccentGreen,
+            selectedLabelColor = Color.White,
+            containerColor = CardSurfaceElevated,
             labelColor = TextSecondary
         ),
         border = androidx.compose.material3.FilterChipDefaults.filterChipBorder(

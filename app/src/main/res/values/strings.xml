@@ -722,7 +722,13 @@
     <string name="dashboard_trip_avg_label">Средний расход</string>
     <string name="dashboard_trip_avg_value">%1$s кВт·ч/100км</string>
     <string name="dashboard_trip_cost_label">Стоимость</string>
-    <string name="dashboard_trip_reset_hint">Долгое нажатие на кнопке TRIP сбрасывает счётчик</string>
+    <string name="dashboard_trip_reset_hint">Долгое нажатие на кнопке TRIP сбрасывает счётчик вручную</string>
+    <string name="dashboard_trip_auto_reset_label">Сбрасывать после зарядки</string>
+    <string name="dashboard_trip_auto_reset_off">Нет</string>
+    <string name="dashboard_trip_auto_reset_any">Любой</string>
+    <string name="dashboard_trip_auto_reset_ac" translatable="false">AC</string>
+    <string name="dashboard_trip_auto_reset_dc" translatable="false">DC</string>
+    <string name="dashboard_trip_auto_reset_full">До 100%</string>
 
     <!-- Battery card -->
     <string name="dashboard_battery_temp_label">темп. бат.</string>
