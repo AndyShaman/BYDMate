@@ -21,6 +21,8 @@ import io.mockk.mockkObject
 import io.mockk.Runs
 import io.mockk.unmockkObject
 import io.mockk.verify
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -355,13 +357,122 @@ class AutomationEngineEdgeTest {
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
         unit.advance(3_000L)
         engine.onCarOff()
+        unit.screenOn = false
+        unit.advance(3_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.screenOn = true
         repeat(4) {
-            engine.evaluate(diParsData(soc = 50), null)
             unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
         }
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-        assertEquals(1, engineLogs().count { it == "service_start: car off marker within session, ignored gap=3s" })
+        assertEquals(1, engineLogs().count { it == "service_start: car off marker within session, ignored gap=9s" })
         assertFalse(storedCarOff())
+    }
+
+    @Test fun `service_start window closes on ACC_OFF with the screen still lit`() = runBlocking {
+        val r = rule(1, listOf(serviceStartTrigger(), paramTrigger("ExtTemp", ">", "22")), logic = "AND")
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit, r)
+        engine.evaluate(diParsData(exteriorTemp = null), null)              // window armed, data cold
+        unit.advance(3_000L)
+        engine.onCarOff()
+        engine.evaluate(diParsData(exteriorTemp = null), null)              // screen still lit
+        unit.advance(3_000L)
+        engine.evaluate(diParsData(exteriorTemp = 25), null)                // second condition true
+        coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
+        assertEquals(1, engineLogs().count { it == "service_start: ACC_OFF, window closed" })
+    }
+
+    @Test fun `service_start opens no wake session on a lit tick after ACC_OFF and a 90 s pause`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // restart mid-drive: silent
+        unit.advance(90_000L)                                               // evaluate paused
+        engine.onCarOff()
+        engine.evaluate(diParsData(soc = 50), null)                         // screen still lit
+        coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().none { it.startsWith("service_start: new session reason=wake") })
+        assertTrue(storedCarOff())
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(10_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // next car start
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=20s"))
+    }
+
+    @Test fun `service_start keeps the marker ready through a repeated ACC_OFF after the dark tick`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // restart mid-drive: silent
+        engine.onCarOff()
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        engine.onCarOff()                                                   // repeated broadcast
+        unit.advance(10_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // car on
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: ACC_OFF repeated, marker kept"))
+    }
+
+    @Test fun `service_start keeps the marker of an ACC_OFF 50 s into a session for the next start`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, _) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // t=0: session, fires
+        unit.advance(50_000L)
+        engine.onCarOff()                                                   // t=50
+        unit.advance(1_000L)
+        engine.evaluate(diParsData(soc = 50), null)                         // t=51, lit: marker kept
+        assertTrue(storedCarOff())
+        unit.screenOn = false
+        repeat(3) {
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        // The process dies; the car is back at t=100 with the heartbeat of t=51 (49 s old).
+        val (restarted, dao) = serviceStartEngine(bootId, HeadUnit(e0 + 100_000L, t0))
+        restarted.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start car off marker expires when the screen stays on`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // restart mid-drive: silent
+        engine.onCarOff()
+        repeat(44) {                                                        // 132 s, screen on
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        assertTrue(engineLogs().contains("service_start: car off marker expired, screen stayed on"))
+        assertFalse(storedCarOff())
+        unit.screenOn = false                                               // 20 s blink mid-drive
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(10_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `onCarOff waits for the evaluate lock`() = runBlocking {
+        val (engine, _) = serviceStartEngine(bootId, HeadUnit(e0, t0))
+        engine.evaluateMutex.lock()
+        val marking = launch { engine.onCarOff() }
+        delay(100)
+        assertTrue(marking.isActive)
+        assertFalse(storedCarOff())
+        engine.evaluateMutex.unlock()
+        marking.join()
+        assertTrue(storedCarOff())
     }
 
     @Test fun `service_start fires once per car start with ACC_OFF 15 minutes apart`() = runBlocking {
@@ -529,7 +640,8 @@ class AutomationEngineEdgeTest {
         val unit = HeadUnit(e0, t0)
         val (engine, _) = serviceStartEngine(bootId, unit)
         assertEquals(
-            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- car_off=-",
+            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- car_off=- " +
+                "car_off_lit=-",
             engine.serviceStartDumpLine(),
         )
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
@@ -537,15 +649,16 @@ class AutomationEngineEdgeTest {
             .format(java.util.Date(t0 + AutomationEngine.SERVICE_START_WINDOW_MS))
         assertEquals(
             "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a " +
-                "car_off=-",
+                "car_off=- car_off_lit=-",
             engine.serviceStartDumpLine(),
         )
         unit.advance(45_000L)
+        engine.onCarOff()                                                   // screen still lit
+        unit.advance(5_000L)
         unit.screenOn = false
-        engine.onCarOff()
         assertEquals(
-            "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=45s boot_id=boot-a " +
-                "car_off=pending",
+            "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=50s boot_id=boot-a " +
+                "car_off=pending car_off_lit=5s",
             engine.serviceStartDumpLine(),
         )
     }

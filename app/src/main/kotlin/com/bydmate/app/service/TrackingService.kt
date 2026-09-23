@@ -67,7 +67,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import java.io.File
@@ -125,12 +124,6 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    // AutomationEngine.evaluate now has two callers (the poll tick and every push event), and
-    // its per-rule gates are read-then-write across several steps: cooldown, once-per-trip,
-    // serviceStartConsumed, updateLastTriggered. Two overlapping calls could pass the same
-    // rule and dispatch its actions twice, so evaluate runs one at a time. Actions are
-    // dispatched inside the engine's own scope, so the lock is held for the rule scan only.
-    private val evaluateMutex = Mutex()
     private var pollingJob: Job? = null
     // Trigger 2 for the ADB restore: Android refuses to enable wireless debugging without a
     // Wi-Fi connection, so a Wi-Fi network appearing is the moment a blocked attempt can run.
@@ -903,7 +896,7 @@ class TrackingService : Service(), LocationListener {
             val sessionId = _sessionStartedAt.value
             serviceScope.launch {
                 try {
-                    evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
+                    automationEngine.evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
                 } catch (e: Exception) {
                     Log.e(TAG, "Automation evaluate threw on push $field: ${e.message}", e)
                 }
@@ -1631,7 +1624,7 @@ class TrackingService : Service(), LocationListener {
 
                     // Idle drain tracked via energydata zero-km records only (HistoryImporter).
                     // Live power integration removed — motor power ≠ total battery drain.
-                    evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
+                    automationEngine.evaluateMutex.withLock { automationEngine.evaluate(data, sessionId) }
                     updateNotification(data)
                     maybeLogSessionSummary(nowMs, data, sessionId)
                     maybeSendIternioTelemetry(data, nowMs)
@@ -1927,7 +1920,16 @@ class TrackingService : Service(), LocationListener {
     private val accOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.i(TAG, "ACC_OFF received")
-            automationEngine.onCarOff()
+            // Off the main thread and under the evaluate lock; goAsync keeps the process
+            // receiving until the marker is committed.
+            val pending = goAsync()
+            serviceScope.launch {
+                try {
+                    automationEngine.onCarOff()
+                } finally {
+                    pending.finish()
+                }
+            }
         }
     }
 
