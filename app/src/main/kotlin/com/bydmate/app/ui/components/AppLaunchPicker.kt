@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.OutlinedTextField
@@ -80,7 +79,7 @@ fun AppLaunchPickerDialog(
         cursorColor = AccentGreen,
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(stringResource(R.string.applauncher_title), color = TextPrimary, fontSize = 16.sp) },
@@ -195,7 +194,7 @@ fun MultiAppPickerDialog(
         cursorColor = AccentGreen,
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(title, color = TextPrimary, fontSize = 16.sp) },

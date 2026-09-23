@@ -21,7 +21,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -210,7 +210,7 @@ fun ChargesScreen(
             )
         }
         state.deleteConfirmCharge?.let { charge ->
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { viewModel.onDismissDeleteConfirm() },
                 title = { Text(stringResource(R.string.charges_delete_dialog_title)) },
                 text = {
@@ -246,29 +246,31 @@ private fun ChargeActionSheet(
         sheetState = sheetState,
         containerColor = CardSurface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                "${charge.type ?: "—"} • ${charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"} кВт·ч",
-                color = TextSecondary, fontSize = 12.sp
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        ScaledDialogContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(stringResource(R.string.charges_action_edit), color = TextPrimary, fontSize = 16.sp)
+                Text(
+                    "${charge.type ?: "—"} • ${charge.kwhCharged?.let { "%.1f".format(it) } ?: "—"} кВт·ч",
+                    color = TextSecondary, fontSize = 12.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.charges_action_edit), color = TextPrimary, fontSize = 16.sp)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
-            }
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

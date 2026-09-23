@@ -83,8 +83,12 @@ class MainActivity : AppCompatActivity() {
             var lang by remember {
                 mutableStateOf(prefs.getString(LocalePreferences.KEY_LANG, null) ?: DEFAULT_LANG)
             }
+            var fontScale by remember { mutableStateOf(LocalePreferences.readFontScale(prefs)) }
             DisposableEffect(prefs) {
                 val listener = SharedPreferences.OnSharedPreferenceChangeListener { p, key ->
+                    if (key == LocalePreferences.KEY_FONT_SCALE) {
+                        fontScale = LocalePreferences.readFontScale(p)
+                    }
                     if (key == LocalePreferences.KEY_LANG) {
                         val newLang = p.getString(key, DEFAULT_LANG) ?: DEFAULT_LANG
                         if (newLang != lang) {
@@ -108,7 +112,7 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            BYDMateTheme {
+            BYDMateTheme(fontScale = fontScale) {
                 CompositionLocalProvider(
                     LocalConfiguration provides localizedConfig,
                     LocalConsumptionThresholds provides thresholds,

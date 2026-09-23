@@ -2,6 +2,11 @@
 <resources>
     <string name="app_name">BYDMate</string>
     <string name="settings_language_title">Language</string>
+    <string name="settings_font_scale_title">Text size</string>
+    <string name="settings_font_scale_desc">Applies to the app screens and the voice agent windows. The widget and the cluster stay unchanged.</string>
+    <string name="settings_font_scale_normal">Normal</string>
+    <string name="settings_font_scale_large">Large</string>
+    <string name="settings_font_scale_xlarge">Extra large</string>
     <string name="settings_title">Settings</string>
     <string name="settings_rail_sections_label">Sections</string>
     <string name="settings_section_auto_battery_title">Car and battery</string>

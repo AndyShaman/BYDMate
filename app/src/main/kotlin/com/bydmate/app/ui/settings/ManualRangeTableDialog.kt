@@ -39,6 +39,7 @@ import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
+import com.bydmate.app.ui.theme.ScaledDialogContent
 
 /**
  * Editable temperature -> consumption table for RangeCalcMethod.MANUAL, ported from the
@@ -89,76 +90,78 @@ fun ManualRangeTableDialog(
     val canSave = parsedPoints.size == rows.size && (filledRanges == 0 || filledRanges == rows.size)
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false)) {
-        Card(
-            shape = RoundedCornerShape(14.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(24.dp),
-        ) {
-            Column(
+        ScaledDialogContent {
+            Card(
+                shape = RoundedCornerShape(14.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
                 modifier = Modifier
-                    .padding(20.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+                    .fillMaxSize()
+                    .padding(24.dp),
             ) {
-                Text(
-                    stringResource(R.string.range_table_dialog_title),
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                )
-                Text(
-                    stringResource(R.string.range_table_dialog_note1),
-                    color = TextMuted,
-                    fontSize = 12.sp,
-                )
-
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Column(
+                    modifier = Modifier
+                        .padding(20.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
                     Text(
-                        stringResource(R.string.range_table_dialog_col_temp),
-                        color = TextMuted, fontSize = 11.sp,
-                        modifier = Modifier.width(40.dp),
+                        stringResource(R.string.range_table_dialog_title),
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
                     )
                     Text(
-                        stringResource(R.string.range_table_dialog_col_consumption),
-                        color = TextMuted, fontSize = 11.sp,
-                        modifier = Modifier.weight(1f),
+                        stringResource(R.string.range_table_dialog_note1),
+                        color = TextMuted,
+                        fontSize = 12.sp,
                     )
-                    Text(
-                        stringResource(R.string.range_table_dialog_col_range),
-                        color = TextMuted, fontSize = 11.sp,
-                        modifier = Modifier.weight(0.8f),
-                    )
-                }
 
-                rows.forEachIndexed { index, row ->
-                    RangeTableRow(
-                        row = row,
-                        onConsumptionChange = { rows[index] = row.copy(consumption = it) },
-                        onRangeChange = { rows[index] = row.copy(range = it) },
-                    )
-                }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            stringResource(R.string.range_table_dialog_col_temp),
+                            color = TextMuted, fontSize = 11.sp,
+                            modifier = Modifier.width(40.dp),
+                        )
+                        Text(
+                            stringResource(R.string.range_table_dialog_col_consumption),
+                            color = TextMuted, fontSize = 11.sp,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Text(
+                            stringResource(R.string.range_table_dialog_col_range),
+                            color = TextMuted, fontSize = 11.sp,
+                            modifier = Modifier.weight(0.8f),
+                        )
+                    }
 
-                OutlinedButton(
-                    onClick = onReset,
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
-                ) { Text(stringResource(R.string.range_table_dialog_reset)) }
+                    rows.forEachIndexed { index, row ->
+                        RangeTableRow(
+                            row = row,
+                            onConsumptionChange = { rows[index] = row.copy(consumption = it) },
+                            onRangeChange = { rows[index] = row.copy(range = it) },
+                        )
+                    }
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     OutlinedButton(
-                        onClick = onDismiss,
-                        modifier = Modifier.weight(1f),
+                        onClick = onReset,
+                        modifier = Modifier.fillMaxWidth(),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
-                    ) { Text(stringResource(R.string.range_table_dialog_cancel)) }
+                    ) { Text(stringResource(R.string.range_table_dialog_reset)) }
 
-                    Button(
-                        onClick = { onSave(parsedPoints) },
-                        modifier = Modifier.weight(1f),
-                        enabled = canSave,
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                    ) { Text(stringResource(R.string.range_table_dialog_save)) }
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        OutlinedButton(
+                            onClick = onDismiss,
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = AccentGreen),
+                        ) { Text(stringResource(R.string.range_table_dialog_cancel)) }
+
+                        Button(
+                            onClick = { onSave(parsedPoints) },
+                            modifier = Modifier.weight(1f),
+                            enabled = canSave,
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                        ) { Text(stringResource(R.string.range_table_dialog_save)) }
+                    }
                 }
             }
         }

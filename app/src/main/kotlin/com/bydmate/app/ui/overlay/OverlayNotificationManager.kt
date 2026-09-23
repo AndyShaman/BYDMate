@@ -23,11 +23,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.TextSecondary
+import com.bydmate.app.ui.theme.WithAppFontScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -98,37 +100,40 @@ object OverlayNotificationManager {
             }
         }
 
+        val fontScale = LocalePreferences(context).getFontScale()
         composeView.setContent {
-            Row(
-                modifier = Modifier
-                    .padding(horizontal = 16.dp)
-                    .widthIn(min = 320.dp, max = 540.dp)
-                    .background(CardSurface, RoundedCornerShape(10.dp))
-                    .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
-                    .clickable { dismiss() }
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = title,
-                        fontSize = 15.sp,
-                        color = AccentGreen
-                    )
-                    if (text.isNotBlank()) {
-                        Spacer(Modifier.height(4.dp))
+            WithAppFontScale(fontScale) {
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 16.dp)
+                        .widthIn(min = 320.dp, max = 540.dp)
+                        .background(CardSurface, RoundedCornerShape(10.dp))
+                        .border(1.dp, CardBorder, RoundedCornerShape(10.dp))
+                        .clickable { dismiss() }
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = text,
-                            fontSize = 13.sp,
-                            color = TextPrimary
+                            text = title,
+                            fontSize = 15.sp,
+                            color = AccentGreen
                         )
+                        if (text.isNotBlank()) {
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = text,
+                                fontSize = 13.sp,
+                                color = TextPrimary
+                            )
+                        }
                     }
+                    Text(
+                        text = "×",
+                        fontSize = 18.sp,
+                        color = TextSecondary,
+                        modifier = Modifier.clickable { dismiss() }
+                    )
                 }
-                Text(
-                    text = "×",
-                    fontSize = 18.sp,
-                    color = TextSecondary,
-                    modifier = Modifier.clickable { dismiss() }
-                )
             }
         }
 

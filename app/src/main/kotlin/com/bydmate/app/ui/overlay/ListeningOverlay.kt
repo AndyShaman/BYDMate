@@ -43,11 +43,13 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bydmate.app.R
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
 import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
+import com.bydmate.app.ui.theme.WithAppFontScale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -232,6 +234,8 @@ object ListeningOverlay {
 
         val youLabel = context.getString(R.string.orb_you)
         val agentLabel = context.getString(R.string.orb_agent)
+        // The pill is a fixed drag handle; only the dialog text follows the in-app text size.
+        val fontScale = LocalePreferences(context).getFontScale()
 
         // Pill window: touchable so it can be dragged; NOT_TOUCH_MODAL lets touches outside the pill
         // still reach whatever is behind the overlay.
@@ -327,7 +331,7 @@ object ListeningOverlay {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(dialogOwner)
             setViewTreeSavedStateRegistryOwner(dialogOwner)
-            setContent { DialogContent(youLabel, agentLabel) }
+            setContent { WithAppFontScale(fontScale) { DialogContent(youLabel, agentLabel) } }
         }
 
         wm.addView(pillView, pillParams)

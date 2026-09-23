@@ -318,6 +318,9 @@ class SettingsViewModel @Inject constructor(
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
 
+    private val _fontScale = MutableStateFlow(localePreferences.getFontScale())
+    val fontScale: StateFlow<Float> = _fontScale.asStateFlow()
+
     private val _agentName = MutableStateFlow(
         appContext.getSharedPreferences("voice", Context.MODE_PRIVATE)
             .getString("agent_name", "") ?: ""
@@ -329,6 +332,12 @@ class SettingsViewModel @Inject constructor(
             .getString("agent_persona", AgentPersona.NAVIGATOR.id) ?: AgentPersona.NAVIGATOR.id
     )
     val agentPersona: StateFlow<String> = _agentPersona.asStateFlow()
+
+    /** MainActivity listens to the same prefs file and re-provides the density on change. */
+    fun setFontScale(scale: Float) {
+        localePreferences.setFontScale(scale)
+        _fontScale.value = scale
+    }
 
     fun setAppLanguage(lang: String) {
         applyAppLanguage(appContext, localePreferences, lang)
@@ -1781,6 +1790,7 @@ class SettingsViewModel @Inject constructor(
                 appendLine("android: ${android.os.Build.VERSION.RELEASE} (SDK ${android.os.Build.VERSION.SDK_INT})")
                 appendLine("fingerprint: ${android.os.Build.FINGERPRINT}")
                 appendLine("locale: jvm=${Locale.getDefault().toLanguageTag()} app=${localePreferences.getLanguage() ?: "(unset)"}")
+                appendLine("font_scale: ${localePreferences.getFontScale()}")
             } catch (e: Exception) {
                 appendLine("(failed to gather app/device metadata: ${e.message})")
             }

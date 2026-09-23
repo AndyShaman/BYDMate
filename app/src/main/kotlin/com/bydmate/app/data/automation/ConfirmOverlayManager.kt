@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.ui.overlay.OverlayLifecycleOwner
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.CardBorder
@@ -42,6 +43,7 @@ import com.bydmate.app.ui.theme.NavyDark
 import com.bydmate.app.ui.theme.SocRed
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
+import com.bydmate.app.ui.theme.WithAppFontScale
 
 /**
  * Shows a SYSTEM_ALERT_WINDOW overlay asking the user to confirm execution
@@ -135,55 +137,58 @@ object ConfirmOverlayManager {
             }
         }
 
+        val fontScale = LocalePreferences(context).getFontScale()
         composeView.setContent {
-            Column(
-                modifier = Modifier
-                    .widthIn(min = 340.dp, max = 420.dp)
-                    .background(CardSurface, RoundedCornerShape(12.dp))
-                    .border(1.5.dp, CardBorder, RoundedCornerShape(12.dp))
-                    .padding(horizontal = 18.dp, vertical = 16.dp),
-            ) {
-                Text(
-                    text = ruleName,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary,
-                )
-                if (actionsSummary.isNotBlank()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = actionsSummary,
-                        fontSize = 13.sp,
-                        color = TextMuted,
-                    )
-                }
-                Spacer(Modifier.height(16.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
+            WithAppFontScale(fontScale) {
+                Column(
+                    modifier = Modifier
+                        .widthIn(min = 340.dp, max = 420.dp)
+                        .background(CardSurface, RoundedCornerShape(12.dp))
+                        .border(1.5.dp, CardBorder, RoundedCornerShape(12.dp))
+                        .padding(horizontal = 18.dp, vertical = 16.dp),
                 ) {
-                    Button(
-                        onClick = { dismiss("cancel") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SocRed,
-                            contentColor = NavyDark,
-                        ),
-                    ) {
-                        Text(context.getString(com.bydmate.app.R.string.confirm_overlay_cancel), fontSize = 14.sp)
+                    Text(
+                        text = ruleName,
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary,
+                    )
+                    if (actionsSummary.isNotBlank()) {
+                        Spacer(Modifier.height(6.dp))
+                        Text(
+                            text = actionsSummary,
+                            fontSize = 13.sp,
+                            color = TextMuted,
+                        )
                     }
-                    Button(
-                        onClick = { dismiss("confirm") },
-                        modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = AccentGreen,
-                            contentColor = NavyDark,
-                        ),
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Text(context.getString(com.bydmate.app.R.string.confirm_overlay_run), fontSize = 14.sp)
+                        Button(
+                            onClick = { dismiss("cancel") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SocRed,
+                                contentColor = NavyDark,
+                            ),
+                        ) {
+                            Text(context.getString(com.bydmate.app.R.string.confirm_overlay_cancel), fontSize = 14.sp)
+                        }
+                        Button(
+                            onClick = { dismiss("confirm") },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = AccentGreen,
+                                contentColor = NavyDark,
+                            ),
+                        ) {
+                            Text(context.getString(com.bydmate.app.R.string.confirm_overlay_run), fontSize = 14.sp)
+                        }
                     }
                 }
             }

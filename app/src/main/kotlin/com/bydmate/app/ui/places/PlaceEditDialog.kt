@@ -55,6 +55,7 @@ import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.MapEventsOverlay
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polygon
+import com.bydmate.app.ui.theme.ScaledDialogContent
 
 /**
  * Parse a coordinate the user sees. The text fields are seeded/updated with the device-locale
@@ -146,112 +147,114 @@ fun PlaceEditDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(dismissOnClickOutside = false),
     ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier.fillMaxWidth(0.9f),
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    text = if (initial == null) stringResource(R.string.place_edit_dialog_title_new) else stringResource(R.string.place_edit_dialog_title_edit),
-                    color = TextPrimary,
-                    fontSize = 16.sp,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                )
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Name field
-                    OutlinedTextField(
-                        value = nameText,
-                        onValueChange = { if (it.length <= 40) nameText = it },
-                        label = { Text(stringResource(R.string.place_edit_name_label)) },
-                        singleLine = true,
-                        isError = nameText.isNotEmpty() && !nameValid,
-                        shape = RoundedCornerShape(8.dp),
-                        colors = fieldColors
+        ScaledDialogContent {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier.fillMaxWidth(0.9f),
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = if (initial == null) stringResource(R.string.place_edit_dialog_title_new) else stringResource(R.string.place_edit_dialog_title_edit),
+                        color = TextPrimary,
+                        fontSize = 16.sp,
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                    // Map picker — tap to set coordinates
-                    PlacePickerMap(
-                        lat = effLat,
-                        lon = effLon,
-                        radiusM = effR,
-                        tileSource = tileSource,
-                        onPick = { lat, lon ->
-                            latText = "%.6f".format(lat)
-                            lonText = "%.6f".format(lon)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(200.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                    )
-
-                    // Lat / Lon fields side by side
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        // Name field
                         OutlinedTextField(
-                            value = latText,
-                            onValueChange = { latText = it },
-                            label = { Text(stringResource(R.string.place_edit_lat_label)) },
+                            value = nameText,
+                            onValueChange = { if (it.length <= 40) nameText = it },
+                            label = { Text(stringResource(R.string.place_edit_name_label)) },
                             singleLine = true,
-                            isError = latText.isNotEmpty() && !latValid,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = nameText.isNotEmpty() && !nameValid,
                             shape = RoundedCornerShape(8.dp),
-                            colors = fieldColors,
-                            modifier = Modifier.weight(1f)
+                            colors = fieldColors
                         )
+
+                        // Map picker — tap to set coordinates
+                        PlacePickerMap(
+                            lat = effLat,
+                            lon = effLon,
+                            radiusM = effR,
+                            tileSource = tileSource,
+                            onPick = { lat, lon ->
+                                latText = "%.6f".format(lat)
+                                lonText = "%.6f".format(lon)
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(200.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                        )
+
+                        // Lat / Lon fields side by side
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = latText,
+                                onValueChange = { latText = it },
+                                label = { Text(stringResource(R.string.place_edit_lat_label)) },
+                                singleLine = true,
+                                isError = latText.isNotEmpty() && !latValid,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = fieldColors,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = lonText,
+                                onValueChange = { lonText = it },
+                                label = { Text(stringResource(R.string.place_edit_lon_label)) },
+                                singleLine = true,
+                                isError = lonText.isNotEmpty() && !lonValid,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                                shape = RoundedCornerShape(8.dp),
+                                colors = fieldColors,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+
+                        // Radius field
                         OutlinedTextField(
-                            value = lonText,
-                            onValueChange = { lonText = it },
-                            label = { Text(stringResource(R.string.place_edit_lon_label)) },
+                            value = radiusText,
+                            onValueChange = { radiusText = it },
+                            label = { Text(stringResource(R.string.place_edit_radius_label)) },
                             singleLine = true,
-                            isError = lonText.isNotEmpty() && !lonValid,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+                            isError = radiusText.isNotEmpty() && !radiusValid,
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             shape = RoundedCornerShape(8.dp),
-                            colors = fieldColors,
-                            modifier = Modifier.weight(1f)
+                            colors = fieldColors
                         )
                     }
 
-                    // Radius field
-                    OutlinedTextField(
-                        value = radiusText,
-                        onValueChange = { radiusText = it },
-                        label = { Text(stringResource(R.string.place_edit_radius_label)) },
-                        singleLine = true,
-                        isError = radiusText.isNotEmpty() && !radiusValid,
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = fieldColors
-                    )
-                }
+                    Spacer(modifier = Modifier.height(12.dp))
 
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Buttons
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    TextButton(
-                        onClick = {
-                            if (canSave) {
-                                val raw = radiusText.toInt()
-                                if (raw < 20) {
-                                    Toast.makeText(context, context.getString(R.string.place_edit_error_min_radius), Toast.LENGTH_SHORT).show()
-                                }
-                                val radius = raw.coerceIn(20, 500)
-                                onSave(initial?.id, nameText.trim(), latValue!!, lonValue!!, radius)
-                            }
-                        },
-                        enabled = canSave
+                    // Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End,
                     ) {
-                        Text(stringResource(R.string.charges_edit_save_button), color = if (canSave) AccentGreen else TextMuted)
+                        TextButton(onClick = onDismiss) {
+                            Text(stringResource(R.string.settings_cancel_button), color = TextSecondary)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        TextButton(
+                            onClick = {
+                                if (canSave) {
+                                    val raw = radiusText.toInt()
+                                    if (raw < 20) {
+                                        Toast.makeText(context, context.getString(R.string.place_edit_error_min_radius), Toast.LENGTH_SHORT).show()
+                                    }
+                                    val radius = raw.coerceIn(20, 500)
+                                    onSave(initial?.id, nameText.trim(), latValue!!, lonValue!!, radius)
+                                }
+                            },
+                            enabled = canSave
+                        ) {
+                            Text(stringResource(R.string.charges_edit_save_button), color = if (canSave) AccentGreen else TextMuted)
+                        }
                     }
                 }
             }

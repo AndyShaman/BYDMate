@@ -19,7 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.AlertDialog
+import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -191,7 +191,7 @@ fun TripsScreen(
 
     // Delete confirmation dialog
     state.deleteConfirmTrip?.let { trip ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { viewModel.onDismissDeleteConfirm() },
             title = { Text(stringResource(R.string.trips_delete_dialog_title)) },
             text = {
@@ -417,23 +417,25 @@ private fun TripActionSheet(
         sheetState = sheetState,
         containerColor = CardSurface,
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text(
-                "${formatTime(trip.startTs)} • ${trip.distanceKm?.let { "%.1f".format(it) } ?: "-"} ${stringResource(R.string.trips_col_km)}",
-                color = TextSecondary, fontSize = 12.sp
-            )
-            Row(
-                modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
+        ScaledDialogContent {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
+                Text(
+                    "${formatTime(trip.startTs)} • ${trip.distanceKm?.let { "%.1f".format(it) } ?: "-"} ${stringResource(R.string.trips_col_km)}",
+                    color = TextSecondary, fontSize = 12.sp
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().clickable(onClick = onDeletePrompt).padding(vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(R.string.charges_action_delete), color = SocRed, fontSize = 16.sp)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
             }
-            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

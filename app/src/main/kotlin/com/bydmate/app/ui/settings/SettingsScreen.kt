@@ -10,6 +10,7 @@ import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_OFFSET_PCT
@@ -58,7 +59,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -1115,7 +1116,7 @@ private fun DisplaySection() {
             },
         )
         if (extendedConfirmOpen) {
-            AlertDialog(
+            AppAlertDialog(
                 onDismissRequest = { extendedConfirmOpen = false },
                 containerColor = CardSurface,
                 title = {
@@ -1838,7 +1839,7 @@ internal fun LearnButtonDialog(
         state = LearnUiState.Waiting
     }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.learn_button_dialog_title)) },
         text = {
@@ -1919,7 +1920,7 @@ private fun ServiceSection(
     var showExportConfirm by remember { mutableStateOf(false) }
 
     state.restoreCandidates?.let { files ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { viewModel.closeRestorePicker() },
             title = {
                 Text(
@@ -1972,7 +1973,7 @@ private fun ServiceSection(
 
     // Confirm dialog for destructive restore operation
     restoreTarget?.let { target ->
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { restoreTarget = null },
             title = {
                 Text(
@@ -2011,7 +2012,7 @@ private fun ServiceSection(
 
     // Confirm dialog before exporting plaintext backup
     if (showExportConfirm) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showExportConfirm = false },
             title = {
                 Text(
@@ -2159,7 +2160,7 @@ private fun ServiceSection(
         )
     }
     if (adbRestoreHelpOpen) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { adbRestoreHelpOpen = false },
             containerColor = CardSurface,
             title = {
@@ -2371,6 +2372,8 @@ private fun ServiceSection(
 private fun AppSection(state: SettingsUiState, viewModel: SettingsViewModel) {
     val lang by viewModel.appLanguage.collectAsState()
     LanguageBlock(currentLang = lang, onLanguageChange = viewModel::setAppLanguage)
+    val fontScale by viewModel.fontScale.collectAsState()
+    FontScaleBlock(current = fontScale, onChange = viewModel::setFontScale)
 
     var showDonate by remember { mutableStateOf(false) }
     if (showDonate) {
@@ -3182,6 +3185,38 @@ private fun LanguageBlock(
     }
 }
 
+@Composable
+private fun FontScaleBlock(
+    current: Float,
+    onChange: (Float) -> Unit
+) {
+    val scales = LocalePreferences.FONT_SCALES
+    val labels = listOf(
+        stringResource(R.string.settings_font_scale_normal),
+        stringResource(R.string.settings_font_scale_large),
+        stringResource(R.string.settings_font_scale_xlarge),
+    )
+    SectionHeader(text = stringResource(R.string.settings_font_scale_title))
+    Card(
+        shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = CardSurfaceElevated),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            SettingChipRow(
+                title = stringResource(R.string.settings_font_scale_title),
+                description = stringResource(R.string.settings_font_scale_desc),
+                options = labels,
+                selectedIndex = scales.indexOf(current).coerceAtLeast(0),
+                onSelect = { idx -> if (scales[idx] != current) onChange(scales[idx]) },
+            )
+        }
+    }
+}
+
 /** Preset for the custom connection card: fills URL and model, key stays the user's. */
 private data class CustomPreset(val name: String, val baseUrl: String, val model: String, val hintRes: Int)
 
@@ -3310,11 +3345,13 @@ private fun ConnDropdown(
                 Text(selectedLabel, fontSize = 13.sp, maxLines = 1)
             }
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                if (allowNone) {
-                    DropdownMenuItem(text = { Text(noneLabel) }, onClick = { onSelect(""); expanded = false })
-                }
-                options.forEach { (id, text) ->
-                    DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(id); expanded = false })
+                ScaledDialogContent {
+                    if (allowNone) {
+                        DropdownMenuItem(text = { Text(noneLabel) }, onClick = { onSelect(""); expanded = false })
+                    }
+                    options.forEach { (id, text) ->
+                        DropdownMenuItem(text = { Text(text) }, onClick = { onSelect(id); expanded = false })
+                    }
                 }
             }
         }
@@ -3454,48 +3491,50 @@ private fun CustomModelPickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(max = 500.dp)
-                .padding(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(
-                    stringResource(R.string.settings_model_picker_title),
-                    color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                if (loading) {
+        ScaledDialogContent {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .heightIn(max = 500.dp)
+                    .padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        stringResource(R.string.settings_model_picker_loading),
-                        color = TextSecondary, fontSize = 14.sp
+                        stringResource(R.string.settings_model_picker_title),
+                        color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold
                     )
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        items(models) { id ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSelect(id) }
-                                    .background(
-                                        if (id == selectedId) AccentGreen.copy(alpha = 0.15f)
-                                        else Color.Transparent,
-                                        RoundedCornerShape(8.dp)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    if (loading) {
+                        Text(
+                            stringResource(R.string.settings_model_picker_loading),
+                            color = TextSecondary, fontSize = 14.sp
+                        )
+                    } else {
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            items(models) { id ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelect(id) }
+                                        .background(
+                                            if (id == selectedId) AccentGreen.copy(alpha = 0.15f)
+                                            else Color.Transparent,
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        id,
+                                        color = if (id == selectedId) AccentGreen else TextPrimary,
+                                        fontSize = 13.sp,
+                                        maxLines = 1
                                     )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp)
-                            ) {
-                                Text(
-                                    id,
-                                    color = if (id == selectedId) AccentGreen else TextPrimary,
-                                    fontSize = 13.sp,
-                                    maxLines = 1
-                                )
+                                }
                             }
                         }
                     }
@@ -3519,77 +3558,79 @@ private fun ModelPickerDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Card(
-            shape = RoundedCornerShape(16.dp),
-            colors = CardDefaults.cardColors(containerColor = CardSurface),
-            modifier = Modifier
-                .fillMaxWidth(0.6f)
-                .heightIn(max = 500.dp)
-                .padding(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Text(stringResource(R.string.settings_model_picker_title), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                Spacer(modifier = Modifier.height(8.dp))
+        ScaledDialogContent {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = CardSurface),
+                modifier = Modifier
+                    .fillMaxWidth(0.6f)
+                    .heightIn(max = 500.dp)
+                    .padding(16.dp)
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(stringResource(R.string.settings_model_picker_title), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text(stringResource(R.string.settings_model_picker_search_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(8.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedTextColor = Color.White,
-                        unfocusedTextColor = Color.White,
-                        focusedBorderColor = AccentGreen,
-                        unfocusedBorderColor = CardBorder,
-                        focusedLabelColor = AccentGreen,
-                        unfocusedLabelColor = TextSecondary,
-                        cursorColor = AccentGreen
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it },
+                        label = { Text(stringResource(R.string.settings_model_picker_search_label)) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedTextColor = Color.White,
+                            unfocusedTextColor = Color.White,
+                            focusedBorderColor = AccentGreen,
+                            unfocusedBorderColor = CardBorder,
+                            focusedLabelColor = AccentGreen,
+                            unfocusedLabelColor = TextSecondary,
+                            cursorColor = AccentGreen
+                        )
                     )
-                )
 
-                Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                if (loading) {
-                    Text(stringResource(R.string.settings_model_picker_loading), color = TextSecondary, fontSize = 14.sp)
-                } else {
-                    val filtered = if (searchQuery.isBlank()) models
-                    else models.filter { it.name.contains(searchQuery, ignoreCase = true) ||
-                        it.id.contains(searchQuery, ignoreCase = true) }
+                    if (loading) {
+                        Text(stringResource(R.string.settings_model_picker_loading), color = TextSecondary, fontSize = 14.sp)
+                    } else {
+                        val filtered = if (searchQuery.isBlank()) models
+                        else models.filter { it.name.contains(searchQuery, ignoreCase = true) ||
+                            it.id.contains(searchQuery, ignoreCase = true) }
 
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(2.dp),
-                        modifier = Modifier.weight(1f, fill = false)
-                    ) {
-                        items(filtered) { model ->
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable { onSelect(model) }
-                                    .background(
-                                        if (model.id == selectedId) AccentGreen.copy(alpha = 0.15f)
-                                        else Color.Transparent,
-                                        RoundedCornerShape(8.dp)
+                        LazyColumn(
+                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                            modifier = Modifier.weight(1f, fill = false)
+                        ) {
+                            items(filtered) { model ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onSelect(model) }
+                                        .background(
+                                            if (model.id == selectedId) AccentGreen.copy(alpha = 0.15f)
+                                            else Color.Transparent,
+                                            RoundedCornerShape(8.dp)
+                                        )
+                                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        model.name,
+                                        color = if (model.id == selectedId) AccentGreen else TextPrimary,
+                                        fontSize = 13.sp,
+                                        modifier = Modifier.weight(1f),
+                                        maxLines = 1
                                     )
-                                    .padding(horizontal = 12.dp, vertical = 8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    model.name,
-                                    color = if (model.id == selectedId) AccentGreen else TextPrimary,
-                                    fontSize = 13.sp,
-                                    modifier = Modifier.weight(1f),
-                                    maxLines = 1
-                                )
-                                Text(
-                                    if (model.pricingPrompt == 0.0) "FREE"
-                                    else "${"%.2f".format(model.pricingPrompt)}$/M",
-                                    color = if (model.pricingPrompt == 0.0) AccentGreen else TextSecondary,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                    Text(
+                                        if (model.pricingPrompt == 0.0) "FREE"
+                                        else "${"%.2f".format(model.pricingPrompt)}$/M",
+                                        color = if (model.pricingPrompt == 0.0) AccentGreen else TextSecondary,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium
+                                    )
+                                }
                             }
                         }
                     }
