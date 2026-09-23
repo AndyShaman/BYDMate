@@ -2,6 +2,7 @@ package com.bydmate.app.data.backup
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.database.sqlite.SQLiteDatabase
 import android.os.Environment
 import android.util.Log
 import com.bydmate.app.R
@@ -585,7 +586,7 @@ class BackupManager(
             val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
             BackupDatabaseFiles.deleteWithSideFiles(tmpDbFile)
             tmpDbFile.writeBytes(entries.dbBytes)
-            val dbSchema = BackupDatabaseFiles.validate(tmpDbFile)
+            val dbSchema = BackupDatabaseFiles.validate(tmpDbFile, strings)
             // 2e. The database itself must be of the schema the manifest names: a full archive is
             //     swapped in as is, and Room would fail on the next start.
             if (dbSchema != backupSchema) {
@@ -594,6 +595,10 @@ class BackupManager(
             }
 
             if (selected == BackupPart.ALL) {
+                // An archive of v3.17.5 or older carries when each rule last fired on the source
+                // device: a later clock there would hold cooldown rules back here.
+                SQLiteDatabase.openDatabase(tmpDbFile.path, null, SQLiteDatabase.OPEN_READWRITE)
+                    .use { it.execSQL("UPDATE automation_rules SET last_triggered_at = NULL") }
                 // Under the export lock: an auto backup running at this moment must not
                 // checkpoint or read the database while it is closed and swapped.
                 synchronized(exportLock) { swapIn(tmpDbFile, prefsMap) }

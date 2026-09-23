@@ -246,6 +246,36 @@ class BackupManagerPartialRestoreTest {
         assertTrue(context.getDatabasePath("bydmate.db").parentFile!!.list()!!.none { it.endsWith(".tmp") })
     }
 
+    /** A v3.17.5 export: the rule still carries when it last fired on the source device. */
+    private fun archiveWithCooldown(): File {
+        val file = BackupFixtures.createCurrentDb(context, "archive-cooldown.db")
+        BackupFixtures.withDb(file) { db ->
+            BackupFixtures.seedCurrent(db, "archive", 7L)
+            db.execSQL("UPDATE automation_rules SET last_triggered_at = 1893456000000")
+        }
+        return BackupFixtures.archive(file.readBytes(), parts = null).also { BackupDatabaseFiles.deleteWithSideFiles(file) }
+    }
+
+    @Test
+    fun `full restore clears the rule cooldowns of the source device`() {
+        manager().restore(archiveWithCooldown(), BackupPart.ALL)
+
+        live { db ->
+            assertEquals("archive", text(db, "SELECT name FROM automation_rules"))
+            assertNull(text(db, "SELECT last_triggered_at FROM automation_rules"))
+        }
+    }
+
+    @Test
+    fun `settings merge clears the rule cooldowns of the source device`() {
+        manager().restore(archiveWithCooldown(), setOf(BackupPart.SETTINGS))
+
+        live { db ->
+            assertEquals("archive", text(db, "SELECT name FROM automation_rules"))
+            assertNull(text(db, "SELECT last_triggered_at FROM automation_rules"))
+        }
+    }
+
     @Test
     fun `restore errors come in the app language`() {
         com.bydmate.app.data.local.LocalePreferences(context).setLanguage("en")
