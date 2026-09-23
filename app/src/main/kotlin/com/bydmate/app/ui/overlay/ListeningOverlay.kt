@@ -50,6 +50,7 @@ import com.bydmate.app.ui.theme.CardSurface
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextPrimary
 import com.bydmate.app.ui.theme.WithAppFontScale
+import com.bydmate.app.util.appLocalizedContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.withContext
@@ -89,11 +90,21 @@ object ListeningOverlay {
     private val textState = MutableStateFlow("")
     private val heardState = MutableStateFlow<String?>(null)   // "Ты: …" row text (no label)
     private val answerState = MutableStateFlow<String?>(null)  // "Агент: …" row text (no label)
+    // The "Ты:" / "Агент:" captions in the app language; set at attach and by [relocale].
+    private val labelsState = MutableStateFlow("" to "")
 
     // Test-visible reads of the dialog state; the flows themselves stay private so only the three
     // mutators below can change them.
     internal val heardText: String? get() = heardState.value
     internal val answerText: String? get() = answerState.value
+    internal val dialogLabels: Pair<String, String> get() = labelsState.value
+
+    /** Re-reads the dialog captions in the app language (the application context keeps the system
+     *  one). Called at every attach and after a language switch; harmless when not shown. */
+    fun relocale(context: Context) {
+        val lc = context.appLocalizedContext()
+        labelsState.value = lc.getString(R.string.orb_you) to lc.getString(R.string.orb_agent)
+    }
 
     /** Shows the recognized user phrase and clears any previous answer. No-op-safe when not shown --
      *  it only mutates state the dialog window observes, so calling it before [show] is harmless. */
@@ -232,8 +243,7 @@ object ListeningOverlay {
         val savedY = prefs.getInt(KEY_ORB_Y, ORB_Y_UNSET)
         val startY = if (savedY == ORB_Y_UNSET) (TOP_MARGIN_DP * density).toInt() else savedY
 
-        val youLabel = context.getString(R.string.orb_you)
-        val agentLabel = context.getString(R.string.orb_agent)
+        relocale(context)
         // The pill is a fixed drag handle; only the dialog text follows the in-app text size.
         val fontScale = LocalePreferences(context).getFontScale()
 
@@ -331,7 +341,7 @@ object ListeningOverlay {
             setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindowOrReleasedFromPool)
             setViewTreeLifecycleOwner(dialogOwner)
             setViewTreeSavedStateRegistryOwner(dialogOwner)
-            setContent { WithAppFontScale(fontScale) { DialogContent(youLabel, agentLabel) } }
+            setContent { WithAppFontScale(fontScale) { DialogContent() } }
         }
 
         wm.addView(pillView, pillParams)
@@ -367,7 +377,8 @@ object ListeningOverlay {
     }
 
     @Composable
-    private fun DialogContent(youLabel: String, agentLabel: String) {
+    private fun DialogContent() {
+        val (youLabel, agentLabel) = labelsState.collectAsState().value
         val heard by heardState.collectAsState()
         val answer by answerState.collectAsState()
         if (heard != null || answer != null) {
