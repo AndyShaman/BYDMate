@@ -90,6 +90,45 @@
     <string name="settings_adb_restore_status_connecting">Przywracanie…</string>
     <string name="settings_adb_restore_status_restored">Przywrócono o %1$s</string>
     <string name="settings_adb_restore_status_failed">Błąd: %1$s</string>
+    <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
+    <string name="adb_verdict_not_enabled">ADB wyłączone: sterowanie nie działa</string>
+    <string name="adb_verdict_off_after_reboot">ADB wyłączyło się po restarcie</string>
+    <string name="adb_verdict_no_access">Brak dostępu do ADB</string>
+    <string name="adb_verdict_helper_down">Pomocnik się nie uruchomił</string>
+    <string name="adb_verdict_checking">Sprawdzamy ADB…</string>
+    <string name="adb_verdict_link_how">Jak włączyć</string>
+    <string name="adb_verdict_link_more">Szczegóły</string>
+    <string name="adb_dialog_not_enabled_title">ADB jest wyłączone</string>
+    <string name="adb_dialog_not_enabled_body">Sterowanie autem, podział ekranu, zestaw wskaźników i przycisk na kierownicy nie działają. Dane baterii i podróży są odczytywane.</string>
+    <string name="adb_enable_step_1">1. Ustawienia DiLink → O systemie → dotknij numeru kompilacji siedem razy</string>
+    <string name="adb_enable_step_2">2. Opcje programisty → włącz „Debugowanie przez Wi-Fi”</string>
+    <string name="adb_enable_step_3">3. Wróć do BYDMate i naciśnij „Sprawdź”</string>
+    <string name="adb_dialog_off_after_reboot_title">ADB wyłączyło się po restarcie</string>
+    <string name="adb_dialog_off_after_reboot_body">W tym oprogramowaniu ADB wyłącza się przy każdym restarcie. BYDMate potrafi włączać je sam, potrzebne jest Wi-Fi.</string>
+    <string name="adb_dialog_no_access_title">Brak dostępu do ADB</string>
+    <string name="adb_dialog_no_access_body">Potwierdź prośbę na ekranie lub połącz ADB ponownie, a potem naciśnij „Sprawdź”.</string>
+    <string name="adb_dialog_helper_down_title">Pomocnik BYDMate się nie uruchomił</string>
+    <string name="adb_dialog_helper_down_body">ADB działa, ale pomocnik nie odpowiada. Wyślij zrzut diagnostyczny z ustawień.</string>
+    <string name="adb_dialog_close">Zamknij</string>
+    <string name="adb_dialog_check">Sprawdź</string>
+    <string name="adb_dialog_enable_restore">Włącz przywracanie</string>
+    <string name="adb_dialog_open_diagnostics">Otwórz diagnostykę</string>
+    <string name="welcome_adb_title">Dostęp do auta przez ADB</string>
+    <string name="welcome_adb_intro">Bez ADB aplikacja tylko odczytuje dane. Aby sterować autem, włącz debugowanie jeden raz:</string>
+    <string name="welcome_adb_gives">Co daje ADB: sterowanie szybami i klimatyzacją, podział ekranu, zestaw wskaźników, przycisk na kierownicy.</string>
+    <string name="welcome_adb_no_dev_title">Jeśli nie ma pozycji „Opcje programisty”</string>
+    <string name="welcome_adb_no_dev_body">W części oprogramowań debugowanie włącza się przez aplikację z kodem QR. Instrukcja pod przyciskiem po prawej.</string>
+    <string name="welcome_adb_check_title">Sprawdzenie</string>
+    <string name="welcome_adb_state_not_checked">Jeszcze nie sprawdzono</string>
+    <string name="welcome_adb_state_failed">ADB jest wyłączone</string>
+    <string name="welcome_adb_state_ok">ADB działa</string>
+    <string name="welcome_adb_ok_hint">Możesz przejść dalej.</string>
+    <string name="welcome_adb_check_button">Sprawdź</string>
+    <string name="welcome_adb_check_again_button">Sprawdź ponownie</string>
+    <string name="welcome_adb_checking">Sprawdzamy…</string>
+    <string name="welcome_adb_check_hint">Sprawdzenie trwa kilka sekund.</string>
+    <string name="welcome_adb_instruction_title">Instrukcja</string>
+    <string name="welcome_adb_instruction_button">Otwórz szczegółową instrukcję</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">System samochodu</string>
     <string name="settings_car_language_title">Język interfejsu samochodu</string>
@@ -654,7 +693,6 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Brak danych z auta</string>
-    <string name="dashboard_adb_offline">Dane auta niedostępne</string>
     <string name="dashboard_diplus_offline">DiPlus nie odpowiada</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>

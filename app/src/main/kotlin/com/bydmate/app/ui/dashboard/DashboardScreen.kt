@@ -6,11 +6,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -44,6 +41,8 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -62,15 +61,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.bydmate.app.R
+import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.remote.DynamicMetric
 import com.bydmate.app.data.trips.TripCounterUi
 import com.bydmate.app.domain.calculator.Trend
+import com.bydmate.app.ui.components.AdbVerdictDialog
+import com.bydmate.app.ui.components.CardDetailDialog
 import com.bydmate.app.ui.components.SocGauge
 import com.bydmate.app.ui.components.TripCard
+import com.bydmate.app.ui.components.adbVerdictColor
+import com.bydmate.app.ui.components.adbVerdictText
 import com.bydmate.app.ui.components.consumptionColor
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.widget.TRIP_DISTANCE_TREND_THRESHOLD_KM
@@ -81,10 +83,17 @@ import kotlinx.coroutines.delay
 @Composable
 fun DashboardScreen(
     onOpenTechPanel: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: DashboardViewModel = hiltViewModel(),
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    // The verdict the dialog was opened for; cleared when the problem goes away so the dialog
+    // cannot pop up by itself the next time a verdict appears.
+    var openAdbVerdict by remember { mutableStateOf<AdbVerdict?>(null) }
+    LaunchedEffect(state.adbVerdict) {
+        if (state.adbVerdict == null || state.adbVerdict == AdbVerdict.OK) openAdbVerdict = null
+    }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     LaunchedEffect(lifecycleOwner) {
@@ -99,7 +108,24 @@ fun DashboardScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        TopBar(isServiceRunning = state.isServiceRunning, vehicleDataConnected = state.vehicleDataConnected, adbConnected = state.adbConnected)
+        TopBar(
+            isServiceRunning = state.isServiceRunning,
+            vehicleDataConnected = state.vehicleDataConnected,
+            adbVerdict = state.adbVerdict,
+            adbChecking = state.adbChecking,
+            onAdbTap = { openAdbVerdict = state.adbVerdict },
+        )
+        val adbVerdict = state.adbVerdict
+        if (openAdbVerdict != null && adbVerdict != null && adbVerdict != AdbVerdict.OK) {
+            AdbVerdictDialog(
+                verdict = adbVerdict,
+                restoreEnabled = viewModel.adbRestoreEnabled,
+                onCheck = { viewModel.recheckAdb() },
+                onEnableRestore = { viewModel.enableAdbRestore() },
+                onOpenDiagnostics = onOpenSettings,
+                onDismiss = { openAdbVerdict = null },
+            )
+        }
         Spacer(modifier = Modifier.height(4.dp))
 
         Row(
@@ -506,7 +532,13 @@ fun DashboardScreen(
 }
 
 @Composable
-private fun TopBar(isServiceRunning: Boolean, vehicleDataConnected: Boolean, adbConnected: Boolean? = null) {
+private fun TopBar(
+    isServiceRunning: Boolean,
+    vehicleDataConnected: Boolean,
+    adbVerdict: AdbVerdict?,
+    adbChecking: Boolean,
+    onAdbTap: () -> Unit,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -523,16 +555,24 @@ private fun TopBar(isServiceRunning: Boolean, vehicleDataConnected: Boolean, adb
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            if (isServiceRunning && !vehicleDataConnected) {
+            // The ADB verdict takes the slot of «no vehicle data»: when both apply, only ADB shows.
+            if (isServiceRunning && adbChecking) {
+                Text(stringResource(R.string.adb_verdict_checking), color = TextSecondary, fontSize = 12.sp)
+                Spacer(modifier = Modifier.width(8.dp))
+            } else if (isServiceRunning && adbVerdict != null && adbVerdict != AdbVerdict.OK) {
+                Text(
+                    text = adbVerdictText(adbVerdict),
+                    color = adbVerdictColor(adbVerdict),
+                    fontSize = 12.sp,
+                    modifier = Modifier.clickable { onAdbTap() }
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+            } else if (isServiceRunning && !vehicleDataConnected) {
                 Text(
                     text = stringResource(R.string.dashboard_vehicle_data_offline),
                     color = SocYellow,
                     fontSize = 12.sp
                 )
-                Spacer(modifier = Modifier.width(8.dp))
-            }
-            if (isServiceRunning && adbConnected == false) {
-                Text(stringResource(R.string.dashboard_adb_offline), color = SocYellow, fontSize = 12.sp)
                 Spacer(modifier = Modifier.width(8.dp))
             }
             Box(
@@ -765,55 +805,6 @@ private fun TripCounterDialog(
             "%.2f %s".format(ui.cost, currencySymbol))
         Text(stringResource(R.string.dashboard_trip_reset_hint), color = TextMuted, fontSize = 11.sp,
             modifier = Modifier.padding(top = 6.dp))
-    }
-}
-
-// ============================================================================
-// Pop-up dialog for card details
-// ============================================================================
-
-@Composable
-private fun CardDetailDialog(
-    title: String? = null,
-    borderColor: Color,
-    onDismiss: () -> Unit,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Dialog(
-        onDismissRequest = onDismiss,
-        properties = DialogProperties(usePlatformDefaultWidth = false)
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
-                border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
-                modifier = Modifier
-                    .padding(start = 22.dp, end = 16.dp)
-                    .fillMaxWidth(0.4f)
-                    .clickable { onDismiss() }
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    if (title != null) {
-                        Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                    }
-                    content()
-                }
-            }
-        }
     }
 }
 

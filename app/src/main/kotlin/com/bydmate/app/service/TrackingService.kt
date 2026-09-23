@@ -98,6 +98,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var cameraStateMonitor: com.bydmate.app.data.camera.CameraStateMonitor
     @Inject lateinit var adbOnDeviceClient: com.bydmate.app.data.autoservice.AdbOnDeviceClient
     @Inject lateinit var adbRestoreManager: com.bydmate.app.data.autoservice.AdbRestoreManager
+    @Inject lateinit var adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
     @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
     @Inject lateinit var lastSessionRepository: com.bydmate.app.data.repository.LastSessionRepository
@@ -653,6 +654,7 @@ class TrackingService : Service(), LocationListener {
             try {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
+                adbVerdictMonitor.recompute()
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
                 // Not gated on ok: a cached catalog resolves over the ADB read path without the
                 // daemon, and without one the call just returns and the respawn path retries.
@@ -774,6 +776,7 @@ class TrackingService : Service(), LocationListener {
         blindSpotController.start(serviceScope)
         instance = this
         _isRunning.value = true
+        adbVerdictMonitor.onServiceStarted()
         ChainLog.append(this, "TrackingService fully started")
 
         // Start Smart Home polling if configured
@@ -1341,6 +1344,7 @@ class TrackingService : Service(), LocationListener {
         wakeLock?.let { if (it.isHeld) it.release() }
         instance = null
         _isRunning.value = false
+        adbVerdictMonitor.onServiceStopped()
 
         // Auto-restart via WorkManager (like BydConnect AutoRestartReceiver)
         try {
@@ -1483,25 +1487,37 @@ class TrackingService : Service(), LocationListener {
                     // ensureRunning() does the actual respawn and is expensive, so it always runs
                     // off-tick via launch (wrapped in runCatching — serviceScope has no
                     // CoroutineExceptionHandler), cooldown-gated against HELPER_RESPAWN_COOLDOWN_MS.
-                    if (pollTickCount % HELPER_HEALTH_CHECK_EVERY_N_TICKS == 0L && !helperBootstrap.isHealthy()) {
-                        val now = System.currentTimeMillis()
-                        if (shouldAttemptRespawn(now, lastHelperRespawnAtMs)) {
-                            lastHelperRespawnAtMs = now
-                            Log.w(TAG, "Helper daemon unhealthy, attempting respawn")
-                            serviceScope.launch {
-                                val respawned = runCatching { helperBootstrap.ensureRunning() }
-                                    .onFailure { Log.w(TAG, "Helper respawn failed: ${it.message}") }
-                                    .getOrDefault(false)
-                                // Trigger 3: either verdict is a reason to check the restore state.
-                                // A daemon that just came back means the classic port is alive right
-                                // now — the one window a self-grant of WRITE_SECURE_SETTINGS can use
-                                // (see AdbRestoreManager.attemptLocked). A daemon that will not come
-                                // back usually means the ADB channel under it is gone (port closed by
-                                // a reboot).
-                                adbRestoreManager.attemptIfNeeded(if (respawned) "helper_respawned" else "watchdog")
-                                // A daemon that just came back is also the first chance to read
-                                // the fid catalog when it was unreachable at startup.
-                                if (respawned) resolveFidCatalog()
+                    if (pollTickCount % HELPER_HEALTH_CHECK_EVERY_N_TICKS == 0L) {
+                        // Pinged once: the verdict reads a healthy tick, a dead one goes to respawn.
+                        // The verdict recompute is launched off-tick: it reads the ADB socket state,
+                        // which shares a lock with a connect that can wait up to 60 s for auth.
+                        val healthy = helperBootstrap.isHealthy()
+                        if (healthy) {
+                            serviceScope.launch { runCatching { adbVerdictMonitor.recompute() } }
+                        } else {
+                            val now = System.currentTimeMillis()
+                            if (!shouldAttemptRespawn(now, lastHelperRespawnAtMs)) {
+                                // No respawn in flight here, so no HELPER_DOWN flicker: refresh a stale OK.
+                                serviceScope.launch { runCatching { adbVerdictMonitor.recompute() } }
+                            } else {
+                                lastHelperRespawnAtMs = now
+                                Log.w(TAG, "Helper daemon unhealthy, attempting respawn")
+                                serviceScope.launch {
+                                    val respawned = runCatching { helperBootstrap.ensureRunning() }
+                                        .onFailure { Log.w(TAG, "Helper respawn failed: ${it.message}") }
+                                        .getOrDefault(false)
+                                    // Trigger 3: either verdict is a reason to check the restore state.
+                                    // A daemon that just came back means the classic port is alive right
+                                    // now — the one window a self-grant of WRITE_SECURE_SETTINGS can use
+                                    // (see AdbRestoreManager.attemptLocked). A daemon that will not come
+                                    // back usually means the ADB channel under it is gone (port closed by
+                                    // a reboot).
+                                    adbRestoreManager.attemptIfNeeded(if (respawned) "helper_respawned" else "watchdog")
+                                    // A daemon that just came back is also the first chance to read
+                                    // the fid catalog when it was unreachable at startup.
+                                    if (respawned) resolveFidCatalog()
+                                    adbVerdictMonitor.recompute()
+                                }
                             }
                         }
                     }

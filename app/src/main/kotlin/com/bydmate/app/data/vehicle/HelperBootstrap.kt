@@ -47,7 +47,20 @@ class HelperBootstrap @Inject constructor(
      * Returns true if a helper daemon matching the current app version is reachable
      * after this call. Serialized: concurrent callers run one at a time.
      */
-    suspend fun ensureRunning(): Boolean = lock.withLock { ensureRunningLocked() }
+    suspend fun ensureRunning(): Boolean = lock.withLock {
+        ensureRunningLocked().also { if (it) markEverAlive() }
+    }
+
+    /**
+     * True once a daemon of our version has answered on this install — i.e. ADB worked here at
+     * least once. Separates "ADB was never enabled" from "ADB closed after a reboot". Never cleared.
+     */
+    fun daemonEverAlive(): Boolean = prefs.getBoolean(KEY_DAEMON_EVER_ALIVE, false)
+
+    // ensureRunning runs often: write only on the first success.
+    private fun markEverAlive() {
+        if (!daemonEverAlive()) prefs.edit().putBoolean(KEY_DAEMON_EVER_ALIVE, true).apply()
+    }
 
     /**
      * Order of operations:
@@ -315,6 +328,7 @@ class HelperBootstrap @Inject constructor(
         private const val KEY_LAST_FAIL_TS = "helper_last_fail_ts"
         private const val KEY_LAST_FAIL_LOG = "helper_last_fail_log"
         private const val KEY_LAST_FAIL_REASON = "helper_last_fail_reason"
+        private const val KEY_DAEMON_EVER_ALIVE = "daemon_ever_alive"
         private const val FAIL_LOG_LINES = 10
         private const val VERSION_READ_FAILED = Long.MIN_VALUE
         private const val POLL_ATTEMPTS = 15

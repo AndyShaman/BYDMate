@@ -561,7 +561,6 @@
     <!-- Dashboard -->
     <string name="dashboard_vehicle_data_offline">未收到车辆数据</string>
     <string name="dashboard_diplus_offline">DiPlus 无响应</string>
-    <string name="dashboard_adb_offline">车辆数据不可用</string>
     <string name="dashboard_status_online">在线</string>
     <string name="dashboard_status_offline">离线</string>
 
@@ -810,6 +809,45 @@
     <string name="settings_adb_restore_status_connecting">正在恢复…</string>
     <string name="settings_adb_restore_status_restored">已于 %1$s 恢复</string>
     <string name="settings_adb_restore_status_failed">错误：%1$s</string>
+    <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
+    <string name="adb_verdict_not_enabled">ADB 未开启：无法控制车辆</string>
+    <string name="adb_verdict_off_after_reboot">重启后 ADB 已关闭</string>
+    <string name="adb_verdict_no_access">无 ADB 访问权限</string>
+    <string name="adb_verdict_helper_down">助手未启动</string>
+    <string name="adb_verdict_checking">正在检查 ADB…</string>
+    <string name="adb_verdict_link_how">如何开启</string>
+    <string name="adb_verdict_link_more">详情</string>
+    <string name="adb_dialog_not_enabled_title">ADB 未开启</string>
+    <string name="adb_dialog_not_enabled_body">车辆控制、分屏、仪表盘和方向盘按键无法使用。电池和行程数据仍可读取。</string>
+    <string name="adb_enable_step_1">1. DiLink 设置 → 关于系统 → 连续点击版本号七次</string>
+    <string name="adb_enable_step_2">2. 开发者选项 → 开启“无线调试”</string>
+    <string name="adb_enable_step_3">3. 返回 BYDMate 并点击“检查”</string>
+    <string name="adb_dialog_off_after_reboot_title">重启后 ADB 已关闭</string>
+    <string name="adb_dialog_off_after_reboot_body">在此固件上，ADB 每次重启都会关闭。BYDMate 可以自动重新开启，需要 Wi-Fi。</string>
+    <string name="adb_dialog_no_access_title">无 ADB 访问权限</string>
+    <string name="adb_dialog_no_access_body">请在屏幕上确认请求或重新连接 ADB，然后点击“检查”。</string>
+    <string name="adb_dialog_helper_down_title">BYDMate 助手未启动</string>
+    <string name="adb_dialog_helper_down_body">ADB 正常，但助手没有响应。请在设置中发送诊断转储。</string>
+    <string name="adb_dialog_close">关闭</string>
+    <string name="adb_dialog_check">检查</string>
+    <string name="adb_dialog_enable_restore">启用恢复</string>
+    <string name="adb_dialog_open_diagnostics">打开诊断</string>
+    <string name="welcome_adb_title">通过 ADB 访问车辆</string>
+    <string name="welcome_adb_intro">没有 ADB，应用只能读取数据。要控制车辆，请开启一次调试：</string>
+    <string name="welcome_adb_gives">ADB 的作用：车窗和空调控制、分屏、仪表盘、方向盘按键。</string>
+    <string name="welcome_adb_no_dev_title">如果没有“开发者选项”</string>
+    <string name="welcome_adb_no_dev_body">部分固件需要通过带二维码的应用开启调试。说明见右侧按钮。</string>
+    <string name="welcome_adb_check_title">检查</string>
+    <string name="welcome_adb_state_not_checked">尚未检查</string>
+    <string name="welcome_adb_state_failed">ADB 未开启</string>
+    <string name="welcome_adb_state_ok">ADB 正常</string>
+    <string name="welcome_adb_ok_hint">可以继续了。</string>
+    <string name="welcome_adb_check_button">检查</string>
+    <string name="welcome_adb_check_again_button">再次检查</string>
+    <string name="welcome_adb_checking">正在检查…</string>
+    <string name="welcome_adb_check_hint">检查只需几秒钟。</string>
+    <string name="welcome_adb_instruction_title">说明</string>
+    <string name="welcome_adb_instruction_button">打开详细说明</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">车机系统</string>
     <string name="settings_car_language_title">车机界面语言</string>

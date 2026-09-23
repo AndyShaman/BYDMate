@@ -248,7 +248,19 @@ fun AppNavigation(
                 )
             }
             composable(Screen.Dashboard.route) {
-                DashboardScreen(onOpenTechPanel = { navController.navigate("tech_panel") })
+                DashboardScreen(
+                    onOpenTechPanel = { navController.navigate("tech_panel") },
+                    // Same tab switch as the bottom bar's Settings item.
+                    onOpenSettings = {
+                        navController.navigate(Screen.Settings.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
+                            }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                )
             }
             composable(Screen.Trips.route) {
                 TripsScreen(onOpenTemperature = { navController.navigate("trip_temperature") })

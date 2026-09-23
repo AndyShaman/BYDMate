@@ -90,6 +90,45 @@
     <string name="settings_adb_restore_status_connecting">Восстанавливаем…</string>
     <string name="settings_adb_restore_status_restored">Восстановлено в %1$s</string>
     <string name="settings_adb_restore_status_failed">Ошибка: %1$s</string>
+    <!-- ADB control-channel verdict: Dashboard header, Settings line, dialog, wizard step -->
+    <string name="adb_verdict_not_enabled">ADB не включён: управление не работает</string>
+    <string name="adb_verdict_off_after_reboot">ADB отключился после перезагрузки</string>
+    <string name="adb_verdict_no_access">Нет доступа к ADB</string>
+    <string name="adb_verdict_helper_down">Помощник не запустился</string>
+    <string name="adb_verdict_checking">Проверяем ADB…</string>
+    <string name="adb_verdict_link_how">Как включить</string>
+    <string name="adb_verdict_link_more">Подробнее</string>
+    <string name="adb_dialog_not_enabled_title">ADB не включён</string>
+    <string name="adb_dialog_not_enabled_body">Управление машиной, разделение экрана, приборка и кнопка руля не работают. Данные о батарее и поездках читаются.</string>
+    <string name="adb_enable_step_1">1. Настройки DiLink → О системе → семь раз нажмите на номер сборки</string>
+    <string name="adb_enable_step_2">2. Для разработчиков → включите «Отладка по Wi-Fi»</string>
+    <string name="adb_enable_step_3">3. Вернитесь в BYDMate и нажмите «Проверить»</string>
+    <string name="adb_dialog_off_after_reboot_title">ADB отключился после перезагрузки</string>
+    <string name="adb_dialog_off_after_reboot_body">На этой прошивке ADB выключается при каждой перезагрузке. BYDMate умеет включать его сам, нужен Wi-Fi.</string>
+    <string name="adb_dialog_no_access_title">Нет доступа к ADB</string>
+    <string name="adb_dialog_no_access_body">Подтвердите запрос на экране или подключите ADB заново, затем нажмите «Проверить».</string>
+    <string name="adb_dialog_helper_down_title">Помощник BYDMate не запустился</string>
+    <string name="adb_dialog_helper_down_body">ADB работает, но помощник не отвечает. Отправьте дамп диагностики из настроек.</string>
+    <string name="adb_dialog_close">Закрыть</string>
+    <string name="adb_dialog_check">Проверить</string>
+    <string name="adb_dialog_enable_restore">Включить восстановление</string>
+    <string name="adb_dialog_open_diagnostics">Открыть диагностику</string>
+    <string name="welcome_adb_title">Доступ к машине через ADB</string>
+    <string name="welcome_adb_intro">Без ADB приложение только читает данные. Чтобы управлять машиной, включите отладку один раз:</string>
+    <string name="welcome_adb_gives">Что даёт ADB: управление окнами и климатом, разделение экрана, приборка, кнопка руля.</string>
+    <string name="welcome_adb_no_dev_title">Если пункта «Для разработчиков» нет</string>
+    <string name="welcome_adb_no_dev_body">На части прошивок отладка включается через приложение с QR-кодом. Инструкция по кнопке справа.</string>
+    <string name="welcome_adb_check_title">Проверка</string>
+    <string name="welcome_adb_state_not_checked">Ещё не проверяли</string>
+    <string name="welcome_adb_state_failed">ADB не включён</string>
+    <string name="welcome_adb_state_ok">ADB работает</string>
+    <string name="welcome_adb_ok_hint">Можно идти дальше.</string>
+    <string name="welcome_adb_check_button">Проверить</string>
+    <string name="welcome_adb_check_again_button">Проверить ещё раз</string>
+    <string name="welcome_adb_checking">Проверяем…</string>
+    <string name="welcome_adb_check_hint">Проверка занимает пару секунд.</string>
+    <string name="welcome_adb_instruction_title">Инструкция</string>
+    <string name="welcome_adb_instruction_button">Открыть подробную инструкцию</string>
     <!-- Car system section: BYD head unit settings, not app settings -->
     <string name="settings_car_system_header">Система машины</string>
     <string name="settings_car_language_title">Язык интерфейса машины</string>
@@ -654,7 +693,6 @@
     <!-- Dashboard -->
     <!-- Top bar -->
     <string name="dashboard_vehicle_data_offline">Нет данных от автомобиля</string>
-    <string name="dashboard_adb_offline">Данные машины недоступны</string>
     <string name="dashboard_diplus_offline">DiPlus не отвечает</string>
     <string name="dashboard_status_online">Online</string>
     <string name="dashboard_status_offline">Offline</string>

@@ -34,7 +34,8 @@ class AdbOnDeviceClientTest {
         // success (what a real redirected shell command returns) so dispatch-only tests don't
         // need to enumerate the exact dynamic command string. Set to null to simulate a
         // dead-socket exec failure (AdbProtocolClient.exec returns null on any transport error).
-        var execResult: String? = ""
+        var execResult: String? = "",
+        override var lastConnectFailure: AdbConnectFailure? = null,
     ) : AdbProtocol {
         var connectCalls = 0
         var disconnectCalls = 0
@@ -77,6 +78,25 @@ class AdbOnDeviceClientTest {
         // Note: not calling connect() — protocol field stays null.
         val result = client.exec("service call autoservice 5 i32 1014 i32 1145045032")
         assertNull(result)
+    }
+
+    @Test
+    fun `lastConnectFailure is null before any connect`() {
+        val client = newClient(FakeProtocol(lastConnectFailure = AdbConnectFailure.UNREACHABLE))
+        // No connect yet: the protocol is not even created, so there is nothing to forward.
+        assertNull(client.lastConnectFailure())
+    }
+
+    @Test
+    fun `lastConnectFailure forwards the protocol's classification`() = runTest {
+        val fake = FakeProtocol(connectResult = false)
+        val client = newClient(fake)
+        client.connect()
+
+        fake.lastConnectFailure = AdbConnectFailure.AUTH_REJECTED
+        assertEquals(AdbConnectFailure.AUTH_REJECTED, client.lastConnectFailure())
+        fake.lastConnectFailure = null
+        assertNull(client.lastConnectFailure())
     }
 
     @Test

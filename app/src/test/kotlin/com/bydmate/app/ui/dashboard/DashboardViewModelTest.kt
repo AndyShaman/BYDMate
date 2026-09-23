@@ -2,6 +2,8 @@ package com.bydmate.app.ui.dashboard
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.autoservice.AdbVerdictMonitor
 import com.bydmate.app.data.autoservice.BatteryReading
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.data.local.LocalePreferences
@@ -30,6 +32,7 @@ import com.bydmate.app.domain.battery.BatteryStateRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -46,6 +49,8 @@ import org.junit.Before
 import org.junit.Test
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
+import io.mockk.verify
 import io.mockk.mockk
 import io.mockk.spyk
 import org.junit.runner.RunWith
@@ -290,8 +295,17 @@ class DashboardViewModelTest {
             settingsRepository = settingsRepo,
             idleDrainDao = idleDrainDao,
             insightsManager = resolvedInsightsManager,
-            batteryStateRepository = batteryStateRepo
+            batteryStateRepository = batteryStateRepo,
+            adbVerdictMonitor = adbVerdictMonitor,
         )
+    }
+
+    // The monitor's two flows, driven directly by the tests.
+    private val adbVerdictFlow = MutableStateFlow<AdbVerdict?>(null)
+    private val adbCheckingFlow = MutableStateFlow(false)
+    private val adbVerdictMonitor: AdbVerdictMonitor = mockk(relaxed = true) {
+        every { verdict } returns adbVerdictFlow
+        every { checking } returns adbCheckingFlow
     }
 
     // --- Tests ---
@@ -306,23 +320,36 @@ class DashboardViewModelTest {
     )
 
     @Test
-    fun `adbConnected is true when autoservice connected`() = runTest {
-        val vm = buildViewModel(
-            fakeAutoservice = FakeAutoservice(sampleReading, available = true)
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertEquals(true, vm.uiState.value.adbConnected)
-    }
-
-    @Test
-    fun `adbConnected is false when autoservice unavailable`() = runTest {
+    fun `adbVerdict and adbChecking mirror the monitor`() = runTest {
         val vm = buildViewModel(
             fakeAutoservice = FakeAutoservice(battery = null, available = false)
         )
         testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.adbVerdict)
+        assertFalse(vm.uiState.value.adbChecking)
 
-        assertFalse(vm.uiState.value.adbConnected!!)
+        adbVerdictFlow.value = AdbVerdict.NOT_ENABLED
+        adbCheckingFlow.value = true
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(AdbVerdict.NOT_ENABLED, vm.uiState.value.adbVerdict)
+        assertTrue(vm.uiState.value.adbChecking)
+
+        adbVerdictFlow.value = null
+        adbCheckingFlow.value = false
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(vm.uiState.value.adbVerdict)
+        assertFalse(vm.uiState.value.adbChecking)
+    }
+
+    @Test
+    fun `recheckAdb and enableAdbRestore go through the monitor`() = runTest {
+        val vm = buildViewModel(fakeAutoservice = FakeAutoservice(sampleReading, available = true))
+
+        vm.recheckAdb()
+        vm.enableAdbRestore()
+
+        verify { adbVerdictMonitor.recheck("dashboard") }
+        verify { adbVerdictMonitor.enableRestoreAndRecheck() }
     }
 
     @Test
