@@ -11,6 +11,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
+import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -144,7 +145,8 @@ class VoiceControllerSafetyTest {
             ttsEngine, journal, continuousAsr, agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(blockReasonContext()))
     }
 
     private fun makeControllerWithAutomation(
@@ -184,7 +186,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(blockReasonContext()))
     }
 
     /**
@@ -494,7 +497,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.ENGINEER) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(context))
 
         controller.onPttPressed()
         Thread.sleep(300)
@@ -597,7 +601,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(blockReasonContext()))
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> presented.set(text) }
 
@@ -656,7 +661,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(blockReasonContext()))
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -728,7 +734,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(blockReasonContext()))
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -784,7 +791,8 @@ class VoiceControllerSafetyTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(context))
         val feedbackCount = AtomicInteger(0)
         val presented = AtomicReference<String?>(null)
         controller.showAnswerHook = { text -> feedbackCount.incrementAndGet(); presented.set(text) }

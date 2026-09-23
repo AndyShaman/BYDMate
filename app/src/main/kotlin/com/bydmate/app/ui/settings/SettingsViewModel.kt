@@ -52,6 +52,7 @@ import com.bydmate.app.service.TrackingService
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.util.applyAppLanguage
 import com.bydmate.app.util.CrashLog
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.R
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -280,6 +281,7 @@ data class SettingsUiState(
 }
 
 @HiltViewModel
+@Suppress("LongParameterList") // Hilt-injected dependencies
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
@@ -330,6 +332,7 @@ class SettingsViewModel @Inject constructor(
     private val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor,
     private val telegramBackupSink: TelegramBackupSink,
     private val autoBackupScheduler: AutoBackupScheduler,
+    private val appStrings: AppStrings,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -698,7 +701,7 @@ class SettingsViewModel @Inject constructor(
             if (occupant != null && occupant.id != period.id) {
                 Log.w(CostCalculator.TAG, "period save rejected start=${period.startTs} taken by id=${occupant.id}")
                 _uiState.update {
-                    it.copy(tariffPeriodError = appContext.getString(R.string.settings_tariff_period_date_taken))
+                    it.copy(tariffPeriodError = appStrings.get(R.string.settings_tariff_period_date_taken))
                 }
                 return@launch
             }
@@ -742,7 +745,7 @@ class SettingsViewModel @Inject constructor(
             it.copy(
                 tariffPeriods = schedule.periods.sortedByDescending { p -> p.startTs },
                 measuredLosses = costCalculator.measuredLosses(),
-                tariffRecalcStatus = appContext.getString(
+                tariffRecalcStatus = appStrings.get(
                     R.string.settings_tariff_recalc_done, result.charges, result.trips
                 ),
             )
@@ -775,7 +778,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportCsv() {
         viewModelScope.launch {
-            _uiState.update { it.copy(exportStatus = appContext.getString(R.string.settings_export_in_progress)) }
+            _uiState.update { it.copy(exportStatus = appStrings.get(R.string.settings_export_in_progress)) }
 
             try {
                 val downloadsDir = Environment.getExternalStoragePublicDirectory(
@@ -875,12 +878,12 @@ class SettingsViewModel @Inject constructor(
                 val chargeCount = charges.size
                 _uiState.update {
                     it.copy(
-                        exportStatus = appContext.getString(R.string.settings_export_done, tripCount, chargeCount, tripPoints.size, idleDrains.size) + "\n-> ${downloadsDir.absolutePath}"
+                        exportStatus = appStrings.get(R.string.settings_export_done, tripCount, chargeCount, tripPoints.size, idleDrains.size) + "\n-> ${downloadsDir.absolutePath}"
                     )
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(exportStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
+                    it.copy(exportStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -1070,7 +1073,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val conn = runCatching { llmConnectionResolver.get(connId) }.getOrNull()
             val text = if (conn == null) {
-                appContext.getString(R.string.settings_conn_not_configured)
+                appStrings.get(R.string.settings_conn_not_configured)
             } else {
                 val start = SystemClock.elapsedRealtime()
                 val messages = JSONArray().put(
@@ -1079,7 +1082,7 @@ class SettingsViewModel @Inject constructor(
                 val result = openRouterClient.chatRaw(conn.baseUrl, conn.apiKey, conn.model, messages, null)
                 val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
                 result.fold(
-                    onSuccess = { appContext.getString(R.string.settings_conn_check_ok, elapsedSec) },
+                    onSuccess = { appStrings.get(R.string.settings_conn_check_ok, elapsedSec) },
                     onFailure = { networkErrorMessage(it) },
                 )
             }
@@ -1097,14 +1100,14 @@ class SettingsViewModel @Inject constructor(
         var depth = 0
         while (cur != null && depth < 5) {
             when (cur) {
-                is java.net.UnknownHostException -> return appContext.getString(R.string.settings_error_dns)
-                is java.net.SocketTimeoutException -> return appContext.getString(R.string.settings_error_timeout)
-                is LlmHttpException -> return appContext.getString(R.string.settings_error_with_message, "HTTP ${cur.code}")
+                is java.net.UnknownHostException -> return appStrings.get(R.string.settings_error_dns)
+                is java.net.SocketTimeoutException -> return appStrings.get(R.string.settings_error_timeout)
+                is LlmHttpException -> return appStrings.get(R.string.settings_error_with_message, "HTTP ${cur.code}")
             }
             cur = cur.cause
             depth++
         }
-        return appContext.getString(R.string.settings_error_with_message, t.message ?: "?")
+        return appStrings.get(R.string.settings_error_with_message, t.message ?: "?")
     }
 
     /** Fetches model list from the custom connection's base URL and shows the picker dialog. */
@@ -1200,7 +1203,7 @@ class SettingsViewModel @Inject constructor(
             settingsRepository.setString(SettingsRepository.KEY_ALICE_API_KEY, state.aliceApiKey)
             val enabled = state.aliceEndpoint.isNotBlank() && state.aliceApiKey.isNotBlank()
             settingsRepository.setString(SettingsRepository.KEY_ALICE_ENABLED, enabled.toString())
-            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = appContext.getString(R.string.settings_saved)) }
+            _uiState.update { it.copy(aliceEnabled = enabled, aliceSaveStatus = appStrings.get(R.string.settings_saved)) }
             delay(2000)
             _uiState.update { it.copy(aliceSaveStatus = null) }
         }
@@ -1247,7 +1250,7 @@ class SettingsViewModel @Inject constructor(
             _uiState.update {
                 it.copy(
                     abrpTelemetryEnabled = enabled,
-                    abrpSaveStatus = appContext.getString(R.string.settings_saved),
+                    abrpSaveStatus = appStrings.get(R.string.settings_saved),
                 )
             }
             delay(2000)
@@ -1290,7 +1293,7 @@ class SettingsViewModel @Inject constructor(
                 ?.let { com.bydmate.app.data.remote.WebhookTelemetryClient.isAllowedWebhookUrl(it) } == true
             if (!valid) {
                 _uiState.update {
-                    it.copy(webhookSaveStatus = appContext.getString(R.string.settings_webhook_invalid_url))
+                    it.copy(webhookSaveStatus = appStrings.get(R.string.settings_webhook_invalid_url))
                 }
                 delay(2000)
                 _uiState.update { it.copy(webhookSaveStatus = null) }
@@ -1304,7 +1307,7 @@ class SettingsViewModel @Inject constructor(
                 it.copy(
                     webhookUrl = url,
                     webhookEnabled = enabled,
-                    webhookSaveStatus = appContext.getString(R.string.settings_webhook_saved),
+                    webhookSaveStatus = appStrings.get(R.string.settings_webhook_saved),
                 )
             }
             delay(2000)
@@ -1704,11 +1707,11 @@ class SettingsViewModel @Inject constructor(
             val result = agentOrchestrator.ask(AGENT_TEST_PROMPT)
             val elapsedSec = (SystemClock.elapsedRealtime() - start) / 1000.0
             val text = when (result) {
-                is AgentResult.Answer -> appContext.getString(
+                is AgentResult.Answer -> appStrings.get(
                     R.string.agent_test_model_result, modelLabel, elapsedSec, result.text.take(80)
                 )
-                AgentResult.Disabled -> appContext.getString(R.string.agent_test_model_disabled)
-                is AgentResult.Error -> appContext.getString(R.string.settings_error_with_message, result.message)
+                AgentResult.Disabled -> appStrings.get(R.string.agent_test_model_disabled)
+                is AgentResult.Error -> appStrings.get(R.string.settings_error_with_message, result.message)
             }
             _uiState.update { it.copy(modelTestRunning = false, modelTestResult = text) }
         }
@@ -2429,10 +2432,10 @@ class SettingsViewModel @Inject constructor(
             when (val result = logRecorder.start { file -> writeDiagnosticHeader(file) }) {
                 is LogRecorder.StartResult.Started, LogRecorder.StartResult.AlreadyRecording -> Unit
                 LogRecorder.StartResult.NoStorage -> _uiState.update {
-                    it.copy(logSaveStatus = appContext.getString(R.string.settings_log_error_no_fs_access))
+                    it.copy(logSaveStatus = appStrings.get(R.string.settings_log_error_no_fs_access))
                 }
                 is LogRecorder.StartResult.Failed -> _uiState.update {
-                    it.copy(logSaveStatus = appContext.getString(R.string.settings_error_with_message, result.message))
+                    it.copy(logSaveStatus = appStrings.get(R.string.settings_error_with_message, result.message))
                 }
             }
         }
@@ -2453,14 +2456,14 @@ class SettingsViewModel @Inject constructor(
             logRecorder.state.collect { state ->
                 _uiState.update {
                     val status = when {
-                        state.isRecording -> appContext.getString(
+                        state.isRecording -> appStrings.get(
                             R.string.settings_log_recording_started, state.filePath ?: "?"
                         )
                         // A fresh ViewModel must not surface the result of a recording
                         // the user stopped long ago.
                         first -> it.logSaveStatus
                         else -> state.lastStopped?.let { stopped ->
-                            appContext.getString(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
+                            appStrings.get(R.string.settings_log_saved, stopped.path, stopped.sizeKb)
                         } ?: it.logSaveStatus
                     }
                     it.copy(isRecordingLogs = state.isRecording, logSaveStatus = status)
@@ -2491,7 +2494,7 @@ class SettingsViewModel @Inject constructor(
     /** Check for app updates on GitHub. */
     fun checkForUpdate() {
         viewModelScope.launch {
-            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = appContext.getString(R.string.settings_update_check_in_progress)) }
+            _uiState.update { it.copy(updateDialogState = UpdateState.Checking, updateStatus = appStrings.get(R.string.settings_update_check_in_progress)) }
             try {
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
@@ -2501,14 +2504,14 @@ class SettingsViewModel @Inject constructor(
                                 version = update.version,
                                 notes = update.releaseNotes ?: ""
                             ),
-                            updateStatus = appContext.getString(R.string.settings_update_available_short, update.version)
+                            updateStatus = appStrings.get(R.string.settings_update_available_short, update.version)
                         )
                     }
                 } else {
                     _uiState.update {
                         it.copy(
                             updateDialogState = UpdateState.UpToDate,
-                            updateStatus = appContext.getString(R.string.settings_update_up_to_date)
+                            updateStatus = appStrings.get(R.string.settings_update_up_to_date)
                         )
                     }
                 }
@@ -2516,7 +2519,7 @@ class SettingsViewModel @Inject constructor(
                 _uiState.update {
                     it.copy(
                         updateDialogState = UpdateState.Error(e.message ?: "Unknown error"),
-                        updateStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?")
+                        updateStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?")
                     )
                 }
             }
@@ -2533,14 +2536,14 @@ class SettingsViewModel @Inject constructor(
      */
     fun exportConfig() {
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(configStatus = appContext.getString(R.string.settings_export_in_progress)) }
+            _uiState.update { it.copy(configStatus = appStrings.get(R.string.settings_export_in_progress)) }
             try {
                 val file = backupManager.export()
                 // The «Поделиться» dialog shows the saved file instead of the status line.
                 _uiState.update { it.copy(configStatus = null, lastExportedBackup = file) }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(configStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
+                    it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -2577,13 +2580,13 @@ class SettingsViewModel @Inject constructor(
     fun restoreConfig(file: File) {
         restoreScanJob?.cancel()
         viewModelScope.launch(Dispatchers.IO) {
-            _uiState.update { it.copy(configStatus = appContext.getString(R.string.settings_export_in_progress)) }
+            _uiState.update { it.copy(configStatus = appStrings.get(R.string.settings_export_in_progress)) }
             try {
                 backupManager.restore(file)
                 restartApp()
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(configStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
+                    it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
                 }
             }
         }
@@ -2602,7 +2605,7 @@ class SettingsViewModel @Inject constructor(
             shareFile(file, "application/zip")
         } catch (e: Exception) {
             _uiState.update {
-                it.copy(configStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
+                it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
             }
         }
     }
@@ -2636,7 +2639,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             val config = settingsRepository.getTgBackupConfig()
             val status = if (config.configured) {
-                appContext.getString(R.string.settings_tg_backup_connected, config.botName, config.chatName)
+                appStrings.get(R.string.settings_tg_backup_connected, config.botName, config.chatName)
             } else null
             _uiState.update { it.copy(tgBackupToken = config.token, tgBackupStatus = status) }
             combine(
@@ -2673,7 +2676,7 @@ class SettingsViewModel @Inject constructor(
         val token = _uiState.value.tgBackupToken.trim()
         if (token.isEmpty() || _uiState.value.tgBackupChecking) return
         _uiState.update {
-            it.copy(tgBackupChecking = true, tgBackupStatus = appContext.getString(R.string.settings_tg_backup_checking))
+            it.copy(tgBackupChecking = true, tgBackupStatus = appStrings.get(R.string.settings_tg_backup_checking))
         }
         tgCheckJob = viewModelScope.launch {
             val status = connectTelegramBot(token)
@@ -2698,25 +2701,25 @@ class SettingsViewModel @Inject constructor(
             val code = _uiState.value.tgBackupCode
                 ?: return newBindCode().let { fresh ->
                     _uiState.update { it.copy(tgBackupCode = fresh) }
-                    appContext.getString(R.string.settings_tg_backup_send_code, botName, fresh)
+                    appStrings.get(R.string.settings_tg_backup_send_code, botName, fresh)
                 }
             telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
-                ?: return appContext.getString(R.string.settings_tg_backup_send_code, botName, code)
+                ?: return appStrings.get(R.string.settings_tg_backup_send_code, botName, code)
         }
-        telegramBackupSink.sendMessage(token, chat.id, appContext.getString(R.string.settings_tg_backup_greeting))
+        telegramBackupSink.sendMessage(token, chat.id, appStrings.get(R.string.settings_tg_backup_greeting))
             .getOrElse { return tgBackupError(it) }
         // The field now holds another token: store nothing, the caller drops this status.
         if (_uiState.value.tgBackupToken != token) return ""
         settingsRepository.saveTgBackup(token, botName, chat.id, chat.name)
         _uiState.update { it.copy(tgBackupCode = null) }
-        return appContext.getString(R.string.settings_tg_backup_connected, botName, chat.name)
+        return appStrings.get(R.string.settings_tg_backup_connected, botName, chat.name)
     }
 
     private fun newBindCode(): String = (BIND_CODE_MIN + SecureRandom().nextInt(BIND_CODE_SPAN)).toString()
 
-    private fun tgBackupError(error: Throwable): String = appContext.getString(
+    private fun tgBackupError(error: Throwable): String = appStrings.get(
         R.string.settings_error_with_message,
-        (error as? TelegramSinkException)?.let { telegramErrorText(appContext, it.key) } ?: error.message ?: "?",
+        (error as? TelegramSinkException)?.let { telegramErrorText(appStrings.context, it.key) } ?: error.message ?: "?",
     )
 
     /**
@@ -2865,7 +2868,7 @@ class SettingsViewModel @Inject constructor(
                 val update = updateChecker.checkForUpdate(appContext, forceCheck = true)
                 if (update != null) {
                     _uiState.update {
-                        it.copy(updateDialogState = UpdateState.Downloading(update.version, appContext.getString(R.string.update_downloading_start)))
+                        it.copy(updateDialogState = UpdateState.Downloading(update.version, appStrings.get(R.string.update_downloading_start)))
                     }
                     updateChecker.downloadAndInstall(appContext, update) { progress ->
                         // Ignore late progress after the job was cancelled (Close pressed)

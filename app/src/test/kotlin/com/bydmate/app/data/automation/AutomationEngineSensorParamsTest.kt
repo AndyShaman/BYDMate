@@ -56,6 +56,7 @@ class AutomationEngineSensorParamsTest {
                 every { probePending } returns false
             },
             context = ApplicationProvider.getApplicationContext<Context>(),
+            appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
         return engine to ruleDao
     }

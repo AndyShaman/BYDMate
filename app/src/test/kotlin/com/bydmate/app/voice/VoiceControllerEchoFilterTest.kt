@@ -90,6 +90,7 @@ class VoiceControllerEchoFilterTest {
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
             selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = mockk(relaxed = true),
             echoFilter = echoFilter
         )
     }

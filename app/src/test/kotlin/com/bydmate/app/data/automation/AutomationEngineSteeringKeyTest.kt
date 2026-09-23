@@ -62,6 +62,7 @@ class AutomationEngineSteeringKeyTest {
                 every { probePending } returns false
             },
             context = ApplicationProvider.getApplicationContext<Context>(),
+            appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
         return Triple(engine, ruleDao, dispatcher)
     }

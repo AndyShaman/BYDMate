@@ -43,6 +43,7 @@ class ActionDispatcherSplitScreenTest {
             mockk<ClusterVoiceControl>(relaxed = true),
             mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
             splitManager,
+            mockk<com.bydmate.app.util.AppStrings>(relaxed = true),
         )
     }
 

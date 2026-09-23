@@ -17,8 +17,12 @@ import java.util.Locale
  * Build on demand; do NOT cache the result — the application context keeps the
  * old locale after a language switch, so a cached localized context would go stale.
  */
-fun Context.appLocalizedContext(): Context {
-    val lang = LocalePreferences(this).getLanguage() ?: "ru"
+fun Context.appLocalizedContext(): Context = localizedContext(appLanguageTag())
+
+/** The app's chosen language tag; Russian when nothing is stored yet. */
+internal fun Context.appLanguageTag(): String = LocalePreferences(this).getLanguage() ?: "ru"
+
+internal fun Context.localizedContext(lang: String): Context {
     val config = Configuration(resources.configuration).apply {
         setLocale(Locale.forLanguageTag(lang))
     }

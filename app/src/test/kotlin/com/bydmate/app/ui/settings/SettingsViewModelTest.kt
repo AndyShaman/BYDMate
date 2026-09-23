@@ -289,7 +289,7 @@ class SettingsViewModelTest {
         val idleDrainDao = StubIdleDrainDao()
 
         val httpClient = OkHttpClient()
-        val resolvedUpdateChecker = updateChecker ?: UpdateChecker(httpClient)
+        val resolvedUpdateChecker = updateChecker ?: UpdateChecker(httpClient, com.bydmate.app.util.AppStrings(ctx))
 
         val energyReader = EnergyDataReader(ctx)
         val historyImporter = HistoryImporter(
@@ -372,6 +372,7 @@ class SettingsViewModelTest {
             },
             telegramBackupSink = telegramBackupSink,
             autoBackupScheduler = mockk(relaxed = true),
+            appStrings = com.bydmate.app.util.AppStrings(ctx),
         )
     }
 

@@ -50,7 +50,7 @@ class AutomationEngineVoiceFireTest {
             every { probePending } returns false
         }
         val ctx = ApplicationProvider.getApplicationContext<Context>()
-        return AutomationEngine(ruleDao, ruleLogDao, dispatcher, placeRepo, netMon, ctx)
+        return AutomationEngine(ruleDao, ruleLogDao, dispatcher, placeRepo, netMon, ctx, com.bydmate.app.util.AppStrings(ctx))
     }
 
     private val appAction = ActionDef(

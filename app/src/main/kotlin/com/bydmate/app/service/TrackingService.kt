@@ -122,6 +122,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
     @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
+    @Inject lateinit var appStrings: com.bydmate.app.util.AppStrings
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // AutomationEngine.evaluate now has two callers (the poll tick and every push event), and
@@ -535,7 +536,7 @@ class TrackingService : Service(), LocationListener {
         Log.i(TAG, "onCreate: starting TrackingService")
         ChainLog.append(this, "TrackingService onCreate")
         createNotificationChannel()
-        startForeground(NOTIFICATION_ID, buildNotification(getString(R.string.service_foreground_content_starting)))
+        startForeground(NOTIFICATION_ID, buildNotification(appStrings.get(R.string.service_foreground_content_starting)))
         ChainLog.append(this, "startForeground OK")
         acquireWakeLock()
         startLocationUpdates()
@@ -2083,13 +2084,13 @@ class TrackingService : Service(), LocationListener {
         // Block 1: запас (SOC + оценка km) + t°бат
         val socStr = data.soc?.let { "$it%" } ?: "—"
         val rangeKm = _lastRangeKm.value
-        val rangeStr = rangeKm?.let { getString(R.string.service_notification_range_suffix, it) } ?: ""
-        val tempStr = data.avgBatTemp?.let { getString(R.string.service_notification_bat_temp_suffix, it) } ?: ""
-        parts += getString(R.string.service_notification_soc_line, socStr, rangeStr, tempStr)
+        val rangeStr = rangeKm?.let { appStrings.get(R.string.service_notification_range_suffix, it) } ?: ""
+        val tempStr = data.avgBatTemp?.let { appStrings.get(R.string.service_notification_bat_temp_suffix, it) } ?: ""
+        parts += appStrings.get(R.string.service_notification_soc_line, socStr, rangeStr, tempStr)
 
         // Block 2: 12V
         data.voltage12v?.let {
-            parts += getString(R.string.service_notification_voltage, it)
+            parts += appStrings.get(R.string.service_notification_voltage, it)
         }
 
         val text = parts.joinToString(" | ")

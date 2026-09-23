@@ -42,7 +42,8 @@ class ActionDispatcherToggleTest {
         dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
         cluster,
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true))
+        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
+            com.bydmate.app.util.AppStrings(app))
 
     init {
         coEvery { vehicleApi.dispatch(any()) } returns Result.success(Unit)

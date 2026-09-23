@@ -11,6 +11,7 @@ import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.ui.overlay.ListeningOverlay
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -35,6 +36,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
+@Suppress("LongParameterList") // Hilt-injected dependencies
 class VoiceController @Inject constructor(
     private val audioCapture: AudioCapture,
     private val actionDispatcher: ActionDispatcher,
@@ -52,6 +54,7 @@ class VoiceController @Inject constructor(
     private val ttsModelManager: TtsModelManager,
     private val ruStressMarker: RuStressMarker,
     private val selectedTtsVoice: () -> TtsVoice,
+    private val appStrings: AppStrings,
     private val echoFilter: SelfEchoFilter = SelfEchoFilter(),
 ) {
     // Process-lifetime scope (@Singleton): intentionally never cancelled.
@@ -242,7 +245,7 @@ class VoiceController @Inject constructor(
             // single "model not loaded" text sent EN-locale users chasing a phantom
             // download problem.
             val langBlocked = continuousAsr.isReady() && currentLang() != VoiceLang.RU
-            val msg = context.getString(
+            val msg = appStrings.get(
                 if (langBlocked) R.string.voice_error_lang_not_ru
                 else R.string.voice_error_model_missing
             )
@@ -282,7 +285,7 @@ class VoiceController @Inject constructor(
         val earlyDuck = runCatching { audioCapture.duckMusic() }.getOrNull()
         sessionJob = scope.launch {
             val session = coroutineContext[Job]
-            runCatching { showListeningOverlay(context.getString(R.string.voice_listening)) }
+            runCatching { showListeningOverlay(appStrings.get(R.string.voice_listening)) }
             var lastEventMs = System.currentTimeMillis()
             var wasAudible = false
             try {
@@ -330,7 +333,7 @@ class VoiceController @Inject constructor(
                                         runCatching { ttsEngine.stop() }
                                         earcon.ok()
                                         _state.value = VoiceUiState.Listening
-                                        runCatching { updateListeningOverlay(context.getString(R.string.voice_listening)) }
+                                        runCatching { updateListeningOverlay(appStrings.get(R.string.voice_listening)) }
                                         record(VoiceJournalEntry.Route.NONE, ev.text, "Прерван по имени",
                                             VoiceJournalEntry.Outcome.OK, null, "Barge-in by name")
                                     } ?: Log.i(TAG, "Barge-in by name ignored: no cancellable ask")
@@ -342,7 +345,7 @@ class VoiceController @Inject constructor(
                             }
                             processingUtterance = true
                             val job = launch(start = CoroutineStart.LAZY) {
-                                runCatching { updateListeningOverlay(context.getString(R.string.voice_thinking)) }
+                                runCatching { updateListeningOverlay(appStrings.get(R.string.voice_thinking)) }
                                 try {
                                     routeUtterance(ev.text, decodeMs)
                                 } catch (t: Throwable) {
@@ -358,7 +361,7 @@ class VoiceController @Inject constructor(
                                 } finally {
                                     routingJob = null
                                     processingUtterance = false
-                                    runCatching { updateListeningOverlay(context.getString(R.string.voice_listening)) }
+                                    runCatching { updateListeningOverlay(appStrings.get(R.string.voice_listening)) }
                                     if (stopRequested.get()) session?.cancel()
                                 }
                             }
