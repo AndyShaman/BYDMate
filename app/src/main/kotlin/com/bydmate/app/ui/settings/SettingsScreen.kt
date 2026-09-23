@@ -300,7 +300,14 @@ private fun SettingsRail(
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         modifier = modifier,
     ) {
-        Column(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 8.dp)) {
+        // Scrolls when enlarged fonts (or a short screen) push the items past the card; the
+        // weighted spacer still pins the version to the bottom while everything fits.
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(vertical = 12.dp, horizontal = 8.dp),
+        ) {
             Text(
                 stringResource(R.string.settings_rail_sections_label),
                 color = TextMuted,
