@@ -342,6 +342,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val fidCatalogManager: com.bydmate.app.data.nativestack.FidCatalogManager,
     private val writeAllowlist: com.bydmate.app.data.vehicle.WriteAllowlist,
     private val ruleDao: com.bydmate.app.data.local.dao.RuleDao,
+    private val automationEngine: com.bydmate.app.data.automation.AutomationEngine,
     private val voiceJournal: VoiceJournal,
     private val tariffPeriodDao: TariffPeriodDao,
     private val costCalculator: CostCalculator,
@@ -1821,6 +1822,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                     .forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
+            appendLine(automationEngine.serviceStartDumpLine())
             // Automation rules (#177): issue reports about a rule that "does nothing"
             // are undiagnosable without the rule itself. Action payloads stay out —
             // they hold phone numbers, addresses and notification text.

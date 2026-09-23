@@ -20,10 +20,13 @@ import io.mockk.Runs
 import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.shadows.ShadowLog
 
 /**
  * Edge-semantics regressions from issue #51: rules firing right after the user
@@ -78,6 +81,7 @@ class AutomationEngineEdgeTest {
             context = ApplicationProvider.getApplicationContext<Context>(),
             appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
+        engine.interactiveProvider = { true }  // screen on unless a test says otherwise
         return engine to ruleDao
     }
 
@@ -144,48 +148,46 @@ class AutomationEngineEdgeTest {
         coVerify(exactly = 1) { ruleDao.updateLastTriggered(1, any()) }
     }
 
-    // #177: WorkManager restarts a killed process on the same DiLink boot; the new
-    // AutomationEngine must not reopen the service_start window mid-session. A real suspend
-    // (elapsedRealtime ran ahead of uptimeMillis) or a reboot (new boot id, elapsed going
-    // backwards) is a real car start and must fire, also when the process itself survived
-    // the sleep. A telemetry pause with the car on (both clocks run) is not. Wall-clock
-    // time takes no part.
+    // #177: the service_start session follows the head unit screen. A tick with the screen on
+    // after more than a minute without a heartbeat (car off: screen dark and/or process dead)
+    // is a new car start and fires once. A process restart mid-drive (fresh heartbeat) does
+    // not, and a process started with the screen off (restart after ACC_OFF) waits for the
+    // screen. A reboot (new boot id, elapsed going backwards) fires. Wall-clock time takes
+    // no part.
     private val t0 = 1_700_000_000_000L
     private val bootId = "boot-a"
     private val e0 = 3_600_000L  // elapsedRealtime of the stored heartbeat
-    private val u0 = 3_000_000L  // uptimeMillis of the stored heartbeat
 
-    private fun storeServiceStartState(bootId: String, lastSeenElapsed: Long, lastSeenUptime: Long = u0) {
-        ApplicationProvider.getApplicationContext<Context>()
-            .getSharedPreferences("automation", Context.MODE_PRIVATE).edit()
+    private fun automationPrefs() = ApplicationProvider.getApplicationContext<Context>()
+        .getSharedPreferences("automation", Context.MODE_PRIVATE)
+
+    private fun storeServiceStartState(bootId: String, lastSeenElapsed: Long) {
+        automationPrefs().edit()
             .putString("service_start_boot_id", bootId)
             .putLong("service_start_last_seen_elapsed", lastSeenElapsed)
-            .putLong("service_start_last_seen_uptime", lastSeenUptime)
             .commit()
     }
 
-    private class Clock(var elapsed: Long, var uptime: Long, var wall: Long) {
-        fun awake(ms: Long) { elapsed += ms; uptime += ms; wall += ms }
-        fun asleep(ms: Long) { elapsed += ms; wall += ms }
+    private fun storedHeartbeat() = automationPrefs().getLong("service_start_last_seen_elapsed", -1L)
+
+    private fun engineLogs() = ShadowLog.getLogsForTag("AutomationEngine").map { it.msg }
+
+    private class HeadUnit(var elapsed: Long, var wall: Long, var screenOn: Boolean = true) {
+        fun advance(ms: Long) { elapsed += ms; wall += ms }
     }
 
-    private fun serviceStartEngine(bootId: String, clock: Clock): Pair<AutomationEngine, RuleDao> {
+    private fun serviceStartEngine(bootId: String, unit: HeadUnit): Pair<AutomationEngine, RuleDao> {
         val r = rule(1, listOf(serviceStartTrigger()))
         val (engine, dao) = setup { listOf(r) }
         engine.bootIdProvider = { bootId }
-        engine.elapsedMs = { clock.elapsed }
-        engine.uptimeMs = { clock.uptime }
-        engine.nowMs = { clock.wall }
+        engine.elapsedMs = { unit.elapsed }
+        engine.nowMs = { unit.wall }
+        engine.interactiveProvider = { unit.screenOn }
         return engine to dao
     }
 
-    private suspend fun startProcess(
-        bootId: String,
-        elapsed: Long,
-        uptime: Long = u0 + (elapsed - e0),
-        wall: Long = t0,
-    ): RuleDao {
-        val (engine, dao) = serviceStartEngine(bootId, Clock(elapsed, uptime, wall))
+    private suspend fun startProcess(bootId: String, elapsed: Long, wall: Long = t0): RuleDao {
+        val (engine, dao) = serviceStartEngine(bootId, HeadUnit(elapsed, wall))
         engine.evaluate(diParsData(soc = 50), null)
         engine.evaluate(diParsData(soc = 50), null)
         return dao
@@ -200,20 +202,79 @@ class AutomationEngineEdgeTest {
         storeServiceStartState(bootId, lastSeenElapsed = e0)
         val dao = startProcess(bootId, e0 + 20_000L)                        // heartbeat 20 s old
         coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+        assertTrue(engineLogs().contains("service_start: process restarted mid-session, not re-arming gap=20s"))
     }
 
-    @Test fun `service_start fires after a sleep on the same boot`() = runBlocking {
-        storeServiceStartState(bootId, lastSeenElapsed = e0)
-        // 10 min by elapsed, 20 s of it awake: slept ~9.7 min.
-        val dao = startProcess(bootId, e0 + 600_000L, uptime = u0 + 20_000L)
+    @Test fun `service_start fires once after the car was off 15 minutes and the process was killed`() =
+        runBlocking {
+            storeServiceStartState(bootId, lastSeenElapsed = e0)
+            val dao = startProcess(bootId, e0 + 900_000L)                   // heartbeat 15 min old
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertTrue(engineLogs().contains("service_start: new session reason=wake gap=900s"))
+        }
+
+    @Test fun `service_start fires once when the screen comes back after 15 minutes off in a live process`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            engine.evaluate(diParsData(soc = 50), null)                     // fires, rule consumed
+            unit.advance(60_000L)
+            engine.evaluate(diParsData(soc = 50), null)                     // window over
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            val heartbeat = storedHeartbeat()
+
+            unit.screenOn = false                                           // car off 15 min
+            repeat(30) {
+                unit.advance(30_000L)
+                engine.evaluate(diParsData(soc = 50), null)
+            }
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertEquals(heartbeat, storedHeartbeat())
+            assertEquals(1, engineLogs().count { it == "service_start: screen off, heartbeat paused" })
+
+            unit.screenOn = true                                            // car on
+            unit.advance(5_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+            repeat(3) {
+                unit.advance(5_000L)
+                engine.evaluate(diParsData(soc = 50), null)
+            }
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        }
+
+    @Test fun `service_start waits for the screen when the process starts with the screen off`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)                // last tick of the drive
+        val unit = HeadUnit(e0 + 12_000L, t0, screenOn = false)            // restart 12 s after ACC_OFF
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)
+        repeat(4) {                                                         // 2 min with the screen off
+            unit.advance(30_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+        assertTrue(engineLogs().contains("service_start: screen off at start, waiting for wake-up"))
+
+        unit.screenOn = true                                                // car on
+        unit.advance(5_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(5_000L)
+        engine.evaluate(diParsData(soc = 50), null)
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
 
-    @Test fun `service_start does not fire after a restart that follows a telemetry pause`() = runBlocking {
-        storeServiceStartState(bootId, lastSeenElapsed = e0)
-        // 10 min without evaluate() but the head unit stayed awake the whole time.
-        val dao = startProcess(bootId, e0 + 600_000L, uptime = u0 + 600_000L)
-        coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+    @Test fun `service_start does not re-arm after a 20 s screen blink`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        unit.advance(60_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(10_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
 
     @Test fun `service_start fires on a new boot even with a fresh heartbeat`() = runBlocking {
@@ -224,54 +285,45 @@ class AutomationEngineEdgeTest {
 
     @Test fun `service_start fires on a reboot without boot id when elapsed goes backwards`() = runBlocking {
         storeServiceStartState("", lastSeenElapsed = e0)
-        val dao = startProcess("", 40_000L, uptime = 40_000L)
+        val dao = startProcess("", 40_000L)
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
 
     @Test fun `service_start does not fire on a restart without boot id and a fresh heartbeat`() = runBlocking {
         storeServiceStartState("", lastSeenElapsed = e0)
-        val dao = startProcess("", e0 + 20_000L, uptime = u0 + 20_000L)
+        val dao = startProcess("", e0 + 20_000L)
         coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
     }
 
-    @Test fun `service_start re-arms when the same process survives a sleep`() = runBlocking {
-        val clock = Clock(e0, u0, t0)
-        val (engine, dao) = serviceStartEngine(bootId, clock)
+    @Test fun `service_start re-arms when the same process survives a suspend with the screen off`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            engine.evaluate(diParsData(soc = 50), null)                     // fires, rule consumed
+            unit.advance(60_000L)
+            engine.evaluate(diParsData(soc = 50), null)                     // window over
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+
+            unit.advance(3_600_000L)                                        // 1 h suspended, no ticks
+            engine.evaluate(diParsData(soc = 50), null)
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        }
+
+    @Test fun `service_start does not re-arm when telemetry pauses 40 s with the car on`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
-        clock.awake(60_000L)
-        engine.evaluate(diParsData(soc = 50), null)                         // window over
+        unit.advance(40_000L)                                               // 40 s without data
+        engine.evaluate(diParsData(soc = 50), null)
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-
-        clock.asleep(3_600_000L)                                            // head unit slept 1 h
-        engine.evaluate(diParsData(soc = 50), null)
-        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
-    }
-
-    @Test fun `service_start does not re-arm when telemetry pauses with the car on`() = runBlocking {
-        val clock = Clock(e0, u0, t0)
-        val (engine, dao) = serviceStartEngine(bootId, clock)
-        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
-        clock.awake(600_000L)                                               // 10 min without data
-        engine.evaluate(diParsData(soc = 50), null)
-        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-    }
-
-    @Test fun `service_start re-arms in the same process after a 9 minute sleep`() = runBlocking {
-        val clock = Clock(e0, u0, t0)
-        val (engine, dao) = serviceStartEngine(bootId, clock)
-        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
-        clock.awake(60_000L)
-        clock.asleep(540_000L)                                              // elapsed +10 min, uptime +1 min
-        engine.evaluate(diParsData(soc = 50), null)
-        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
     }
 
     @Test fun `service_start fires once over five minutes of 30 s ticks`() = runBlocking {
-        val clock = Clock(e0, u0, t0)
-        val (engine, dao) = serviceStartEngine(bootId, clock)
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
         repeat(11) {
             engine.evaluate(diParsData(soc = 50), null)
-            clock.awake(30_000L)
+            unit.advance(30_000L)
         }
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
@@ -281,6 +333,28 @@ class AutomationEngineEdgeTest {
         // NTP/GPS moved the wall clock a minute; same boot, heartbeat 20 s old by elapsed.
         val dao = startProcess(bootId, e0 + 20_000L, wall = t0 + 60_000L)
         coVerify(exactly = 0) { dao.updateLastTriggered(any(), any()) }
+    }
+
+    @Test fun `service_start dump line shows the window, consumption, heartbeat and boot id`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, _) = serviceStartEngine(bootId, unit)
+        assertEquals(
+            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=-",
+            engine.serviceStartDumpLine(),
+        )
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        val until = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
+            .format(java.util.Date(t0 + AutomationEngine.SERVICE_START_WINDOW_MS))
+        assertEquals(
+            "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a",
+            engine.serviceStartDumpLine(),
+        )
+        unit.advance(45_000L)
+        unit.screenOn = false
+        assertEquals(
+            "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=45s boot_id=boot-a",
+            engine.serviceStartDumpLine(),
+        )
     }
 
     @Test fun `turn signal edge fires once on off to left transition`() = runBlocking {
