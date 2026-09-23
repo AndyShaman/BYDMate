@@ -49,20 +49,16 @@ class AutoBackupRunner(
         private val runLock = Mutex()
     }
 
-    /**
-     * [force] = a fresh export even when an upload is pending (first attempt of a manual run).
-     * [manual] = started by the user, so it runs even with the period off; a scheduled run
-     * re-reads the period first and stops when it was switched off after enqueueing.
-     */
-    suspend fun run(force: Boolean = false, manual: Boolean = force): RunOutcome = runLock.withLock {
-        if (!manual && settingsRepository.getAutoBackupPeriod() == AutoBackupPeriod.OFF) {
+    /** A scheduled run: re-reads the period first and stops when it was switched off after enqueueing. */
+    suspend fun run(): RunOutcome = runLock.withLock {
+        if (settingsRepository.getAutoBackupPeriod() == AutoBackupPeriod.OFF) {
             Log.i(TAG, "period is off, run skipped")
             return@withLock RunOutcome.SUCCESS
         }
-        runLocked(force)
+        runLocked()
     }
 
-    private suspend fun runLocked(force: Boolean): RunOutcome {
+    private suspend fun runLocked(): RunOutcome {
         val config = settingsRepository.getTgBackupConfig()
         val pendingPath = settingsRepository.getAutoBackupPendingUpload()
         var pending = pendingPath.takeIf { it.isNotEmpty() }?.let(::File)?.takeIf { it.exists() }
@@ -70,10 +66,6 @@ class AutoBackupRunner(
             // Rotated away or deleted by the user: forget it and take the normal export path.
             Log.i(TAG, "pending ${File(pendingPath).name} is gone, exporting afresh")
             settingsRepository.setAutoBackupPendingUpload("")
-        }
-        if (pending != null && force) {
-            Log.i(TAG, "pending ${pending.name} superseded by a manual run")
-            pending = null
         }
         if (pending != null && isScheduleDue()) {
             // A stuck upload (weeks without network) must not block fresh backups: once the period
