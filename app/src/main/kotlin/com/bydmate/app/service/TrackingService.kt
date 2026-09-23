@@ -2038,18 +2038,18 @@ class TrackingService : Service(), LocationListener {
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
             CHANNEL_ID,
-            "BYDMate Tracking",
+            appStrings.get(R.string.notif_channel_tracking_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
-            description = "Trip and charge tracking"
+            description = appStrings.get(R.string.notif_channel_tracking_desc)
             setShowBadge(false)
         }
         val quiet = NotificationChannel(
             QUIET_CHANNEL_ID,
-            "BYDMate Tracking (quiet)",
+            appStrings.get(R.string.notif_channel_tracking_quiet_name),
             NotificationManager.IMPORTANCE_MIN
         ).apply {
-            description = "Trip and charge tracking, collapsed in the shade"
+            description = appStrings.get(R.string.notif_channel_tracking_quiet_desc)
             setShowBadge(false)
         }
         val nm = getSystemService(NotificationManager::class.java)

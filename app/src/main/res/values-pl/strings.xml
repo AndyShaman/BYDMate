@@ -1688,4 +1688,14 @@
     <string name="post_restore_download_asr">Pobierz 226 MB</string>
     <string name="post_restore_download">Pobierz</string>
     <string name="post_restore_close">Zamknij</string>
+    <string name="notif_channel_tracking_name">BYDMate: rejestr tras</string>
+    <string name="notif_channel_tracking_desc">Rejestrowanie tras i ładowań</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate: rejestr tras (cicho)</string>
+    <string name="notif_channel_tracking_quiet_desc">Rejestrowanie tras i ładowań, zwinięte w panelu powiadomień</string>
+    <string name="notif_channel_auto_silent_name">Automatyzacje bez dźwięku</string>
+    <string name="notif_channel_auto_silent_desc">Powiadomienia automatyzacji bez dźwięku</string>
+    <string name="notif_channel_auto_sound_name">Automatyzacje z dźwiękiem</string>
+    <string name="notif_channel_auto_sound_desc">Powiadomienia automatyzacji z dźwiękiem</string>
+    <string name="notif_channel_auto_confirm_name">Potwierdzenia automatyzacji</string>
+    <string name="notif_channel_auto_confirm_desc">Prośby o potwierdzenie reguł automatyzacji</string>
 </resources>

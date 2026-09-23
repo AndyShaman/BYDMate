@@ -820,19 +820,19 @@ class ActionDispatcher @Inject constructor(
     private fun createUserChannels() {
         val silent = NotificationChannel(
             CHANNEL_SILENT_ID,
-            "Automation Silent",
+            appStrings.get(R.string.notif_channel_auto_silent_name),
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             setSound(null, null)
             enableVibration(false)
-            description = "Silent automation notifications"
+            description = appStrings.get(R.string.notif_channel_auto_silent_desc)
         }
         val sound = NotificationChannel(
             CHANNEL_SOUND_ID,
-            "Automation Alerts",
+            appStrings.get(R.string.notif_channel_auto_sound_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Audible automation notifications"
+            description = appStrings.get(R.string.notif_channel_auto_sound_desc)
         }
         val manager = nm()
         manager.createNotificationChannel(silent)

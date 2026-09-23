@@ -1703,4 +1703,14 @@
     <string name="post_restore_download_asr">Скачать 226 МБ</string>
     <string name="post_restore_download">Скачать</string>
     <string name="post_restore_close">Закрыть</string>
+    <string name="notif_channel_tracking_name">BYDMate: учёт поездок</string>
+    <string name="notif_channel_tracking_desc">Учёт поездок и зарядок</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate: учёт поездок (тихо)</string>
+    <string name="notif_channel_tracking_quiet_desc">Учёт поездок и зарядок, свёрнуто в шторке</string>
+    <string name="notif_channel_auto_silent_name">Автоматизации без звука</string>
+    <string name="notif_channel_auto_silent_desc">Уведомления автоматизаций без звука</string>
+    <string name="notif_channel_auto_sound_name">Автоматизации со звуком</string>
+    <string name="notif_channel_auto_sound_desc">Уведомления автоматизаций со звуком</string>
+    <string name="notif_channel_auto_confirm_name">Подтверждение автоматизаций</string>
+    <string name="notif_channel_auto_confirm_desc">Запросы на подтверждение правил автоматизации</string>
 </resources>
