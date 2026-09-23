@@ -1920,16 +1920,10 @@ class TrackingService : Service(), LocationListener {
     private val accOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.i(TAG, "ACC_OFF received")
-            // Off the main thread; goAsync keeps the process receiving until the marker is
-            // committed.
-            val pending = goAsync()
-            serviceScope.launch {
-                try {
-                    automationEngine.onCarOff()
-                } finally {
-                    pending.finish()
-                }
-            }
+            // Committed right here on the main thread: the firmware force-stops the process about
+            // 2 s after ACC_OFF, and a queued coroutine may not run by then or may be cancelled
+            // with the service. The marker is a tiny prefs file, about 1 ms of disk write.
+            automationEngine.onCarOff()
         }
     }
 
