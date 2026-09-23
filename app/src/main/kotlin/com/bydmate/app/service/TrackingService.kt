@@ -283,6 +283,8 @@ class TrackingService : Service(), LocationListener {
         // car/system toggles the settings screen edits.
         private const val QUIET_CHANNEL_ID = "bydmate_tracking_quiet"
         const val KEY_QUIET_NOTIFICATION = "quiet_notification"
+        /** Start intent extra: the service was started by USER_PRESENT or BOOT_COMPLETED (#177). */
+        const val EXTRA_WAKE_EDGE = "wake_edge"
         // Throttle autoservice gun-state read so we don't hit Binder/ADB on every
         // poll tick. 5 ticks ≈ 15 s — fast enough that the user sees a row
         // appear within ~half a minute of unplugging, gentle enough not to
@@ -948,6 +950,7 @@ class TrackingService : Service(), LocationListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.getBooleanExtra(EXTRA_WAKE_EDGE, false) == true) automationEngine.onUserPresent()
         maybeAttachWidget()
         return START_STICKY
     }
@@ -1916,6 +1919,9 @@ class TrackingService : Service(), LocationListener {
             // Trigger 4: the wireless-debugging dialog can only be confirmed on an awake screen,
             // so a wake is the cheapest moment to re-check whether it was. The manager gates itself.
             val trigger = if (intent?.action == Intent.ACTION_USER_PRESENT) "user_present" else "screen_on"
+            // Only USER_PRESENT is a car start for service_start (#177): SCREEN_ON also comes
+            // with a manual screen blink while driving.
+            if (intent?.action == Intent.ACTION_USER_PRESENT) automationEngine.onUserPresent()
             serviceScope.launch {
                 runCatching { adbRestoreManager.attemptIfNeeded(trigger) }
                     .onFailure { Log.w(TAG, "ADB restore on $trigger failed: ${it.message}") }

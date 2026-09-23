@@ -285,6 +285,40 @@ class AutomationEngineEdgeTest {
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
 
+    @Test fun `service_start fires once on user present after a 20 s screen off in a live process`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        unit.advance(60_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.screenOn = false                                               // quick off/on under a minute
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        engine.onUserPresent()
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)                         // still dark: stays pending
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(3_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: user present"))
+        assertTrue(engineLogs().contains("service_start: new session reason=user_present gap=20s"))
+    }
+
+    @Test fun `service_start fires once on a process started by user present 30 s after the last heartbeat`() =
+        runBlocking {
+            storeServiceStartState(bootId, lastSeenElapsed = e0)
+            val unit = HeadUnit(e0 + 30_000L, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            engine.onUserPresent()                                          // start intent carried the wake edge
+            engine.evaluate(diParsData(soc = 50), null)
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        }
+
     @Test fun `service_start fires on a new boot even with a fresh heartbeat`() = runBlocking {
         storeServiceStartState(bootId, lastSeenElapsed = e0)
         val dao = startProcess("boot-b", e0 + 20_000L)                      // quick reboot
@@ -419,20 +453,23 @@ class AutomationEngineEdgeTest {
         val unit = HeadUnit(e0, t0)
         val (engine, _) = serviceStartEngine(bootId, unit)
         assertEquals(
-            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=-",
+            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- wake_edge=-",
             engine.serviceStartDumpLine(),
         )
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
         val until = java.text.SimpleDateFormat("HH:mm:ss", java.util.Locale.US)
             .format(java.util.Date(t0 + AutomationEngine.SERVICE_START_WINDOW_MS))
         assertEquals(
-            "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a",
+            "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a " +
+                "wake_edge=-",
             engine.serviceStartDumpLine(),
         )
         unit.advance(45_000L)
         unit.screenOn = false
+        engine.onUserPresent()
         assertEquals(
-            "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=45s boot_id=boot-a",
+            "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=45s boot_id=boot-a " +
+                "wake_edge=pending",
             engine.serviceStartDumpLine(),
         )
     }
