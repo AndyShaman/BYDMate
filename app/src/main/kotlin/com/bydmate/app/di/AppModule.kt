@@ -575,18 +575,25 @@ object AppModule {
     ): BackupManager = BackupManager(
         context = ctx,
         appDatabase = db,
-        prefsFileNames = listOf(
-            "bydmate_locale",
-            "bydmate_widget",
-            "cluster_projection",
-            "automation",
-            "update_prefs",
-            "bydmate_range_prefs",
-            // Durable user voice/agent settings (AC-03). Deliberately NOT included:
-            // energydata_sync / energydata_liveness / seat_channel / window_channel —
-            // per-device learned state that must not migrate to another car.
-            "voice",
-        )
+        prefsFileNames = BackupManager.PREFS_FILES,
+        excludedPrefsKeys = BackupManager.EXCLUDED_PREFS_KEYS,
+    )
+
+    @Provides
+    @Singleton
+    @Suppress("LongParameterList")
+    fun providePostRestoreCheck(
+        @ApplicationContext ctx: Context,
+        settingsRepository: SettingsRepository,
+        helperBootstrap: com.bydmate.app.data.vehicle.HelperBootstrap,
+        helperClient: com.bydmate.app.data.vehicle.HelperClient,
+        gigaAmModelManager: com.bydmate.app.voice.GigaAmModelManager,
+        ttsModelManager: com.bydmate.app.voice.TtsModelManager,
+    ): com.bydmate.app.data.backup.PostRestoreCheck = com.bydmate.app.data.backup.PostRestoreCheck(
+        state = ctx.getSharedPreferences(com.bydmate.app.data.backup.PostRestoreCheck.PREFS_NAME, Context.MODE_PRIVATE),
+        probes = com.bydmate.app.data.backup.AndroidPostRestoreProbes(
+            ctx, settingsRepository, helperBootstrap, helperClient, gigaAmModelManager, ttsModelManager,
+        ),
     )
 
     @Provides

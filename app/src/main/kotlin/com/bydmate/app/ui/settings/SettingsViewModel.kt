@@ -1849,6 +1849,7 @@ class SettingsViewModel @Inject constructor(
                 )
                 appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
                 appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
+                appendLine(com.bydmate.app.data.backup.PostRestoreCheck.dumpLine(appContext))
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
             }

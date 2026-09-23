@@ -118,7 +118,7 @@ object ClusterProjectionManager {
     const val KEY_TARGET_LABEL = "target_label"
     // Last VirtualDisplay id we created. Persisted so a fresh app process can release the display
     // a prior (dead) process left orphaned in the long-lived daemon, instead of leaking it.
-    private const val KEY_LAST_VD_ID = "last_vd_id"
+    internal const val KEY_LAST_VD_ID = "last_vd_id"
     /** Wave P: power the cluster compositor automatically around projection (default ON). */
     const val KEY_AUTO_CONTAINER = "auto_container_enabled"
     /** Projection transport: direct freeform launch (default) vs legacy VirtualDisplay pipeline. */
@@ -132,13 +132,13 @@ object ClusterProjectionManager {
      * projection itself, and it is cleared the moment an app-uid lookup succeeds — so a firmware
      * update that opens the display up returns the car to its own setting.
      */
-    private const val KEY_DIRECT_FORCED = "cluster_direct_forced"
+    internal const val KEY_DIRECT_FORCED = "cluster_direct_forced"
     // Set while the daemon has powered the cluster compositor up for our projection; cleared only
     // after a CONFIRMED power-down. Survives process death: when the car shuts off mid-projection
     // the off sequence (18 -> pause -> 0) never runs, the compositor reboots in projection mode
     // with nobody drawing, and the cluster stays black — recoverStaleCompositor() reads this at
     // service start to send the missing power-down.
-    private const val KEY_COMPOSITOR_POWERED = "compositor_powered_on"
+    internal const val KEY_COMPOSITOR_POWERED = "compositor_powered_on"
 
     // Set when the freeform switch was rejected: enable_freeform_support is read once at boot,
     // so the settings screen shows a "reboot the car" hint until a direct attempt succeeds.

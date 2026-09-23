@@ -5,7 +5,15 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import android.os.Environment
 import android.util.Log
+import com.bydmate.app.camera.BlindSpotPreferences
+import com.bydmate.app.cluster.ClusterFrameUi7
+import com.bydmate.app.cluster.ClusterJournal
+import com.bydmate.app.cluster.ClusterProjectionManager
+import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.hud.HudController
+import com.bydmate.app.service.A11yRecoveryGate
+import com.bydmate.app.split.SplitPreferencesImpl
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -51,11 +59,74 @@ class BackupManager(
     private val context: Context,
     private val appDatabase: AppDatabase,
     private val prefsFileNames: List<String>,
+    /** Per-file keys that stay on this device: never exported, never overwritten by a restore. */
+    private val excludedPrefsKeys: Map<String, Set<String>> = emptyMap(),
 ) {
 
     companion object {
 
         private const val TAG = "BackupManager"
+
+        /**
+         * Files that joined the whitelist after archives without them were already in the wild.
+         * Restore leaves such a file alone when the archive lacks it; a new file goes here.
+         */
+        val PREFS_FILES_ADDED_LATER = listOf(
+            // Without the ADB-restore toggle the helper daemon never comes back after the first
+            // reboot on firmwares that close port 5555, and every daemon-based feature dies.
+            AdbRestorePreferencesImpl.PREFS_NAME,
+            BlindSpotPreferences.PREFS_NAME,
+            SplitPreferencesImpl.PREFS_NAME,
+            HudController.PREFS_NAME,
+        )
+
+        /** SharedPreferences files carried by a backup. */
+        val PREFS_FILES = listOf(
+            "bydmate_locale",
+            "bydmate_widget",
+            ClusterProjectionManager.PREFS_NAME,
+            "automation",
+            "update_prefs",
+            "bydmate_range_prefs",
+            // Durable user voice/agent settings (AC-03). Deliberately NOT included:
+            // energydata_sync / energydata_liveness / seat_channel / window_channel —
+            // per-device learned state that must not migrate to another car.
+            "voice",
+        ) + PREFS_FILES_ADDED_LATER
+
+        /**
+         * Runtime markers of the session that wrote them and car-specific probe results.
+         * An entry ending in '*' excludes every key with that prefix.
+         */
+        val EXCLUDED_PREFS_KEYS: Map<String, Set<String>> = mapOf(
+            HudController.PREFS_NAME to setOf(HudController.KEY_SUPPORTED),
+            ClusterProjectionManager.PREFS_NAME to setOf(
+                ClusterProjectionManager.KEY_LAST_VD_ID,
+                ClusterProjectionManager.KEY_DIRECT_DISPLAY_ID,
+                ClusterProjectionManager.KEY_COMPOSITOR_POWERED,
+                ClusterProjectionManager.KEY_FREEFORM_REBOOT_PENDING,
+                A11yRecoveryGate.KEY_LAST_ATTEMPT_ELAPSED_MS,
+                A11yRecoveryGate.KEY_FAIL_STREAK,
+                ClusterProjectionManager.KEY_SPLIT_FREEFORM_REBOOT_PENDING,
+                ClusterProjectionManager.KEY_DIRECT_FORCED,
+                ClusterFrameUi7.KEY_SAVED_CENTER,
+                ClusterFrameUi7.KEY_SAVED_LEFT,
+                ClusterFrameUi7.KEY_SAVED_MENU,
+                ClusterJournal.KEY_JOURNAL,
+                // SplitFreeformVerdict: latched per boot count of this head unit.
+                "split_ff_*",
+                ClusterProjectionManager.KEY_DENSITY_UNSAFE_PREFIX + "*",
+            ),
+            // Cooldown of the last adb_wifi_enabled write: a record from the source device would
+            // suppress the first write on a fresh install on the same Wi-Fi.
+            AdbRestorePreferencesImpl.PREFS_NAME to setOf(
+                AdbRestorePreferencesImpl.KEY_LAST_WRITE_NETWORK,
+                AdbRestorePreferencesImpl.KEY_LAST_WRITE_AT,
+            ),
+        )
+
+        internal fun isExcluded(patterns: Set<String>, key: String): Boolean =
+            patterns.any { if (it.endsWith('*')) key.startsWith(it.dropLast(1)) else key == it }
 
         private const val ENTRY_DB = "bydmate.db"
         private const val ENTRY_PREFS = "prefs.json"
@@ -320,13 +391,13 @@ class BackupManager(
             "База данных занята, экспорт прерван. Повторите попытку позже."
         )
 
-        // 3. Collect SharedPreferences (only files with at least one entry)
+        // 3. Collect SharedPreferences. Every whitelisted file is written, even an empty one:
+        //    restore reads "file absent" as "made before this file joined the whitelist".
         val prefsData = mutableMapOf<String, Map<String, Any?>>()
         for (name in prefsFileNames) {
-            val all = context.getSharedPreferences(name, Context.MODE_PRIVATE).all
-            if (all.isNotEmpty()) {
-                prefsData[name] = all
-            }
+            val excluded = excludedPrefsKeys[name].orEmpty()
+            prefsData[name] = context.getSharedPreferences(name, Context.MODE_PRIVATE).all
+                .filterKeys { !isExcluded(excluded, it) }
         }
         val prefsJson = serializePrefs(prefsData)
 
@@ -447,6 +518,10 @@ class BackupManager(
             // DESTRUCTIVE PART — only reached once the backup is fully validated.
             // ---------------------------------------------------------------------
 
+            // Mark the next start as the first one after a restore BEFORE anything is replaced,
+            // so a process death mid-restore still runs PostRestoreCheck (overlay, models).
+            PostRestoreCheck.markPending(context)
+
             // 3. Close the database so we can safely replace the file.
             appDatabase.close()
 
@@ -470,25 +545,28 @@ class BackupManager(
             File(dbDir, "bydmate.db-shm").delete()
 
             // 5. Restore SharedPreferences.
-            // FULL REPLACE: clear EVERY whitelisted file first, even files absent from the
-            // backup (they were empty at export time). Iterating only over prefsMap would let
-            // stale prefs on the current device survive a "full replace".
+            // FULL REPLACE of every whitelisted file, except the per-device keys in
+            // excludedPrefsKeys, which keep this device's values. A file absent from the backup
+            // is cleared too (older exports skipped empty files), unless it is in
+            // PREFS_FILES_ADDED_LATER: then the backup predates that file joining the whitelist,
+            // and clearing it would wipe a live setting (adb_restore).
             for (fileName in prefsFileNames) {
-                val editor = context.getSharedPreferences(fileName, Context.MODE_PRIVATE).edit()
-                editor.clear()
-                val entries = prefsMap[fileName]
-                if (entries != null) {
-                    for ((key, value) in entries) {
-                        when (value) {
-                            is String -> editor.putString(key, value)
-                            is Int -> editor.putInt(key, value)
-                            is Long -> editor.putLong(key, value)
-                            is Float -> editor.putFloat(key, value)
-                            is Boolean -> editor.putBoolean(key, value)
-                            is Set<*> -> {
-                                @Suppress("UNCHECKED_CAST")
-                                editor.putStringSet(key, value as Set<String>)
-                            }
+                val entries = prefsMap[fileName] ?: if (fileName in PREFS_FILES_ADDED_LATER) continue else emptyMap()
+                val excluded = excludedPrefsKeys[fileName].orEmpty()
+                val prefs = context.getSharedPreferences(fileName, Context.MODE_PRIVATE)
+                val editor = prefs.edit()
+                prefs.all.keys.filterNot { isExcluded(excluded, it) }.forEach { editor.remove(it) }
+                for ((key, value) in entries) {
+                    if (isExcluded(excluded, key)) continue
+                    when (value) {
+                        is String -> editor.putString(key, value)
+                        is Int -> editor.putInt(key, value)
+                        is Long -> editor.putLong(key, value)
+                        is Float -> editor.putFloat(key, value)
+                        is Boolean -> editor.putBoolean(key, value)
+                        is Set<*> -> {
+                            @Suppress("UNCHECKED_CAST")
+                            editor.putStringSet(key, value as Set<String>)
                         }
                     }
                 }

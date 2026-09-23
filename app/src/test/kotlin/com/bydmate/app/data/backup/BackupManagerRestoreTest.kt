@@ -3,11 +3,16 @@ package com.bydmate.app.data.backup
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.camera.BlindSpotPreferences
+import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.hud.HudController
+import com.bydmate.app.split.SplitPreferencesImpl
 import io.mockk.mockk
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -31,14 +36,16 @@ class BackupManagerRestoreTest {
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val appDatabase = mockk<AppDatabase>(relaxed = true)
 
-    private fun backupZip(): Pair<File, ByteArray> {
+    private fun backupZip(
+        prefs: Map<String, Map<String, Any?>> = mapOf("automation" to mapOf("restored_key" to "yes")),
+    ): Pair<File, ByteArray> {
         val dbFile = tmp.newFile("src.db").also { it.delete() }
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
             db.execSQL("CREATE TABLE t (x INTEGER)")
             db.execSQL("INSERT INTO t VALUES (42)")
         }
         val dbBytes = dbFile.readBytes()
-        val prefsJson = BackupManager.serializePrefs(mapOf("automation" to mapOf("restored_key" to "yes")))
+        val prefsJson = BackupManager.serializePrefs(prefs)
         val manifestJson = JSONObject().apply {
             put("appVersionCode", 1)
             put("dbSchemaVersion", AppDatabase.SCHEMA_VERSION)
@@ -64,6 +71,110 @@ class BackupManagerRestoreTest {
         assertArrayEquals(dbBytes, context.getDatabasePath("bydmate.db").readBytes())
         assertEquals("yes", prefs.getString("restored_key", null))
         assertTrue(!prefs.contains("stale_key"))
+    }
+
+    @Test
+    fun `restore marks the next start as post-restore`() {
+        val (zip, _) = backupZip()
+
+        BackupManager(context, appDatabase, listOf("automation")).restore(zip)
+
+        val state = context.getSharedPreferences(PostRestoreCheck.PREFS_NAME, Context.MODE_PRIVATE)
+        assertTrue(state.getBoolean(PostRestoreCheck.KEY_PENDING, false))
+        assertTrue(state.getLong(PostRestoreCheck.KEY_TS, 0L) > 0L)
+    }
+
+    private fun prefs(name: String) = context.getSharedPreferences(name, Context.MODE_PRIVATE)
+
+    private fun restoreWithProductionLists(zip: File) =
+        BackupManager(context, appDatabase, BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS).restore(zip)
+
+    @Test
+    fun `old backup without the new prefs files restores and leaves them alone`() {
+        prefs(AdbRestorePreferencesImpl.PREFS_NAME).edit().putBoolean(AdbRestorePreferencesImpl.KEY_ENABLED, true).commit()
+        prefs(BlindSpotPreferences.PREFS_NAME).edit().putBoolean(BlindSpotPreferences.KEY_ENABLED, true).commit()
+        prefs(SplitPreferencesImpl.PREFS_NAME).edit().putBoolean(SplitPreferencesImpl.KEY_FEATURE_ENABLED, true).commit()
+        prefs(HudController.PREFS_NAME).edit().putBoolean(HudController.KEY_ENABLED, true).commit()
+        val (zip, _) = backupZip()
+
+        restoreWithProductionLists(zip)
+
+        assertEquals("yes", prefs("automation").getString("restored_key", null))
+        assertTrue(AdbRestorePreferencesImpl(context).isEnabled())
+        assertTrue(BlindSpotPreferences(context).enabled)
+        assertTrue(SplitPreferencesImpl(context).isFeatureEnabled())
+        assertTrue(prefs(HudController.PREFS_NAME).getBoolean(HudController.KEY_ENABLED, false))
+    }
+
+    @Test
+    fun `legacy prefs file absent from the backup is cleared, per-device keys stay`() {
+        prefs("bydmate_widget").edit().putBoolean("widget_enabled", true).commit()
+        prefs("cluster_projection").edit().putInt("last_vd_id", 5).putBoolean("mirror_enabled", true).commit()
+        // Older exports skipped empty files, so "absent" meant "empty" for these.
+        val (zip, _) = backupZip()
+
+        restoreWithProductionLists(zip)
+
+        assertTrue(prefs("bydmate_widget").all.isEmpty())
+        assertEquals(mapOf("last_vd_id" to 5), prefs("cluster_projection").all)
+    }
+
+    @Test
+    fun `explicit empty prefs file in the backup is cleared`() {
+        prefs("bydmate_widget").edit().putBoolean("widget_enabled", true).commit()
+        prefs(BlindSpotPreferences.PREFS_NAME).edit().putBoolean(BlindSpotPreferences.KEY_ENABLED, true).commit()
+        val (zip, _) = backupZip(
+            mapOf("bydmate_widget" to emptyMap(), BlindSpotPreferences.PREFS_NAME to emptyMap()),
+        )
+
+        restoreWithProductionLists(zip)
+
+        assertTrue(prefs("bydmate_widget").all.isEmpty())
+        assertFalse(BlindSpotPreferences(context).enabled)
+    }
+
+    @Test
+    fun `restore keeps the local ADB write cooldown`() {
+        AdbRestorePreferencesImpl(context).recordWrite("local-wifi", 5L)
+        val (zip, _) = backupZip(
+            mapOf(
+                AdbRestorePreferencesImpl.PREFS_NAME to mapOf(
+                    AdbRestorePreferencesImpl.KEY_ENABLED to true,
+                    AdbRestorePreferencesImpl.KEY_LAST_WRITE_NETWORK to "other-wifi",
+                    AdbRestorePreferencesImpl.KEY_LAST_WRITE_AT to 9L,
+                ),
+            ),
+        )
+
+        restoreWithProductionLists(zip)
+
+        val adb = AdbRestorePreferencesImpl(context)
+        assertTrue(adb.isEnabled())
+        assertEquals("local-wifi", adb.lastWriteNetwork())
+        assertEquals(5L, adb.lastWriteAtMs())
+    }
+
+    @Test
+    fun `restore keeps per-device keys of this car`() {
+        val cluster = context.getSharedPreferences("cluster_projection", Context.MODE_PRIVATE)
+        cluster.edit().putInt("last_vd_id", 5).putInt("split_ff_seen_boot", 3).putBoolean("mirror_enabled", false).commit()
+        val hud = context.getSharedPreferences("hud", Context.MODE_PRIVATE)
+        hud.edit().putBoolean("hud_supported", false).commit()
+        // A pre-change backup still carries the other car's runtime markers.
+        val (zip, _) = backupZip(
+            mapOf(
+                "cluster_projection" to mapOf("last_vd_id" to 9, "split_ff_seen_boot" to 8, "mirror_enabled" to true),
+                "hud" to mapOf("hud_supported" to true, "hud_enabled" to true),
+            )
+        )
+
+        restoreWithProductionLists(zip)
+
+        assertEquals(5, cluster.getInt("last_vd_id", -1))
+        assertEquals(3, cluster.getInt("split_ff_seen_boot", -1))
+        assertTrue(cluster.getBoolean("mirror_enabled", false))
+        assertTrue(!hud.getBoolean("hud_supported", true))
+        assertTrue(hud.getBoolean("hud_enabled", false))
     }
 
     @Test

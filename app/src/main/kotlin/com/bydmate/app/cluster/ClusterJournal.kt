@@ -79,7 +79,7 @@ class ClusterJournal(
             }
 
         const val MAX_ENTRIES = 30
-        private const val KEY_JOURNAL = "projection_journal"
+        internal const val KEY_JOURNAL = "projection_journal"
         private const val TS_FORMAT = "yyyy-MM-dd HH:mm:ss"
         // "yyyy-MM-dd HH:mm:ss " prefix length — payload starts here.
         private const val TS_PREFIX_LEN = 20
