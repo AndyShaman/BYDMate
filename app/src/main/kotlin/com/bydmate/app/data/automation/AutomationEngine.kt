@@ -166,6 +166,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     @Volatile private var savedBootId: String? = null
     @Volatile private var lastTickElapsed: Long? = null
     @Volatile private var lastHeartbeatWriteElapsed: Long? = null
+    // Explicit wake edge: USER_PRESENT seen by the running service, or the start intent of a
+    // service started by USER_PRESENT / BOOT_COMPLETED. The next screen-on tick opens a new
+    // session whatever the gap; the gap rule stays as the fallback without USER_PRESENT.
+    @Volatile private var wakeEdgePending = false
 
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
     // live cache so the a11y key filter can answer "is this key mine?" on the
@@ -217,8 +221,18 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val heartbeat = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L)
         val age = if (heartbeat >= 0L) "${(elapsedMs() - heartbeat) / 1000}s" else "-"
         val bootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)?.takeIf { it.isNotEmpty() } ?: "-"
+        val wakeEdge = if (wakeEdgePending) "pending" else "-"
         return "service_start: interactive=${interactiveProvider()} window=$window " +
-            "consumed=${serviceStartConsumed.size} last_heartbeat_age=$age boot_id=$bootId"
+            "consumed=${serviceStartConsumed.size} last_heartbeat_age=$age boot_id=$bootId wake_edge=$wakeEdge"
+    }
+
+    /**
+     * The user unlocked the head unit after the screen came on (USER_PRESENT): the car was
+     * switched on. Not called for SCREEN_ON, so a screen blink while driving does not re-fire.
+     */
+    fun onUserPresent() {
+        Log.i(TAG, "service_start: user present")
+        wakeEdgePending = true
     }
 
     // Called every 3s from TrackingService poll loop.
@@ -276,7 +290,10 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             val saved = savedBootId.orEmpty()
             val prevElapsed = lastTickElapsed
             val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
+            val wakeEdge = wakeEdgePending
+            if (wakeEdge) wakeEdgePending = false
             val reason = when {
+                wakeEdge -> "user_present"
                 bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved -> "boot"
                 prevElapsed == null -> "first"
                 elapsed < prevElapsed -> "elapsed_back"

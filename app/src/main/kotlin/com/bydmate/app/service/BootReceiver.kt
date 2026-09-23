@@ -7,6 +7,7 @@ import android.util.Log
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.workDataOf
 
 /**
  * Auto-start on boot — uses WorkManager (like BydConnect).
@@ -56,7 +57,11 @@ class BootReceiver : BroadcastReceiver() {
 
         // Use WorkManager — guaranteed execution (like BydConnect)
         try {
-            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>().build()
+            // A car start for the service_start trigger (#177): the service opens a new session.
+            val wakeEdge = intent.action == Intent.ACTION_USER_PRESENT || intent.action == Intent.ACTION_BOOT_COMPLETED
+            val request = OneTimeWorkRequestBuilder<ServiceStartWorker>()
+                .setInputData(workDataOf(TrackingService.EXTRA_WAKE_EDGE to wakeEdge))
+                .build()
             WorkManager.getInstance(context).enqueueUniqueWork(
                 ServiceStartWorker.WORK_NAME,
                 ExistingWorkPolicy.KEEP,
