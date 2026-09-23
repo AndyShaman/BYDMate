@@ -300,34 +300,30 @@ private fun SettingsRail(
         colors = CardDefaults.cardColors(containerColor = CardSurface),
         modifier = modifier,
     ) {
-        // Scrolls when enlarged fonts (or a short screen) push the items past the card; the
-        // weighted spacer still pins the version to the bottom while everything fits.
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 12.dp, horizontal = 8.dp),
-        ) {
-            Text(
-                stringResource(R.string.settings_rail_sections_label),
-                color = TextMuted,
-                fontSize = 10.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
-            )
-
-            SettingsSection.entries.forEach { section ->
-                val isHidden = section == SettingsSection.SMART_HOME
-                if (isHidden && !smartHomeUnlocked) return@forEach
-                RailItem(
-                    section = section,
-                    isActive = section == selected,
-                    isHidden = isHidden,
-                    onClick = { onSelect(section) },
+        Column(modifier = Modifier.fillMaxSize().padding(vertical = 12.dp, horizontal = 8.dp)) {
+            // Only the section list scrolls, for enlarged fonts or a short screen; it takes the
+            // remaining height, so the divider and the version stay pinned to the bottom.
+            Column(modifier = Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+                Text(
+                    stringResource(R.string.settings_rail_sections_label),
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp),
                 )
+
+                SettingsSection.entries.forEach { section ->
+                    val isHidden = section == SettingsSection.SMART_HOME
+                    if (isHidden && !smartHomeUnlocked) return@forEach
+                    RailItem(
+                        section = section,
+                        isActive = section == selected,
+                        isHidden = isHidden,
+                        onClick = { onSelect(section) },
+                    )
+                }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
             HorizontalDivider(color = CardBorder)
             Row(
                 modifier = Modifier
