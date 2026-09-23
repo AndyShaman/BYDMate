@@ -1536,4 +1536,14 @@
     <string name="post_restore_download_asr">Download 226 MB</string>
     <string name="post_restore_download">Download</string>
     <string name="post_restore_close">Close</string>
+    <string name="notif_channel_tracking_name">BYDMate Tracking</string>
+    <string name="notif_channel_tracking_desc">Trip and charge tracking</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate Tracking (quiet)</string>
+    <string name="notif_channel_tracking_quiet_desc">Trip and charge tracking, collapsed in the shade</string>
+    <string name="notif_channel_auto_silent_name">Automation Silent</string>
+    <string name="notif_channel_auto_silent_desc">Silent automation notifications</string>
+    <string name="notif_channel_auto_sound_name">Automation Alerts</string>
+    <string name="notif_channel_auto_sound_desc">Audible automation notifications</string>
+    <string name="notif_channel_auto_confirm_name">Automation Confirmations</string>
+    <string name="notif_channel_auto_confirm_desc">Confirmation dialogs for automation rules</string>
 </resources>

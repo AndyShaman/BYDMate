@@ -1650,4 +1650,14 @@
     <string name="post_restore_download_asr">下载 226 MB</string>
     <string name="post_restore_download">下载</string>
     <string name="post_restore_close">关闭</string>
+    <string name="notif_channel_tracking_name">BYDMate：行程记录</string>
+    <string name="notif_channel_tracking_desc">记录行程和充电</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate：行程记录（静默）</string>
+    <string name="notif_channel_tracking_quiet_desc">记录行程和充电，在通知栏中折叠显示</string>
+    <string name="notif_channel_auto_silent_name">静音自动化通知</string>
+    <string name="notif_channel_auto_silent_desc">不发声的自动化通知</string>
+    <string name="notif_channel_auto_sound_name">有声自动化通知</string>
+    <string name="notif_channel_auto_sound_desc">发声的自动化通知</string>
+    <string name="notif_channel_auto_confirm_name">自动化确认</string>
+    <string name="notif_channel_auto_confirm_desc">自动化规则的确认请求</string>
 </resources>

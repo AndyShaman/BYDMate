@@ -871,10 +871,10 @@ class AutomationEngine @Inject constructor(
     private fun createConfirmChannel() {
         val channel = NotificationChannel(
             CONFIRM_CHANNEL_ID,
-            "Automation Confirmations",
+            appStrings.get(R.string.notif_channel_auto_confirm_name),
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
-            description = "Confirmation dialogs for automation rules"
+            description = appStrings.get(R.string.notif_channel_auto_confirm_desc)
         }
         val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(channel)

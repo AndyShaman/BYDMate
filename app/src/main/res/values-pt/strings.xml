@@ -1532,4 +1532,14 @@
     <string name="post_restore_download_asr">Baixar 226 MB</string>
     <string name="post_restore_download">Baixar</string>
     <string name="post_restore_close">Fechar</string>
+    <string name="notif_channel_tracking_name">BYDMate: viagens e carregamentos</string>
+    <string name="notif_channel_tracking_desc">Registo de viagens e carregamentos</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate: viagens e carregamentos (silencioso)</string>
+    <string name="notif_channel_tracking_quiet_desc">Registo de viagens e carregamentos, recolhido nas notificações</string>
+    <string name="notif_channel_auto_silent_name">Automações sem som</string>
+    <string name="notif_channel_auto_silent_desc">Notificações de automações sem som</string>
+    <string name="notif_channel_auto_sound_name">Automações com som</string>
+    <string name="notif_channel_auto_sound_desc">Notificações de automações com som</string>
+    <string name="notif_channel_auto_confirm_name">Confirmações de automações</string>
+    <string name="notif_channel_auto_confirm_desc">Pedidos de confirmação das regras de automação</string>
 </resources>

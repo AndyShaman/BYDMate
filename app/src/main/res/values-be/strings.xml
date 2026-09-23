@@ -1688,4 +1688,14 @@
     <string name="post_restore_download_asr">Спампаваць 226 МБ</string>
     <string name="post_restore_download">Спампаваць</string>
     <string name="post_restore_close">Закрыць</string>
+    <string name="notif_channel_tracking_name">BYDMate: улік паездак</string>
+    <string name="notif_channel_tracking_desc">Улік паездак і зарадак</string>
+    <string name="notif_channel_tracking_quiet_name">BYDMate: улік паездак (ціха)</string>
+    <string name="notif_channel_tracking_quiet_desc">Улік паездак і зарадак, згорнута ў шторцы</string>
+    <string name="notif_channel_auto_silent_name">Аўтаматызацыі без гуку</string>
+    <string name="notif_channel_auto_silent_desc">Апавяшчэнні аўтаматызацый без гуку</string>
+    <string name="notif_channel_auto_sound_name">Аўтаматызацыі з гукам</string>
+    <string name="notif_channel_auto_sound_desc">Апавяшчэнні аўтаматызацый з гукам</string>
+    <string name="notif_channel_auto_confirm_name">Пацвярджэнне аўтаматызацый</string>
+    <string name="notif_channel_auto_confirm_desc">Запыты на пацвярджэнне правіл аўтаматызацыі</string>
 </resources>
