@@ -1920,8 +1920,8 @@ class TrackingService : Service(), LocationListener {
     private val accOffReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             Log.i(TAG, "ACC_OFF received")
-            // Off the main thread and under the evaluate lock; goAsync keeps the process
-            // receiving until the marker is committed.
+            // Off the main thread; goAsync keeps the process receiving until the marker is
+            // committed.
             val pending = goAsync()
             serviceScope.launch {
                 try {

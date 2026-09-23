@@ -21,9 +21,8 @@ import io.mockk.mockkObject
 import io.mockk.Runs
 import io.mockk.unmockkObject
 import io.mockk.verify
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -463,16 +462,67 @@ class AutomationEngineEdgeTest {
         coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
     }
 
-    @Test fun `onCarOff waits for the evaluate lock`() = runBlocking {
+    @Test fun `onCarOff commits the marker while an evaluate holds the lock`() = runBlocking {
         val (engine, _) = serviceStartEngine(bootId, HeadUnit(e0, t0))
         engine.evaluateMutex.lock()
-        val marking = launch { engine.onCarOff() }
-        delay(100)
-        assertTrue(marking.isActive)
-        assertFalse(storedCarOff())
-        engine.evaluateMutex.unlock()
-        marking.join()
+        try {
+            withTimeout(1_000L) { engine.onCarOff() }
+            assertTrue(storedCarOff())
+        } finally {
+            engine.evaluateMutex.unlock()
+        }
+    }
+
+    /** Prefs whose session write (the boot id) runs [hook] once, in the middle of a tick. */
+    private class HookedPrefs(private val real: SharedPreferences, var hook: (() -> Unit)?) :
+        SharedPreferences by real {
+        override fun edit(): SharedPreferences.Editor = Editor(real.edit())
+
+        private inner class Editor(private val e: SharedPreferences.Editor) : SharedPreferences.Editor by e {
+            override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                if (key == "service_start_boot_id") hook?.also { hook = null }?.invoke()
+                e.putString(key, value)
+                return this
+            }
+            override fun putLong(key: String, value: Long): SharedPreferences.Editor {
+                e.putLong(key, value)
+                return this
+            }
+            override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor {
+                e.putBoolean(key, value)
+                return this
+            }
+        }
+    }
+
+    @Test fun `ACC_OFF arriving during a tick keeps its marker`() = runBlocking {
+        val prefs = HookedPrefs(automationPrefs(), null)
+        val context = object : ContextWrapper(ApplicationProvider.getApplicationContext()) {
+            override fun getSharedPreferences(name: String, mode: Int): SharedPreferences =
+                if (name == "automation") prefs else super.getSharedPreferences(name, mode)
+        }
+        val (engine, dao) = setup(context) { listOf(rule(1, listOf(serviceStartTrigger()))) }
+        val unit = HeadUnit(e0, t0)
+        engine.bootIdProvider = { bootId }
+        engine.elapsedMs = { unit.elapsed }
+        engine.nowMs = { unit.wall }
+        engine.interactiveProvider = { unit.screenOn }
+        // The receiver thread commits the marker after the tick read it, before the session write.
+        prefs.hook = { runBlocking { engine.onCarOff() } }
+
+        engine.evaluate(diParsData(soc = 50), null)                         // session reason=first
+
         assertTrue(storedCarOff())
+        assertTrue(engineLogs().contains("service_start: ACC_OFF arrived during the tick, marker kept"))
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(60_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // next car start
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=70s"))
+        assertFalse(storedCarOff())
     }
 
     @Test fun `service_start fires once per car start with ACC_OFF 15 minutes apart`() = runBlocking {
