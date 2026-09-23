@@ -11,6 +11,7 @@ import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.data.backup.AutoBackupPeriod
+import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -27,6 +28,7 @@ import kotlin.math.roundToInt
 import com.bydmate.app.ui.widget.LeftTapMode
 import com.bydmate.app.ui.widget.WidgetController
 import com.bydmate.app.ui.widget.WidgetPreferences
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -45,6 +47,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -65,6 +68,8 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -83,6 +88,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
@@ -95,6 +101,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -104,6 +111,7 @@ import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -1921,8 +1929,7 @@ private fun ServiceSection(
 
     // Own picker over Download/ instead of SAF: on some firmwares ACTION_OPEN_DOCUMENT hands
     // back a URI without a read grant (#223). Non-null restoreCandidates = picker open.
-    var restoreTarget by remember { mutableStateOf<File?>(null) }
-    var showExportConfirm by remember { mutableStateOf(false) }
+    var showSaveDialog by remember { mutableStateOf(false) }
 
     state.restoreCandidates?.let { files ->
         AppAlertDialog(
@@ -1946,10 +1953,7 @@ private fun ServiceSection(
                             Column(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable {
-                                        viewModel.closeRestorePicker()
-                                        restoreTarget = file
-                                    }
+                                    .clickable { viewModel.pickRestoreFile(file) }
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             ) {
                                 Text(file.name, color = TextPrimary, fontSize = 13.sp, maxLines = 1)
@@ -1976,108 +1980,43 @@ private fun ServiceSection(
         )
     }
 
-    // Confirm dialog for destructive restore operation
-    restoreTarget?.let { target ->
-        AppAlertDialog(
-            onDismissRequest = { restoreTarget = null },
-            title = {
-                Text(
-                    stringResource(R.string.settings_config_restore_confirm_title),
-                    color = TextPrimary,
-                )
-            },
-            text = {
-                Text(
-                    stringResource(R.string.settings_config_restore_confirm_body),
-                    color = TextSecondary,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    restoreTarget = null
-                    viewModel.restoreConfig(target)
-                }) {
-                    Text(
-                        stringResource(R.string.settings_config_restore_confirm_ok),
-                        color = SocRed,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { restoreTarget = null }) {
-                    Text(
-                        stringResource(R.string.settings_config_restore_confirm_cancel),
-                        color = TextSecondary,
-                    )
-                }
-            },
-            containerColor = CardSurfaceElevated,
+    // «Что восстановить»: only the parts the archive carries can be checked (#238).
+    state.restoreChoice?.let { choice ->
+        BackupPartsDialog(
+            title = stringResource(R.string.settings_config_restore_dialog_title),
+            initial = choice.parts,
+            available = choice.parts,
+            confirmLabel = stringResource(R.string.settings_config_restore_confirm_ok),
+            confirmColor = SocRed,
+            warning = stringResource(R.string.settings_config_restore_warning),
+            onConfirm = { viewModel.restoreConfig(choice.file, it) },
+            onDismiss = { viewModel.dismissRestoreChoice() },
         )
     }
 
-    // After a manual export: offer the system share sheet (Telegram «Избранное» and the like, #237).
-    state.savedBackup?.file?.let { file ->
-        AppAlertDialog(
-            onDismissRequest = { viewModel.dismissExportedBackup() },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        stringResource(R.string.settings_config_export_done, "Download/${file.name}"),
-                        color = TextPrimary,
-                    )
-                    Text(stringResource(R.string.settings_backup_share_hint), color = TextSecondary, fontSize = 13.sp)
-                }
+    if (showSaveDialog) {
+        BackupPartsDialog(
+            title = stringResource(R.string.settings_config_save_dialog_title),
+            initial = state.manualBackupParts,
+            available = BackupPart.ALL,
+            confirmLabel = stringResource(R.string.settings_config_save_button),
+            confirmColor = PrimaryColor,
+            warning = null,
+            onConfirm = {
+                showSaveDialog = false
+                viewModel.saveConfiguration(it)
             },
-            confirmButton = {
-                TextButton(onClick = { viewModel.shareExportedBackup() }) {
-                    Text(stringResource(R.string.settings_backup_share), color = PrimaryColor)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.dismissExportedBackup() }) {
-                    Text(stringResource(R.string.settings_backup_close), color = TextSecondary)
-                }
-            },
-            containerColor = CardSurfaceElevated,
+            onDismiss = { showSaveDialog = false },
         )
     }
 
-    // Confirm dialog before exporting plaintext backup
-    if (showExportConfirm) {
-        AppAlertDialog(
-            onDismissRequest = { showExportConfirm = false },
-            title = {
-                Text(
-                    stringResource(R.string.settings_config_export_confirm_title),
-                    color = TextPrimary,
-                )
-            },
-            text = {
-                Text(
-                    stringResource(R.string.settings_config_export_confirm_body),
-                    color = TextSecondary,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showExportConfirm = false
-                    viewModel.saveConfiguration(state.manualBackupParts)
-                }) {
-                    Text(
-                        stringResource(R.string.settings_config_export_confirm_ok),
-                        color = PrimaryColor,
-                    )
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showExportConfirm = false }) {
-                    Text(
-                        stringResource(R.string.settings_config_restore_confirm_cancel),
-                        color = TextSecondary,
-                    )
-                }
-            },
-            containerColor = CardSurfaceElevated,
+    // After a manual save: the file, the Telegram outcome and the system share sheet (#237, #238).
+    state.savedBackup?.let { saved ->
+        SavedBackupDialog(
+            saved = saved,
+            withKeys = BackupPart.KEYS in state.manualBackupParts,
+            onShare = { viewModel.shareExportedBackup() },
+            onDismiss = { viewModel.dismissExportedBackup() },
         )
     }
 
@@ -2289,69 +2228,19 @@ private fun ServiceSection(
                 },
             )
             SettingDivider()
+            SettingSubhead(stringResource(R.string.settings_config_header))
             SettingActionRow(
-                title = stringResource(R.string.settings_export_csv_button),
-                description = stringResource(R.string.settings_export_csv_desc),
-                buttonLabel = stringResource(R.string.settings_export_csv_button),
-                onClick = { viewModel.exportCsv() },
-            )
-            if (state.exportStatus != null) {
-                SettingHint(
-                    text = state.exportStatus!!,
-                )
-            }
-            SettingDivider()
-            SettingActionRow(
-                title = stringResource(R.string.settings_log_recording_start_button),
-                description = stringResource(R.string.settings_log_recording_desc),
-                buttonLabel = if (state.isRecordingLogs) {
-                    stringResource(R.string.settings_log_recording_stop_button)
-                } else {
-                    stringResource(R.string.settings_log_recording_start_button)
-                },
-                onClick = {
-                    if (state.isRecordingLogs) viewModel.stopLogRecording()
-                    else viewModel.startLogRecording()
-                },
-            )
-            if (state.logSaveStatus != null) {
-                SettingHint(
-                    text = state.logSaveStatus!!,
-                )
-            }
-            // Diagnostic fid recorder (-test/debug builds only): the daemon owns the run, this row
-            // only reflects and toggles it, so a reopened screen still shows a recording in force.
-            if (state.fidRecorderVisible) {
-                SettingDivider()
-                SettingToggleRow(
-                    title = stringResource(R.string.settings_fid_recorder_title),
-                    description = stringResource(R.string.settings_fid_recorder_desc),
-                    checked = state.fidRecorderRunning,
-                    onCheckedChange = { viewModel.setFidRecorder(it) },
-                )
-                if (state.fidRecorderError != null) {
-                    SettingHint(
-                        text = stringResource(R.string.settings_fid_recorder_error, state.fidRecorderError!!),
-                    )
-                }
-                if (state.fidRecorderFile != null) {
-                    SettingHint(
-                        text = stringResource(R.string.settings_fid_recorder_file, state.fidRecorderFile!!),
-                    )
-                }
-            }
-            SettingDivider()
-            SettingActionRow(
-                title = stringResource(R.string.settings_config_export_button),
-                description = stringResource(R.string.settings_config_export_desc),
-                buttonLabel = stringResource(R.string.settings_config_export_button),
-                onClick = { showExportConfirm = true },
+                title = stringResource(R.string.settings_config_save_title),
+                description = stringResource(R.string.settings_config_save_desc),
+                buttonLabel = stringResource(R.string.settings_config_save_button),
+                onClick = { showSaveDialog = true },
+                style = SettingButtonStyle.Primary,
             )
             SettingDivider()
             SettingActionRow(
                 title = stringResource(R.string.settings_config_restore_button),
                 description = stringResource(R.string.settings_config_restore_desc),
-                buttonLabel = stringResource(R.string.settings_config_restore_button),
+                buttonLabel = stringResource(R.string.settings_config_restore_pick_button),
                 onClick = { viewModel.openRestorePicker() },
             )
             if (state.configStatus != null) {
@@ -2361,17 +2250,7 @@ private fun ServiceSection(
             }
             AutoBackupRows(state, viewModel)
             SettingDivider()
-            SettingActionRow(
-                title = stringResource(R.string.settings_fid_dump_button),
-                description = stringResource(R.string.settings_fid_dump_desc),
-                buttonLabel = stringResource(R.string.settings_fid_dump_button),
-                onClick = { viewModel.dumpFids() },
-            )
-            if (state.fidDumpStatus != null) {
-                SettingHint(
-                    text = state.fidDumpStatus!!,
-                )
-            }
+            DiagnosticsRows(state, viewModel)
         }
     }
 
@@ -2401,73 +2280,455 @@ private fun ServiceSection(
     }
 }
 
-/** Automatic backup (#237): period chips, last-run status, Telegram bot, «Бэкап вручную». */
+/** Log recording, the fid recorder (test builds) and the fid catalog dump, each with a [?] (#238). */
+@Composable
+private fun DiagnosticsRows(state: SettingsUiState, viewModel: SettingsViewModel) {
+    // Title and body of the open [?] dialog; null = closed.
+    var help by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    help?.let { (title, body) ->
+        AppAlertDialog(
+            onDismissRequest = { help = null },
+            containerColor = CardSurface,
+            title = { Text(stringResource(title), color = TextPrimary) },
+            text = {
+                Text(
+                    stringResource(body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { help = null }) {
+                    Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
+                }
+            },
+        )
+    }
+    SettingSubhead(stringResource(R.string.settings_diagnostics_header))
+    SettingActionRow(
+        title = stringResource(R.string.settings_log_recording_start_button),
+        description = stringResource(R.string.settings_log_recording_desc),
+        buttonLabel = if (state.isRecordingLogs) {
+            stringResource(R.string.settings_log_recording_stop_button)
+        } else {
+            stringResource(R.string.settings_log_recording_start_button)
+        },
+        onClick = {
+            if (state.isRecordingLogs) viewModel.stopLogRecording()
+            else viewModel.startLogRecording()
+        },
+        onHelp = { help = R.string.settings_log_recording_start_button to R.string.settings_log_recording_help },
+    )
+    if (state.logSaveStatus != null) {
+        SettingHint(
+            text = state.logSaveStatus!!,
+        )
+    }
+    // Diagnostic fid recorder (-test/debug builds only): the daemon owns the run, this row
+    // only reflects and toggles it, so a reopened screen still shows a recording in force.
+    if (state.fidRecorderVisible) {
+        SettingDivider()
+        SettingToggleRow(
+            title = stringResource(R.string.settings_fid_recorder_title),
+            description = stringResource(R.string.settings_fid_recorder_desc),
+            checked = state.fidRecorderRunning,
+            onCheckedChange = { viewModel.setFidRecorder(it) },
+            onHelp = { help = R.string.settings_fid_recorder_title to R.string.settings_fid_recorder_help },
+        )
+        if (state.fidRecorderError != null) {
+            SettingHint(
+                text = stringResource(R.string.settings_fid_recorder_error, state.fidRecorderError!!),
+            )
+        }
+        if (state.fidRecorderFile != null) {
+            SettingHint(
+                text = stringResource(R.string.settings_fid_recorder_file, state.fidRecorderFile!!),
+            )
+        }
+    }
+    SettingDivider()
+    SettingActionRow(
+        title = stringResource(R.string.settings_fid_dump_button),
+        description = stringResource(R.string.settings_fid_dump_desc),
+        buttonLabel = stringResource(R.string.settings_config_save_button),
+        onClick = { viewModel.dumpFids() },
+        onHelp = { help = R.string.settings_fid_dump_button to R.string.settings_fid_dump_help },
+    )
+    if (state.fidDumpStatus != null) {
+        SettingHint(
+            text = state.fidDumpStatus!!,
+        )
+    }
+}
+
+/** Automatic save (#237, #238): period and part chips with the last run, then the Telegram bot. */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel) {
     val context = LocalContext.current
     val periods = AutoBackupPeriod.entries
-    SettingDivider()
-    SettingChipRow(
-        title = stringResource(R.string.settings_auto_backup_title),
-        description = stringResource(R.string.settings_auto_backup_desc),
-        options = listOf(
-            stringResource(R.string.settings_auto_backup_off),
-            stringResource(R.string.settings_auto_backup_daily),
-            stringResource(R.string.settings_auto_backup_weekly),
-            stringResource(R.string.settings_auto_backup_monthly),
-        ),
-        selectedIndex = periods.indexOf(state.autoBackupPeriod),
-        onSelect = { viewModel.setAutoBackupPeriod(periods[it]) },
-    )
     val locale = LocalConfiguration.current.locales[0]
     val dateFormat = remember(locale) { SimpleDateFormat("d MMM HH:mm", locale) }
-    SettingHint(
-        text = when {
-            state.autoBackupLastTs > 0L -> stringResource(
-                R.string.settings_auto_backup_last,
-                dateFormat.format(Date(state.autoBackupLastTs)),
-                autoBackupResultText(context, state.autoBackupLastResult),
-            )
-            // A first run that failed to export has no timestamp but does have a reason.
-            state.autoBackupLastResult.isNotEmpty() -> autoBackupResultText(context, state.autoBackupLastResult)
-            else -> stringResource(R.string.settings_auto_backup_never)
-        },
-    )
     SettingDivider()
-    SettingActionRow(
-        title = stringResource(R.string.settings_tg_backup_title),
-        buttonLabel = stringResource(R.string.settings_tg_backup_check),
-        onClick = { viewModel.checkTelegramBackup() },
-        enabled = !state.tgBackupChecking && state.tgBackupToken.isNotBlank(),
-    )
-    SettingsTextField(
-        label = stringResource(R.string.settings_tg_backup_token_label),
-        value = state.tgBackupToken,
-        onValueChange = { viewModel.updateTgBackupToken(it) },
-        keyboardType = KeyboardType.Password,
-        secret = true,
-    )
-    SettingHint(stringResource(R.string.settings_tg_backup_hint))
-    if (state.tgBackupStatus != null || state.tgBackupToken.isNotEmpty()) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(modifier = Modifier.weight(1f)) {
-                SettingHint(state.tgBackupStatus.orEmpty())
+    // Two halves instead of SettingChipRow: at the largest text size the chips wrap onto a second
+    // line instead of scrolling the last one out of sight.
+    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
+        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+            Text(
+                stringResource(R.string.settings_auto_backup_title),
+                color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+            )
+            Text(
+                stringResource(R.string.settings_auto_backup_desc),
+                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp,
+                modifier = Modifier.padding(top = 2.dp),
+            )
+            Text(
+                text = when {
+                    state.autoBackupLastTs > 0L -> stringResource(
+                        R.string.settings_auto_backup_last,
+                        dateFormat.format(Date(state.autoBackupLastTs)),
+                        autoBackupResultText(context, state.autoBackupLastResult),
+                    )
+                    // A first run that failed to export has no timestamp but does have a reason.
+                    state.autoBackupLastResult.isNotEmpty() -> autoBackupResultText(context, state.autoBackupLastResult)
+                    else -> stringResource(R.string.settings_auto_backup_never)
+                },
+                color = TextPrimary, fontSize = 13.sp, lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 6.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f), horizontalAlignment = Alignment.End) {
+            val periodLabels = listOf(
+                stringResource(R.string.settings_auto_backup_off),
+                stringResource(R.string.settings_auto_backup_daily),
+                stringResource(R.string.settings_auto_backup_weekly),
+                stringResource(R.string.settings_auto_backup_monthly),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+                periods.forEachIndexed { index, period ->
+                    UnitChip(
+                        label = periodLabels[index],
+                        selected = period == state.autoBackupPeriod,
+                        onClick = { viewModel.setAutoBackupPeriod(period) },
+                    )
+                }
             }
-            if (state.tgBackupToken.isNotEmpty()) {
-                TextButton(onClick = { viewModel.disconnectTelegramBackup() }) {
-                    Text(stringResource(R.string.settings_tg_backup_disconnect), color = TextSecondary, fontSize = 13.sp)
+            Text(
+                stringResource(R.string.settings_auto_backup_parts_label),
+                color = TextSecondary, fontSize = 12.sp, lineHeight = 16.sp, textAlign = TextAlign.End,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End)) {
+                BackupPart.entries.forEach { part ->
+                    val label = stringResource(
+                        when (part) {
+                            BackupPart.TABLES -> R.string.settings_backup_chip_tables
+                            BackupPart.SETTINGS -> R.string.settings_backup_chip_settings
+                            BackupPart.KEYS -> R.string.settings_backup_chip_keys
+                        }
+                    )
+                    val selected = part in state.autoBackupParts
+                    UnitChip(
+                        label = if (selected) "✓ $label" else label,
+                        selected = selected,
+                        onClick = { viewModel.toggleAutoBackupPart(part) },
+                    )
                 }
             }
         }
     }
     SettingDivider()
-    val queuedToast = stringResource(R.string.settings_backup_now_queued)
-    SettingActionRow(
-        title = stringResource(R.string.settings_backup_now_title),
-        buttonLabel = stringResource(R.string.settings_backup_now_button),
-        onClick = {
-            viewModel.backupNow()
-            Toast.makeText(context, queuedToast, Toast.LENGTH_SHORT).show()
+    TelegramBotRows(state, viewModel)
+}
+
+/** Telegram bot as a three-step stepper: token, code sent to the bot, connected (#238). */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+@Composable
+private fun TelegramBotRows(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val clipboard = LocalClipboardManager.current
+    val copiedToast = stringResource(R.string.settings_tg_backup_code_copied)
+    val binding = state.tgBackupBinding
+    val code = state.tgBackupCode
+    val step = when {
+        binding != null -> 3
+        code != null -> 2
+        else -> 1
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Text(
+            stringResource(R.string.settings_tg_backup_title),
+            color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium,
+        )
+        TelegramStepper(step)
+        when {
+            binding != null -> {
+                Text(
+                    "✓ " + stringResource(R.string.settings_tg_backup_connected_chip),
+                    color = AccentGreen, fontSize = 13.sp, fontWeight = FontWeight.Medium,
+                    modifier = Modifier
+                        .background(AccentGreen.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+                        .padding(horizontal = 10.dp, vertical = 4.dp),
+                )
+                Text(
+                    stringResource(R.string.settings_tg_backup_chat_line, binding.botName, binding.chatName),
+                    color = TextPrimary, fontSize = 14.sp,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        stringResource(R.string.settings_tg_backup_connected_note),
+                        color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = { viewModel.disconnectTelegramBackup() }) {
+                        Text(stringResource(R.string.settings_tg_backup_disconnect), color = TextSecondary, fontSize = 13.sp)
+                    }
+                }
+            }
+            code != null -> {
+                Text(
+                    code,
+                    color = TextPrimary, fontSize = 30.sp, fontWeight = FontWeight.Bold,
+                    fontFamily = FontFamily.Monospace, letterSpacing = 6.sp,
+                    modifier = Modifier
+                        .background(NavyDark, RoundedCornerShape(10.dp))
+                        .padding(horizontal = 20.dp, vertical = 10.dp),
+                )
+                Text(
+                    stringResource(R.string.settings_tg_backup_code_instruction, state.tgBackupBotName),
+                    color = TextSecondary, fontSize = 13.sp, lineHeight = 18.sp,
+                )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            clipboard.setText(AnnotatedString(code))
+                            Toast.makeText(context, copiedToast, Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        border = BorderStroke(1.dp, CardBorder),
+                    ) { Text(stringResource(R.string.settings_tg_backup_copy_code), color = TextPrimary, fontSize = 13.sp) }
+                    TelegramCheckButton(state, viewModel)
+                    TextButton(onClick = { viewModel.cancelTelegramCode() }) {
+                        Text(stringResource(R.string.settings_tg_backup_back), color = TextSecondary, fontSize = 13.sp)
+                    }
+                }
+            }
+            else -> {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        SettingsTextField(
+                            label = stringResource(R.string.settings_tg_backup_token_label),
+                            value = state.tgBackupToken,
+                            onValueChange = { viewModel.updateTgBackupToken(it) },
+                            keyboardType = KeyboardType.Password,
+                            secret = true,
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(10.dp))
+                    TelegramCheckButton(state, viewModel)
+                }
+                Text(
+                    stringResource(R.string.settings_tg_backup_hint),
+                    color = TextMuted, fontSize = 12.sp, lineHeight = 16.sp,
+                )
+            }
+        }
+        // Progress and errors right under the controls, in colour: easy to miss as a grey hint.
+        state.tgBackupStatus?.takeIf { step != 3 }?.let { status ->
+            Text(
+                status,
+                color = if (state.tgBackupChecking) TextSecondary else AccentOrange,
+                fontSize = 14.sp, lineHeight = 19.sp, fontWeight = FontWeight.Medium,
+            )
+        }
+    }
+}
+
+@Composable
+private fun TelegramCheckButton(state: SettingsUiState, viewModel: SettingsViewModel) {
+    Button(
+        onClick = { viewModel.checkTelegramBackup() },
+        enabled = !state.tgBackupChecking && state.tgBackupToken.isNotBlank(),
+        shape = RoundedCornerShape(8.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+    ) { Text(stringResource(R.string.settings_tg_backup_check), fontSize = 13.sp, fontWeight = FontWeight.Medium) }
+}
+
+/** «1 Токен — 2 Код — 3 Готово»; steps before [current] show a check mark. */
+@Composable
+private fun TelegramStepper(current: Int) {
+    val labels = listOf(
+        stringResource(R.string.settings_tg_backup_step_token),
+        stringResource(R.string.settings_tg_backup_step_code),
+        stringResource(R.string.settings_tg_backup_step_done),
+    )
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        labels.forEachIndexed { index, label ->
+            val step = index + 1
+            val active = step == current
+            val done = step < current || (active && step == labels.size)
+            if (index > 0) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                        .height(1.dp)
+                        .background(if (step <= current) AccentGreen else CardBorder),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(24.dp)
+                    .background(if (active || done) AccentGreen else CardBorder, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    if (done) "✓" else step.toString(),
+                    color = if (active || done) NavyDark else TextSecondary,
+                    fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                )
+            }
+            Text(
+                label,
+                color = if (active) TextPrimary else TextSecondary,
+                fontSize = 13.sp, fontWeight = if (active) FontWeight.Medium else FontWeight.Normal,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 6.dp),
+            )
+        }
+    }
+}
+
+/**
+ * «Что сохранить» / «Что восстановить» (#238): a checkbox per part, [available] parts only; at least
+ * one must stay checked. Scrolls, so the buttons stay reachable at the largest text size.
+ */
+@Composable
+private fun BackupPartsDialog(
+    title: String,
+    initial: Set<BackupPart>,
+    available: Set<BackupPart>,
+    confirmLabel: String,
+    confirmColor: Color,
+    warning: String?,
+    onConfirm: (Set<BackupPart>) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var selected by remember { mutableStateOf(initial intersect available) }
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurfaceElevated,
+        title = { Text(title, color = TextPrimary) },
+        text = {
+            Box(modifier = Modifier.heightIn(max = 400.dp)) {
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    BackupPart.entries.forEach { part ->
+                        val enabled = part in available
+                        val (titleRes, descRes) = when (part) {
+                            BackupPart.TABLES -> R.string.settings_backup_part_tables to R.string.settings_backup_part_tables_desc
+                            BackupPart.SETTINGS -> R.string.settings_backup_part_settings to R.string.settings_backup_part_settings_desc
+                            BackupPart.KEYS -> R.string.settings_backup_part_keys to R.string.settings_backup_part_keys_desc
+                        }
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable(enabled = enabled) {
+                                    selected = if (part in selected) selected - part else selected + part
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Checkbox(
+                                checked = part in selected,
+                                onCheckedChange = null,
+                                enabled = enabled,
+                                colors = CheckboxDefaults.colors(
+                                    checkedColor = AccentGreen,
+                                    uncheckedColor = CardBorder,
+                                    checkmarkColor = NavyDark,
+                                ),
+                            )
+                            Column(modifier = Modifier.padding(start = 10.dp)) {
+                                Text(
+                                    stringResource(titleRes),
+                                    color = if (enabled) TextPrimary else TextMuted,
+                                    fontSize = 14.sp, fontWeight = FontWeight.Medium,
+                                )
+                                Text(
+                                    stringResource(if (enabled) descRes else R.string.settings_backup_part_absent),
+                                    color = if (enabled) TextSecondary else TextMuted,
+                                    fontSize = 12.sp, lineHeight = 16.sp,
+                                )
+                            }
+                        }
+                    }
+                    if (warning != null) {
+                        Text(
+                            warning,
+                            color = AccentOrange, fontSize = 13.sp, lineHeight = 18.sp,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(selected) }, enabled = selected.isNotEmpty()) {
+                Text(confirmLabel, color = if (selected.isNotEmpty()) confirmColor else TextMuted)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_config_restore_confirm_cancel), color = TextSecondary)
+            }
+        },
+    )
+}
+
+/** «Сохранено»: file name and size, the Telegram outcome, «Поделиться» and «Закрыть». */
+@Composable
+private fun SavedBackupDialog(saved: SavedBackup, withKeys: Boolean, onShare: () -> Unit, onDismiss: () -> Unit) {
+    val locale = LocalConfiguration.current.locales[0]
+    val sizeMb = remember(saved.file, locale) {
+        String.format(locale, "%.1f", saved.file.length() / (1024.0 * 1024.0))
+    }
+    AppAlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = CardSurfaceElevated,
+        title = { Text(stringResource(R.string.settings_config_saved_title), color = TextPrimary) },
+        text = {
+            Column(
+                modifier = Modifier.heightIn(max = 400.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(stringResource(R.string.settings_config_saved_file, saved.file.name, sizeMb), color = TextPrimary)
+                if (saved.telegramStatus != null) {
+                    Text(saved.telegramStatus, color = TextPrimary, fontSize = 14.sp)
+                }
+                if (withKeys) {
+                    Text(stringResource(R.string.settings_backup_share_hint), color = TextSecondary, fontSize = 13.sp)
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.settings_backup_close), color = PrimaryColor)
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onShare) {
+                Text(stringResource(R.string.settings_backup_share), color = TextSecondary)
+            }
         },
     )
 }

@@ -29,7 +29,6 @@ import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.IdleDrainDao
-import com.bydmate.app.data.local.dao.TripPointDao
 import com.bydmate.app.diagnostics.LogRecorder
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.data.push.fidRecorderEnabled
@@ -44,7 +43,6 @@ import com.bydmate.app.data.local.entity.PlaceEntity
 import com.bydmate.app.data.local.entity.TariffPeriodEntity
 import com.bydmate.app.domain.cost.CostCalculator
 import com.bydmate.app.domain.cost.MeasuredLosses
-import com.bydmate.app.domain.cost.TariffSchedule
 import com.bydmate.app.data.repository.ChargeRepository
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.repository.SettingsRepository
@@ -112,6 +110,12 @@ import javax.inject.Inject
 /** A finished manual save (#238): the file in Download and the Telegram line; null = no bot connected. */
 data class SavedBackup(val file: File, val telegramStatus: String?)
 
+/** A backup picked for restore and the parts its manifest lists (#238). */
+data class RestoreChoice(val file: File, val parts: Set<BackupPart>)
+
+/** The bot backups go to and the chat it sends them into. */
+data class TgBackupBinding(val botName: String, val chatName: String)
+
 data class SpaceShortfall(val requiredMb: Long, val availableMb: Long) {
     companion object {
         private const val BYTES_PER_MB = 1024L * 1024L
@@ -132,7 +136,6 @@ data class SettingsUiState(
     val units: String = SettingsRepository.DEFAULT_UNITS,
     val currency: String = SettingsRepository.DEFAULT_CURRENCY,
     val currencySymbol: String = "BYN",
-    val exportStatus: String? = null,
     val importStatus: String? = null,
     val appVersion: String = "0.0.0",
     val updateStatus: String? = null,
@@ -193,6 +196,8 @@ data class SettingsUiState(
     val configStatus: String? = null,
     /** Backups offered by the restore picker, newest first. Null = picker closed. */
     val restoreCandidates: List<File>? = null,
+    /** Non-null = the «Что восстановить» dialog is open. */
+    val restoreChoice: RestoreChoice? = null,
     /** Result of the last manual save; non-null = the «Поделиться» dialog is open. */
     val savedBackup: SavedBackup? = null,
     /** Parts the manual save offers checked: the last choice (#238). */
@@ -204,11 +209,18 @@ data class SettingsUiState(
     val autoBackupLastTs: Long = 0L,
     val autoBackupLastResult: String = "",
     val tgBackupToken: String = "",
-    /** Outcome of the last «Проверить» (or «Подключено: @bot» on load); null = nothing to say. */
+    /** Progress or error of the last «Проверить»; null = nothing to say. */
     val tgBackupStatus: String? = null,
     val tgBackupChecking: Boolean = false,
-    /** One-time code the user sends to the bot to bind their chat; lives until a successful binding. */
+    /**
+     * One-time code the user sends to the bot to bind their chat; lives until a successful binding.
+     * Non-null = the stepper is on «Код».
+     */
     val tgBackupCode: String? = null,
+    /** Bot found by the last «Проверить»; the code step names it. */
+    val tgBackupBotName: String = "",
+    /** Non-null = a bot is connected, the stepper is on «Готово». */
+    val tgBackupBinding: TgBackupBinding? = null,
     /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
     val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
@@ -297,7 +309,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private val historyImporter: HistoryImporter,
     private val energyDataReader: EnergyDataReader,
     private val idleDrainDao: IdleDrainDao,
-    private val tripPointDao: TripPointDao,
     private val insightsManager: InsightsManager,
     private val adbOnDeviceClient: AdbOnDeviceClient,
     private val localePreferences: LocalePreferences,
@@ -776,128 +787,6 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         viewModelScope.launch {
             settingsRepository.setString(SettingsRepository.KEY_CURRENCY, code)
         }
-    }
-
-    /**
-     * Export all trips and charges to CSV files in the Downloads directory.
-     * Creates two files: bydmate_trips_<timestamp>.csv and bydmate_charges_<timestamp>.csv.
-     */
-    fun exportCsv() {
-        viewModelScope.launch {
-            _uiState.update { it.copy(exportStatus = appStrings.get(R.string.settings_export_in_progress)) }
-
-            try {
-                val downloadsDir = Environment.getExternalStoragePublicDirectory(
-                    Environment.DIRECTORY_DOWNLOADS
-                )
-                if (!downloadsDir.exists()) {
-                    downloadsDir.mkdirs()
-                }
-
-                val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-
-                // Export trips
-                val trips = tripRepository.getAllTrips().firstOrNull() ?: emptyList()
-                val tripsFile = File(downloadsDir, "bydmate_trips_$timestamp.csv")
-                FileWriter(tripsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,distance_km,kwh_consumed,kwh_per_100km,soc_start,soc_end,temp_avg_c,avg_speed_kmh,bat_temp_avg,bat_temp_max,bat_temp_min,cost,exterior_temp,tariff_rate\n")
-                    for (trip in trips) {
-                        writer.append("${trip.id},${trip.startTs},${trip.endTs ?: ""},")
-                        writer.append("${trip.distanceKm ?: ""},${trip.kwhConsumed ?: ""},")
-                        writer.append("${trip.kwhPer100km ?: ""},${trip.socStart ?: ""},")
-                        writer.append("${trip.socEnd ?: ""},${trip.tempAvgC ?: ""},")
-                        writer.append("${trip.avgSpeedKmh ?: ""},${trip.batTempAvg ?: ""},")
-                        writer.append("${trip.batTempMax ?: ""},${trip.batTempMin ?: ""},")
-                        val tripRate = trip.cost?.let { c ->
-                            trip.kwhConsumed?.takeIf { it > 0.0 }?.let { kwh -> c / kwh }
-                        }
-                        writer.append("${trip.cost ?: ""},${trip.exteriorTemp ?: ""},")
-                        writer.append("${tripRate ?: ""}\n")
-                    }
-                }
-
-                // Export charges — the period gives the rate and the losses behind each cost
-                val schedule = costCalculator.schedule()
-                val charges = chargeRepository.getAllCharges().firstOrNull() ?: emptyList()
-                val chargesFile = File(downloadsDir, "bydmate_charges_$timestamp.csv")
-                FileWriter(chargesFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_charged,kwh_charged_soc,max_power_kw,type,cost,lat,lon,bat_temp_avg,bat_temp_max,bat_temp_min,avg_power_kw,status,cell_voltage_min,cell_voltage_max,voltage_12v,exterior_temp,merged_count,meter_kwh,cost_manual,tariff_rate,loss_pct\n")
-                    for (charge in charges) {
-                        writer.append("${charge.id},${charge.startTs},${charge.endTs ?: ""},")
-                        writer.append("${charge.socStart ?: ""},${charge.socEnd ?: ""},")
-                        writer.append("${charge.kwhCharged ?: ""},${charge.kwhChargedSoc ?: ""},")
-                        writer.append("${charge.maxPowerKw ?: ""},${charge.type ?: ""},")
-                        writer.append("${charge.cost ?: ""},${charge.lat ?: ""},")
-                        writer.append("${charge.lon ?: ""},${charge.batTempAvg ?: ""},")
-                        writer.append("${charge.batTempMax ?: ""},${charge.batTempMin ?: ""},")
-                        writer.append("${charge.avgPowerKw ?: ""},${charge.status},")
-                        writer.append("${charge.cellVoltageMin ?: ""},${charge.cellVoltageMax ?: ""},")
-                        writer.append("${charge.voltage12v ?: ""},${charge.exteriorTemp ?: ""},")
-                        val chargePeriod = schedule.periodAt(charge.startTs)
-                        val lossPct = chargePeriod?.let { TariffSchedule.lossPctFor(it, charge.type) }
-                        val paidKwh = chargePeriod?.let {
-                            TariffSchedule.energyPaid(it, charge.type, charge.kwhCharged, charge.meterKwh)
-                        }
-                        val chargeRate = charge.cost?.let { c ->
-                            paidKwh?.takeIf { it > 0.0 }?.let { paid -> c / paid }
-                        }
-                        writer.append("${charge.mergedCount},${charge.meterKwh ?: ""},")
-                        writer.append("${charge.costManual},${chargeRate ?: ""},")
-                        writer.append("${lossPct ?: ""}\n")
-                    }
-                }
-
-                // Export tariff periods — the price history behind every cost above
-                val periodsFile = File(downloadsDir, "bydmate_tariff_periods_$timestamp.csv")
-                FileWriter(periodsFile).use { writer ->
-                    writer.append("id,start_ts,home_rate,dc_rate,ac_loss_pct,dc_loss_pct,trip_rule,currency\n")
-                    for (p in schedule.periods) {
-                        writer.append("${p.id},${p.startTs},${p.homeRate},${p.dcRate},")
-                        writer.append("${p.acLossPct},${p.dcLossPct},${p.tripRule},")
-                        writer.append("${_uiState.value.currency}\n")
-                    }
-                }
-
-                // Export GPS track points
-                val tripPoints = tripPointDao.getAll()
-                val pointsFile = File(downloadsDir, "bydmate_trip_points_$timestamp.csv")
-                FileWriter(pointsFile).use { writer ->
-                    writer.append("id,trip_id,timestamp,lat,lon,speed_kmh\n")
-                    for (p in tripPoints) {
-                        writer.append("${p.id},${p.tripId},${p.timestamp},")
-                        writer.append("${p.lat},${p.lon},${p.speedKmh ?: ""}\n")
-                    }
-                }
-
-                // Export idle drains (parked battery drain)
-                val idleDrains = idleDrainDao.getAll()
-                val drainsFile = File(downloadsDir, "bydmate_idle_drains_$timestamp.csv")
-                FileWriter(drainsFile).use { writer ->
-                    writer.append("id,start_ts,end_ts,soc_start,soc_end,kwh_consumed\n")
-                    for (d in idleDrains) {
-                        writer.append("${d.id},${d.startTs},${d.endTs ?: ""},")
-                        writer.append("${d.socStart ?: ""},${d.socEnd ?: ""},${d.kwhConsumed ?: ""}\n")
-                    }
-                }
-
-                val tripCount = trips.size
-                val chargeCount = charges.size
-                _uiState.update {
-                    it.copy(
-                        exportStatus = appStrings.get(R.string.settings_export_done, tripCount, chargeCount, tripPoints.size, idleDrains.size) + "\n-> ${downloadsDir.absolutePath}"
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(exportStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
-                }
-            }
-        }
-    }
-
-    /** Clear the export status message. */
-    fun clearExportStatus() {
-        _uiState.update { it.copy(exportStatus = null) }
     }
 
     /** Import trip history from BYD energydata database. */
@@ -2593,17 +2482,37 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(restoreCandidates = null) }
     }
 
+    /** A file tapped in the picker: reads the parts its manifest lists, then opens «Что восстановить». */
+    fun pickRestoreFile(file: File) {
+        closeRestorePicker()
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                val parts = backupManager.archiveParts(file)
+                _uiState.update { it.copy(restoreChoice = RestoreChoice(file, parts)) }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
+                }
+            }
+        }
+    }
+
+    fun dismissRestoreChoice() {
+        _uiState.update { it.copy(restoreChoice = null) }
+    }
+
     /**
-     * Restore the full app state from a user-picked backup zip.
+     * Restore [parts] of the app state from a user-picked backup zip.
      * On success the process is immediately restarted so Room re-opens the replaced DB.
      * On failure configStatus is set to the error message.
      */
-    fun restoreConfig(file: File) {
+    fun restoreConfig(file: File, parts: Set<BackupPart>) {
         restoreScanJob?.cancel()
+        _uiState.update { it.copy(restoreChoice = null) }
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(configStatus = appStrings.get(R.string.settings_export_in_progress)) }
             try {
-                backupManager.restore(file)
+                backupManager.restore(file, parts)
                 restartApp()
             } catch (e: Exception) {
                 _uiState.update {
@@ -2659,12 +2568,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     private fun observeAutoBackup() {
         viewModelScope.launch {
             val config = settingsRepository.getTgBackupConfig()
-            val status = if (config.configured) {
-                appStrings.get(R.string.settings_tg_backup_connected, config.botName, config.chatName)
-            } else null
+            val binding = if (config.configured) TgBackupBinding(config.botName, config.chatName) else null
             val manualParts = settingsRepository.getManualBackupParts()
             _uiState.update {
-                it.copy(tgBackupToken = config.token, tgBackupStatus = status, manualBackupParts = manualParts)
+                it.copy(tgBackupToken = config.token, tgBackupBinding = binding, manualBackupParts = manualParts)
             }
             combine(
                 settingsRepository.observeAutoBackupPeriod(),
@@ -2708,7 +2615,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     private var tgCheckJob: Job? = null
 
-    /** «Проверить»: token → bot name → chat bound by a code → greeting message. */
+    /** «Проверить»: token, then bot name, then the chat bound by a code, then a greeting message. */
     fun checkTelegramBackup() {
         val token = _uiState.value.tgBackupToken.trim()
         if (token.isEmpty() || _uiState.value.tgBackupChecking) return
@@ -2728,28 +2635,35 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     /**
      * Binds the chat that sent the one-time code and stores the binding only after the greeting
      * went through; any error changes nothing. A bot already bound with this token keeps its chat.
+     * Returns the status line to show; null = the stepper itself tells what happened.
      */
-    private suspend fun connectTelegramBot(token: String): String {
+    private suspend fun connectTelegramBot(token: String): String? {
         val botName = telegramBackupSink.getMe(token).getOrElse { return tgBackupError(it) }
         val stored = settingsRepository.getTgBackupConfig()
         val chat = if (stored.token == token && stored.chatId != null) {
             TelegramChat(stored.chatId, stored.chatName)
         } else {
             val code = _uiState.value.tgBackupCode
-                ?: return newBindCode().let { fresh ->
-                    _uiState.update { it.copy(tgBackupCode = fresh) }
-                    appStrings.get(R.string.settings_tg_backup_send_code, botName, fresh)
-                }
+            if (code == null) {
+                _uiState.update { it.copy(tgBackupCode = newBindCode(), tgBackupBotName = botName) }
+                return null
+            }
             telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
-                ?: return appStrings.get(R.string.settings_tg_backup_send_code, botName, code)
+                ?: return appStrings.get(R.string.settings_tg_backup_code_not_received)
         }
         telegramBackupSink.sendMessage(token, chat.id, appStrings.get(R.string.settings_tg_backup_greeting))
             .getOrElse { return tgBackupError(it) }
         // The field now holds another token: store nothing, the caller drops this status.
-        if (_uiState.value.tgBackupToken != token) return ""
+        if (_uiState.value.tgBackupToken != token) return null
         settingsRepository.saveTgBackup(token, botName, chat.id, chat.name)
-        _uiState.update { it.copy(tgBackupCode = null) }
-        return appStrings.get(R.string.settings_tg_backup_connected, botName, chat.name)
+        _uiState.update { it.copy(tgBackupCode = null, tgBackupBinding = TgBackupBinding(botName, chat.name)) }
+        return null
+    }
+
+    /** «Назад» on the code step: drops the code, the token stays in the field for another try. */
+    fun cancelTelegramCode() {
+        tgCheckJob?.cancel()
+        _uiState.update { it.copy(tgBackupCode = null, tgBackupStatus = null, tgBackupChecking = false) }
     }
 
     private fun newBindCode(): String = (BIND_CODE_MIN + SecureRandom().nextInt(BIND_CODE_SPAN)).toString()
@@ -2767,18 +2681,20 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         val check = tgCheckJob
         autoBackupScheduler.cancelScheduled(appContext)
         _uiState.update {
-            it.copy(tgBackupToken = "", tgBackupStatus = null, tgBackupChecking = false, tgBackupCode = null)
+            it.copy(
+                tgBackupToken = "",
+                tgBackupStatus = null,
+                tgBackupChecking = false,
+                tgBackupCode = null,
+                tgBackupBotName = "",
+                tgBackupBinding = null,
+            )
         }
         viewModelScope.launch {
             // Joined first so a check that was about to save cannot write after the clear.
             check?.cancelAndJoin()
             settingsRepository.clearTgBackup()
         }
-    }
-
-    /** «Бэкап вручную»: a fresh export regardless of the period and a pending upload. */
-    fun backupNow() {
-        autoBackupScheduler.enqueueNow(appContext)
     }
 
     /**
