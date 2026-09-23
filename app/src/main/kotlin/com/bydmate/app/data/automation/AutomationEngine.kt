@@ -170,6 +170,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // service started by USER_PRESENT / BOOT_COMPLETED. The next screen-on tick opens a new
     // session whatever the gap; the gap rule stays as the fallback without USER_PRESENT.
     @Volatile private var wakeEdgePending = false
+    // Elapsed time the last session opened. One car start delivers USER_PRESENT twice with the
+    // process alive (the service receiver, then BootReceiver -> worker -> start intent 1-3 s
+    // later), so an edge within SERVICE_START_WAKE_GAP_MS of an opened session is the same
+    // start. A genuine second car start within that minute is suppressed as well: accepted.
+    @Volatile private var lastSessionOpenedElapsed: Long? = null
 
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
     // live cache so the a11y key filter can answer "is this key mine?" on the
@@ -290,8 +295,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             val saved = savedBootId.orEmpty()
             val prevElapsed = lastTickElapsed
             val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
-            val wakeEdge = wakeEdgePending
-            if (wakeEdge) wakeEdgePending = false
+            var wakeEdge = wakeEdgePending
+            if (wakeEdge) {
+                wakeEdgePending = false
+                val opened = lastSessionOpenedElapsed
+                if (opened != null && elapsed >= opened && elapsed - opened <= SERVICE_START_WAKE_GAP_MS) {
+                    Log.i(TAG, "service_start: wake edge within session, ignored gap=${(elapsed - opened) / 1000}s")
+                    wakeEdge = false
+                }
+            }
             val reason = when {
                 wakeEdge -> "user_present"
                 bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved -> "boot"
@@ -304,6 +316,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 Log.i(TAG, "service_start: new session reason=$reason gap=$gap")
                 serviceStartWindowEnd = elapsed + SERVICE_START_WINDOW_MS
                 serviceStartConsumed.clear()
+                lastSessionOpenedElapsed = elapsed
                 // One synchronous write before any rule runs: a process killed right after the
                 // fire must find this session's heartbeat, or its restart would re-arm.
                 prefs.edit()

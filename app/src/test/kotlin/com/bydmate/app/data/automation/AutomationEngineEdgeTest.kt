@@ -319,6 +319,39 @@ class AutomationEngineEdgeTest {
             coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
         }
 
+    @Test fun `service_start ignores the second user present of the same car start`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.onUserPresent()                                              // screen wake receiver
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        unit.advance(3_000L)
+        engine.onUserPresent()                                              // same edge via the start intent
+        repeat(4) {
+            engine.evaluate(diParsData(soc = 50), null)
+            unit.advance(3_000L)
+        }
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertEquals(1, engineLogs().count { it == "service_start: wake edge within session, ignored gap=3s" })
+    }
+
+    @Test fun `service_start fires once per car start on user present 15 minutes apart`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.onUserPresent()
+        engine.evaluate(diParsData(soc = 50), null)                         // first car start
+        unit.screenOn = false
+        repeat(30) {                                                        // car off 15 min
+            unit.advance(30_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        engine.onUserPresent()
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // second car start
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+    }
+
     @Test fun `service_start fires on a new boot even with a fresh heartbeat`() = runBlocking {
         storeServiceStartState(bootId, lastSeenElapsed = e0)
         val dao = startProcess("boot-b", e0 + 20_000L)                      // quick reboot
