@@ -41,8 +41,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-@Suppress("LongParameterList") // Hilt-injected dependencies
-class AutomationEngine @Inject constructor(
+class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val ruleDao: RuleDao,
     private val ruleLogDao: RuleLogDao,
     private val actionDispatcher: ActionDispatcher,

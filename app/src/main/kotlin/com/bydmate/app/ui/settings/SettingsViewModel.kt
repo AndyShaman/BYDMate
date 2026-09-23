@@ -281,8 +281,7 @@ data class SettingsUiState(
 }
 
 @HiltViewModel
-@Suppress("LongParameterList") // Hilt-injected dependencies
-class SettingsViewModel @Inject constructor(
+class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     @ApplicationContext private val appContext: Context,
     private val settingsRepository: SettingsRepository,
     private val tripRepository: TripRepository,

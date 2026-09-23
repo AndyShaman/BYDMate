@@ -36,8 +36,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-@Suppress("LongParameterList") // Hilt-injected dependencies
-class VoiceController @Inject constructor(
+class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val audioCapture: AudioCapture,
     private val actionDispatcher: ActionDispatcher,
     private val localePreferences: LocalePreferences,
