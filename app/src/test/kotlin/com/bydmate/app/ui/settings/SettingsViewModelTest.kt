@@ -1314,6 +1314,19 @@ class SettingsViewModelTest {
         assertFalse("token leaked into the dump", header.contains("SECRET-token-value"))
     }
 
+    /** #238: the backup section prints the parts of the automatic and of the manual save. */
+    @Test fun `the diagnostic header reports the backup parts`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        settingsDao.map[SettingsRepository.KEY_AUTO_BACKUP_PARTS] = "keys,tables"
+
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader()
+
+        assertTrue(header, header.contains("parts: auto=tables,keys manual=tables,settings"))
+    }
+
     /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */
     private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000): String {
         val deadline = System.currentTimeMillis() + timeoutMs

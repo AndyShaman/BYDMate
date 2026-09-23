@@ -53,7 +53,7 @@ class AutoBackupRunnerTest {
         dir = tmp.newFolder("Download")
         settings = SettingsRepository(FakeSettingsDao(), mockk<LocalePreferences>(relaxed = true))
         runBlocking { settings.setAutoBackupPeriod(AutoBackupPeriod.DAILY) }
-        every { backupManager.export() } answers {
+        every { backupManager.export(any()) } answers {
             exportCount++
             File(dir, "bydmate_backup_20260923_1000${exportCount.toString().padStart(2, '0')}.zip").apply {
                 writeBytes(ByteArray(2048))
@@ -184,7 +184,7 @@ class AutoBackupRunnerTest {
 
         assertEquals(RunOutcome.SUCCESS, runner().run())
 
-        verify(exactly = 0) { backupManager.export() }
+        verify(exactly = 0) { backupManager.export(any()) }
         coVerify(exactly = 0) { sink.sendDocument(any(), any(), any(), any()) }
         assertEquals("", settings.getAutoBackupLastResult())
     }
@@ -199,7 +199,7 @@ class AutoBackupRunnerTest {
         coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
         assertEquals(RunOutcome.SUCCESS, runner().run(force = false, manual = true))
 
-        verify(exactly = 1) { backupManager.export() }
+        verify(exactly = 1) { backupManager.export(any()) }
         assertEquals(AutoBackupRunner.RESULT_SENT, settings.getAutoBackupLastResult())
     }
 
@@ -239,7 +239,7 @@ class AutoBackupRunnerTest {
 
     @Test fun `file over the telegram limit is a permanent error without an upload`() = runTest {
         configureTelegram()
-        every { backupManager.export() } answers {
+        every { backupManager.export(any()) } answers {
             File(dir, "bydmate_backup_20260923_100001.zip").apply {
                 RandomAccessFile(this, "rw").use { it.setLength(TelegramBackupSink.MAX_UPLOAD_BYTES + 1) }
             }
@@ -264,7 +264,7 @@ class AutoBackupRunnerTest {
 
         assertEquals(RunOutcome.SUCCESS, runner().run(force = true))
 
-        verify(exactly = 1) { backupManager.export() }
+        verify(exactly = 1) { backupManager.export(any()) }
         val fresh = File(dir, "bydmate_backup_auto_20260923_100001.zip")
         coVerify(exactly = 1) { sink.sendDocument(any(), any(), match { it.absolutePath == fresh.absolutePath }, any()) }
         assertEquals("", settings.getAutoBackupPendingUpload())
@@ -305,7 +305,7 @@ class AutoBackupRunnerTest {
         coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
         assertEquals(RunOutcome.SUCCESS, runner().run())
 
-        verify(exactly = 1) { backupManager.export() }
+        verify(exactly = 1) { backupManager.export(any()) }
         coVerify { sink.sendDocument(any(), any(), match { it.absolutePath == pending }, any()) }
         assertEquals("", settings.getAutoBackupPendingUpload())
         assertEquals(AutoBackupRunner.RESULT_SENT, settings.getAutoBackupLastResult())
@@ -317,13 +317,13 @@ class AutoBackupRunnerTest {
 
         assertEquals(RunOutcome.SUCCESS, runner().run())
 
-        verify(exactly = 1) { backupManager.export() }
+        verify(exactly = 1) { backupManager.export(any()) }
         assertEquals("", settings.getAutoBackupPendingUpload())
     }
 
     @Test fun `stale pending path is cleared even when the fresh export fails`() = runTest {
         settings.setAutoBackupPendingUpload(File(dir, "bydmate_backup_auto_gone.zip").absolutePath)
-        every { backupManager.export() } throws IllegalStateException("База данных занята")
+        every { backupManager.export(any()) } throws IllegalStateException("База данных занята")
 
         assertEquals(RunOutcome.FAILURE, runner().run())
 
@@ -340,7 +340,7 @@ class AutoBackupRunnerTest {
 
         assertEquals(RunOutcome.SUCCESS, runner().run())
 
-        verify(exactly = 0) { backupManager.export() }
+        verify(exactly = 0) { backupManager.export(any()) }
         coVerify { sink.sendDocument(any(), any(), match { it.absolutePath == stuck.absolutePath }, any()) }
         assertEquals("", settings.getAutoBackupPendingUpload())
     }
@@ -358,7 +358,7 @@ class AutoBackupRunnerTest {
 
         assertEquals(RunOutcome.RETRY, runner().run())
 
-        verify(exactly = 1) { backupManager.export() }
+        verify(exactly = 1) { backupManager.export(any()) }
         val fresh = File(dir, "bydmate_backup_auto_20260923_100001.zip")
         coVerify(exactly = 1) { sink.sendDocument(any(), any(), match { it.absolutePath == fresh.absolutePath }, any()) }
         assertEquals(fresh.absolutePath, settings.getAutoBackupPendingUpload())
@@ -379,11 +379,64 @@ class AutoBackupRunnerTest {
 
     @Test fun `export failure keeps the last timestamp so the next ignition retries`() = runTest {
         settings.setAutoBackupLastTs(123L)
-        every { backupManager.export() } throws IllegalStateException("База данных занята")
+        every { backupManager.export(any()) } throws IllegalStateException("База данных занята")
 
         assertEquals(RunOutcome.FAILURE, runner().run())
 
         assertEquals(123L, settings.getAutoBackupLastTs())
         assertEquals("export_error", settings.getAutoBackupLastResult())
+    }
+
+    // --- parts (#238) ---
+
+    @Test fun `auto save exports tables and settings until the parts are chosen, then the stored parts`() = runTest {
+        runner().run()
+        verify(exactly = 1) { backupManager.export(setOf(BackupPart.TABLES, BackupPart.SETTINGS)) }
+
+        settings.setAutoBackupParts(setOf(BackupPart.TABLES, BackupPart.KEYS))
+        now += 2L * 24 * 60 * 60 * 1000
+        runner().run()
+        verify(exactly = 1) { backupManager.export(setOf(BackupPart.TABLES, BackupPart.KEYS)) }
+    }
+
+    @Test fun `manual save with a bot sends one copy and leaves the auto backup state alone`() = runTest {
+        configureTelegram()
+        settings.setAutoBackupLastTs(123L)
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns Result.success(Unit)
+
+        val result = runner().saveManual(setOf(BackupPart.KEYS))
+
+        verify(exactly = 1) { backupManager.export(setOf(BackupPart.KEYS)) }
+        coVerify(exactly = 1) {
+            sink.sendDocument("123:abc", 42L, match { it.name == "bydmate_backup_20260923_100001.zip" }, match { it.startsWith("BYDMate: бэкап ") })
+        }
+        assertTrue(result.sent)
+        assertEquals(null, result.sendError)
+        assertTrue(result.file.exists())
+        assertEquals("", settings.getAutoBackupPendingUpload())
+        assertEquals("", settings.getAutoBackupLastResult())
+        assertEquals(123L, settings.getAutoBackupLastTs())
+    }
+
+    @Test fun `manual save that fails to send reports why and queues nothing`() = runTest {
+        configureTelegram()
+        coEvery { sink.sendDocument(any(), any(), any(), any()) } returns
+            Result.failure(TelegramSinkException(TelegramError.NO_NETWORK))
+
+        val result = runner().saveManual(BackupPart.ALL)
+
+        assertFalse(result.sent)
+        assertEquals("NO_NETWORK", result.sendError)
+        assertTrue(result.file.exists())
+        assertEquals("", settings.getAutoBackupPendingUpload())
+    }
+
+    @Test fun `manual save without a bot stays in Download`() = runTest {
+        val result = runner().saveManual(BackupPart.DEFAULT)
+
+        coVerify(exactly = 0) { sink.sendDocument(any(), any(), any(), any()) }
+        assertFalse(result.sent)
+        assertEquals(null, result.sendError)
+        assertEquals(listOf("bydmate_backup_20260923_100001.zip"), dir.list()!!.toList())
     }
 }

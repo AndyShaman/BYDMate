@@ -986,6 +986,8 @@
     <string name="settings_backup_close">Закрыць</string>
     <string name="settings_backup_now_title">Бэкап уручную</string>
     <string name="settings_backup_share_hint">У архіве ключы і гісторыя паездак, дзяліцеся толькі з тым, каму давяраеце.</string>
+    <string name="settings_config_save_sent">Адпраўлена ў Telegram</string>
+    <string name="settings_config_save_send_failed">Не ўдалося адправіць у Telegram: %1$s</string>
     <string name="settings_auto_backup_result_sent">адпраўлены ў Telegram</string>
     <string name="settings_auto_backup_result_local_only">захаваны лакальна, Telegram не наладжаны</string>
     <string name="settings_auto_backup_result_send_error">памылка адпраўкі: %1$s</string>

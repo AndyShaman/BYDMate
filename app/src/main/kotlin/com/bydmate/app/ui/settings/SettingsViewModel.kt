@@ -19,6 +19,7 @@ import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.backup.AutoBackupRunner
 import com.bydmate.app.data.backup.AutoBackupScheduler
+import com.bydmate.app.data.backup.BackupPart
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.backup.TelegramBackupSink
 import com.bydmate.app.data.backup.TelegramChat
@@ -108,6 +109,9 @@ import javax.inject.Inject
  * Contains current setting values and export operation status.
  */
 /** Numbers behind a refused model download, in MB, ready for the error string. */
+/** A finished manual save (#238): the file in Download and the Telegram line; null = no bot connected. */
+data class SavedBackup(val file: File, val telegramStatus: String?)
+
 data class SpaceShortfall(val requiredMb: Long, val availableMb: Long) {
     companion object {
         private const val BYTES_PER_MB = 1024L * 1024L
@@ -189,10 +193,13 @@ data class SettingsUiState(
     val configStatus: String? = null,
     /** Backups offered by the restore picker, newest first. Null = picker closed. */
     val restoreCandidates: List<File>? = null,
-    /** Zip written by the last manual export; non-null = the «Поделиться» dialog is open. */
-    val lastExportedBackup: File? = null,
+    /** Result of the last manual save; non-null = the «Поделиться» dialog is open. */
+    val savedBackup: SavedBackup? = null,
+    /** Parts the manual save offers checked: the last choice (#238). */
+    val manualBackupParts: Set<BackupPart> = BackupPart.DEFAULT,
     // Automatic backup (#237)
     val autoBackupPeriod: AutoBackupPeriod = AutoBackupPeriod.OFF,
+    val autoBackupParts: Set<BackupPart> = BackupPart.DEFAULT,
     /** 0 = never ran. */
     val autoBackupLastTs: Long = 0L,
     val autoBackupLastResult: String = "",
@@ -2375,6 +2382,10 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 val chatId = settingsRepository.getTgBackupChatId()
                 val tgConfigured = settingsRepository.getTgBackupToken().isNotEmpty() && chatId != null
                 appendLine("period: ${settingsRepository.getAutoBackupPeriod().key}")
+                appendLine(
+                    "parts: auto=${BackupPart.toCsv(settingsRepository.getAutoBackupParts())} " +
+                        "manual=${BackupPart.toCsv(settingsRepository.getManualBackupParts())}"
+                )
                 appendLine("last_ts: " + if (lastTs > 0L)
                     SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date(lastTs)) else "(never)")
                 appendLine("last_result: ${settingsRepository.getAutoBackupLastResult().ifEmpty { "(none)" }}")
@@ -2530,16 +2541,27 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     // -------------------------------------------------------------------------
 
     /**
-     * Export the full app state (DB + prefs) to a zip file in Downloads.
-     * Updates configStatus with a success path or an error message.
+     * «Сохранить конфигурацию» (#238): exports [parts] to Download and sends a copy to the bot when
+     * it is connected. The choice is remembered for the next save. Errors go to configStatus.
      */
-    fun exportConfig() {
+    fun saveConfiguration(parts: Set<BackupPart>) {
+        if (parts.isEmpty()) return
+        _uiState.update { it.copy(manualBackupParts = parts) }
         viewModelScope.launch(Dispatchers.IO) {
             _uiState.update { it.copy(configStatus = appStrings.get(R.string.settings_export_in_progress)) }
             try {
-                val file = backupManager.export()
+                settingsRepository.setManualBackupParts(parts)
+                val result = AutoBackupRunner(backupManager, telegramBackupSink, settingsRepository).saveManual(parts)
+                val telegram = when {
+                    result.sent -> appStrings.get(R.string.settings_config_save_sent)
+                    result.sendError != null -> appStrings.get(
+                        R.string.settings_config_save_send_failed,
+                        telegramErrorText(appStrings.context, result.sendError),
+                    )
+                    else -> null
+                }
                 // The «Поделиться» dialog shows the saved file instead of the status line.
-                _uiState.update { it.copy(configStatus = null, lastExportedBackup = file) }
+                _uiState.update { it.copy(configStatus = null, savedBackup = SavedBackup(result.file, telegram)) }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
@@ -2598,8 +2620,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
     /** «Поделиться» in the dialog after a manual export (#237). */
     fun shareExportedBackup() {
-        val file = _uiState.value.lastExportedBackup ?: return
-        _uiState.update { it.copy(lastExportedBackup = null) }
+        val file = _uiState.value.savedBackup?.file ?: return
+        _uiState.update { it.copy(savedBackup = null) }
         try {
             shareFile(file, "application/zip")
         } catch (e: Exception) {
@@ -2610,7 +2632,7 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
     }
 
     fun dismissExportedBackup() {
-        _uiState.update { it.copy(lastExportedBackup = null) }
+        _uiState.update { it.copy(savedBackup = null) }
     }
 
     /** Standard ACTION_SEND share sheet for a file in Download (or the app's external files). */
@@ -2640,17 +2662,25 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
             val status = if (config.configured) {
                 appStrings.get(R.string.settings_tg_backup_connected, config.botName, config.chatName)
             } else null
-            _uiState.update { it.copy(tgBackupToken = config.token, tgBackupStatus = status) }
+            val manualParts = settingsRepository.getManualBackupParts()
+            _uiState.update {
+                it.copy(tgBackupToken = config.token, tgBackupStatus = status, manualBackupParts = manualParts)
+            }
             combine(
                 settingsRepository.observeAutoBackupPeriod(),
                 settingsRepository.observeAutoBackupLastTs(),
                 settingsRepository.observeAutoBackupLastResult(),
-            ) { period, lastTs, lastResult -> Triple(period, lastTs, lastResult) }
-                .collect { (period, lastTs, lastResult) ->
-                    _uiState.update {
-                        it.copy(autoBackupPeriod = period, autoBackupLastTs = lastTs, autoBackupLastResult = lastResult)
-                    }
+                settingsRepository.observeAutoBackupParts(),
+            ) { period, lastTs, lastResult, parts ->
+                { s: SettingsUiState ->
+                    s.copy(
+                        autoBackupPeriod = period,
+                        autoBackupLastTs = lastTs,
+                        autoBackupLastResult = lastResult,
+                        autoBackupParts = parts,
+                    )
                 }
+            }.collect { apply -> _uiState.update(apply) }
         }
     }
 
@@ -2658,6 +2688,14 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         _uiState.update { it.copy(autoBackupPeriod = period) }
         if (period == AutoBackupPeriod.OFF) autoBackupScheduler.cancelScheduled(appContext)
         viewModelScope.launch { settingsRepository.setAutoBackupPeriod(period) }
+    }
+
+    /** A part chip under the period chips; the last checked part cannot be unchecked. */
+    fun toggleAutoBackupPart(part: BackupPart) {
+        val parts = _uiState.value.autoBackupParts.let { if (part in it) it - part else it + part }
+        if (parts.isEmpty()) return
+        _uiState.update { it.copy(autoBackupParts = parts) }
+        viewModelScope.launch { settingsRepository.setAutoBackupParts(parts) }
     }
 
     /**

@@ -2016,7 +2016,7 @@ private fun ServiceSection(
     }
 
     // After a manual export: offer the system share sheet (Telegram «Избранное» and the like, #237).
-    state.lastExportedBackup?.let { file ->
+    state.savedBackup?.file?.let { file ->
         AppAlertDialog(
             onDismissRequest = { viewModel.dismissExportedBackup() },
             text = {
@@ -2061,7 +2061,7 @@ private fun ServiceSection(
             confirmButton = {
                 TextButton(onClick = {
                     showExportConfirm = false
-                    viewModel.exportConfig()
+                    viewModel.saveConfiguration(state.manualBackupParts)
                 }) {
                     Text(
                         stringResource(R.string.settings_config_export_confirm_ok),
