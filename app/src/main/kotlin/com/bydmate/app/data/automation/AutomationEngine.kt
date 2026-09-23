@@ -84,6 +84,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // Legacy heartbeat key of 3.17.5: no longer read or written, the stale value stays in
         // prefs and is kept out of backups.
         internal const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
+        // Car-off marker: set on byd.intent.action.ACC_OFF with commit(), since the process is
+        // force-stopped about a second later; cleared by the session it opens.
+        internal const val KEY_SERVICE_START_CAR_OFF = "service_start_car_off"
         private const val SERVICE_START_WAKE_GAP_MS = 60_000L
         private const val SERVICE_START_HEARTBEAT_MS = 30_000L
 
@@ -166,14 +169,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     @Volatile private var savedBootId: String? = null
     @Volatile private var lastTickElapsed: Long? = null
     @Volatile private var lastHeartbeatWriteElapsed: Long? = null
-    // Explicit wake edge: USER_PRESENT seen by the running service, or the start intent of a
-    // service started by USER_PRESENT / BOOT_COMPLETED. The next screen-on tick opens a new
-    // session whatever the gap; the gap rule stays as the fallback without USER_PRESENT.
-    @Volatile private var wakeEdgePending = false
-    // Elapsed time the last session opened. One car start delivers USER_PRESENT twice with the
-    // process alive (the service receiver, then BootReceiver -> worker -> start intent 1-3 s
-    // later), so an edge within SERVICE_START_WAKE_GAP_MS of an opened session is the same
-    // start. A genuine second car start within that minute is suppressed as well: accepted.
+    // Car-off marker (ACC_OFF, KEY_SERVICE_START_CAR_OFF): the next screen-on tick opens a new
+    // session whatever the gap; the gap rule stays as the fallback on a firmware without
+    // ACC_OFF. carOffLit: this process set the marker and has not seen the screen off since,
+    // so a screen still lit right after ACC_OFF does not fire the rule at car off. A marker
+    // left by a dead process counts as dark: its restart comes with the screen off.
+    @Volatile private var carOffLit = false
+    // Elapsed time the last session opened. A car-off marker within SERVICE_START_WAKE_GAP_MS
+    // of it is dropped: the car was switched off and on again within a minute of a start. The
+    // session is not reopened for that second start: accepted.
     @Volatile private var lastSessionOpenedElapsed: Long? = null
 
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
@@ -226,18 +230,19 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val heartbeat = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L)
         val age = if (heartbeat >= 0L) "${(elapsedMs() - heartbeat) / 1000}s" else "-"
         val bootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)?.takeIf { it.isNotEmpty() } ?: "-"
-        val wakeEdge = if (wakeEdgePending) "pending" else "-"
+        val carOff = if (prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)) "pending" else "-"
         return "service_start: interactive=${interactiveProvider()} window=$window " +
-            "consumed=${serviceStartConsumed.size} last_heartbeat_age=$age boot_id=$bootId wake_edge=$wakeEdge"
+            "consumed=${serviceStartConsumed.size} last_heartbeat_age=$age boot_id=$bootId car_off=$carOff"
     }
 
     /**
-     * The user unlocked the head unit after the screen came on (USER_PRESENT): the car was
-     * switched on. Not called for SCREEN_ON, so a screen blink while driving does not re-fire.
+     * The car was switched off (byd.intent.action.ACC_OFF). Persisted at once: the process is
+     * force-stopped shortly after, and the next car start must open a new session.
      */
-    fun onUserPresent() {
-        Log.i(TAG, "service_start: user present")
-        wakeEdgePending = true
+    fun onCarOff() {
+        Log.i(TAG, "service_start: ACC_OFF, car off marked")
+        carOffLit = true
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE).edit().putBoolean(KEY_SERVICE_START_CAR_OFF, true).commit()
     }
 
     // Called every 3s from TrackingService poll loop.
@@ -278,6 +283,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             lastTickElapsed = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L).takeIf { it >= 0L }
         }
         if (!interactive) {
+            carOffLit = false
             if (firstTick) {
                 Log.i(TAG, "service_start: screen off at start, waiting for wake-up")
                 serviceStartWindowEnd = -1L
@@ -295,17 +301,15 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
             val saved = savedBootId.orEmpty()
             val prevElapsed = lastTickElapsed
             val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
-            var wakeEdge = wakeEdgePending
-            if (wakeEdge) {
-                wakeEdgePending = false
-                val opened = lastSessionOpenedElapsed
-                if (opened != null && elapsed >= opened && elapsed - opened <= SERVICE_START_WAKE_GAP_MS) {
-                    Log.i(TAG, "service_start: wake edge within session, ignored gap=${(elapsed - opened) / 1000}s")
-                    wakeEdge = false
-                }
+            val carOff = prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)
+            val sinceOpened = lastSessionOpenedElapsed?.let { elapsed - it } ?: Long.MAX_VALUE
+            val carOffInSession = carOff && sinceOpened <= SERVICE_START_WAKE_GAP_MS
+            if (carOffInSession) {
+                Log.i(TAG, "service_start: car off marker within session, ignored gap=${sinceOpened / 1000}s")
+                prefs.edit().putBoolean(KEY_SERVICE_START_CAR_OFF, false).commit()
             }
             val reason = when {
-                wakeEdge -> "user_present"
+                carOff && !carOffInSession && !carOffLit -> "car_off"
                 bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved -> "boot"
                 prevElapsed == null -> "first"
                 elapsed < prevElapsed -> "elapsed_back"
@@ -318,11 +322,14 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                 serviceStartConsumed.clear()
                 lastSessionOpenedElapsed = elapsed
                 // One synchronous write before any rule runs: a process killed right after the
-                // fire must find this session's heartbeat, or its restart would re-arm.
-                prefs.edit()
+                // fire must find this session's heartbeat and no car-off marker, or its restart
+                // would re-arm.
+                val committed = prefs.edit()
                     .putString(KEY_SERVICE_START_BOOT_ID, bootId)
                     .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
+                    .putBoolean(KEY_SERVICE_START_CAR_OFF, false)
                     .commit()
+                if (!committed) Log.w(TAG, "service_start: session commit failed")
                 lastHeartbeatWriteElapsed = elapsed
                 savedBootId = bootId
             } else if (!sessionDecided) {

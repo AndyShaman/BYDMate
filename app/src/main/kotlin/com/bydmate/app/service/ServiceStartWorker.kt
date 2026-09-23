@@ -30,7 +30,6 @@ class ServiceStartWorker(
         return try {
             val intent = Intent(applicationContext, TrackingService::class.java).apply {
                 putExtra("onBoot", true)
-                putExtra(TrackingService.EXTRA_WAKE_EDGE, inputData.getBoolean(TrackingService.EXTRA_WAKE_EDGE, false))
             }
             ContextCompat.startForegroundService(applicationContext, intent)
             ChainLog.append(applicationContext, "startForegroundService OK")

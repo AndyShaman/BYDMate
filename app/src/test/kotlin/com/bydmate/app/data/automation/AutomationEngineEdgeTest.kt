@@ -23,6 +23,7 @@ import io.mockk.unmockkObject
 import io.mockk.verify
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -285,71 +286,108 @@ class AutomationEngineEdgeTest {
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
     }
 
-    @Test fun `service_start fires once on user present after a 20 s screen off in a live process`() = runBlocking {
-        val unit = HeadUnit(e0, t0)
-        val (engine, dao) = serviceStartEngine(bootId, unit)
-        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
-        unit.advance(60_000L)
-        engine.evaluate(diParsData(soc = 50), null)
-        unit.screenOn = false                                               // quick off/on under a minute
-        unit.advance(10_000L)
-        engine.evaluate(diParsData(soc = 50), null)
-        engine.onUserPresent()
-        unit.advance(10_000L)
-        engine.evaluate(diParsData(soc = 50), null)                         // still dark: stays pending
-        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-        unit.screenOn = true
-        engine.evaluate(diParsData(soc = 50), null)
-        unit.advance(3_000L)
-        engine.evaluate(diParsData(soc = 50), null)
-        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
-        assertTrue(engineLogs().contains("service_start: user present"))
-        assertTrue(engineLogs().contains("service_start: new session reason=user_present gap=20s"))
-    }
+    private fun storedCarOff() = automationPrefs().getBoolean("service_start_car_off", false)
 
-    @Test fun `service_start fires once on a process started by user present 30 s after the last heartbeat`() =
-        runBlocking {
-            storeServiceStartState(bootId, lastSeenElapsed = e0)
-            val unit = HeadUnit(e0 + 30_000L, t0)
-            val (engine, dao) = serviceStartEngine(bootId, unit)
-            engine.onUserPresent()                                          // start intent carried the wake edge
-            engine.evaluate(diParsData(soc = 50), null)
-            unit.advance(3_000L)
-            engine.evaluate(diParsData(soc = 50), null)
-            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-        }
-
-    @Test fun `service_start ignores the second user present of the same car start`() = runBlocking {
+    @Test fun `service_start fires once on the car off marker after 30 s dark in a live process`() = runBlocking {
         storeServiceStartState(bootId, lastSeenElapsed = e0)
         val unit = HeadUnit(e0 + 20_000L, t0)
         val (engine, dao) = serviceStartEngine(bootId, unit)
-        engine.onUserPresent()                                              // screen wake receiver
+        engine.evaluate(diParsData(soc = 50), null)                         // restart mid-drive: silent
+        engine.onCarOff()
+        assertTrue(storedCarOff())
+        unit.screenOn = false
+        repeat(3) {                                                         // 30 s off, under the gap
+            unit.advance(10_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: ACC_OFF, car off marked"))
+        assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=30s"))
+        assertFalse(storedCarOff())
+        repeat(5) {
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start fires once on a restarted process after ACC_OFF with a 30 s old heartbeat`() =
+        runBlocking {
+            storeServiceStartState(bootId, lastSeenElapsed = e0)
+            val (dying, _) = serviceStartEngine(bootId, HeadUnit(e0 + 5_000L, t0))
+            dying.onCarOff()                                                // then force-stopped
+            val unit = HeadUnit(e0 + 30_000L, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            engine.evaluate(diParsData(soc = 50), null)                     // first tick, screen on
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertTrue(engineLogs().contains("service_start: new session reason=car_off gap=30s"))
+            assertFalse(storedCarOff())
+        }
+
+    @Test fun `service_start waits for a dark screen when the screen stays lit after ACC_OFF`() = runBlocking {
+        storeServiceStartState(bootId, lastSeenElapsed = e0)
+        val unit = HeadUnit(e0 + 20_000L, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        engine.evaluate(diParsData(soc = 50), null)                         // restart mid-drive: silent
+        engine.onCarOff()
+        repeat(3) {                                                         // screen still lit at car off
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        coVerify(exactly = 0) { dao.updateLastTriggered(1, any()) }
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(10_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // next car start
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+    }
+
+    @Test fun `service_start ignores a car off marker within a minute of the session start`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
         unit.advance(3_000L)
-        engine.onUserPresent()                                              // same edge via the start intent
+        engine.onCarOff()
         repeat(4) {
             engine.evaluate(diParsData(soc = 50), null)
             unit.advance(3_000L)
         }
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
-        assertEquals(1, engineLogs().count { it == "service_start: wake edge within session, ignored gap=3s" })
+        assertEquals(1, engineLogs().count { it == "service_start: car off marker within session, ignored gap=3s" })
+        assertFalse(storedCarOff())
     }
 
-    @Test fun `service_start fires once per car start on user present 15 minutes apart`() = runBlocking {
+    @Test fun `service_start fires once per car start with ACC_OFF 15 minutes apart`() = runBlocking {
         storeServiceStartState(bootId, lastSeenElapsed = e0)
         val unit = HeadUnit(e0 + 20_000L, t0)
         val (engine, dao) = serviceStartEngine(bootId, unit)
-        engine.onUserPresent()
+        engine.onCarOff()                                                   // previous drive ended
+        unit.screenOn = false
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(20_000L)
+        unit.screenOn = true
         engine.evaluate(diParsData(soc = 50), null)                         // first car start
+        repeat(10) {
+            unit.advance(3_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+        }
+        engine.onCarOff()
         unit.screenOn = false
         repeat(30) {                                                        // car off 15 min
             unit.advance(30_000L)
             engine.evaluate(diParsData(soc = 50), null)
         }
-        engine.onUserPresent()
         unit.screenOn = true
         engine.evaluate(diParsData(soc = 50), null)                         // second car start
         coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        assertEquals(2, engineLogs().count { it.startsWith("service_start: new session reason=car_off") })
     }
 
     @Test fun `service_start fires on a new boot even with a fresh heartbeat`() = runBlocking {
@@ -455,6 +493,11 @@ class AutomationEngineEdgeTest {
                 e.putLong(key, value)
                 return this
             }
+            override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor {
+                keys += key
+                e.putBoolean(key, value)
+                return this
+            }
             override fun commit(): Boolean { committed += keys.toSet(); return e.commit() }
             override fun apply() { applied += keys.toSet(); e.apply() }
         }
@@ -476,7 +519,7 @@ class AutomationEngineEdgeTest {
 
         coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
         // A process killed right after the fire must find the new heartbeat on disk.
-        val session = setOf("service_start_boot_id", "service_start_last_seen_elapsed")
+        val session = setOf("service_start_boot_id", "service_start_last_seen_elapsed", "service_start_car_off")
         assertTrue(prefs.committed.toString(), prefs.committed.any { it.containsAll(session) })
         assertTrue(prefs.applied.toString(), prefs.applied.none { "service_start_last_seen_elapsed" in it })
         assertEquals(e0 + 900_000L, storedHeartbeat())
@@ -486,7 +529,7 @@ class AutomationEngineEdgeTest {
         val unit = HeadUnit(e0, t0)
         val (engine, _) = serviceStartEngine(bootId, unit)
         assertEquals(
-            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- wake_edge=-",
+            "service_start: interactive=true window=not armed consumed=0 last_heartbeat_age=- boot_id=- car_off=-",
             engine.serviceStartDumpLine(),
         )
         engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
@@ -494,15 +537,15 @@ class AutomationEngineEdgeTest {
             .format(java.util.Date(t0 + AutomationEngine.SERVICE_START_WINDOW_MS))
         assertEquals(
             "service_start: interactive=true window=armed until $until consumed=1 last_heartbeat_age=0s boot_id=boot-a " +
-                "wake_edge=-",
+                "car_off=-",
             engine.serviceStartDumpLine(),
         )
         unit.advance(45_000L)
         unit.screenOn = false
-        engine.onUserPresent()
+        engine.onCarOff()
         assertEquals(
             "service_start: interactive=false window=spent consumed=1 last_heartbeat_age=45s boot_id=boot-a " +
-                "wake_edge=pending",
+                "car_off=pending",
             engine.serviceStartDumpLine(),
         )
     }
