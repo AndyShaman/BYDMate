@@ -41,8 +41,8 @@ class AppStringsTest {
     @Test fun `format args are applied in the app language`() {
         locale.setLanguage("be")
         assertEquals(
-            "Падключана: @bydmatebot → Chat",
-            strings.get(R.string.settings_tg_backup_connected, "bydmatebot", "Chat"),
+            "bydmate_backup.zip, 1.2 МБ",
+            strings.get(R.string.settings_config_saved_file, "bydmate_backup.zip", "1.2"),
         )
     }
 

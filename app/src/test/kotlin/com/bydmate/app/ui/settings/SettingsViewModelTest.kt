@@ -229,8 +229,6 @@ class SettingsViewModelTest {
     private lateinit var settingsDao: FakeSettingsDao
 
     // Tariff fixture: fields rather than factory parameters, the factory is long enough.
-    private var exportTrips: List<TripEntity> = emptyList()
-    private var exportCharges: List<ChargeEntity> = emptyList()
     private var exportCostCalculator: com.bydmate.app.domain.cost.CostCalculator? = null
     private var tariffPeriodDaoOverride: TariffPeriodDao? = null
 
@@ -277,13 +275,13 @@ class SettingsViewModelTest {
         val settingsRepo = SettingsRepository(settingsDao, mockk<LocalePreferences>(relaxed = true))
 
         val tripDao = object : StubTripDao() {
-            override fun getAll(): Flow<List<TripEntity>> = flowOf(exportTrips)
+            override fun getAll(): Flow<List<TripEntity>> = flowOf(emptyList())
         }
         val tripPointDao = StubTripPointDao()
         val tripRepo = TripRepository(tripDao, tripPointDao, mockk<TripTombstoneDao>(relaxed = true), mockk<AppDatabase>(relaxed = true))
 
         val chargeDao = object : StubChargeDao() {
-            override fun getAll(): Flow<List<ChargeEntity>> = flowOf(exportCharges)
+            override fun getAll(): Flow<List<ChargeEntity>> = flowOf(emptyList())
         }
         val chargeRepo = ChargeRepository(chargeDao, StubChargePointDao())
         val idleDrainDao = StubIdleDrainDao()
@@ -317,7 +315,6 @@ class SettingsViewModelTest {
             historyImporter = historyImporter,
             energyDataReader = energyReader,
             idleDrainDao = idleDrainDao,
-            tripPointDao = tripPointDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
             localePreferences = LocalePreferences(ctx),
@@ -1537,6 +1534,21 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `a picked backup opens the parts dialog with the parts its manifest lists`() = runTest {
+        val file = File("/sdcard/Download/bydmate_backup_1.zip")
+        val parts = setOf(com.bydmate.app.data.backup.BackupPart.TABLES)
+        backupManager = mockk { every { archiveParts(file) } returns parts }
+        val vm = buildViewModel().apply { ioDispatcher = testDispatcher }
+
+        vm.pickRestoreFile(file)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(RestoreChoice(file, parts), vm.uiState.value.restoreChoice)
+        vm.dismissRestoreChoice()
+        assertNull(vm.uiState.value.restoreChoice)
+    }
+
+    @Test
     fun `openRestorePicker ignores repeated taps while a scan runs`() = runTest {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         backupManager = mockk { every { listBackups() } answers { calls.incrementAndGet(); emptyList() } }
@@ -1676,53 +1688,6 @@ class SettingsViewModelTest {
         }
     }
 
-    // --- CSV export: the tariff wave added rate/loss columns and a periods file ---
-
-    private fun exportedFile(prefix: String): File =
-        publicDumpDir().listFiles().orEmpty()
-            .filter { it.name.startsWith(prefix) }
-            .maxByOrNull { it.lastModified() }
-            ?: error("no $prefix file in ${publicDumpDir().absolutePath}")
-
-    @Test
-    fun `csv export carries the tariff columns and a periods file`() = runTest {
-        val period = com.bydmate.app.data.local.entity.TariffPeriodEntity(
-            id = 7, startTs = 1_700_000_000_000L, homeRate = 0.30, dcRate = 0.80,
-            acLossPct = 10.0, dcLossPct = 5.0, tripRule = "home",
-        )
-        val calculator = mockk<com.bydmate.app.domain.cost.CostCalculator>(relaxed = true)
-        coEvery { calculator.schedule() } returns
-            com.bydmate.app.domain.cost.TariffSchedule(listOf(period))
-        exportTrips = listOf(
-            TripEntity(id = 1, startTs = period.startTs, kwhConsumed = 10.0, cost = 3.0)
-        )
-        exportCharges = listOf(
-            ChargeEntity(id = 2, startTs = period.startTs, kwhCharged = 9.0, type = "AC", cost = 3.0)
-        )
-        exportCostCalculator = calculator
-        val vm = buildViewModel()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        vm.exportCsv()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        val trips = exportedFile("bydmate_trips_").readLines()
-        assertTrue("trips header must end with tariff_rate, was: ${trips[0]}",
-            trips[0].endsWith(",tariff_rate"))
-        assertTrue("trip row must carry its rate, was: ${trips[1]}", trips[1].endsWith(",0.3"))
-
-        val charges = exportedFile("bydmate_charges_").readLines()
-        assertTrue("charges header must carry the new columns, was: ${charges[0]}",
-            charges[0].endsWith(",meter_kwh,cost_manual,tariff_rate,loss_pct"))
-        // 9 kWh into the pack at 10% AC losses = 10 kWh paid, 3.00 / 10 = 0.30
-        assertTrue("charge row must end with rate and loss, was: ${charges[1]}",
-            charges[1].endsWith(",,false,0.3,10.0"))
-
-        val periods = exportedFile("bydmate_tariff_periods_").readLines()
-        assertEquals("id,start_ts,home_rate,dc_rate,ac_loss_pct,dc_loss_pct,trip_rule,currency", periods[0])
-        assertEquals("7,${period.startTs},0.3,0.8,10.0,5.0,home,BYN", periods[1])
-    }
-
     // --- Tariff periods: the unique start date and the reach of a recalculation ---
 
     private val augustStart = 1_754_006_400_000L   // 01.08.2026
@@ -1833,11 +1798,8 @@ class SettingsViewModelTest {
 
     private val ctxForTg: Context get() = ApplicationProvider.getApplicationContext()
 
-    private fun sendCodeStatus(bot: String, code: String) =
-        ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_send_code, bot, code)
-
     @Test
-    fun `first check of a new bot shows a six digit code and stores nothing`() = runTest {
+    fun `first check of a new bot moves to the code step and stores nothing`() = runTest {
         val sink = tgSinkFake()
         coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
         val vm = buildViewModel()
@@ -1847,7 +1809,9 @@ class SettingsViewModelTest {
 
         val code = vm.uiState.value.tgBackupCode!!
         assertTrue(code, Regex("\\d{6}").matches(code))
-        assertEquals(sendCodeStatus("my_car_bot", code), vm.uiState.value.tgBackupStatus)
+        assertEquals("my_car_bot", vm.uiState.value.tgBackupBotName)
+        assertNull(vm.uiState.value.tgBackupStatus)
+        assertNull(vm.uiState.value.tgBackupBinding)
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
         coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
     }
@@ -1865,7 +1829,10 @@ class SettingsViewModelTest {
         checkToken(vm, "123:abc")
 
         assertEquals(code, vm.uiState.value.tgBackupCode)
-        assertEquals(sendCodeStatus("my_car_bot", code), vm.uiState.value.tgBackupStatus)
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_code_not_received),
+            vm.uiState.value.tgBackupStatus,
+        )
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
         coVerify(exactly = 0) { sink.sendMessage(any(), any(), any()) }
     }
@@ -1884,10 +1851,8 @@ class SettingsViewModelTest {
 
         checkToken(vm, "123:abc")
 
-        assertEquals(
-            ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_connected, "my_car_bot", "Andy @andy_s"),
-            vm.uiState.value.tgBackupStatus,
-        )
+        assertEquals(TgBackupBinding("my_car_bot", "Andy @andy_s"), vm.uiState.value.tgBackupBinding)
+        assertNull(vm.uiState.value.tgBackupStatus)
         assertNull(vm.uiState.value.tgBackupCode)
         assertEquals("123:abc", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
         assertEquals("my_car_bot", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
@@ -1982,8 +1947,32 @@ class SettingsViewModelTest {
 
         assertFalse(vm.uiState.value.tgBackupChecking)
         assertNull(vm.uiState.value.tgBackupStatus)
+        assertNull(vm.uiState.value.tgBackupBinding)
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
         assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+    }
+
+    @Test
+    fun `a connected bot opens on the done step, back on the code step returns to the token`() = runTest {
+        // The stored bot is read by the init coroutine, which runs on the first advance.
+        val connected = buildViewModel()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME] = "my_car_bot"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME] = "Andy"
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(TgBackupBinding("my_car_bot", "Andy"), connected.uiState.value.tgBackupBinding)
+
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("456:new") } returns Result.success("new_bot")
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        checkToken(vm, "456:new")
+        vm.cancelTelegramCode()
+
+        assertNull(vm.uiState.value.tgBackupCode)
+        assertNull(vm.uiState.value.tgBackupStatus)
+        assertEquals("456:new", vm.uiState.value.tgBackupToken)
     }
 
     @Test
@@ -2021,5 +2010,6 @@ class SettingsViewModelTest {
         assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
         assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
         assertEquals("", vm.uiState.value.tgBackupToken)
+        assertNull(vm.uiState.value.tgBackupBinding)
     }
 }

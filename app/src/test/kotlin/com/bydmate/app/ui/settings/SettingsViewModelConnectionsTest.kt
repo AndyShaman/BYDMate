@@ -250,7 +250,6 @@ class SettingsViewModelConnectionsTest {
             historyImporter = historyImporter,
             energyDataReader = energyReader,
             idleDrainDao = idleDrainDao,
-            tripPointDao = tripPointDao,
             insightsManager = insightsManager,
             adbOnDeviceClient = FakeAdbClient(),
             localePreferences = LocalePreferences(ctx),

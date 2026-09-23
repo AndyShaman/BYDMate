@@ -180,6 +180,7 @@ fun SettingActionRow(
     secondButtonLabel: String? = null,
     onSecondClick: (() -> Unit)? = null,
     secondButtonEnabled: Boolean = enabled,
+    onHelp: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -188,7 +189,7 @@ fun SettingActionRow(
             .padding(vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RowLabel(title, description, enabled, Modifier.weight(1f))
+        RowLabel(title, description, enabled, Modifier.weight(1f), onHelp)
         if (secondButtonLabel != null && onSecondClick != null) {
             SettingRowButton(secondButtonLabel, onSecondClick, SettingButtonStyle.Secondary, secondButtonEnabled)
             Spacer(modifier = Modifier.width(8.dp))
