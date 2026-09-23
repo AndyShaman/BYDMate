@@ -611,7 +611,11 @@
     <string name="dashboard_trip_avg_label">Consumo médio</string>
     <string name="dashboard_trip_avg_value">%1$s kWh/100km</string>
     <string name="dashboard_trip_cost_label">Custo</string>
-    <string name="dashboard_trip_reset_hint">Toque longo no botão TRIP para zerar o contador</string>
+    <string name="dashboard_trip_reset_hint">Toque longo no botão TRIP para zerar o contador manualmente</string>
+    <string name="dashboard_trip_auto_reset_label">Zerar após carregar</string>
+    <string name="dashboard_trip_auto_reset_off">Não</string>
+    <string name="dashboard_trip_auto_reset_any">Qualquer</string>
+    <string name="dashboard_trip_auto_reset_full">Até 100%</string>
 
     <string name="dashboard_battery_temp_label">temp. bateria</string>
     <string name="dashboard_battery_voltage_label">Sistema 12V</string>

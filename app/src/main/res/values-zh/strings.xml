@@ -586,7 +586,11 @@
     <string name="dashboard_trip_avg_label">平均能耗</string>
     <string name="dashboard_trip_avg_value">%1$s 千瓦时/100公里</string>
     <string name="dashboard_trip_cost_label">费用</string>
-    <string name="dashboard_trip_reset_hint">长按 TRIP 按钮清零</string>
+    <string name="dashboard_trip_reset_hint">长按 TRIP 按钮手动清零</string>
+    <string name="dashboard_trip_auto_reset_label">充电后清零</string>
+    <string name="dashboard_trip_auto_reset_off">关闭</string>
+    <string name="dashboard_trip_auto_reset_any">任意</string>
+    <string name="dashboard_trip_auto_reset_full">充至 100%</string>
 
     <!-- Battery card -->
     <string name="dashboard_battery_temp_label">电池温度</string>

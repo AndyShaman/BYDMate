@@ -720,7 +720,11 @@
     <string name="dashboard_trip_avg_label">Średnie zużycie</string>
     <string name="dashboard_trip_avg_value">%1$s kWh/100 km</string>
     <string name="dashboard_trip_cost_label">Koszt</string>
-    <string name="dashboard_trip_reset_hint">Długie naciśnięcie przycisku TRIP zeruje licznik</string>
+    <string name="dashboard_trip_reset_hint">Długie naciśnięcie przycisku TRIP zeruje licznik ręcznie</string>
+    <string name="dashboard_trip_auto_reset_label">Zeruj po ładowaniu</string>
+    <string name="dashboard_trip_auto_reset_off">Nie</string>
+    <string name="dashboard_trip_auto_reset_any">Każde</string>
+    <string name="dashboard_trip_auto_reset_full">Do 100%</string>
 
     <!-- Battery card -->
     <string name="dashboard_battery_temp_label">temp. akum.</string>

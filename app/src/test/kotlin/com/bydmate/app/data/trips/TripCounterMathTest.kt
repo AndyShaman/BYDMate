@@ -360,4 +360,42 @@ class TripCounterMathTest {
         assertEquals(4.4, ui.kwh, 0.001)       // 5 - minOf(1, 0.6) = 5 - 0.6 = 4.4
         assertEquals(12_000L, ui.drivingMs)    // 15000 - minOf(4000, 3000) = 15000 - 3000 = 12000
     }
+
+    // --- Auto-reset after charging (#235) ---
+
+    /**
+     * Charge found by catch-up at service start: the anchor comes from resetWholeSession
+     * (resetTs = T, zero corrections, excludeStraddling=false). The first trip after the
+     * charge started before T (the service came up mid-session), so its landed row is
+     * straddling. It is entirely post-charge and must count whole.
+     */
+    @Test fun auto_reset_at_service_start_keeps_the_first_trip_after_charge() {
+        val stats = TripCounterStats(
+            totalKm = 12.0, totalKwh = 2.4, totalCost = 0.48,
+            drivingKwh = 2.4, idleKwh = 0.0, tripCount = 1, drivingMs = 720_000L,
+            straddlingKm = 12.0, straddlingKwh = 2.4, straddlingMs = 720_000L, straddlingTripCount = 1,
+            landedSessionKm = 0.0, landedSessionKwh = 0.0, landedSessionMs = 0L,
+        )
+        val r = reset(ts = 5_000L)
+        val ui = TripCounterMath.compute(stats, r, null, null, null, false, 30_000L, 0.2)
+        assertEquals(12.0, ui.km, 0.001)
+        assertEquals(1, ui.tripCount)
+    }
+
+    /**
+     * Mirror: the manual reset degraded by a missing session (excludeStraddling=true) on the
+     * same stats drops that trip. This is why a catch-up charge must not use manual semantics.
+     */
+    @Test fun manual_degraded_anchor_drops_the_first_trip_after_charge() {
+        val stats = TripCounterStats(
+            totalKm = 12.0, totalKwh = 2.4, totalCost = 0.48,
+            drivingKwh = 2.4, idleKwh = 0.0, tripCount = 1, drivingMs = 720_000L,
+            straddlingKm = 12.0, straddlingKwh = 2.4, straddlingMs = 720_000L, straddlingTripCount = 1,
+            landedSessionKm = 0.0, landedSessionKwh = 0.0, landedSessionMs = 0L,
+        )
+        val r = reset(ts = 5_000L, excludeStraddling = true)
+        val ui = TripCounterMath.compute(stats, r, null, null, null, false, 30_000L, 0.2)
+        assertEquals(0.0, ui.km, 0.001)
+        assertEquals(0, ui.tripCount)
+    }
 }
