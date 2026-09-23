@@ -59,6 +59,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -548,30 +549,45 @@ private fun TopBar(
             text = "BYDMate",
             color = TextPrimary,
             fontSize = 24.sp,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            maxLines = 1
         )
 
+        // Status side yields width to the brand: long verdict texts ellipsize instead of wrapping.
         Row(
+            modifier = Modifier.weight(1f, fill = false),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // The ADB verdict takes the slot of «no vehicle data»: when both apply, only ADB shows.
             if (isServiceRunning && adbChecking) {
-                Text(stringResource(R.string.adb_verdict_checking), color = TextSecondary, fontSize = 12.sp)
+                Text(
+                    stringResource(R.string.adb_verdict_checking),
+                    color = TextSecondary,
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
             } else if (isServiceRunning && adbVerdict != null && adbVerdict != AdbVerdict.OK) {
                 Text(
                     text = adbVerdictText(adbVerdict),
                     color = adbVerdictColor(adbVerdict),
                     fontSize = 12.sp,
-                    modifier = Modifier.clickable { onAdbTap() }
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false).clickable { onAdbTap() }
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             } else if (isServiceRunning && !vehicleDataConnected) {
                 Text(
                     text = stringResource(R.string.dashboard_vehicle_data_offline),
                     color = SocYellow,
-                    fontSize = 12.sp
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false)
                 )
                 Spacer(modifier = Modifier.width(8.dp))
             }
@@ -584,7 +600,8 @@ private fun TopBar(
             Text(
                 text = if (isServiceRunning) stringResource(R.string.dashboard_status_online) else stringResource(R.string.dashboard_status_offline),
                 color = TextSecondary,
-                fontSize = 12.sp
+                fontSize = 12.sp,
+                maxLines = 1
             )
         }
     }

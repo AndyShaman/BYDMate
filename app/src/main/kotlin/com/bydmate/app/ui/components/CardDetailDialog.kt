@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.bydmate.app.ui.theme.CardSurface
+import com.bydmate.app.ui.theme.ScaledDialogContent
 
 // ============================================================================
 // Pop-up dialog for card details
@@ -43,34 +44,36 @@ internal fun CardDetailDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.CenterStart
-        ) {
-            Card(
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
-                border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
+        ScaledDialogContent {
+            Box(
                 modifier = Modifier
-                    .padding(start = 22.dp, end = 16.dp)
-                    .fillMaxWidth(0.4f)
-                    .then(if (dismissOnCardTap) Modifier.clickable { onDismiss() } else Modifier)
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) { onDismiss() },
+                contentAlignment = Alignment.CenterStart
             ) {
-                Column(
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    border = androidx.compose.foundation.BorderStroke(2.dp, borderColor.copy(alpha = 0.6f)),
                     modifier = Modifier
-                        .padding(16.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                        .padding(start = 22.dp, end = 16.dp)
+                        .fillMaxWidth(0.4f)
+                        .then(if (dismissOnCardTap) Modifier.clickable { onDismiss() } else Modifier)
                 ) {
-                    if (title != null) {
-                        Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    Column(
+                        modifier = Modifier
+                            .padding(16.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (title != null) {
+                            Text(title, color = borderColor, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        }
+                        content()
                     }
-                    content()
                 }
             }
         }

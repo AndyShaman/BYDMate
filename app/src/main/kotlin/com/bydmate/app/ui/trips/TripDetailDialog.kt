@@ -67,114 +67,116 @@ fun TripDetailDialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
+        ScaledDialogContent {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .fillMaxHeight(0.85f)
-                    .clickable { /* absorb click */ }
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                    ) { onDismiss() },
+                contentAlignment = Alignment.Center
             ) {
-                val isStop = (trip.distanceKm ?: 0.0) == 0.0
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier
+                        .fillMaxWidth(0.92f)
+                        .fillMaxHeight(0.85f)
+                        .clickable { /* absorb click */ }
+                ) {
+                    val isStop = (trip.distanceKm ?: 0.0) == 0.0
 
-                // Landscape: map left, stats right
-                Row(modifier = Modifier.fillMaxSize()) {
-                    // LEFT: Map + speed histogram
-                    Column(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        // Header
-                        Text(
-                            if (isStop) stringResource(R.string.trip_detail_title_stop) else stringResource(R.string.trip_detail_title_trip),
-                            color = AccentGreen,
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            "${formatTime(trip.startTs)}${trip.endTs?.let { " – ${formatTime(it)}" } ?: ""}",
-                            color = TextSecondary,
-                            fontSize = 14.sp
-                        )
+                    // Landscape: map left, stats right
+                    Row(modifier = Modifier.fillMaxSize()) {
+                        // LEFT: Map + speed histogram
+                        Column(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            // Header
+                            Text(
+                                if (isStop) stringResource(R.string.trip_detail_title_stop) else stringResource(R.string.trip_detail_title_trip),
+                                color = AccentGreen,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                "${formatTime(trip.startTs)}${trip.endTs?.let { " – ${formatTime(it)}" } ?: ""}",
+                                color = TextSecondary,
+                                fontSize = 14.sp
+                            )
 
-                        // Map in its own clipped box
-                        if (points.size >= 2) {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .clip(RoundedCornerShape(8.dp))
-                            ) {
-                                TripRouteMap(
+                            // Map in its own clipped box
+                            if (points.size >= 2) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .clip(RoundedCornerShape(8.dp))
+                                ) {
+                                    TripRouteMap(
+                                        points = points,
+                                        tileSource = tileSource,
+                                        modifier = Modifier.fillMaxSize()
+                                    )
+                                }
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .weight(1f)
+                                        .background(NavyDark, RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(stringResource(R.string.trip_detail_gps_unavailable), color = TextMuted, fontSize = 13.sp)
+                                }
+                            }
+
+                            // Speed histogram
+                            if (points.size >= 4) {
+                                SpeedHistogram(
                                     points = points,
-                                    tileSource = tileSource,
-                                    modifier = Modifier.fillMaxSize()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(60.dp)
                                 )
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .weight(1f)
-                                    .background(NavyDark, RoundedCornerShape(8.dp)),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(stringResource(R.string.trip_detail_gps_unavailable), color = TextMuted, fontSize = 13.sp)
+                        }
+
+                        // RIGHT: Stats
+                        Column(
+                            modifier = Modifier
+                                .width(220.dp)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(stringResource(R.string.trip_detail_stats_header), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+
+                            trip.distanceKm?.let { DetailRow(stringResource(R.string.trip_detail_distance_label), stringResource(R.string.trip_detail_distance_value, it)) }
+                            if (trip.endTs != null) DetailRow(stringResource(R.string.trip_detail_duration_label), formatDuration(ctx, trip.startTs, trip.endTs))
+                            trip.avgSpeedKmh?.let { DetailRow(stringResource(R.string.trip_detail_avg_speed_label), stringResource(R.string.trip_detail_speed_value, it)) }
+                            if (points.isNotEmpty()) {
+                                val maxSpeed = points.maxOfOrNull { it.speedKmh ?: 0.0 } ?: 0.0
+                                if (maxSpeed > 0) DetailRow(stringResource(R.string.trip_detail_max_speed_label), stringResource(R.string.trip_detail_speed_value, maxSpeed))
                             }
-                        }
-
-                        // Speed histogram
-                        if (points.size >= 4) {
-                            SpeedHistogram(
-                                points = points,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(60.dp)
-                            )
-                        }
-                    }
-
-                    // RIGHT: Stats
-                    Column(
-                        modifier = Modifier
-                            .width(220.dp)
-                            .fillMaxHeight()
-                            .verticalScroll(rememberScrollState())
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(stringResource(R.string.trip_detail_stats_header), color = TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-
-                        trip.distanceKm?.let { DetailRow(stringResource(R.string.trip_detail_distance_label), stringResource(R.string.trip_detail_distance_value, it)) }
-                        if (trip.endTs != null) DetailRow(stringResource(R.string.trip_detail_duration_label), formatDuration(ctx, trip.startTs, trip.endTs))
-                        trip.avgSpeedKmh?.let { DetailRow(stringResource(R.string.trip_detail_avg_speed_label), stringResource(R.string.trip_detail_speed_value, it)) }
-                        if (points.isNotEmpty()) {
-                            val maxSpeed = points.maxOfOrNull { it.speedKmh ?: 0.0 } ?: 0.0
-                            if (maxSpeed > 0) DetailRow(stringResource(R.string.trip_detail_max_speed_label), stringResource(R.string.trip_detail_speed_value, maxSpeed))
-                        }
-                        trip.kwhConsumed?.let {
-                            DetailRow(stringResource(R.string.trip_detail_consumption_label), stringResource(R.string.trip_detail_consumption_value, it))
-                            trip.kwhPer100km?.let { per100 ->
-                                DetailRow(stringResource(R.string.trip_detail_efficiency_label), "%.1f/100".format(per100), consumptionColor(per100))
+                            trip.kwhConsumed?.let {
+                                DetailRow(stringResource(R.string.trip_detail_consumption_label), stringResource(R.string.trip_detail_consumption_value, it))
+                                trip.kwhPer100km?.let { per100 ->
+                                    DetailRow(stringResource(R.string.trip_detail_efficiency_label), "%.1f/100".format(per100), consumptionColor(per100))
+                                }
                             }
+                            if (trip.socStart != null && trip.socEnd != null) {
+                                DetailRow("SOC", "${trip.socStart}% → ${trip.socEnd}%")
+                            }
+                            trip.cost?.let { DetailRow(stringResource(R.string.trip_detail_cost_label), "%.2f %s".format(it, currencySymbol), AccentGreen) }
+                            trip.exteriorTemp?.let { DetailRow(stringResource(R.string.trip_detail_temp_label), "${it}°C") }
                         }
-                        if (trip.socStart != null && trip.socEnd != null) {
-                            DetailRow("SOC", "${trip.socStart}% → ${trip.socEnd}%")
-                        }
-                        trip.cost?.let { DetailRow(stringResource(R.string.trip_detail_cost_label), "%.2f %s".format(it, currencySymbol), AccentGreen) }
-                        trip.exteriorTemp?.let { DetailRow(stringResource(R.string.trip_detail_temp_label), "${it}°C") }
                     }
                 }
             }

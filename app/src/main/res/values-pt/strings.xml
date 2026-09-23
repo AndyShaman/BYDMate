@@ -2,6 +2,11 @@
 <resources>
     <string name="app_name">BYDMate</string>
     <string name="settings_language_title">Idioma</string>
+    <string name="settings_font_scale_title">Tamanho do texto</string>
+    <string name="settings_font_scale_desc">Aplica-se às telas do aplicativo e às janelas do agente de voz. O widget e o painel não mudam.</string>
+    <string name="settings_font_scale_normal">Normal</string>
+    <string name="settings_font_scale_large">Grande</string>
+    <string name="settings_font_scale_xlarge">Muito grande</string>
     <string name="settings_title">Configurações</string>
     <string name="settings_rail_sections_label">Seções</string>
     <string name="settings_section_auto_battery_title">Carro e bateria</string>

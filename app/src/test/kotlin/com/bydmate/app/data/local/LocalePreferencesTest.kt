@@ -24,6 +24,9 @@ class LocalePreferencesTest {
         every { editor.putBoolean(any(), any()) } answers {
             store[firstArg<String>()] = secondArg<Boolean>(); editor
         }
+        every { editor.putFloat(any(), any()) } answers {
+            store[firstArg<String>()] = secondArg<Float>(); editor
+        }
         every { editor.remove(any()) } returns editor
         every { editor.clear() } returns editor
         every { editor.apply() } just Runs
@@ -31,6 +34,10 @@ class LocalePreferencesTest {
         val prefs = mockk<SharedPreferences>()
         every { prefs.getString(any(), any()) } answers {
             store[firstArg<String>()] as String? ?: secondArg<String?>()
+        }
+        // Mirrors the platform: a value of another type under the key throws ClassCastException.
+        every { prefs.getFloat(any(), any()) } answers {
+            store[firstArg<String>()] as Float? ?: secondArg<Float>()
         }
         every { prefs.contains(any()) } answers { store.containsKey(firstArg<String>()) }
         every { prefs.edit() } returns editor
@@ -68,5 +75,34 @@ class LocalePreferencesTest {
         assertFalse(lp.isSetupCompletedMirror())
         lp.markSetupCompletedMirror()
         assertTrue(lp.isSetupCompletedMirror())
+    }
+
+    @Test
+    fun `getFontScale defaults to 1_0 when unset`() {
+        val (ctx, _) = mockSetup(emptyMap())
+        assertEquals(1.0f, LocalePreferences(ctx).getFontScale())
+    }
+
+    @Test
+    fun `setFontScale round-trips an allowed step with commit`() {
+        val (ctx, prefs) = mockSetup(emptyMap())
+        val editor = prefs.edit()
+        val lp = LocalePreferences(ctx)
+        lp.setFontScale(1.15f)
+        assertEquals(1.15f, lp.getFontScale())
+        verify { editor.putFloat("font_scale", 1.15f) }
+        verify { editor.commit() }
+    }
+
+    @Test
+    fun `getFontScale falls back to 1_0 for a value outside the steps`() {
+        val (ctx, _) = mockSetup(mapOf("font_scale" to 1.7f))
+        assertEquals(1.0f, LocalePreferences(ctx).getFontScale())
+    }
+
+    @Test
+    fun `getFontScale falls back to 1_0 for a value of another type`() {
+        val (ctx, _) = mockSetup(mapOf("font_scale" to "big"))
+        assertEquals(1.0f, LocalePreferences(ctx).getFontScale())
     }
 }

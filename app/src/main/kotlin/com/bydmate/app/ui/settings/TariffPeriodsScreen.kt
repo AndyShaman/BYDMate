@@ -69,6 +69,7 @@ import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.bydmate.app.ui.theme.ScaledDialogContent
 
 /** Width of the period column; the form takes the rest of the screen. */
 private val LIST_WIDTH = 260.dp
@@ -218,22 +219,28 @@ fun TariffPeriodsScreen(
         DatePickerDialog(
             onDismissRequest = { showDatePicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    dpState.selectedDateMillis?.let { picked ->
-                        draft = editing.copy(startTs = utcMidnightAsLocalMidnight(picked))
+                ScaledDialogContent {
+                    TextButton(onClick = {
+                        dpState.selectedDateMillis?.let { picked ->
+                            draft = editing.copy(startTs = utcMidnightAsLocalMidnight(picked))
+                        }
+                        showDatePicker = false
+                    }) {
+                        Text(stringResource(R.string.charges_edit_save_button), color = AccentGreen, fontSize = 14.sp)
                     }
-                    showDatePicker = false
-                }) {
-                    Text(stringResource(R.string.charges_edit_save_button), color = AccentGreen, fontSize = 14.sp)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showDatePicker = false }) {
-                    Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
+                ScaledDialogContent {
+                    TextButton(onClick = { showDatePicker = false }) {
+                        Text(stringResource(R.string.settings_cancel_button), color = TextSecondary, fontSize = 14.sp)
+                    }
                 }
             },
         ) {
-            DatePicker(state = dpState)
+            ScaledDialogContent {
+                DatePicker(state = dpState)
+            }
         }
     }
 }

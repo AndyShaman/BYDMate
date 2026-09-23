@@ -3,6 +3,11 @@
     <string name="app_name">BYDMate</string>
     <string name="cluster_a11y_description">拦截方向盘按键用于导航投射到仪表盘。手动启用，仅在功能开启时工作。</string>
     <string name="settings_language_title">语言</string>
+    <string name="settings_font_scale_title">文字大小</string>
+    <string name="settings_font_scale_desc">适用于应用界面和语音助手窗口。悬浮窗和仪表盘不受影响。</string>
+    <string name="settings_font_scale_normal">标准</string>
+    <string name="settings_font_scale_large">大</string>
+    <string name="settings_font_scale_xlarge">特大</string>
 
     <!-- Settings: Navigation rail -->
     <string name="settings_title">设置</string>

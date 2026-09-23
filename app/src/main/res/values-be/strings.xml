@@ -3,6 +3,11 @@
     <string name="app_name">BYDMate</string>
     <string name="cluster_a11y_description">Перахоп кнопак руля для праекцыі навігацыі на прыборную панэль. Уключаецца ўручную, працуе толькі пры ўключанай функцыі.</string>
     <string name="settings_language_title">Мова</string>
+    <string name="settings_font_scale_title">Памер тэксту</string>
+    <string name="settings_font_scale_desc">Дзейнічае на экраны праграмы і вокны галасавога агента. Віджэт і прыборка не мяняюцца.</string>
+    <string name="settings_font_scale_normal">Звычайны</string>
+    <string name="settings_font_scale_large">Буйны</string>
+    <string name="settings_font_scale_xlarge">Вельмі буйны</string>
 
     <!-- Settings: Navigation rail -->
     <string name="settings_title">Налады</string>

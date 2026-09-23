@@ -371,6 +371,19 @@ class SettingsViewModelTest {
     // --- Tests ---
 
     @Test
+    fun `setFontScale writes through to LocalePreferences and updates the flow`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1.0f, vm.fontScale.value)
+
+        vm.setFontScale(1.3f)
+
+        assertEquals(1.3f, vm.fontScale.value)
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        assertEquals(1.3f, LocalePreferences(ctx).getFontScale())
+    }
+
+    @Test
     fun `initial state has default battery capacity`() = runTest {
         val vm = buildViewModel()
         testDispatcher.scheduler.advanceUntilIdle()

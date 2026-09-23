@@ -17,6 +17,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -209,7 +210,13 @@ fun AppNavigation(
                                     contentDescription = stringResource(screen.labelRes)
                                 )
                             },
-                            label = { Text(stringResource(screen.labelRes)) },
+                            label = {
+                                Text(
+                                    stringResource(screen.labelRes),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            },
                             selected = currentDestination?.hierarchy?.any { it.route == screen.route } == true,
                             onClick = {
                                 navController.navigate(screen.route) {
@@ -308,41 +315,43 @@ private fun PostInstallReminderDialog(version: String, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .clickable(
-                    indication = null,
-                    interactionSource = remember { MutableInteractionSource() }
-                ) { onDismiss() },
-            contentAlignment = Alignment.Center
-        ) {
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = CardSurface),
+        ScaledDialogContent {
+            Box(
                 modifier = Modifier
-                    .fillMaxWidth(0.55f)
-                    .clickable { /* absorb */ }
+                    .fillMaxSize()
+                    .clickable(
+                        indication = null,
+                        interactionSource = remember { MutableInteractionSource() }
+                    ) { onDismiss() },
+                contentAlignment = Alignment.Center
             ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = CardSurface),
+                    modifier = Modifier
+                        .fillMaxWidth(0.55f)
+                        .clickable { /* absorb */ }
                 ) {
-                    Text(stringResource(R.string.nav_autostart_dialog_title, version), color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Text(
-                        stringResource(R.string.nav_autostart_dialog_body),
-                        color = TextSecondary, fontSize = 14.sp
-                    )
-                    Button(
-                        onClick = {
-                            com.bydmate.app.util.AutostartScreen.open(context)
-                            onDismiss()
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(8.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                    Column(
+                        modifier = Modifier.padding(20.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(stringResource(R.string.nav_autostart_dialog_button), color = Color.Black, fontWeight = FontWeight.Bold)
+                        Text(stringResource(R.string.nav_autostart_dialog_title, version), color = TextPrimary, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            stringResource(R.string.nav_autostart_dialog_body),
+                            color = TextSecondary, fontSize = 14.sp
+                        )
+                        Button(
+                            onClick = {
+                                com.bydmate.app.util.AutostartScreen.open(context)
+                                onDismiss()
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(8.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                        ) {
+                            Text(stringResource(R.string.nav_autostart_dialog_button), color = Color.Black, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }

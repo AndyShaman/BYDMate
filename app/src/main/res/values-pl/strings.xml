@@ -3,6 +3,11 @@
     <string name="app_name">BYDMate</string>
     <string name="cluster_a11y_description">Przechwytywanie przycisków kierownicy do projekcji nawigacji na zestaw wskaźników. Włączane ręcznie, działa tylko przy włączonej funkcji.</string>
     <string name="settings_language_title">Język</string>
+    <string name="settings_font_scale_title">Rozmiar tekstu</string>
+    <string name="settings_font_scale_desc">Dotyczy ekranów aplikacji i okien asystenta głosowego. Widżet i wskaźniki się nie zmieniają.</string>
+    <string name="settings_font_scale_normal">Normalny</string>
+    <string name="settings_font_scale_large">Duży</string>
+    <string name="settings_font_scale_xlarge">Bardzo duży</string>
 
     <!-- Settings: Navigation rail -->
     <string name="settings_title">Ustawienia</string>

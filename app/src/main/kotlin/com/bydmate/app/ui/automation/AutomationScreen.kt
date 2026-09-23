@@ -53,7 +53,7 @@ import androidx.compose.material.icons.outlined.RecordVoiceOver
 import androidx.compose.material.icons.outlined.TouchApp
 import androidx.compose.material.icons.outlined.Wifi
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.material3.AlertDialog
+import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -214,7 +214,7 @@ fun AutomationScreen(
 
     // Delete confirmation
     state.showDeleteConfirm?.let {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { viewModel.cancelDelete() },
             title = { Text(stringResource(R.string.automation_delete_confirm_title), color = TextPrimary) },
             text = { Text(stringResource(R.string.automation_delete_confirm_text), color = TextSecondary) },
@@ -285,21 +285,23 @@ private fun RuleCard(
                         Icon(Icons.Outlined.MoreVert, "menu", tint = TextMuted, modifier = Modifier.size(18.dp))
                     }
                     DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.automation_menu_edit)) },
-                            onClick = { menuExpanded = false; onEdit() },
-                            leadingIcon = { Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(18.dp)) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.automation_menu_duplicate)) },
-                            onClick = { menuExpanded = false; onDuplicate() },
-                            leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp)) }
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(R.string.automation_menu_delete), color = Color(0xFFEF4444)) },
-                            onClick = { menuExpanded = false; onDelete() },
-                            leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)) }
-                        )
+                        ScaledDialogContent {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.automation_menu_edit)) },
+                                onClick = { menuExpanded = false; onEdit() },
+                                leadingIcon = { Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(18.dp)) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.automation_menu_duplicate)) },
+                                onClick = { menuExpanded = false; onDuplicate() },
+                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp)) }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.automation_menu_delete), color = Color(0xFFEF4444)) },
+                                onClick = { menuExpanded = false; onDelete() },
+                                leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)) }
+                            )
+                        }
                     }
                 }
             }
@@ -393,336 +395,338 @@ private fun EditorDialog(
             dismissOnClickOutside = false
         )
     ) {
-        val context = LocalContext.current
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.65f)
-                .fillMaxHeight(0.85f)
-                .background(NavyDeep, RoundedCornerShape(16.dp))
-                .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
-        ) {
-            // Title bar
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp, 12.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    if (editing.isNew) stringResource(R.string.automation_editor_new_rule_title) else editing.name,
-                    fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
-                    modifier = Modifier.weight(1f)
-                )
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Outlined.Close, "close", tint = TextMuted)
-                }
-            }
-            HorizontalDivider(color = CardBorder)
-
-            // Two columns
-            Row(modifier = Modifier.weight(1f)) {
-                // Left: Name + Triggers
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp, 12.dp)
-                ) {
-                    OutlinedTextField(
-                        value = editing.name,
-                        onValueChange = { v -> onUpdate { copy(name = v) } },
-                        placeholder = { Text(stringResource(R.string.automation_rule_name_placeholder), color = TextMuted) },
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = AccentGreen,
-                            unfocusedBorderColor = CardBorder,
-                            focusedTextColor = TextPrimary,
-                            unfocusedTextColor = TextPrimary,
-                            cursorColor = AccentGreen
-                        ),
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    )
-                    Spacer(Modifier.height(14.dp))
-                    SectionHeader(stringResource(R.string.automation_section_when))
-
-                    // AND/OR toggle
-                    Row {
-                        LogicChip(stringResource(R.string.automation_logic_and), editing.triggerLogic == "AND") {
-                            onUpdate { copy(triggerLogic = "AND") }
-                        }
-                        LogicChip(stringResource(R.string.automation_logic_or), editing.triggerLogic == "OR") {
-                            onUpdate { copy(triggerLogic = "OR") }
-                        }
-                    }
-                    Spacer(Modifier.height(8.dp))
-
-                    editing.triggers.forEachIndexed { idx, trigger ->
-                        TriggerRow(
-                            index = idx,
-                            trigger = trigger,
-                            places = places,
-                            onUpdate = { newTrigger ->
-                                onUpdate {
-                                    copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
-                                }
-                            },
-                            onMoveUp = if (idx > 0) {
-                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
-                            } else null,
-                            onMoveDown = if (idx < editing.triggers.lastIndex) {
-                                { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
-                            } else null,
-                            onDelete = {
-                                onUpdate {
-                                    copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
-                                }
-                            }
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-
-                    if (editing.triggers.size < 5) {
-                        AddTriggerButton(
-                            places = places,
-                            onAddParam = {
-                                val p = TRIGGER_PARAMS.first()
-                                onUpdate {
-                                    copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.localizedName(context)))
-                                }
-                            },
-                            onAddPlace = { place ->
-                                onUpdate { copy(triggers = triggers + newPlaceTrigger(place, context)) }
-                            },
-                            onAddTimeOfDay = {
-                                onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
-                            },
-                            onAddSchedule = {
-                                onUpdate { copy(triggers = triggers + newScheduleTrigger()) }
-                            },
-                            onAddServiceStart = {
-                                onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
-                            },
-                            onAddNetworkAvailable = {
-                                onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
-                            },
-                            onAddButtonPress = {
-                                onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
-                            },
-                            onAddSteeringKey = {
-                                onUpdate { copy(triggers = triggers + newSteeringKeyTrigger(0)) }
-                            },
-                            onAddVoice = {
-                                onUpdate { copy(triggers = triggers + newVoiceTrigger(context)) }
-                            },
-                        )
-                    }
-                }
-
-                // Divider
-                Box(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .width(1.dp)
-                        .background(CardBorder)
-                )
-
-                // Right: Actions + Settings
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .verticalScroll(rememberScrollState())
-                        .padding(16.dp, 12.dp)
-                ) {
-                    SectionHeader(stringResource(R.string.automation_section_then))
-
-                    editing.actions.forEachIndexed { idx, action ->
-                        ActionRow(
-                            index = idx,
-                            action = action,
-                            places = places,
-                            onUpdate = { newAction ->
-                                onUpdate {
-                                    copy(actions = actions.toMutableList().apply { set(idx, newAction) })
-                                }
-                            },
-                            onTest = onTestAction,
-                            onMoveUp = if (idx > 0) {
-                                { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
-                            } else null,
-                            onMoveDown = if (idx < editing.actions.lastIndex) {
-                                { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
-                            } else null,
-                            onDelete = {
-                                onUpdate {
-                                    copy(actions = actions.toMutableList().apply { removeAt(idx) })
-                                }
-                            }
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-
-                    if (editing.actions.size < 10) {
-                        AddActionButton(
-                            onAddParam = {
-                                val a = ACTION_COMMANDS.first()
-                                onUpdate { copy(actions = actions + actionDefFor(a, context)) }
-                            },
-                            onAddNotification = {
-                                onUpdate { copy(actions = actions + newNotificationAction(context)) }
-                            },
-                            onAddAppLaunch = {
-                                onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
-                            },
-                            onAddCall = {
-                                onUpdate { copy(actions = actions + newCallAction(context)) }
-                            },
-                            onAddNavigate = {
-                                onUpdate { copy(actions = actions + newNavigateAction(context)) }
-                            },
-                            onAddUrl = {
-                                onUpdate { copy(actions = actions + newUrlAction(context)) }
-                            },
-                            onAddYandexMusic = {
-                                onUpdate { copy(actions = actions + newYandexMusicAction(context)) }
-                            },
-                            onAddDelay = {
-                                onUpdate { copy(actions = actions + newDelayAction(context)) }
-                            },
-                            onAddMediaVolume = {
-                                onUpdate { copy(actions = actions + newMediaVolumeAction(context)) }
-                            },
-                            onAddSentry = {
-                                onUpdate { copy(actions = actions + newSentryAction(context)) }
-                            },
-                            onAddHotspot = {
-                                onUpdate { copy(actions = actions + newHotspotAction(context)) }
-                            },
-                            onAddSpeak = {
-                                onUpdate { copy(actions = actions + newSpeakAction(context)) }
-                            },
-                            onAddAgentQuery = {
-                                onUpdate { copy(actions = actions + newAgentQueryAction(context)) }
-                            },
-                            onAddCluster = {
-                                onUpdate { copy(actions = actions + newClusterAction(context)) }
-                            },
-                            onAddSplitScreen = {
-                                onUpdate { copy(actions = actions + newSplitScreenAction(context)) }
-                            },
-                            onAddSplitScreenClose = {
-                                onUpdate { copy(actions = actions + newSplitScreenCloseAction(context)) }
-                            },
-                            onAddSplitScreenToggle = {
-                                onUpdate { copy(actions = actions + newSplitScreenToggleAction(context)) }
-                            },
-                        )
-                    }
-
-                    Spacer(Modifier.height(20.dp))
-                    SectionHeader(stringResource(R.string.automation_section_settings))
-
-                    // Cooldown
-                    SettingRow(stringResource(R.string.automation_setting_cooldown)) {
-                        // The field owns its text: binding it to cooldownSeconds.toString() made an
-                        // empty field unrepresentable, so Backspace on the last digit was reverted
-                        // and the caret jumped to the start (#163). Empty commits as 0.
-                        var cooldownText by remember(editing.id) {
-                            mutableStateOf(editing.cooldownSeconds.toString())
-                        }
-                        OutlinedTextField(
-                            value = cooldownText,
-                            onValueChange = { v ->
-                                val digits = v.filter { it.isDigit() }
-                                cooldownText = digits
-                                onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
-                            },
-                            modifier = Modifier.width(70.dp),
-                            colors = OutlinedTextFieldDefaults.colors(
-                                focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
-                                focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
-                            ),
-                            singleLine = true,
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                        )
-                        Spacer(Modifier.width(4.dp))
-                        Text(stringResource(R.string.automation_setting_unit_sec), fontSize = 12.sp, color = TextMuted)
-                    }
-                    Spacer(Modifier.height(4.dp))
-
-                    // Require park
-                    SettingRow(stringResource(R.string.automation_setting_park_only)) {
-                        Switch(
-                            checked = editing.requirePark,
-                            onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
-                            colors = bydSwitchColors(),
-                        )
-                    }
-
-                    // Confirm before execute
-                    SettingRow(stringResource(R.string.automation_setting_confirm_before)) {
-                        Switch(
-                            checked = editing.confirmBeforeExecute,
-                            onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
-                            colors = bydSwitchColors(),
-                        )
-                    }
-
-                    // Fire once per trip
-                    SettingRow(stringResource(R.string.automation_setting_once_per_trip)) {
-                        Switch(
-                            checked = editing.fireOncePerTrip,
-                            onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
-                            colors = bydSwitchColors(),
-                        )
-                    }
-
-                    // Play chime once when the rule fires
-                    SettingRow(stringResource(R.string.automation_setting_play_sound)) {
-                        Switch(
-                            checked = editing.playSound,
-                            onCheckedChange = { v -> onUpdate { copy(playSound = v) } },
-                            colors = bydSwitchColors(),
-                        )
-                    }
-                }
-            }
-
-            // Footer
-            HorizontalDivider(color = CardBorder)
+        ScaledDialogContent {
+            val context = LocalContext.current
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp, 10.dp)
+                    .fillMaxWidth(0.65f)
+                    .fillMaxHeight(0.85f)
+                    .background(NavyDeep, RoundedCornerShape(16.dp))
+                    .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
             ) {
-                editorError?.let { err ->
-                    Text(
-                        text = err,
-                        color = Color(0xFFEF4444),
-                        fontSize = 12.sp,
-                        modifier = Modifier.padding(vertical = 4.dp)
-                    )
-                }
+                // Title bar
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(14.dp, 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Button(
-                        onClick = onDismiss,
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                        shape = RoundedCornerShape(8.dp),
-                        modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                    ) { Text(stringResource(R.string.automation_cancel_button)) }
-                    Spacer(Modifier.width(10.dp))
-                    Button(
-                        onClick = onSave,
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                        shape = RoundedCornerShape(8.dp),
-                        enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
-                    ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
+                    Text(
+                        if (editing.isNew) stringResource(R.string.automation_editor_new_rule_title) else editing.name,
+                        fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Close, "close", tint = TextMuted)
+                    }
+                }
+                HorizontalDivider(color = CardBorder)
+
+                // Two columns
+                Row(modifier = Modifier.weight(1f)) {
+                    // Left: Name + Triggers
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp, 12.dp)
+                    ) {
+                        OutlinedTextField(
+                            value = editing.name,
+                            onValueChange = { v -> onUpdate { copy(name = v) } },
+                            placeholder = { Text(stringResource(R.string.automation_rule_name_placeholder), color = TextMuted) },
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = AccentGreen,
+                                unfocusedBorderColor = CardBorder,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary,
+                                cursorColor = AccentGreen
+                            ),
+                            singleLine = true,
+                            textStyle = androidx.compose.ui.text.TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                        )
+                        Spacer(Modifier.height(14.dp))
+                        SectionHeader(stringResource(R.string.automation_section_when))
+
+                        // AND/OR toggle
+                        Row {
+                            LogicChip(stringResource(R.string.automation_logic_and), editing.triggerLogic == "AND") {
+                                onUpdate { copy(triggerLogic = "AND") }
+                            }
+                            LogicChip(stringResource(R.string.automation_logic_or), editing.triggerLogic == "OR") {
+                                onUpdate { copy(triggerLogic = "OR") }
+                            }
+                        }
+                        Spacer(Modifier.height(8.dp))
+
+                        editing.triggers.forEachIndexed { idx, trigger ->
+                            TriggerRow(
+                                index = idx,
+                                trigger = trigger,
+                                places = places,
+                                onUpdate = { newTrigger ->
+                                    onUpdate {
+                                        copy(triggers = triggers.toMutableList().apply { set(idx, newTrigger) })
+                                    }
+                                },
+                                onMoveUp = if (idx > 0) {
+                                    { onUpdate { copy(triggers = triggers.moveItem(idx, up = true)) } }
+                                } else null,
+                                onMoveDown = if (idx < editing.triggers.lastIndex) {
+                                    { onUpdate { copy(triggers = triggers.moveItem(idx, up = false)) } }
+                                } else null,
+                                onDelete = {
+                                    onUpdate {
+                                        copy(triggers = triggers.toMutableList().apply { removeAt(idx) })
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+
+                        if (editing.triggers.size < 5) {
+                            AddTriggerButton(
+                                places = places,
+                                onAddParam = {
+                                    val p = TRIGGER_PARAMS.first()
+                                    onUpdate {
+                                        copy(triggers = triggers + TriggerDef(p.param, p.chineseName, ">", "0", p.localizedName(context)))
+                                    }
+                                },
+                                onAddPlace = { place ->
+                                    onUpdate { copy(triggers = triggers + newPlaceTrigger(place, context)) }
+                                },
+                                onAddTimeOfDay = {
+                                    onUpdate { copy(triggers = triggers + newTimeOfDayTrigger(context)) }
+                                },
+                                onAddSchedule = {
+                                    onUpdate { copy(triggers = triggers + newScheduleTrigger()) }
+                                },
+                                onAddServiceStart = {
+                                    onUpdate { copy(triggers = triggers + newServiceStartTrigger(context)) }
+                                },
+                                onAddNetworkAvailable = {
+                                    onUpdate { copy(triggers = triggers + newNetworkAvailableTrigger(context)) }
+                                },
+                                onAddButtonPress = {
+                                    onUpdate { copy(triggers = triggers + newButtonPressTrigger(1)) }
+                                },
+                                onAddSteeringKey = {
+                                    onUpdate { copy(triggers = triggers + newSteeringKeyTrigger(0)) }
+                                },
+                                onAddVoice = {
+                                    onUpdate { copy(triggers = triggers + newVoiceTrigger(context)) }
+                                },
+                            )
+                        }
+                    }
+
+                    // Divider
+                    Box(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .width(1.dp)
+                            .background(CardBorder)
+                    )
+
+                    // Right: Actions + Settings
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .verticalScroll(rememberScrollState())
+                            .padding(16.dp, 12.dp)
+                    ) {
+                        SectionHeader(stringResource(R.string.automation_section_then))
+
+                        editing.actions.forEachIndexed { idx, action ->
+                            ActionRow(
+                                index = idx,
+                                action = action,
+                                places = places,
+                                onUpdate = { newAction ->
+                                    onUpdate {
+                                        copy(actions = actions.toMutableList().apply { set(idx, newAction) })
+                                    }
+                                },
+                                onTest = onTestAction,
+                                onMoveUp = if (idx > 0) {
+                                    { onUpdate { copy(actions = actions.moveItem(idx, up = true)) } }
+                                } else null,
+                                onMoveDown = if (idx < editing.actions.lastIndex) {
+                                    { onUpdate { copy(actions = actions.moveItem(idx, up = false)) } }
+                                } else null,
+                                onDelete = {
+                                    onUpdate {
+                                        copy(actions = actions.toMutableList().apply { removeAt(idx) })
+                                    }
+                                }
+                            )
+                            Spacer(Modifier.height(4.dp))
+                        }
+
+                        if (editing.actions.size < 10) {
+                            AddActionButton(
+                                onAddParam = {
+                                    val a = ACTION_COMMANDS.first()
+                                    onUpdate { copy(actions = actions + actionDefFor(a, context)) }
+                                },
+                                onAddNotification = {
+                                    onUpdate { copy(actions = actions + newNotificationAction(context)) }
+                                },
+                                onAddAppLaunch = {
+                                    onUpdate { copy(actions = actions + newAppLaunchAction(context)) }
+                                },
+                                onAddCall = {
+                                    onUpdate { copy(actions = actions + newCallAction(context)) }
+                                },
+                                onAddNavigate = {
+                                    onUpdate { copy(actions = actions + newNavigateAction(context)) }
+                                },
+                                onAddUrl = {
+                                    onUpdate { copy(actions = actions + newUrlAction(context)) }
+                                },
+                                onAddYandexMusic = {
+                                    onUpdate { copy(actions = actions + newYandexMusicAction(context)) }
+                                },
+                                onAddDelay = {
+                                    onUpdate { copy(actions = actions + newDelayAction(context)) }
+                                },
+                                onAddMediaVolume = {
+                                    onUpdate { copy(actions = actions + newMediaVolumeAction(context)) }
+                                },
+                                onAddSentry = {
+                                    onUpdate { copy(actions = actions + newSentryAction(context)) }
+                                },
+                                onAddHotspot = {
+                                    onUpdate { copy(actions = actions + newHotspotAction(context)) }
+                                },
+                                onAddSpeak = {
+                                    onUpdate { copy(actions = actions + newSpeakAction(context)) }
+                                },
+                                onAddAgentQuery = {
+                                    onUpdate { copy(actions = actions + newAgentQueryAction(context)) }
+                                },
+                                onAddCluster = {
+                                    onUpdate { copy(actions = actions + newClusterAction(context)) }
+                                },
+                                onAddSplitScreen = {
+                                    onUpdate { copy(actions = actions + newSplitScreenAction(context)) }
+                                },
+                                onAddSplitScreenClose = {
+                                    onUpdate { copy(actions = actions + newSplitScreenCloseAction(context)) }
+                                },
+                                onAddSplitScreenToggle = {
+                                    onUpdate { copy(actions = actions + newSplitScreenToggleAction(context)) }
+                                },
+                            )
+                        }
+
+                        Spacer(Modifier.height(20.dp))
+                        SectionHeader(stringResource(R.string.automation_section_settings))
+
+                        // Cooldown
+                        SettingRow(stringResource(R.string.automation_setting_cooldown)) {
+                            // The field owns its text: binding it to cooldownSeconds.toString() made an
+                            // empty field unrepresentable, so Backspace on the last digit was reverted
+                            // and the caret jumped to the start (#163). Empty commits as 0.
+                            var cooldownText by remember(editing.id) {
+                                mutableStateOf(editing.cooldownSeconds.toString())
+                            }
+                            OutlinedTextField(
+                                value = cooldownText,
+                                onValueChange = { v ->
+                                    val digits = v.filter { it.isDigit() }
+                                    cooldownText = digits
+                                    onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
+                                },
+                                modifier = Modifier.width(70.dp),
+                                colors = OutlinedTextFieldDefaults.colors(
+                                    focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,
+                                    focusedTextColor = TextPrimary, unfocusedTextColor = TextPrimary, cursorColor = AccentGreen
+                                ),
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.automation_setting_unit_sec), fontSize = 12.sp, color = TextMuted)
+                        }
+                        Spacer(Modifier.height(4.dp))
+
+                        // Require park
+                        SettingRow(stringResource(R.string.automation_setting_park_only)) {
+                            Switch(
+                                checked = editing.requirePark,
+                                onCheckedChange = { v -> onUpdate { copy(requirePark = v) } },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+
+                        // Confirm before execute
+                        SettingRow(stringResource(R.string.automation_setting_confirm_before)) {
+                            Switch(
+                                checked = editing.confirmBeforeExecute,
+                                onCheckedChange = { v -> onUpdate { copy(confirmBeforeExecute = v) } },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+
+                        // Fire once per trip
+                        SettingRow(stringResource(R.string.automation_setting_once_per_trip)) {
+                            Switch(
+                                checked = editing.fireOncePerTrip,
+                                onCheckedChange = { v -> onUpdate { copy(fireOncePerTrip = v) } },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+
+                        // Play chime once when the rule fires
+                        SettingRow(stringResource(R.string.automation_setting_play_sound)) {
+                            Switch(
+                                checked = editing.playSound,
+                                onCheckedChange = { v -> onUpdate { copy(playSound = v) } },
+                                colors = bydSwitchColors(),
+                            )
+                        }
+                    }
+                }
+
+                // Footer
+                HorizontalDivider(color = CardBorder)
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp, 10.dp)
+                ) {
+                    editorError?.let { err ->
+                        Text(
+                            text = err,
+                            color = Color(0xFFEF4444),
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        Button(
+                            onClick = onDismiss,
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+                        ) { Text(stringResource(R.string.automation_cancel_button)) }
+                        Spacer(Modifier.width(10.dp))
+                        Button(
+                            onClick = onSave,
+                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                            shape = RoundedCornerShape(8.dp),
+                            enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
+                        ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
+                    }
                 }
             }
         }
@@ -826,14 +830,16 @@ private fun ParamTriggerControls(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center
         )
         DropdownMenu(expanded = opExpanded, onDismissRequest = { opExpanded = false }) {
-            OPERATORS.forEach { op ->
-                DropdownMenuItem(
-                    text = { Text(op, fontWeight = FontWeight.Bold) },
-                    onClick = {
-                        opExpanded = false
-                        onUpdate(trigger.copy(operator = op))
-                    }
-                )
+            ScaledDialogContent {
+                OPERATORS.forEach { op ->
+                    DropdownMenuItem(
+                        text = { Text(op, fontWeight = FontWeight.Bold) },
+                        onClick = {
+                            opExpanded = false
+                            onUpdate(trigger.copy(operator = op))
+                        }
+                    )
+                }
             }
         }
     }
@@ -856,15 +862,17 @@ private fun ParamTriggerControls(
                     .padding(8.dp, 6.dp)
             )
             DropdownMenu(expanded = enumExpanded, onDismissRequest = { enumExpanded = false }) {
-                paramOption.enumValues.forEach { (value, _) ->
-                    DropdownMenuItem(
-                        text = { Text(paramOption.localizedEnumLabel(value, context), fontSize = 13.sp) },
-                        onClick = {
-                            enumExpanded = false
-                            // The chosen operator stays; picking a value must not reset it (VadimV).
-                            onUpdate(trigger.copy(value = value))
-                        }
-                    )
+                ScaledDialogContent {
+                    paramOption.enumValues.forEach { (value, _) ->
+                        DropdownMenuItem(
+                            text = { Text(paramOption.localizedEnumLabel(value, context), fontSize = 13.sp) },
+                            onClick = {
+                                enumExpanded = false
+                                // The chosen operator stays; picking a value must not reset it (VadimV).
+                                onUpdate(trigger.copy(value = value))
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -937,19 +945,21 @@ private fun PlaceTriggerControls(
             val enterPrefix = stringResource(R.string.automation_trigger_place_enter_prefix)
             val exitPrefix = stringResource(R.string.automation_trigger_place_exit_prefix)
             DropdownMenu(expanded = placeExpanded, onDismissRequest = { placeExpanded = false }) {
-                places.forEach { place ->
-                    DropdownMenuItem(
-                        text = { Text(place.name, fontSize = 13.sp) },
-                        onClick = {
-                            placeExpanded = false
-                            val kindLabel = if (trigger.kind == "place_enter") enterPrefix else exitPrefix
-                            onUpdate(trigger.copy(
-                                placeId = place.id,
-                                placeName = place.name,
-                                displayName = "$kindLabel «${place.name}»"
-                            ))
-                        }
-                    )
+                ScaledDialogContent {
+                    places.forEach { place ->
+                        DropdownMenuItem(
+                            text = { Text(place.name, fontSize = 13.sp) },
+                            onClick = {
+                                placeExpanded = false
+                                val kindLabel = if (trigger.kind == "place_enter") enterPrefix else exitPrefix
+                                onUpdate(trigger.copy(
+                                    placeId = place.id,
+                                    placeName = place.name,
+                                    displayName = "$kindLabel «${place.name}»"
+                                ))
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1009,14 +1019,16 @@ private fun TimeOfDayTriggerControls(
                 .padding(8.dp, 6.dp)
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            phases.forEach { (value, label) ->
-                DropdownMenuItem(
-                    text = { Text(label, fontSize = 13.sp) },
-                    onClick = {
-                        expanded = false
-                        onUpdate(trigger.copy(value = value, displayName = label))
-                    }
-                )
+            ScaledDialogContent {
+                phases.forEach { (value, label) ->
+                    DropdownMenuItem(
+                        text = { Text(label, fontSize = 13.sp) },
+                        onClick = {
+                            expanded = false
+                            onUpdate(trigger.copy(value = value, displayName = label))
+                        }
+                    )
+                }
             }
         }
     }
@@ -1257,19 +1269,21 @@ private fun ButtonPressTriggerControls(
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            (1..4).forEach { n ->
-                DropdownMenuItem(
-                    text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
-                    onClick = {
-                        expanded = false
-                        onUpdate(
-                            trigger.copy(
-                                value = n.toString(),
-                                displayName = context.getString(R.string.automation_trigger_button_label, n),
+            ScaledDialogContent {
+                (1..4).forEach { n ->
+                    DropdownMenuItem(
+                        text = { Text(n.toString(), fontWeight = FontWeight.Bold) },
+                        onClick = {
+                            expanded = false
+                            onUpdate(
+                                trigger.copy(
+                                    value = n.toString(),
+                                    displayName = context.getString(R.string.automation_trigger_button_label, n),
+                                )
                             )
-                        )
-                    },
-                )
+                        },
+                    )
+                }
             }
         }
     }
@@ -1309,44 +1323,46 @@ private fun ButtonIconPicker(buttonNumber: Int) {
             )
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            Text(
-                stringResource(R.string.widget_button_icon_hint),
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(12.dp, 6.dp),
-            )
-            WidgetButtonIcons.CATALOG.chunked(ICON_PICKER_COLUMNS).forEach { row ->
-                Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
-                    row.forEach { entry ->
-                        val isSelected = entry.id == selectedId
-                        Box(
-                            modifier = Modifier
-                                .padding(2.dp)
-                                .background(
-                                    if (isSelected) AccentGreen.copy(alpha = 0.18f) else CardSurface,
-                                    RoundedCornerShape(6.dp),
+            ScaledDialogContent {
+                Text(
+                    stringResource(R.string.widget_button_icon_hint),
+                    fontSize = 11.sp,
+                    color = TextSecondary,
+                    modifier = Modifier.padding(12.dp, 6.dp),
+                )
+                WidgetButtonIcons.CATALOG.chunked(ICON_PICKER_COLUMNS).forEach { row ->
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 2.dp)) {
+                        row.forEach { entry ->
+                            val isSelected = entry.id == selectedId
+                            Box(
+                                modifier = Modifier
+                                    .padding(2.dp)
+                                    .background(
+                                        if (isSelected) AccentGreen.copy(alpha = 0.18f) else CardSurface,
+                                        RoundedCornerShape(6.dp),
+                                    )
+                                    .border(
+                                        1.dp,
+                                        if (isSelected) AccentGreen else CardBorder,
+                                        RoundedCornerShape(6.dp),
+                                    )
+                                    .clickable {
+                                        val next = if (isSelected) null else entry.id
+                                        selectedId = next
+                                        prefs.setButtonIconId(buttonNumber, next)
+                                        Log.i("AutomationScreen", "button $buttonNumber icon=$next")
+                                    }
+                                    .padding(6.dp)
+                                    .size(22.dp),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Icon(
+                                    imageVector = entry.vector,
+                                    contentDescription = stringResource(entry.labelRes),
+                                    tint = if (isSelected) AccentGreen else TextSecondary,
+                                    modifier = Modifier.size(20.dp),
                                 )
-                                .border(
-                                    1.dp,
-                                    if (isSelected) AccentGreen else CardBorder,
-                                    RoundedCornerShape(6.dp),
-                                )
-                                .clickable {
-                                    val next = if (isSelected) null else entry.id
-                                    selectedId = next
-                                    prefs.setButtonIconId(buttonNumber, next)
-                                    Log.i("AutomationScreen", "button $buttonNumber icon=$next")
-                                }
-                                .padding(6.dp)
-                                .size(22.dp),
-                            contentAlignment = Alignment.Center,
-                        ) {
-                            Icon(
-                                imageVector = entry.vector,
-                                contentDescription = stringResource(entry.labelRes),
-                                tint = if (isSelected) AccentGreen else TextSecondary,
-                                modifier = Modifier.size(20.dp),
-                            )
+                            }
                         }
                     }
                 }
@@ -1600,17 +1616,19 @@ private fun DelayActionControls(
                     .padding(8.dp, 6.dp)
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                delayLabels.forEach { (ms, label) ->
-                    DropdownMenuItem(
-                        text = { Text(label, fontSize = 13.sp) },
-                        onClick = {
-                            expanded = false
-                            onUpdate(action.copy(
-                                payload = ms.toString(),
-                                displayName = delayDisplayNames[ms] ?: label
-                            ))
-                        }
-                    )
+                ScaledDialogContent {
+                    delayLabels.forEach { (ms, label) ->
+                        DropdownMenuItem(
+                            text = { Text(label, fontSize = 13.sp) },
+                            onClick = {
+                                expanded = false
+                                onUpdate(action.copy(
+                                    payload = ms.toString(),
+                                    displayName = delayDisplayNames[ms] ?: label
+                                ))
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1842,17 +1860,19 @@ private fun ToggleActionControls(
                     .padding(8.dp, 6.dp)
             )
             DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                ActionDispatcher.TOGGLE_TARGETS.forEach { target ->
-                    DropdownMenuItem(
-                        text = { Text(targetNames[target] ?: target, fontSize = 13.sp) },
-                        onClick = {
-                            expanded = false
-                            onUpdate(action.copy(
-                                payload = target,
-                                displayName = toggleDisplayName(context, target)
-                            ))
-                        }
-                    )
+                ScaledDialogContent {
+                    ActionDispatcher.TOGGLE_TARGETS.forEach { target ->
+                        DropdownMenuItem(
+                            text = { Text(targetNames[target] ?: target, fontSize = 13.sp) },
+                            onClick = {
+                                expanded = false
+                                onUpdate(action.copy(
+                                    payload = target,
+                                    displayName = toggleDisplayName(context, target)
+                                ))
+                            }
+                        )
+                    }
                 }
             }
         }
@@ -1909,28 +1929,30 @@ private fun CatalogDropdown(
             onDismissRequest = { expanded = false },
             modifier = Modifier.fillMaxHeight(0.5f)
         ) {
-            var lastCat = ""
-            items.forEachIndexed { idx, item ->
-                val cat = categories[idx]
-                if (cat != lastCat) {
-                    lastCat = cat
-                    val open = openCategories[cat] == true
-                    DropdownMenuItem(
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(if (open) "▼" else "▶", fontSize = 11.sp, color = AccentGreen)
-                                Spacer(Modifier.width(6.dp))
-                                Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
-                            }
-                        },
-                        onClick = { openCategories[cat] = !open }
-                    )
-                }
-                if (openCategories[cat] == true) {
-                    DropdownMenuItem(
-                        text = { Text(item, fontSize = 13.sp) },
-                        onClick = { expanded = false; onSelect(idx) }
-                    )
+            ScaledDialogContent {
+                var lastCat = ""
+                items.forEachIndexed { idx, item ->
+                    val cat = categories[idx]
+                    if (cat != lastCat) {
+                        lastCat = cat
+                        val open = openCategories[cat] == true
+                        DropdownMenuItem(
+                            text = {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(if (open) "▼" else "▶", fontSize = 11.sp, color = AccentGreen)
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(cat, fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextMuted)
+                                }
+                            },
+                            onClick = { openCategories[cat] = !open }
+                        )
+                    }
+                    if (openCategories[cat] == true) {
+                        DropdownMenuItem(
+                            text = { Text(item, fontSize = 13.sp) },
+                            onClick = { expanded = false; onSelect(idx) }
+                        )
+                    }
                 }
             }
         }
@@ -1945,35 +1967,37 @@ private fun JournalDialog(logs: List<RuleLogEntity>, onDismiss: () -> Unit) {
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
-        val context = LocalContext.current
-        Column(
-            modifier = Modifier
-                .fillMaxWidth(0.4f)
-                .fillMaxHeight(0.75f)
-                .background(NavyDeep, RoundedCornerShape(16.dp))
-                .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(14.dp, 12.dp),
-                verticalAlignment = Alignment.CenterVertically
+        ScaledDialogContent {
+            val context = LocalContext.current
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth(0.4f)
+                    .fillMaxHeight(0.75f)
+                    .background(NavyDeep, RoundedCornerShape(16.dp))
+                    .border(1.5.dp, CardBorder, RoundedCornerShape(16.dp))
             ) {
-                Text(stringResource(R.string.automation_journal_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
-                    modifier = Modifier.weight(1f))
-                IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
-                    Icon(Icons.Outlined.Close, "close", tint = TextMuted)
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(14.dp, 12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(stringResource(R.string.automation_journal_title), fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary,
+                        modifier = Modifier.weight(1f))
+                    IconButton(onClick = onDismiss, modifier = Modifier.size(28.dp)) {
+                        Icon(Icons.Outlined.Close, "close", tint = TextMuted)
+                    }
                 }
-            }
-            HorizontalDivider(color = CardBorder)
+                HorizontalDivider(color = CardBorder)
 
-            if (logs.isEmpty()) {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(stringResource(R.string.automation_journal_empty), color = TextMuted, fontSize = 14.sp)
-                }
-            } else {
-                LazyColumn(modifier = Modifier.padding(8.dp)) {
-                    items(logs, key = { it.id }) { log ->
-                        LogItem(log)
-                        Spacer(Modifier.height(4.dp))
+                if (logs.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(stringResource(R.string.automation_journal_empty), color = TextMuted, fontSize = 14.sp)
+                    }
+                } else {
+                    LazyColumn(modifier = Modifier.padding(8.dp)) {
+                        items(logs, key = { it.id }) { log ->
+                            LogItem(log)
+                            Spacer(Modifier.height(4.dp))
+                        }
                     }
                 }
             }
@@ -2150,85 +2174,87 @@ private fun AddActionButton(
             Text(stringResource(R.string.automation_add_action_button), fontSize = 12.sp, color = TextMuted)
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_dplus_command), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddParam() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_notification), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddNotification()
-                    if (!android.provider.Settings.canDrawOverlays(context)) {
-                        showOverlayPrompt = true
+            ScaledDialogContent {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_dplus_command), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddParam() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_notification), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddNotification()
+                        if (!android.provider.Settings.canDrawOverlays(context)) {
+                            showOverlayPrompt = true
+                        }
                     }
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_app_launch), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddAppLaunch() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_yandex_music), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddYandexMusic() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_call), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddCall() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_navigate), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddNavigate() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_url), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddUrl() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddDelay() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddMediaVolume() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddSentry() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_hotspot), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddHotspot() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_speak), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddSpeak() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_agent_query), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddAgentQuery() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddCluster() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_split_screen), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddSplitScreen() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_split_screen_close), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddSplitScreenClose() }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_action_split_screen_toggle), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddSplitScreenToggle() }
-            )
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_app_launch), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddAppLaunch() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_yandex_music), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddYandexMusic() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_call), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddCall() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_navigate), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddNavigate() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_url), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddUrl() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_delay), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddDelay() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_media_volume), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddMediaVolume() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_sentry), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddSentry() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_hotspot), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddHotspot() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_speak), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddSpeak() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_agent_query), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddAgentQuery() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_cluster_projection), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddCluster() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_split_screen), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddSplitScreen() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_split_screen_close), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddSplitScreenClose() }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_action_split_screen_toggle), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddSplitScreenToggle() }
+                )
+            }
         }
     }
 
     if (showOverlayPrompt) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { showOverlayPrompt = false },
             containerColor = CardSurface,
             title = { Text(stringResource(R.string.automation_overlay_permission_title), color = TextPrimary, fontSize = 16.sp) },
@@ -2333,7 +2359,7 @@ private fun NotificationEditDialog(
         cursorColor = AccentGreen
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = {
@@ -2445,7 +2471,7 @@ private fun SpeakEditDialog(
         cursorColor = AccentGreen
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = {
@@ -2547,7 +2573,7 @@ private fun AgentQueryEditDialog(
         cursorColor = AccentGreen
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = {
@@ -2700,7 +2726,7 @@ private fun SplitScreenEditDialog(
     val sideLeftLabel = stringResource(R.string.split_action_side_left)
     val sideRightLabel = stringResource(R.string.split_action_side_right)
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = {
@@ -2953,7 +2979,7 @@ private fun CallEditDialog(
         cursorColor = AccentGreen
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(stringResource(R.string.automation_call_dialog_title), color = TextPrimary, fontSize = 16.sp) },
@@ -3106,7 +3132,7 @@ private fun NavigateEditDialog(
         cursorColor = AccentGreen
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(stringResource(R.string.automation_navigate_dialog_title), color = TextPrimary, fontSize = 16.sp) },
@@ -3133,14 +3159,16 @@ private fun NavigateEditDialog(
                             maxLines = 1
                         )
                         DropdownMenu(expanded = placeExpanded, onDismissRequest = { placeExpanded = false }) {
-                            places.forEach { place ->
-                                DropdownMenuItem(
-                                    text = { Text(place.name, fontSize = 13.sp) },
-                                    onClick = {
-                                        placeExpanded = false
-                                        selectedPlace = place
-                                    }
-                                )
+                            ScaledDialogContent {
+                                places.forEach { place ->
+                                    DropdownMenuItem(
+                                        text = { Text(place.name, fontSize = 13.sp) },
+                                        onClick = {
+                                            placeExpanded = false
+                                            selectedPlace = place
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
@@ -3239,7 +3267,7 @@ private fun UrlEditDialog(
         errorLabelColor = Color(0xFFEF4444)
     )
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(stringResource(R.string.automation_url_dialog_title), color = TextPrimary, fontSize = 16.sp) },
@@ -3359,7 +3387,7 @@ private fun YandexMusicEditDialog(
     var minimize by remember { mutableStateOf(initialMinimize) }
     var dropdownExpanded by remember { mutableStateOf(false) }
 
-    AlertDialog(
+    AppAlertDialog(
         onDismissRequest = onDismiss,
         containerColor = CardSurface,
         title = { Text(stringResource(R.string.automation_music_dialog_title), color = TextPrimary, fontSize = 16.sp) },
@@ -3385,14 +3413,16 @@ private fun YandexMusicEditDialog(
                         expanded = dropdownExpanded,
                         onDismissRequest = { dropdownExpanded = false }
                     ) {
-                        modes.forEach { (value, label) ->
-                            DropdownMenuItem(
-                                text = { Text(label, fontSize = 13.sp) },
-                                onClick = {
-                                    selectedMode = value
-                                    dropdownExpanded = false
-                                }
-                            )
+                        ScaledDialogContent {
+                            modes.forEach { (value, label) ->
+                                DropdownMenuItem(
+                                    text = { Text(label, fontSize = 13.sp) },
+                                    onClick = {
+                                        selectedMode = value
+                                        dropdownExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -3460,79 +3490,81 @@ private fun AddTriggerButton(
             Text(stringResource(R.string.automation_add_condition_button), fontSize = 12.sp, color = TextMuted)
         }
         DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_param), fontSize = 13.sp) },
-                onClick = { menuExpanded = false; onAddParam() }
-            )
-            val firstPlace = places.firstOrNull()
-            DropdownMenuItem(
-                text = {
-                    if (firstPlace != null) {
-                        Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp)
-                    } else {
-                        Column {
-                            Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp, color = TextSecondary)
-                            Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 11.sp, color = TextMuted)
+            ScaledDialogContent {
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_param), fontSize = 13.sp) },
+                    onClick = { menuExpanded = false; onAddParam() }
+                )
+                val firstPlace = places.firstOrNull()
+                DropdownMenuItem(
+                    text = {
+                        if (firstPlace != null) {
+                            Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp)
+                        } else {
+                            Column {
+                                Text(stringResource(R.string.automation_trigger_type_place), fontSize = 13.sp, color = TextSecondary)
+                                Text(stringResource(R.string.automation_trigger_type_place_empty_hint), fontSize = 11.sp, color = TextMuted)
+                            }
                         }
-                    }
-                },
-                onClick = {
-                    if (firstPlace != null) {
+                    },
+                    onClick = {
+                        if (firstPlace != null) {
+                            menuExpanded = false
+                            onAddPlace(firstPlace)
+                        }
+                    },
+                    enabled = firstPlace != null
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_time_of_day), fontSize = 13.sp) },
+                    onClick = {
                         menuExpanded = false
-                        onAddPlace(firstPlace)
+                        onAddTimeOfDay()
                     }
-                },
-                enabled = firstPlace != null
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_time_of_day), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddTimeOfDay()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddSchedule()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddServiceStart()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_internet), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddNetworkAvailable()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddButtonPress()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_steering_key), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddSteeringKey()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = 13.sp) },
-                onClick = {
-                    menuExpanded = false
-                    onAddVoice()
-                }
-            )
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_schedule), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddSchedule()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_service_start), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddServiceStart()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_internet), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddNetworkAvailable()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_button_press), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddButtonPress()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_steering_key), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddSteeringKey()
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.automation_trigger_type_voice), fontSize = 13.sp) },
+                    onClick = {
+                        menuExpanded = false
+                        onAddVoice()
+                    }
+                )
+            }
         }
     }
 }

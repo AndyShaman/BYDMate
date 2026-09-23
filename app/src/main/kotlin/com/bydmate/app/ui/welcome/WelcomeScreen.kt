@@ -25,7 +25,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
+import com.bydmate.app.ui.components.AppAlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -339,7 +339,7 @@ private fun AdbStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
 
     // Same long explanation as the Settings ADB-restore help.
     if (helpOpen) {
-        AlertDialog(
+        AppAlertDialog(
             onDismissRequest = { helpOpen = false },
             containerColor = CardSurface,
             title = {
