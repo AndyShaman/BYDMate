@@ -2035,26 +2035,35 @@ class TrackingService : Service(), LocationListener {
             .any { ComponentName.unflattenFromString(it.id ?: "") == ours }
     }
 
-    private fun createNotificationChannel() {
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            appStrings.get(R.string.notif_channel_tracking_name),
-            NotificationManager.IMPORTANCE_LOW
-        ).apply {
-            description = appStrings.get(R.string.notif_channel_tracking_desc)
-            setShowBadge(false)
+    private fun createNotificationChannel() = NotificationChannels.create(this, appStrings.context)
+
+    /** The tracking notification channels, also re-registered on a language change. */
+    object NotificationChannels {
+        /**
+         * Creates both tracking channels, or renames them: the same ids update the names and the
+         * descriptions to [strings], a context in the app language.
+         */
+        fun create(context: Context, strings: Context) {
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                strings.getString(R.string.notif_channel_tracking_name),
+                NotificationManager.IMPORTANCE_LOW
+            ).apply {
+                description = strings.getString(R.string.notif_channel_tracking_desc)
+                setShowBadge(false)
+            }
+            val quiet = NotificationChannel(
+                QUIET_CHANNEL_ID,
+                strings.getString(R.string.notif_channel_tracking_quiet_name),
+                NotificationManager.IMPORTANCE_MIN
+            ).apply {
+                description = strings.getString(R.string.notif_channel_tracking_quiet_desc)
+                setShowBadge(false)
+            }
+            val nm = context.getSystemService(NotificationManager::class.java)
+            nm.createNotificationChannel(channel)
+            nm.createNotificationChannel(quiet)
         }
-        val quiet = NotificationChannel(
-            QUIET_CHANNEL_ID,
-            appStrings.get(R.string.notif_channel_tracking_quiet_name),
-            NotificationManager.IMPORTANCE_MIN
-        ).apply {
-            description = appStrings.get(R.string.notif_channel_tracking_quiet_desc)
-            setShowBadge(false)
-        }
-        val nm = getSystemService(NotificationManager::class.java)
-        nm.createNotificationChannel(channel)
-        nm.createNotificationChannel(quiet)
     }
 
     private fun activeChannelId(): String {

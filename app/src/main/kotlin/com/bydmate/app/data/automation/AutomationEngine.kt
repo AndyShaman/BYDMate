@@ -91,6 +91,22 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         // the a11y key filter through onSteeringKey(), never from the poll.
         const val TRIGGER_KIND_STEERING_KEY = "steering_key"
         const val TRIGGER_PARAM_STEERING_KEY = "steering_key"
+
+        /**
+         * Creates the confirmation channel, or renames it: the same id updates the name and the
+         * description to [strings], a context in the app language.
+         */
+        fun createConfirmChannel(context: Context, strings: Context) {
+            val channel = NotificationChannel(
+                CONFIRM_CHANNEL_ID,
+                strings.getString(R.string.notif_channel_auto_confirm_name),
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = strings.getString(R.string.notif_channel_auto_confirm_desc)
+            }
+            val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            nm.createNotificationChannel(channel)
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -930,15 +946,5 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_NOT_EXPORTED)
     }
 
-    private fun createConfirmChannel() {
-        val channel = NotificationChannel(
-            CONFIRM_CHANNEL_ID,
-            appStrings.get(R.string.notif_channel_auto_confirm_name),
-            NotificationManager.IMPORTANCE_HIGH
-        ).apply {
-            description = appStrings.get(R.string.notif_channel_auto_confirm_desc)
-        }
-        val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(channel)
-    }
+    private fun createConfirmChannel() = createConfirmChannel(context, appStrings.context)
 }
