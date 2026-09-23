@@ -35,10 +35,11 @@ object BackupParts {
     val TABLES_TABLES = listOf(
         "trips", "trip_points", "trip_tombstones",
         "charges", "charge_points",
-        "battery_snapshots", "idle_drains", "tariff_periods",
+        "battery_snapshots", "idle_drains",
     )
 
-    val SETTINGS_TABLES = listOf("automation_rules", "places")
+    /** Tariff periods travel with the flat tariff keys they mirror, which are settings. */
+    val SETTINGS_TABLES = listOf("automation_rules", "places", "tariff_periods")
 
     /** Live state of this head unit: emptied in every archive, kept as is by a merge. */
     val RUNTIME_TABLES = listOf("automation_log", "vehicle_write_log", "odometer_samples", "last_state")

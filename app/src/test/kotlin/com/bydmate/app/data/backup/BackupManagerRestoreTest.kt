@@ -6,8 +6,10 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.SplitPreferencesImpl
+import io.mockk.every
 import io.mockk.mockk
 import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
@@ -22,6 +24,10 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 import java.io.File
 import java.io.FileOutputStream
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
+import kotlin.concurrent.thread
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
 
@@ -38,11 +44,14 @@ class BackupManagerRestoreTest {
 
     private fun backupZip(
         prefs: Map<String, Map<String, Any?>> = mapOf("automation" to mapOf("restored_key" to "yes")),
+        name: String = "src",
     ): Pair<File, ByteArray> {
-        val dbFile = tmp.newFile("src.db").also { it.delete() }
+        val dbFile = tmp.newFile("$name.db").also { it.delete() }
         SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL("CREATE TABLE t (x INTEGER)")
-            db.execSQL("INSERT INTO t VALUES (42)")
+            db.execSQL("CREATE TABLE t (x TEXT)")
+            db.execSQL("INSERT INTO t VALUES (?)", arrayOf(name))
+            // The database version must agree with the manifest.
+            db.version = AppDatabase.SCHEMA_VERSION
         }
         val dbBytes = dbFile.readBytes()
         val prefsJson = BackupManager.serializePrefs(prefs)
@@ -51,7 +60,7 @@ class BackupManagerRestoreTest {
             put("dbSchemaVersion", AppDatabase.SCHEMA_VERSION)
             put("createdAt", 0L)
         }.toString()
-        val zip = File(tmp.root, "bydmate_backup_20260101_000000.zip")
+        val zip = File(tmp.root, "bydmate_backup_$name.zip")
         ZipOutputStream(FileOutputStream(zip)).use { z ->
             z.putNextEntry(ZipEntry("bydmate.db")); z.write(dbBytes); z.closeEntry()
             z.putNextEntry(ZipEntry("prefs.json")); z.write(prefsJson.toByteArray()); z.closeEntry()
@@ -66,7 +75,7 @@ class BackupManagerRestoreTest {
         prefs.edit().putString("stale_key", "old").commit()
         val (zip, dbBytes) = backupZip()
 
-        BackupManager(context, appDatabase, listOf("automation")).restore(zip)
+        BackupManager(context, appDatabase, AppStrings(context), listOf("automation")).restore(zip)
 
         assertArrayEquals(dbBytes, context.getDatabasePath("bydmate.db").readBytes())
         assertEquals("yes", prefs.getString("restored_key", null))
@@ -77,17 +86,47 @@ class BackupManagerRestoreTest {
     fun `restore marks the next start as post-restore`() {
         val (zip, _) = backupZip()
 
-        BackupManager(context, appDatabase, listOf("automation")).restore(zip)
+        BackupManager(context, appDatabase, AppStrings(context), listOf("automation")).restore(zip)
 
         val state = context.getSharedPreferences(PostRestoreCheck.PREFS_NAME, Context.MODE_PRIVATE)
         assertTrue(state.getBoolean(PostRestoreCheck.KEY_PENDING, false))
         assertTrue(state.getLong(PostRestoreCheck.KEY_TS, 0L) > 0L)
     }
 
+    @Test
+    fun `a second restore waits until the first one has swapped its database in`() {
+        val (first, _) = backupZip(name = "first")
+        val (second, secondBytes) = backupZip(name = "second")
+        val closing = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        val closes = AtomicInteger()
+        // The first restore stops inside its swap, with its temp file not yet renamed.
+        every { appDatabase.close() } answers {
+            if (closes.incrementAndGet() == 1) {
+                closing.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            }
+        }
+        val manager = BackupManager(context, appDatabase, AppStrings(context), listOf("automation"))
+        val errors = java.util.concurrent.ConcurrentHashMap<String, Throwable>()
+        val a = thread { runCatching { manager.restore(first) }.onFailure { errors["first"] = it } }
+        assertTrue(closing.await(5, TimeUnit.SECONDS))
+        val b = thread { runCatching { manager.restore(second) }.onFailure { errors["second"] = it } }
+        val deadline = System.currentTimeMillis() + 5_000
+        while (b.state != Thread.State.BLOCKED && System.currentTimeMillis() < deadline) Thread.sleep(10)
+
+        release.countDown()
+        a.join(5_000)
+        b.join(5_000)
+
+        assertEquals(emptyMap<String, Throwable>(), errors.toMap())
+        assertArrayEquals(secondBytes, context.getDatabasePath("bydmate.db").readBytes())
+    }
+
     private fun prefs(name: String) = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 
     private fun restoreWithProductionLists(zip: File) =
-        BackupManager(context, appDatabase, BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS).restore(zip)
+        BackupManager(context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS).restore(zip)
 
     @Test
     fun `old backup without the new prefs files restores and leaves them alone`() {

@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 import android.os.Environment
 import android.util.Log
+import com.bydmate.app.R
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterFrameUi7
 import com.bydmate.app.cluster.ClusterJournal
@@ -14,6 +15,8 @@ import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.service.A11yRecoveryGate
 import com.bydmate.app.split.SplitPreferencesImpl
+import com.bydmate.app.util.AppStrings
+import com.bydmate.app.voice.AudioCapture
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -61,6 +64,7 @@ internal class BackupEntries(
 class BackupManager(
     private val context: Context,
     private val appDatabase: AppDatabase,
+    private val strings: AppStrings,
     private val prefsFileNames: List<String>,
     /** Per-file keys that stay on this device: never exported, never overwritten by a restore. */
     private val excludedPrefsKeys: Map<String, Set<String>> = emptyMap(),
@@ -133,6 +137,9 @@ class BackupManager(
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_ELAPSED,
                 AutomationEngine.KEY_SERVICE_START_LAST_SEEN_UPTIME,
             ),
+            // Media volume saved while the voice agent speaks: another car would get it raised
+            // back to the source device's level.
+            "voice" to setOf(AudioCapture.KEY_PRE_DUCK_VOLUME),
         )
 
         internal fun isExcluded(patterns: Set<String>, key: String): Boolean =
@@ -393,7 +400,7 @@ class BackupManager(
     private fun exportUnlocked(parts: Set<BackupPart>): File {
         // 1-2. Self-contained snapshot of the live database.
         // 3. Runtime state never travels, so even a full archive goes through the trimmed copy.
-        val dbSnapshot = BackupDatabaseFiles.trimmedCopy(snapshotLiveDb(), parts, context.cacheDir)
+        val dbSnapshot = BackupDatabaseFiles.trimmedCopy(withLiveSnapshot { it }, parts, context.cacheDir, strings)
 
         // 4. Collect SharedPreferences. Every whitelisted file is written, even an empty one:
         //    restore reads "file absent" as "made before this file joined the whitelist".
@@ -449,7 +456,9 @@ class BackupManager(
     }
 
     /**
-     * Bytes of the live database with the WAL folded in. Caller holds [exportLock].
+     * Runs [block] on the bytes of the live database with the WAL folded in, while the write
+     * transaction that read them is still open: no writer commits until [block] returns.
+     * Caller holds [exportLock].
      *
      * 1. Fold WAL so the DB file is self-contained, and PROVE it happened (AC-02).
      *    PRAGMA wal_checkpoint(TRUNCATE) returns one row (busy, log, checkpointed);
@@ -461,24 +470,20 @@ class BackupManager(
      *    writer may still slip in between step 1 and the lock — detected via the
      *    WAL file size (TRUNCATE leaves it at 0 bytes) and retried.
      */
-    private fun snapshotLiveDb(): ByteArray {
+    private fun <T> withLiveSnapshot(block: (ByteArray) -> T): T {
         val dbFile = context.getDatabasePath("bydmate.db")
         val walFile = File(dbFile.parentFile, "bydmate.db-wal")
-        var dbBytes: ByteArray? = null
         val supportDb = appDatabase.openHelper.writableDatabase
         for (attempt in 1..3) {
             if (!checkpointTruncate()) continue
             supportDb.beginTransaction()
             try {
-                if (walFile.length() == 0L) {
-                    dbBytes = dbFile.readBytes()
-                    break
-                }
+                if (walFile.length() == 0L) return block(dbFile.readBytes())
             } finally {
                 supportDb.endTransaction()
             }
         }
-        return dbBytes ?: throw IllegalStateException(
+        throw IllegalStateException(
             "База данных занята, экспорт прерван. Повторите попытку позже."
         )
     }
@@ -529,62 +534,76 @@ class BackupManager(
      *
      * After this function returns the caller MUST restart the process so that
      * Room opens the replaced DB file fresh.
+     *
+     * Serialized end to end: two restores share the temp files and the swap.
      */
     fun restore(file: File, parts: Set<BackupPart> = BackupPart.ALL) {
-        // Read straight from the public Download folder via the File API: on some firmwares
-        // (Yuan Plus, DiLink 3.0) the ACTION_OPEN_DOCUMENT handler returns a URI without a
-        // read grant, so the SAF path fails with a SecurityException (#223).
-        val inputStream: InputStream = try {
-            file.inputStream()
-        } catch (e: IOException) {
-            throw IllegalStateException("Не удалось открыть файл бэкапа", e)
+        synchronized(restoreLock) {
+            // Read straight from the public Download folder via the File API: on some firmwares
+            // (Yuan Plus, DiLink 3.0) the ACTION_OPEN_DOCUMENT handler returns a URI without a
+            // read grant, so the SAF path fails with a SecurityException (#223).
+            val inputStream: InputStream = try {
+                file.inputStream()
+            } catch (e: IOException) {
+                throw IllegalStateException("Не удалось открыть файл бэкапа", e)
+            }
+            // 1-2. Read + validate the zip entries under hard size limits (AC-13).
+            val entries = inputStream.use { readBackupEntries(it) }
+
+            // ---------------------------------------------------------------------
+            // PRE-VALIDATION — everything that can fail MUST be checked here, before
+            // a single destructive operation runs. A backup with a valid manifest but
+            // a corrupt DB or malformed prefs.json must be rejected while the live DB
+            // is still intact, never half-applied.
+            // ---------------------------------------------------------------------
+
+            // 2a. Manifest schema compatibility
+            val manifestObj = JSONObject(entries.manifestJson)
+            val backupSchema = manifestObj.getInt("dbSchemaVersion")
+            check(isRestorable(backupSchema, AppDatabase.SCHEMA_VERSION)) {
+                BackupDatabaseFiles.newerArchiveMessage(backupSchema, strings)
+            }
+
+            // 2b. Parts: a trimmed database must never pass for a full one.
+            val archiveParts = manifestParts(manifestObj)
+            check(entries.partial != (archiveParts == BackupPart.ALL)) {
+                strings.get(R.string.backup_error_parts_mismatch)
+            }
+            val selected = parts intersect archiveParts
+            check(selected.isNotEmpty()) { strings.get(R.string.backup_error_no_selected_parts) }
+
+            // 2c. Deserialize prefs now — malformed JSON throws here, before any destructive step.
+            val prefsMap = deserializePrefs(entries.prefsJson)
+
+            // 2d. Write the DB bytes to a temp file and verify it is a real, intact SQLite
+            //     database. openDatabase rejects a non-SQLite file; quick_check catches
+            //     structural corruption. Bad file -> throw, temp deleted, live DB untouched.
+            val targetDbFile = context.getDatabasePath("bydmate.db")
+            val dbDir = targetDbFile.parentFile
+            dbDir?.mkdirs()
+            val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
+            BackupDatabaseFiles.deleteWithSideFiles(tmpDbFile)
+            tmpDbFile.writeBytes(entries.dbBytes)
+            val dbSchema = BackupDatabaseFiles.validate(tmpDbFile)
+            // 2e. The database itself must be of the schema the manifest names: a full archive is
+            //     swapped in as is, and Room would fail on the next start.
+            if (dbSchema != backupSchema) {
+                BackupDatabaseFiles.deleteWithSideFiles(tmpDbFile)
+                error(strings.get(R.string.backup_error_version_mismatch))
+            }
+
+            if (selected == BackupPart.ALL) {
+                // Under the export lock: an auto backup running at this moment must not
+                // checkpoint or read the database while it is closed and swapped.
+                synchronized(exportLock) { swapIn(tmpDbFile, prefsMap) }
+            } else {
+                mergeAndSwap(tmpDbFile, selected, prefsMap.takeIf { BackupPart.SETTINGS in selected })
+            }
+            // Caller is responsible for restarting the process after this returns.
         }
-        // 1-2. Read + validate the zip entries under hard size limits (AC-13).
-        val entries = inputStream.use { readBackupEntries(it) }
-
-        // ---------------------------------------------------------------------
-        // PRE-VALIDATION — everything that can fail MUST be checked here, before
-        // a single destructive operation runs. A backup with a valid manifest but
-        // a corrupt DB or malformed prefs.json must be rejected while the live DB
-        // is still intact, never half-applied.
-        // ---------------------------------------------------------------------
-
-        // 2a. Manifest schema compatibility
-        val manifestObj = JSONObject(entries.manifestJson)
-        val backupSchema = manifestObj.getInt("dbSchemaVersion")
-        check(isRestorable(backupSchema, AppDatabase.SCHEMA_VERSION)) { BackupDatabaseFiles.newerArchiveMessage(backupSchema) }
-
-        // 2b. Parts: a trimmed database must never pass for a full one.
-        val archiveParts = manifestParts(manifestObj)
-        check(entries.partial != (archiveParts == BackupPart.ALL)) {
-            "Файл бэкапа повреждён: состав архива не совпадает с его описанием"
-        }
-        val selected = parts intersect archiveParts
-        check(selected.isNotEmpty()) { "В архиве нет выбранных частей" }
-
-        // 2c. Deserialize prefs now — malformed JSON throws here, before any destructive step.
-        val prefsMap = deserializePrefs(entries.prefsJson)
-
-        // 2d. Write the DB bytes to a temp file and verify it is a real, intact SQLite
-        //     database. openDatabase rejects a non-SQLite file; quick_check catches
-        //     structural corruption. Bad file -> throw, temp deleted, live DB untouched.
-        val targetDbFile = context.getDatabasePath("bydmate.db")
-        val dbDir = targetDbFile.parentFile
-        dbDir?.mkdirs()
-        val tmpDbFile = File(dbDir, "bydmate.db.restore.tmp")
-        BackupDatabaseFiles.deleteWithSideFiles(tmpDbFile)
-        tmpDbFile.writeBytes(entries.dbBytes)
-        BackupDatabaseFiles.validate(tmpDbFile)
-
-        if (selected == BackupPart.ALL) {
-            // Under the export lock: an auto backup running at this moment must not checkpoint or
-            // read the database while it is closed and swapped.
-            synchronized(exportLock) { swapIn(tmpDbFile, prefsMap) }
-        } else {
-            mergeAndSwap(tmpDbFile, selected, prefsMap.takeIf { BackupPart.SETTINGS in selected })
-        }
-        // Caller is responsible for restarting the process after this returns.
     }
+
+    private val restoreLock = Any()
 
     /**
      * Replaces [selected] parts of a copy of the live database with the same parts of [archiveFile],
@@ -593,11 +612,18 @@ class BackupManager(
     private fun mergeAndSwap(archiveFile: File, selected: Set<BackupPart>, prefsMap: Map<String, Map<String, Any?>>?) {
         val mergedFile = File(archiveFile.parentFile, "bydmate.db.merge.tmp")
         try {
-            BackupDatabaseFiles.migrate(context, archiveFile)
+            BackupDatabaseFiles.migrate(context, archiveFile, strings)
             synchronized(exportLock) {
                 BackupDatabaseFiles.deleteWithSideFiles(mergedFile)
-                mergedFile.writeBytes(snapshotLiveDb())
-                BackupDatabaseFiles.merge(mergedFile, archiveFile, selected)
+                // The write transaction of the snapshot stays open through the merge, so nothing
+                // committed to the live database in the meantime is lost with the swap.
+                withLiveSnapshot { bytes ->
+                    mergedFile.writeBytes(bytes)
+                    BackupDatabaseFiles.merge(mergedFile, archiveFile, selected, strings)
+                }
+                // Residual window: a writer that starts between the end of that transaction and
+                // the close in swapIn commits to the old file and is lost. The process restarts
+                // right after the restore.
                 swapIn(mergedFile, prefsMap)
             }
         } finally {

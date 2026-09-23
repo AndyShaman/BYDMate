@@ -7,6 +7,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.data.autoservice.AdbRestorePreferencesImpl
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.SplitPreferencesImpl
 import io.mockk.every
@@ -47,7 +48,7 @@ class BackupManagerExportTest {
 
     private fun checkpointCursor(busy: Int) = BackupFixtures.checkpointCursor(busy)
 
-    private fun manager() = BackupManager(context, appDatabase, listOf("automation"))
+    private fun manager() = BackupManager(context, appDatabase, AppStrings(context), listOf("automation"))
 
     @Before
     fun setUp() {
@@ -209,7 +210,7 @@ class BackupManagerExportTest {
             .apply { runtimeKeys.forEach { putInt(it, 7) } }.commit()
 
         val zip = BackupManager(
-            context, appDatabase, BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS,
+            context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS,
         ).export()
 
         val exported = ZipFile(zip).use { z ->
@@ -225,6 +226,35 @@ class BackupManagerExportTest {
         assertEquals(mapOf("auto_enabled" to true), exported["automation"])
         // Empty files are written too: restore reads "absent" as "older backup".
         assertTrue(exported.keys.containsAll(BackupManager.PREFS_FILES))
+    }
+
+    @Test
+    fun `export clears when each rule last fired and keeps how often`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        BackupFixtures.withDb(liveDb) { it.execSQL("UPDATE automation_rules SET last_triggered_at = 123, trigger_count = 5") }
+
+        val zip = manager().export(BackupPart.ALL)
+
+        entryDb(zip, "bydmate.db") { db ->
+            assertNull(BackupFixtures.text(db, "SELECT last_triggered_at FROM automation_rules"))
+            assertEquals("5", BackupFixtures.text(db, "SELECT trigger_count FROM automation_rules"))
+        }
+    }
+
+    @Test
+    fun `export leaves the voice ducking marker behind`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        context.getSharedPreferences("voice", Context.MODE_PRIVATE).edit()
+            .putInt("pre_duck_volume", 3).putBoolean("voice_enabled", true).commit()
+
+        val zip = BackupManager(
+            context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS,
+        ).export()
+
+        val exported = ZipFile(zip).use { z ->
+            BackupManager.deserializePrefs(z.getInputStream(z.getEntry("prefs.json")).readBytes().decodeToString())
+        }
+        assertEquals(mapOf("voice_enabled" to true), exported["voice"])
     }
 
     @Test

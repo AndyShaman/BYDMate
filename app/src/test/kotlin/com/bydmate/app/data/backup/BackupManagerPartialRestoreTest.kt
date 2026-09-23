@@ -10,6 +10,7 @@ import com.bydmate.app.data.backup.BackupFixtures.count
 import com.bydmate.app.data.backup.BackupFixtures.setting
 import com.bydmate.app.data.backup.BackupFixtures.text
 import com.bydmate.app.data.local.database.AppDatabase
+import com.bydmate.app.util.AppStrings
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertEquals
@@ -40,7 +41,7 @@ class BackupManagerPartialRestoreTest {
     private lateinit var liveDb: File
 
     private fun manager() =
-        BackupManager(context, appDatabase, BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS)
+        BackupManager(context, appDatabase, AppStrings(context), BackupManager.PREFS_FILES, BackupManager.EXCLUDED_PREFS_KEYS)
 
     private fun prefs(name: String) = context.getSharedPreferences(name, Context.MODE_PRIVATE)
 
@@ -83,9 +84,9 @@ class BackupManagerPartialRestoreTest {
             assertEquals("archive", text(db, "SELECT source FROM trips WHERE id = 7"))
             assertEquals(7L, text(db, "SELECT trip_id FROM trip_points")!!.toLong())
             assertEquals("archive", text(db, "SELECT detection_source FROM charges WHERE id = 7"))
-            assertEquals("archive", text(db, "SELECT trip_rule FROM tariff_periods"))
             assertEquals("archive", setting(db, "trip1_reset_ts"))
-            // Everything outside Tables is the live one.
+            // Everything outside Tables is the live one, tariffs included: they are settings.
+            assertEquals("live", text(db, "SELECT trip_rule FROM tariff_periods"))
             assertEquals("live", text(db, "SELECT name FROM automation_rules"))
             assertEquals("live", text(db, "SELECT name FROM places"))
             assertEquals("live", setting(db, "currency"))
@@ -110,6 +111,7 @@ class BackupManagerPartialRestoreTest {
         live { db ->
             assertEquals("archive", text(db, "SELECT name FROM automation_rules"))
             assertEquals("archive", text(db, "SELECT name FROM places"))
+            assertEquals("archive", text(db, "SELECT trip_rule FROM tariff_periods"))
             assertEquals("archive", setting(db, "currency"))
             assertEquals("live", text(db, "SELECT source FROM trips"))
             assertEquals("live", setting(db, "trip1_reset_ts"))
@@ -149,17 +151,19 @@ class BackupManagerPartialRestoreTest {
         // A v3.17.5 archive: no parts in the manifest, so a full one.
         val zip = BackupFixtures.archive(bytes, parts = null, schema = 19)
 
-        manager().restore(zip, setOf(BackupPart.TABLES))
+        manager().restore(zip, setOf(BackupPart.TABLES, BackupPart.SETTINGS))
 
         live { db ->
             assertEquals(1, count(db, "trips"))
             assertEquals("archive", text(db, "SELECT source FROM trips WHERE id = 7"))
             assertNull(text(db, "SELECT meter_kwh FROM charges WHERE id = 7"))
-            // MIGRATION_19_20 seeded the first tariff period from the archive's own tariff.
+            // MIGRATION_19_20 seeded the first tariff period from the archive's own tariff, and
+            // both arrive together with Settings.
             assertEquals("0.31", text(db, "SELECT home_rate FROM tariff_periods"))
-            // Settings were not chosen: the live tariff and rules stay.
-            assertEquals("live", text(db, "SELECT name FROM automation_rules"))
-            assertNull(setting(db, "home_tariff"))
+            assertEquals("0.31", setting(db, "home_tariff"))
+            assertEquals(0, count(db, "automation_rules"))
+            // Keys were not chosen: the live token stays.
+            assertEquals("live-token", setting(db, "tg_backup_token"))
         }
     }
 
@@ -180,6 +184,76 @@ class BackupManagerPartialRestoreTest {
         assertThrows(IllegalStateException::class.java) { manager().restore(zip, BackupPart.ALL) }
 
         live { db -> assertEquals("live", text(db, "SELECT name FROM automation_rules")) }
+    }
+
+    @Test
+    fun `merge runs while the live database write transaction is held`() {
+        val supportDb = mockk<SupportSQLiteDatabase>(relaxed = true)
+        every { appDatabase.openHelper.writableDatabase } returns supportDb
+        val merged = File(liveDb.parentFile, "bydmate.db.merge.tmp")
+        var held = false
+        // What the merged copy holds at the moment the write lock is released.
+        val atRelease = mutableListOf<String?>()
+        every { supportDb.beginTransaction() } answers { held = true }
+        every { supportDb.endTransaction() } answers {
+            atRelease += if (merged.exists()) BackupFixtures.withDb(merged) { text(it, "SELECT source FROM trips") } else null
+            held = false
+        }
+        var closedWhileHeld: Boolean? = null
+        every { appDatabase.close() } answers { closedWhileHeld = held }
+        val zip = BackupFixtures.archive(archiveDbBytes(setOf(BackupPart.TABLES)), setOf(BackupPart.TABLES))
+
+        manager().restore(zip, BackupPart.ALL)
+
+        // No writer could commit between the snapshot and the end of the merge.
+        assertEquals(listOf<String?>("archive"), atRelease)
+        assertEquals(false, closedWhileHeld)
+    }
+
+    @Test
+    fun `archive whose database version differs from its manifest is refused`() {
+        for (parts in listOf(BackupPart.ALL, setOf(BackupPart.SETTINGS))) {
+            val file = BackupFixtures.createCurrentDb(context, "archive-newer.db")
+            BackupFixtures.withDb(file) { it.version = AppDatabase.SCHEMA_VERSION + 1 }
+            val zip = BackupFixtures.archive(file.readBytes(), BackupPart.ALL, schema = AppDatabase.SCHEMA_VERSION)
+            file.delete()
+
+            val error = assertThrows(IllegalStateException::class.java) { manager().restore(zip, parts) }
+
+            assertEquals("Файл бэкапа повреждён: версия базы не совпадает с описанием", error.message)
+            live { db -> assertEquals("live", text(db, "SELECT name FROM automation_rules")) }
+            assertTrue(!prefs(PostRestoreCheck.PREFS_NAME).getBoolean(PostRestoreCheck.KEY_PENDING, false))
+        }
+    }
+
+    @Test
+    fun `archive with a charge point of a missing charge is refused and the live database is untouched`() {
+        val file = BackupFixtures.createCurrentDb(context, "archive-orphan.db")
+        BackupFixtures.withDb(file) { db ->
+            BackupFixtures.seedCurrent(db, "archive", 7L)
+            db.execSQL("INSERT INTO charge_points (charge_id, timestamp) VALUES (99, 2002)")
+        }
+        val zip = BackupFixtures.archive(file.readBytes(), BackupPart.ALL)
+
+        val error = assertThrows(IllegalStateException::class.java) { manager().restore(zip, setOf(BackupPart.TABLES)) }
+
+        assertEquals("Файл бэкапа повреждён: нарушены связи между таблицами", error.message)
+        live { db ->
+            assertEquals("live", text(db, "SELECT source FROM trips"))
+            assertEquals(1, count(db, "charge_points"))
+        }
+        assertTrue(!prefs(PostRestoreCheck.PREFS_NAME).getBoolean(PostRestoreCheck.KEY_PENDING, false))
+        assertTrue(context.getDatabasePath("bydmate.db").parentFile!!.list()!!.none { it.endsWith(".tmp") })
+    }
+
+    @Test
+    fun `restore errors come in the app language`() {
+        com.bydmate.app.data.local.LocalePreferences(context).setLanguage("en")
+        val zip = BackupFixtures.archive(archiveDbBytes(setOf(BackupPart.TABLES)), setOf(BackupPart.TABLES))
+
+        val error = assertThrows(IllegalStateException::class.java) { manager().restore(zip, setOf(BackupPart.KEYS)) }
+
+        assertEquals("The archive has none of the selected parts", error.message)
     }
 
     @Test

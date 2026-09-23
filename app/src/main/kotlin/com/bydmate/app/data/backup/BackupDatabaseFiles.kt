@@ -5,8 +5,10 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteException
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import com.bydmate.app.R
 import com.bydmate.app.data.local.database.AppDatabase
 import com.bydmate.app.di.AppModule
+import com.bydmate.app.util.AppStrings
 import java.io.File
 
 /**
@@ -20,7 +22,7 @@ internal object BackupDatabaseFiles {
      * survive in free pages of the file (a token in an archive without Keys): secure_delete zeroes
      * them and VACUUM rebuilds the file from live rows only.
      */
-    fun trimmedCopy(snapshot: ByteArray, parts: Set<BackupPart>, tempDir: File): ByteArray {
+    fun trimmedCopy(snapshot: ByteArray, parts: Set<BackupPart>, tempDir: File, strings: AppStrings): ByteArray {
         val tmp = File.createTempFile("backup_trim_", ".db", tempDir)
         try {
             tmp.writeBytes(snapshot)
@@ -28,7 +30,7 @@ internal object BackupDatabaseFiles {
                 db.rawQuery("PRAGMA secure_delete=ON", null).use { it.moveToFirst() }
                 inTransaction(db) { dropRows(db, parts) }
                 db.execSQL("VACUUM")
-                check(quickCheck(db)) { "Снимок базы для экспорта не прошёл проверку целостности" }
+                check(quickCheck(db)) { strings.get(R.string.backup_error_export_integrity) }
             }
             return tmp.readBytes()
         } finally {
@@ -40,6 +42,8 @@ internal object BackupDatabaseFiles {
         val dropped = BackupPart.entries.filter { it !in parts }
         (BackupParts.RUNTIME_TABLES + dropped.flatMap(BackupParts::tablesOf))
             .forEach { db.execSQL("DELETE FROM `$it`") }
+        // When a rule last fired is this head unit's state: another device would inherit its cooldown.
+        db.execSQL("UPDATE automation_rules SET last_triggered_at = NULL")
         val runtimeKeys = BackupParts.RUNTIME_SETTINGS_KEYS.toTypedArray()
         db.delete("settings", "key IN ${List(runtimeKeys.size) { "?" }.joinToString(",", "(", ")")}", runtimeKeys)
         for (part in dropped) {
@@ -52,16 +56,20 @@ internal object BackupDatabaseFiles {
      * Replaces [selected] parts of [target] with the same parts of [archive]; both share one schema.
      * The runtime tables and keys of [target] stay as they are.
      */
-    fun merge(target: File, archive: File, selected: Set<BackupPart>) {
+    fun merge(target: File, archive: File, selected: Set<BackupPart>, strings: AppStrings) {
         SQLiteDatabase.openDatabase(target.path, null, SQLiteDatabase.OPEN_READWRITE).use { db ->
             db.execSQL("ATTACH DATABASE ? AS archive", arrayOf(archive.path))
             inTransaction(db) {
                 selected.forEach { replacePart(db, it) }
                 // The open trip of the live state points into the history just replaced.
                 if (BackupPart.TABLES in selected) db.execSQL("UPDATE last_state SET open_trip_id = NULL")
+                // This connection does not enforce foreign keys, and quick_check does not look at
+                // them: an orphan row would reach Room, which does. Throwing rolls the merge back.
+                val orphans = db.rawQuery("PRAGMA main.foreign_key_check", null).use { it.count }
+                check(orphans == 0) { strings.get(R.string.backup_error_fk_violation) }
             }
             db.execSQL("DETACH DATABASE archive")
-            check(quickCheck(db)) { "База после слияния с бэкапом не прошла проверку целостности" }
+            check(quickCheck(db)) { strings.get(R.string.backup_error_merge_integrity) }
         }
     }
 
@@ -87,11 +95,11 @@ internal object BackupDatabaseFiles {
      * Brings [archive] (a file in the app's database folder) of an older schema to the current one
      * through the app's own migrations; Room validates the result against the schema.
      */
-    fun migrate(context: Context, archive: File) {
+    fun migrate(context: Context, archive: File, strings: AppStrings) {
         val version = SQLiteDatabase.openDatabase(archive.path, null, SQLiteDatabase.OPEN_READONLY).use { it.version }
-        check(version <= AppDatabase.SCHEMA_VERSION) { newerArchiveMessage(version) }
+        check(version <= AppDatabase.SCHEMA_VERSION) { newerArchiveMessage(version, strings) }
         // Room would create an empty schema over it and the merge would wipe the chosen parts.
-        check(version >= 1) { "Файл базы данных в бэкапе не является базой BYDMate" }
+        check(version >= 1) { strings.get(R.string.backup_error_not_bydmate_db) }
         if (version == AppDatabase.SCHEMA_VERSION) return
         val archiveDb = AppModule.withMigrations(Room.databaseBuilder(context, AppDatabase::class.java, archive.name))
             .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
@@ -103,23 +111,23 @@ internal object BackupDatabaseFiles {
         }
     }
 
-    fun newerArchiveMessage(schema: Int) =
-        "Бэкап создан более новой версией приложения (схема $schema, текущая ${AppDatabase.SCHEMA_VERSION}). " +
-            "Обновите приложение перед восстановлением."
+    fun newerArchiveMessage(schema: Int, strings: AppStrings) =
+        strings.get(R.string.backup_error_newer_archive, schema, AppDatabase.SCHEMA_VERSION)
 
     /**
      * Verify [file] is a readable, structurally intact SQLite database.
      * Throws IllegalStateException (and deletes the temp file) if it is not a SQLite file
      * or fails quick_check. Opened read-only so a backup from an older (but compatible)
-     * schema is not migrated here.
+     * schema is not migrated here. Returns its `PRAGMA user_version`: the schema Room stamped on it.
      */
-    fun validate(file: File) {
+    fun validate(file: File): Int {
         val db = try {
             SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
         } catch (e: SQLiteException) {
             file.delete()
             throw IllegalStateException("Файл базы данных в бэкапе повреждён или не является базой SQLite", e)
         }
+        val version = db.version
         val ok = try {
             quickCheck(db)
         } catch (_: SQLiteException) {
@@ -131,6 +139,7 @@ internal object BackupDatabaseFiles {
             file.delete()
             error("Файл базы данных в бэкапе не прошёл проверку целостности")
         }
+        return version
     }
 
     private fun quickCheck(db: SQLiteDatabase): Boolean =

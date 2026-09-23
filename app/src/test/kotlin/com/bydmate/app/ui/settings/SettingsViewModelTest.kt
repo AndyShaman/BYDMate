@@ -1550,6 +1550,24 @@ class SettingsViewModelTest {
     }
 
     @Test
+    fun `restoreConfig ignores a second restore while the first one runs`() = runTest {
+        val file = File("/sdcard/Download/bydmate_backup_1.zip")
+        val parts = setOf(com.bydmate.app.data.backup.BackupPart.TABLES)
+        val calls = java.util.concurrent.atomic.AtomicInteger()
+        backupManager = mockk { every { restore(file, parts) } answers { calls.incrementAndGet(); error("broken") } }
+        val vm = buildViewModel().apply { ioDispatcher = testDispatcher }
+
+        vm.restoreConfig(file, parts)
+        assertTrue(vm.uiState.value.restoreInProgress)
+        vm.restoreConfig(file, parts)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, calls.get())
+        assertFalse(vm.uiState.value.restoreInProgress)
+        assertTrue(vm.uiState.value.configStatus!!.contains("broken"))
+    }
+
+    @Test
     fun `openRestorePicker ignores repeated taps while a scan runs`() = runTest {
         val calls = java.util.concurrent.atomic.AtomicInteger()
         backupManager = mockk { every { listBackups() } answers { calls.incrementAndGet(); emptyList() } }
