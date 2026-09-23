@@ -36,7 +36,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
@@ -133,8 +132,8 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // read-then-write across several steps: cooldown, once-per-trip, service_start consumption,
     // updateLastTriggered. Two overlapping calls could pass the same rule and dispatch its actions
     // twice, so callers run it under this lock. Actions are dispatched inside the engine's own
-    // scope, so the lock is held for the rule scan only. onCarOff() takes it too, so the car-off
-    // marker never interleaves with a session decision.
+    // scope, so the lock is held for the rule scan only. onCarOff() never takes it: the firmware
+    // force-stops the process about 2 s after ACC_OFF, so the marker is committed at once.
     val evaluateMutex = Mutex()
     // Test seam: identifies the current DiLink boot. Empty string = unknown (boot_id not
     // readable); an unknown id on either side takes no part in the new-session decision.
@@ -201,8 +200,11 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // One line for the diagnostics dump (#177): the service_start session as this process sees it.
     fun serviceStartDumpLine(): String = serviceStart.dumpLine(interactiveProvider(), elapsedMs(), nowMs())
 
-    /** The car was switched off (byd.intent.action.ACC_OFF): marks it for the service_start session. */
-    suspend fun onCarOff() = evaluateMutex.withLock { serviceStart.onCarOff(elapsedMs()) }
+    /**
+     * The car was switched off (byd.intent.action.ACC_OFF): marks it for the service_start session.
+     * Commits at once, never waiting for an evaluate().
+     */
+    suspend fun onCarOff() = serviceStart.onCarOff(elapsedMs())
 
     // Called every 3s from TrackingService poll loop.
     // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)

@@ -26,7 +26,13 @@ import java.util.concurrent.ConcurrentHashMap
  * Limitation: without a readable boot id, a reboot whose new elapsed already exceeds the saved
  * one and lies within the wake gap is not recognised.
  *
- * Every call except [dumpLine] runs under [AutomationEngine.evaluateMutex].
+ * The firmware force-stops the process 1.7-2.3 s after ACC_OFF, so in practice the marker is
+ * judged by the restarted process; the wait for a dark tick only covers those seconds before the
+ * force-stop in a live process.
+ *
+ * [tick] runs under [AutomationEngine.evaluateMutex]. [onCarOff] never waits for it: it commits
+ * the marker at once under [carOffLock], and a tick clears the marker only if no ACC_OFF arrived
+ * since it read it (the generation check in [commitClearingCarOff]).
  */
 internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
 
@@ -53,6 +59,10 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
     // is dropped: the car was switched off and on again within a minute of a start. The session
     // is not reopened for that second start: accepted.
     @Volatile private var lastSessionOpenedElapsed: Long? = null
+    // Guards the marker against a concurrent tick: every ACC_OFF bumps the generation, and a tick
+    // that read the marker at an older generation must not clear it.
+    private val carOffLock = Any()
+    private var carOffGeneration = 0L
 
     fun tick(elapsed: Long, interactive: Boolean, bootId: () -> String) {
         val prefs = prefs()
@@ -63,24 +73,24 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
             savedBootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)
             lastTickElapsed = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L).takeIf { it >= 0L }
         }
-        if (interactive) litTick(prefs, elapsed) else darkTick(firstTick, elapsed)
+        if (interactive) {
+            litTick(prefs, elapsed)
+        } else {
+            carOffLitSince = null
+            if (firstTick) {
+                Log.i(TAG, "service_start: screen off at start, waiting for wake-up")
+                windowEnd = -1L
+            } else {
+                if (lastInteractive) Log.i(TAG, "service_start: screen off, heartbeat paused")
+                // The car went off before a service_start rule matched: it must not fire later
+                // with the screen dark.
+                if (elapsed <= windowEnd) {
+                    Log.i(TAG, "service_start: screen off, window closed")
+                    windowEnd = -1L
+                }
+            }
+        }
         lastInteractive = interactive
-    }
-
-    private fun darkTick(firstTick: Boolean, elapsed: Long) {
-        carOffLitSince = null
-        if (firstTick) {
-            Log.i(TAG, "service_start: screen off at start, waiting for wake-up")
-            windowEnd = -1L
-            return
-        }
-        if (lastInteractive) Log.i(TAG, "service_start: screen off, heartbeat paused")
-        // The car went off before a service_start rule matched: it must not fire later with the
-        // screen dark.
-        if (elapsed <= windowEnd) {
-            Log.i(TAG, "service_start: screen off, window closed")
-            windowEnd = -1L
-        }
     }
 
     private fun litTick(prefs: SharedPreferences, elapsed: Long) {
@@ -88,18 +98,20 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
             keepAlive(prefs, elapsed)
             return
         }
-        val carOff = prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)
+        val (generation, carOff) = synchronized(carOffLock) {
+            carOffGeneration to prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)
+        }
         val prevElapsed = lastTickElapsed
         val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
         val sinceOpened = lastSessionOpenedElapsed?.let { elapsed - it } ?: Long.MAX_VALUE
         val carOffInSession = carOff && sinceOpened <= SERVICE_START_WAKE_GAP_MS
         if (carOffInSession) {
             Log.i(TAG, "service_start: car off marker within session, ignored gap=${sinceOpened / 1000}s")
-            prefs.edit().putBoolean(KEY_SERVICE_START_CAR_OFF, false).commit()
+            commitClearingCarOff(prefs.edit(), generation, "service_start: car off marker commit failed")
         }
         val reason = newSessionReason(elapsed, prevElapsed, carOff && !carOffInSession)
         if (reason != null) {
-            openSession(prefs, elapsed, "service_start: new session reason=$reason gap=$gap")
+            openSession(prefs, elapsed, generation, "service_start: new session reason=$reason gap=$gap")
         } else if (!sessionDecided) {
             Log.i(TAG, "service_start: process restarted mid-session, not re-arming gap=$gap")
             windowEnd = -1L
@@ -113,7 +125,10 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
      */
     private fun waitsForDark(prefs: SharedPreferences, elapsed: Long): Boolean {
         val litSince = carOffLitSince ?: return false
-        if (!prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)) return false
+        val (generation, carOff) = synchronized(carOffLock) {
+            carOffGeneration to prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)
+        }
+        if (!carOff) return false
         if (elapsed - litSince <= SERVICE_START_CAR_OFF_LIT_MAX_MS) {
             if (elapsed <= windowEnd) {
                 Log.i(TAG, "service_start: ACC_OFF, window closed")
@@ -124,10 +139,27 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         // The screen never went dark (the car stayed on, or a late broadcast): left in place, the
         // marker would fire at the next screen blink mid-drive.
         Log.i(TAG, "service_start: car off marker expired, screen stayed on")
+        if (!commitClearingCarOff(prefs.edit(), generation, "service_start: car off marker commit failed")) return true
         carOffLitSince = null
-        prefs.edit().putBoolean(KEY_SERVICE_START_CAR_OFF, false).commit()
         return false
     }
+
+    /**
+     * Commits [edit] together with a cleared car-off marker, unless an ACC_OFF arrived since the
+     * tick read the marker at [generation]: then the marker and its lit state stay for the next
+     * tick to judge. Returns whether the marker was cleared.
+     */
+    private fun commitClearingCarOff(edit: SharedPreferences.Editor, generation: Long, failure: String): Boolean =
+        synchronized(carOffLock) {
+            val current = generation == carOffGeneration
+            if (current) {
+                edit.putBoolean(KEY_SERVICE_START_CAR_OFF, false)
+            } else {
+                Log.i(TAG, "service_start: ACC_OFF arrived during the tick, marker kept")
+            }
+            if (!edit.commit()) Log.w(TAG, failure)
+            current
+        }
 
     private fun newSessionReason(elapsed: Long, prevElapsed: Long?, carOff: Boolean): String? {
         val bootId = sessionBootId.orEmpty()
@@ -142,7 +174,7 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         }
     }
 
-    private fun openSession(prefs: SharedPreferences, elapsed: Long, line: String) {
+    private fun openSession(prefs: SharedPreferences, elapsed: Long, generation: Long, line: String) {
         Log.i(TAG, line)
         windowEnd = elapsed + SERVICE_START_WINDOW_MS
         consumed.clear()
@@ -150,12 +182,10 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
         val bootId = sessionBootId.orEmpty()
         // One synchronous write before any rule runs: a process killed right after the fire must
         // find this session's heartbeat and no car-off marker, or its restart would re-arm.
-        val committed = prefs.edit()
+        val session = prefs.edit()
             .putString(KEY_SERVICE_START_BOOT_ID, bootId)
             .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
-            .putBoolean(KEY_SERVICE_START_CAR_OFF, false)
-            .commit()
-        if (!committed) Log.w(TAG, "service_start: session commit failed")
+        commitClearingCarOff(session, generation, "service_start: session commit failed")
         lastHeartbeatWriteElapsed = elapsed
         savedBootId = bootId
     }
@@ -179,11 +209,13 @@ internal class ServiceStartSession(private val prefs: () -> SharedPreferences) {
      * force-stopped shortly after, and the next car start must open a new session. A repeated
      * broadcast keeps the marker and whether the screen was already seen off.
      */
-    fun onCarOff(elapsed: Long) {
+    fun onCarOff(elapsed: Long) = synchronized(carOffLock) {
+        // A repeat counts too: a tick that read the marker before it must not clear it.
+        carOffGeneration++
         val prefs = prefs()
         if (prefs.getBoolean(KEY_SERVICE_START_CAR_OFF, false)) {
             Log.i(TAG, "service_start: ACC_OFF repeated, marker kept")
-            return
+            return@synchronized
         }
         Log.i(TAG, "service_start: ACC_OFF, car off marked")
         carOffLitSince = elapsed
