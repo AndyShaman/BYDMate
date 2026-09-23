@@ -271,8 +271,26 @@ class BackupManager(
      *   3. Collect whitelisted SharedPreferences.
      *   4. Build manifest JSON.
      *   5. Write zip to Downloads.
+     *
+     * Serialized: a manual export and the auto backup worker may run at once, and two
+     * checkpoint/read passes over the same WAL would fight each other.
      */
-    fun export(): File {
+    fun export(): File = synchronized(exportLock) { exportUnlocked() }
+
+    private val exportLock = Any()
+
+    /**
+     * Two exports within one second (manual + auto run) must not overwrite each other: adds
+     * _2, _3… when the name is taken, also by the auto runner's renamed copy of it.
+     */
+    private fun freeBackupFile(dir: File, timestamp: String): File = generateSequence(1) { it + 1 }
+        .map { n -> timestamp + (if (n == 1) "" else "_$n") + BACKUP_FILE_SUFFIX }
+        .first { name ->
+            !File(dir, BACKUP_FILE_PREFIX + name).exists() && !File(dir, AutoBackupRunner.AUTO_PREFIX + name).exists()
+        }
+        .let { File(dir, BACKUP_FILE_PREFIX + it) }
+
+    private fun exportUnlocked(): File {
         // 1. Fold WAL so the DB file is self-contained, and PROVE it happened (AC-02).
         //    PRAGMA wal_checkpoint(TRUNCATE) returns one row (busy, log, checkpointed);
         //    busy=1 means a concurrent reader/writer blocked the checkpoint and the WAL
@@ -331,7 +349,7 @@ class BackupManager(
         val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val downloadsDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
         if (!downloadsDir.exists()) downloadsDir.mkdirs()
-        val zipFile = File(downloadsDir, "$BACKUP_FILE_PREFIX$timestamp$BACKUP_FILE_SUFFIX")
+        val zipFile = freeBackupFile(downloadsDir, timestamp)
 
         ZipOutputStream(FileOutputStream(zipFile)).use { zip ->
             zip.putNextEntry(ZipEntry(ENTRY_DB))
@@ -422,61 +440,65 @@ class BackupManager(
         tmpDbFile.writeBytes(entries.dbBytes)
         validateSqliteFile(tmpDbFile)
 
-        // ---------------------------------------------------------------------
-        // DESTRUCTIVE PART — only reached once the backup is fully validated.
-        // ---------------------------------------------------------------------
+        // Under the export lock: an auto backup running at this moment must not checkpoint or
+        // read the database while it is closed and swapped.
+        synchronized(exportLock) {
+            // ---------------------------------------------------------------------
+            // DESTRUCTIVE PART — only reached once the backup is fully validated.
+            // ---------------------------------------------------------------------
 
-        // 3. Close the database so we can safely replace the file.
-        appDatabase.close()
+            // 3. Close the database so we can safely replace the file.
+            appDatabase.close()
 
-        // 4. Swap the validated temp file in via an atomic rename. The live bydmate.db
-        //    is never absent: it is replaced atomically. If rename fails the original is
-        //    still in place and NOTHING has been mutated yet, so we abort (throw) rather
-        //    than risk destroying it with a non-atomic delete+copy. This also closes the
-        //    race where the foreground TrackingService could re-open Room mid-restore and
-        //    find a missing file.
-        //
-        //    A successful rename is the POINT OF NO RETURN: from here the app state is
-        //    already changed, so no later step may throw past the caller's restart. File
-        //    deletes below do not throw, and the prefs loop is best-effort (see below).
-        if (!tmpDbFile.renameTo(targetDbFile)) {
-            tmpDbFile.delete()
-            throw IllegalStateException("Не удалось заменить файл базы данных при восстановлении")
-        }
-        // Drop stale WAL/SHM left from the old DB AFTER the swap. The restored file is
-        // self-contained (WAL was folded in at export time).
-        File(dbDir, "bydmate.db-wal").delete()
-        File(dbDir, "bydmate.db-shm").delete()
+            // 4. Swap the validated temp file in via an atomic rename. The live bydmate.db
+            //    is never absent: it is replaced atomically. If rename fails the original is
+            //    still in place and NOTHING has been mutated yet, so we abort (throw) rather
+            //    than risk destroying it with a non-atomic delete+copy. This also closes the
+            //    race where the foreground TrackingService could re-open Room mid-restore and
+            //    find a missing file.
+            //
+            //    A successful rename is the POINT OF NO RETURN: from here the app state is
+            //    already changed, so no later step may throw past the caller's restart. File
+            //    deletes below do not throw, and the prefs loop is best-effort (see below).
+            if (!tmpDbFile.renameTo(targetDbFile)) {
+                tmpDbFile.delete()
+                throw IllegalStateException("Не удалось заменить файл базы данных при восстановлении")
+            }
+            // Drop stale WAL/SHM left from the old DB AFTER the swap. The restored file is
+            // self-contained (WAL was folded in at export time).
+            File(dbDir, "bydmate.db-wal").delete()
+            File(dbDir, "bydmate.db-shm").delete()
 
-        // 5. Restore SharedPreferences.
-        // FULL REPLACE: clear EVERY whitelisted file first, even files absent from the
-        // backup (they were empty at export time). Iterating only over prefsMap would let
-        // stale prefs on the current device survive a "full replace".
-        for (fileName in prefsFileNames) {
-            val editor = context.getSharedPreferences(fileName, Context.MODE_PRIVATE).edit()
-            editor.clear()
-            val entries = prefsMap[fileName]
-            if (entries != null) {
-                for ((key, value) in entries) {
-                    when (value) {
-                        is String -> editor.putString(key, value)
-                        is Int -> editor.putInt(key, value)
-                        is Long -> editor.putLong(key, value)
-                        is Float -> editor.putFloat(key, value)
-                        is Boolean -> editor.putBoolean(key, value)
-                        is Set<*> -> {
-                            @Suppress("UNCHECKED_CAST")
-                            editor.putStringSet(key, value as Set<String>)
+            // 5. Restore SharedPreferences.
+            // FULL REPLACE: clear EVERY whitelisted file first, even files absent from the
+            // backup (they were empty at export time). Iterating only over prefsMap would let
+            // stale prefs on the current device survive a "full replace".
+            for (fileName in prefsFileNames) {
+                val editor = context.getSharedPreferences(fileName, Context.MODE_PRIVATE).edit()
+                editor.clear()
+                val entries = prefsMap[fileName]
+                if (entries != null) {
+                    for ((key, value) in entries) {
+                        when (value) {
+                            is String -> editor.putString(key, value)
+                            is Int -> editor.putInt(key, value)
+                            is Long -> editor.putLong(key, value)
+                            is Float -> editor.putFloat(key, value)
+                            is Boolean -> editor.putBoolean(key, value)
+                            is Set<*> -> {
+                                @Suppress("UNCHECKED_CAST")
+                                editor.putStringSet(key, value as Set<String>)
+                            }
                         }
                     }
                 }
-            }
-            if (!editor.commit()) {
-                // Past the point of no return: the DB is already swapped. A failed prefs
-                // commit (rare, disk-level error) must NOT throw here — that would skip the
-                // caller's restart and freeze the app half-restored. Log and continue so
-                // the remaining files still apply and the process still restarts.
-                Log.w(TAG, "Failed to commit prefs file during restore: $fileName")
+                if (!editor.commit()) {
+                    // Past the point of no return: the DB is already swapped. A failed prefs
+                    // commit (rare, disk-level error) must NOT throw here — that would skip the
+                    // caller's restart and freeze the app half-restored. Log and continue so
+                    // the remaining files still apply and the process still restarts.
+                    Log.w(TAG, "Failed to commit prefs file during restore: $fileName")
+                }
             }
         }
         // Caller is responsible for restarting the process after this returns.

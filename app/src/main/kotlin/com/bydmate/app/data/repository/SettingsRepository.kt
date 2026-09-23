@@ -1,5 +1,7 @@
 package com.bydmate.app.data.repository
 
+import com.bydmate.app.data.backup.AutoBackupPeriod
+import com.bydmate.app.data.backup.TgBackupConfig
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.dao.SettingsDao
 import com.bydmate.app.data.local.entity.SettingEntity
@@ -92,6 +94,18 @@ open class SettingsRepository @Inject constructor(
         const val KEY_WEBHOOK_SECRET = "webhook_secret"
         /** Отправлять GPS-координаты и курс на вебхук (opt-in, по умолчанию выкл). */
         const val KEY_WEBHOOK_SEND_LOCATION = "webhook_send_location"
+        // Automatic backup (#237). Period = AutoBackupPeriod.key; last_ts = 0 until the first export.
+        const val KEY_AUTO_BACKUP_PERIOD = "auto_backup_period"
+        const val KEY_AUTO_BACKUP_LAST_TS = "auto_backup_last_ts"
+        /** Short Russian text for the Settings status line («отправлен в Telegram», …). */
+        const val KEY_AUTO_BACKUP_LAST_RESULT = "auto_backup_last_result"
+        /** Absolute path of an exported backup not yet delivered to Telegram; empty = none. */
+        const val KEY_AUTO_BACKUP_PENDING_UPLOAD = "auto_backup_pending_upload"
+        /** Telegram bot the backups go to: token (secret), private chat id, bot username. */
+        const val KEY_TG_BACKUP_TOKEN = "tg_backup_token"
+        const val KEY_TG_BACKUP_CHAT_ID = "tg_backup_chat_id"
+        const val KEY_TG_BACKUP_BOT_NAME = "tg_backup_bot_name"
+        const val KEY_TG_BACKUP_CHAT_NAME = "tg_backup_chat_name"
         const val KEY_DATA_SOURCE = "data_source"
         const val KEY_MAP_TILE_SOURCE = "map_tile_source"
         const val KEY_AUTOSERVICE_ENABLED = "autoservice_enabled"
@@ -433,6 +447,73 @@ open class SettingsRepository @Inject constructor(
 
     fun observeTripAutoResetMode(n: Int): Flow<TripAutoResetMode> =
         observeString("trip${n}_auto_reset").map { TripAutoResetMode.fromKey(it) }
+
+    // --- Automatic backup (#237) ---
+
+    suspend fun getAutoBackupPeriod(): AutoBackupPeriod =
+        AutoBackupPeriod.fromKey(settingsDao.get(KEY_AUTO_BACKUP_PERIOD))
+
+    suspend fun setAutoBackupPeriod(period: AutoBackupPeriod) =
+        setString(KEY_AUTO_BACKUP_PERIOD, period.key)
+
+    fun observeAutoBackupPeriod(): Flow<AutoBackupPeriod> =
+        observeString(KEY_AUTO_BACKUP_PERIOD).map { AutoBackupPeriod.fromKey(it) }
+
+    suspend fun getAutoBackupLastTs(): Long =
+        getString(KEY_AUTO_BACKUP_LAST_TS, "0").toLongOrNull() ?: 0L
+
+    suspend fun setAutoBackupLastTs(ts: Long) =
+        setString(KEY_AUTO_BACKUP_LAST_TS, ts.toString())
+
+    fun observeAutoBackupLastTs(): Flow<Long> =
+        observeString(KEY_AUTO_BACKUP_LAST_TS).map { it?.toLongOrNull() ?: 0L }
+
+    suspend fun getAutoBackupLastResult(): String =
+        getString(KEY_AUTO_BACKUP_LAST_RESULT, "")
+
+    suspend fun setAutoBackupLastResult(result: String) =
+        setString(KEY_AUTO_BACKUP_LAST_RESULT, result)
+
+    fun observeAutoBackupLastResult(): Flow<String> =
+        observeString(KEY_AUTO_BACKUP_LAST_RESULT).map { it.orEmpty() }
+
+    suspend fun getAutoBackupPendingUpload(): String =
+        getString(KEY_AUTO_BACKUP_PENDING_UPLOAD, "")
+
+    suspend fun setAutoBackupPendingUpload(path: String) =
+        setString(KEY_AUTO_BACKUP_PENDING_UPLOAD, path)
+
+    suspend fun getTgBackupToken(): String =
+        getString(KEY_TG_BACKUP_TOKEN, "")
+
+    suspend fun getTgBackupChatId(): Long? =
+        getString(KEY_TG_BACKUP_CHAT_ID, "").toLongOrNull()
+
+    suspend fun getTgBackupBotName(): String =
+        getString(KEY_TG_BACKUP_BOT_NAME, "")
+
+    /** Token, chat and names read in one query, so a run never pairs a new token with an old chat. */
+    suspend fun getTgBackupConfig(): TgBackupConfig {
+        val keys = listOf(KEY_TG_BACKUP_TOKEN, KEY_TG_BACKUP_CHAT_ID, KEY_TG_BACKUP_BOT_NAME, KEY_TG_BACKUP_CHAT_NAME)
+        val values = settingsDao.getMany(keys).associate { it.key to it.value.orEmpty() }
+        return TgBackupConfig(
+            token = values[KEY_TG_BACKUP_TOKEN].orEmpty(),
+            chatId = values[KEY_TG_BACKUP_CHAT_ID]?.toLongOrNull(),
+            botName = values[KEY_TG_BACKUP_BOT_NAME].orEmpty(),
+            chatName = values[KEY_TG_BACKUP_CHAT_NAME].orEmpty(),
+        )
+    }
+
+    /** A checked bot in one transaction, so a half-checked token never pairs with an old chat. */
+    suspend fun saveTgBackup(token: String, botName: String, chatId: Long?, chatName: String) = setStrings(mapOf(
+        KEY_TG_BACKUP_TOKEN to token,
+        KEY_TG_BACKUP_BOT_NAME to botName,
+        KEY_TG_BACKUP_CHAT_ID to (chatId?.toString() ?: ""),
+        KEY_TG_BACKUP_CHAT_NAME to chatName,
+    ))
+
+    /** «Отключить»: forgets the bot in one transaction. */
+    suspend fun clearTgBackup() = saveTgBackup("", "", null, "")
 
     suspend fun getTechCardOrder(): String =
         getString(KEY_TECH_CARD_ORDER, "")

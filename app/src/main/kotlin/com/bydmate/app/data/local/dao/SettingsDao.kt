@@ -14,6 +14,10 @@ interface SettingsDao {
     @Query("SELECT value FROM settings WHERE `key` = :key")
     fun observe(key: String): Flow<String?>
 
+    /** Several keys in one SELECT — a consistent snapshot, the read-side twin of [setAll]. */
+    @Query("SELECT * FROM settings WHERE `key` IN (:keys)")
+    suspend fun getMany(keys: List<String>): List<SettingEntity>
+
     @Upsert
     suspend fun set(setting: SettingEntity)
 

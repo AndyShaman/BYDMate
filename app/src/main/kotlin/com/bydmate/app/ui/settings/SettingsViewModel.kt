@@ -16,7 +16,14 @@ import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.agent.AgentResult
 import com.bydmate.app.agent.LlmConnectionResolver
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
+import com.bydmate.app.data.backup.AutoBackupPeriod
+import com.bydmate.app.data.backup.AutoBackupRunner
+import com.bydmate.app.data.backup.AutoBackupScheduler
 import com.bydmate.app.data.backup.BackupManager
+import com.bydmate.app.data.backup.TelegramBackupSink
+import com.bydmate.app.data.backup.TelegramChat
+import com.bydmate.app.data.backup.TelegramError
+import com.bydmate.app.data.backup.TelegramSinkException
 import com.bydmate.app.data.local.EnergyDataReader
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
@@ -55,6 +62,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.update
@@ -62,6 +70,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
@@ -87,6 +96,7 @@ import com.bydmate.app.voice.ContinuousAsr
 import com.bydmate.app.voice.online.TtsRouter
 import java.io.File
 import java.io.FileWriter
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -178,6 +188,19 @@ data class SettingsUiState(
     val configStatus: String? = null,
     /** Backups offered by the restore picker, newest first. Null = picker closed. */
     val restoreCandidates: List<File>? = null,
+    /** Zip written by the last manual export; non-null = the «Поделиться» dialog is open. */
+    val lastExportedBackup: File? = null,
+    // Automatic backup (#237)
+    val autoBackupPeriod: AutoBackupPeriod = AutoBackupPeriod.OFF,
+    /** 0 = never ran. */
+    val autoBackupLastTs: Long = 0L,
+    val autoBackupLastResult: String = "",
+    val tgBackupToken: String = "",
+    /** Outcome of the last «Проверить» (or «Подключено: @bot» on load); null = nothing to say. */
+    val tgBackupStatus: String? = null,
+    val tgBackupChecking: Boolean = false,
+    /** One-time code the user sends to the bot to bind their chat; lives until a successful binding. */
+    val tgBackupCode: String? = null,
     /** Status of the last fid-catalog dump. Null = idle. Red if starts with error prefix. */
     val fidDumpStatus: String? = null,
     val mapTileSource: String = SettingsRepository.DEFAULT_MAP_TILE_SOURCE,
@@ -305,6 +328,8 @@ class SettingsViewModel @Inject constructor(
     private val costCalculator: CostCalculator,
     private val blindSpotController: com.bydmate.app.camera.BlindSpotController,
     private val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor,
+    private val telegramBackupSink: TelegramBackupSink,
+    private val autoBackupScheduler: AutoBackupScheduler,
 ) : ViewModel() {
 
     /** ADB control-channel verdict for the line under the ADB-restore toggle. */
@@ -369,6 +394,7 @@ class SettingsViewModel @Inject constructor(
 
     init {
         loadSettings()
+        observeAutoBackup()
         loadTariffPeriods()
         observeLogRecorder()
         refreshFidRecorder()
@@ -1702,6 +1728,9 @@ class SettingsViewModel @Inject constructor(
             "Проверка связи. Вызови инструмент get_vehicle_state и ответь одним коротким " +
                 "предложением: какой заряд батареи."
         private const val MINIMAX_SOURCE = "minimax"
+        /** Telegram bind code: six digits. */
+        private const val BIND_CODE_MIN = 100_000
+        private const val BIND_CODE_SPAN = 900_000
         /** Shared budget for the two daemon-backed dump sections (liveness + seat reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
@@ -2337,6 +2366,24 @@ class SettingsViewModel @Inject constructor(
                 ).forEach { appendLine(it) }
             } catch (e: Exception) { appendLine("error: ${e.message}") }
 
+            appendLine("--- auto backup ---")
+            try {
+                val lastTs = settingsRepository.getAutoBackupLastTs()
+                val chatId = settingsRepository.getTgBackupChatId()
+                val tgConfigured = settingsRepository.getTgBackupToken().isNotEmpty() && chatId != null
+                appendLine("period: ${settingsRepository.getAutoBackupPeriod().key}")
+                appendLine("last_ts: " + if (lastTs > 0L)
+                    SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ", Locale.US).format(Date(lastTs)) else "(never)")
+                appendLine("last_result: ${settingsRepository.getAutoBackupLastResult().ifEmpty { "(none)" }}")
+                appendLine("pending: ${File(settingsRepository.getAutoBackupPendingUpload()).name.ifEmpty { "(none)" }}")
+                // Never the token; chat id only by its last 4 digits.
+                appendLine(
+                    "telegram: configured=${if (tgConfigured) "yes" else "no"} " +
+                        "bot=${settingsRepository.getTgBackupBotName().ifEmpty { null }?.let { "@$it" } ?: "-"} " +
+                        "chat=${chatId?.let { "…" + it.toString().takeLast(4) } ?: "(none)"}"
+                )
+            } catch (e: Exception) { appendLine("error: ${e.message}") }
+
             appendLine("--- fid push ---")
             try {
                 fidPushChannel.diagnosticsSnapshot().forEach { appendLine(it) }
@@ -2488,9 +2535,8 @@ class SettingsViewModel @Inject constructor(
             _uiState.update { it.copy(configStatus = appContext.getString(R.string.settings_export_in_progress)) }
             try {
                 val file = backupManager.export()
-                _uiState.update {
-                    it.copy(configStatus = appContext.getString(R.string.settings_config_export_done, file.absolutePath))
-                }
+                // The «Поделиться» dialog shows the saved file instead of the status line.
+                _uiState.update { it.copy(configStatus = null, lastExportedBackup = file) }
             } catch (e: Exception) {
                 _uiState.update {
                     it.copy(configStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
@@ -2545,6 +2591,153 @@ class SettingsViewModel @Inject constructor(
     /** Dismiss the config backup/restore status message. */
     fun clearConfigStatus() {
         _uiState.update { it.copy(configStatus = null) }
+    }
+
+    /** «Поделиться» in the dialog after a manual export (#237). */
+    fun shareExportedBackup() {
+        val file = _uiState.value.lastExportedBackup ?: return
+        _uiState.update { it.copy(lastExportedBackup = null) }
+        try {
+            shareFile(file, "application/zip")
+        } catch (e: Exception) {
+            _uiState.update {
+                it.copy(configStatus = appContext.getString(R.string.settings_error_with_message, e.message ?: "?"))
+            }
+        }
+    }
+
+    fun dismissExportedBackup() {
+        _uiState.update { it.copy(lastExportedBackup = null) }
+    }
+
+    /** Standard ACTION_SEND share sheet for a file in Download (or the app's external files). */
+    private fun shareFile(file: File, mime: String) {
+        val uri = FileProvider.getUriForFile(
+            appContext, "${appContext.packageName}.fileprovider", file,
+        )
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = mime
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = Intent.createChooser(shareIntent, null).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        appContext.startActivity(chooser)
+    }
+
+    // -------------------------------------------------------------------------
+    // Automatic backup (#237)
+    // -------------------------------------------------------------------------
+
+    /** Loads the bot once, then mirrors period and last run live so the status follows the worker. */
+    private fun observeAutoBackup() {
+        viewModelScope.launch {
+            val config = settingsRepository.getTgBackupConfig()
+            val status = if (config.configured) {
+                appContext.getString(R.string.settings_tg_backup_connected, config.botName, config.chatName)
+            } else null
+            _uiState.update { it.copy(tgBackupToken = config.token, tgBackupStatus = status) }
+            combine(
+                settingsRepository.observeAutoBackupPeriod(),
+                settingsRepository.observeAutoBackupLastTs(),
+                settingsRepository.observeAutoBackupLastResult(),
+            ) { period, lastTs, lastResult -> Triple(period, lastTs, lastResult) }
+                .collect { (period, lastTs, lastResult) ->
+                    _uiState.update {
+                        it.copy(autoBackupPeriod = period, autoBackupLastTs = lastTs, autoBackupLastResult = lastResult)
+                    }
+                }
+        }
+    }
+
+    fun setAutoBackupPeriod(period: AutoBackupPeriod) {
+        _uiState.update { it.copy(autoBackupPeriod = period) }
+        if (period == AutoBackupPeriod.OFF) autoBackupScheduler.cancelScheduled(appContext)
+        viewModelScope.launch { settingsRepository.setAutoBackupPeriod(period) }
+    }
+
+    /**
+     * Token field edits stay in the state; the token is stored once «Проверить» accepts it.
+     * Trimmed: a token pasted from a chat often carries a trailing space or newline.
+     */
+    fun updateTgBackupToken(value: String) {
+        _uiState.update { it.copy(tgBackupToken = value.trim()) }
+    }
+
+    private var tgCheckJob: Job? = null
+
+    /** «Проверить»: token → bot name → chat bound by a code → greeting message. */
+    fun checkTelegramBackup() {
+        val token = _uiState.value.tgBackupToken.trim()
+        if (token.isEmpty() || _uiState.value.tgBackupChecking) return
+        _uiState.update {
+            it.copy(tgBackupChecking = true, tgBackupStatus = appContext.getString(R.string.settings_tg_backup_checking))
+        }
+        tgCheckJob = viewModelScope.launch {
+            val status = connectTelegramBot(token)
+            _uiState.update {
+                // The field was edited while the check ran: the result belongs to another token.
+                if (it.tgBackupToken != token) it.copy(tgBackupChecking = false, tgBackupStatus = null)
+                else it.copy(tgBackupChecking = false, tgBackupStatus = status)
+            }
+        }
+    }
+
+    /**
+     * Binds the chat that sent the one-time code and stores the binding only after the greeting
+     * went through; any error changes nothing. A bot already bound with this token keeps its chat.
+     */
+    private suspend fun connectTelegramBot(token: String): String {
+        val botName = telegramBackupSink.getMe(token).getOrElse { return tgBackupError(it) }
+        val stored = settingsRepository.getTgBackupConfig()
+        val chat = if (stored.token == token && stored.chatId != null) {
+            TelegramChat(stored.chatId, stored.chatName)
+        } else {
+            val code = _uiState.value.tgBackupCode
+                ?: return newBindCode().let { fresh ->
+                    _uiState.update { it.copy(tgBackupCode = fresh) }
+                    appContext.getString(R.string.settings_tg_backup_send_code, botName, fresh)
+                }
+            telegramBackupSink.findPrivateChat(token, code).getOrElse { return tgBackupError(it) }
+                ?: return appContext.getString(R.string.settings_tg_backup_send_code, botName, code)
+        }
+        telegramBackupSink.sendMessage(token, chat.id, appContext.getString(R.string.settings_tg_backup_greeting))
+            .getOrElse { return tgBackupError(it) }
+        // The field now holds another token: store nothing, the caller drops this status.
+        if (_uiState.value.tgBackupToken != token) return ""
+        settingsRepository.saveTgBackup(token, botName, chat.id, chat.name)
+        _uiState.update { it.copy(tgBackupCode = null) }
+        return appContext.getString(R.string.settings_tg_backup_connected, botName, chat.name)
+    }
+
+    private fun newBindCode(): String = (BIND_CODE_MIN + SecureRandom().nextInt(BIND_CODE_SPAN)).toString()
+
+    private fun tgBackupError(error: Throwable): String = appContext.getString(
+        R.string.settings_error_with_message,
+        (error as? TelegramSinkException)?.let { telegramErrorText(appContext, it.key) } ?: error.message ?: "?",
+    )
+
+    /**
+     * «Отключить»: stops a running check and a waiting scheduled run, then forgets token, chat and
+     * bot name; backups stay local.
+     */
+    fun disconnectTelegramBackup() {
+        val check = tgCheckJob
+        autoBackupScheduler.cancelScheduled(appContext)
+        _uiState.update {
+            it.copy(tgBackupToken = "", tgBackupStatus = null, tgBackupChecking = false, tgBackupCode = null)
+        }
+        viewModelScope.launch {
+            // Joined first so a check that was about to save cannot write after the clear.
+            check?.cancelAndJoin()
+            settingsRepository.clearTgBackup()
+        }
+    }
+
+    /** «Бэкап вручную»: a fresh export regardless of the period and a pending upload. */
+    fun backupNow() {
+        autoBackupScheduler.enqueueNow(appContext)
     }
 
     /**
@@ -2630,18 +2823,7 @@ class SettingsViewModel @Inject constructor(
                     out.appendLine("---")
                     out.append(dump)
                 }
-                val uri = FileProvider.getUriForFile(
-                    appContext, "${appContext.packageName}.fileprovider", file,
-                )
-                val shareIntent = Intent(Intent.ACTION_SEND).apply {
-                    type = "text/plain"
-                    putExtra(Intent.EXTRA_STREAM, uri)
-                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                }
-                val chooser = Intent.createChooser(shareIntent, null).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                appContext.startActivity(chooser)
+                shareFile(file, "text/plain")
                 // Show the path the user actually sees in a file manager (storage root stripped),
                 // e.g. "Download/fid-dump-20260729-120000.txt".
                 val storageRoot = Environment.getExternalStorageDirectory()?.absolutePath
@@ -2704,6 +2886,33 @@ class SettingsViewModel @Inject constructor(
 }
 
 /** Human-readable name for [android.content.pm.PackageManager.getApplicationEnabledSetting] values. */
+/** Localized text for a [TelegramSinkException.key]; an unknown key is shown as is. */
+internal fun telegramErrorText(context: Context, key: String): String {
+    if (key.startsWith("HTTP:")) return context.getString(R.string.settings_tg_error_http, key.removePrefix("HTTP:"))
+    val res = when (TelegramError.entries.firstOrNull { it.name == key }) {
+        TelegramError.BAD_TOKEN -> R.string.settings_tg_error_bad_token
+        TelegramError.NO_NETWORK -> R.string.settings_tg_error_no_network
+        TelegramError.NO_CHAT -> R.string.settings_tg_error_no_chat
+        TelegramError.TOO_LARGE -> R.string.settings_tg_error_too_large
+        TelegramError.WEBHOOK -> R.string.settings_tg_error_webhook
+        TelegramError.BAD_RESPONSE -> R.string.settings_tg_error_bad_response
+        TelegramError.HTTP, null -> return key
+    }
+    return context.getString(res)
+}
+
+/** Localized text for the stored auto backup result key (see [AutoBackupRunner] RESULT_*). */
+internal fun autoBackupResultText(context: Context, key: String): String = when {
+    key == AutoBackupRunner.RESULT_SENT -> context.getString(R.string.settings_auto_backup_result_sent)
+    key == AutoBackupRunner.RESULT_LOCAL_ONLY -> context.getString(R.string.settings_auto_backup_result_local_only)
+    key == AutoBackupRunner.RESULT_EXPORT_ERROR -> context.getString(R.string.settings_auto_backup_result_export_error)
+    key.startsWith(AutoBackupRunner.RESULT_SEND_ERROR_PREFIX) -> context.getString(
+        R.string.settings_auto_backup_result_send_error,
+        telegramErrorText(context, key.removePrefix(AutoBackupRunner.RESULT_SEND_ERROR_PREFIX)),
+    )
+    else -> key
+}
+
 internal fun enabledSettingName(state: Int): String = when (state) {
     android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_DEFAULT -> "DEFAULT (enabled)"
     android.content.pm.PackageManager.COMPONENT_ENABLED_STATE_ENABLED -> "ENABLED"

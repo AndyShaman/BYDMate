@@ -20,6 +20,8 @@ class TripResetStateRoundTripTest {
     private class FakeSettingsDao : SettingsDao {
         val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
+        override suspend fun getMany(keys: List<String>): List<SettingEntity> =
+            keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }

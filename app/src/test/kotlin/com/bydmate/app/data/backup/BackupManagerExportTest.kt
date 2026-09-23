@@ -8,13 +8,20 @@ import com.bydmate.app.data.local.database.AppDatabase
 import io.mockk.every
 import io.mockk.mockk
 import org.junit.Assert.assertArrayEquals
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import android.os.Environment
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import java.util.zip.ZipFile
 
 @RunWith(RobolectricTestRunner::class)
@@ -61,5 +68,38 @@ class BackupManagerExportTest {
             val entry = z.getEntry("bydmate.db")
             assertArrayEquals(byteArrayOf(1, 2, 3), z.getInputStream(entry).readBytes())
         }
+    }
+
+    /** Base names export() may pick for the next few seconds, so a test crossing a second still collides. */
+    private fun upcomingNames(prefix: String): List<File> {
+        val dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).apply { mkdirs() }
+        val fmt = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+        val now = System.currentTimeMillis()
+        return (0..2).map { File(dir, prefix + fmt.format(Date(now + it * 1000L)) + ".zip") }
+    }
+
+    @Test
+    fun `two exports in the same second give two different files`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        val first = manager().export()
+        val firstBytes = first.readBytes()
+        upcomingNames("bydmate_backup_").forEach { if (!it.exists()) it.writeBytes(byteArrayOf(9)) }
+
+        val second = manager().export()
+
+        assertNotEquals(first.absolutePath, second.absolutePath)
+        assertTrue(second.name, second.name.startsWith("bydmate_backup_") && second.name.endsWith("_2.zip"))
+        assertArrayEquals(firstBytes, first.readBytes())
+    }
+
+    @Test
+    fun `export does not reuse a name the auto runner already renamed`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        val autoCopies = upcomingNames("bydmate_backup_auto_").onEach { it.writeBytes(byteArrayOf(9)) }
+
+        val exported = manager().export()
+
+        assertTrue(exported.name, exported.name.endsWith("_2.zip"))
+        autoCopies.forEach { assertEquals(1L, it.length()) }
     }
 }

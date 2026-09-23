@@ -10,6 +10,7 @@ import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
 import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.backup.AutoBackupPeriod
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
@@ -94,6 +95,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -2010,6 +2012,33 @@ private fun ServiceSection(
         )
     }
 
+    // After a manual export: offer the system share sheet (Telegram «Избранное» and the like, #237).
+    state.lastExportedBackup?.let { file ->
+        AppAlertDialog(
+            onDismissRequest = { viewModel.dismissExportedBackup() },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        stringResource(R.string.settings_config_export_done, "Download/${file.name}"),
+                        color = TextPrimary,
+                    )
+                    Text(stringResource(R.string.settings_backup_share_hint), color = TextSecondary, fontSize = 13.sp)
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { viewModel.shareExportedBackup() }) {
+                    Text(stringResource(R.string.settings_backup_share), color = PrimaryColor)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.dismissExportedBackup() }) {
+                    Text(stringResource(R.string.settings_backup_close), color = TextSecondary)
+                }
+            },
+            containerColor = CardSurfaceElevated,
+        )
+    }
+
     // Confirm dialog before exporting plaintext backup
     if (showExportConfirm) {
         AppAlertDialog(
@@ -2327,6 +2356,7 @@ private fun ServiceSection(
                     text = state.configStatus!!,
                 )
             }
+            AutoBackupRows(state, viewModel)
             SettingDivider()
             SettingActionRow(
                 title = stringResource(R.string.settings_fid_dump_button),
@@ -2366,6 +2396,77 @@ private fun ServiceSection(
             )
         }
     }
+}
+
+/** Automatic backup (#237): period chips, last-run status, Telegram bot, «Бэкап вручную». */
+@Composable
+private fun AutoBackupRows(state: SettingsUiState, viewModel: SettingsViewModel) {
+    val context = LocalContext.current
+    val periods = AutoBackupPeriod.entries
+    SettingDivider()
+    SettingChipRow(
+        title = stringResource(R.string.settings_auto_backup_title),
+        description = stringResource(R.string.settings_auto_backup_desc),
+        options = listOf(
+            stringResource(R.string.settings_auto_backup_off),
+            stringResource(R.string.settings_auto_backup_daily),
+            stringResource(R.string.settings_auto_backup_weekly),
+            stringResource(R.string.settings_auto_backup_monthly),
+        ),
+        selectedIndex = periods.indexOf(state.autoBackupPeriod),
+        onSelect = { viewModel.setAutoBackupPeriod(periods[it]) },
+    )
+    val locale = LocalConfiguration.current.locales[0]
+    val dateFormat = remember(locale) { SimpleDateFormat("d MMM HH:mm", locale) }
+    SettingHint(
+        text = when {
+            state.autoBackupLastTs > 0L -> stringResource(
+                R.string.settings_auto_backup_last,
+                dateFormat.format(Date(state.autoBackupLastTs)),
+                autoBackupResultText(context, state.autoBackupLastResult),
+            )
+            // A first run that failed to export has no timestamp but does have a reason.
+            state.autoBackupLastResult.isNotEmpty() -> autoBackupResultText(context, state.autoBackupLastResult)
+            else -> stringResource(R.string.settings_auto_backup_never)
+        },
+    )
+    SettingDivider()
+    SettingActionRow(
+        title = stringResource(R.string.settings_tg_backup_title),
+        buttonLabel = stringResource(R.string.settings_tg_backup_check),
+        onClick = { viewModel.checkTelegramBackup() },
+        enabled = !state.tgBackupChecking && state.tgBackupToken.isNotBlank(),
+    )
+    SettingsTextField(
+        label = stringResource(R.string.settings_tg_backup_token_label),
+        value = state.tgBackupToken,
+        onValueChange = { viewModel.updateTgBackupToken(it) },
+        keyboardType = KeyboardType.Password,
+        secret = true,
+    )
+    SettingHint(stringResource(R.string.settings_tg_backup_hint))
+    if (state.tgBackupStatus != null || state.tgBackupToken.isNotEmpty()) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(modifier = Modifier.weight(1f)) {
+                SettingHint(state.tgBackupStatus.orEmpty())
+            }
+            if (state.tgBackupToken.isNotEmpty()) {
+                TextButton(onClick = { viewModel.disconnectTelegramBackup() }) {
+                    Text(stringResource(R.string.settings_tg_backup_disconnect), color = TextSecondary, fontSize = 13.sp)
+                }
+            }
+        }
+    }
+    SettingDivider()
+    val queuedToast = stringResource(R.string.settings_backup_now_queued)
+    SettingActionRow(
+        title = stringResource(R.string.settings_backup_now_title),
+        buttonLabel = stringResource(R.string.settings_backup_now_button),
+        onClick = {
+            viewModel.backupNow()
+            Toast.makeText(context, queuedToast, Toast.LENGTH_SHORT).show()
+        },
+    )
 }
 
 @Composable

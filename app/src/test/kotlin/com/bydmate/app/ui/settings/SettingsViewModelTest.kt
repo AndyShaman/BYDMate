@@ -106,6 +106,8 @@ class SettingsViewModelTest {
     private class FakeSettingsDao : SettingsDao {
         val map = mutableMapOf<String, String>()
         override suspend fun get(key: String): String? = map[key]
+        override suspend fun getMany(keys: List<String>): List<SettingEntity> =
+            keys.mapNotNull { k -> map[k]?.let { SettingEntity(k, it) } }
         override fun observe(key: String): Flow<String?> = flowOf(map[key])
         override suspend fun set(entity: SettingEntity) { map[entity.key] = entity.value ?: "" }
         override suspend fun setAll(settings: List<SettingEntity>) { settings.forEach { set(it) } }
@@ -258,6 +260,9 @@ class SettingsViewModelTest {
     // Stub BackupManager: no AppDatabase available in unit tests, use mockk
     private var backupManager: BackupManager = mockk(relaxed = true)
 
+    // Telegram Bot API stand-in for the auto-backup «Проверить» flow (#237).
+    private var telegramBackupSink: com.bydmate.app.data.backup.TelegramBackupSink = mockk(relaxed = true)
+
     private fun buildViewModel(
         updateChecker: UpdateChecker? = null,
         ttsModelManager: com.bydmate.app.voice.TtsModelManager? = null,
@@ -365,6 +370,8 @@ class SettingsViewModelTest {
                 io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
                 io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
             },
+            telegramBackupSink = telegramBackupSink,
+            autoBackupScheduler = mockk(relaxed = true),
         )
     }
 
@@ -1290,6 +1297,22 @@ class SettingsViewModelTest {
         assertTrue("no answer line, was:\n$header", header.contains("answer: Окна закрыты"))
     }
 
+    /** #237: the backup section names the bot and the chat tail, never the token. */
+    @Test fun `the diagnostic header never contains the telegram token`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123456:SECRET-token-value"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "987654321"
+
+        vm.startLogRecording()
+        testDispatcher.scheduler.advanceUntilIdle()
+        val header = awaitDiagnosticHeader()
+
+        assertTrue("no auto backup section, was:\n$header", header.contains("--- auto backup ---"))
+        assertTrue(header, header.contains("telegram: configured=yes bot=- chat=…4321"))
+        assertFalse("token leaked into the dump", header.contains("SECRET-token-value"))
+    }
+
     /** The header lands on the real Dispatchers.IO, which the test scheduler cannot advance. */
     private fun awaitDiagnosticHeader(timeoutMs: Long = 10_000): String {
         val deadline = System.currentTimeMillis() + timeoutMs
@@ -1759,5 +1782,230 @@ class SettingsViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
 
         coVerify { calculator.recalculate(septemberStart, Long.MAX_VALUE) }
+    }
+
+    // --- Telegram backup bot «Проверить» (#237) ---
+
+    private fun tgSinkFake(): com.bydmate.app.data.backup.TelegramBackupSink = mockk<com.bydmate.app.data.backup.TelegramBackupSink>().also {
+        telegramBackupSink = it
+    }
+
+    private fun checkToken(vm: SettingsViewModel, token: String) {
+        vm.updateTgBackupToken(token)
+        vm.checkTelegramBackup()
+        testDispatcher.scheduler.advanceUntilIdle()
+    }
+
+    @Test
+    fun `telegram check with a rejected token shows the reason and stores nothing`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("bad") } returns Result.failure(
+            com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.BAD_TOKEN, 401)
+        )
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        checkToken(vm, " bad ")
+
+        val ctx: Context = ApplicationProvider.getApplicationContext()
+        val state = vm.uiState.value
+        assertFalse(state.tgBackupChecking)
+        assertEquals("bad", state.tgBackupToken)
+        val reason = ctx.getString(com.bydmate.app.R.string.settings_tg_error_bad_token)
+        assertTrue(state.tgBackupStatus!!, state.tgBackupStatus!!.contains(reason))
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+    }
+
+    private val ctxForTg: Context get() = ApplicationProvider.getApplicationContext()
+
+    private fun sendCodeStatus(bot: String, code: String) =
+        ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_send_code, bot, code)
+
+    @Test
+    fun `first check of a new bot shows a six digit code and stores nothing`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        checkToken(vm, "123:abc")
+
+        val code = vm.uiState.value.tgBackupCode!!
+        assertTrue(code, Regex("\\d{6}").matches(code))
+        assertEquals(sendCodeStatus("my_car_bot", code), vm.uiState.value.tgBackupStatus)
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+    }
+
+    @Test
+    fun `check before the code was sent keeps the same code and stores nothing`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        coEvery { sink.findPrivateChat("123:abc", any()) } returns Result.success(null)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        checkToken(vm, "123:abc")
+        val code = vm.uiState.value.tgBackupCode!!
+
+        checkToken(vm, "123:abc")
+
+        assertEquals(code, vm.uiState.value.tgBackupCode)
+        assertEquals(sendCodeStatus("my_car_bot", code), vm.uiState.value.tgBackupStatus)
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        coVerify(exactly = 0) { sink.sendMessage(any(), any(), any()) }
+    }
+
+    @Test
+    fun `chat that sent the code is greeted and then stored`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        coEvery { sink.sendMessage("123:abc", 777L, any()) } returns Result.success(Unit)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        checkToken(vm, "123:abc")
+        val code = vm.uiState.value.tgBackupCode!!
+        coEvery { sink.findPrivateChat("123:abc", code) } returns
+            Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy @andy_s"))
+
+        checkToken(vm, "123:abc")
+
+        assertEquals(
+            ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_connected, "my_car_bot", "Andy @andy_s"),
+            vm.uiState.value.tgBackupStatus,
+        )
+        assertNull(vm.uiState.value.tgBackupCode)
+        assertEquals("123:abc", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        assertEquals("my_car_bot", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
+        assertEquals("777", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+        assertEquals("Andy @andy_s", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME])
+        coVerify(exactly = 1) {
+            sink.sendMessage("123:abc", 777L, ctxForTg.getString(com.bydmate.app.R.string.settings_tg_backup_greeting))
+        }
+    }
+
+    @Test
+    fun `failed greeting stores nothing and shows the reason`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        coEvery { sink.findPrivateChat("123:abc", any()) } returns
+            Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy"))
+        coEvery { sink.sendMessage(any(), any(), any()) } returns Result.failure(
+            com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.HTTP, 403)
+        )
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        checkToken(vm, "123:abc")
+
+        checkToken(vm, "123:abc")
+
+        val reason = ctxForTg.getString(com.bydmate.app.R.string.settings_tg_error_http, "403")
+        assertTrue(vm.uiState.value.tgBackupStatus!!, vm.uiState.value.tgBackupStatus!!.contains(reason))
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+    }
+
+    @Test
+    fun `re-checking a bound bot keeps its chat without a code`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        coEvery { sink.sendMessage("123:abc", 777L, any()) } returns Result.success(Unit)
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME] = "Andy"
+
+        checkToken(vm, "123:abc")
+
+        assertNull(vm.uiState.value.tgBackupCode)
+        assertEquals("777", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+        assertEquals("Andy", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME])
+        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+        coVerify(exactly = 1) { sink.sendMessage("123:abc", 777L, any()) }
+    }
+
+    @Test
+    fun `failed chat lookup keeps the previously connected bot untouched`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("456:new") } returns Result.success("new_bot")
+        coEvery { sink.findPrivateChat("456:new", any()) } returns Result.failure(
+            com.bydmate.app.data.backup.TelegramSinkException(com.bydmate.app.data.backup.TelegramError.WEBHOOK, 409)
+        )
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME] = "my_car_bot"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+        checkToken(vm, "456:new")
+
+        checkToken(vm, "456:new")
+
+        val reason = ctxForTg.getString(com.bydmate.app.R.string.settings_tg_error_webhook)
+        assertTrue(vm.uiState.value.tgBackupStatus!!, vm.uiState.value.tgBackupStatus!!.contains(reason))
+        assertEquals("123:abc", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        assertEquals("my_car_bot", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
+        assertEquals("777", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+    }
+
+    @Test
+    fun `token edited during the check makes its result ignored`() = runTest {
+        val sink = tgSinkFake()
+        lateinit var vm: SettingsViewModel
+        coEvery { sink.getMe("123:abc") } returns Result.success("my_car_bot")
+        coEvery { sink.findPrivateChat("123:abc", any()) } returns
+            Result.success(com.bydmate.app.data.backup.TelegramChat(777L, "Andy"))
+        coEvery { sink.sendMessage(any(), any(), any()) } coAnswers {
+            vm.updateTgBackupToken("999:other")
+            Result.success(Unit)
+        }
+        vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        checkToken(vm, "123:abc")
+
+        vm.checkTelegramBackup()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.tgBackupChecking)
+        assertNull(vm.uiState.value.tgBackupStatus)
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        assertNull(settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+    }
+
+    @Test
+    fun `disconnect during a running check cancels it and nothing is stored`() = runTest {
+        val sink = tgSinkFake()
+        coEvery { sink.getMe("123:abc") } coAnswers { kotlinx.coroutines.awaitCancellation() }
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        checkToken(vm, "123:abc")
+        assertTrue(vm.uiState.value.tgBackupChecking)
+        vm.disconnectTelegramBackup()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(vm.uiState.value.tgBackupChecking)
+        assertNull(vm.uiState.value.tgBackupStatus)
+        assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        coVerify(exactly = 0) { sink.findPrivateChat(any(), any()) }
+    }
+
+    @Test
+    fun `telegram disconnect clears token, chat and bot name`() = runTest {
+        val vm = buildViewModel()
+        testDispatcher.scheduler.advanceUntilIdle()
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN] = "123:abc"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID] = "777"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME] = "my_car_bot"
+        settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME] = "Andy"
+
+        vm.disconnectTelegramBackup()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_NAME])
+        assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_TOKEN])
+        assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_CHAT_ID])
+        assertEquals("", settingsDao.map[SettingsRepository.KEY_TG_BACKUP_BOT_NAME])
+        assertEquals("", vm.uiState.value.tgBackupToken)
     }
 }
