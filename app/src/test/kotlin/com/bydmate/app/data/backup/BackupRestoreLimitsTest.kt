@@ -2,6 +2,7 @@ package com.bydmate.app.data.backup
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertThrows
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -112,6 +113,38 @@ class BackupRestoreLimitsTest {
         )
         assertThrows(IllegalStateException::class.java) {
             BackupManager.readBackupEntries(ByteArrayInputStream(zip), maxEntryBytes = 1_000)
+        }
+    }
+
+    @Test
+    fun `oversized partial database entry fails fast`() {
+        val zip = zipOf(
+            "bydmate.part.db" to ByteArray(10_000),
+            "prefs.json" to "{}".toByteArray(),
+            "manifest.json" to "{}".toByteArray(),
+        )
+        assertThrows(IllegalStateException::class.java) {
+            BackupManager.readBackupEntries(ByteArrayInputStream(zip), maxEntryBytes = 1_000)
+        }
+    }
+
+    @Test
+    fun `partial database entry is read and marked partial`() {
+        val zip = zipOf(
+            "bydmate.part.db" to ByteArray(100),
+            "prefs.json" to "{}".toByteArray(),
+            "manifest.json" to """{"dbSchemaVersion":20,"parts":["tables"]}""".toByteArray(),
+        )
+        val entries = BackupManager.readBackupEntries(ByteArrayInputStream(zip))
+        assertEquals(100, entries.dbBytes.size)
+        assertTrue(entries.partial)
+    }
+
+    @Test
+    fun `full and partial database entries together fail`() {
+        val zip = zipOf("bydmate.part.db" to ByteArray(10), *validEntries())
+        assertThrows(IllegalStateException::class.java) {
+            BackupManager.readBackupEntries(ByteArrayInputStream(zip))
         }
     }
 

@@ -1,7 +1,7 @@
 package com.bydmate.app.data.backup
 
 import android.content.Context
-import android.database.MatrixCursor
+import android.database.sqlite.SQLiteDatabase
 import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.camera.BlindSpotPreferences
@@ -11,13 +11,18 @@ import com.bydmate.app.hud.HudController
 import com.bydmate.app.split.SplitPreferencesImpl
 import io.mockk.every
 import io.mockk.mockk
+import org.json.JSONObject
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Assert.assertThrows
 import org.junit.Before
+import org.junit.Rule
 import org.junit.Test
+import org.junit.rules.TemporaryFolder
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
@@ -32,23 +37,31 @@ import java.util.zip.ZipFile
 @Config(sdk = [29])
 class BackupManagerExportTest {
 
+    @get:Rule
+    val tmp = TemporaryFolder()
+
     private val context: Context = ApplicationProvider.getApplicationContext()
     private val appDatabase = mockk<AppDatabase>(relaxed = true)
     private val supportDb = mockk<SupportSQLiteDatabase>(relaxed = true)
+    private lateinit var liveDb: File
 
-    // Fresh cursor per call: export() closes it via .use on every retry attempt.
-    private fun checkpointCursor(busy: Int) =
-        MatrixCursor(arrayOf("busy", "log", "checkpointed")).apply { addRow(arrayOf(busy, 0, 0)) }
+    private fun checkpointCursor(busy: Int) = BackupFixtures.checkpointCursor(busy)
 
     private fun manager() = BackupManager(context, appDatabase, listOf("automation"))
 
     @Before
     fun setUp() {
         every { appDatabase.openHelper.writableDatabase } returns supportDb
-        val dbFile = context.getDatabasePath("bydmate.db")
-        dbFile.parentFile?.mkdirs()
-        dbFile.writeBytes(byteArrayOf(1, 2, 3))
+        liveDb = BackupFixtures.createCurrentDb(context, "bydmate.db")
+        BackupFixtures.withDb(liveDb) { BackupFixtures.seedCurrent(it, "live", 1L) }
     }
+
+    private fun <T> entryDb(zip: File, name: String, block: (SQLiteDatabase) -> T): T =
+        BackupFixtures.withDb(BackupFixtures.openEntryDb(zip, name, tmp.root), block)
+
+    private fun manifestParts(zip: File): Set<BackupPart> = BackupManager.manifestParts(
+        JSONObject(BackupFixtures.entryBytes(zip, "manifest.json")!!.decodeToString())
+    )
 
     @Test
     fun `export fails when checkpoint stays busy`() {
@@ -65,13 +78,98 @@ class BackupManagerExportTest {
     }
 
     @Test
-    fun `export packs exact db bytes when checkpoint is clean`() {
+    fun `full export keeps every part and empties runtime state`() {
         every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
-        val zip = manager().export()
-        ZipFile(zip).use { z ->
-            val entry = z.getEntry("bydmate.db")
-            assertArrayEquals(byteArrayOf(1, 2, 3), z.getInputStream(entry).readBytes())
+
+        val zip = manager().export(BackupPart.ALL)
+
+        assertEquals(BackupPart.ALL, manifestParts(zip))
+        assertNull(BackupFixtures.entryBytes(zip, "bydmate.part.db"))
+        entryDb(zip, "bydmate.db") { db ->
+            for (table in BackupParts.TABLES_TABLES + BackupParts.SETTINGS_TABLES) {
+                assertEquals(table, 1, BackupFixtures.count(db, table))
+            }
+            for (table in BackupParts.RUNTIME_TABLES) {
+                assertEquals(table, 0, BackupFixtures.count(db, table))
+            }
+            assertEquals("live", BackupFixtures.setting(db, "currency"))
+            assertEquals("live", BackupFixtures.setting(db, "trip1_reset_ts"))
+            assertEquals(BackupFixtures.TOKEN, BackupFixtures.setting(db, "tg_backup_token"))
+            assertNull(BackupFixtures.setting(db, "last_known_soc"))
         }
+        // The live database keeps its runtime state: only the copy is trimmed.
+        BackupFixtures.withDb(liveDb) { db ->
+            assertEquals(1, BackupFixtures.count(db, "last_state"))
+            assertEquals("live", BackupFixtures.setting(db, "last_known_soc"))
+        }
+    }
+
+    @Test
+    fun `partial export writes bydmate part db with only the chosen parts`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        context.getSharedPreferences("automation", Context.MODE_PRIVATE).edit().putString("pref", "x").commit()
+
+        val zip = manager().export(setOf(BackupPart.TABLES))
+
+        assertEquals(setOf(BackupPart.TABLES), manifestParts(zip))
+        assertNull(BackupFixtures.entryBytes(zip, "bydmate.db"))
+        assertEquals("{}", BackupFixtures.entryBytes(zip, "prefs.json")!!.decodeToString())
+        entryDb(zip, "bydmate.part.db") { db ->
+            for (table in BackupParts.TABLES_TABLES) assertEquals(table, 1, BackupFixtures.count(db, table))
+            for (table in BackupParts.SETTINGS_TABLES + BackupParts.RUNTIME_TABLES) {
+                assertEquals(table, 0, BackupFixtures.count(db, table))
+            }
+            assertEquals("live", BackupFixtures.setting(db, "trip1_reset_ts"))
+            assertNull(BackupFixtures.setting(db, "currency"))
+            assertNull(BackupFixtures.setting(db, "tg_backup_token"))
+            assertNull(BackupFixtures.setting(db, "last_known_soc"))
+        }
+    }
+
+    @Test
+    fun `keys only export carries the keys and nothing else`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+
+        val zip = manager().export(setOf(BackupPart.KEYS))
+
+        entryDb(zip, "bydmate.part.db") { db ->
+            for (table in BackupParts.TABLES_TABLES + BackupParts.SETTINGS_TABLES) {
+                assertEquals(table, 0, BackupFixtures.count(db, table))
+            }
+            assertEquals(BackupFixtures.TOKEN, BackupFixtures.setting(db, "tg_backup_token"))
+            assertNull(BackupFixtures.setting(db, "currency"))
+            assertNull(BackupFixtures.setting(db, "trip1_reset_ts"))
+        }
+    }
+
+    @Test
+    fun `archive without keys holds no trace of the token in its raw bytes`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        val token = BackupFixtures.TOKEN.toByteArray()
+
+        val withKeys = manager().export(BackupPart.ALL)
+        val withoutKeys = manager().export(setOf(BackupPart.TABLES, BackupPart.SETTINGS))
+
+        // The check finds the token where it is: the raw database file of the full archive.
+        assertTrue(BackupFixtures.entryBytes(withKeys, "bydmate.db")!!.containsSequence(token))
+        // Raw file bytes, not a query: a deleted row left in a free page would still be found here.
+        assertFalse(BackupFixtures.entryBytes(withoutKeys, "bydmate.part.db")!!.containsSequence(token))
+        assertFalse(withoutKeys.readBytes().containsSequence(token))
+    }
+
+    private fun ByteArray.containsSequence(needle: ByteArray): Boolean =
+        (0..size - needle.size).any { start -> needle.indices.all { this[start + it] == needle[it] } }
+
+    @Test
+    fun `old reader of v3 17 5 rejects a partial archive`() {
+        every { appDatabase.query("PRAGMA wal_checkpoint(TRUNCATE)", null) } answers { checkpointCursor(busy = 0) }
+        val zip = manager().export(setOf(BackupPart.TABLES, BackupPart.SETTINGS))
+
+        assertThrows(IllegalStateException::class.java) {
+            zip.inputStream().use { BackupManager.readBackupEntries(it, dbEntryNames = setOf("bydmate.db")) }
+        }
+        val entries = zip.inputStream().use { BackupManager.readBackupEntries(it) }
+        assertTrue(entries.partial)
     }
 
     /** Base names export() may pick for the next few seconds, so a test crossing a second still collides. */
@@ -95,6 +193,12 @@ class BackupManagerExportTest {
         prefs(SplitPreferencesImpl.PREFS_NAME).edit().putBoolean(SplitPreferencesImpl.KEY_FEATURE_ENABLED, true).commit()
         prefs(HudController.PREFS_NAME).edit()
             .putBoolean(HudController.KEY_ENABLED, true).putBoolean(HudController.KEY_SUPPORTED, true).commit()
+        prefs("automation").edit()
+            .putBoolean("auto_enabled", true)
+            .putString("service_start_boot_id", "boot-a")
+            .putLong("service_start_last_seen_elapsed", 1L)
+            .putLong("service_start_last_seen_uptime", 1L)
+            .commit()
         val runtimeKeys = listOf(
             "last_vd_id", "direct_display_id", "compositor_powered_on", "freeform_reboot_pending",
             "a11y_recovery_last_elapsed_ms", "a11y_recovery_fail_streak",
@@ -117,6 +221,8 @@ class BackupManagerExportTest {
         assertEquals(true, exported[SplitPreferencesImpl.PREFS_NAME]?.get(SplitPreferencesImpl.KEY_FEATURE_ENABLED))
         assertEquals(mapOf(HudController.KEY_ENABLED to true), exported[HudController.PREFS_NAME])
         assertEquals(mapOf("mirror_enabled" to true), exported["cluster_projection"])
+        // The service_start session of this boot stays on this head unit (#177).
+        assertEquals(mapOf("auto_enabled" to true), exported["automation"])
         // Empty files are written too: restore reads "absent" as "older backup".
         assertTrue(exported.keys.containsAll(BackupManager.PREFS_FILES))
     }
