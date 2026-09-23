@@ -18,6 +18,7 @@ import android.view.WindowManager
 import android.widget.FrameLayout
 import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
+import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.vehicle.FreeformLaunchResult
 import com.bydmate.app.data.vehicle.HelperBootstrap
 import com.bydmate.app.data.vehicle.HelperClient
@@ -1520,8 +1521,8 @@ object ClusterProjectionManager {
                     runCatching {
                         OverlayNotificationManager.show(
                             context,
-                            context.getString(R.string.settings_display_mirror_title),
-                            context.getString(R.string.settings_cluster_direct_reboot_hint),
+                            context.appLocalizedContext().getString(R.string.settings_display_mirror_title),
+                            context.appLocalizedContext().getString(R.string.settings_cluster_direct_reboot_hint),
                         )
                     }
                 }

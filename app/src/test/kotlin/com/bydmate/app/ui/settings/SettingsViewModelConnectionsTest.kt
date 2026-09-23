@@ -246,7 +246,7 @@ class SettingsViewModelConnectionsTest {
             settingsRepository = settingsRepo,
             tripRepository = tripRepo,
             chargeRepository = chargeRepo,
-            updateChecker = UpdateChecker(httpClient),
+            updateChecker = UpdateChecker(httpClient, com.bydmate.app.util.AppStrings(ctx)),
             historyImporter = historyImporter,
             energyDataReader = energyReader,
             idleDrainDao = idleDrainDao,
@@ -305,6 +305,7 @@ class SettingsViewModelConnectionsTest {
             },
             telegramBackupSink = mockk(relaxed = true),
             autoBackupScheduler = mockk(relaxed = true),
+            appStrings = com.bydmate.app.util.AppStrings(ctx),
         )
     }
 

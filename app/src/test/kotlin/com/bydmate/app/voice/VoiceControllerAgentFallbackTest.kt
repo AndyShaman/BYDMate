@@ -8,6 +8,7 @@ import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.DispatchResult
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.util.appStringsOver
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
@@ -102,7 +103,8 @@ class VoiceControllerAgentFallbackTest {
             agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(mockk<Context>(relaxed = true)))
     }
 
     @Test fun `agent Answer becomes AgentAnswer state, earcon ok, orchestrator called once`() {

@@ -35,7 +35,8 @@ class ActionDispatcherSentryToggleTest {
         dagger.Lazy { mockk<com.bydmate.app.voice.VoiceAutomationActions>(relaxed = true) },
         mockk<ClusterVoiceControl>(relaxed = true),
         mockk<com.bydmate.app.voice.AudioCapture>(relaxed = true),
-        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true))
+        mockk<com.bydmate.app.split.SplitSessionManager>(relaxed = true),
+            com.bydmate.app.util.AppStrings(app))
 
     private val toggleSentry =
         ActionDef(command = "", displayName = "Переключить", kind = "toggle", payload = "sentry")

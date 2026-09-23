@@ -11,6 +11,7 @@ import com.bydmate.app.data.automation.VoiceFireResult
 import com.bydmate.app.R
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.local.entity.ActionDef
+import com.bydmate.app.util.appStringsOver
 import io.mockk.clearMocks
 import io.mockk.coEvery
 import io.mockk.coVerify
@@ -166,7 +167,8 @@ class VoiceControllerSessionTest {
             ttsEngine, journal, continuousAsr, agentIdentity = agentIdentity,
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(context))
     }
 
     // (a) PTT with isReady=true routes each Utterance into the NLU dispatch path, and the
@@ -574,7 +576,8 @@ class VoiceControllerSessionTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(mockk<Context>(relaxed = true)))
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -793,7 +796,8 @@ class VoiceControllerSessionTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(mockk<Context>(relaxed = true)))
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -852,7 +856,8 @@ class VoiceControllerSessionTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(mockk<Context>(relaxed = true)))
 
         controller.onPttPressed()
         awaitTrue { controller.listening.value }
@@ -1125,7 +1130,8 @@ class VoiceControllerSessionTest {
             agentIdentity = { AgentIdentity("", AgentPersona.NAVIGATOR) },
             ttsModelManager = mockk(relaxed = true),
             ruStressMarker = RuStressMarker { null },
-            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") })
+            selectedTtsVoice = { TtsVoiceCatalog.byId("dmitri") },
+            appStrings = appStringsOver(stubbedContext()))
         val answers = Collections.synchronizedList(mutableListOf<String>())
         controller.showAnswerHook = { text -> answers.add(text) }
 

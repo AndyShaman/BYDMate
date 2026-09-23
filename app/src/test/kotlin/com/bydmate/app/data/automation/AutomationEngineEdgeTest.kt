@@ -76,6 +76,7 @@ class AutomationEngineEdgeTest {
                 every { probePending } returns false
             },
             context = ApplicationProvider.getApplicationContext<Context>(),
+            appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
         )
         return engine to ruleDao
     }
@@ -326,6 +327,7 @@ class AutomationEngineEdgeTest {
                     every { probePending } returns false
                 },
                 context = ApplicationProvider.getApplicationContext<Context>(),
+                appStrings = com.bydmate.app.util.AppStrings(ApplicationProvider.getApplicationContext()),
             )
             engine.evaluate(diParsData(exteriorTemp = 10), null)
             engine.evaluate(diParsData(exteriorTemp = 25), null)

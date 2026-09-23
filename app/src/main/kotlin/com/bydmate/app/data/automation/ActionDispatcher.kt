@@ -30,6 +30,7 @@ import com.bydmate.app.split.SplitSessionManager
 import com.bydmate.app.split.SplitSessionState
 import com.bydmate.app.split.SplitSide
 import com.bydmate.app.split.SplitStartResult
+import com.bydmate.app.util.AppStrings
 import com.bydmate.app.util.appLocalizedContext
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
@@ -42,6 +43,7 @@ import javax.inject.Singleton
 data class DispatchResult(val success: Boolean, val reason: String? = null)
 
 @Singleton
+@Suppress("LongParameterList") // Hilt-injected dependencies
 class ActionDispatcher @Inject constructor(
     private val vehicleApi: VehicleApi,
     private val helper: HelperClient,
@@ -50,6 +52,7 @@ class ActionDispatcher @Inject constructor(
     private val clusterVoiceControl: ClusterVoiceControl,
     private val audioCapture: com.bydmate.app.voice.AudioCapture,
     private val splitSessionManager: SplitSessionManager,
+    private val appStrings: AppStrings,
 ) {
     companion object {
         private const val TAG = "ActionDispatcher"
@@ -675,9 +678,9 @@ class ActionDispatcher @Inject constructor(
             SplitStartResult.FREEFORM_UNAVAILABLE ->
                 DispatchResult(false, freeformUnavailableHint())
             SplitStartResult.LAUNCH_FAILED ->
-                DispatchResult(false, context.getString(R.string.split_launch_failed))
+                DispatchResult(false, appStrings.get(R.string.split_launch_failed))
             SplitStartResult.DISABLED ->
-                DispatchResult(false, context.getString(R.string.split_feature_disabled))
+                DispatchResult(false, appStrings.get(R.string.split_feature_disabled))
         }
     }
 
@@ -708,9 +711,9 @@ class ActionDispatcher @Inject constructor(
             SplitStartResult.FREEFORM_UNAVAILABLE ->
                 DispatchResult(false, freeformUnavailableHint())
             SplitStartResult.LAUNCH_FAILED ->
-                DispatchResult(false, context.getString(R.string.split_launch_failed))
+                DispatchResult(false, appStrings.get(R.string.split_launch_failed))
             SplitStartResult.DISABLED ->
-                DispatchResult(false, context.getString(R.string.split_feature_disabled))
+                DispatchResult(false, appStrings.get(R.string.split_feature_disabled))
         }
     }
 
@@ -718,7 +721,7 @@ class ActionDispatcher @Inject constructor(
      * Hint for FREEFORM_UNAVAILABLE: on firmwares proven to ignore the freeform flag (#139)
      * a reboot never helps, so promising one would be a lie.
      */
-    private fun freeformUnavailableHint(): String = context.getString(
+    private fun freeformUnavailableHint(): String = appStrings.get(
         if (splitSessionManager.freeformUnsupported()) R.string.split_freeform_unsupported_hint
         else R.string.split_freeform_reboot_hint
     )
@@ -918,8 +921,8 @@ class ActionDispatcher @Inject constructor(
                 when (splitSessionManager.start(pair)) {
                     SplitStartResult.OK -> null
                     SplitStartResult.FREEFORM_UNAVAILABLE -> freeformUnavailableHint()
-                    SplitStartResult.LAUNCH_FAILED -> context.getString(R.string.split_launch_failed)
-                    SplitStartResult.DISABLED -> context.getString(R.string.split_feature_disabled)
+                    SplitStartResult.LAUNCH_FAILED -> appStrings.get(R.string.split_launch_failed)
+                    SplitStartResult.DISABLED -> appStrings.get(R.string.split_feature_disabled)
                 }
 
             override suspend fun sendIntent(): DispatchResult = sendNavigateIntent(payload, shortcut)
@@ -1076,7 +1079,7 @@ class ActionDispatcher @Inject constructor(
                 failure = result
             }
             Log.w(TAG, "navigate app=maps kind=shortcut target=$shortcut -> no package accepted it")
-            return DispatchResult(false, context.getString(R.string.navigate_maps_shortcut_failed))
+            return DispatchResult(false, appStrings.get(R.string.navigate_maps_shortcut_failed))
         }
         // Free-text destination: Maps opens its own search, since the agent has no coordinates
         // for an arbitrary street-level address.
