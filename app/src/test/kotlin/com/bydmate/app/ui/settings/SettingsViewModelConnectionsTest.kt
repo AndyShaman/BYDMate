@@ -294,6 +294,7 @@ class SettingsViewModelConnectionsTest {
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
+            automationEngine = mockk(relaxed = true),
             voiceJournal = com.bydmate.app.voice.VoiceJournal(),
             tariffPeriodDao = mockk(relaxed = true),
             costCalculator = mockk(relaxed = true),

@@ -8,11 +8,15 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.location.Location
+import android.os.PowerManager
 import android.os.SystemClock
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import kotlin.math.abs
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -69,15 +73,18 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         internal const val PREFS_NAME = "automation"
         internal const val KEY_SERVICE_START_BOOT_ID = "service_start_boot_id"
         private const val BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
-        // Heartbeat of a live evaluate() loop on two monotonic clocks: elapsedRealtime counts
-        // deep sleep, uptimeMillis stops in it; both are immune to NTP/GPS clock corrections.
-        // The head unit sleeps on short stops without a reboot (same boot id). elapsed running
-        // ahead of uptime by more than SERVICE_START_SLEEP_MIN_MS between two ticks means the
-        // device really suspended, so this is a real car start. A plain gap in evaluate() calls
-        // (telemetry unavailable while the car is on) advances both clocks equally and is not.
+        // Heartbeat of a live evaluate() loop with the screen on, on elapsedRealtime (monotonic,
+        // immune to NTP/GPS clock corrections). The head unit does not reboot between drives:
+        // on ACC_OFF the screen goes dark while Android keeps running, and the process may be
+        // restarted with the screen still off. A screen-on tick after more than
+        // SERVICE_START_WAKE_GAP_MS without a heartbeat means the car was off, so this is a
+        // real car start. A process restart mid-drive leaves a heartbeat of at most
+        // SERVICE_START_HEARTBEAT_MS plus the restart delay and is not.
         internal const val KEY_SERVICE_START_LAST_SEEN_ELAPSED = "service_start_last_seen_elapsed"
+        // Legacy heartbeat key of 3.17.5: no longer read or written, the stale value stays in
+        // prefs and is kept out of backups.
         internal const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
-        private const val SERVICE_START_SLEEP_MIN_MS = 60_000L
+        private const val SERVICE_START_WAKE_GAP_MS = 60_000L
         private const val SERVICE_START_HEARTBEAT_MS = 30_000L
 
         // Steering-wheel key trigger: manual only, like button_press. Fires from
@@ -115,16 +122,25 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     }
     // Test seam: monotonic clock of evaluate() that counts deep sleep, drives the heartbeat.
     internal var elapsedMs: () -> Long = { SystemClock.elapsedRealtime() }
-    // Test seam: monotonic clock of evaluate() that stops in deep sleep.
-    internal var uptimeMs: () -> Long = { SystemClock.uptimeMillis() }
+    // Test seam: whether the head unit screen is on. Without a PowerManager the session
+    // falls back to the heartbeat alone, as if the screen were always on.
+    internal var interactiveProvider: () -> Boolean = {
+        runCatching {
+            (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
+        }.getOrDefault(true)
+    }
     // Test seam: wall clock of evaluate().
     internal var nowMs: () -> Long = { System.currentTimeMillis() }
-    // Session state of this process: boot id, and both clocks of the previous tick (null
-    // until the first evaluate(), which seeds them from the persisted heartbeat).
+    // Session state of this process: boot id and elapsed of the last screen-on tick, seeded
+    // from the persisted heartbeat on the first evaluate() (may stay null: nothing stored).
+    // sessionDecided flips on the first screen-on tick, which alone may keep the window closed
+    // for a process restarted mid-drive.
+    @Volatile private var seeded = false
+    @Volatile private var sessionDecided = false
+    @Volatile private var lastInteractive = false
     @Volatile private var sessionBootId: String? = null
     @Volatile private var savedBootId: String? = null
     @Volatile private var lastTickElapsed: Long? = null
-    @Volatile private var lastTickUptime: Long? = null
     @Volatile private var lastHeartbeatWriteElapsed: Long? = null
 
     // Keycodes bound to a steering_key trigger of an ENABLED rule. Kept as a
@@ -163,6 +179,23 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         }
     }
 
+    // One line for the diagnostics dump (#177): the service_start session as this process
+    // sees it. The heartbeat age is read from prefs, as a restarted process would see it.
+    fun serviceStartDumpLine(): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val end = serviceStartWindowEnd
+        val window = when {
+            end <= 0L -> "not armed"
+            nowMs() <= end -> "armed until " + SimpleDateFormat("HH:mm:ss", Locale.US).format(Date(end))
+            else -> "spent"
+        }
+        val heartbeat = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L)
+        val age = if (heartbeat >= 0L) "${(elapsedMs() - heartbeat) / 1000}s" else "-"
+        val bootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)?.takeIf { it.isNotEmpty() } ?: "-"
+        return "service_start: interactive=${interactiveProvider()} window=$window " +
+            "consumed=${serviceStartConsumed.size} last_heartbeat_age=$age boot_id=$bootId"
+    }
+
     // Called every 3s from TrackingService poll loop.
     // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)
     // because the latter mirrors TripTracker via an async collect, which lags by a
@@ -176,60 +209,67 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val rules = ruleDao.getEnabled()
         val now = nowMs()
 
-        // A new session arms the service_start window: a different kernel boot id (reboot),
-        // elapsed going backwards (reboot), or a real suspend between two ticks: elapsed ran
-        // ahead of uptime by more than SERVICE_START_SLEEP_MIN_MS (the head unit slept, whether
-        // the process died meanwhile or survived the sleep). Checked on every evaluate(), so a
-        // process that lives through a sleep still re-arms on wake-up. A telemetry pause while
-        // the car is on (no evaluate() calls, both clocks run) is not a new session.
-        // WorkManager restarting a killed process mid-session (same boot, no sleep) marks the
-        // window as already spent (-1), so service_start rules don't fire again (#177).
-        // Wall-clock time takes no part in the decision, so clock corrections can't reopen the
-        // window. Limitation: without a readable boot id, a reboot whose new elapsed already
-        // exceeds the saved one (previous session shorter than the time to app start on the
-        // new boot) is not recognised.
+        // A new session arms the service_start window. The session follows the head unit screen,
+        // not kernel suspend: between drives the screen is dark while Android may stay awake
+        // (#177). Decided on a screen-on tick only: a different kernel boot id (reboot), no
+        // stored heartbeat, elapsed going backwards (reboot), or more than
+        // SERVICE_START_WAKE_GAP_MS since the last screen-on tick (car was off: screen dark
+        // and/or process dead). Checked on every evaluate(), so a process that lives through a
+        // stop re-arms when the screen comes back. Ticks with the screen off write no heartbeat;
+        // a process started with the screen off (restart after ACC_OFF) keeps the window closed
+        // and decides on its first screen-on tick. A process restarted mid-drive (fresh
+        // heartbeat) marks the window as already spent (-1), so service_start rules don't fire
+        // again. Wall-clock time takes no part in the decision, so clock corrections can't
+        // reopen the window. Limitation: without a readable boot id, a reboot whose new elapsed
+        // already exceeds the saved one and lies within the wake gap is not recognised.
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         val elapsed = elapsedMs()
-        val uptime = uptimeMs()
-        val firstTick = lastTickElapsed == null
+        val interactive = interactiveProvider()
+        val firstTick = !seeded
         if (firstTick) {
+            seeded = true
             sessionBootId = bootIdProvider()
             savedBootId = prefs.getString(KEY_SERVICE_START_BOOT_ID, null)
+            lastTickElapsed = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L).takeIf { it >= 0L }
         }
-        val bootId = sessionBootId.orEmpty()
-        val prevElapsed: Long?
-        val prevUptime: Long?
-        if (firstTick) {
-            prevElapsed = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, -1L).takeIf { it >= 0L }
-            prevUptime = prefs.getLong(KEY_SERVICE_START_LAST_SEEN_UPTIME, -1L).takeIf { it >= 0L }
+        if (!interactive) {
+            if (firstTick) {
+                Log.i(TAG, "service_start: screen off at start, waiting for wake-up")
+                serviceStartWindowEnd = -1L
+            } else if (lastInteractive) {
+                Log.i(TAG, "service_start: screen off, heartbeat paused")
+            }
         } else {
-            prevElapsed = lastTickElapsed
-            prevUptime = lastTickUptime
+            val bootId = sessionBootId.orEmpty()
+            val saved = savedBootId.orEmpty()
+            val prevElapsed = lastTickElapsed
+            val gap = prevElapsed?.let { "${(elapsed - it) / 1000}s" } ?: "-"
+            val reason = when {
+                bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved -> "boot"
+                prevElapsed == null -> "first"
+                elapsed < prevElapsed -> "elapsed_back"
+                elapsed - prevElapsed > SERVICE_START_WAKE_GAP_MS -> "wake"
+                else -> null
+            }
+            if (reason != null) {
+                Log.i(TAG, "service_start: new session reason=$reason gap=$gap")
+                serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
+                serviceStartConsumed.clear()
+                prefs.edit().putString(KEY_SERVICE_START_BOOT_ID, bootId).commit()
+                savedBootId = bootId
+            } else if (!sessionDecided) {
+                Log.i(TAG, "service_start: process restarted mid-session, not re-arming gap=$gap")
+                serviceStartWindowEnd = -1L
+            }
+            sessionDecided = true
+            lastTickElapsed = elapsed
+            val lastWrite = lastHeartbeatWriteElapsed
+            if (lastWrite == null || elapsed - lastWrite >= SERVICE_START_HEARTBEAT_MS) {
+                lastHeartbeatWriteElapsed = elapsed
+                prefs.edit().putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed).apply()
+            }
         }
-        val saved = savedBootId.orEmpty()
-        val bootChanged = bootId.isNotEmpty() && saved.isNotEmpty() && bootId != saved
-        val slept = prevElapsed != null && prevUptime != null &&
-            (elapsed - prevElapsed) - (uptime - prevUptime) > SERVICE_START_SLEEP_MIN_MS
-        val newSession = bootChanged || prevElapsed == null || elapsed < prevElapsed || slept
-        if (newSession) {
-            serviceStartWindowEnd = now + SERVICE_START_WINDOW_MS
-            serviceStartConsumed.clear()
-            prefs.edit().putString(KEY_SERVICE_START_BOOT_ID, bootId).commit()
-            savedBootId = bootId
-        } else if (firstTick) {
-            Log.i(TAG, "service_start: process restarted mid-session, not re-arming")
-            serviceStartWindowEnd = -1L
-        }
-        lastTickElapsed = elapsed
-        lastTickUptime = uptime
-        val lastWrite = lastHeartbeatWriteElapsed
-        if (lastWrite == null || elapsed - lastWrite >= SERVICE_START_HEARTBEAT_MS) {
-            lastHeartbeatWriteElapsed = elapsed
-            prefs.edit()
-                .putLong(KEY_SERVICE_START_LAST_SEEN_ELAPSED, elapsed)
-                .putLong(KEY_SERVICE_START_LAST_SEEN_UPTIME, uptime)
-                .apply()
-        }
+        lastInteractive = interactive
 
         // Prune per-rule state for rules that have been deleted (or disabled
         // and removed from the active set). Without this, `lastEvalResults`,

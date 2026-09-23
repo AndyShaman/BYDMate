@@ -359,6 +359,7 @@ class SettingsViewModelTest {
             fidCatalogManager = mockk(relaxed = true),
             writeAllowlist = com.bydmate.app.data.vehicle.WriteAllowlist.EMPTY,
             ruleDao = mockk(relaxed = true),
+            automationEngine = mockk(relaxed = true),
             voiceJournal = voiceJournal,
             tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
             costCalculator = exportCostCalculator ?: mockk(relaxed = true),
