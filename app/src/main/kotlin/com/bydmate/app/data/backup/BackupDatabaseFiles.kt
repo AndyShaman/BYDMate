@@ -17,6 +17,10 @@ import java.io.File
  */
 internal object BackupDatabaseFiles {
 
+    // Tables every BYDMate database has had since backups exist (schema 15): a file without
+    // them is some other SQLite database.
+    private val CORE_TABLES = listOf("trips", "charges", "automation_rules", "settings", "places", "last_state")
+
     /**
      * [snapshot] without runtime state and without the parts outside [parts]. Deleted rows must not
      * survive in free pages of the file (a token in an archive without Keys): secure_delete zeroes
@@ -61,6 +65,9 @@ internal object BackupDatabaseFiles {
             db.execSQL("ATTACH DATABASE ? AS archive", arrayOf(archive.path))
             inTransaction(db) {
                 selected.forEach { replacePart(db, it) }
+                // An archive of v3.17.5 or older carries when each rule last fired on the source
+                // device: a later clock there would hold cooldown rules back here.
+                if (BackupPart.SETTINGS in selected) db.execSQL("UPDATE main.automation_rules SET last_triggered_at = NULL")
                 // The open trip of the live state points into the history just replaced.
                 if (BackupPart.TABLES in selected) db.execSQL("UPDATE last_state SET open_trip_id = NULL")
                 // This connection does not enforce foreign keys, and quick_check does not look at
@@ -115,12 +122,13 @@ internal object BackupDatabaseFiles {
         strings.get(R.string.backup_error_newer_archive, schema, AppDatabase.SCHEMA_VERSION)
 
     /**
-     * Verify [file] is a readable, structurally intact SQLite database.
-     * Throws IllegalStateException (and deletes the temp file) if it is not a SQLite file
-     * or fails quick_check. Opened read-only so a backup from an older (but compatible)
-     * schema is not migrated here. Returns its `PRAGMA user_version`: the schema Room stamped on it.
+     * Verify [file] is a readable, structurally intact BYDMate database.
+     * Throws IllegalStateException (and deletes the temp file) if it is not a SQLite file,
+     * fails quick_check, lacks a Room schema version or the core tables, or has rows that break
+     * a foreign key. Opened read-only so a backup from an older (but compatible) schema is not
+     * migrated here. Returns its `PRAGMA user_version`: the schema Room stamped on it.
      */
-    fun validate(file: File): Int {
+    fun validate(file: File, strings: AppStrings): Int {
         val db = try {
             SQLiteDatabase.openDatabase(file.path, null, SQLiteDatabase.OPEN_READONLY)
         } catch (e: SQLiteException) {
@@ -128,16 +136,25 @@ internal object BackupDatabaseFiles {
             throw IllegalStateException("Файл базы данных в бэкапе повреждён или не является базой SQLite", e)
         }
         val version = db.version
-        val ok = try {
-            quickCheck(db)
+        val problem = try {
+            val tables = CORE_TABLES.joinToString(",") { "'$it'" }
+            val coreTables = db.rawQuery("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name IN ($tables)", null)
+                .use { it.moveToFirst(); it.getInt(0) }
+            when {
+                !quickCheck(db) -> "Файл базы данных в бэкапе не прошёл проверку целостности"
+                // A full archive is swapped in as is: Room would fail on the next start.
+                version < 1 || coreTables < CORE_TABLES.size -> strings.get(R.string.backup_error_not_bydmate_db)
+                db.rawQuery("PRAGMA foreign_key_check", null).use { it.count } > 0 -> strings.get(R.string.backup_error_fk_violation)
+                else -> null
+            }
         } catch (_: SQLiteException) {
-            false
+            "Файл базы данных в бэкапе не прошёл проверку целостности"
         } finally {
             db.close()
         }
-        if (!ok) {
+        if (problem != null) {
             file.delete()
-            error("Файл базы данных в бэкапе не прошёл проверку целостности")
+            error(problem)
         }
         return version
     }

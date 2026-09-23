@@ -45,15 +45,8 @@ class BackupManagerRestoreTest {
     private fun backupZip(
         prefs: Map<String, Map<String, Any?>> = mapOf("automation" to mapOf("restored_key" to "yes")),
         name: String = "src",
+        dbBytes: ByteArray = currentDbBytes(name),
     ): Pair<File, ByteArray> {
-        val dbFile = tmp.newFile("$name.db").also { it.delete() }
-        SQLiteDatabase.openOrCreateDatabase(dbFile, null).use { db ->
-            db.execSQL("CREATE TABLE t (x TEXT)")
-            db.execSQL("INSERT INTO t VALUES (?)", arrayOf(name))
-            // The database version must agree with the manifest.
-            db.version = AppDatabase.SCHEMA_VERSION
-        }
-        val dbBytes = dbFile.readBytes()
         val prefsJson = BackupManager.serializePrefs(prefs)
         val manifestJson = JSONObject().apply {
             put("appVersionCode", 1)
@@ -67,6 +60,61 @@ class BackupManagerRestoreTest {
             z.putNextEntry(ZipEntry("manifest.json")); z.write(manifestJson.toByteArray()); z.closeEntry()
         }
         return zip to dbBytes
+    }
+
+    /** A database of the current schema with one row per table, tagged [name]. */
+    private fun currentDbBytes(name: String, extra: (SQLiteDatabase) -> Unit = {}): ByteArray {
+        val file = BackupFixtures.createCurrentDb(context, "archive-$name.db")
+        BackupFixtures.withDb(file) { db ->
+            BackupFixtures.seedCurrent(db, name, 1L)
+            extra(db)
+        }
+        return file.readBytes().also { BackupDatabaseFiles.deleteWithSideFiles(file) }
+    }
+
+    private val liveBytes = "live database".toByteArray()
+
+    /** The file a refused restore must leave as it was. */
+    private fun liveDbFile() = context.getDatabasePath("bydmate.db").apply {
+        parentFile?.mkdirs()
+        writeBytes(liveBytes)
+    }
+
+    private fun assertRefusedAndUntouched(zip: File, message: String, live: File) {
+        val error = org.junit.Assert.assertThrows(IllegalStateException::class.java) {
+            BackupManager(context, appDatabase, AppStrings(context), listOf("automation")).restore(zip)
+        }
+        assertEquals(message, error.message)
+        assertArrayEquals(liveBytes, live.readBytes())
+        val state = context.getSharedPreferences(PostRestoreCheck.PREFS_NAME, Context.MODE_PRIVATE)
+        assertFalse(state.getBoolean(PostRestoreCheck.KEY_PENDING, false))
+        assertTrue(live.parentFile!!.list()!!.none { it.endsWith(".tmp") })
+    }
+
+    @Test
+    fun `full archive with a foreign schema is refused, live db untouched`() {
+        val live = liveDbFile()
+        val foreign = tmp.newFile("foreign.db").also { it.delete() }
+        SQLiteDatabase.openOrCreateDatabase(foreign, null).use { db ->
+            db.execSQL("CREATE TABLE t (x TEXT)")
+            db.execSQL("INSERT INTO t VALUES ('x')")
+            // The version agrees with the manifest: only the tables give it away.
+            db.version = AppDatabase.SCHEMA_VERSION
+        }
+        val (zip, _) = backupZip(dbBytes = foreign.readBytes())
+
+        assertRefusedAndUntouched(zip, "Файл базы данных в бэкапе не является базой BYDMate", live)
+    }
+
+    @Test
+    fun `full archive with an orphan charge_points row is refused`() {
+        val live = liveDbFile()
+        val orphan = currentDbBytes("orphan") { db ->
+            db.execSQL("INSERT INTO charge_points (charge_id, timestamp) VALUES (99, 2002)")
+        }
+        val (zip, _) = backupZip(dbBytes = orphan)
+
+        assertRefusedAndUntouched(zip, "Файл бэкапа повреждён: нарушены связи между таблицами", live)
     }
 
     @Test
