@@ -136,7 +136,8 @@ class NativeParsReader @Inject constructor(
         }
         android.util.Log.i(
             "TechPanel",
-            "tech: ins=${raw("insulationKohm")} mF=${raw("motorTempFront")} mR=${raw("motorTempRear")} " +
+            "tech: soc=${raw("soc")} remain=${raw("batteryRemainKwh")} soh=${raw("soh")} " +
+                "ins=${raw("insulationKohm")} mF=${raw("motorTempFront")} mR=${raw("motorTempRear")} " +
                 "iF=${raw("inverterTempFront")} iR=${raw("inverterTempRear")} " +
                 "V=${raw("hvVoltage")} I=${raw("hvCurrent")} " +
                 "chg=${raw("bmsMaxChargeKw")} dis=${raw("bmsMaxDischargeKw")} " +

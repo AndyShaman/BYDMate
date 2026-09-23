@@ -106,6 +106,12 @@ class BYDMateApp : Application(), Configuration.Provider {
             }
         }
         scheduleDataThinning()
+        appScope.launch {
+            com.bydmate.app.service.UpdateApkCleanup.run(
+                android.os.Environment.getExternalStoragePublicDirectory(android.os.Environment.DIRECTORY_DOWNLOADS),
+                BuildConfig.VERSION_NAME,
+            )
+        }
         registerActivityLifecycleCallbacks(WidgetLifecycleCallbacks(this, splitOverlayController))
         // Start split-screen overlay observers (mirrors WidgetController init pattern).
         splitOverlayController.start(appScope)
