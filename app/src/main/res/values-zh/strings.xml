@@ -1636,4 +1636,18 @@
     <string name="trips_temp_verdict_not_higher">寒冷时的能耗并不高于温暖时（差值 %1$s%%）。您的行程中暂未看到冬季额外能耗。</string>
     <string name="trips_temp_verdict_narrow">目前所有行程都在 %1$s…%2$s °C，暂时没有寒冷或炎热的数据可比。</string>
     <string name="trips_temp_verdict_none">暂时无法比较：需要寒冷和温暖天气各自的行程。</string>
+
+    <!-- Post-restore check dialog -->
+    <string name="post_restore_title">恢复之后</string>
+    <string name="post_restore_intro">设置已恢复。要让一切正常工作，还需：</string>
+    <string name="post_restore_overlay">悬浮窗和显示在其他应用上层的窗口</string>
+    <string name="post_restore_mic">语音控制所需的麦克风</string>
+    <string name="post_restore_contacts">通过助手拨打电话所需的通讯录</string>
+    <string name="post_restore_asr">语音识别模型</string>
+    <string name="post_restore_tts">朗读语音：%1$s</string>
+    <string name="post_restore_reboot">重启车机，关闭原厂语音助手才会生效</string>
+    <string name="post_restore_allow">允许</string>
+    <string name="post_restore_download_asr">下载 226 MB</string>
+    <string name="post_restore_download">下载</string>
+    <string name="post_restore_close">关闭</string>
 </resources>

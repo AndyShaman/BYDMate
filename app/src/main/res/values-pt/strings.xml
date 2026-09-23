@@ -1518,4 +1518,18 @@
     <string name="trips_temp_verdict_not_higher">No frio o carro não gasta mais do que no calor (diferença %1$s%%). Ainda não se vê um acréscimo de inverno nas suas viagens.</string>
     <string name="trips_temp_verdict_narrow">Por agora todas as viagens a %1$s…%2$s °C — ainda não há frio nem calor para comparar.</string>
     <string name="trips_temp_verdict_none">Ainda não há com que comparar: faltam viagens no frio e no calor.</string>
+
+    <!-- Post-restore check dialog -->
+    <string name="post_restore_title">Após a restauração</string>
+    <string name="post_restore_intro">Configurações restauradas. Para que tudo funcione, falta:</string>
+    <string name="post_restore_overlay">Widget e janelas sobre outros apps</string>
+    <string name="post_restore_mic">Microfone para controle por voz</string>
+    <string name="post_restore_contacts">Contatos para chamadas pelo agente</string>
+    <string name="post_restore_asr">Modelo de reconhecimento de fala</string>
+    <string name="post_restore_tts">Voz das respostas: %1$s</string>
+    <string name="post_restore_reboot">Reinicie a central multimídia para que a desativação do assistente nativo entre em vigor</string>
+    <string name="post_restore_allow">Permitir</string>
+    <string name="post_restore_download_asr">Baixar 226 MB</string>
+    <string name="post_restore_download">Baixar</string>
+    <string name="post_restore_close">Fechar</string>
 </resources>

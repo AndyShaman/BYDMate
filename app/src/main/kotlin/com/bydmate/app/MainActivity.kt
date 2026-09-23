@@ -11,6 +11,7 @@ import android.util.Log
 import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -28,6 +29,8 @@ import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.components.ConsumptionThresholds
 import com.bydmate.app.ui.components.LocalConsumptionThresholds
 import com.bydmate.app.ui.navigation.AppNavigation
+import com.bydmate.app.ui.restore.PostRestoreDialog
+import com.bydmate.app.ui.restore.PostRestoreViewModel
 import com.bydmate.app.ui.theme.BYDMateTheme
 import dagger.hilt.android.AndroidEntryPoint
 import java.util.Locale
@@ -38,6 +41,7 @@ class MainActivity : AppCompatActivity() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var updateChecker: UpdateChecker
+    private val postRestoreViewModel: PostRestoreViewModel by viewModels()
 
     companion object {
         private const val TAG = "MainActivity"
@@ -121,6 +125,7 @@ class MainActivity : AppCompatActivity() {
                         settingsRepository = settingsRepository,
                         updateChecker = updateChecker,
                     )
+                    PostRestoreDialog(postRestoreViewModel)
                 }
             }
         }

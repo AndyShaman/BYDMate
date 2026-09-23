@@ -1522,4 +1522,18 @@
     <string name="trips_temp_verdict_not_higher">In the cold the car does not use more than in the warm (difference %1$s%%). No winter penalty shows in your trips yet.</string>
     <string name="trips_temp_verdict_narrow">So far every trip was at %1$s…%2$s °C — there is no cold or heat to compare with yet.</string>
     <string name="trips_temp_verdict_none">Nothing to compare yet: trips in the cold and in the warm are both needed.</string>
+
+    <!-- Post-restore check dialog -->
+    <string name="post_restore_title">After restore</string>
+    <string name="post_restore_intro">Settings restored. To get everything working, a few steps remain:</string>
+    <string name="post_restore_overlay">Widget and windows over other apps</string>
+    <string name="post_restore_mic">Microphone for voice control</string>
+    <string name="post_restore_contacts">Contacts for calls through the agent</string>
+    <string name="post_restore_asr">Speech recognition model</string>
+    <string name="post_restore_tts">Voice for replies: %1$s</string>
+    <string name="post_restore_reboot">Restart the head unit so that disabling the built-in assistant takes effect</string>
+    <string name="post_restore_allow">Allow</string>
+    <string name="post_restore_download_asr">Download 226 MB</string>
+    <string name="post_restore_download">Download</string>
+    <string name="post_restore_close">Close</string>
 </resources>

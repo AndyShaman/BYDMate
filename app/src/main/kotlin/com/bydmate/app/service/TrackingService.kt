@@ -121,6 +121,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var blindSpotController: com.bydmate.app.camera.BlindSpotController
     @Inject lateinit var logRecorder: com.bydmate.app.diagnostics.LogRecorder
     @Inject lateinit var autoBackupScheduler: com.bydmate.app.data.backup.AutoBackupScheduler
+    @Inject lateinit var postRestoreCheck: com.bydmate.app.data.backup.PostRestoreCheck
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     // AutomationEngine.evaluate now has two callers (the poll tick and every push event), and
@@ -656,6 +657,15 @@ class TrackingService : Service(), LocationListener {
             try {
                 val ok = helperBootstrap.ensureRunning()
                 Log.i(TAG, "HelperBootstrap.ensureRunning → $ok")
+                // First start after a backup restore: re-grant the overlay through the daemon
+                // that is now up, report the rest to the dialog in MainActivity.
+                serviceScope.launch {
+                    try {
+                        postRestoreCheck.runIfPending()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "PostRestore: check failed: ${e.message}")
+                    }
+                }
                 adbVerdictMonitor.recompute()
                 ChainLog.append(this@TrackingService, "Helper daemon: ${if (ok) "alive" else "unreachable"}")
                 // Not gated on ok: a cached catalog resolves over the ADB read path without the

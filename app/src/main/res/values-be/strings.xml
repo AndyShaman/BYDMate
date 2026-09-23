@@ -1674,4 +1674,18 @@
     <string name="trips_temp_verdict_not_higher">У холад расход не вышэйшы, чым у цяпло (розніца %1$s%%). Зімовай надбаўкі па вашых паездках пакуль не відаць.</string>
     <string name="trips_temp_verdict_narrow">Пакуль усе паездкі пры %1$s…%2$s °C — параўнаць з холадам ці спёкай пакуль няма з чым.</string>
     <string name="trips_temp_verdict_none">Пакуль параўноўваць няма з чым: патрэбны паездкі і ў холад, і ў цяпло.</string>
+
+    <!-- Post-restore check dialog -->
+    <string name="post_restore_title">Пасля аднаўлення</string>
+    <string name="post_restore_intro">Налады адноўлены. Каб усё працавала, засталося:</string>
+    <string name="post_restore_overlay">Віджэт і вокны паверх іншых праграм</string>
+    <string name="post_restore_mic">Мікрафон для галасавога кіравання</string>
+    <string name="post_restore_contacts">Кантакты для званкоў праз агента</string>
+    <string name="post_restore_asr">Мадэль распазнавання маўлення</string>
+    <string name="post_restore_tts">Голас агучвання: %1$s</string>
+    <string name="post_restore_reboot">Перазагрузіце магнітолу, каб адключэнне штатнага асістэнта ўступіла ў сілу</string>
+    <string name="post_restore_allow">Дазволіць</string>
+    <string name="post_restore_download_asr">Спампаваць 226 МБ</string>
+    <string name="post_restore_download">Спампаваць</string>
+    <string name="post_restore_close">Закрыць</string>
 </resources>

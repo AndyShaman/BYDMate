@@ -1674,4 +1674,18 @@
     <string name="trips_temp_verdict_not_higher">Na zimno auto nie bierze więcej niż w cieple (różnica %1$s%%). Zimowej nadwyżki w Twoich przejazdach na razie nie widać.</string>
     <string name="trips_temp_verdict_narrow">Na razie wszystkie przejazdy przy %1$s…%2$s °C — nie ma jeszcze z czym porównać.</string>
     <string name="trips_temp_verdict_none">Na razie nie ma z czym porównać: potrzebne przejazdy i na zimno, i w cieple.</string>
+
+    <!-- Post-restore check dialog -->
+    <string name="post_restore_title">Po przywróceniu</string>
+    <string name="post_restore_intro">Ustawienia przywrócone. Aby wszystko działało, zostało:</string>
+    <string name="post_restore_overlay">Widżet i okna nad innymi aplikacjami</string>
+    <string name="post_restore_mic">Mikrofon do sterowania głosem</string>
+    <string name="post_restore_contacts">Kontakty do połączeń przez agenta</string>
+    <string name="post_restore_asr">Model rozpoznawania mowy</string>
+    <string name="post_restore_tts">Głos odpowiedzi: %1$s</string>
+    <string name="post_restore_reboot">Uruchom ponownie radio, aby wyłączenie wbudowanego asystenta zaczęło działać</string>
+    <string name="post_restore_allow">Zezwól</string>
+    <string name="post_restore_download_asr">Pobierz 226 MB</string>
+    <string name="post_restore_download">Pobierz</string>
+    <string name="post_restore_close">Zamknij</string>
 </resources>
