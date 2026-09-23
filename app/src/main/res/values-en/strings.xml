@@ -1451,8 +1451,8 @@
     <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
-    <string name="tech_hint_soh" formatted="false">Battery health: how much of the original capacity is left. 100% on a new car, slowly decreasing over the years. The car itself calculates this value.</string>
-    <string name="tech_hint_remain_kwh">How much energy is left in the battery, as the car itself reports it.</string>
+    <string name="tech_hint_soh" formatted="false">Battery health, as the car itself estimates it: how much capacity is left compared to new. 100% on a new car, slowly decreasing over the years. This is a separate figure, it is not linked to \"Remaining\" by any formula, there is no need to compare them.</string>
+    <string name="tech_hint_remain_kwh" formatted="false">How much energy is left in the battery, as the car itself estimates it. The car calculates this figure itself, not as a percentage of factory capacity: at 100% charge it is almost equal to factory capacity, at a lower charge it is lower than a simple percentage calculation. Plan your range using this figure.</string>
     <string name="tech_hint_hv_voltage">Voltage of the traction battery. It rises while charging and falls as the pack discharges, roughly 450…560 V on this car. On its own it says little, it is useful together with power.</string>
     <string name="tech_hint_motor_power">Power at the electric motors right now: how much the car sends to the wheels or takes back from them while regenerating. Zero when parked. The car itself calculates this value.</string>
     <string name="tech_hint_power">How much energy the battery is giving out right now. Plus: the car is spending it (acceleration, climate). Minus: the battery is taking energy in, either regeneration while braking or charging from a charger. Second number: how fast the charge is draining, percent per hour. When parked this is the onboard electronics draw.</string>

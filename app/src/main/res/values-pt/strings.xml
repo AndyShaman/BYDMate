@@ -1447,8 +1447,8 @@
     <string name="tech_value_tyre">%1$.2f bar · %2$d°</string>
     <string name="tech_value_tyre_pressure">%1$.2f bar</string>
     <string name="tech_value_cell_scale">%1$.2f V</string>
-    <string name="tech_hint_soh" formatted="false">Saúde da bateria: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. O valor é calculado pelo próprio carro.</string>
-    <string name="tech_hint_remain_kwh">Quanta energia resta na bateria, segundo o próprio carro.</string>
+    <string name="tech_hint_soh" formatted="false">Saúde da bateria segundo a estimativa do próprio carro: quanta capacidade resta em relação à bateria nova. 100% num carro novo, desce lentamente com os anos. É um valor à parte, não está ligado por fórmula a “Restante”, não é preciso compará-los entre si.</string>
+    <string name="tech_hint_remain_kwh" formatted="false">Quanta energia resta na bateria, segundo a estimativa do próprio carro. O carro calcula este valor sozinho, não como percentagem da capacidade de fábrica: a 100% de carga fica quase igual à capacidade de fábrica, com menos carga fica abaixo de um simples cálculo percentual. Planeie a autonomia por este valor.</string>
     <string name="tech_hint_hv_voltage">Tensão da bateria de tração. Sobe ao carregar e desce à medida que descarrega, neste carro cerca de 450…560 V. Por si só diz pouco, é útil junto com a potência.</string>
     <string name="tech_hint_motor_power">Potência nos motores elétricos agora: quanto o carro está a entregar às rodas ou a receber delas durante a regeneração. Zero quando parado. O valor é calculado pelo próprio carro.</string>
     <string name="tech_hint_power">Quanta energia a bateria está a entregar agora. Positivo: o carro está a gastar (aceleração, climatização). Negativo: a bateria está a receber energia, seja regeneração ao travar seja carregamento num carregador. Segundo número: a que velocidade a carga está a esgotar-se, por cento à hora. Quando parado é o consumo da eletrónica de bordo.</string>
