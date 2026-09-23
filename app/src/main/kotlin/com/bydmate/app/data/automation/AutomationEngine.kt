@@ -202,9 +202,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
     /**
      * The car was switched off (byd.intent.action.ACC_OFF): marks it for the service_start session.
-     * Commits at once, never waiting for an evaluate().
+     * Commits at once on the calling thread, never waiting for an evaluate().
      */
-    suspend fun onCarOff() = serviceStart.onCarOff(elapsedMs())
+    fun onCarOff() = serviceStart.onCarOff(elapsedMs())
 
     // Called every 3s from TrackingService poll loop.
     // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)
