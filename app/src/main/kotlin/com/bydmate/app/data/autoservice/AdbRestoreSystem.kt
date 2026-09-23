@@ -1,6 +1,8 @@
 package com.bydmate.app.data.autoservice
 
 import android.Manifest
+import android.accessibilityservice.AccessibilityServiceInfo
+import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
@@ -10,7 +12,10 @@ import android.net.nsd.NsdServiceInfo
 import android.net.wifi.WifiManager
 import android.provider.Settings
 import android.util.Log
+import android.view.accessibility.AccessibilityManager
 import com.bydmate.app.data.vehicle.HelperBootstrap
+import com.bydmate.app.data.vehicle.HelperClient
+import com.bydmate.app.helper.HelperBinderProtocol
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellableContinuation
 import kotlinx.coroutines.Dispatchers
@@ -61,6 +66,15 @@ interface AdbRestoreSystem {
 
     suspend fun ensureHelperRunning(): Boolean
 
+    /**
+     * Is our accessibility service actually bound by the framework? The Secure setting alone can
+     * list it while it is not running (it desyncs on some firmwares). False when unreadable.
+     */
+    fun isAccessibilityServiceBound(): Boolean
+
+    /** Lists our accessibility service via the daemon (started first if needed); true on success. */
+    suspend fun enableAccessibilityService(): Boolean
+
     suspend fun sleep(ms: Long)
 
     fun nowMs(): Long
@@ -73,6 +87,7 @@ class AndroidAdbRestoreSystem @Inject constructor(
     private val keyStore: AdbKeyStore,
     private val adbOnDeviceClient: AdbOnDeviceClient,
     private val helperBootstrap: HelperBootstrap,
+    private val helperClient: HelperClient,
 ) : AdbRestoreSystem {
 
     override fun hasWriteSecureSettings(): Boolean =
@@ -245,6 +260,18 @@ class AndroidAdbRestoreSystem @Inject constructor(
     override suspend fun classicConnect(): Boolean = adbOnDeviceClient.connect().isSuccess
 
     override suspend fun ensureHelperRunning(): Boolean = helperBootstrap.ensureRunning()
+
+    override fun isAccessibilityServiceBound(): Boolean = runCatching {
+        val ours = ComponentName.unflattenFromString(HelperBinderProtocol.ACCESSIBILITY_SERVICE_COMPONENT)
+            ?: return@runCatching false
+        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
+        am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_ALL_MASK)
+            .any { ComponentName.unflattenFromString(it.id ?: "") == ours }
+    }.getOrDefault(false)
+
+    // HelperClient only resolves an existing binder, so the daemon is bootstrapped first.
+    override suspend fun enableAccessibilityService(): Boolean =
+        helperBootstrap.ensureRunning() && helperClient.enableAccessibilityService()
 
     override suspend fun sleep(ms: Long) = delay(ms)
 
