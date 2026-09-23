@@ -3,6 +3,7 @@ package com.bydmate.app.ui.settings
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.bydmate.app.data.automation.RouteNavigatorUris
+import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.backup.BackupManager
 import com.bydmate.app.data.local.EnergyDataDeadDetector
@@ -210,6 +211,7 @@ class SettingsViewModelTest {
     private class FakeAdbClient : AdbOnDeviceClient {
         override suspend fun connect(): Result<Unit> = Result.success(Unit)
         override suspend fun isConnected(): Boolean = false
+        override fun lastConnectFailure(): AdbConnectFailure? = null
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String): Boolean = false
         override suspend fun grantWriteSecureSettings(packageName: String): Boolean = false
@@ -359,6 +361,10 @@ class SettingsViewModelTest {
             tariffPeriodDao = tariffPeriodDaoOverride ?: mockk(relaxed = true),
             costCalculator = exportCostCalculator ?: mockk(relaxed = true),
             blindSpotController = mockk(relaxed = true),
+            adbVerdictMonitor = mockk(relaxed = true) {
+                io.mockk.every { verdict } returns kotlinx.coroutines.flow.MutableStateFlow(null)
+                io.mockk.every { checking } returns kotlinx.coroutines.flow.MutableStateFlow(false)
+            },
         )
     }
 

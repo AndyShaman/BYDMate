@@ -21,6 +21,7 @@ class AutoserviceClientImplTest {
         val calls = mutableListOf<String>()
         override suspend fun connect(): Result<Unit> = Result.success(Unit)
         override suspend fun isConnected(): Boolean = connected
+        override fun lastConnectFailure(): AdbConnectFailure? = null
         override suspend fun exec(cmd: String): String? {
             calls += cmd
             return responses[cmd]

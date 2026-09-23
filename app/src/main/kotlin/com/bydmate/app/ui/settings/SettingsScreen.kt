@@ -9,6 +9,7 @@ import com.bydmate.app.camera.BlindSpotPositionOverlay
 import com.bydmate.app.camera.BlindSpotPreferences
 import com.bydmate.app.cluster.ClusterEntryPoint
 import com.bydmate.app.data.autoservice.AdbRestoreState
+import com.bydmate.app.data.autoservice.AdbVerdict
 import com.bydmate.app.cluster.ClusterProjectionManager
 import com.bydmate.app.cluster.CENTER_OFFSET_PCT
 import com.bydmate.app.cluster.MAX_OFFSET_PCT
@@ -80,7 +81,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.withStyle
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -120,7 +124,10 @@ import com.bydmate.app.R
 import com.bydmate.app.agent.LlmAgentBackend
 import com.bydmate.app.data.remote.OpenRouterModel
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.components.AdbVerdictDialog
 import com.bydmate.app.ui.components.AppLaunchPickerDialog
+import com.bydmate.app.ui.components.adbVerdictColor
+import com.bydmate.app.ui.components.adbVerdictText
 import com.bydmate.app.ui.components.MultiAppPickerDialog
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.*
@@ -2077,6 +2084,13 @@ private fun ServiceSection(
     var adbRestoreEnabled by remember { mutableStateOf(adbRestore.isEnabled()) }
     var adbRestoreHelpOpen by remember { mutableStateOf(false) }
     val adbRestoreState by adbRestore.state.collectAsStateWithLifecycle()
+    val adbVerdict by viewModel.adbVerdict.collectAsStateWithLifecycle()
+    val adbChecking by viewModel.adbChecking.collectAsStateWithLifecycle()
+    // The verdict the dialog was opened for; cleared when the problem goes away.
+    var openAdbVerdict by remember { mutableStateOf<AdbVerdict?>(null) }
+    LaunchedEffect(adbVerdict) {
+        if (adbVerdict == null || adbVerdict == AdbVerdict.OK) openAdbVerdict = null
+    }
     // Opening Settings with the feature on refreshes the status line (and picks the port back
     // up if it is down) instead of showing whatever the last trigger left behind. Keyed on the
     // toggle, so switching it on runs an attempt right away. The attempt runs in the manager's
@@ -2102,7 +2116,47 @@ private fun ServiceSection(
                 onHelp = { adbRestoreHelpOpen = true },
             )
             adbRestoreStatusText(adbRestoreState)?.let { SettingHint(text = it) }
+            val verdict = adbVerdict
+            if (adbChecking) {
+                Text(
+                    stringResource(R.string.adb_verdict_checking),
+                    color = TextSecondary, fontSize = 12.5.sp,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+            } else if (verdict != null && verdict != AdbVerdict.OK) {
+                val link = stringResource(
+                    if (verdict == AdbVerdict.NOT_ENABLED) R.string.adb_verdict_link_how
+                    else R.string.adb_verdict_link_more
+                )
+                Text(
+                    buildAnnotatedString {
+                        withStyle(SpanStyle(color = adbVerdictColor(verdict))) { append(adbVerdictText(verdict)) }
+                        append(" ")
+                        withStyle(SpanStyle(color = AccentBlue, fontWeight = FontWeight.SemiBold)) { append(link) }
+                    },
+                    fontSize = 12.5.sp,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { openAdbVerdict = verdict }
+                        .padding(bottom = 8.dp),
+                )
+            }
         }
+    }
+    val dialogVerdict = adbVerdict
+    if (openAdbVerdict != null && dialogVerdict != null && dialogVerdict != AdbVerdict.OK) {
+        AdbVerdictDialog(
+            verdict = dialogVerdict,
+            restoreEnabled = adbRestoreEnabled,
+            onCheck = { viewModel.recheckAdb() },
+            onEnableRestore = {
+                // Keep the toggle above in step with the dialog's switch-on.
+                adbRestoreEnabled = true
+                viewModel.enableAdbRestore()
+            },
+            onOpenDiagnostics = null,
+            onDismiss = { openAdbVerdict = null },
+        )
     }
     if (adbRestoreHelpOpen) {
         AlertDialog(

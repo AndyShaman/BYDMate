@@ -304,7 +304,16 @@ class SettingsViewModel @Inject constructor(
     private val tariffPeriodDao: TariffPeriodDao,
     private val costCalculator: CostCalculator,
     private val blindSpotController: com.bydmate.app.camera.BlindSpotController,
+    private val adbVerdictMonitor: com.bydmate.app.data.autoservice.AdbVerdictMonitor,
 ) : ViewModel() {
+
+    /** ADB control-channel verdict for the line under the ADB-restore toggle. */
+    val adbVerdict: StateFlow<com.bydmate.app.data.autoservice.AdbVerdict?> = adbVerdictMonitor.verdict
+    val adbChecking: StateFlow<Boolean> = adbVerdictMonitor.checking
+
+    fun recheckAdb() = adbVerdictMonitor.recheck("settings")
+
+    fun enableAdbRestore() = adbVerdictMonitor.enableRestoreAndRecheck()
 
     private val _appLanguage = MutableStateFlow(localePreferences.getLanguage() ?: "ru")
     val appLanguage: StateFlow<String> = _appLanguage.asStateFlow()
@@ -1799,6 +1808,8 @@ class SettingsViewModel @Inject constructor(
                         "trigger=${adbRestoreManager.lastTrigger} retries=${adbRestoreManager.retryCount} " +
                         "write_secure_settings=$secureSettingsGranted"
                 )
+                appendLine("adb_verdict: ${adbVerdictMonitor.verdict.value ?: "(none)"}")
+                appendLine("daemon_ever_alive: ${helperBootstrap.daemonEverAlive()}")
             } catch (e: Exception) {
                 appendLine("(failed to gather settings: ${e.message})")
             }

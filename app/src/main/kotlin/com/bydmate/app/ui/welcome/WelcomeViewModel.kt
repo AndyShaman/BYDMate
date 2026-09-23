@@ -1,9 +1,11 @@
 package com.bydmate.app.ui.welcome
 
 import android.content.Context
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.R
+import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.repository.SettingsRepository
@@ -32,8 +34,12 @@ data class WelcomeUiState(
     val dcTariff: String = SettingsRepository.DEFAULT_DC_TARIFF,
     val isLoading: Boolean = false,
     val importStatus: String? = null,
-    val isComplete: Boolean = false
+    val isComplete: Boolean = false,
+    val adbCheck: AdbCheck = AdbCheck.NotChecked,
 )
+
+/** State of the wizard's advisory ADB check. */
+enum class AdbCheck { NotChecked, Checking, Failed, Ok }
 
 @HiltViewModel
 class WelcomeViewModel @Inject constructor(
@@ -41,7 +47,8 @@ class WelcomeViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val localePreferences: LocalePreferences,
     private val tripRepository: TripRepository,
-    private val historyImporter: HistoryImporter
+    private val historyImporter: HistoryImporter,
+    private val adbClient: AdbOnDeviceClient,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -74,6 +81,20 @@ class WelcomeViewModel @Inject constructor(
                 val currency = findCurrency(currencyForLanguage(lang))
                 state.copy(language = lang, currency = currency.code, currencySymbol = currency.symbol)
             }
+        }
+    }
+
+    /**
+     * One connect to the on-device adbd. No daemon spawn here: the service does that once the
+     * wizard ends. May block up to 60 s while DiLink shows its own «Allow debugging» dialog.
+     */
+    fun checkAdb() {
+        if (_uiState.value.adbCheck == AdbCheck.Checking) return
+        _uiState.update { it.copy(adbCheck = AdbCheck.Checking) }
+        viewModelScope.launch {
+            val ok = adbClient.connect().isSuccess
+            if (!ok) Log.i(TAG, "ADB check failed: ${adbClient.lastConnectFailure()}")
+            _uiState.update { it.copy(adbCheck = if (ok) AdbCheck.Ok else AdbCheck.Failed) }
         }
     }
 
@@ -120,7 +141,8 @@ class WelcomeViewModel @Inject constructor(
     }
 
     companion object {
-        const val TOTAL_STEPS = 3
+        const val TOTAL_STEPS = 4
+        private const val TAG = "Welcome"
 
         private fun currencyForLanguage(lang: String): String =
             if (lang == "zh") "CNY" else SettingsRepository.DEFAULT_CURRENCY

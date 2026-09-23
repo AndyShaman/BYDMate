@@ -2,6 +2,7 @@ package com.bydmate.app.data.vehicle
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.autoservice.AdbConnectFailure
 import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.helper.HelperBinderHolder
 import kotlinx.coroutines.launch
@@ -68,6 +69,7 @@ class HelperBootstrapTest {
         var connected = true
         override suspend fun connect() = Result.success(Unit)
         override suspend fun isConnected() = connected
+        override fun lastConnectFailure(): AdbConnectFailure? = null
         override suspend fun exec(cmd: String): String? = null
         override suspend fun grantUsageStatsAppop(packageName: String) = true
         override suspend fun grantWriteSecureSettings(packageName: String) = true
@@ -130,6 +132,34 @@ class HelperBootstrapTest {
         assertTrue(boot.ensureRunning())
         assertEquals("reuse must not kill", 0, adb.killCalls)
         assertEquals("reuse must not respawn", 0, adb.spawnCalls)
+    }
+
+    @Test
+    fun `daemonEverAlive is false on fresh prefs, set by a success, kept after a later failure`() = runTest {
+        val adb = FakeAdb()
+        val helper = FakeHelper(alive = true, version = baselineVersion())
+        val boot = HelperBootstrap(adb, helper, ctx())
+        assertFalse("fresh install never saw a daemon", boot.daemonEverAlive())
+
+        assertTrue(boot.ensureRunning())
+        assertTrue(boot.daemonEverAlive())
+
+        // Daemon gone and the respawn cannot be dispatched: ensureRunning fails...
+        helper.alive = false
+        helper.version = null
+        adb.onSpawn = { false }
+        assertFalse(boot.ensureRunning())
+        // ...but "ADB once worked here" is never cleared.
+        assertTrue(boot.daemonEverAlive())
+    }
+
+    @Test
+    fun `daemonEverAlive stays false when the daemon never comes up`() = runTest {
+        val adb = FakeAdb().apply { onSpawn = { false } }
+        val boot = HelperBootstrap(adb, FakeHelper(alive = false), ctx())
+
+        assertFalse(boot.ensureRunning())
+        assertFalse(boot.daemonEverAlive())
     }
 
     @Test

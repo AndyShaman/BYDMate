@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,10 +18,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -32,13 +37,18 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
 import com.bydmate.app.R
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -49,6 +59,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.bydmate.app.data.repository.SettingsRepository
+import com.bydmate.app.ui.components.AdbEnableSteps
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.util.APP_LANGUAGES
 
@@ -87,7 +98,8 @@ fun WelcomeScreen(
         when (state.step) {
             1 -> LanguageStep(state, viewModel)
             2 -> TariffStep(state, viewModel)
-            3 -> AutoStartStep(state, viewModel)
+            3 -> AdbStep(state, viewModel)
+            4 -> AutoStartStep(state, viewModel)
         }
     }
 }
@@ -207,6 +219,145 @@ private fun TariffStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun AdbStep(state: WelcomeUiState, viewModel: WelcomeViewModel) {
+    var helpOpen by remember { mutableStateOf(false) }
+
+    Row(
+        modifier = Modifier.fillMaxSize(),
+        horizontalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        // LEFT: Instructions
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SectionCard(stringResource(R.string.welcome_adb_title)) {
+                Text(stringResource(R.string.welcome_adb_intro), color = TextSecondary, fontSize = 13.sp)
+                Spacer(modifier = Modifier.height(4.dp))
+                AdbEnableSteps()
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(stringResource(R.string.welcome_adb_gives), color = TextMuted, fontSize = 11.sp)
+            }
+
+            SectionCard(stringResource(R.string.welcome_adb_no_dev_title)) {
+                Text(stringResource(R.string.welcome_adb_no_dev_body), color = TextSecondary, fontSize = 13.sp)
+            }
+        }
+
+        // RIGHT: Check + instructions + navigation
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            SectionCard(stringResource(R.string.welcome_adb_check_title)) {
+                val (dotColor, stateText) = when (state.adbCheck) {
+                    AdbCheck.Ok -> AccentGreen to stringResource(R.string.welcome_adb_state_ok)
+                    AdbCheck.Failed -> SocRed to stringResource(R.string.welcome_adb_state_failed)
+                    else -> TextMuted to stringResource(R.string.welcome_adb_state_not_checked)
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(modifier = Modifier.size(14.dp).clip(CircleShape).background(dotColor))
+                    Text(stateText, color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+                if (state.adbCheck == AdbCheck.Ok) {
+                    Text(stringResource(R.string.welcome_adb_ok_hint), color = TextSecondary, fontSize = 13.sp)
+                } else {
+                    Button(
+                        onClick = { viewModel.checkAdb() },
+                        enabled = state.adbCheck != AdbCheck.Checking,
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = AccentBlue,
+                            disabledContainerColor = AccentBlue.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        if (state.adbCheck == AdbCheck.Checking) {
+                            CircularProgressIndicator(
+                                color = Color.White,
+                                strokeWidth = 2.dp,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(stringResource(R.string.welcome_adb_checking), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                        } else {
+                            Text(
+                                stringResource(
+                                    if (state.adbCheck == AdbCheck.Failed) R.string.welcome_adb_check_again_button
+                                    else R.string.welcome_adb_check_button
+                                ),
+                                color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                    Text(stringResource(R.string.welcome_adb_check_hint), color = TextMuted, fontSize = 11.sp)
+                }
+            }
+
+            SectionCard(stringResource(R.string.welcome_adb_instruction_title)) {
+                OutlinedButton(
+                    onClick = { helpOpen = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp)
+                ) {
+                    Text(stringResource(R.string.welcome_adb_instruction_button), color = TextSecondary, fontSize = 14.sp)
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
+
+            // «Далее» stays enabled: the check is advisory, the user may skip it.
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                OutlinedButton(
+                    onClick = { viewModel.prevStep() },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(stringResource(R.string.welcome_back_button), color = TextSecondary, fontSize = 14.sp)
+                }
+                Button(
+                    onClick = { viewModel.nextStep() },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen)
+                ) {
+                    Text(stringResource(R.string.welcome_next_button), fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+
+    // Same long explanation as the Settings ADB-restore help.
+    if (helpOpen) {
+        AlertDialog(
+            onDismissRequest = { helpOpen = false },
+            containerColor = CardSurface,
+            title = {
+                Text(stringResource(R.string.settings_adb_restore_help_title), color = TextPrimary)
+            },
+            text = {
+                Text(
+                    stringResource(R.string.settings_adb_restore_help_body),
+                    color = TextSecondary, fontSize = 14.sp, lineHeight = 19.sp,
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = { helpOpen = false }) {
+                    Text(stringResource(R.string.nav_autostart_dialog_button), color = AccentGreen)
+                }
+            },
+        )
     }
 }
 

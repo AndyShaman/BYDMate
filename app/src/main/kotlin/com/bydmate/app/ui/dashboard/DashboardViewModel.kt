@@ -3,6 +3,8 @@ package com.bydmate.app.ui.dashboard
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.bydmate.app.data.autoservice.AdbVerdict
+import com.bydmate.app.data.autoservice.AdbVerdictMonitor
 import com.bydmate.app.data.local.entity.TripEntity
 import com.bydmate.app.data.local.dao.IdleDrainDao
 import com.bydmate.app.data.remote.DynamicMetric
@@ -75,7 +77,9 @@ data class DashboardUiState(
     val insightExpanded: Boolean = false,
     val estimatedRangeKm: Double? = null,
     val vehicleDataConnected: Boolean = true,
-    val adbConnected: Boolean? = null,
+    // ADB control-channel verdict for the header; null = nothing to show.
+    val adbVerdict: AdbVerdict? = null,
+    val adbChecking: Boolean = false,
     val currentSoh: Float? = null,
     val currentLifetimeKm: Float? = null,
     val currentLifetimeKwh: Float? = null,
@@ -100,7 +104,8 @@ class DashboardViewModel @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val idleDrainDao: IdleDrainDao,
     private val insightsManager: InsightsManager,
-    private val batteryStateRepository: BatteryStateRepository
+    private val batteryStateRepository: BatteryStateRepository,
+    private val adbVerdictMonitor: AdbVerdictMonitor,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(DashboardUiState())
@@ -170,6 +175,12 @@ class DashboardViewModel @Inject constructor(
     )
 
     private fun observeLiveData() {
+        viewModelScope.launch {
+            combine(adbVerdictMonitor.verdict, adbVerdictMonitor.checking) { v, c -> v to c }
+                .collect { (verdict, checking) ->
+                    _uiState.update { it.copy(adbVerdict = verdict, adbChecking = checking) }
+                }
+        }
         viewModelScope.launch {
             // combine() is typed only up to 5 flows — bundle data+connected and
             // session+tripKm to stay under the limit (mirrors WidgetController).
@@ -380,6 +391,12 @@ class DashboardViewModel @Inject constructor(
         }
     }
 
+    val adbRestoreEnabled: Boolean get() = adbVerdictMonitor.isRestoreEnabled()
+
+    fun recheckAdb() = adbVerdictMonitor.recheck("dashboard")
+
+    fun enableAdbRestore() = adbVerdictMonitor.enableRestoreAndRecheck()
+
     /** Refresh today's summary, can be called on pull-to-refresh or screen resume. */
     fun refresh() {
         loadPeriodSummary()
@@ -389,17 +406,13 @@ class DashboardViewModel @Inject constructor(
 
     private suspend fun loadAutoserviceFlag() {
         val state = runCatching { batteryStateRepository.refresh() }.getOrNull()
+        if (state == null) return
         _uiState.update {
-            if (state == null) {
-                it.copy(adbConnected = false)
-            } else {
-                it.copy(
-                    adbConnected = state.autoserviceAvailable,
-                    currentSoh = state.sohPercent,
-                    currentLifetimeKm = state.lifetimeKm,
-                    currentLifetimeKwh = state.lifetimeKwh,
-                )
-            }
+            it.copy(
+                currentSoh = state.sohPercent,
+                currentLifetimeKm = state.lifetimeKm,
+                currentLifetimeKwh = state.lifetimeKwh,
+            )
         }
     }
 

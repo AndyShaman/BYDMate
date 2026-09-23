@@ -28,6 +28,8 @@ interface AdbOnDeviceClient {
     /** Initiates the ADB handshake. Suspends until handshake completes or fails. */
     suspend fun connect(): Result<Unit>
     suspend fun isConnected(): Boolean
+    /** Why the last connect attempt failed; null after a successful one or before any. No side effects. */
+    fun lastConnectFailure(): AdbConnectFailure?
     /** Executes a one-shot shell command and returns stdout, or null on failure. */
     suspend fun exec(cmd: String): String?
     /**
@@ -123,6 +125,8 @@ class AdbOnDeviceClientImpl @Inject constructor(
     override suspend fun isConnected(): Boolean = withContext(Dispatchers.IO) {
         protocol?.isConnected() ?: false
     }
+
+    override fun lastConnectFailure(): AdbConnectFailure? = protocol?.lastConnectFailure
 
     override suspend fun exec(cmd: String): String? = withContext(Dispatchers.IO) {
         // Structural barrier against accidental WRITE — only allow GETs to autoservice.

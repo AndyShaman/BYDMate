@@ -22,6 +22,8 @@ import java.util.Arrays
 internal interface AdbProtocol {
     fun connect(): Boolean
     fun exec(cmd: String): String?
+    /** Why the last [connect] returned false; null after a successful one (or before any). */
+    val lastConnectFailure: AdbConnectFailure?
     fun isConnected(): Boolean
     fun disconnect()
 }
@@ -68,14 +70,20 @@ internal class AdbProtocolClient(
     @Volatile private var input: InputStream? = null
     @Volatile private var output: OutputStream? = null
     @Volatile private var localStreamId: Int = 1
+    @Volatile override var lastConnectFailure: AdbConnectFailure? = null
+        private set
 
     @Synchronized
     override fun connect(): Boolean {
         if (isConnectedInternal()) {
             Log.d(TAG, "Already connected, skipping reconnect")
+            lastConnectFailure = null
             return true
         }
         disconnectInternal()
+        // Set once adbd has asked for auth: from then on a failure (denied key, or the 60 s
+        // user-prompt timeout surfacing as a socket exception) means "adbd is up, we are not trusted".
+        var authStarted = false
         try {
             val s = socketFactory(host, port).apply {
                 soTimeout = SOCKET_TIMEOUT_MS
@@ -93,6 +101,8 @@ internal class AdbProtocolClient(
                 // Wireless debugging: acknowledge the offer, then everything below the
                 // packet layer moves into TLS. adbd re-sends its banner afterwards.
                 Log.d(TAG, "Daemon requested TLS, upgrading")
+                // adbd answered: a TLS failure from here on means our key is not paired/trusted.
+                authStarted = true
                 writePacket(A_STLS, A_STLS_VERSION, 0, EMPTY)
                 val tls = tlsUpgrade(s)
                 tlsSocket = tls
@@ -100,13 +110,14 @@ internal class AdbProtocolClient(
                 output = tls.getOutputStream()
                 first = readPacket()
             }
-            return when (first.command) {
+            val ok = when (first.command) {
                 A_CNXN -> {
                     Log.i(TAG, "Connected (no auth required)")
                     true
                 }
                 A_AUTH -> {
                     if (first.arg0 == AUTH_TOKEN) {
+                        authStarted = true
                         authenticate(first.payload)
                     } else {
                         Log.e(TAG, "Unexpected AUTH arg0=${first.arg0}")
@@ -120,12 +131,18 @@ internal class AdbProtocolClient(
                     false
                 }
             }
+            lastConnectFailure = if (ok) null else failureAfter(authStarted)
+            return ok
         } catch (e: Exception) {
             Log.w(TAG, "Connect failed: ${e.message}")
             disconnectInternal()
+            lastConnectFailure = failureAfter(authStarted)
             return false
         }
     }
+
+    private fun failureAfter(authStarted: Boolean): AdbConnectFailure =
+        if (authStarted) AdbConnectFailure.AUTH_REJECTED else AdbConnectFailure.UNREACHABLE
 
     @Synchronized
     override fun exec(cmd: String): String? = openService("shell:$cmd")

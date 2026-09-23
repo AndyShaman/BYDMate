@@ -2,6 +2,8 @@ package com.bydmate.app.ui.welcome
 
 import android.content.Context
 import androidx.test.core.app.ApplicationProvider
+import com.bydmate.app.data.autoservice.AdbConnectFailure
+import com.bydmate.app.data.autoservice.AdbOnDeviceClient
 import com.bydmate.app.data.local.HistoryImporter
 import com.bydmate.app.data.local.LocalePreferences
 import com.bydmate.app.data.repository.SettingsRepository
@@ -9,7 +11,9 @@ import com.bydmate.app.data.repository.TripRepository
 import com.bydmate.app.ui.widget.WidgetController
 import io.mockk.coEvery
 import io.mockk.coVerify
+import io.mockk.every
 import io.mockk.mockk
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -35,6 +39,7 @@ class WelcomeViewModelTest {
     private val settingsRepository: SettingsRepository = mockk(relaxed = true)
     private val tripRepository: TripRepository = mockk(relaxed = true)
     private val historyImporter: HistoryImporter = mockk(relaxed = true)
+    private val adbClient: AdbOnDeviceClient = mockk(relaxed = true)
     private val productionRelocale = WidgetController.splitOverlayRelocaleAction
     private lateinit var ctx: Context
     private lateinit var localePreferences: LocalePreferences
@@ -57,7 +62,7 @@ class WelcomeViewModelTest {
     }
 
     private fun viewModel() =
-        WelcomeViewModel(ctx, settingsRepository, localePreferences, tripRepository, historyImporter)
+        WelcomeViewModel(ctx, settingsRepository, localePreferences, tripRepository, historyImporter, adbClient)
 
     @Test
     fun `steps start at 1, stop at TOTAL_STEPS and never go below 1`() {
@@ -66,9 +71,62 @@ class WelcomeViewModelTest {
         vm.prevStep()
         assertEquals(1, vm.uiState.value.step)
         repeat(WelcomeViewModel.TOTAL_STEPS + 2) { vm.nextStep() }
-        assertEquals(3, vm.uiState.value.step)
+        assertEquals(4, vm.uiState.value.step)
         repeat(WelcomeViewModel.TOTAL_STEPS + 2) { vm.prevStep() }
         assertEquals(1, vm.uiState.value.step)
+    }
+
+    @Test
+    fun `wizard has four steps and the ADB step sits between tariffs and autostart`() {
+        assertEquals(4, WelcomeViewModel.TOTAL_STEPS)
+        val vm = viewModel()
+        repeat(2) { vm.nextStep() }
+        assertEquals(3, vm.uiState.value.step)
+        vm.nextStep()
+        assertEquals(4, vm.uiState.value.step)
+        vm.prevStep()
+        assertEquals(3, vm.uiState.value.step)
+    }
+
+    @Test
+    fun `checkAdb goes Checking then Ok on a successful connect`() = runTest(testDispatcher) {
+        coEvery { adbClient.connect() } returns Result.success(Unit)
+        val vm = viewModel()
+        assertEquals(AdbCheck.NotChecked, vm.uiState.value.adbCheck)
+
+        vm.checkAdb()
+        assertEquals(AdbCheck.Checking, vm.uiState.value.adbCheck)
+        advanceUntilIdle()
+        assertEquals(AdbCheck.Ok, vm.uiState.value.adbCheck)
+    }
+
+    @Test
+    fun `checkAdb goes Checking then Failed on a refused connect`() = runTest(testDispatcher) {
+        coEvery { adbClient.connect() } returns Result.failure(java.io.IOException("ADB connect refused"))
+        every { adbClient.lastConnectFailure() } returns AdbConnectFailure.UNREACHABLE
+        val vm = viewModel()
+
+        vm.checkAdb()
+        assertEquals(AdbCheck.Checking, vm.uiState.value.adbCheck)
+        advanceUntilIdle()
+        assertEquals(AdbCheck.Failed, vm.uiState.value.adbCheck)
+    }
+
+    @Test
+    fun `checkAdb is ignored while a check is running`() = runTest(testDispatcher) {
+        val gate = CompletableDeferred<Result<Unit>>()
+        coEvery { adbClient.connect() } coAnswers { gate.await() }
+        val vm = viewModel()
+
+        vm.checkAdb()
+        advanceUntilIdle()
+        vm.checkAdb()
+        advanceUntilIdle()
+        gate.complete(Result.success(Unit))
+        advanceUntilIdle()
+
+        coVerify(exactly = 1) { adbClient.connect() }
+        assertEquals(AdbCheck.Ok, vm.uiState.value.adbCheck)
     }
 
     @Test

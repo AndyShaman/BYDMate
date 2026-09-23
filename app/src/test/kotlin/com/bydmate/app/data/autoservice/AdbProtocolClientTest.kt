@@ -2,6 +2,8 @@ package com.bydmate.app.data.autoservice
 
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -119,5 +121,108 @@ class AdbProtocolClientTest {
         assertEquals("OKAY", ascii(AdbProtocolClient.A_OKAY))
         assertEquals("CLSE", ascii(AdbProtocolClient.A_CLSE))
         assertEquals("WRTE", ascii(AdbProtocolClient.A_WRTE))
+    }
+
+    // --- lastConnectFailure: why connect() returned false ---
+
+    private val authKeyPair by lazy {
+        KeyPairGenerator.getInstance("RSA").apply { initialize(2048) }.generateKeyPair()
+    }
+
+    /** Replays a scripted adbd; EOF after the script models a prompt that never gets answered. */
+    private class ScriptedSocket(script: ByteArray) : java.net.Socket() {
+        private val input = java.io.ByteArrayInputStream(script)
+        private val output = java.io.ByteArrayOutputStream()
+        override fun getInputStream(): java.io.InputStream = input
+        override fun getOutputStream(): java.io.OutputStream = output
+        override fun isConnected(): Boolean = true
+        override fun isClosed(): Boolean = false
+        override fun setSoTimeout(timeout: Int) = Unit
+        override fun setTcpNoDelay(on: Boolean) = Unit
+        override fun close() = Unit
+    }
+
+    private fun packet(command: Int, arg0: Int, payload: ByteArray = ByteArray(0)): ByteArray =
+        AdbProtocolClient.buildHeader(command, arg0, 0, payload) + payload
+
+    private fun cnxn(): ByteArray = packet(AdbProtocolClient.A_CNXN, AdbProtocolClient.A_VERSION_AUTH,
+        "device::\u0000".toByteArray())
+
+    private fun authToken(): ByteArray = packet(AdbProtocolClient.A_AUTH, AdbProtocolClient.AUTH_TOKEN, ByteArray(20) { it.toByte() })
+
+    private fun clientFor(vararg sockets: () -> java.net.Socket): AdbProtocolClient {
+        val queue = ArrayDeque(sockets.toList())
+        return AdbProtocolClient(
+            keyPair = authKeyPair,
+            socketFactory = { _, _ -> queue.removeFirst()() },
+            tlsUpgrade = { it },
+        )
+    }
+
+    @Test
+    fun `lastConnectFailure is null before any connect`() {
+        assertNull(clientFor().lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is UNREACHABLE when the socket cannot be opened`() {
+        val client = clientFor({ throw java.net.ConnectException("Connection refused") })
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.UNREACHABLE, client.lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is UNREACHABLE on an unexpected handshake packet`() {
+        val client = clientFor({ ScriptedSocket(packet(AdbProtocolClient.A_CLSE, 0)) })
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.UNREACHABLE, client.lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is AUTH_REJECTED when adbd denies our key`() {
+        // Signature unknown -> pubkey sent -> adbd answers with something other than CNXN.
+        val script = authToken() + authToken() + packet(AdbProtocolClient.A_CLSE, 0)
+        val client = clientFor({ ScriptedSocket(script) })
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.AUTH_REJECTED, client.lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is AUTH_REJECTED when the user prompt times out`() {
+        // Pubkey sent, then the stream ends: the read throws exactly like a 60 s soTimeout.
+        val script = authToken() + authToken()
+        val client = clientFor({ ScriptedSocket(script) })
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.AUTH_REJECTED, client.lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is AUTH_REJECTED when the TLS upgrade after STLS fails`() {
+        val socket = ScriptedSocket(packet(AdbProtocolClient.A_STLS, AdbProtocolClient.A_STLS_VERSION))
+        val client = AdbProtocolClient(
+            keyPair = authKeyPair,
+            socketFactory = { _, _ -> socket },
+            tlsUpgrade = { throw javax.net.ssl.SSLHandshakeException("certificate unknown") },
+        )
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.AUTH_REJECTED, client.lastConnectFailure)
+    }
+
+    @Test
+    fun `lastConnectFailure is cleared by a successful handshake`() {
+        val client = clientFor(
+            { throw java.net.ConnectException("Connection refused") },
+            { ScriptedSocket(authToken() + cnxn()) },
+        )
+
+        assertFalse(client.connect())
+        assertEquals(AdbConnectFailure.UNREACHABLE, client.lastConnectFailure)
+        assertTrue(client.connect())
+        assertNull(client.lastConnectFailure)
     }
 }
