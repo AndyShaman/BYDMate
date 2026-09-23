@@ -43,8 +43,7 @@ import javax.inject.Singleton
 data class DispatchResult(val success: Boolean, val reason: String? = null)
 
 @Singleton
-@Suppress("LongParameterList") // Hilt-injected dependencies
-class ActionDispatcher @Inject constructor(
+class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hilt-injected dependencies
     private val vehicleApi: VehicleApi,
     private val helper: HelperClient,
     @ApplicationContext private val context: Context,
