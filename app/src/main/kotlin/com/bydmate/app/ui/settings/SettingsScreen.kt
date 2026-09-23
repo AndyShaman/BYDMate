@@ -1989,6 +1989,7 @@ private fun ServiceSection(
             confirmLabel = stringResource(R.string.settings_config_restore_confirm_ok),
             confirmColor = SocRed,
             warning = stringResource(R.string.settings_config_restore_warning),
+            busy = state.restoreInProgress,
             onConfirm = { viewModel.restoreConfig(choice.file, it) },
             onDismiss = { viewModel.dismissRestoreChoice() },
         )
@@ -2002,6 +2003,7 @@ private fun ServiceSection(
             confirmLabel = stringResource(R.string.settings_config_save_button),
             confirmColor = PrimaryColor,
             warning = null,
+            busy = state.restoreInProgress,
             onConfirm = {
                 showSaveDialog = false
                 viewModel.saveConfiguration(it)
@@ -2235,6 +2237,7 @@ private fun ServiceSection(
                 buttonLabel = stringResource(R.string.settings_config_save_button),
                 onClick = { showSaveDialog = true },
                 style = SettingButtonStyle.Primary,
+                enabled = !state.restoreInProgress,
             )
             SettingDivider()
             SettingActionRow(
@@ -2242,6 +2245,7 @@ private fun ServiceSection(
                 description = stringResource(R.string.settings_config_restore_desc),
                 buttonLabel = stringResource(R.string.settings_config_restore_pick_button),
                 onClick = { viewModel.openRestorePicker() },
+                enabled = !state.restoreInProgress,
             )
             if (state.configStatus != null) {
                 SettingHint(
@@ -2609,6 +2613,7 @@ private fun TelegramStepper(current: Int) {
 /**
  * «Что сохранить» / «Что восстановить» (#238): a checkbox per part, [available] parts only; at least
  * one must stay checked. Scrolls, so the buttons stay reachable at the largest text size.
+ * [busy] = a restore runs, the confirm button stays disabled.
  */
 @Composable
 private fun BackupPartsDialog(
@@ -2618,6 +2623,7 @@ private fun BackupPartsDialog(
     confirmLabel: String,
     confirmColor: Color,
     warning: String?,
+    busy: Boolean,
     onConfirm: (Set<BackupPart>) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -2683,8 +2689,9 @@ private fun BackupPartsDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { onConfirm(selected) }, enabled = selected.isNotEmpty()) {
-                Text(confirmLabel, color = if (selected.isNotEmpty()) confirmColor else TextMuted)
+            val canConfirm = selected.isNotEmpty() && !busy
+            TextButton(onClick = { onConfirm(selected) }, enabled = canConfirm) {
+                Text(confirmLabel, color = if (canConfirm) confirmColor else TextMuted)
             }
         },
         dismissButton = {

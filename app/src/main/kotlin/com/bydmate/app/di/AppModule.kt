@@ -578,9 +578,11 @@ object AppModule {
     fun provideBackupManager(
         @ApplicationContext ctx: Context,
         db: AppDatabase,
+        strings: com.bydmate.app.util.AppStrings,
     ): BackupManager = BackupManager(
         context = ctx,
         appDatabase = db,
+        strings = strings,
         prefsFileNames = BackupManager.PREFS_FILES,
         excludedPrefsKeys = BackupManager.EXCLUDED_PREFS_KEYS,
     )

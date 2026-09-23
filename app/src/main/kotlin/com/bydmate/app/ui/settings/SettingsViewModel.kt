@@ -198,6 +198,8 @@ data class SettingsUiState(
     val restoreCandidates: List<File>? = null,
     /** Non-null = the «Что восстановить» dialog is open. */
     val restoreChoice: RestoreChoice? = null,
+    /** A restore runs: save and restore stay disabled until it ends (the app restarts on success). */
+    val restoreInProgress: Boolean = false,
     /** Result of the last manual save; non-null = the «Поделиться» dialog is open. */
     val savedBackup: SavedBackup? = null,
     /** Parts the manual save offers checked: the last choice (#238). */
@@ -2509,9 +2511,11 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
      * On failure configStatus is set to the error message.
      */
     fun restoreConfig(file: File, parts: Set<BackupPart>) {
+        // One restore at a time: a second one would run over the first one's temp files.
+        if (_uiState.value.restoreInProgress) return
         restoreScanJob?.cancel()
-        _uiState.update { it.copy(restoreChoice = null) }
-        viewModelScope.launch(Dispatchers.IO) {
+        _uiState.update { it.copy(restoreChoice = null, restoreInProgress = true) }
+        viewModelScope.launch(ioDispatcher) {
             _uiState.update { it.copy(configStatus = appStrings.get(R.string.settings_export_in_progress)) }
             try {
                 backupManager.restore(file, parts)
@@ -2520,6 +2524,8 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 _uiState.update {
                     it.copy(configStatus = appStrings.get(R.string.settings_error_with_message, e.message ?: "?"))
                 }
+            } finally {
+                _uiState.update { it.copy(restoreInProgress = false) }
             }
         }
     }
