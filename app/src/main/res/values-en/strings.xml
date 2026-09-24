@@ -1647,4 +1647,5 @@
     <string name="automation_import_nav_go">starts the route right away</string>
     <string name="automation_import_nav_maps">in Yandex Maps</string>
     <string name="automation_import_minimize">then minimize</string>
+    <string name="help_badge_content_description">Hint</string>
 </resources>

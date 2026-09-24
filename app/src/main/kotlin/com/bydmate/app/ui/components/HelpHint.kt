@@ -14,8 +14,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bydmate.app.R
 import com.bydmate.app.ui.theme.CardSurfaceElevated
 import com.bydmate.app.ui.theme.TextMuted
 import com.bydmate.app.ui.theme.TextSecondary
@@ -28,7 +30,7 @@ fun HelpIcon(onClick: () -> Unit) {
     // A vector icon sized in dp: the glyph never outgrows its circle at a larger text size.
     Icon(
         Icons.AutoMirrored.Outlined.HelpOutline,
-        contentDescription = null,
+        contentDescription = stringResource(R.string.help_badge_content_description),
         tint = TextMuted,
         modifier = Modifier
             .padding(start = 6.dp)

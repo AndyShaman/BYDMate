@@ -46,9 +46,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
+import com.bydmate.app.R
 import com.bydmate.app.ui.components.bydSwitchColors
 import com.bydmate.app.ui.theme.AccentGreen
 import com.bydmate.app.ui.theme.AccentOrange
@@ -310,7 +312,7 @@ fun SettingHelpBadge(onClick: () -> Unit) {
     // A vector icon sized in dp: the glyph never outgrows its circle at a larger text size.
     Icon(
         Icons.AutoMirrored.Outlined.HelpOutline,
-        contentDescription = null,
+        contentDescription = stringResource(R.string.help_badge_content_description),
         tint = TextMuted,
         modifier = Modifier
             .padding(horizontal = 6.dp)

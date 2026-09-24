@@ -1643,4 +1643,5 @@
     <string name="automation_import_nav_go">inicia a rota na hora</string>
     <string name="automation_import_nav_maps">no Yandex Maps</string>
     <string name="automation_import_minimize">depois minimizar</string>
+    <string name="help_badge_content_description">Dica</string>
 </resources>

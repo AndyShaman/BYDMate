@@ -100,11 +100,25 @@ class AgentOrchestrator @Inject constructor(
     /** True while the agent's LAST reply was a clarifying question ("Какое окно?")
      *  asked within [FOLLOW_UP_WINDOW_MS]: the driver's next utterance is the ANSWER
      *  and must go straight to [ask], not through NLU (which would turn "водителя"
-     *  into a seat command or a NotUnderstood and lose the pending question). */
+     *  into a seat command or a NotUnderstood and lose the pending question).
+     *
+     *  A trailing "?" alone is not enough: the agent also asks rhetorical questions AFTER
+     *  it already acted ("Приоткрыл окно. Опять в форточку дышать собрался?"), and those
+     *  must not open the window. So this walks [history] backwards from the last message to
+     *  the most recent User message (the current turn); if any Assistant reply in that span
+     *  carried a tool call, the turn already acted and the trailing "?" is rhetorical. */
     suspend fun expectsFollowUp(): Boolean = mutex.withLock {
         if (nowMs() - lastAnswerAt > FOLLOW_UP_WINDOW_MS) return false
         val last = history.lastOrNull() as? AgentMessage.Assistant ?: return false
-        last.toolCalls.isEmpty() && last.content?.trimEnd()?.endsWith("?") == true
+        if (last.content?.trimEnd()?.endsWith("?") != true) return false
+        for (i in history.indices.reversed()) {
+            when (val msg = history[i]) {
+                is AgentMessage.User -> return@withLock true
+                is AgentMessage.Assistant -> if (msg.toolCalls.isNotEmpty()) return@withLock false
+                is AgentMessage.Tool, is AgentMessage.System -> {}
+            }
+        }
+        true
     }
 
     /** Automation-origin agent turn: single prompt, throwaway message list. Never touches the

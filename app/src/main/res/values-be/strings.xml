@@ -1799,4 +1799,5 @@
     <string name="automation_import_nav_go">адразу «Паехалі»</string>
     <string name="automation_import_nav_maps">у Яндекс Картах</string>
     <string name="automation_import_minimize">потым згарнуць</string>
+    <string name="help_badge_content_description">Падказка</string>
 </resources>

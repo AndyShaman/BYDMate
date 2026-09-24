@@ -1799,4 +1799,5 @@
     <string name="automation_import_nav_go">od razu „Jedziemy”</string>
     <string name="automation_import_nav_maps">w Yandex Maps</string>
     <string name="automation_import_minimize">potem zminimalizuj</string>
+    <string name="help_badge_content_description">Podpowiedź</string>
 </resources>
