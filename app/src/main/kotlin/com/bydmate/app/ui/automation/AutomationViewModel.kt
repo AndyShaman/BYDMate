@@ -321,6 +321,8 @@ data class EditingRule(
     val isNew: Boolean = true,
     /** The rule's switch when the editor opened: «Сохранить как новое» keeps it. */
     val enabled: Boolean = true,
+    /** A save is in flight: the draft is frozen, [AutomationViewModel.updateEditing] ignores edits. */
+    val saving: Boolean = false,
 ) {
     fun toShared() = SharedRule(
         name = name.trim(),
@@ -547,24 +549,31 @@ class AutomationViewModel @Inject constructor(
      * «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it
      * was. The editor and the draft stay open until the insert returns: it closes only on
      * success, bound to this save's editor session, so a DB failure keeps the draft on screen
-     * with a message instead of losing it.
+     * with a message instead of losing it. The draft is frozen ([EditingRule.saving]) for the
+     * same stretch: an edit made while the insert awaits the DB would otherwise be neither saved
+     * (a snapshot taken before the edit is what gets inserted) nor kept (the editor closes on
+     * success and drops it).
      */
     fun saveDeletedRuleAsNew() {
         val e = _uiState.value.editing
-        if (!_uiState.value.editorRuleDeleted) return
+        if (!_uiState.value.editorRuleDeleted || e.saving) return
         val session = editorSession
-        // Dismisses the confirmation dialog right away, so a second tap before the insert
-        // returns is a no-op (the guard above), without touching the rest of the editor.
-        _uiState.update { it.copy(editorRuleDeleted = false) }
+        // Dismisses the confirmation dialog and freezes the draft right away, so a second tap or
+        // an edit before the insert returns is a no-op.
+        _uiState.update { it.copy(editorRuleDeleted = false, editing = it.editing.copy(saving = true)) }
         viewModelScope.launch {
             try {
                 ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
-                if (session == editorSession) closeEditor()
+                if (session == editorSession) {
+                    _uiState.update { it.copy(editing = it.editing.copy(saving = false)) }
+                    closeEditor()
+                }
             } catch (ex: SQLiteException) {
                 Log.w("AutomationViewModel", "saveDeletedRuleAsNew: insert failed", ex)
                 if (session == editorSession) {
                     _uiState.update {
                         it.copy(
+                            editing = it.editing.copy(saving = false),
                             editorError = context.appLocalizedContext()
                                 .getString(R.string.automation_import_save_failed, ex.message ?: "?"),
                         )
@@ -579,8 +588,9 @@ class AutomationViewModel @Inject constructor(
         _uiState.update { it.copy(editorRuleDeleted = false) }
     }
 
+    /** A no-op while the draft is [EditingRule.saving]: nothing edits a rule mid-insert. */
     fun updateEditing(transform: EditingRule.() -> EditingRule) {
-        _uiState.update { it.copy(editing = it.editing.transform()) }
+        _uiState.update { if (it.editing.saving) it else it.copy(editing = it.editing.transform()) }
     }
 
     private fun validateActions(actions: List<ActionDef>): String? {

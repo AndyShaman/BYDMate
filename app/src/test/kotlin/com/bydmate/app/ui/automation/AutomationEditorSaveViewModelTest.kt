@@ -133,9 +133,10 @@ class AutomationEditorSaveViewModelTest {
 
         vm.saveDeletedRuleAsNew()
         testDispatcher.scheduler.runCurrent()
-        // Insert still in flight: editor and draft stay on screen.
+        // Insert still in flight: editor and draft stay on screen, frozen.
         assertTrue(vm.uiState.value.showEditor)
         assertEquals("Navi", vm.uiState.value.editing.name)
+        assertTrue(vm.uiState.value.editing.saving)
 
         gate.complete(30L)
         testDispatcher.scheduler.advanceUntilIdle()
@@ -143,7 +144,32 @@ class AutomationEditorSaveViewModelTest {
         coVerify(exactly = 1) { ruleDao.insert(any()) }
     }
 
-    @Test fun `a failed insert on a deleted rule keeps the draft and shows a message`() {
+    @Test fun `an edit attempted while the deleted-rule save is in flight is ignored, the inserted row matches the snapshot`() {
+        coEvery { ruleDao.getById(9) } returns null
+        val gate = CompletableDeferred<Long>()
+        val inserted = slot<RuleEntity>()
+        coEvery { ruleDao.insert(capture(inserted)) } coAnswers { gate.await() }
+        val vm = vm()
+        vm.openEditRule(RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]"))
+        vm.editWith(listOf(windowClose))
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveDeletedRuleAsNew()
+        testDispatcher.scheduler.runCurrent()
+        // A mutation attempted while the insert is in flight is a no-op: the frozen draft is
+        // what gets inserted, and the edit is neither saved nor recoverable afterwards.
+        vm.updateEditing { copy(name = "Renamed mid-save") }
+        assertEquals("Navi", vm.uiState.value.editing.name)
+
+        gate.complete(30L)
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("Navi", inserted.captured.name)
+        assertFalse(vm.uiState.value.showEditor)
+        coVerify(exactly = 1) { ruleDao.insert(any()) }
+    }
+
+    @Test fun `a failed insert on a deleted rule keeps the draft and shows a message, and unfreezes it`() {
         coEvery { ruleDao.getById(9) } returns null
         coEvery { ruleDao.insert(any()) } throws SQLiteException("disk full")
         val vm = vm()
@@ -157,9 +183,14 @@ class AutomationEditorSaveViewModelTest {
 
         assertTrue(vm.uiState.value.showEditor)
         assertFalse(vm.uiState.value.editorRuleDeleted)
+        assertFalse(vm.uiState.value.editing.saving)
         assertEquals("Navi", vm.uiState.value.editing.name)
         assertEquals(listOf(windowClose), vm.uiState.value.editing.actions)
         assertTrue(vm.uiState.value.editorError?.contains("disk full") == true)
+
+        // The draft unfroze: edits work again.
+        vm.updateEditing { copy(name = "Navi 2") }
+        assertEquals("Navi 2", vm.uiState.value.editing.name)
     }
 
     @Test fun `editing a url action's address drops a stripped-params marker, an unchanged address keeps it`() {
