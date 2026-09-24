@@ -32,6 +32,14 @@ class VoiceTriggerValidationTest {
         assertEquals(VoiceTriggerValidation.Collision.None,
             VoiceTriggerValidation.check("открой навигатор", taken))
     }
+    @Test fun `another inflection of a taken phrase does not collide`() {
+        val taken = mapOf(VoicePhrase.normalize("открой окна") to "Проветрить")
+        assertEquals(VoiceTriggerValidation.Collision.None, VoiceTriggerValidation.check("открой окно", taken))
+        assertEquals(VoiceTriggerValidation.Collision.None,
+            VoiceTriggerValidation.check("открой окно", emptyMap(), mapOf(VoicePhrase.normalize("открой окна") to "Окна")))
+        assertEquals(VoiceTriggerValidation.Collision.OtherRule("Проветрить"),
+            VoiceTriggerValidation.check("Открой, окна!", taken))
+    }
     @Test fun `fresh custom phrase is None`() {
         assertEquals(VoiceTriggerValidation.Collision.None,
             VoiceTriggerValidation.check("поехали", emptyMap()))

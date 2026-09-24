@@ -29,7 +29,9 @@ sealed interface ParseResult {
 object NluParser {
 
     fun parse(text: String): ParseResult {
-        val tokens = VoiceNormalizer.tokens(text)
+        // Politeness changes nothing asked for: dropped before any word is read, so "на
+        // пожалуйста пятьдесят" is "на пятьдесят" to the measure and to its neighbours.
+        val tokens = VoiceNormalizer.tokens(text).filterNot { it in FILLERS }
         if (tokens.isEmpty()) return ParseResult.Unrecognized
 
         // Negation ("не открывай", "нет, не надо") is beyond slot NLU: guessing an
@@ -174,15 +176,19 @@ object NluParser {
         return out
     }
 
-    /** Words that join the others without meaning anything alone, and politeness fillers. A
-     *  preposition closing the clause ("открой окно на") joins nothing and is not read. */
+    /** Words that join the others without meaning anything alone. A preposition closing the
+     *  clause ("открой окно на") joins nothing and is not read. */
     private val CONNECTORS = setOf("на", "до", "по", "в", "во", "у", "и", "а", "также", EXCEPT)
     private val PREPOSITIONS = setOf("на", "до", "по", "в", "во", "у")
     private val FILLERS: Set<String> by lazy { VoicePhrase.FILLERS + setOf("спасибо", "хочу", "я") }
 
-    /** Words read as they are, wherever they stand. */
+    /** "на водительской стороне": the side word itself, in these forms only. */
+    private val SIDE_WORDS = setOf("сторона", "стороны", "стороне", "сторону", "стороной", "сторон")
+
+    /** Words read as they are, wherever they stand. Qualifiers are read only in the forms
+     *  [QUAL_WORDS] lists: "лев" or "сторонник" is not a side. */
     private val plainWords: Set<String> by lazy {
-        CONNECTORS - PREPOSITIONS + FILLERS + verbForms + MY_WORDS + NEUTER_SIDES
+        CONNECTORS - PREPOSITIONS + verbForms + MY_WORDS + NEUTER_SIDES + SIDE_WORDS + QUAL_WORDS.values.flatten()
     }
 
     /** "второй уровень", "на третий уровень": read only next to a level. */
@@ -196,8 +202,7 @@ object NluParser {
     }
     private val readableStems: Set<String> by lazy {
         val nouns = VoiceLexicon.actionWords().filterKeys { it in NOUN_ACTIONS }.values.flatten()
-        (nouns + VoiceLexicon.deviceWords().values.flatten() + QUAL_WORDS.values.flatten())
-            .mapTo(HashSet()) { VoiceStemmer.stem(it) }
+        (nouns + VoiceLexicon.deviceWords().values.flatten()).mapTo(HashSet()) { VoiceStemmer.stem(it) }
     }
 
     /**
@@ -218,7 +223,7 @@ object NluParser {
             val t = tokens[i]
             when {
                 t in PREPOSITIONS -> i < tokens.lastIndex
-                t in plainWords || t.startsWith("сторон") -> true
+                t in plainWords -> true
                 t in LEVEL_WORDS -> level
                 stems[i] == SPEED_STEM -> fan
                 else -> i in measure.words || stems[i] in readableStems
@@ -257,14 +262,23 @@ object NluParser {
 
     private enum class Qual { DRIVER, PASSENGER, FRONT, REAR, LEFT, RIGHT, ALL }
 
-    private val QUAL_WORDS: Map<Qual, List<String>> = mapOf(
-        Qual.DRIVER to listOf("водитель", "водителя", "водительское"),
-        Qual.PASSENGER to listOf("пассажир", "пассажира", "пассажирское"),
-        Qual.FRONT to listOf("передние", "переднее", "передний", "передняя", "передних", "спереди"),
-        Qual.REAR to listOf("задние", "заднее", "задний", "задняя", "задних", "сзади"),
-        Qual.LEFT to listOf("левое", "левый", "левая", "слева"),
-        Qual.RIGHT to listOf("правое", "правый", "правая", "справа"),
-        Qual.ALL to listOf("все", "всех"),
+    // Adjective endings by stem type: "лев-ое", "передн-ее", "водительск-ое".
+    private val HARD_ENDINGS = listOf("ый", "ая", "ое", "ые", "ого", "ому", "ую", "ой", "ым", "ом", "ых", "ыми")
+    private val SOFT_ENDINGS = listOf("ий", "яя", "ее", "ие", "его", "ему", "юю", "ей", "им", "ем", "их", "ими")
+    private val VELAR_ENDINGS = listOf("ий", "ая", "ое", "ие", "ого", "ому", "ую", "ой", "им", "ом", "их", "ими")
+
+    private fun forms(stem: String, endings: List<String>): Set<String> = endings.mapTo(HashSet()) { stem + it }
+
+    /** Every form a qualifier is read in, compared word for word (no stemming, no prefixes). */
+    private val QUAL_WORDS: Map<Qual, Set<String>> = mapOf(
+        Qual.DRIVER to setOf("водитель", "водителя", "водителю", "водителем", "водителе") + forms("водительск", VELAR_ENDINGS),
+        Qual.PASSENGER to setOf("пассажир", "пассажира", "пассажиру", "пассажиром", "пассажире") +
+            forms("пассажирск", VELAR_ENDINGS),
+        Qual.FRONT to forms("передн", SOFT_ENDINGS) + "спереди",
+        Qual.REAR to forms("задн", SOFT_ENDINGS) + "сзади",
+        Qual.LEFT to forms("лев", HARD_ENDINGS) + "слева",
+        Qual.RIGHT to forms("прав", HARD_ENDINGS) + "справа",
+        Qual.ALL to setOf("все", "всех", "всем", "всеми"),
     )
 
     /** "моё окно", "моего сиденья": the speaker sits in the driver's seat. */
@@ -272,8 +286,7 @@ object NluParser {
 
     /** ALL positional markers present in the phrase (compound corners need both). */
     private fun detectQualifiers(tokens: List<String>): Set<Qual> {
-        val s = tokens.mapTo(HashSet()) { VoiceStemmer.stem(it) }
-        val out = QUAL_WORDS.filterValues { words -> words.any { VoiceStemmer.stem(it) in s } }.keys.toMutableSet()
+        val out = QUAL_WORDS.filterValues { forms -> tokens.any { it in forms } }.keys.toMutableSet()
         if (tokens.any { it in MY_WORDS }) out.add(Qual.DRIVER)
         return out
     }
@@ -371,7 +384,7 @@ object NluParser {
     /** Share of the opening the words name: null = none, [UNKNOWN_SHARE] = unreadable,
      *  [CONFLICT_SHARE] = two different shares or numbers. */
     private fun namedShare(actions: Set<ActionSlot>, m: Measure): Int? {
-        if (m.shareConflict || m.numbers.size > 1) return CONFLICT_SHARE
+        if (m.shareConflict || m.numbers.size > 1 || m.levels > 1) return CONFLICT_SHARE
         if (unreadableShare(m)) return UNKNOWN_SHARE
         val named = LinkedHashSet<Int>()
         m.share?.let { named.add(it) }
@@ -396,21 +409,22 @@ object NluParser {
     )
 
     /** One window slot, or per-door slots for "кроме X и Y" (never touching X or Y); null
-     *  when an exclusion names no whole window (a bare "правого" may be either row) or nothing
-     *  is left. */
+     *  when the qualifiers name no single window or pair, an exclusion names no whole window
+     *  (a bare "правого" may be either row), «кроме» is said twice or nothing is left. */
     private fun windowTargets(tokens: List<String>): List<DeviceSlot>? {
         val cut = tokens.indexOf(EXCEPT)
-        if (cut < 0) return listOf(windowFor(detectQualifiers(tokens), pluralWindows(tokens)))
+        if (cut < 0) return windowFor(detectQualifiers(tokens), pluralWindows(tokens))?.let { listOf(it) }
+        if (tokens.count { it == EXCEPT } > 1) return null
         // Each excluded window on its own: "заднего левого и заднего правого" is two corners,
         // not one set of qualifiers.
         val excluded = splitClauses(tokens.subList(cut + 1, tokens.size)).flatMap { part ->
             val quals = detectQualifiers(part)
             if (quals.all { it == Qual.LEFT || it == Qual.RIGHT }) return null
-            doorsOf(windowFor(quals, plural = false))
+            doorsOf(windowFor(quals, plural = false) ?: return null)
         }
         if (excluded.isEmpty()) return null
         val baseQuals = detectQualifiers(tokens.subList(0, cut)) - Qual.ALL
-        val base = if (baseQuals.isEmpty()) DeviceSlot.WINDOW_ALL else windowFor(baseQuals, plural = true)
+        val base = if (baseQuals.isEmpty()) DeviceSlot.WINDOW_ALL else windowFor(baseQuals, plural = true) ?: return null
         val kept = doorsOf(base) - excluded.toSet()
         return kept.takeIf { it.isNotEmpty() }
     }
@@ -422,38 +436,39 @@ object NluParser {
         else -> listOf(slot)
     }
 
-    /** Map a qualifier SET to one window. A bare singular "окно"/"моё окно" is the
-     *  driver's; plural "окна"/"все" is every window. */
-    private fun windowFor(quals: Set<Qual>, plural: Boolean): DeviceSlot =
-        sideWindow(quals) ?: positionWindow(quals)
-            ?: if (plural || Qual.ALL in quals) DeviceSlot.WINDOW_ALL else DeviceSlot.WINDOW_DRIVER
+    /** The window or pair each qualifier set names, every qualifier used. A bare LEFT/RIGHT is
+     *  the rear pair side (front sides are named driver/passenger). A set not listed here ("заднее
+     *  окно водителя", a corner of each row) names no window the parser can place. */
+    private val WINDOW_OF: Map<Set<Qual>, DeviceSlot> = mapOf(
+        setOf(Qual.DRIVER) to DeviceSlot.WINDOW_DRIVER,
+        setOf(Qual.DRIVER, Qual.FRONT) to DeviceSlot.WINDOW_DRIVER,
+        setOf(Qual.DRIVER, Qual.LEFT) to DeviceSlot.WINDOW_DRIVER,
+        setOf(Qual.DRIVER, Qual.FRONT, Qual.LEFT) to DeviceSlot.WINDOW_DRIVER,
+        setOf(Qual.FRONT, Qual.LEFT) to DeviceSlot.WINDOW_DRIVER,
+        setOf(Qual.PASSENGER) to DeviceSlot.WINDOW_PASSENGER,
+        setOf(Qual.PASSENGER, Qual.FRONT) to DeviceSlot.WINDOW_PASSENGER,
+        setOf(Qual.PASSENGER, Qual.RIGHT) to DeviceSlot.WINDOW_PASSENGER,
+        setOf(Qual.PASSENGER, Qual.FRONT, Qual.RIGHT) to DeviceSlot.WINDOW_PASSENGER,
+        setOf(Qual.FRONT, Qual.RIGHT) to DeviceSlot.WINDOW_PASSENGER,
+        setOf(Qual.LEFT) to DeviceSlot.WINDOW_REAR_LEFT,
+        setOf(Qual.REAR, Qual.LEFT) to DeviceSlot.WINDOW_REAR_LEFT,
+        setOf(Qual.RIGHT) to DeviceSlot.WINDOW_REAR_RIGHT,
+        setOf(Qual.REAR, Qual.RIGHT) to DeviceSlot.WINDOW_REAR_RIGHT,
+        setOf(Qual.FRONT) to DeviceSlot.WINDOW_FRONT,
+        setOf(Qual.DRIVER, Qual.PASSENGER) to DeviceSlot.WINDOW_FRONT,
+        setOf(Qual.DRIVER, Qual.PASSENGER, Qual.FRONT) to DeviceSlot.WINDOW_FRONT,
+        setOf(Qual.REAR) to DeviceSlot.WINDOW_REAR,
+        setOf(Qual.FRONT, Qual.REAR) to DeviceSlot.WINDOW_ALL,
+    )
+    private val WINDOW_GROUPS = setOf(DeviceSlot.WINDOW_ALL, DeviceSlot.WINDOW_FRONT, DeviceSlot.WINDOW_REAR)
 
-    private fun sideWindow(quals: Set<Qual>): DeviceSlot? {
-        val driver = Qual.DRIVER in quals
-        val passenger = Qual.PASSENGER in quals
-        return when {
-            driver && passenger -> DeviceSlot.WINDOW_FRONT
-            driver -> DeviceSlot.WINDOW_DRIVER
-            passenger -> DeviceSlot.WINDOW_PASSENGER
-            else -> null
-        }
-    }
-
-    /** Compound corners resolve first; a bare LEFT/RIGHT means the rear pair side
-     *  (front sides are named driver/passenger). */
-    private fun positionWindow(quals: Set<Qual>): DeviceSlot? {
-        val front = Qual.FRONT in quals
-        val rear = Qual.REAR in quals
-        return when {
-            front && rear -> DeviceSlot.WINDOW_ALL
-            front && Qual.LEFT in quals -> DeviceSlot.WINDOW_DRIVER
-            front && Qual.RIGHT in quals -> DeviceSlot.WINDOW_PASSENGER
-            Qual.LEFT in quals -> DeviceSlot.WINDOW_REAR_LEFT
-            Qual.RIGHT in quals -> DeviceSlot.WINDOW_REAR_RIGHT
-            front -> DeviceSlot.WINDOW_FRONT
-            rear -> DeviceSlot.WINDOW_REAR
-            else -> null
-        }
+    /** Map a qualifier SET to one window or pair, or null. A bare singular "окно"/"моё окно" is
+     *  the driver's; plural "окна"/"все" is every window; "все" next to a side names a pair only. */
+    private fun windowFor(quals: Set<Qual>, plural: Boolean): DeviceSlot? {
+        val sides = quals - Qual.ALL
+        if (sides.isEmpty()) return if (plural || Qual.ALL in quals) DeviceSlot.WINDOW_ALL else DeviceSlot.WINDOW_DRIVER
+        val window = WINDOW_OF[sides] ?: return null
+        return window.takeIf { Qual.ALL !in quals || it in WINDOW_GROUPS }
     }
 
     private fun isWindow(d: DeviceSlot) = d.name.startsWith("WINDOW")
@@ -464,7 +479,11 @@ object NluParser {
 
     private const val FAN_MAX = 7
     private const val SEAT_MAX = 3
-    private val NOT_FAN_ACTIONS = setOf(ActionSlot.OFF, ActionSlot.OPEN, ActionSlot.CLOSE)
+    /** Verbs and nouns a fan level reads: "включи", "поставь", "обдув"/"вентиляция". */
+    private val FAN_ACTIONS = setOf(ActionSlot.ON, ActionSlot.SET, ActionSlot.VENT_1)
+
+    /** The fan belongs to the climate: "вентилятор климата" names nothing else. */
+    private val FAN_DEVICES = setOf(DeviceSlot.AC_FAN, DeviceSlot.AC_FLOW, DeviceSlot.AC_AUTO)
 
     /** "вентилятор на три", "скорость обдува пять", "обдув на четыре". A seat or the
      *  windshield keeps "обдув" for itself. */
@@ -475,20 +494,20 @@ object NluParser {
     }
 
     /** The fan reads a level and nothing else: no side, no other device, no share but "на
-     *  полную" (the top level). */
+     *  полную" (the top level), no action but switching or setting it. */
     private fun resolveFan(stems: List<String>, actions: Set<ActionSlot>, qualifiers: Set<Qual>, m: Measure): ParseResult {
-        val fanOnly = qualifiers.isEmpty() && readsDevices(stems, setOf(DeviceSlot.AC_FAN, DeviceSlot.AC_FLOW))
+        val fanOnly = qualifiers.isEmpty() && readsDevices(stems, FAN_DEVICES)
         val shareless = !(m.hasShare && m.extreme == null) && !m.unexplained
-        if (!fanOnly || !shareless || actions.any { it in NOT_FAN_ACTIONS }) return ParseResult.Unrecognized
+        if (!fanOnly || !shareless || !FAN_ACTIONS.containsAll(actions)) return ParseResult.Unrecognized
         val level = levelOf(m, FAN_MAX) ?: return ParseResult.Unrecognized
         return VoiceCatalog.resolve(ActionSlot.SET, DeviceSlot.AC_FAN, level)
             ?.let { ParseResult.Command(it) } ?: ParseResult.Unrecognized
     }
 
     /** The level a phrase names by number, ordinal or максимум/минимум: null = none
-     *  named, 0 = contradictory (never a valid level). */
+     *  named, 0 = two levels named (never a valid level, even when they agree). */
     private fun levelOf(m: Measure, max: Int): Int? {
-        if (m.numbers.size > 1) return 0
+        if (m.levels > 1) return 0
         val named = LinkedHashSet<Int>()
         m.numbers.firstOrNull()?.let { named.add(it) }
         m.ordinal?.let { named.add(it) }
@@ -518,28 +537,67 @@ object NluParser {
         val seatPresent = devices3.any { isSeat(it) }
         // Rear seats have no NLU slots: "подогрев сиденья сзади" must not heat the driver.
         if (seatPresent && Qual.REAR in qualifiers) return ParseResult.Unrecognized
-        // Only a seat reads a side ("задний багажник" is just the trunk).
+        // Only a seat reads a side, and a few devices their own ("задний багажник" is just the trunk).
         if (!seatPresent && !readsSideOf(devices3, qualifiers)) return ParseResult.Unrecognized
+        val sides = if (seatPresent) (seatSides(stems, qualifiers) ?: return ParseResult.Unrecognized) else emptySet()
         val leveledActions = upgradeSeatLevel(actions2, devices3, if (seatPresent) levelOf(measure, SEAT_MAX) else null)
 
-        if (seatPresent && targetsBothSeats(stems, qualifiers)) {
-            return resolveBothSeats(stems, leveledActions, devices3, number)
+        if (sides.size > 1) return resolveBothSeats(stems, measure, leveledActions, devices3, number)
+
+        val resolved = resolveAll(leveledActions, refineSeats(devices3, sides.singleOrNull()), number)
+        val (command, pairs) = resolved.entries.singleOrNull() ?: return ParseResult.Unrecognized
+        return if (readsAll(stems, measure, leveledActions, pairs)) ParseResult.Command(command) else ParseResult.Unrecognized
+    }
+
+    /** The command reads everything the phrase names: its measure, every action word and every
+     *  device word ("открой багажник климат" is not the trunk alone, "выключи вентиляцию руля" is
+     *  not the wheel heater). */
+    private fun readsAll(stems: List<String>, measure: Measure, actions: Set<ActionSlot>, pairs: Set<Pair<ActionSlot, DeviceSlot>>): Boolean {
+        val used = pairs.mapTo(HashSet()) { it.second }
+        return readsMeasure(measure, used) && readsActions(actions, pairs) && readsDevices(stems, used)
+    }
+
+    /** Only a seat reads a level and only the temperature a number, each exactly one and with no
+     *  other measure word next to it: "на три процента", "на полную наполовину" are not levels. */
+    private fun readsMeasure(m: Measure, used: Set<DeviceSlot>): Boolean = when {
+        !m.named -> true
+        m.unexplained || m.levels != 1 || (m.words - m.levelWords).isNotEmpty() -> false
+        used.any { isSeat(it) } -> true
+        DeviceSlot.AC_TEMP in used -> m.numbers.size == 1
+        else -> false
+    }
+
+    /** The subsystem noun each device is: "подогрев" warms, "обдув"/"вентиляция" blows. The
+     *  windshield defrost is warm air, so it is both. */
+    private fun nounsOf(d: DeviceSlot): Set<ActionSlot> = when (d) {
+        DeviceSlot.STEERING_HEAT, DeviceSlot.MIRROR_HEAT, DeviceSlot.SEAT_DRIVER_HEAT, DeviceSlot.SEAT_PASSENGER_HEAT ->
+            setOf(ActionSlot.HEAT_1)
+        DeviceSlot.AC_FLOW, DeviceSlot.SEAT_DRIVER_VENT, DeviceSlot.SEAT_PASSENGER_VENT -> setOf(ActionSlot.VENT_1)
+        DeviceSlot.DEFROST_FRONT -> setOf(ActionSlot.HEAT_1, ActionSlot.VENT_1)
+        else -> emptySet()
+    }
+
+    private val SEAT_LEVEL_ACTIONS: Set<ActionSlot> by lazy { SEAT_LEVELS.values.flatten().toSet() }
+    private val LEVEL_VERBS = setOf(ActionSlot.ON, ActionSlot.SET)
+
+    /** Every action word is read by the command: its own action, the subsystem noun of its
+     *  device ("подогрев руля") or the on/set verb of a seat level ("включи подогрев сиденья").
+     *  "открой багажник на проветривание" leaves the airing unread. */
+    private fun readsActions(actions: Set<ActionSlot>, pairs: Set<Pair<ActionSlot, DeviceSlot>>): Boolean =
+        actions.all { a ->
+            pairs.any { (own, d) -> a == own || a in nounsOf(d) || a in LEVEL_VERBS && own in SEAT_LEVEL_ACTIONS }
         }
 
-        return comfortCommand(stems, measure, resolveAll(leveledActions, refineSeats(devices3, qualifiers), number))
-    }
-
-    /** The one command resolved, if the command reads everything the phrase names: only a
-     *  seat or the temperature reads a number or a level, and every device word names what
-     *  it does ("открой багажник климат" is not the trunk alone). */
-    private fun comfortCommand(stems: List<String>, measure: Measure, resolved: Map<String, Set<DeviceSlot>>): ParseResult {
-        val (command, used) = resolved.entries.singleOrNull() ?: return ParseResult.Unrecognized
-        if (measure.named && used.none { isSeat(it) || it == DeviceSlot.AC_TEMP }) return ParseResult.Unrecognized
-        return if (readsDevices(stems, used)) ParseResult.Command(command) else ParseResult.Unrecognized
-    }
+    /** The sides a device other than a seat reads: the tailgate is the rear one, the windshield
+     *  the front glass, and the mirror heater warms every mirror. */
+    private val SIDES_READ: Map<DeviceSlot, Set<Qual>> = mapOf(
+        DeviceSlot.TRUNK to setOf(Qual.REAR),
+        DeviceSlot.DEFROST_FRONT to setOf(Qual.FRONT),
+        DeviceSlot.MIRROR_HEAT to setOf(Qual.ALL),
+    )
 
     private fun readsSideOf(devices: Set<DeviceSlot>, qualifiers: Set<Qual>): Boolean =
-        qualifiers.isEmpty() || devices == setOf(DeviceSlot.TRUNK) && qualifiers == setOf(Qual.REAR)
+        qualifiers.isEmpty() || SIDES_READ[devices.singleOrNull()]?.containsAll(qualifiers) == true
 
     private val deviceSlotsByStem: Map<String, Set<DeviceSlot>> by lazy {
         val out = HashMap<String, MutableSet<DeviceSlot>>()
@@ -570,23 +628,41 @@ object NluParser {
     private fun impliedSet(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): Set<ActionSlot> =
         if (actions.isEmpty() && DeviceSlot.AC_TEMP in devices && number != null) setOf(ActionSlot.SET) else actions
 
-    /** "все сиденья"/"сидений" (plural) or "водителя и пассажира" targets BOTH seats.
-     *  issue #185: the stemmer collapses genitive singular "сидения" (as in
-     *  "сидения водителя") and genitive plural "сидений" to the same stem, so
-     *  the plural alone can't tell them apart. A single DRIVER/PASSENGER qualifier
-     *  already names one side explicitly -- that always wins over the plural guess. */
-    private fun targetsBothSeats(stems: List<String>, qualifiers: Set<Qual>): Boolean {
-        val driver = Qual.DRIVER in qualifiers
-        val passenger = Qual.PASSENGER in qualifiers
-        if (Qual.ALL in qualifiers || driver && passenger) return true
-        return !driver && !passenger && VoiceStemmer.stem("сидения") in stems
+    private enum class Seat { DRIVER, PASSENGER }
+
+    /** The seats the phrase names. The car is left-hand drive: LEFT is the driver's seat and
+     *  RIGHT the passenger's, so a side word always picks its seat. "все"/"водителя и пассажира"/
+     *  "левого и правого" is both; with no side, plural "сидений" is both and a bare seat the
+     *  driver's. Null when the sides contradict ("правое сиденье водителя", "всех сидений водителя").
+     *  issue #185: the stemmer collapses genitive singular "сидения" (as in "сидения водителя")
+     *  and genitive plural "сидений" to the same stem, so a named side always wins over the
+     *  plural guess. */
+    private fun seatSides(stems: List<String>, quals: Set<Qual>): Set<Seat>? {
+        val named = SEAT_OF.filterKeys { it in quals }.values.toSet()
+        if (CROSSED_SIDES.any { quals.containsAll(it) }) return null
+        return when {
+            Qual.ALL in quals -> BOTH_SEATS.takeIf { named.isEmpty() }
+            named.isNotEmpty() -> named
+            VoiceStemmer.stem("сидения") in stems -> BOTH_SEATS
+            else -> setOf(Seat.DRIVER)
+        }
     }
 
-    /** Each distinct command the (action, device) pairs resolve to, with the devices behind it. */
-    private fun resolveAll(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): Map<String, Set<DeviceSlot>> {
-        val resolved = LinkedHashMap<String, MutableSet<DeviceSlot>>()
+    private val SEAT_OF = mapOf(
+        Qual.DRIVER to Seat.DRIVER, Qual.LEFT to Seat.DRIVER, Qual.PASSENGER to Seat.PASSENGER, Qual.RIGHT to Seat.PASSENGER,
+    )
+    private val BOTH_SEATS = setOf(Seat.DRIVER, Seat.PASSENGER)
+    private val CROSSED_SIDES = listOf(setOf(Qual.DRIVER, Qual.RIGHT), setOf(Qual.PASSENGER, Qual.LEFT))
+
+    /** Each distinct command the (action, device) pairs resolve to, with the pairs behind it. */
+    private fun resolveAll(
+        actions: Set<ActionSlot>,
+        devices: Set<DeviceSlot>,
+        number: Int?,
+    ): Map<String, Set<Pair<ActionSlot, DeviceSlot>>> {
+        val resolved = LinkedHashMap<String, MutableSet<Pair<ActionSlot, DeviceSlot>>>()
         for (a in actions) for (d in devices) {
-            VoiceCatalog.resolve(a, d, number)?.let { resolved.getOrPut(it) { LinkedHashSet() }.add(d) }
+            VoiceCatalog.resolve(a, d, number)?.let { resolved.getOrPut(it) { LinkedHashSet() }.add(a to d) }
         }
         return resolved
     }
@@ -596,26 +672,27 @@ object NluParser {
      *  and goes to the agent (issue #98). */
     private fun resolveBothSeats(
         stems: List<String>,
+        measure: Measure,
         actions: Set<ActionSlot>,
         devices: Set<DeviceSlot>,
         number: Int?,
     ): ParseResult {
-        val perSide = listOf(this::driverSeat, this::passengerSeat).map { side ->
-            resolveAll(actions, devices.mapTo(LinkedHashSet()) { if (isSeat(it)) side(it) else it }, number)
+        val perSide = listOf(Seat.DRIVER, Seat.PASSENGER).map { resolveAll(actions, refineSeats(devices, it), number) }
+        val pairs = perSide.flatMapTo(HashSet()) { it.values.flatten() }
+        return if (perSide.all { it.size == 1 } && readsAll(stems, measure, actions, pairs)) {
+            ParseResult.Command(perSide.map { it.keys.first() })
+        } else {
+            ParseResult.Unrecognized
         }
-        val used = perSide.flatMapTo(HashSet()) { it.values.flatten() }
-        return if (perSide.all { it.size == 1 } && readsDevices(stems, used)) ParseResult.Command(perSide.map { it.keys.first() })
-        else ParseResult.Unrecognized
     }
 
-    /** A seat with no side qualifier defaults to the DRIVER's seat so a bare
-     *  "подогрев сиденья" resolves to one command instead of falling through. */
-    private fun refineSeats(devices: Set<DeviceSlot>, quals: Set<Qual>): Set<DeviceSlot> =
+    /** Every seat device on [seat]'s side; other devices unchanged. */
+    private fun refineSeats(devices: Set<DeviceSlot>, seat: Seat?): Set<DeviceSlot> =
         devices.mapTo(LinkedHashSet()) {
             when {
-                isSeat(it) && Qual.PASSENGER in quals -> passengerSeat(it)
-                isSeat(it) -> driverSeat(it)
-                else -> it
+                !isSeat(it) || seat == null -> it
+                seat == Seat.PASSENGER -> passengerSeat(it)
+                else -> driverSeat(it)
             }
         }
 

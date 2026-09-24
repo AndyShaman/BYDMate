@@ -25,6 +25,12 @@ class VoiceControllerLogLineTest {
         assertTrue(line.length.toString(), line.length < 600)
     }
 
+    @Test fun `the busy drop line is flattened and capped`() {
+        assertEquals("Utterance dropped while busy: открой 'окно'", VoiceController.busyDropLine("открой\n\"окно\""))
+        val line = VoiceController.busyDropLine("а".repeat(1_000))
+        assertTrue(line.length.toString(), line.length < 600)
+    }
+
     @Test fun `long values are capped`() {
         val long = "а".repeat(1_000)
         val line = VoiceController.logLine(VoiceJournalEntry(transcript = long, route = VoiceJournalEntry.Route.NLU,

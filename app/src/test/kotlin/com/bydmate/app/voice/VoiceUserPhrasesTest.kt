@@ -106,6 +106,16 @@ class VoiceUserPhrasesTest {
         assertEquals(VoiceUserPhrases.Check.Ok, p.check(open, "открой окна", emptyMap()))
     }
 
+    // A collision is judged as exactly as a match: another inflection is another phrase.
+    @Test fun `another inflection of a taken phrase is not a duplicate`() {
+        val p = VoiceUserPhrases().apply { add(open, "открой окна") }
+        assertEquals(VoiceUserPhrases.Check.Ok, p.check(close, "открой окно", emptyMap()))
+        assertEquals(VoiceUserPhrases.Check.Ok,
+            p.check(close, "задраить люк", mapOf(VoicePhrase.normalize("задраить люки") to "Дача")))
+        assertEquals(VoiceUserPhrases.Check.InUse("Дача"),
+            p.check(close, "Задраить люки!", mapOf(VoicePhrase.normalize("задраить люки") to "Дача")))
+    }
+
     @Test fun `owners maps normalized phrases to command names`() {
         val p = VoiceUserPhrases().apply { add(close, "Задраить люки") }
         val name = VoiceUserPhrases.COMMANDS.first { it.id == close }.name

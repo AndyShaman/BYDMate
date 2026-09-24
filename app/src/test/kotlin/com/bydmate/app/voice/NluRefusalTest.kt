@@ -66,10 +66,43 @@ class NluRefusalTest {
 
     // Every device word names what the command does.
     @Test fun a_device_the_command_does_not_touch_is_not_dropped() {
-        assertUnrecognized("открой багажник климат", "включи климат на двадцать два", "вентилятор климата на три",
-            "открой окно в салоне")
+        assertUnrecognized("открой багажник климат", "включи климат на двадцать два", "открой окно в салоне")
         assertEquals(listOf("吹前挡"), commands("включи обдув стекла"))
         assertEquals(listOf("车门上锁"), commands("заблокируй двери машины"))
+    }
+
+    // Every action word is read by the command: the airing mode on the trunk, the ventilation of
+    // the wheel heater, a heater word on the fan are not dropped.
+    @Test fun an_action_the_command_does_not_use_is_not_dropped() {
+        assertUnrecognized("открой багажник на проветривание", "выключи вентиляцию руля", "включи вентиляцию зеркал",
+            "проветри вентилятор на три", "включи подогрев климата")
+        assertEquals(listOf("关闭方向盘加热"), commands("выключи подогрев руля"))
+        assertEquals(listOf("主驾座椅加热2档"), commands("поставь подогрев сиденья на два"))
+        assertEquals(listOf("打开空调通风"), commands("включи обдув"))
+    }
+
+    // A seat reads exactly one level (1..3, an ordinal, максимум/минимум/на полную) and no other
+    // measure word; the temperature exactly one number.
+    @Test fun a_seat_level_is_one_level_and_nothing_else() {
+        assertUnrecognized("включи подогрев сиденья на три процента", "включи подогрев сиденья на полную наполовину",
+            "включи подогрев сиденья на третий второй уровень", "включи подогрев сиденья на максимум минимум",
+            "включи подогрев сидений на три процента", "поставь температуру 22 на максимум")
+        assertEquals(listOf("主驾座椅加热3档"), commands("включи подогрев сиденья на полную"))
+        assertEquals(listOf("主驾座椅加热3档"), commands("включи подогрев сиденья на третий уровень"))
+        assertEquals(listOf("副驾座椅通风1档"), commands("включи вентиляцию сиденья пассажира на минимум"))
+        assertEquals(refused(VoiceRefusal.CONFLICTING_MEASURE), parse("открой окно на максимум минимум"))
+    }
+
+    // Fillers go before any word is read; the window glass, "всех" and the climate are read by
+    // the command that uses them.
+    @Test fun fillers_and_words_the_command_uses_do_not_break_it() {
+        assertEquals(listOf("主驾半开"), commands("открой окно на пятьдесят пожалуйста процентов"))
+        assertEquals(listOf("主驾打开100"), commands("открой окно до пожалуйста конца"))
+        assertEquals(listOf("主驾半开"), commands("открой окно на пожалуйста пятьдесят"))
+        assertEquals(listOf("吹前挡"), commands("включи обдув переднего стекла"))
+        assertEquals(listOf("后视镜加热"), commands("включи подогрев всех зеркал"))
+        assertEquals(listOf("风量3"), commands("вентилятор климата на три"))
+        assertUnrecognized("включи обдув переднего", "включи подогрев всех руля")
     }
 
     @Test fun soft_measures_after_na_are_the_vent() {
@@ -131,6 +164,13 @@ class NluRefusalTest {
             "открой окна кроме переднего левого и правого", "закрой окна кроме заднего левого и правого",
             "сделай теплее кроме водительского сиденья", "громче кроме задних",
         )
+    }
+
+    // The exclusion resolves like any qualifier set: one window or pair, or nothing; a second
+    // «кроме» is never half honoured.
+    @Test fun except_resolves_whole_windows_only_once() {
+        assertUnrecognized("открой окна кроме заднего окна водителя", "открой окна кроме заднего левого кроме заднего правого")
+        assertEquals(listOf("主驾打开100", "后左打开100", "后右打开100"), commands("открой окна кроме переднего правого"))
     }
 
     @Test fun commands_the_parser_cannot_split_refuse() {

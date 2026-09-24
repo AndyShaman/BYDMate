@@ -26,6 +26,29 @@ class NluQualifierTest {
     @Test fun plural_windows_are_all() = assertEquals("车窗全开", cmd("открой окна"))
     @Test fun front_windows_still_pair() = assertEquals("前排车窗全开", cmd("открой передние окна"))
 
+    // A qualifier set maps to exactly one window or pair, every qualifier used, or to nothing:
+    // a corner of each row never collapses to all four, a row never beats the side.
+    @Test fun qualifiers_naming_no_single_window_or_pair_are_not_placed() {
+        for (text in listOf("открой заднее левое и переднее правое окно", "открой левое и правое окно")) {
+            refused(text, VoiceRefusal.MULTIPLE_COMMANDS)
+        }
+        for (text in listOf("открой заднее окно водителя", "открой правое окно водителя",
+            "открой все левые окна")) {
+            unrecognized(text)
+        }
+        assertEquals("车窗全开", cmd("открой передние и задние окна"))
+        assertEquals("后排车窗全开", cmd("открой все задние окна"))
+    }
+
+    // Qualifiers are read word for word in their listed forms, never by prefix or by stem.
+    @Test fun qualifier_words_are_read_only_in_their_forms() {
+        unrecognized("открой окно сторонник")
+        unrecognized("открой окно лев")
+        assertEquals("主驾打开100", cmd("открой окно на водительской стороне"))
+        assertEquals("副驾打开100", cmd("открой окно у пассажира"))
+        assertEquals("后左打开0", cmd("закрой левую форточку сзади"))
+    }
+
     // Half and vent exist for every single window and for the front/rear pairs,
     // not only for "all windows".
     @Test fun vent_driver_window_ajar() = assertEquals("主驾通风", cmd("приоткрой окно водителя"))
@@ -54,6 +77,18 @@ class NluQualifierTest {
     @Test fun seat_level_2_driver_default() = assertEquals("主驾座椅加热2档", cmd("подогрев сиденья на 2"))
     @Test fun seat_passenger_still_narrows() = assertEquals("副驾座椅加热1档", cmd("включи подогрев сиденья пассажира"))
     @Test fun seat_vent_defaults_to_driver() = assertEquals("主驾座椅通风1档", cmd("включи вентиляцию сиденья"))
+
+    // Left-hand drive: RIGHT is the passenger seat, LEFT the driver's; a side never falls through
+    // to the driver default, and contradicting sides go to the agent.
+    @Test fun seat_side_words_pick_their_seat() {
+        assertEquals("副驾座椅加热1档", cmd("включи подогрев переднего правого сиденья"))
+        assertEquals("副驾座椅加热1档", cmd("включи подогрев правого кресла"))
+        assertEquals("主驾座椅加热1档", cmd("включи подогрев левого кресла"))
+        assertEquals(listOf("主驾座椅加热1档", "副驾座椅加热1档"),
+            (NluParser.parse("включи подогрев сидений слева и справа") as? ParseResult.Command)?.commands)
+        unrecognized("включи подогрев правого сиденья водителя")
+        unrecognized("включи подогрев левого сиденья пассажира")
+    }
 
     // Levels 4/5 exist only in the agent catalog — NLU must not silently fire level 1.
     @Test fun seat_level_4_goes_to_agent() = unrecognized("подогрев сиденья на 4")

@@ -2,9 +2,9 @@ package com.bydmate.app.voice
 
 /**
  * Normalizes a spoken phrase for collision detection and matching.
- * Lowercase, ё→е, strip non-letter/digit, split, drop filler words, stem each token (same
- * VoiceStemmer the recognizer uses), join with a single space. Pure and deterministic, so
- * inflected variants ("форточка"/"форточки") normalize to the same string.
+ * Lowercase, ё→е, strip non-letter/digit, split, drop filler words, join with a single space.
+ * No stemming: «открой окно» and «открой окна» are different phrases, for matching and for
+ * collisions alike. Pure and deterministic.
  */
 object VoicePhrase {
     private val NON_WORD = Regex("[^\\p{L}\\p{Nd} ]")
@@ -13,14 +13,11 @@ object VoicePhrase {
     // Politeness and address words that never change what the driver asked for.
     internal val FILLERS = setOf("пожалуйста", "можешь", "мне", "слушай", "эй")
 
-    fun normalize(phrase: String): String = tokens(phrase).joinToString(" ")
-
-    /** The normalized tokens of [phrase], in spoken order. */
-    fun tokens(phrase: String): List<String> = words(phrase).map { VoiceStemmer.stem(it) }
+    /** The key two phrases collide on: equal exactly when [isExact] holds between them. */
+    fun normalize(phrase: String): String = words(phrase).joinToString(" ")
 
     /** The words of [phrase] as spoken, without stemming: lowercase, ё→е, no punctuation, no
-     *  fillers. Matching is judged on these, so «открой окна» is not «открой окно»; stemming
-     *  is only for the collision check. */
+     *  fillers. Matching and collisions are judged on these, so «открой окна» is not «открой окно». */
     fun words(phrase: String): List<String> =
         phrase.lowercase()
             .replace('ё', 'е')

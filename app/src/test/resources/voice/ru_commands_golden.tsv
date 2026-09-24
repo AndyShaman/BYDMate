@@ -359,3 +359,23 @@ utterance	expected	category	danger
 мы открываем багажник	UNRECOGNIZED	locks	danger
 закрываем окна	UNRECOGNIZED	windows	danger
 открой окна кроме переднего левого и правого	UNRECOGNIZED	windows	danger
+открой заднее левое и переднее правое окно	UNRECOGNIZED	windows	danger
+открой заднее окно водителя	UNRECOGNIZED	windows	danger
+открой окна кроме заднего окна водителя	UNRECOGNIZED	windows	danger
+открой окна кроме заднего левого кроме заднего правого	UNRECOGNIZED	windows	danger
+включи подогрев переднего правого сиденья	副驾座椅加热1档	seats	
+включи подогрев правого кресла	副驾座椅加热1档	seats	
+открой багажник на проветривание	UNRECOGNIZED	locks	danger
+выключи вентиляцию руля	UNRECOGNIZED	steering heat	danger
+включи подогрев сиденья на три процента	UNRECOGNIZED	seats	danger
+включи подогрев сиденья на полную наполовину	UNRECOGNIZED	seats	danger
+включи подогрев сиденья на третий второй уровень	UNRECOGNIZED	seats	danger
+включи подогрев сиденья на максимум минимум	UNRECOGNIZED	seats	danger
+открой окно сторонник	UNRECOGNIZED	windows	danger
+открой окно лев	UNRECOGNIZED	windows	danger
+включи обдув переднего стекла	吹前挡	climate	
+включи подогрев всех зеркал	后视镜加热	mirrors	
+вентилятор климата на три	风量3	fan	
+открой окно на пятьдесят пожалуйста процентов	主驾半开	windows	danger
+открой окно до пожалуйста конца	主驾打开100	windows	
+открой окно на пожалуйста пятьдесят	主驾半开	windows	danger

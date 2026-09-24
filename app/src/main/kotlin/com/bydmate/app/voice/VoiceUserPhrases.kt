@@ -46,7 +46,8 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
             byId[id]?.takeIf { list.any { VoicePhrase.isExact(transcript, it) } }
         }
 
-    /** Normalized phrase → command name, for the automation editor's collision check. */
+    /** Normalized phrase ([VoicePhrase.normalize]) → command name, for the automation editor's
+     *  collision check. */
     fun owners(): Map<String, String> = buildMap {
         for ((id, list) in _phrases.value) {
             val name = byId[id]?.name ?: continue
@@ -63,7 +64,7 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
         if (phrase.trim().length > MAX_CHARS) return Check.TooLong
         if (_phrases.value[commandId].orEmpty().size >= MAX_PHRASES) return Check.TooMany
         for ((id, list) in _phrases.value) {
-            if (list.any { VoicePhrase.normalize(it) == norm }) return Check.InUse(byId[id]?.name ?: id)
+            if (list.any { VoicePhrase.isExact(phrase, it) }) return Check.InUse(byId[id]?.name ?: id)
         }
         automationPhrases[norm]?.let { return Check.InUse(it) }
         return Check.Ok

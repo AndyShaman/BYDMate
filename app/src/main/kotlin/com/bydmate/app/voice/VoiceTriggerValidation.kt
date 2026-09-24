@@ -16,7 +16,8 @@ object VoiceTriggerValidation {
 
     /**
      * Automations are resolved before built-in commands, so a phrase the built-in parser also
-     * understands is allowed: the automation takes it over. Only an exact duplicate is refused.
+     * understands is allowed: the automation takes it over. Only an exact duplicate is refused,
+     * word for word as matching judges it ([VoicePhrase.normalize], no stemming).
      *
      * @param phrase user-entered phrase
      * @param otherVoicePhrases normalized voice phrases of OTHER rules → rule name
