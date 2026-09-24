@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -29,8 +30,10 @@ import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -57,6 +60,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import com.bydmate.app.data.repository.SettingsRepository
 import com.bydmate.app.service.UpdateChecker
 import com.bydmate.app.ui.charges.ChargesScreen
@@ -71,6 +75,13 @@ import com.bydmate.app.ui.settings.UpdateState
 import com.bydmate.app.ui.theme.*
 import com.bydmate.app.ui.trips.TripsScreen
 import com.bydmate.app.ui.welcome.WelcomeScreen
+
+// M3 NavigationBar only sets a default minimum of 80 dp, so an explicit height lowers it; each
+// item centres its 32 dp indicator and label in that height, keeping at least 4 dp above and below.
+private val NavBarHeight = 64.dp
+
+// Indicator (24 dp icon + 2 x 4 dp), 4 dp to the label, 2 x 4 dp minimum item padding.
+private val NavBarItemChrome = 40.dp
 
 enum class Screen(val route: String, val labelRes: Int, val icon: ImageVector) {
     Dashboard("dashboard", R.string.nav_tab_dashboard, Icons.Outlined.Home),
@@ -194,12 +205,20 @@ fun AppNavigation(
     }
 
     val isWelcome = currentDestination?.route == "welcome"
+    // Grows past NavBarHeight only once a large text size makes the label too tall for it.
+    // The bar pads itself by its bottom window inset inside this height, so the inset is added on top.
+    val density = LocalDensity.current
+    val navBarHeight = maxOf(
+        NavBarHeight,
+        with(density) { MaterialTheme.typography.labelMedium.lineHeight.toDp() } + NavBarItemChrome,
+    ) + with(density) { NavigationBarDefaults.windowInsets.getBottom(density).toDp() }
 
     Scaffold(
         containerColor = NavyDark,
         bottomBar = {
             if (!isWelcome) {
                 NavigationBar(
+                    modifier = Modifier.height(navBarHeight),
                     containerColor = NavBarBackground
                 ) {
                     Screen.entries.forEach { screen ->
