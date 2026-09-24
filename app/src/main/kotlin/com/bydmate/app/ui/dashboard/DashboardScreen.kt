@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
@@ -14,9 +15,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -51,6 +55,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -61,6 +66,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
+import androidx.compose.ui.unit.constrainHeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -135,8 +142,12 @@ fun DashboardScreen(
             modifier = Modifier.weight(1f).fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // LEFT COLUMN — fill full height with SpaceBetween
-            Box(modifier = Modifier.weight(0.4f)) {
+            // LEFT COLUMN: blocks keep their own height, only the gauge yields when space runs out
+            BoxWithConstraints(modifier = Modifier.weight(0.4f)) {
+                val columnHeight = maxHeight
+                // Scroll is attached only on overflow: its clip would cut the glow above the gauge.
+                var overflows by remember { mutableStateOf(false) }
+                val scrollState = rememberScrollState()
                 // Ghost car background
                 Image(
                     painter = painterResource(R.drawable.leopard3),
@@ -147,27 +158,26 @@ fun DashboardScreen(
                     contentScale = ContentScale.Fit,
                     alignment = Alignment.Center
                 )
-                Column(
+                GaugeYieldingColumn(
+                    onOverflowChange = { overflows = it },
                     modifier = Modifier
-                        .fillMaxSize()
+                        .fillMaxWidth()
+                        .then(if (overflows) Modifier.verticalScroll(scrollState) else Modifier)
+                        .heightIn(min = columnHeight)
                         .padding(vertical = 4.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.SpaceBetween
                 ) {
                     // TOP: SOC gauge + 4 widget-style stats around it (mirrors FloatingWidgetView).
                     // Two symmetric rows wrap the gauge:
                     //   row mid    — duration | odometer | inside temp
                     //   row bottom — trip km | range km + label | consumption + trend
+                    SocGauge(
+                        soc = state.soc ?: 0,
+                        isCharging = state.isCharging,
+                    )
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        SocGauge(
-                            soc = state.soc ?: 0,
-                            modifier = Modifier.size(150.dp),
-                            isCharging = state.isCharging,
-                        )
-
                         // Live-ticking duration text (refresh every 15s, like in widget).
                         val durationText by produceState(
                             initialValue = formatDurationShort(context, state.sessionStartedAt),
@@ -534,6 +544,42 @@ fun DashboardScreen(
                     PlaceholderText(text = stringResource(R.string.dashboard_empty_no_trips))
                 }
             }
+        }
+    }
+}
+
+private val GaugeMaxSize = 150.dp
+private val GaugeMinSize = 100.dp
+
+/**
+ * Left column of Главная. [content] emits the gauge, the rows under it and the card stack, in
+ * that order. Rows and cards keep their own height and the cards sit at the bottom; the gauge
+ * takes what is left, between [GaugeMinSize] and [GaugeMaxSize]. When even the smallest gauge
+ * does not fit the minimum height, the column grows taller and reports it via [onOverflowChange].
+ */
+@Composable
+private fun GaugeYieldingColumn(
+    onOverflowChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val width = constraints.maxWidth
+        val free = Constraints(maxWidth = width)
+        val rows = measurables[1].measure(free)
+        val cards = measurables[2].measure(free)
+        val target = constraints.minHeight
+        val gaugeSize = (target - rows.height - cards.height)
+            .coerceIn(GaugeMinSize.roundToPx(), GaugeMaxSize.roundToPx())
+            .coerceAtMost(width)
+        val gauge = measurables[0].measure(Constraints.fixed(gaugeSize, gaugeSize))
+        val needed = gaugeSize + rows.height + cards.height
+        onOverflowChange(needed > target)
+        val height = constraints.constrainHeight(maxOf(target, needed))
+        layout(width, height) {
+            gauge.place((width - gaugeSize) / 2, 0)
+            rows.place((width - rows.width) / 2, gaugeSize)
+            cards.place((width - cards.width) / 2, maxOf(gaugeSize + rows.height, height - cards.height))
         }
     }
 }
@@ -1031,17 +1077,17 @@ private fun StatCard(title: String, value: String, subtitle: String?, accentColo
     Card(
         shape = RoundedCornerShape(12.dp),
         colors = CardDefaults.cardColors(containerColor = CardSurface),
-        modifier = modifier.height(64.dp)
+        modifier = modifier
     ) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp).padding(horizontal = 12.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Text(title, color = TextSecondary, fontSize = 11.sp)
             Text(value, color = accentColor, fontSize = 14.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace)
-            Text(subtitle ?: "", color = TextMuted, fontSize = 11.sp)
+            Text(subtitle ?: "", color = TextMuted, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
 }
