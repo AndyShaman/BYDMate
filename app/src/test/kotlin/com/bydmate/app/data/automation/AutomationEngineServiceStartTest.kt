@@ -812,4 +812,95 @@ class AutomationEngineServiceStartTest {
         assertEquals(e0 + 30_000L, storedHeartbeat())
         assertTrue(engine.serviceStartDumpLine().endsWith(" heartbeat=none"))
     }
+
+    // The next elapsed read of evaluate() lets the due timer beat run first, 1 ms ahead of the
+    // elapsed the tick gets: the beat thread won the race to the session state.
+    private fun beatAheadOfNextTick(engine: AutomationEngine, unit: HeadUnit, timer: TestScope) {
+        var armed = true
+        engine.elapsedMs = {
+            if (armed) {
+                armed = false
+                timer.pass(unit, 1_000L)                                    // the beat reads unit.elapsed
+                unit.elapsed - 1L
+            } else {
+                unit.elapsed
+            }
+        }
+    }
+
+    @Test fun `service_start heartbeat beat 1 ms ahead of the tick opens no session`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        timer.pass(unit, 29_000L)
+        beatAheadOfNextTick(engine, unit, timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // tick at e0 + 29 999
+
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertFalse(engineLogs().any { it.startsWith("service_start: new session reason=elapsed_back") })
+        assertEquals(e0 + 30_000L, storedHeartbeat())
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start session opened by a tick older than a beat keeps the newer heartbeat`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, dao) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // fires, rule consumed
+        timer.pass(unit, 20_000L)
+        engine.onCarOff()                                                   // screen still lit
+        unit.screenOn = false
+        engine.evaluate(diParsData(soc = 50), null)                         // dark tick, marker ready
+        unit.screenOn = true
+        timer.pass(unit, 69_000L)                                           // beats at 30 s and 60 s
+        beatAheadOfNextTick(engine, unit, timer)
+        engine.evaluate(diParsData(soc = 50), null)                         // tick at e0 + 89 999
+
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().any { it.startsWith("service_start: new session reason=car_off") })
+        assertEquals(e0 + 90_000L, storedHeartbeat())
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start heartbeat beat running when its timer stops writes nothing`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val (engine, _) = serviceStartEngine(bootId, unit)
+        val timer = TestScope()
+        engine.startServiceStartHeartbeat(timer)
+        engine.evaluate(diParsData(soc = 50), null)
+        timer.pass(unit, 29_000L)
+        engine.elapsedMs = {                                                // stop lands inside the beat
+            engine.stopServiceStartHeartbeat()
+            engine.startServiceStartHeartbeat(TestScope())
+            unit.elapsed
+        }
+        timer.pass(unit, 1_000L)
+
+        assertEquals(e0, storedHeartbeat())
+        engine.stopServiceStartHeartbeat()
+    }
+
+    @Test fun `service_start dark heartbeat beat confirms the ACC_OFF marker while evaluate is stalled`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            engine.evaluate(diParsData(soc = 50), null)                     // fires, rule consumed
+            timer.pass(unit, 20_000L)
+            engine.onCarOff()                                               // screen still lit, no tick after
+            unit.screenOn = false
+            timer.pass(unit, 20_000L)                                       // one dark beat at 30 s
+            unit.screenOn = true                                            // car on again
+            timer.pass(unit, 120_000L)                                      // lit beats keep the heartbeat fresh
+            engine.evaluate(diParsData(soc = 50), null)                     // evaluate resumes
+
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+            assertTrue(engineLogs().contains("service_start: screen off seen by heartbeat timer"))
+            assertTrue(engineLogs().any { it.startsWith("service_start: new session reason=car_off") })
+            engine.stopServiceStartHeartbeat()
+        }
 }
