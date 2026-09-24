@@ -1,0 +1,190 @@
+package com.bydmate.app.voice
+
+/**
+ * Pure Russian pre-pass for the offline parser. GigaAM emits lowercase text without
+ * punctuation and spells numbers as words; this turns it into tokens and reads the
+ * measure out of them (a share of an opening, a level, a bare number), so the parser can
+ * tell "open" from "open halfway" and never widen an utterance it could not read.
+ */
+object VoiceNormalizer {
+
+    /** Share the vent detent stands for (the translator's 10 % window vent). */
+    const val VENT_SHARE = 10
+    const val FULL_SHARE = 100
+    private const val HALF_SHARE = 50
+    private const val THREE_QUARTERS = 75
+
+    enum class Extreme { MAX, MIN }
+
+    /**
+     * @param numbers cardinals named in the phrase (tens + units composed, digits parsed)
+     * @param numberIsShare the single number reads as an opening share: "на/до N" or "N процентов"
+     * @param share share named by words: a fraction, a vent word or a "fully" word
+     * @param softVent a soft verb ("приоткрой") asked for the vent detent unless something else is named
+     * @param shareConflict two different shares named ("полностью наполовину")
+     * @param ordinal "первый".."пятый" as a level
+     * @param extreme "максимум"/"минимум"
+     * @param unexplained a measure word nobody can read (centimetres, a dangling "до"/"пол")
+     */
+    data class Measure(
+        val numbers: List<Int> = emptyList(),
+        val numberIsShare: Boolean = false,
+        val share: Int? = null,
+        val softVent: Boolean = false,
+        val shareConflict: Boolean = false,
+        val ordinal: Int? = null,
+        val extreme: Extreme? = null,
+        val unexplained: Boolean = false,
+    ) {
+        /** Some word asks for a share of an opening (numbers alone do not: they are levels elsewhere). */
+        val hasShare: Boolean get() = share != null || softVent || shareConflict
+    }
+
+    private val UNITS: Map<String, Int> = mapOf(
+        "ноль" to 0, "один" to 1, "одна" to 1, "одну" to 1, "два" to 2, "две" to 2, "три" to 3,
+        "четыре" to 4, "пять" to 5, "шесть" to 6, "семь" to 7, "восемь" to 8, "девять" to 9,
+        "одного" to 1, "двух" to 2, "трех" to 3, "четырех" to 4, "пяти" to 5, "шести" to 6,
+        "семи" to 7, "восьми" to 8, "девяти" to 9,
+    )
+    private val TEENS: Map<String, Int> = mapOf(
+        "десять" to 10, "одиннадцать" to 11, "двенадцать" to 12, "тринадцать" to 13,
+        "четырнадцать" to 14, "пятнадцать" to 15, "шестнадцать" to 16, "семнадцать" to 17,
+        "восемнадцать" to 18, "девятнадцать" to 19, "десяти" to 10, "одиннадцати" to 11,
+        "двенадцати" to 12, "тринадцати" to 13, "четырнадцати" to 14, "пятнадцати" to 15,
+        "шестнадцати" to 16, "семнадцати" to 17, "восемнадцати" to 18, "девятнадцати" to 19,
+    )
+    private val TENS: Map<String, Int> = mapOf(
+        "двадцать" to 20, "тридцать" to 30, "сорок" to 40, "пятьдесят" to 50,
+        "шестьдесят" to 60, "семьдесят" to 70, "восемьдесят" to 80, "девяносто" to 90,
+        "двадцати" to 20, "тридцати" to 30, "сорока" to 40, "пятидесяти" to 50,
+        "шестидесяти" to 60, "семидесяти" to 70, "восьмидесяти" to 80, "девяноста" to 90,
+        "сто" to 100, "ста" to 100,
+    )
+
+    private val ORDINALS: Map<String, Int> = buildMap {
+        listOf("первый", "первая", "первое", "первую", "первого", "первом", "первой").forEach { put(it, 1) }
+        listOf("второй", "вторая", "второе", "вторую", "второго", "втором").forEach { put(it, 2) }
+        listOf("третий", "третья", "третье", "третью", "третьего", "третьем", "третьей").forEach { put(it, 3) }
+        listOf("четвертый", "четвертая", "четвертое", "четвертую", "четвертого", "четвертом").forEach { put(it, 4) }
+        listOf("пятый", "пятая", "пятое", "пятую", "пятого", "пятом").forEach { put(it, 5) }
+    }
+
+    private val MAX_WORDS = setOf("максимум", "максимума", "максимальный", "максимальная", "максимальную", "максимальной")
+    private val MIN_WORDS = setOf("минимум", "минимума", "минимальный", "минимальная", "минимальную", "минимальной")
+    private val VENT_WORDS = setOf("чуть", "чуточку", "немного", "немножко", "слегка")
+    private val FULL_WORDS = setOf("полностью", "целиком", "полную", "полной")
+    private val END_WORDS = setOf("конца", "упора")
+    private val FRACTIONS: Map<String, Int> = mapOf(
+        "наполовину" to HALF_SHARE, "треть" to 33, "трети" to 33, "четверть" to 25, "четверти" to 25,
+    )
+    private val SOFT_OPEN_PREFIXES = listOf("приоткр", "приспуст")
+    private val UNIT_PREFIXES = listOf("сантиметр", "миллиметр")
+    private val UNIT_ABBREVIATIONS = setOf("см", "мм")
+    private val HALF_NOUNS = listOf("окн", "окош", "стекл", "форточ", "люк")
+
+    /** Lowercase, ё -> е, "%" -> "процентов", hyphens and punctuation split tokens,
+     *  "полокна" -> "пол окна". */
+    fun tokens(text: String): List<String> = text.lowercase()
+        .replace('ё', 'е')
+        .replace("%", " процентов ")
+        .replace(Regex("[^\\p{L}\\p{Nd} ]"), " ")
+        .split(Regex("\\s+"))
+        .filter { it.isNotBlank() }
+        .flatMap { splitHalfNoun(it) }
+
+    private fun splitHalfNoun(token: String): List<String> {
+        val rest = token.removePrefix("пол")
+        return if (rest != token && HALF_NOUNS.any { rest.startsWith(it) }) listOf("пол", rest) else listOf(token)
+    }
+
+    /** The whole number words of the phrase with their token spans, tens + units composed. */
+    private data class NumberSpan(val value: Int, val first: Int, val last: Int)
+
+    private fun numberSpans(tokens: List<String>): List<NumberSpan> {
+        val out = ArrayList<NumberSpan>()
+        var i = 0
+        while (i < tokens.size) {
+            val t = tokens[i]
+            val tens = TENS[t]
+            val unit = tokens.getOrNull(i + 1)?.let { UNITS[it] }
+            when {
+                tens != null && tens < FULL_SHARE && unit != null && unit > 0 -> { out.add(NumberSpan(tens + unit, i, i + 1)); i++ }
+                tens != null -> out.add(NumberSpan(tens, i, i))
+                t.all { it.isDigit() } && t.length <= 3 -> out.add(NumberSpan(t.toInt(), i, i))
+                else -> (TEENS[t] ?: UNITS[t])?.let { out.add(NumberSpan(it, i, i)) }
+            }
+            i++
+        }
+        return out
+    }
+
+    /** "три четверти" is a fraction (75 %), not the number three. */
+    private fun threeQuarters(tokens: List<String>, i: Int) =
+        tokens[i] == "три" && tokens.getOrNull(i + 1)?.startsWith("четверт") == true
+
+    fun measure(tokens: List<String>): Measure {
+        val spans = numberSpans(tokens).filterNot { threeQuarters(tokens, it.first) }
+        val shares = LinkedHashSet<Int>()
+        var unexplained = false
+        tokens.forEachIndexed { i, t ->
+            val share = wordShare(tokens, i)
+            if (share != null) shares.add(share)
+            if (isUnreadable(tokens, i, spans)) unexplained = true
+            if (t == "пол" && share == null) unexplained = true
+        }
+        val single = spans.singleOrNull()
+        return Measure(
+            numbers = spans.map { it.value },
+            numberIsShare = single != null && isShareNumber(tokens, single),
+            share = shares.singleOrNull(),
+            softVent = tokens.any { t -> SOFT_OPEN_PREFIXES.any { t.startsWith(it) } },
+            shareConflict = shares.size > 1,
+            ordinal = tokens.firstNotNullOfOrNull { ORDINALS[it] },
+            extreme = extremeOf(tokens),
+            unexplained = unexplained,
+        )
+    }
+
+    private fun extremeOf(tokens: List<String>): Extreme? = when {
+        tokens.any { it in MAX_WORDS } || tokens.any { it == "полную" } -> Extreme.MAX
+        tokens.any { it in MIN_WORDS } -> Extreme.MIN
+        else -> null
+    }
+
+    /** Share named by the word at [i]: fractions, vent words, "fully" words. */
+    private fun wordShare(tokens: List<String>, i: Int): Int? {
+        val t = tokens[i]
+        return when {
+            threeQuarters(tokens, i) -> THREE_QUARTERS
+            t.startsWith("четверт") && tokens.getOrNull(i - 1) == "три" -> null
+            t.startsWith("половин") -> HALF_SHARE
+            t == "пол" -> halfOf(tokens, i)
+            t == "до" -> FULL_SHARE.takeIf { tokens.getOrNull(i + 1) in END_WORDS }
+            t in VENT_WORDS || t.startsWith("щел") -> VENT_SHARE
+            t in FULL_WORDS -> FULL_SHARE
+            else -> FRACTIONS[t]
+        }
+    }
+
+    /** "на пол" / "пол окна" is half; "обдув в пол" is the floor and names no share. */
+    private fun halfOf(tokens: List<String>, i: Int): Int? {
+        val next = tokens.getOrNull(i + 1)
+        val half = tokens.getOrNull(i - 1) == "на" || next != null && HALF_NOUNS.any { next.startsWith(it) }
+        return if (half) HALF_SHARE else null
+    }
+
+    /** A measure word the phrase uses that none of the readers above explains. */
+    private fun isUnreadable(tokens: List<String>, i: Int, spans: List<NumberSpan>): Boolean {
+        val t = tokens[i]
+        if (t in UNIT_ABBREVIATIONS || UNIT_PREFIXES.any { t.startsWith(it) }) return true
+        if (t != "до") return false
+        val next = tokens.getOrNull(i + 1) ?: return true
+        return !(next in END_WORDS || next.startsWith("половин") || spans.any { it.first == i + 1 })
+    }
+
+    private fun isShareNumber(tokens: List<String>, span: NumberSpan): Boolean {
+        val before = tokens.getOrNull(span.first - 1)
+        val after = tokens.getOrNull(span.last + 1)
+        return before == "на" || before == "до" || after?.startsWith("процент") == true
+    }
+}
