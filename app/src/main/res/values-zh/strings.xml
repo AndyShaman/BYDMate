@@ -916,6 +916,16 @@
     <string name="backup_error_no_selected_parts">备份中没有所选的部分</string>
     <string name="backup_error_fk_violation">备份文件已损坏：表之间的关联已被破坏</string>
     <string name="backup_error_version_mismatch">备份文件已损坏：数据库版本与描述不符</string>
+    <string name="backup_error_db_not_sqlite">备份中的数据库文件已损坏或不是 SQLite 数据库</string>
+    <string name="backup_error_db_integrity">备份中的数据库文件未通过完整性检查</string>
+    <string name="backup_error_too_many_entries">备份文件已损坏：归档中的条目过多</string>
+    <string name="backup_error_duplicate_entry">备份文件已损坏：重复条目 %1$s</string>
+    <string name="backup_error_too_large">备份文件过大</string>
+    <string name="backup_error_incomplete">备份文件已损坏或不完整。缺少条目：%1$s</string>
+    <string name="backup_error_entry_too_large">备份文件已损坏：条目超过允许的大小</string>
+    <string name="backup_error_export_busy">数据库正忙，导出已中止。请稍后重试。</string>
+    <string name="backup_error_open_failed">无法打开备份文件</string>
+    <string name="backup_error_swap_failed">恢复时无法替换数据库文件</string>
     <string name="settings_backup_chip_tables">表格</string>
     <string name="settings_backup_chip_settings">设置</string>
     <string name="settings_backup_chip_keys">密钥</string>

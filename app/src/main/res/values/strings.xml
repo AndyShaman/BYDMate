@@ -1001,6 +1001,16 @@
     <string name="backup_error_no_selected_parts">В архиве нет выбранных частей</string>
     <string name="backup_error_fk_violation">Файл бэкапа повреждён: нарушены связи между таблицами</string>
     <string name="backup_error_version_mismatch">Файл бэкапа повреждён: версия базы не совпадает с описанием</string>
+    <string name="backup_error_db_not_sqlite">Файл базы данных в бэкапе повреждён или не является базой SQLite</string>
+    <string name="backup_error_db_integrity">Файл базы данных в бэкапе не прошёл проверку целостности</string>
+    <string name="backup_error_too_many_entries">Файл бэкапа повреждён: слишком много записей в архиве</string>
+    <string name="backup_error_duplicate_entry">Файл бэкапа повреждён: дублирующаяся запись %1$s</string>
+    <string name="backup_error_too_large">Файл бэкапа слишком большой</string>
+    <string name="backup_error_incomplete">Файл бэкапа повреждён или неполный. Ожидались записи: %1$s</string>
+    <string name="backup_error_entry_too_large">Файл бэкапа повреждён: запись превышает допустимый размер</string>
+    <string name="backup_error_export_busy">База данных занята, экспорт прерван. Повторите попытку позже.</string>
+    <string name="backup_error_open_failed">Не удалось открыть файл бэкапа</string>
+    <string name="backup_error_swap_failed">Не удалось заменить файл базы данных при восстановлении</string>
     <string name="settings_backup_chip_tables">Таблицы</string>
     <string name="settings_backup_chip_settings">Настройки</string>
     <string name="settings_backup_chip_keys">Ключи</string>

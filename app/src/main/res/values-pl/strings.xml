@@ -997,6 +997,16 @@
     <string name="backup_error_no_selected_parts">Archiwum nie zawiera żadnej z wybranych części</string>
     <string name="backup_error_fk_violation">Plik kopii zapasowej jest uszkodzony: powiązania między tabelami są naruszone</string>
     <string name="backup_error_version_mismatch">Plik kopii zapasowej jest uszkodzony: wersja bazy nie zgadza się z opisem</string>
+    <string name="backup_error_db_not_sqlite">Plik bazy danych w kopii zapasowej jest uszkodzony lub nie jest bazą SQLite</string>
+    <string name="backup_error_db_integrity">Plik bazy danych w kopii zapasowej nie przeszedł kontroli integralności</string>
+    <string name="backup_error_too_many_entries">Plik kopii zapasowej jest uszkodzony: za dużo wpisów w archiwum</string>
+    <string name="backup_error_duplicate_entry">Plik kopii zapasowej jest uszkodzony: zduplikowany wpis %1$s</string>
+    <string name="backup_error_too_large">Plik kopii zapasowej jest za duży</string>
+    <string name="backup_error_incomplete">Plik kopii zapasowej jest uszkodzony lub niekompletny. Oczekiwane wpisy: %1$s</string>
+    <string name="backup_error_entry_too_large">Plik kopii zapasowej jest uszkodzony: wpis przekracza dopuszczalny rozmiar</string>
+    <string name="backup_error_export_busy">Baza danych jest zajęta, eksport przerwany. Spróbuj ponownie później.</string>
+    <string name="backup_error_open_failed">Nie udało się otworzyć pliku kopii zapasowej</string>
+    <string name="backup_error_swap_failed">Nie udało się zastąpić pliku bazy danych podczas przywracania</string>
     <string name="settings_backup_chip_tables">Tabele</string>
     <string name="settings_backup_chip_settings">Ustawienia</string>
     <string name="settings_backup_chip_keys">Klucze</string>

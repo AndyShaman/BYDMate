@@ -838,6 +838,16 @@
     <string name="backup_error_no_selected_parts">O arquivo não contém nenhuma das partes selecionadas</string>
     <string name="backup_error_fk_violation">O arquivo de backup está danificado: as ligações entre as tabelas estão quebradas</string>
     <string name="backup_error_version_mismatch">O arquivo de backup está danificado: a versão do banco de dados não corresponde à descrição</string>
+    <string name="backup_error_db_not_sqlite">O arquivo de banco de dados do backup está danificado ou não é um banco SQLite</string>
+    <string name="backup_error_db_integrity">O arquivo de banco de dados do backup não passou na verificação de integridade</string>
+    <string name="backup_error_too_many_entries">O arquivo de backup está danificado: excesso de entradas no arquivo</string>
+    <string name="backup_error_duplicate_entry">O arquivo de backup está danificado: entrada duplicada %1$s</string>
+    <string name="backup_error_too_large">O arquivo de backup é muito grande</string>
+    <string name="backup_error_incomplete">O arquivo de backup está danificado ou incompleto. Entradas esperadas: %1$s</string>
+    <string name="backup_error_entry_too_large">O arquivo de backup está danificado: uma entrada excede o tamanho permitido</string>
+    <string name="backup_error_export_busy">O banco de dados está ocupado, exportação interrompida. Tente novamente mais tarde.</string>
+    <string name="backup_error_open_failed">Não foi possível abrir o arquivo de backup</string>
+    <string name="backup_error_swap_failed">Não foi possível substituir o arquivo de banco de dados durante a restauração</string>
     <string name="settings_backup_chip_tables">Tabelas</string>
     <string name="settings_backup_chip_settings">Configurações</string>
     <string name="settings_backup_chip_keys">Chaves</string>

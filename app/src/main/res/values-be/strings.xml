@@ -997,6 +997,16 @@
     <string name="backup_error_no_selected_parts">У архіве няма выбраных частак</string>
     <string name="backup_error_fk_violation">Файл бэкапа пашкоджаны: парушаны сувязі паміж табліцамі</string>
     <string name="backup_error_version_mismatch">Файл бэкапа пашкоджаны: версія базы не супадае з апісаннем</string>
+    <string name="backup_error_db_not_sqlite">Файл базы даных у бэкапе пашкоджаны або не з’яўляецца базай SQLite</string>
+    <string name="backup_error_db_integrity">Файл базы даных у бэкапе не прайшоў праверку цэласнасці</string>
+    <string name="backup_error_too_many_entries">Файл бэкапа пашкоджаны: занадта шмат запісаў у архіве</string>
+    <string name="backup_error_duplicate_entry">Файл бэкапа пашкоджаны: дублюючы запіс %1$s</string>
+    <string name="backup_error_too_large">Файл бэкапа занадта вялікі</string>
+    <string name="backup_error_incomplete">Файл бэкапа пашкоджаны або няпоўны. Чакаліся запісы: %1$s</string>
+    <string name="backup_error_entry_too_large">Файл бэкапа пашкоджаны: запіс перавышае дапушчальны памер</string>
+    <string name="backup_error_export_busy">База даных занята, экспарт перарваны. Паўтарыце спробу пазней.</string>
+    <string name="backup_error_open_failed">Не ўдалося адкрыць файл бэкапа</string>
+    <string name="backup_error_swap_failed">Не ўдалося замяніць файл базы даных пры аднаўленні</string>
     <string name="settings_backup_chip_tables">Табліцы</string>
     <string name="settings_backup_chip_settings">Налады</string>
     <string name="settings_backup_chip_keys">Ключы</string>
