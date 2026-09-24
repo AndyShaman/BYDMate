@@ -1235,7 +1235,7 @@
     <string name="auto_act_passenger_vent_off">Вентыляцыя пасажыра выкл</string>
     <string name="auto_act_mirror_heat_on">Падагрэў люстэркаў укл</string>
     <string name="auto_act_mirror_heat_off">Падагрэў люстэркаў выкл</string>
-    <string name="auto_act_steering_heat_on">Падагрэў руля укл</string>
+    <string name="auto_act_steering_heat_on">Падагрэў руля ўкл</string>
     <string name="auto_act_steering_heat_off">Падагрэў руля выкл</string>
     <string name="steering_heat_not_equipped">На гэтай машыне няма падагрэву руля</string>
     <string name="auto_act_ambient_light_on">Амбіент укл</string>
