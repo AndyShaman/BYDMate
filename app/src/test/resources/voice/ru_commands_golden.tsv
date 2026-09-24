@@ -543,3 +543,25 @@ utterance	expected	category	danger
 открой люк и окна	天窗打开100+车窗全开	sunroof	
 второй уровень вентиляции сиденья пассажира	副驾座椅通风2档	seats	
 выключи руль	关闭方向盘加热	steering heat	
+окно водителя на пятьдесят	主驾半开	windows	danger
+открой пассажирское окно	副驾打开100	windows	
+разблокируй машину	车门解锁	locks	
+заблокируй машину	车门上锁	locks	
+разблокируй замки	车门解锁	locks	
+заблокируй замки	车门上锁	locks	
+открой двери	UNRECOGNIZED	locks	
+звук прибавь	VOL:+1	media	
+звук громче	VOL:+1	media	
+звук тише	VOL:-1	media	
+звук убавь	VOL:-1	media	
+звук прибавь на десять	UNRECOGNIZED	media	
+климат в автомате	自动空调	climate	
+включи климат на авто	自动空调	climate	
+погаси свет	关闭车内灯	misc	
+погаси подсветку	氛围灯关闭	misc	
+выключай подогрев сиденья	主驾座椅加热关闭	seats	
+включай подогрев руля	方向盘加热	steering heat	
+сохрани заряд	UNRECOGNIZED	misc	
+сколько заряда	UNRECOGNIZED	misc	
+включи навигатор	UNRECOGNIZED	misc	
+выключи фары	UNRECOGNIZED	misc	
