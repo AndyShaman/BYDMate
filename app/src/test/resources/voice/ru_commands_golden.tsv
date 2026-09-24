@@ -272,7 +272,7 @@ utterance	expected	category	danger
 машина открыта	UNRECOGNIZED	locks	
 окно открыто	UNRECOGNIZED	windows	danger
 закрыто ли окно	UNRECOGNIZED	windows	
-открытые окна закрой	车窗关闭	windows	
+открытые окна закрой	UNRECOGNIZED	windows	
 приоткрой багажник	UNRECOGNIZED	locks	
 открой багажник наполовину	UNRECOGNIZED	locks	
 закрой окна и двери	UNRECOGNIZED	windows	
@@ -347,7 +347,15 @@ utterance	expected	category	danger
 открой окна как раньше	UNRECOGNIZED	windows	danger
 открой окно на шестьдесят процентов	主驾半开	windows	danger
 открой окно на пятнадцать процентов	主驾通风	windows	danger
-открой окно на пять процентов	主驾通风	windows	danger
+открой окно на пять процентов	UNRECOGNIZED	windows	danger
 поставь окно на ноль процентов	主驾打开0	windows	
-открой люк на пять процентов	天窗通风	sunroof	danger
+открой люк на пять процентов	UNRECOGNIZED	sunroof	danger
 открой люк на восемьдесят процентов	天窗打开50	sunroof	danger
+открой окно в салоне на палец	UNRECOGNIZED	windows	danger
+открой окно на пол пальца	UNRECOGNIZED	windows	danger
+открой багажник на ладонь	UNRECOGNIZED	locks	danger
+сделай теплее кроме водительского сиденья	UNRECOGNIZED	climate	danger
+подожди и открой окна	UNRECOGNIZED	windows	danger
+мы открываем багажник	UNRECOGNIZED	locks	danger
+закрываем окна	UNRECOGNIZED	windows	danger
+открой окна кроме переднего левого и правого	UNRECOGNIZED	windows	danger

@@ -1354,7 +1354,7 @@
     <string name="settings_voice_user_phrases_title">Własne frazy komend</string>
     <string name="settings_voice_user_phrases_description">Własne słowa dla wbudowanych komend offline</string>
     <string name="settings_voice_user_phrases_button">Otwórz</string>
-    <string name="voice_user_phrases_hint">Fraza wypowiedziana osobno ma pierwszeństwo przed wbudowaną komendą. W dłuższej wypowiedzi zadziała tylko wtedy, gdy wbudowana komenda nie zostanie rozpoznana.</string>
+    <string name="voice_user_phrases_hint">Twoja fraza działa tylko wtedy, gdy zostanie wypowiedziana w całości, i wtedy ma pierwszeństwo przed wbudowaną komendą.</string>
     <string name="voice_user_phrases_add">Dodaj</string>
     <string name="voice_user_phrases_field">Fraza</string>
     <string name="voice_user_phrases_too_long">Maksymalnie %1$d znaków</string>

@@ -4,9 +4,9 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 /**
- * What the parser refuses, and why: a refusal (unlike a phrase it simply did not understand)
- * also stops every user or automation phrase contained in the utterance, so each code here is
- * a promise that nothing acts on the phrase but the agent.
+ * What the parser does not act on, and why. A word the parser does not read leaves the whole
+ * utterance [ParseResult.Unrecognized]; a refusal carries its own journal code. Both go to the
+ * agent, and nothing contained in the utterance acts on it.
  */
 class NluRefusalTest {
 
@@ -14,36 +14,62 @@ class NluRefusalTest {
     private fun refused(reason: String) = ParseResult.Refused(reason)
     private fun commands(text: String) = (parse(text) as? ParseResult.Command)?.commands
 
+    private fun assertUnrecognized(vararg texts: String) {
+        for (text in texts) assertEquals(text, ParseResult.Unrecognized, parse(text))
+    }
+
     @Test fun negation_words_refuse() {
         for (text in listOf("не открой окно", "не надо открывать окно", "нельзя открывать окно",
-            "нет открой люк", "отмена закрой окна", "отмени открой люк")) {
+            "нет открой люк", "отмена закрой окна", "отмени открой люк", "Не надо, открой окно")) {
             assertEquals(text, refused(VoiceRefusal.NEGATION), parse(text))
         }
-        assertEquals(true, NluParser.negated("Не надо, открой окно"))
-        assertEquals(false, NluParser.negated("открой окно на ноль"))
     }
 
-    @Test fun commands_for_later_refuse() {
-        for (text in listOf("открой окно завтра", "хочу открыть окно потом", "открой люк позже",
-            "вчера открывал люк", "открой окна как раньше", "мы откроем багажник завтра")) {
-            assertEquals(text, refused(VoiceRefusal.DEFERRED), parse(text))
-        }
-        assertEquals(listOf("主驾打开100"), commands("хочу открыть окно"))
+    // The one rule: every word is read by the command, or the phrase goes to the agent.
+    @Test fun a_word_the_parser_does_not_read_leaves_the_phrase_unrecognized() {
+        assertUnrecognized(
+            "открой окно завтра", "хочу открыть окно потом", "открой люк позже", "открой окна как раньше",
+            "открой окно в салоне на палец", "открой окно на пол пальца", "открой багажник на ладонь",
+            "открой окно на палец", "открой люк на ладонь", "открой окно на сколько-то",
+            "открой окно на два сантиметра", "открой окна по кругу",
+        )
+        assertEquals(listOf("主驾打开100"), commands("открыть окно"))
     }
 
-    // Other tenses and questions are not commands at all: no verb guess makes them one.
-    @Test fun other_tenses_and_questions_are_not_commands() {
-        for (text in listOf("мы откроем багажник", "открыли бы окно", "открывал люк", "открывается ли багажник")) {
-            assertEquals(text, ParseResult.Unrecognized, parse(text))
-        }
+    // Verbs are read only in the forms the lexicon lists: other tenses and persons are not commands.
+    @Test fun other_verb_forms_are_not_commands() {
+        assertUnrecognized(
+            "мы откроем багажник", "мы откроем багажник завтра", "открыли бы окно", "открывал люк",
+            "открывается ли багажник", "мы открываем багажник", "закрываем окна", "я открываю люк",
+            "открывал окно", "багажник открывается",
+        )
     }
 
-    @Test fun unreadable_measures_refuse() {
-        for (text in listOf("открой окно на палец", "открой люк на ладонь", "открой окно на сколько-то",
-            "открой окно на два сантиметра", "открой окна по кругу", "открой окно на", "открой два окна",
-            "открой окно на минимум", "закрой окна немного", "открой багажник наполовину", "приоткрой багажник")) {
+    @Test fun a_preposition_that_joins_nothing_is_not_read() {
+        assertUnrecognized("открой окно на", "открой окно до")
+    }
+
+    @Test fun measures_read_but_not_expressible_refuse() {
+        for (text in listOf("открой два окна", "открой окно на минимум", "закрой окна немного",
+            "открой багажник наполовину", "приоткрой багажник")) {
             assertEquals(text, refused(VoiceRefusal.UNKNOWN_MEASURE), parse(text))
         }
+    }
+
+    // A measure only fits what reads it: a step, the volume, a light or a lock read none.
+    @Test fun a_measure_the_command_does_not_read_is_not_dropped() {
+        assertUnrecognized(
+            "сделай теплее на два градуса", "громче на пять", "включи подогрев руля на максимум",
+            "вентилятор на три чуть", "сделай теплее водителю",
+        )
+    }
+
+    // Every device word names what the command does.
+    @Test fun a_device_the_command_does_not_touch_is_not_dropped() {
+        assertUnrecognized("открой багажник климат", "включи климат на двадцать два", "вентилятор климата на три",
+            "открой окно в салоне")
+        assertEquals(listOf("吹前挡"), commands("включи обдув стекла"))
+        assertEquals(listOf("车门上锁"), commands("заблокируй двери машины"))
     }
 
     @Test fun soft_measures_after_na_are_the_vent() {
@@ -68,24 +94,26 @@ class NluRefusalTest {
         assertEquals(listOf("主驾打开0"), commands("поставь окно на ноль процентов"))
     }
 
-    // Floor: the widest detent that does not exceed the spoken share; above zero but under
-    // the vent it is the vent.
+    // Floor: the widest detent that does not exceed the spoken share; under the smallest
+    // detent nothing is small enough and the phrase goes to the agent.
     @Test fun spoken_shares_round_down_to_a_detent() {
         val windows = mapOf(
             "сто" to "主驾打开100", "восемьдесят" to "主驾半开", "семьдесят пять" to "主驾半开",
             "шестьдесят" to "主驾半开", "пятьдесят" to "主驾半开", "сорок" to "主驾通风",
             "тридцать три" to "主驾通风", "двадцать пять" to "主驾通风", "пятнадцать" to "主驾通风",
-            "десять" to "主驾通风", "пять" to "主驾通风",
+            "десять" to "主驾通风",
         )
         windows.forEach { (pct, want) ->
             assertEquals(pct, listOf(want), commands("открой окно на $pct процентов"))
         }
         assertEquals(listOf("主驾通风"), commands("открой окно на треть"))
         assertEquals(listOf("车窗半开"), commands("открой окна на три четверти"))
-        val sunroof = mapOf("сто" to "天窗打开100", "восемьдесят" to "天窗打开50", "сорок" to "天窗通风", "пять" to "天窗通风")
+        val sunroof = mapOf("сто" to "天窗打开100", "восемьдесят" to "天窗打开50", "сорок" to "天窗通风", "семь" to "天窗通风")
         sunroof.forEach { (pct, want) ->
             assertEquals(pct, listOf(want), commands("открой люк на $pct процентов"))
         }
+        assertUnrecognized("открой окно на пять процентов", "открой окно на девять процентов",
+            "открой люк на пять процентов", "открой люк до пяти процентов")
     }
 
     @Test fun except_lists_every_excluded_window() {
@@ -95,19 +123,21 @@ class NluRefusalTest {
         assertEquals(listOf("后左打开0", "后右打开0"), commands("закрой окна кроме водительского и пассажирского"))
     }
 
-    @Test fun except_that_cannot_be_expressed_refuses() {
-        for (text in listOf("открой окна кроме", "открой люк кроме шторки", "включи подогрев всех сидений кроме пассажира",
-            "открой окна кроме водительского и закрой люк", "открой окна кроме окна")) {
-            assertEquals(text, refused(VoiceRefusal.EXCEPT_UNSUPPORTED), parse(text))
-        }
+    // «кроме» only with whole windows: a bare «правого» may be either row.
+    @Test fun except_that_names_no_whole_window_is_unrecognized() {
+        assertUnrecognized(
+            "открой окна кроме", "открой люк кроме шторки", "включи подогрев всех сидений кроме пассажира",
+            "открой окна кроме водительского и закрой люк", "открой окна кроме окна",
+            "открой окна кроме переднего левого и правого", "закрой окна кроме заднего левого и правого",
+            "сделай теплее кроме водительского сиденья", "громче кроме задних",
+        )
     }
 
     @Test fun commands_the_parser_cannot_split_refuse() {
         for (text in listOf("открой окна и люк наполовину", "открой люк наполовину и окна", "жарко и холодно",
-            "открой закрой окно")) {
+            "открой закрой окно", "подожди и открой окна", "открой окно и люк на палец")) {
             assertEquals(text, refused(VoiceRefusal.MULTIPLE_COMMANDS), parse(text))
         }
-        assertEquals(refused(VoiceRefusal.UNKNOWN_MEASURE), parse("открой окно и люк на палец"))
         // One target joined by «и» still parses whole.
         assertEquals(listOf("前排车窗全开"), commands("открой окна водителя и пассажира"))
     }

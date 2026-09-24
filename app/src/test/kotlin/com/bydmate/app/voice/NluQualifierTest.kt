@@ -42,7 +42,7 @@ class NluQualifierTest {
     // a measure the parser cannot read is refused, never a full open.
     @Test fun window_percentage_picks_detent_below() = assertEquals("主驾通风", cmd("открой водительское окно на двадцать процентов"))
     @Test fun sunroof_percentage_picks_detent_below() = assertEquals("天窗通风", cmd("открой люк на тридцать процентов"))
-    @Test fun unreadable_measure_is_refused() = refused("открой окно на пять сантиметров", VoiceRefusal.UNKNOWN_MEASURE)
+    @Test fun unread_unit_is_unrecognized() = unrecognized("открой окно на пять сантиметров")
 
     // Front trunk is NOT the rear tailgate — must go to the agent.
     @Test fun front_trunk_goes_to_agent() = unrecognized("открой передний багажник")

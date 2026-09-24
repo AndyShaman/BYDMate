@@ -1,7 +1,5 @@
 package com.bydmate.app.voice
 
-import java.util.Collections
-
 /**
  * Normalizes a spoken phrase for collision detection and matching.
  * Lowercase, ё→е, strip non-letter/digit, split, drop filler words, stem each token (same
@@ -13,7 +11,7 @@ object VoicePhrase {
     private val WHITESPACE = Regex("\\s+")
 
     // Politeness and address words that never change what the driver asked for.
-    private val FILLERS = setOf("пожалуйста", "можешь", "мне", "слушай", "эй")
+    internal val FILLERS = setOf("пожалуйста", "можешь", "мне", "слушай", "эй")
 
     fun normalize(phrase: String): String = tokens(phrase).joinToString(" ")
 
@@ -21,8 +19,8 @@ object VoicePhrase {
     fun tokens(phrase: String): List<String> = words(phrase).map { VoiceStemmer.stem(it) }
 
     /** The words of [phrase] as spoken, without stemming: lowercase, ё→е, no punctuation, no
-     *  fillers. Exactness is judged on these, so «открой окна» is not «открой окно»; stemming
-     *  is only for finding a phrase inside a longer utterance. */
+     *  fillers. Matching is judged on these, so «открой окна» is not «открой окно»; stemming
+     *  is only for the collision check. */
     fun words(phrase: String): List<String> =
         phrase.lowercase()
             .replace('ё', 'е')
@@ -35,9 +33,4 @@ object VoicePhrase {
         val words = words(phrase)
         return words.isNotEmpty() && words == words(heard)
     }
-
-    /** True when [phrase] (normalized tokens) occurs in [heard] as a whole-word sequence,
-     *  equality included. Token-wise, so «окно» never matches inside «окновать». */
-    fun containsSequence(heard: List<String>, phrase: List<String>): Boolean =
-        phrase.isNotEmpty() && Collections.indexOfSubList(heard, phrase) >= 0
 }

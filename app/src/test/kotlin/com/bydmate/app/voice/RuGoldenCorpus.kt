@@ -76,10 +76,6 @@ object RuGoldenCorpus {
         return apertures(actual).any { (target, pct) -> pct > (want[target] ?: 0) }
     }
 
-    /** Smallest detent per opening (window vent 10 %, sunroof tilt 7 %): a spoken share above
-     *  zero but below it may open that far and no further. */
-    private fun smallestDetent(target: String): Int = if (target == "sunroof") 7 else 10
-
     /** The share the utterance itself names ("на сорок процентов", "на треть", "чуть"), or null. */
     fun spokenShare(utterance: String): Int? {
         val m = VoiceNormalizer.measure(VoiceNormalizer.tokens(utterance))
@@ -90,9 +86,7 @@ object RuGoldenCorpus {
      *  whatever the expected string was rounded to. */
     fun opensWiderThanSpoken(utterance: String, actual: String): Boolean {
         val limit = spokenShare(utterance) ?: return false
-        return apertures(actual).any { (target, pct) ->
-            pct > if (limit > 0) maxOf(limit, smallestDetent(target)) else 0
-        }
+        return apertures(actual).values.any { it > limit }
     }
 
     data class Score(val category: String, val correct: Int, val total: Int) {

@@ -133,6 +133,33 @@ class VoiceJournalTest {
         assertEquals("ответ", e.answer)
     }
 
+    @Test fun `fifty long agent answers are cut, persisted and read back`() {
+        val file = File(tmp.root, VoiceJournal.FILE_NAME)
+        val answer = "ж".repeat(3_000)
+        val long = "а".repeat(VoiceJournal.MAX_FIELD_CHARS)
+        val writer = journal(file)
+        repeat(VoiceJournal.MAX) {
+            writer.add(entry("$it $long").copy(route = VoiceJournalEntry.Route.AGENT, detail = answer, answer = answer,
+                command = long, reason = long))
+        }
+        assertTrue(file.length() <= VoiceJournal.MAX_FILE_BYTES)
+
+        val back = journal(file).entries.value
+        assertEquals(VoiceJournal.MAX, back.size)
+        assertTrue(back.all { it.detail.length == VoiceJournal.MAX_TEXT_CHARS && it.answer?.length == VoiceJournal.MAX_TEXT_CHARS })
+    }
+
+    @Test fun `stored fields over the bound are cut on load`() {
+        val file = File(tmp.root, VoiceJournal.FILE_NAME)
+        val long = "а".repeat(VoiceJournal.MAX_TEXT_CHARS + 100)
+        file.writeText(org.json.JSONArray(listOf(VoiceJournal.toJson(entry(long).copy(answer = long)))).toString())
+
+        val e = journal(file).entries.value.single()
+        assertEquals(VoiceJournal.MAX_FIELD_CHARS, e.transcript.length)
+        assertEquals(VoiceJournal.MAX_TEXT_CHARS, e.detail.length)
+        assertEquals(VoiceJournal.MAX_TEXT_CHARS, e.answer?.length)
+    }
+
     @Test fun `writes wait for the queued read and coalesce into the latest list`() {
         val file = File(tmp.root, VoiceJournal.FILE_NAME)
         journal(file).add(entry("stored"))

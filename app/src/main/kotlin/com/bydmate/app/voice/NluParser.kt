@@ -14,18 +14,17 @@ sealed interface ParseResult {
     data class RelativeTemp(val sign: Int) : ParseResult
     data class Volume(val payload: String) : ParseResult
     data object Unrecognized : ParseResult
-    /** Understood enough to know it must NOT act: a negation, a command for later, a measure
-     *  it cannot read, a "кроме" it cannot express, several commands it cannot split.
-     *  [reason] is a [VoiceRefusal] code. Unlike [Unrecognized], no phrase contained in the
-     *  utterance may act on it either. */
+    /** Understood enough to know it must NOT act: a negation, a measure it cannot read or
+     *  that contradicts itself, several commands it cannot split. [reason] is a [VoiceRefusal]
+     *  code; like [Unrecognized], the phrase goes to the agent. */
     data class Refused(val reason: String) : ParseResult
 }
 
 /**
- * Offline slot parser for Russian voice commands. Deterministic and pure. Every word it
- * cannot place is ignored EXCEPT measure words: a share or a number it cannot read on a
- * window or the sunroof makes the whole utterance [ParseResult.Refused], never a
- * full open.
+ * Offline slot parser for Russian voice commands. Deterministic and pure. A command fires
+ * only when EVERY word of the utterance is one the command reads (see [readsEveryWord]):
+ * any word left over ("палец", "подожди", "мы", "завтра") makes it [ParseResult.Unrecognized]
+ * and the phrase goes to the agent.
  */
 object NluParser {
 
@@ -35,27 +34,15 @@ object NluParser {
 
         // Negation ("не открывай", "нет, не надо") is beyond slot NLU: guessing an
         // affirmative command would do the OPPOSITE of what was said. Agent decides.
-        if (negated(tokens)) return ParseResult.Refused(VoiceRefusal.NEGATION)
-        // "открой окно потом": a command for later is not a command for now.
-        if (tokens.any { it in DEFERRED_WORDS }) return ParseResult.Refused(VoiceRefusal.DEFERRED)
+        if (tokens.any { it in NEGATION_WORDS }) return ParseResult.Refused(VoiceRefusal.NEGATION)
         // "кроме" lists its exclusions with «и»: they are never commands of their own.
-        if (EXCEPT in tokens) return parseClause(tokens).refusedAs(VoiceRefusal.EXCEPT_UNSUPPORTED)
+        if (EXCEPT in tokens) return parseClause(tokens)
 
         val clauses = splitClauses(tokens)
         return if (clauses.size > 1) parseClauses(tokens, clauses) else parseClause(tokens)
     }
 
-    /** True when [text] holds a negation word: it is never an affirmative command, neither
-     *  the parser's nor a phrase contained in it. */
-    fun negated(text: String): Boolean = negated(VoiceNormalizer.tokens(text))
-
     private val NEGATION_WORDS = setOf("не", "нет", "нельзя", "отмена", "отмени", "отменить", "отмените")
-    private val DEFERRED_WORDS = setOf("завтра", "потом", "позже", "вчера", "раньше")
-
-    private fun negated(tokens: List<String>) = tokens.any { it in NEGATION_WORDS }
-
-    private fun ParseResult.refusedAs(reason: String): ParseResult =
-        if (this == ParseResult.Unrecognized) ParseResult.Refused(reason) else this
 
     /** How the cabin feels, as a temperature step: cold asks for warmer air, heat for cooler.
      *  Only these exact words: "прохладнее"/"холоднее" are the COOLER request itself. */
@@ -104,7 +91,7 @@ object NluParser {
      * one ("закрой окна и люк"). Otherwise the utterance is parsed whole ("открой окна
      * водителя и пассажира" is one target, not two clauses). When neither reading works but
      * some clause alone meant something, the phrase held commands the parser cannot split:
-     * refused, so no phrase contained in it acts on one part.
+     * refused, never one part of it.
      */
     private fun parseClauses(tokens: List<String>, clauses: List<List<String>>): ParseResult {
         var verbs = emptyList<String>()
@@ -140,25 +127,42 @@ object NluParser {
         val devices = pruneDevices(matchSlots(stems, VoiceLexicon.deviceWords()), tokens, stems, actions, measure)
         val qualifiers = detectQualifiers(tokens)
 
-        // "передний багажник" is NOT the rear tailgate; TRUNK has no front variant
-        // in the NLU catalog. Hand to the agent (front_trunk_open/close there).
-        if (DeviceSlot.TRUNK in devices && Qual.FRONT in qualifiers) return ParseResult.Unrecognized
-
-        // Relative temperature implies the AC; resolved against the live snapshot
-        // by VoiceController (the parser stays pure).
-        feelingResult(feeling, actions, devices)?.let { return it }
-        if (ActionSlot.WARMER in actions) return ParseResult.RelativeTemp(1)
-        if (ActionSlot.COOLER in actions) return ParseResult.RelativeTemp(-1)
-
-        resolveVolume(actions, devices, measure.numbers.singleOrNull())?.let { return it }
+        if (!readsEveryWord(tokens, stems, measure, devices) || !placesDevices(tokens, devices, qualifiers)) {
+            return ParseResult.Unrecognized
+        }
+        relativeStep(feeling, actions, devices, qualifiers, measure)?.let { return it }
+        resolveVolume(actions, devices, measure, qualifiers)?.let { return it }
         if (devices.any { isAperture(it) }) return resolveAperture(tokens, actions, devices, measure)
-        // "кроме" is expanded for windows only; elsewhere dropping it would do the excluded part too.
-        if (EXCEPT in tokens) return ParseResult.Unrecognized
-        if (isFan(devices, stems, measure)) return resolveFan(actions, measure)
+        if (isFan(devices, stems, measure)) return resolveFan(stems, actions, qualifiers, measure)
         // A share ("наполовину", "чуть", "приоткрой") only fits an opening; on anything
         // else it cannot be read, and doing the rest in full would do more than was asked.
         if (measure.hasShare && measure.extreme == null) return ParseResult.Refused(VoiceRefusal.UNKNOWN_MEASURE)
         return resolveComfort(stems, actions, devices, qualifiers, measure)
+    }
+
+    /** "кроме" is expanded for windows only; elsewhere dropping it would do the excluded part
+     *  too. "передний багажник" is NOT the rear tailgate: TRUNK has no front variant in the NLU
+     *  catalog (front_trunk_open/close live in the agent's). */
+    private fun placesDevices(tokens: List<String>, devices: Set<DeviceSlot>, qualifiers: Set<Qual>): Boolean =
+        (EXCEPT !in tokens || devices.any { isAperture(it) }) && !(DeviceSlot.TRUNK in devices && Qual.FRONT in qualifiers)
+
+    /** Relative temperature implies the AC; resolved against the live snapshot by
+     *  VoiceController (the parser stays pure). A step reads no measure, no side and no device
+     *  but the cabin itself. Null when the phrase asks for no step. */
+    private fun relativeStep(
+        feeling: List<Int>,
+        actions: Set<ActionSlot>,
+        devices: Set<DeviceSlot>,
+        qualifiers: Set<Qual>,
+        measure: Measure,
+    ): ParseResult? {
+        val step = feelingResult(feeling, actions, devices) ?: when {
+            ActionSlot.WARMER in actions -> ParseResult.RelativeTemp(1)
+            ActionSlot.COOLER in actions -> ParseResult.RelativeTemp(-1)
+            else -> return null
+        }
+        val bare = !measure.named && qualifiers.isEmpty() && FEELING_PLACES.containsAll(devices)
+        return if (bare) step else ParseResult.Unrecognized
     }
 
     private fun <T> matchSlots(stems: List<String>, words: Map<T, List<String>>): Set<T> {
@@ -168,6 +172,58 @@ object NluParser {
             if (stems.any { it in surfStems }) out.add(slot)
         }
         return out
+    }
+
+    /** Words that join the others without meaning anything alone, and politeness fillers. A
+     *  preposition closing the clause ("открой окно на") joins nothing and is not read. */
+    private val CONNECTORS = setOf("на", "до", "по", "в", "во", "у", "и", "а", "также", EXCEPT)
+    private val PREPOSITIONS = setOf("на", "до", "по", "в", "во", "у")
+    private val FILLERS: Set<String> by lazy { VoicePhrase.FILLERS + setOf("спасибо", "хочу", "я") }
+
+    /** Words read as they are, wherever they stand. */
+    private val plainWords: Set<String> by lazy {
+        CONNECTORS - PREPOSITIONS + FILLERS + verbForms + MY_WORDS + NEUTER_SIDES
+    }
+
+    /** "второй уровень", "на третий уровень": read only next to a level. */
+    private val LEVEL_WORDS = setOf("уровень", "уровня", "уровне")
+
+    /** Action nouns inflect ("подогрева сидений", "вентиляцию"); verbs are read only in the
+     *  forms the lexicon lists, so "открываем", "открывал" are words the parser does not read. */
+    private val NOUN_ACTIONS = setOf(ActionSlot.HEAT_1, ActionSlot.VENT_1)
+    private val verbForms: Set<String> by lazy {
+        VoiceLexicon.actionWords().filterKeys { it !in NOUN_ACTIONS }.values.flatten().toSet()
+    }
+    private val readableStems: Set<String> by lazy {
+        val nouns = VoiceLexicon.actionWords().filterKeys { it in NOUN_ACTIONS }.values.flatten()
+        (nouns + VoiceLexicon.deviceWords().values.flatten() + QUAL_WORDS.values.flatten())
+            .mapTo(HashSet()) { VoiceStemmer.stem(it) }
+    }
+
+    /**
+     * The one rule for firing offline: every word is an action in a listed form, a device, a
+     * side/row/all qualifier, a word of a fully read measure, a connector or a filler. Whether
+     * the resolved command then uses that measure, side or «кроме» is checked where it is
+     * resolved; a word nobody reads is never skipped.
+     */
+    private fun readsEveryWord(
+        tokens: List<String>,
+        stems: List<String>,
+        measure: Measure,
+        devices: Set<DeviceSlot>,
+    ): Boolean {
+        val fan = DeviceSlot.AC_FAN in devices || DeviceSlot.AC_FLOW in devices
+        val level = measure.numbers.isNotEmpty() || measure.ordinal != null || measure.extreme != null
+        return tokens.indices.all { i ->
+            val t = tokens[i]
+            when {
+                t in PREPOSITIONS -> i < tokens.lastIndex
+                t in plainWords || t.startsWith("сторон") -> true
+                t in LEVEL_WORDS -> level
+                stems[i] == SPEED_STEM -> fan
+                else -> i in measure.words || stems[i] in readableStems
+            }
+        }
     }
 
     private val WINDSHIELD_STEM = VoiceStemmer.stem("лобовое")
@@ -267,18 +323,18 @@ object NluParser {
             is Detent.Refuse -> return ParseResult.Refused(d.reason)
             Detent.None -> return ParseResult.Unrecognized
         }
-        val targets = when {
-            !sunroof -> windowTargets(tokens)
-            EXCEPT in tokens -> null
-            else -> listOf(DeviceSlot.SUNROOF)
-        } ?: return ParseResult.Unrecognized
+        val targets = (if (sunroof) sunroofTarget(tokens) else windowTargets(tokens)) ?: return ParseResult.Unrecognized
         val commands = targets.map { VoiceCatalog.resolve(slot, it, null) ?: return ParseResult.Unrecognized }
         return ParseResult.Command(commands)
     }
 
+    /** The sunroof is one opening: a side or «кроме» names nothing on it. */
+    private fun sunroofTarget(tokens: List<String>): List<DeviceSlot>? =
+        listOf(DeviceSlot.SUNROOF).takeIf { EXCEPT !in tokens && detectQualifiers(tokens).isEmpty() }
+
     /** The detent the phrase asks for; a measure or verbs it cannot read are refused, never
      *  a full open by default. A spoken share maps to the widest detent that does not exceed
-     *  it; anything above zero but below the smallest detent is that detent. */
+     *  it; anything above zero but below the smallest detent is not understood. */
     private fun apertureDetent(actions: Set<ActionSlot>, m: Measure, stops: List<Pair<Int, ActionSlot>>): Detent {
         if (actions.any { it !in APERTURE_ACTIONS }) return Detent.None
         val closes = ActionSlot.CLOSE in actions
@@ -292,7 +348,9 @@ object NluParser {
             else -> share
         }
         if (target == 0) return Detent.Slot(ActionSlot.CLOSE)
-        return Detent.Slot((stops.lastOrNull { it.first <= target } ?: stops.first()).second)
+        // Above zero but under the smallest detent: no detent is small enough.
+        val stop = stops.lastOrNull { it.first <= target } ?: return Detent.None
+        return Detent.Slot(stop.second)
     }
 
     /** The refusal an unreadable or contradictory share stands for, or null. */
@@ -325,24 +383,11 @@ object NluParser {
     }
 
     /** A measure that cannot be a share of an opening: an unexplained word, a level
-     *  (ordinal, "минимум"), a number that is not a share, or «на»/«по» followed by a word
-     *  that is neither a measure nor a target ("на палец", "на ладонь"). */
+     *  (ordinal, "минимум") or a number that is not a share. */
     private fun unreadableShare(m: Measure): Boolean {
         if (m.unexplained || m.ordinal != null || m.extreme == Extreme.MIN) return true
-        if (m.looseTargets.any { !isApertureTarget(it) }) return true
         return m.numbers.isNotEmpty() && !m.numberIsShare
     }
-
-    /** Words that may follow «на»/«по» on a window or the sunroof without being a measure:
-     *  a side or position, the opening itself, the airing mode. */
-    private val APERTURE_TARGET_STEMS: Set<String> by lazy {
-        val devices = VoiceLexicon.deviceWords().filterKeys { isAperture(it) || it == DeviceSlot.SUNSHADE }.values.flatten()
-        val airing = VoiceLexicon.actionWords().getValue(ActionSlot.VENT)
-        (QUAL_WORDS.values.flatten() + MY_WORDS + devices + airing).mapTo(HashSet()) { VoiceStemmer.stem(it) }
-    }
-
-    private fun isApertureTarget(word: String): Boolean =
-        word.startsWith("сторон") || VoiceStemmer.stem(word) in APERTURE_TARGET_STEMS
 
     private const val EXCEPT = "кроме"
 
@@ -351,7 +396,8 @@ object NluParser {
     )
 
     /** One window slot, or per-door slots for "кроме X и Y" (never touching X or Y); null
-     *  when an exclusion names no window or nothing is left. */
+     *  when an exclusion names no whole window (a bare "правого" may be either row) or nothing
+     *  is left. */
     private fun windowTargets(tokens: List<String>): List<DeviceSlot>? {
         val cut = tokens.indexOf(EXCEPT)
         if (cut < 0) return listOf(windowFor(detectQualifiers(tokens), pluralWindows(tokens)))
@@ -359,7 +405,7 @@ object NluParser {
         // not one set of qualifiers.
         val excluded = splitClauses(tokens.subList(cut + 1, tokens.size)).flatMap { part ->
             val quals = detectQualifiers(part)
-            if (quals.isEmpty()) return null
+            if (quals.all { it == Qual.LEFT || it == Qual.RIGHT }) return null
             doorsOf(windowFor(quals, plural = false))
         }
         if (excluded.isEmpty()) return null
@@ -428,8 +474,12 @@ object NluParser {
         return SPEED_STEM in stems || m.numbers.isNotEmpty() || m.extreme != null || m.ordinal != null
     }
 
-    private fun resolveFan(actions: Set<ActionSlot>, m: Measure): ParseResult {
-        if (actions.any { it in NOT_FAN_ACTIONS }) return ParseResult.Unrecognized
+    /** The fan reads a level and nothing else: no side, no other device, no share but "на
+     *  полную" (the top level). */
+    private fun resolveFan(stems: List<String>, actions: Set<ActionSlot>, qualifiers: Set<Qual>, m: Measure): ParseResult {
+        val fanOnly = qualifiers.isEmpty() && readsDevices(stems, setOf(DeviceSlot.AC_FAN, DeviceSlot.AC_FLOW))
+        val shareless = !(m.hasShare && m.extreme == null) && !m.unexplained
+        if (!fanOnly || !shareless || actions.any { it in NOT_FAN_ACTIONS }) return ParseResult.Unrecognized
         val level = levelOf(m, FAN_MAX) ?: return ParseResult.Unrecognized
         return VoiceCatalog.resolve(ActionSlot.SET, DeviceSlot.AC_FAN, level)
             ?.let { ParseResult.Command(it) } ?: ParseResult.Unrecognized
@@ -468,15 +518,50 @@ object NluParser {
         val seatPresent = devices3.any { isSeat(it) }
         // Rear seats have no NLU slots: "подогрев сиденья сзади" must not heat the driver.
         if (seatPresent && Qual.REAR in qualifiers) return ParseResult.Unrecognized
+        // Only a seat reads a side ("задний багажник" is just the trunk).
+        if (!seatPresent && !readsSideOf(devices3, qualifiers)) return ParseResult.Unrecognized
         val leveledActions = upgradeSeatLevel(actions2, devices3, if (seatPresent) levelOf(measure, SEAT_MAX) else null)
 
         if (seatPresent && targetsBothSeats(stems, qualifiers)) {
-            return resolveBothSeats(leveledActions, devices3, number)
+            return resolveBothSeats(stems, leveledActions, devices3, number)
         }
 
-        val resolved = resolveAll(leveledActions, refineSeats(devices3, qualifiers), number)
-        return if (resolved.size == 1) ParseResult.Command(resolved.first())
-        else ParseResult.Unrecognized
+        return comfortCommand(stems, measure, resolveAll(leveledActions, refineSeats(devices3, qualifiers), number))
+    }
+
+    /** The one command resolved, if the command reads everything the phrase names: only a
+     *  seat or the temperature reads a number or a level, and every device word names what
+     *  it does ("открой багажник климат" is not the trunk alone). */
+    private fun comfortCommand(stems: List<String>, measure: Measure, resolved: Map<String, Set<DeviceSlot>>): ParseResult {
+        val (command, used) = resolved.entries.singleOrNull() ?: return ParseResult.Unrecognized
+        if (measure.named && used.none { isSeat(it) || it == DeviceSlot.AC_TEMP }) return ParseResult.Unrecognized
+        return if (readsDevices(stems, used)) ParseResult.Command(command) else ParseResult.Unrecognized
+    }
+
+    private fun readsSideOf(devices: Set<DeviceSlot>, qualifiers: Set<Qual>): Boolean =
+        qualifiers.isEmpty() || devices == setOf(DeviceSlot.TRUNK) && qualifiers == setOf(Qual.REAR)
+
+    private val deviceSlotsByStem: Map<String, Set<DeviceSlot>> by lazy {
+        val out = HashMap<String, MutableSet<DeviceSlot>>()
+        VoiceLexicon.deviceWords().forEach { (slot, words) ->
+            words.forEach { out.getOrPut(VoiceStemmer.stem(it)) { LinkedHashSet() }.add(slot) }
+        }
+        out
+    }
+
+    private val actionNounStems: Set<String> by lazy {
+        VoiceLexicon.actionWords().filterKeys { it in NOUN_ACTIONS }.values.flatten().mapTo(HashSet()) { VoiceStemmer.stem(it) }
+    }
+
+    /** Every device word names one of [used]: a seat word any seat (the side is a qualifier),
+     *  a glass word the windshield, the sunroof word the shade it belongs to. A word that is
+     *  also an action noun ("обдув", "вентиляция") is read as the action. */
+    private fun readsDevices(stems: List<String>, used: Set<DeviceSlot>): Boolean = stems.all { st ->
+        val slots = deviceSlotsByStem[st].orEmpty()
+        slots.isEmpty() || st in actionNounStems || slots.any { it in used } ||
+            used.any { isSeat(it) } && slots.any { isSeat(it) } ||
+            DeviceSlot.DEFROST_FRONT in used && slots.any { isWindow(it) } ||
+            DeviceSlot.SUNSHADE in used && DeviceSlot.SUNROOF in slots
     }
 
     /** Bare absolute value: a temperature/number with no verb means SET
@@ -497,10 +582,11 @@ object NluParser {
         return !driver && !passenger && VoiceStemmer.stem("сидения") in stems
     }
 
-    private fun resolveAll(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): Set<String> {
-        val resolved = LinkedHashSet<String>()
+    /** Each distinct command the (action, device) pairs resolve to, with the devices behind it. */
+    private fun resolveAll(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): Map<String, Set<DeviceSlot>> {
+        val resolved = LinkedHashMap<String, MutableSet<DeviceSlot>>()
         for (a in actions) for (d in devices) {
-            VoiceCatalog.resolve(a, d, number)?.let { resolved.add(it) }
+            VoiceCatalog.resolve(a, d, number)?.let { resolved.getOrPut(it) { LinkedHashSet() }.add(d) }
         }
         return resolved
     }
@@ -508,11 +594,17 @@ object NluParser {
     /** The catalog emits one command per (action, device), so fan out per side; each
      *  side must resolve to exactly ONE command, otherwise the utterance is ambiguous
      *  and goes to the agent (issue #98). */
-    private fun resolveBothSeats(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): ParseResult {
+    private fun resolveBothSeats(
+        stems: List<String>,
+        actions: Set<ActionSlot>,
+        devices: Set<DeviceSlot>,
+        number: Int?,
+    ): ParseResult {
         val perSide = listOf(this::driverSeat, this::passengerSeat).map { side ->
             resolveAll(actions, devices.mapTo(LinkedHashSet()) { if (isSeat(it)) side(it) else it }, number)
         }
-        return if (perSide.all { it.size == 1 }) ParseResult.Command(perSide.map { it.first() })
+        val used = perSide.flatMapTo(HashSet()) { it.values.flatten() }
+        return if (perSide.all { it.size == 1 } && readsDevices(stems, used)) ParseResult.Command(perSide.map { it.keys.first() })
         else ParseResult.Unrecognized
     }
 
@@ -593,15 +685,29 @@ object NluParser {
     /** Volume is a media_volume action, not a catalog param. "громче"/"тише" step
      *  +-1; on/off of "звук" mute/unmute; a bare number on the VOLUME device sets
      *  an absolute level. Returns null when no volume intent is present. */
-    private fun resolveVolume(actions: Set<ActionSlot>, devices: Set<DeviceSlot>, number: Int?): ParseResult.Volume? {
-        if (ActionSlot.LOUDER in actions) return ParseResult.Volume("+1")
-        if (ActionSlot.QUIETER in actions) return ParseResult.Volume("-1")
-        if (DeviceSlot.VOLUME !in devices) return null
-        return when {
-            ActionSlot.OFF in actions -> ParseResult.Volume("mute")
-            ActionSlot.ON in actions -> ParseResult.Volume("unmute")
-            number != null -> ParseResult.Volume(number.toString())
-            else -> null
-        }
+    private fun resolveVolume(
+        actions: Set<ActionSlot>,
+        devices: Set<DeviceSlot>,
+        m: Measure,
+        qualifiers: Set<Qual>,
+    ): ParseResult? {
+        val step = if (ActionSlot.LOUDER in actions) "+1" else if (ActionSlot.QUIETER in actions) "-1" else null
+        if (step == null && DeviceSlot.VOLUME !in devices) return null
+        // Volume reads no side and no other device; only an absolute level reads a number.
+        if (qualifiers.isNotEmpty() || devices.any { it != DeviceSlot.VOLUME }) return ParseResult.Unrecognized
+        val payload = step ?: muteOf(actions)
+        if (payload != null) return if (m.named) ParseResult.Unrecognized else ParseResult.Volume(payload)
+        val level = m.numbers.singleOrNull()?.takeIf { !m.copy(numbers = emptyList()).named }
+        return if (level != null) ParseResult.Volume(level.toString()) else ParseResult.Unrecognized
     }
+
+    private fun muteOf(actions: Set<ActionSlot>): String? = when {
+        ActionSlot.OFF in actions -> "mute"
+        ActionSlot.ON in actions -> "unmute"
+        else -> null
+    }
+
+    /** Some word of the phrase names a measure: a number, a share, a level or an unreadable one. */
+    private val Measure.named: Boolean
+        get() = numbers.isNotEmpty() || hasShare || ordinal != null || extreme != null || unexplained
 }
