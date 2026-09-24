@@ -62,27 +62,16 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         const val ACTION_CANCEL = "com.bydmate.app.AUTOMATION_CANCEL"
         const val EXTRA_NOTIF_ID = "notif_id"
 
-        // How long after the first evaluate() the service_start trigger stays
-        // armed, giving cold-start params a few polls to warm up.
+        // How long after it fires the service_start trigger stays true, giving
+        // cold-start params a few polls to warm up (#51).
         const val SERVICE_START_WINDOW_MS = 30_000L
 
-        // Kernel boot id of the DiLink session that already had its service_start window.
-        // A process restart on the same boot must not reopen it (#177).
+        // Legacy service_start session keys of 3.17.x-3.18.0 (#177): no longer read or written,
+        // the stale values stay in prefs and are kept out of backups.
         internal const val PREFS_NAME = "automation"
         internal const val KEY_SERVICE_START_BOOT_ID = "service_start_boot_id"
-        private const val BOOT_ID_PATH = "/proc/sys/kernel/random/boot_id"
-        // Heartbeat of a live evaluate() loop with the screen on, on elapsedRealtime (monotonic,
-        // immune to NTP/GPS clock corrections). The head unit does not reboot between drives:
-        // on ACC_OFF the screen goes dark while Android keeps running, and the process may be
-        // restarted with the screen still off. A screen-on tick after more than a minute without
-        // a heartbeat means the car was off, so this is a real car start. A process restart
-        // mid-drive leaves a heartbeat of at most 30 s plus the restart delay and is not.
         internal const val KEY_SERVICE_START_LAST_SEEN_ELAPSED = "service_start_last_seen_elapsed"
-        // Legacy heartbeat key of 3.17.5: no longer read or written, the stale value stays in
-        // prefs and is kept out of backups.
         internal const val KEY_SERVICE_START_LAST_SEEN_UPTIME = "service_start_last_seen_uptime"
-        // Car-off marker: set on byd.intent.action.ACC_OFF with commit(), since the process is
-        // force-stopped about a second later; cleared by the session it opens.
         internal const val KEY_SERVICE_START_CAR_OFF = "service_start_car_off"
 
         // Steering-wheel key trigger: manual only, like button_press. Fires from
@@ -122,31 +111,26 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
     // already responded to, so a single VALIDATED edge fires the rule at most
     // once even if the rule's other AND-conditions delay the actual fire.
     private val lastSeenNetworkAvailableAt = ConcurrentHashMap<Long, Long>()
-    // Service-start trigger: active during a short window after a new session
-    // starts (see ServiceStartSession), consumed per rule on fire. The previous
-    // one-shot flag raced cold-start nulls: the very first tick often carries
-    // incomplete data, so "запуск BYDMate AND темп > 22" silently missed the
-    // whole trip when ExtTemp was still null on tick one (issue #51).
-    private val serviceStart = ServiceStartSession { context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE) }
+    // Service-start trigger (#177): a new process is a car start. At car off the firmware
+    // force-stops every app and the process comes back through WorkManager, sometimes while the
+    // screen is still dark. So the trigger fires on the first evaluate() of this process with the
+    // screen on, then stays true for SERVICE_START_WINDOW_MS while the screen is on, and each
+    // rule fires on it once per process. The window keeps "запуск BYDMate AND темп > 22" from
+    // missing the trip when ExtTemp is still null on tick one (issue #51). Memory only: a new
+    // process starts over.
+    @Volatile private var serviceStartFiredAt: Long? = null
+    @Volatile private var serviceStartWaitLogged = false
+    private val serviceStartConsumed: MutableSet<Long> = ConcurrentHashMap.newKeySet()
     // evaluate() has two callers (the poll tick and every push event), and its per-rule gates are
     // read-then-write across several steps: cooldown, once-per-trip, service_start consumption,
     // updateLastTriggered. Two overlapping calls could pass the same rule and dispatch its actions
     // twice, so callers run it under this lock. Actions are dispatched inside the engine's own
-    // scope, so the lock is held for the rule scan only. onCarOff() never takes it: the firmware
-    // force-stops the process about 2 s after ACC_OFF, so the marker is committed at once.
+    // scope, so the lock is held for the rule scan only.
     val evaluateMutex = Mutex()
-    // Test seam: identifies the current DiLink boot. Empty string = unknown (boot_id not
-    // readable); an unknown id on either side takes no part in the new-session decision.
-    internal var bootIdProvider: () -> String = {
-        runCatching { java.io.File(BOOT_ID_PATH).readText().trim() }.getOrNull().orEmpty()
-    }
-    // Test seam: monotonic clock of evaluate() that counts deep sleep, drives the heartbeat.
+    // Test seam: monotonic clock of the service_start window.
     internal var elapsedMs: () -> Long = { SystemClock.elapsedRealtime() }
-    // Test seam: whether the head unit screen is on. Without a PowerManager the session
-    // falls back to the heartbeat alone, as if the screen were always on. Limitation: then, or
-    // with a PowerManager reporting interactive while the display is off, the car-off marker of
-    // a live process never sees a dark tick and never fires (it expires), while a process
-    // restarted after ACC_OFF fires on its first tick.
+    // Test seam: whether the head unit screen is on. Without a PowerManager the screen is taken
+    // as on, so service_start fires on the first evaluate().
     internal var interactiveProvider: () -> Boolean = {
         runCatching {
             (context.getSystemService(Context.POWER_SERVICE) as PowerManager).isInteractive
@@ -197,23 +181,30 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         }
     }
 
-    // One line for the diagnostics dump (#177): the service_start session as this process sees it.
-    fun serviceStartDumpLine(): String = serviceStart.dumpLine(interactiveProvider(), elapsedMs(), nowMs())
+    // One line for the diagnostics dump (#177).
+    fun serviceStartDumpLine(): String =
+        "service_start: interactive=${interactiveProvider()} fired=${serviceStartFiredAt != null}"
 
     /**
-     * The car was switched off (byd.intent.action.ACC_OFF): marks it for the service_start session.
-     * Commits at once on the calling thread, never waiting for an evaluate().
+     * Whether service_start is true on this evaluate(): fires on the first one with the screen on,
+     * then stays true for [SERVICE_START_WINDOW_MS] while the screen is on. Runs under
+     * [evaluateMutex].
      */
-    fun onCarOff() = serviceStart.onCarOff(elapsedMs())
-
-    /**
-     * Starts the service_start heartbeat timer in [scope] (the service's): a lit screen keeps the
-     * session alive even while evaluate() is stalled. Stopped by [stopServiceStartHeartbeat].
-     */
-    fun startServiceStartHeartbeat(scope: CoroutineScope) =
-        serviceStart.startHeartbeat(scope, { elapsedMs() }, { interactiveProvider() })
-
-    fun stopServiceStartHeartbeat() = serviceStart.stopHeartbeat()
+    private fun serviceStartWindowOpen(): Boolean {
+        val lit = interactiveProvider()
+        val firedAt = serviceStartFiredAt
+        if (firedAt != null) return lit && elapsedMs() - firedAt <= SERVICE_START_WINDOW_MS
+        if (!lit) {
+            if (!serviceStartWaitLogged) {
+                serviceStartWaitLogged = true
+                Log.i(TAG, "service_start: screen off at start, waiting for screen on")
+            }
+            return false
+        }
+        serviceStartFiredAt = elapsedMs()
+        Log.i(TAG, "service_start: fired (new process, screen on)")
+        return true
+    }
 
     // Called every 3s from TrackingService poll loop.
     // tripStartedAt is passed explicitly (not read from TrackingService.tripStartedAt)
@@ -228,9 +219,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         val rules = ruleDao.getEnabled()
         val now = nowMs()
 
-        // The session reads the clock and the screen itself, under its lock: a reading taken here
-        // may be minutes old by the time the tick runs.
-        val serviceStartWindow = serviceStart.tick(elapsedMs, interactiveProvider, bootIdProvider)
+        val serviceStartWindow = serviceStartWindowOpen()
 
         // Prune per-rule state for rules that have been deleted (or disabled
         // and removed from the active set). Without this, `lastEvalResults`,
@@ -241,7 +230,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
         lastEvalResults.keys.retainAll(activeIds)
         lastFiredTripByRule.keys.retainAll(activeIds)
         lastSeenNetworkAvailableAt.keys.retainAll(activeIds)
-        serviceStart.consumed.retainAll(activeIds)
+        // serviceStartConsumed is not pruned: a rule disabled for a tick must not fire twice.
 
         for (rule in rules) {
             try {
@@ -280,7 +269,7 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
                     }
                 }
 
-                val serviceStartActive = serviceStart.isActive(rule.id, serviceStartWindow)
+                val serviceStartActive = serviceStartWindow && rule.id !in serviceStartConsumed
                 val perTrigger = evaluateEachTrigger(triggers, data, location, placesById, serviceStartActive, networkEdge)
                 val matched = combineByLogic(perTrigger, rule.triggerLogic)
 
@@ -327,14 +316,9 @@ class AutomationEngine @Inject @Suppress("LongParameterList") constructor( // Hi
 
                 // Mark triggered immediately to prevent re-fire
                 ruleDao.updateLastTriggered(rule.id, now)
-                val serviceStartRule = serviceStartActive && triggers.any { it.kind == "service_start" }
-                // An ACC_OFF or a dark screen may have closed the window while this evaluate was
-                // suspended; nothing suspends from here to the dispatch.
-                if (serviceStartRule && !serviceStart.isActive(serviceStartWindow)) {
-                    Log.i(TAG, "service_start: window closed before dispatch")
-                    continue
+                if (serviceStartActive && triggers.any { it.kind == "service_start" }) {
+                    serviceStartConsumed.add(rule.id)
                 }
-                if (serviceStartRule) serviceStart.consumed.add(rule.id)
                 if (rule.fireOncePerTrip && tripStartedAt != null) {
                     lastFiredTripByRule[rule.id] = tripStartedAt
                 }

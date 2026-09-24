@@ -276,8 +276,6 @@ class TrackingService : Service(), LocationListener {
         // car/system toggles the settings screen edits.
         private const val QUIET_CHANNEL_ID = "bydmate_tracking_quiet"
         const val KEY_QUIET_NOTIFICATION = "quiet_notification"
-        // Car switched off (non-protected broadcast from com.byd.amapservice, DiLink 5.0).
-        private const val ACTION_ACC_OFF = "byd.intent.action.ACC_OFF"
         // Throttle autoservice gun-state read so we don't hit Binder/ADB on every
         // poll tick. 5 ticks ≈ 15 s — fast enough that the user sees a row
         // appear within ~half a minute of unplugging, gentle enough not to
@@ -784,7 +782,6 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
-        automationEngine.startServiceStartHeartbeat(serviceScope)
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
@@ -1348,7 +1345,6 @@ class TrackingService : Service(), LocationListener {
         _youtubeForeground.value = false
         _foregroundPackage.value = null
         networkAvailableMonitor.stop()
-        automationEngine.stopServiceStartHeartbeat()
         unregisterWifiRestoreCallback()
         unregisterWakeReceivers()
         // AutomationEngine is @Singleton — its scope must outlive the service
@@ -1928,19 +1924,6 @@ class TrackingService : Service(), LocationListener {
         }
     }
 
-    // Car off for the service_start trigger (#177): the marker is committed before the
-    // firmware force-stops the process. A manifest receiver would not get this implicit
-    // broadcast on API 26+, so it lives with the service.
-    private val accOffReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context?, intent: Intent?) {
-            Log.i(TAG, "ACC_OFF received")
-            // Committed right here on the main thread: the firmware force-stops the process about
-            // 2 s after ACC_OFF, and a queued coroutine may not run by then or may be cancelled
-            // with the service. The marker is a tiny prefs file, about 1 ms of disk write.
-            automationEngine.onCarOff()
-        }
-    }
-
     private fun registerScreenWakeReceiver() {
         val filter = IntentFilter(Intent.ACTION_SCREEN_ON).apply {
             addAction(Intent.ACTION_USER_PRESENT)
@@ -1950,11 +1933,6 @@ class TrackingService : Service(), LocationListener {
         } catch (e: Exception) {
             Log.w(TAG, "screen-wake receiver register failed: ${e.message}")
         }
-        try {
-            registerReceiver(accOffReceiver, IntentFilter(ACTION_ACC_OFF))
-        } catch (e: Exception) {
-            Log.w(TAG, "ACC_OFF receiver register failed: ${e.message}")
-        }
     }
 
     private fun unregisterWakeReceivers() {
@@ -1962,11 +1940,6 @@ class TrackingService : Service(), LocationListener {
             unregisterReceiver(screenWakeReceiver)
         } catch (e: Exception) {
             Log.w(TAG, "screen-wake receiver unregister failed: ${e.message}")
-        }
-        try {
-            unregisterReceiver(accOffReceiver)
-        } catch (e: Exception) {
-            Log.w(TAG, "ACC_OFF receiver unregister failed: ${e.message}")
         }
     }
 
