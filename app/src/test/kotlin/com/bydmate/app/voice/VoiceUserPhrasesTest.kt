@@ -49,6 +49,13 @@ class VoiceUserPhrasesTest {
         assertEquals(true, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.exact)
     }
 
+    // Exactness is word for word: another inflection is only contained, so the parser keeps it.
+    @Test fun `another inflection of the phrase is contained, not exact`() {
+        val p = VoiceUserPhrases().apply { add(close, "открой окна") }
+        assertEquals(VoiceUserMatch(VoiceUserPhrases.COMMANDS.first { it.id == close }, exact = false), p.match("открой окно"))
+        assertEquals(true, p.match("слушай открой окна пожалуйста")?.exact)
+    }
+
     @Test fun `no partial-word match`() {
         val p = VoiceUserPhrases().apply { add(close, "окно") }
         assertNull(p.match("окновать"))

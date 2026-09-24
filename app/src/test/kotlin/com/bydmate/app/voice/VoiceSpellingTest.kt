@@ -32,6 +32,13 @@ class VoiceSpellingTest {
         assertEquals("окно закрыто", fix("окно закрыто"))
     }
 
+    // Verbs are never fuzzy-matched: "откроем" is one edit from "открыть" and talks about later.
+    @Test fun verbs_are_never_guessed() {
+        assertEquals("мы откроем багажник завтра", fix("мы откроем багажник завтра"))
+        assertEquals("закроем окна", fix("закроем окна"))
+        assertEquals("включи кондиционер", fix("включи кондиционр"))
+    }
+
     @Test fun comparatives_are_not_guessed() {
         assertEquals("говори громко", fix("говори громко"))
     }

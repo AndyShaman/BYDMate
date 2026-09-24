@@ -43,6 +43,9 @@ object VoiceJournalDump {
         }
     }
 
-    /** Keeps one session on one line and its quoted fields unambiguous. */
-    private fun oneLine(s: String): String = s.replace('\n', ' ').replace('\r', ' ').replace('"', '\'')
+    /** Keeps one session on one line and its quoted fields unambiguous: whitespace runs
+     *  (newlines included) collapse to one space, double quotes become single ones. */
+    internal fun oneLine(s: String): String = s.replace(WHITESPACE, " ").replace('"', '\'')
+
+    private val WHITESPACE = Regex("\\s+")
 }

@@ -44,7 +44,8 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
         data class InUse(val owner: String) : Check
     }
 
-    /** The command whose user phrase occurs in [transcript]; the longest phrase wins. */
+    /** The command whose user phrase occurs in [transcript]; the longest phrase wins, an exact
+     *  one on a tie. */
     fun match(transcript: String): VoiceUserMatch? {
         val heard = VoicePhrase.tokens(transcript)
         if (heard.isEmpty()) return null
@@ -54,8 +55,10 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
             val cmd = byId[id] ?: continue
             for (phrase in list) {
                 val tokens = VoicePhrase.tokens(phrase)
-                if (tokens.size > bestLen && VoicePhrase.containsSequence(heard, tokens)) {
-                    best = VoiceUserMatch(cmd, exact = tokens.size == heard.size)
+                if (tokens.size < bestLen || !VoicePhrase.containsSequence(heard, tokens)) continue
+                val exact = VoicePhrase.isExact(transcript, phrase)
+                if (tokens.size > bestLen || exact && best?.exact == false) {
+                    best = VoiceUserMatch(cmd, exact)
                     bestLen = tokens.size
                 }
             }

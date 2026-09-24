@@ -1300,10 +1300,19 @@ fun ActionDef.urlMinimize(): Boolean = try {
     org.json.JSONObject(payload ?: "{}").optBoolean("minimize", false)
 } catch (e: Exception) { false }
 
+/**
+ * The url action with a new address and minimize flag. An unchanged address keeps a
+ * `paramsStripped` marker (an import may have carried one); a changed address drops it, since a
+ * freshly typed one was never stripped by this build.
+ */
 fun ActionDef.withUrl(url: String, minimize: Boolean): ActionDef = copy(
     payload = org.json.JSONObject().apply {
         put("url", url)
         put("minimize", minimize)
+        if (url == urlString()) {
+            val stripped = try { org.json.JSONObject(payload ?: "{}").optBoolean(RuleShare.PARAMS_STRIPPED, false) } catch (e: Exception) { false }
+            if (stripped) put(RuleShare.PARAMS_STRIPPED, true)
+        }
     }.toString()
 )
 

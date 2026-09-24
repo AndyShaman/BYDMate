@@ -9,7 +9,8 @@ import org.junit.runners.Parameterized
 /**
  * Every row of the Russian golden corpus: a row marked `danger` must never open any
  * window or the sunroof wider than its expectation (or at all when the expectation is
- * UNRECOGNIZED). Accuracy over the whole corpus lives in [RuCommandGoldenAccuracyTest].
+ * UNRECOGNIZED), and no row may open wider than the share its utterance names.
+ * Accuracy over the whole corpus lives in [RuCommandGoldenAccuracyTest].
  */
 @RunWith(Parameterized::class)
 class RuCommandGoldenTest(private val row: RuGoldenCorpus.Row) {
@@ -29,6 +30,10 @@ class RuCommandGoldenTest(private val row: RuGoldenCorpus.Row) {
                 RuGoldenCorpus.doesMoreThanExpected(row.expected, actual),
             )
         }
+        assertFalse(
+            "\"${row.utterance}\" => $actual opens wider than it says",
+            RuGoldenCorpus.opensWiderThanSpoken(row.utterance, actual),
+        )
     }
 }
 

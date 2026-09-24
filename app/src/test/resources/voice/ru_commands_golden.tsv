@@ -32,15 +32,15 @@ utterance	expected	category	danger
 открой окно на 50 процентов	主驾半开	windows	danger
 открой окно на 50%	主驾半开	windows	danger
 открой окно до пятидесяти процентов	主驾半开	windows	danger
-открой окно на сорок процентов	主驾半开	windows	danger
+открой окно на сорок процентов	主驾通风	windows	danger
 открой окно на семьдесят процентов	主驾半开	windows	danger
 открой окно на тридцать процентов	主驾通风	windows	danger
 открой окно на десять процентов	主驾通风	windows	danger
 открой окна на двадцать пять процентов	车窗通风	windows	danger
-открой окна на восемьдесят процентов	车窗全开	windows	
+открой окна на восемьдесят процентов	车窗半开	windows	danger
 открой окна на сто процентов	车窗全开	windows	
-открой окно на треть	主驾半开	windows	danger
-открой водительское окно на треть	主驾半开	windows	danger
+открой окно на треть	主驾通风	windows	danger
+открой водительское окно на треть	主驾通风	windows	danger
 открой водительское окно на четверть	主驾通风	windows	danger
 водительское окно на четверть	主驾通风	windows	danger
 открой окна на три четверти	车窗半开	windows	danger
@@ -132,8 +132,8 @@ utterance	expected	category	danger
 открой люк на половину	天窗打开50	sunroof	danger
 люк наполовину	天窗打开50	sunroof	danger
 открой люк на пятьдесят процентов	天窗打开50	sunroof	danger
-открой люк на треть	天窗打开50	sunroof	danger
-открой люк на тридцать	天窗打开50	sunroof	danger
+открой люк на треть	天窗通风	sunroof	danger
+открой люк на тридцать	天窗通风	sunroof	danger
 люк приоткрой на половину	天窗打开50	sunroof	danger
 открой люк чуть чуть	天窗通风	sunroof	danger
 приоткрой люк	天窗通风	sunroof	danger
@@ -266,7 +266,7 @@ utterance	expected	category	danger
 открой окно водителя и закрой люк	主驾打开100+天窗打开0	sunroof	
 поставь люк на половину	天窗打开50	sunroof	danger
 закрой люк наполовину	天窗打开50	sunroof	
-открой люк на сорок процентов	天窗打开50	sunroof	danger
+открой люк на сорок процентов	天窗通风	sunroof	danger
 открой люк на двадцать процентов	天窗通风	sunroof	danger
 открой люк кроме шторки	UNRECOGNIZED	sunroof	danger
 машина открыта	UNRECOGNIZED	locks	
@@ -322,3 +322,32 @@ utterance	expected	category	danger
 жарко и холодно	UNRECOGNIZED	climate	
 в окно дует холодно	UNRECOGNIZED	climate	
 мне холодно закрой окно	主驾打开0	climate	
+открой окна кроме водительского окна и пассажирского окна	后左打开100+后右打开100	windows	danger
+закрой окна кроме заднего левого и заднего правого	主驾打开0+副驾打开0	windows	
+открой окно на палец	UNRECOGNIZED	windows	danger
+открой люк на ладонь	UNRECOGNIZED	sunroof	danger
+открой окно на щёлку	主驾通风	windows	danger
+открой окно на чуть	主驾通风	windows	danger
+открой окно на немножко	主驾通风	windows	danger
+открой окно на сколько-то	UNRECOGNIZED	windows	danger
+открой окно на два сантиметра	UNRECOGNIZED	windows	danger
+открой окна по кругу	UNRECOGNIZED	windows	danger
+открой окно на водительской стороне	主驾打开100	windows	
+не надо открывать окно	UNRECOGNIZED	windows	danger
+нельзя открывать окно	UNRECOGNIZED	windows	danger
+отмени открой люк	UNRECOGNIZED	sunroof	danger
+мы откроем багажник завтра	UNRECOGNIZED	locks	danger
+открыли бы окно	UNRECOGNIZED	windows	danger
+вчера открывал люк	UNRECOGNIZED	sunroof	danger
+открывается ли багажник	UNRECOGNIZED	locks	danger
+хочу открыть окно	主驾打开100	windows	
+хочу открыть окно потом	UNRECOGNIZED	windows	danger
+открой окно завтра	UNRECOGNIZED	windows	danger
+открой люк позже	UNRECOGNIZED	sunroof	danger
+открой окна как раньше	UNRECOGNIZED	windows	danger
+открой окно на шестьдесят процентов	主驾半开	windows	danger
+открой окно на пятнадцать процентов	主驾通风	windows	danger
+открой окно на пять процентов	主驾通风	windows	danger
+поставь окно на ноль процентов	主驾打开0	windows	
+открой люк на пять процентов	天窗通风	sunroof	danger
+открой люк на восемьдесят процентов	天窗打开50	sunroof	danger

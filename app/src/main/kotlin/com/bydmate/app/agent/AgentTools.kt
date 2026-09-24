@@ -47,6 +47,7 @@ import com.bydmate.app.ui.automation.TRIGGER_PARAMS
 import com.bydmate.app.ui.automation.TriggerParamOption
 import com.bydmate.app.ui.automation.localizedEnumLabel
 import com.bydmate.app.voice.VoiceGate
+import com.bydmate.app.voice.VoiceUserPhrases
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -132,6 +133,16 @@ class AgentTools @Inject constructor(
     @Inject
     internal fun injectDriverMemory(memory: DriverMemory) {
         driverMemory = memory
+    }
+
+    // Same method-injection reason as splitPrefs above. The in-memory default holds no phrases,
+    // so create_automation then checks only the other rules.
+    private var userPhrases: VoiceUserPhrases = VoiceUserPhrases()
+
+    /** Called by Hilt after construction; call manually in unit tests of voice-phrase collisions. */
+    @Inject
+    internal fun injectUserPhrases(phrases: VoiceUserPhrases) {
+        userPhrases = phrases
     }
 
     /** Sorted names of the enabled automations, kept in step with the rules table by
@@ -2076,9 +2087,11 @@ class AgentTools @Inject constructor(
             is Built.Value -> r.value
         }
 
-        // Validate voice-phrase collisions (builtin commands, duplicates across rules).
-        // editingId=0L because this is a new rule with no persisted id yet.
-        RuleDraftValidator.validateTriggers(listOf(trigger), editingId = 0L, existingRules = existing)?.let {
+        // Validate voice-phrase collisions (the user's phrases for built-in commands, duplicates
+        // across rules). editingId=0L because this is a new rule with no persisted id yet.
+        RuleDraftValidator.validateTriggers(
+            listOf(trigger), editingId = 0L, existingRules = existing, userCommandPhrases = userPhrases.owners(),
+        )?.let {
             val msg = when (it) {
                 TriggerValidationError.VoicePhraseEmpty -> "не указана голосовая фраза"
                 is TriggerValidationError.VoicePhraseBuiltin ->

@@ -22,6 +22,13 @@ class VoicePhraseTest {
         assertEquals(VoicePhrase.normalize("елка"), VoicePhrase.normalize("Эй, ёлка, пожалуйста"))
     }
 
+    @Test fun `exactness compares words without stemming`() {
+        assertFalse(VoicePhrase.isExact("открой окно", "открой окна"))
+        assertTrue(VoicePhrase.isExact("слушай открой окно пожалуйста", "открой окно"))
+        assertTrue(VoicePhrase.isExact("Открой, ёлку!", "открой елку"))
+        assertFalse(VoicePhrase.isExact("пожалуйста", "пожалуйста"))
+    }
+
     @Test fun `containsSequence matches equal and contained whole words only`() {
         val heard = VoicePhrase.tokens("открой окно в машине")
         assertTrue(VoicePhrase.containsSequence(heard, VoicePhrase.tokens("открой окно в машине")))

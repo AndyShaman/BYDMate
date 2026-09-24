@@ -4,6 +4,7 @@ import android.content.Context
 import android.util.Log
 import com.bydmate.app.agent.AgentOrchestrator
 import com.bydmate.app.agent.AgentResult
+import com.bydmate.app.agent.AgentTrace
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.VoiceFireResult
@@ -185,7 +186,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val startedAt = turn.startedAtMs
         val e = if (entry.asrMs != null && startedAt > 0L) entry.copy(dispatchMs = entry.timestampMs - startedAt) else entry
         journal.add(e)
-        Log.i(TAG, "heard=\"${e.transcript}\" route=${e.route.code} cmd=${e.command ?: "-"} reason=${e.refusal ?: "-"}")
+        Log.i(TAG, logLine(e))
         Log.i(TAG, logMsg)
     }
 
@@ -446,15 +447,18 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
      *  agent follow-up window, checked by the caller, outranks all of them):
-     *  1. an automation phrase equal to the whole utterance after normalization;
+     *  1. an automation phrase equal to the whole utterance, word for word after normalization;
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
-     *  4. an automation phrase contained in the utterance (longest wins);
-     *  5. a user phrase contained in the utterance (longest wins);
-     *  6. the agent (Resolution.None).
+     *  4. a parser refusal (negation, a command for later, an unreadable measure, an
+     *     inexpressible «кроме», commands it cannot split) or any negation word: the agent,
+     *     with that reason, and no contained phrase may act;
+     *  5. an automation phrase contained in the utterance (longest wins);
+     *  6. a user phrase contained in the utterance (longest wins);
+     *  7. the agent (Resolution.None).
      *  An exact user-made phrase goes first so the user can take over a phrase the parser gets
      *  wrong; a merely contained one yields to the parser, so «открой окно» never swallows
-     *  «открой окно наполовину». */
+     *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
         val auto = automationResolver.match(text)
         val user = userPhrases.match(text)
@@ -462,6 +466,8 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         if (user != null && user.exact) return user.toCmd()
         val parsed = parse(text)
         if (parsed !is Resolution.None) return parsed
+        if (parsed.reason != VoiceRefusal.UNRECOGNIZED) return parsed
+        if (NluParser.negated(text)) return Resolution.None(VoiceRefusal.NEGATION)
         return auto?.let { Resolution.Auto(it) } ?: user?.toCmd() ?: parsed
     }
 
@@ -474,6 +480,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
             is ParseResult.Volume -> Resolution.Vol(r.payload)
             ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
+            is ParseResult.Refused -> Resolution.None(r.reason)
         }
     }
 
@@ -845,6 +852,16 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
 
     companion object {
         private const val TAG = "VoiceController"
+
+        // Longest value one logcat summary field may carry (an automation name, an utterance).
+        private const val LOG_FIELD_CHARS = 200
+
+        /** The one-line logcat summary of a journal entry: every value flattened to one line,
+         *  quotes escaped and capped, so a name with a newline or a quote cannot break it. */
+        internal fun logLine(e: VoiceJournalEntry): String {
+            fun v(s: String?) = s?.let { AgentTrace.clip(VoiceJournalDump.oneLine(it), LOG_FIELD_CHARS) } ?: "-"
+            return "heard=\"${v(e.transcript)}\" route=${e.route.code} cmd=${v(e.command)} reason=${v(e.refusal)}"
+        }
 
         // Dwell on a terminal state before auto-returning to Idle. Short on purpose —
         // long enough to read "не распознал", short enough to feel instant.

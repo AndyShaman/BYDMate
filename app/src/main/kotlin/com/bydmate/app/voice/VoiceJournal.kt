@@ -10,6 +10,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
+import java.util.concurrent.Executor
+import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -42,28 +45,70 @@ data class VoiceJournalEntry(
 }
 
 /** Ring buffer of the last MAX voice sessions, newest first. With a [file] it survives process
- *  restarts: loaded once on creation, rewritten on every change. Null [file] = memory only. */
+ *  restarts. File work never runs on the caller's thread: the file is read once (queued on
+ *  creation) and rewritten after changes, both on one background thread ([executor], a
+ *  dedicated single thread by default) where queued writes coalesce into one write of the
+ *  latest list. Null [file] = memory only. */
 @Singleton
-class VoiceJournal(private val file: File? = null) {
+class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
     @Inject constructor(@ApplicationContext context: Context) : this(File(context.filesDir, FILE_NAME))
 
+    private val io: Executor by lazy {
+        executor ?: Executors.newSingleThreadExecutor { r -> Thread(r, "voice-journal").apply { isDaemon = true } }
+    }
     private val lock = Any()
-    private val _entries = MutableStateFlow(load())
+    private val loadRequested = AtomicBoolean(false)
+    private val writeQueued = AtomicBoolean(false)
+    // Set by clear() before the file was read: the old sessions must not come back.
+    private var discardFile = false
+    private val _entries = MutableStateFlow<List<VoiceJournalEntry>>(emptyList())
     val entries: StateFlow<List<VoiceJournalEntry>> = _entries.asStateFlow()
 
-    fun add(e: VoiceJournalEntry) = synchronized(lock) {
-        _entries.value = (listOf(e) + _entries.value).take(MAX)
-        persist(_entries.value)
+    // First use is creation (the singleton is built when first injected): the read is only
+    // queued here, the caller never waits for the disk.
+    init { ensureLoaded() }
+
+    fun add(e: VoiceJournalEntry) {
+        synchronized(lock) { _entries.value = (listOf(bounded(e)) + _entries.value).take(MAX) }
+        scheduleWrite()
     }
 
-    fun clear() = synchronized(lock) {
-        _entries.value = emptyList()
-        persist(emptyList())
+    fun clear() {
+        synchronized(lock) {
+            discardFile = true
+            _entries.value = emptyList()
+        }
+        scheduleWrite()
     }
 
-    private fun load(): List<VoiceJournalEntry> {
-        val f = file ?: return emptyList()
+    /** Queues the one read of the file ahead of every write, so a write never replaces
+     *  sessions it has not seen. Sessions added meanwhile are newer and stay first. */
+    private fun ensureLoaded() {
+        if (file == null || !loadRequested.compareAndSet(false, true)) return
+        io.execute {
+            val stored = load(file)
+            synchronized(lock) {
+                if (!discardFile) _entries.value = (_entries.value + stored).take(MAX)
+            }
+        }
+    }
+
+    /** One pending write at a time; it saves whatever the list is when it runs. */
+    private fun scheduleWrite() {
+        val f = file ?: return
+        if (!writeQueued.compareAndSet(false, true)) return
+        io.execute {
+            writeQueued.set(false)
+            persist(f, _entries.value)
+        }
+    }
+
+    private fun load(f: File): List<VoiceJournalEntry> {
         if (!f.isFile) return emptyList()
+        if (f.length() > MAX_FILE_BYTES) {
+            Log.w(TAG, "voice journal is ${f.length()} bytes, over $MAX_FILE_BYTES: starting empty")
+            return emptyList()
+        }
         return runCatching {
             val arr = JSONArray(f.readText())
             (0 until arr.length()).mapNotNull { fromJson(arr.getJSONObject(it)) }.take(MAX)
@@ -71,8 +116,7 @@ class VoiceJournal(private val file: File? = null) {
             .getOrDefault(emptyList())
     }
 
-    private fun persist(list: List<VoiceJournalEntry>) {
-        val f = file ?: return
+    private fun persist(f: File, list: List<VoiceJournalEntry>) {
         runCatching {
             val tmp = File(f.parentFile, "${f.name}.tmp")
             tmp.writeText(JSONArray(list.map { toJson(it) }).toString())
@@ -87,6 +131,17 @@ class VoiceJournal(private val file: File? = null) {
         const val MAX = 50
         const val FILE_NAME = "voice_journal.json"
         private const val TAG = "VoiceJournal"
+
+        /** A larger file is not this journal's (50 bounded sessions): skipped, not parsed. */
+        const val MAX_FILE_BYTES = 256L * 1024
+        /** Longest transcript, command or reason kept per session. */
+        const val MAX_FIELD_CHARS = 500
+
+        internal fun bounded(e: VoiceJournalEntry): VoiceJournalEntry = e.copy(
+            transcript = e.transcript.take(MAX_FIELD_CHARS),
+            command = e.command?.take(MAX_FIELD_CHARS),
+            reason = e.reason?.take(MAX_FIELD_CHARS),
+        )
 
         internal fun toJson(e: VoiceJournalEntry): JSONObject = JSONObject().apply {
             put("t", e.timestampMs)

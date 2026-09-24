@@ -11,6 +11,9 @@ class NluQualifierTest {
     private fun unrecognized(text: String) =
         assertEquals(ParseResult.Unrecognized, NluParser.parse(text))
 
+    private fun refused(text: String, reason: String) =
+        assertEquals(ParseResult.Refused(reason), NluParser.parse(text))
+
     // Corner windows: a compound qualifier must select exactly ONE window.
     @Test fun rear_right_window_targets_one_window() = assertEquals("后右打开100", cmd("открой заднее правое окно"))
     @Test fun rear_left_close() = assertEquals("后左打开0", cmd("закрой заднее левое окно"))
@@ -35,11 +38,11 @@ class NluQualifierTest {
     @Test fun vent_rear_pair() = assertEquals("后排车窗通风", cmd("проветри задние окна"))
     @Test fun half_sunroof_with_open_verb() = assertEquals("天窗打开50", cmd("открой люк наполовину"))
 
-    // An explicit percentage picks the nearest detent (ties to the smaller opening);
-    // a measure the parser cannot read goes to the agent, never to a full open.
-    @Test fun window_percentage_picks_nearest_detent() = assertEquals("主驾通风", cmd("открой водительское окно на двадцать процентов"))
-    @Test fun sunroof_percentage_picks_nearest_detent() = assertEquals("天窗打开50", cmd("открой люк на тридцать процентов"))
-    @Test fun unreadable_measure_goes_to_agent() = unrecognized("открой окно на пять сантиметров")
+    // An explicit percentage picks the widest detent that does not exceed it (never above);
+    // a measure the parser cannot read is refused, never a full open.
+    @Test fun window_percentage_picks_detent_below() = assertEquals("主驾通风", cmd("открой водительское окно на двадцать процентов"))
+    @Test fun sunroof_percentage_picks_detent_below() = assertEquals("天窗通风", cmd("открой люк на тридцать процентов"))
+    @Test fun unreadable_measure_is_refused() = refused("открой окно на пять сантиметров", VoiceRefusal.UNKNOWN_MEASURE)
 
     // Front trunk is NOT the rear tailgate — must go to the agent.
     @Test fun front_trunk_goes_to_agent() = unrecognized("открой передний багажник")
@@ -56,8 +59,8 @@ class NluQualifierTest {
     @Test fun seat_level_4_goes_to_agent() = unrecognized("подогрев сиденья на 4")
 
     // Negation is beyond slot NLU.
-    @Test fun negation_goes_to_agent() = unrecognized("не открывай окно")
-    @Test fun negation_no_goes_to_agent() = unrecognized("нет закрой люк")
+    @Test fun negation_is_refused() = refused("не открывай окно", VoiceRefusal.NEGATION)
+    @Test fun negation_no_is_refused() = refused("нет закрой люк", VoiceRefusal.NEGATION)
 
     // "машина" as the lock target with open/close verbs.
     @Test fun close_car_locks() = assertEquals("车门上锁", cmd("закрой машину"))

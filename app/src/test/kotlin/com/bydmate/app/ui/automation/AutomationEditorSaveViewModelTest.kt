@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
+import org.json.JSONObject
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -159,6 +160,14 @@ class AutomationEditorSaveViewModelTest {
         assertEquals("Navi", vm.uiState.value.editing.name)
         assertEquals(listOf(windowClose), vm.uiState.value.editing.actions)
         assertTrue(vm.uiState.value.editorError?.contains("disk full") == true)
+    }
+
+    @Test fun `editing a url action's address drops a stripped-params marker, an unchanged address keeps it`() {
+        val stripped = ActionDef("", "x", "url", """{"url":"https://h/p?mapid=42","minimize":false,"paramsStripped":true}""")
+        val sameUrl = stripped.withUrl("https://h/p?mapid=42", minimize = true)
+        assertTrue(JSONObject(sameUrl.payload!!).getBoolean("paramsStripped"))
+        val changedUrl = stripped.withUrl("https://h/p?other=1", minimize = false)
+        assertFalse(JSONObject(changedUrl.payload!!).has("paramsStripped"))
     }
 
     @Test fun `dismissing the deleted-rule dialog keeps the editor and the draft`() {
