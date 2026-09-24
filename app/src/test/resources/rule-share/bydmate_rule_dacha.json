@@ -1,0 +1,21 @@
+{
+  "format": "bydmate_rule",
+  "version": 1,
+  "app_version": "3.18.0",
+  "rule": {
+    "name": "Navi",
+    "trigger_logic": "AND",
+    "triggers": [
+      {"param":"Place","chineseName":"位置","operator":"==","value":"enter","displayName":"Въезд в «Дача»","kind":"place_enter","placeName":"Дача"}
+    ],
+    "actions": [
+      {"command":"","displayName":"","kind":"call","payload":"{\"autoDial\":true,\"contactRequired\":true}"},
+      {"command":"车窗关闭","displayName":"Закрыть все окна","kind":"param"}
+    ],
+    "cooldown_seconds": 60,
+    "require_park": false,
+    "confirm_before_execute": false,
+    "fire_once_per_trip": false,
+    "play_sound": false
+  }
+}

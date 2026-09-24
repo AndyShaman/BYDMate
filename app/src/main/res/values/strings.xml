@@ -414,7 +414,7 @@
     <string name="automation_create_button">+ Создать</string>
 
     <!-- Rule card context menu -->
-    <string name="automation_menu_edit">Редактировать</string>
+    <string name="automation_menu_edit">Изменить</string>
     <string name="automation_menu_duplicate">Дублировать</string>
     <string name="automation_menu_delete">Удалить</string>
 
@@ -469,7 +469,7 @@
     <string name="automation_add_condition_button">+ Добавить условие</string>
     <string name="automation_trigger_type_param">Параметр</string>
     <string name="automation_trigger_type_place">Место</string>
-    <string name="automation_trigger_type_place_empty_hint">Сначала создайте место в настройках</string>
+    <string name="automation_trigger_type_place_empty_hint">Сначала добавьте место кнопкой «Места» вверху экрана</string>
     <string name="automation_trigger_type_time_of_day">Время суток</string>
     <string name="automation_trigger_type_schedule">Время / расписание</string>
     <string name="automation_trigger_type_service_start">Запуск BYDMate</string>
@@ -590,7 +590,7 @@
 
     <!-- Navigate edit dialog -->
     <string name="automation_navigate_dialog_title">Маршрут в Я.Навигаторе</string>
-    <string name="automation_navigate_no_places_hint">Сначала добавьте место в Настройки → Места</string>
+    <string name="automation_navigate_no_places_hint">Сначала добавьте место кнопкой «Места» вверху экрана</string>
     <string name="automation_navigate_pick_place_placeholder">Выберите место…</string>
 
     <!-- URL edit dialog -->
@@ -1753,4 +1753,29 @@
     <string name="notif_channel_auto_sound_desc">Уведомления автоматизаций со звуком</string>
     <string name="notif_channel_auto_confirm_name">Подтверждение автоматизаций</string>
     <string name="notif_channel_auto_confirm_desc">Запросы на подтверждение правил автоматизации</string>
+    <!-- Automation wave 2: share, import, test run -->
+    <string name="automation_import_button">Импорт</string>
+    <string name="automation_share_button">Поделиться</string>
+    <string name="automation_share_note">Файл без контактов и ключей, только правило.</string>
+    <string name="automation_share_error">Не удалось сохранить файл: %1$s</string>
+    <string name="automation_test_run_button">Тестовый запуск</string>
+    <string name="automation_test_run_hint">Выполнит все действия сразу, как будто сработало условие</string>
+    <string name="automation_test_run_done">Тестовый запуск: все действия выполнены</string>
+    <string name="automation_test_run_failed">Тестовый запуск: не выполнено %1$d из %2$d. %3$s</string>
+    <string name="automation_import_pick_title">Файлы автоматизаций в Download</string>
+    <string name="automation_import_pick_empty">В папке Download нет файлов bydmate_rule_*.json</string>
+    <string name="automation_import_invalid">Не удалось прочитать файл: это не автоматизация BYDMate</string>
+    <string name="automation_import_newer_version">Автоматизация из более новой версии, обновите приложение</string>
+    <string name="automation_import_preview_title">Проверьте автоматизацию</string>
+    <string name="automation_import_conditions">Условия</string>
+    <string name="automation_import_actions">Действия</string>
+    <string name="automation_import_need_attention">Нужно уточнить</string>
+    <string name="automation_import_place_missing">Место «%1$s» не найдено</string>
+    <string name="automation_import_pick_place">Выбрать место</string>
+    <string name="automation_import_contact_missing">Контакт не найден</string>
+    <string name="automation_import_pick_contact">Выбрать контакт</string>
+    <string name="automation_import_enable_now">Включить сразу</string>
+    <string name="automation_import_enable_now_hint">Иначе добавится выключенной</string>
+    <string name="automation_import_add">Добавить</string>
+    <string name="automation_import_name_suffix">импорт</string>
 </resources>

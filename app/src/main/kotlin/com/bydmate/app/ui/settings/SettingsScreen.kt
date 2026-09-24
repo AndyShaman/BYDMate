@@ -39,7 +39,6 @@ import androidx.compose.material.icons.outlined.DirectionsCar
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Link
 import androidx.compose.material.icons.outlined.PhoneAndroid
-import androidx.compose.material.icons.outlined.Place
 import androidx.compose.material.icons.outlined.PowerSettingsNew
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.material3.Icon
@@ -162,13 +161,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-private enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
+internal enum class SettingsSection(@StringRes val labelRes: Int, val icon: ImageVector) {
     VOICE(R.string.settings_section_voice_agent, Icons.Outlined.Mic),
     WIDGET(R.string.settings_section_widget_title, Icons.Outlined.PhoneAndroid),
     DISPLAY(R.string.settings_section_display_title, Icons.Outlined.DirectionsCar),
     SPLIT(R.string.settings_section_split_title, Icons.Outlined.Apps),
     BATTERY(R.string.settings_section_auto_battery_title, Icons.Outlined.BatteryChargingFull),
-    PLACES(R.string.settings_section_places_title, Icons.Outlined.Place),
     INTEGRATIONS(R.string.settings_section_integrations_title, Icons.Outlined.Link),
     SERVICE(R.string.settings_section_service_title, Icons.Outlined.Build),
     APP(R.string.settings_section_application_title, Icons.Outlined.Settings),
@@ -283,7 +281,6 @@ fun SettingsScreen(
                         SettingsSection.WIDGET -> WidgetSection()
                         SettingsSection.DISPLAY -> DisplaySection()
                         SettingsSection.SPLIT -> SplitSection()
-                        SettingsSection.PLACES -> PlacesSection()
                         SettingsSection.SERVICE -> ServiceSection(state, viewModel)
                         SettingsSection.APP -> AppSection(state, viewModel)
                         SettingsSection.SMART_HOME -> SmartHomeSection(state, viewModel)
@@ -963,12 +960,6 @@ private fun WidgetSection() {
             },
         )
     }
-}
-
-@Composable
-private fun PlacesSection() {
-    SectionHeader(text = stringResource(R.string.settings_section_places_title))
-    PlacesInlineContent()
 }
 
 @Composable

@@ -1,0 +1,20 @@
+{
+  "format": "bydmate_rule",
+  "version": 1,
+  "app_version": "9.0.0",
+  "rule": {
+    "name": "Future",
+    "trigger_logic": "AND",
+    "triggers": [
+      {"param":"Speed","chineseName":"车速","operator":">","value":"7","displayName":"Скорость","kind":"param"}
+    ],
+    "actions": [
+      {"command":"","displayName":"Телепорт","kind":"teleport","payload":"{}"}
+    ],
+    "cooldown_seconds": 60,
+    "require_park": false,
+    "confirm_before_execute": false,
+    "fire_once_per_trip": false,
+    "play_sound": false
+  }
+}

@@ -469,7 +469,7 @@
     <string name="automation_add_condition_button">+ Dodaj warunek</string>
     <string name="automation_trigger_type_param">Parametr</string>
     <string name="automation_trigger_type_place">Miejsce</string>
-    <string name="automation_trigger_type_place_empty_hint">Najpierw utwórz miejsce w ustawieniach</string>
+    <string name="automation_trigger_type_place_empty_hint">Najpierw dodaj miejsce przyciskiem „Miejsca” u góry ekranu</string>
     <string name="automation_trigger_type_time_of_day">Pora dnia</string>
     <string name="automation_trigger_type_schedule">Czas / harmonogram</string>
     <string name="automation_trigger_type_service_start">Uruchomienie BYDMate</string>
@@ -590,7 +590,7 @@
 
     <!-- Navigate edit dialog -->
     <string name="automation_navigate_dialog_title">Trasa w Yandex Nawigatorze</string>
-    <string name="automation_navigate_no_places_hint">Najpierw dodaj miejsce w Ustawienia → Miejsca</string>
+    <string name="automation_navigate_no_places_hint">Najpierw dodaj miejsce przyciskiem „Miejsca” u góry ekranu</string>
     <string name="automation_navigate_pick_place_placeholder">Wybierz miejsce…</string>
 
     <!-- URL edit dialog -->
@@ -1738,4 +1738,29 @@
     <string name="notif_channel_auto_sound_desc">Powiadomienia automatyzacji z dźwiękiem</string>
     <string name="notif_channel_auto_confirm_name">Potwierdzenia automatyzacji</string>
     <string name="notif_channel_auto_confirm_desc">Prośby o potwierdzenie reguł automatyzacji</string>
+    <!-- Automation wave 2: share, import, test run -->
+    <string name="automation_import_button">Importuj</string>
+    <string name="automation_share_button">Udostępnij</string>
+    <string name="automation_share_note">Plik bez kontaktów i kluczy, tylko reguła.</string>
+    <string name="automation_share_error">Nie udało się zapisać pliku: %1$s</string>
+    <string name="automation_test_run_button">Uruchomienie testowe</string>
+    <string name="automation_test_run_hint">Wykona wszystkie akcje od razu, jakby warunek został spełniony</string>
+    <string name="automation_test_run_done">Uruchomienie testowe: wszystkie akcje wykonane</string>
+    <string name="automation_test_run_failed">Uruchomienie testowe: nie wykonano %1$d z %2$d. %3$s</string>
+    <string name="automation_import_pick_title">Pliki automatyzacji w Download</string>
+    <string name="automation_import_pick_empty">Brak plików bydmate_rule_*.json w folderze Download</string>
+    <string name="automation_import_invalid">Nie udało się odczytać pliku: to nie jest automatyzacja BYDMate</string>
+    <string name="automation_import_newer_version">Automatyzacja z nowszej wersji, zaktualizuj aplikację</string>
+    <string name="automation_import_preview_title">Sprawdź automatyzację</string>
+    <string name="automation_import_conditions">Warunki</string>
+    <string name="automation_import_actions">Akcje</string>
+    <string name="automation_import_need_attention">Wymaga uzupełnienia</string>
+    <string name="automation_import_place_missing">Nie znaleziono miejsca „%1$s”</string>
+    <string name="automation_import_pick_place">Wybierz miejsce</string>
+    <string name="automation_import_contact_missing">Nie znaleziono kontaktu</string>
+    <string name="automation_import_pick_contact">Wybierz kontakt</string>
+    <string name="automation_import_enable_now">Włącz od razu</string>
+    <string name="automation_import_enable_now_hint">W przeciwnym razie zostanie dodana wyłączona</string>
+    <string name="automation_import_add">Dodaj</string>
+    <string name="automation_import_name_suffix">import</string>
 </resources>

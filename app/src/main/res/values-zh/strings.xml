@@ -384,7 +384,7 @@
     <string name="automation_add_condition_button">+ 添加条件</string>
     <string name="automation_trigger_type_param">参数</string>
     <string name="automation_trigger_type_place">地点</string>
-    <string name="automation_trigger_type_place_empty_hint">请先在设置中创建地点</string>
+    <string name="automation_trigger_type_place_empty_hint">请先用顶部的“地点”按钮添加地点</string>
     <string name="automation_trigger_type_time_of_day">时段</string>
     <string name="automation_trigger_type_service_start">BYDMate 启动</string>
     <string name="automation_trigger_type_internet">网络可用</string>
@@ -469,7 +469,7 @@
 
     <!-- Navigate edit dialog -->
     <string name="automation_navigate_dialog_title">Yandex 导航路线</string>
-    <string name="automation_navigate_no_places_hint">请先在 设置 → 地点 中添加地点</string>
+    <string name="automation_navigate_no_places_hint">请先用顶部的“地点”按钮添加地点</string>
     <string name="automation_navigate_pick_place_placeholder">选择地点...</string>
 
     <!-- URL edit dialog -->
@@ -1700,4 +1700,29 @@
     <string name="notif_channel_auto_sound_desc">发声的自动化通知</string>
     <string name="notif_channel_auto_confirm_name">自动化确认</string>
     <string name="notif_channel_auto_confirm_desc">自动化规则的确认请求</string>
+    <!-- Automation wave 2: share, import, test run -->
+    <string name="automation_import_button">导入</string>
+    <string name="automation_share_button">分享</string>
+    <string name="automation_share_note">文件只包含自动化规则，不含联系人和密钥。</string>
+    <string name="automation_share_error">无法保存文件：%1$s</string>
+    <string name="automation_test_run_button">试运行</string>
+    <string name="automation_test_run_hint">立即执行所有动作，就像条件已满足一样</string>
+    <string name="automation_test_run_done">试运行：所有动作已执行</string>
+    <string name="automation_test_run_failed">试运行：%2$d 个动作中有 %1$d 个未执行。%3$s</string>
+    <string name="automation_import_pick_title">Download 中的自动化文件</string>
+    <string name="automation_import_pick_empty">Download 文件夹中没有 bydmate_rule_*.json 文件</string>
+    <string name="automation_import_invalid">无法读取文件：这不是 BYDMate 自动化</string>
+    <string name="automation_import_newer_version">该自动化来自更新的版本，请更新应用</string>
+    <string name="automation_import_preview_title">检查自动化</string>
+    <string name="automation_import_conditions">条件</string>
+    <string name="automation_import_actions">动作</string>
+    <string name="automation_import_need_attention">需要确认</string>
+    <string name="automation_import_place_missing">未找到地点“%1$s”</string>
+    <string name="automation_import_pick_place">选择地点</string>
+    <string name="automation_import_contact_missing">未找到联系人</string>
+    <string name="automation_import_pick_contact">选择联系人</string>
+    <string name="automation_import_enable_now">立即启用</string>
+    <string name="automation_import_enable_now_hint">否则将以停用状态添加</string>
+    <string name="automation_import_add">添加</string>
+    <string name="automation_import_name_suffix">导入</string>
 </resources>
