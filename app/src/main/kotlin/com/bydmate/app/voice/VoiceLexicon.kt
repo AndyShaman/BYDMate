@@ -1,6 +1,6 @@
 package com.bydmate.app.voice
 
-/** Offline commands are Russian only; EN is kept for callers and settings, the parser ignores it. */
+/** Offline commands are Russian only; the value is kept for callers that still pass it. */
 enum class VoiceLang { RU }
 
 /** Surface words per slot. This is the single place where phrasing flexibility
