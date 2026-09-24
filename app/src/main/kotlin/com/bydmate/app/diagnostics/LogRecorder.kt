@@ -390,7 +390,11 @@ class LogRecorder internal constructor(
             // Trip recorder: open/close lines carry the outside temperature of both ends.
             "TripRecorder:*",
             // Tariff periods: period saves, recalculation totals and the per-trip price choice.
-            "TARIFF:*"
+            "TARIFF:*",
+            // Post-3.17.5 wave: auto backup (scheduler, worker, runner), backup restore path,
+            // post-restore check and the APK cleanup after an update. Their acceptance lines
+            // never reached the recorded log because the tags were missing here.
+            "AutoBackup:*", "BackupManager:*", "PostRestoreCheck:*", "UpdateApkCleanup:*"
         )
     }
 }
