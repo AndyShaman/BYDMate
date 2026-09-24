@@ -96,7 +96,7 @@ class FidMapTest {
         val required = setOf(
             "insulationKohm", "motorTempFront", "motorTempRear",
             "inverterTempFront", "inverterTempRear", "hvVoltage", "hvCurrent",
-            "motorCurrentFront", "motorCurrentRear", "bmsMaxChargeKw", "bmsMaxDischargeKw",
+            "motorCurrentFront", "motorCurrentRear", "bmsMaxChargeKw", "bmsMaxDischargeAllowKw", "bmsMaxDischargeKw",
             "motorRpmFront", "motorRpmRear", "compressorW",
             "tyreTempFL", "tyreTempFR", "tyreTempRL", "tyreTempRR",
             "pedalAccel", "pedalBrake",
@@ -116,6 +116,7 @@ class FidMapTest {
             "motorCurrentFront" to Triple(1009, 1186988040, 7),
             "motorCurrentRear" to Triple(1009, 1186988056, 7),
             "bmsMaxChargeKw" to Triple(1014, 877658136, 5),
+            "bmsMaxDischargeAllowKw" to Triple(1014, 877658120, 5),
             "bmsMaxDischargeKw" to Triple(1014, 1145045048, 5),
             "motorRpmFront" to Triple(1012, 1141899272, 5),
             "motorRpmRear" to Triple(1012, 621805576, 5),
@@ -134,6 +135,7 @@ class FidMapTest {
             assertEquals("transact for $field", addr.third, e.transact)
         }
         assertEquals(0.1, FidMap.entries.single { it.field == "bmsMaxChargeKw" }.scale, 0.0001)
+        assertEquals(0.1, FidMap.entries.single { it.field == "bmsMaxDischargeAllowKw" }.scale, 0.0001)
     }
 
     /** The addresses moved out of FidRegistry must still be the ones it documents. */

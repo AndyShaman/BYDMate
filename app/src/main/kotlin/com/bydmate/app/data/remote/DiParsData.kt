@@ -81,6 +81,7 @@ data class DiParsData(
     val hvCurrent: Double? = null,       // traction battery current, A (negative = charging)
     val batteryPowerW: Double? = null,   // hvVoltage × hvCurrent, W (+ draw / − charge), #153
     val bmsMaxChargeKw: Double? = null,
+    val bmsMaxDischargeAllowKw: Double? = null,
     val bmsMaxDischargeKw: Int? = null,
     val motorRpmFront: Int? = null,
     val motorRpmRear: Int? = null,

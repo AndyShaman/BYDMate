@@ -388,6 +388,8 @@ class NativeParsReader @Inject constructor(
             batteryPowerW       = batteryPowerW,
             bmsMaxChargeKw      = field<Double>("bmsMaxChargeKw")
                 ?.let { FieldGuards.double("bmsMaxChargeKw", it) },
+            bmsMaxDischargeAllowKw = field<Double>("bmsMaxDischargeAllowKw")
+                ?.let { FieldGuards.double("bmsMaxDischargeAllowKw", it) },
             bmsMaxDischargeKw   = ranged("bmsMaxDischargeKw"),
             motorRpmFront       = ranged("motorRpmFront"),
             motorRpmRear        = ranged("motorRpmRear"),

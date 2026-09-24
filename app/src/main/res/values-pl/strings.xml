@@ -1652,6 +1652,7 @@
     <string name="tech_caption_full_cycles_empty">pojawi się po pierwszym ładowaniu</string>
     <string name="tech_label_battery_power">moc akumulatora</string>
     <string name="tech_label_max_charge">maks. moc ładowania</string>
+    <string name="tech_label_max_discharge_allow">maks. moc rozładowania</string>
     <string name="tech_label_max_discharge">dostępna moc akumulatora</string>
     <string name="tech_label_motor_temp">temperatura silnika</string>
     <string name="tech_label_inverter_temp">temperatura falownika</string>
@@ -1689,7 +1690,7 @@
     <string name="tech_hint_power">Ile energii akumulator oddaje w tej chwili. Plus: samochód zużywa (przyspieszanie, klimatyzacja). Minus: akumulator przyjmuje energię: rekuperacja przy hamowaniu albo ładowanie ze stacji. Druga liczba: jak szybko ubywa ładunku, procent na godzinę. Na postoju to zużycie przez elektronikę pokładową.</string>
     <string name="tech_hint_12v">Napięcie zwykłego akumulatora 12 V, który zasila elektronikę. Przy uruchomionym samochodzie 13…14,5 V. Jeśli na postoju spada poniżej 12 V, akumulator słabnie.</string>
     <string name="tech_hint_insulation">Rezystancja między akumulatorem wysokiego napięcia a nadwoziem. Im większa, tym lepiej: normą są pojedyncze megaomy. Spadek do 0,5 MΩ i niżej oznacza uszkodzoną gdzieś izolację, czas do serwisu.</string>
-    <string name="tech_hint_bms_limits">Ile akumulator jest gotów przyjąć przy ładowaniu i oddawać w sposób ciągły, według jego sterownika. Przy krótkim przyspieszeniu samochód bierze więcej niż dostępna wartość, to normalne: limit szczytowy jest przez kilka sekund wyższy. Przy zimnym lub prawie pełnym akumulatorze obie wartości są niższe: zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
+    <string name="tech_hint_bms_limits">Żadnej z tych trzech liczb aplikacja nie oblicza, tylko odczytuje ze sterownika akumulatora (BMS) w takiej postaci, w jakiej są. „Maks. moc ładowania” i „maks. moc rozładowania” to górne granice, które BMS aktualnie dopuszcza dla ładowania i dla oddawania energii z akumulatora; te same wartości pokazują skanery diagnostyczne. „Dostępna moc akumulatora” to osobna, mniejsza liczba: BYD nie wyjaśnia jej znaczenia, ale z zachowania wynika, że to moc, którą akumulator jest gotów oddawać w sposób ciągły. Przy krótkim przyspieszeniu samochód bierze więcej niż dostępna wartość, to normalne. Przy zimnym lub prawie pełnym akumulatorze wszystkie trzy wartości są niższe: zimą ładowanie jest wolniejsze, a rekuperacja słabsza.</string>
     <string name="tech_hint_cells">Akumulator składa się z setek ogniw. Pokazane są najsłabsze, najmocniejsze i różnica między nimi. Różnica do 20…30 mV jest normalna. Stale duża różnica oznacza, że jedno ogniwo starzeje się szybciej niż pozostałe.</string>
     <string name="tech_hint_motors">Temperatura silników elektrycznych i falowników, które nimi sterują. W zwykłej jeździe do 60…80°. Przy długim przyspieszaniu lub holowaniu grzeją się mocniej, a samochód sam obniża moc, aż ostygną.</string>
     <string name="tech_hint_compressor">Ile watów pobiera sprężarka klimatyzacji i pompy ciepła. To główny odbiornik poza silnikami: latem w upał i zimą na mrozie zauważalnie zjada zasięg.</string>

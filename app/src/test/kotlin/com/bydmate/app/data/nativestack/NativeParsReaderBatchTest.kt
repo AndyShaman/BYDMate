@@ -524,6 +524,7 @@ class NativeParsReaderBatchTest {
                 fid("hvVoltage").field to 499,
                 fid("hvCurrent").field to java.lang.Float.floatToRawIntBits(2.4f),
                 fid("bmsMaxChargeKw").field to 1732,
+                fid("bmsMaxDischargeAllowKw").field to 3315,
                 fid("bmsMaxDischargeKw").field to 148,
                 fid("motorRpmRear").field to -370,
                 fid("compressorW").field to 576,
@@ -543,6 +544,7 @@ class NativeParsReaderBatchTest {
         assertEquals(499, data.hvVoltage)
         assertEquals(2.4, data.hvCurrent!!, 0.0001)
         assertEquals(173.2, data.bmsMaxChargeKw!!, 0.0001)
+        assertEquals(331.5, data.bmsMaxDischargeAllowKw!!, 0.0001)
         assertEquals(148, data.bmsMaxDischargeKw)
         assertEquals(-370, data.motorRpmRear)
         assertEquals(576, data.compressorW)

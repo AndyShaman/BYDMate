@@ -191,6 +191,7 @@ object FidPushApplier {
             d.copy(hvCurrent = v, batteryPowerW = FieldGuards.batteryPowerW(d.hvVoltage, v))
         },
         "bmsMaxChargeKw" to { d, v -> d.copy(bmsMaxChargeKw = v) },
+        "bmsMaxDischargeAllowKw" to { d, v -> d.copy(bmsMaxDischargeAllowKw = v) },
         "motorCurrentFront" to { d, v -> d.copy(motorCurrentFront = v.toFloat()) },
         "motorCurrentRear" to { d, v -> d.copy(motorCurrentRear = v.toFloat()) },
     )

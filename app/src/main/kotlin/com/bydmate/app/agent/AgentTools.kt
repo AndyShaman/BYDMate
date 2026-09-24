@@ -911,6 +911,7 @@ class AgentTools @Inject constructor(
         }
         // What the BMS allows right now; the peak on hard acceleration is higher.
         putIf("bms_max_charge_kw", d.bmsMaxChargeKw)
+        putIf("bms_max_discharge_allow_kw", d.bmsMaxDischargeAllowKw)
         putIf("bms_max_discharge_kw", d.bmsMaxDischargeKw)
         putIf("voltage_12v", d.voltage12v)
         putIf("battery_temp_avg_c", d.avgBatTemp)
