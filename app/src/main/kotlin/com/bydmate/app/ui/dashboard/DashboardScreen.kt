@@ -542,7 +542,7 @@ fun DashboardScreen(
                     Text(state.currencySymbol, color = TextMuted, fontSize = 11.sp, textAlign = TextAlign.End, modifier = Modifier.weight(1f))
                 }
                 if (state.recentTrips.isNotEmpty()) {
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    WholeRowsColumn(rowSpacing = 4.dp, modifier = Modifier.weight(1f)) {
                         state.recentTrips.forEach { trip ->
                             TripCard(
                                 trip = trip,
@@ -593,6 +593,50 @@ private fun GaugeYieldingColumn(
             gauge.place((width - gaugeSize) / 2, 0)
             rows.place((width - rows.width) / 2, gaugeSize)
             cards.place((width - cards.width) / 2, height - cards.height)
+        }
+    }
+}
+
+/**
+ * Vertical list that only places rows which fit completely within the available height.
+ * A row cut in half by the bottom edge is never shown; it is simply not placed. Rows keep
+ * [rowSpacing] between them, matching a plain Column with the same Arrangement.spacedBy value.
+ */
+@Composable
+private fun WholeRowsColumn(
+    rowSpacing: Dp,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Layout(content = content, modifier = modifier) { measurables, constraints ->
+        val spacingPx = rowSpacing.roundToPx()
+        val childConstraints = Constraints(maxWidth = constraints.maxWidth)
+        val maxHeight = constraints.maxHeight
+        val placeables = mutableListOf<androidx.compose.ui.layout.Placeable>()
+        var usedHeight = 0
+        for (measurable in measurables) {
+            val extra = if (placeables.isEmpty()) 0 else spacingPx
+            // Unbounded maxHeight means there is no limit to respect: place everything.
+            if (maxHeight != Constraints.Infinity) {
+                val placeable = measurable.measure(childConstraints)
+                if (usedHeight + extra + placeable.height > maxHeight) break
+                usedHeight += extra + placeable.height
+                placeables += placeable
+            } else {
+                val placeable = measurable.measure(childConstraints)
+                usedHeight += extra + placeable.height
+                placeables += placeable
+            }
+        }
+        val width = constraints.maxWidth
+        val height = constraints.constrainHeight(usedHeight)
+        layout(width, height) {
+            var y = 0
+            placeables.forEachIndexed { index, placeable ->
+                if (index > 0) y += spacingPx
+                placeable.place(0, y)
+                y += placeable.height
+            }
         }
     }
 }
