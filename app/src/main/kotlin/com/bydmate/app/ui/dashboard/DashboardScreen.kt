@@ -1,6 +1,5 @@
 package com.bydmate.app.ui.dashboard
 
-import kotlin.math.ceil
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -94,6 +93,7 @@ import com.bydmate.app.ui.widget.TRIP_DISTANCE_TREND_THRESHOLD_KM
 import com.bydmate.app.ui.widget.formatDurationShort
 import com.bydmate.app.ui.widget.formatTripKm
 import kotlinx.coroutines.delay
+import kotlin.math.ceil
 
 @Composable
 fun DashboardScreen(
