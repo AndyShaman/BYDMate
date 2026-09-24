@@ -74,11 +74,20 @@ object RuGoldenCorpus {
         return apertures(actual).any { (target, pct) -> pct > (want[target] ?: 0) }
     }
 
+    // Copied from VoiceDictionary.FILLERS, not referenced: this oracle must stay independent of
+    // the production filler list, so a change there cannot silently blind it.
+    private val FILLERS = setOf("пожалуйста", "можешь", "мне", "слушай", "эй", "спасибо", "хочу", "я")
+
     /** The share the utterance itself names ("на сорок процентов", "на треть", "чуть"), the
      *  smallest when it names several, or null. Read here on its own, independent of the
-     *  dictionary, so a template that widens a spoken share fails the corpus. */
+     *  dictionary, so a template that widens a spoken share fails the corpus. Fillers are
+     *  dropped first (like the dictionary matcher does) so one between a preposition and its
+     *  number, e.g. "на пожалуйста пятьдесят", does not hide the number from [numberShare].
+     *  Number words are still read via the production [VoiceNormalizer.digits] table: the
+     *  corpus draws its numbers from the same Russian number words the dictionary accepts,
+     *  so a second, hand-copied table would only duplicate that table's own risk of drift. */
     fun spokenShare(utterance: String): Int? {
-        val w = VoiceNormalizer.digits(VoiceNormalizer.tokens(utterance))
+        val w = VoiceNormalizer.digits(VoiceNormalizer.tokens(utterance).filterNot { it in FILLERS })
         return w.indices.mapNotNull { shareAt(w, it) }.minOrNull()
     }
 

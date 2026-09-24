@@ -84,4 +84,33 @@ class VoiceDictionaryTest {
         assertTrue(unused.message, "never used" in unused.message.orEmpty())
         assertThrows(IllegalArgumentException::class.java) { VoiceDictionary.parse("открой окно") }
     }
+
+    @Test fun a_name_used_as_the_wrong_kind_is_a_loader_error_whichever_line_comes_first() {
+        val slotFirst = assertThrows(IllegalArgumentException::class.java) {
+            VoiceDictionary.parse("rule x: открой\n<x> окно => 主驾打开100\n{x} люк => 天窗打开100")
+        }
+        assertTrue(slotFirst.message, "x" in slotFirst.message.orEmpty())
+        val ruleFirst = assertThrows(IllegalArgumentException::class.java) {
+            VoiceDictionary.parse("rule x: открой\n{x} люк => 天窗打开100\n<x> окно => 主驾打开100")
+        }
+        assertTrue(ruleFirst.message, "x" in ruleFirst.message.orEmpty())
+    }
+
+    @Test fun a_reversed_or_non_numeric_range_is_a_loader_error() {
+        val reversed = assertThrows(IllegalArgumentException::class.java) {
+            VoiceDictionary.parse("range n: 30..16\n{n} штука => X{n}")
+        }
+        assertTrue(reversed.message, "30..16" in reversed.message.orEmpty())
+        val nonNumeric = assertThrows(IllegalArgumentException::class.java) {
+            VoiceDictionary.parse("range n: тридцать..сорок\n{n} штука => X{n}")
+        }
+        assertTrue(nonNumeric.message, "тридцать..сорок" in nonNumeric.message.orEmpty())
+    }
+
+    @Test fun a_stray_closing_bracket_in_a_template_is_a_loader_error() {
+        for (bad in listOf("открой окно} => 主驾打开100", "открой окно> => 主驾打开100",
+            "открой окно) => 主驾打开100", "открой окно] => 主驾打开100")) {
+            assertThrows(IllegalArgumentException::class.java) { VoiceDictionary.parse(bad) }
+        }
+    }
 }

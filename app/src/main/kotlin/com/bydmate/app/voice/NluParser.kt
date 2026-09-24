@@ -1,5 +1,7 @@
 package com.bydmate.app.voice
 
+import android.util.Log
+
 sealed interface ParseResult {
     /** One utterance can run several dispatchable commands (both seats, the windows "кроме"
      *  one, "A и B"). Single-command callers keep using [command]. */
@@ -20,22 +22,34 @@ sealed interface ParseResult {
  */
 object NluParser {
 
-    private val dictionary: VoiceDictionary by lazy { VoiceDictionary.load() }
+    private const val TAG = "NluParser"
+
+    // A corrupt resource must never surface as internal_error: a failed load is logged once
+    // here (by "by lazy") and every phrase after it goes to the agent instead, same as one the
+    // dictionary itself does not recognize.
+    private val dictionary: Result<VoiceDictionary> by lazy {
+        runCatching { VoiceDictionary.load() }.onFailure { Log.e(TAG, "dictionary failed to load", it) }
+    }
 
     /** Load the dictionary ahead of the first command so it never waits on the parse. */
     fun warmUp() {
         dictionary
     }
 
-    fun parse(text: String): ParseResult {
+    fun parse(text: String): ParseResult = parse(text, dictionary)
+
+    /** [dict] is the loaded (or failed) dictionary, exposed here so a failed load can be
+     *  exercised without pointing [NluParser] at a broken resource. */
+    internal fun parse(text: String, dict: Result<VoiceDictionary>): ParseResult {
+        val dictionary = dict.getOrNull() ?: return ParseResult.Unrecognized
         val words = VoiceDictionary.words(text)
         if (words.isEmpty()) return ParseResult.Unrecognized
-        return dictionary.match(words) ?: compound(words) ?: ParseResult.Unrecognized
+        return dictionary.match(words) ?: compound(words, dictionary) ?: ParseResult.Unrecognized
     }
 
     /** Every part between «и» / «а также» as its commands, or null when some part is not a
      *  command of its own (a step, the volume and a verbless phrase never are). */
-    private fun compound(words: List<String>): ParseResult? {
+    private fun compound(words: List<String>, dictionary: VoiceDictionary): ParseResult? {
         val parts = split(words)
         if (parts.size < 2) return null
         val commands = parts.map { part ->

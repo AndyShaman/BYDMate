@@ -46,8 +46,23 @@ class NluParserTest {
         assertEquals(ParseResult.Unrecognized, NluParser.parse("открой люк и"))
     }
 
+    @Test fun a_verbless_variant_never_carries_its_own_part_of_a_compound() {
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("выключи подогрев руля и подогрев сидений"))
+        assertEquals(
+            ParseResult.Unrecognized,
+            NluParser.parse("выключи подогрев сиденья водителя и подогрев сиденья пассажира"),
+        )
+        assertEquals(listOf("方向盘加热", "主驾座椅加热1档", "副驾座椅加热1档"), commands("включи подогрев руля и сидений"))
+        assertEquals(listOf("主驾座椅加热1档", "副驾座椅加热1档"), commands("подогрев сидений"))
+    }
+
     @Test fun empty_and_filler_only_are_unrecognized() {
         assertEquals(ParseResult.Unrecognized, NluParser.parse(""))
         assertEquals(ParseResult.Unrecognized, NluParser.parse("пожалуйста спасибо"))
+    }
+
+    @Test fun a_failed_dictionary_load_is_unrecognized_not_a_crash() {
+        val broken = Result.failure<VoiceDictionary>(IllegalArgumentException("corrupt resource"))
+        assertEquals(ParseResult.Unrecognized, NluParser.parse("открой окно", broken))
     }
 }

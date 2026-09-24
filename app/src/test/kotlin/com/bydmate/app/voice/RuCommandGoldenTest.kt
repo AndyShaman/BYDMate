@@ -1,5 +1,6 @@
 package com.bydmate.app.voice
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -60,5 +61,25 @@ class RuCommandGoldenAccuracyTest {
             .joinToString("\n") { "\"${it.utterance}\" => ${RuGoldenCorpus.actual(it)} (want ${it.expected})" }
         val overall = scores.last()
         assertTrue("accuracy ${overall.accuracy} < $minOverallAccuracy\n$misses", overall.accuracy >= minOverallAccuracy)
+    }
+
+    @Test fun spoken_share_skips_a_filler_between_the_preposition_and_the_number() {
+        assertEquals(50, RuGoldenCorpus.spokenShare("открой окно на пожалуйста пятьдесят"))
+    }
+
+    /** Every row naming a share must give [RuGoldenCorpus.spokenShare] a non-null answer, so a
+     *  gap in the oracle (a filler in the way, an unhandled word) fails loudly here instead of
+     *  silently passing [RuCommandGoldenTest] by never checking the aperture at all. */
+    @Test fun spoken_share_oracle_has_no_blind_spots() {
+        // Words checked whole (not by substring), so "третье"/"третью" does not falsely
+        // trigger on "треть"; "процент" alone stands for its three inflected forms.
+        val wholeWordTriggers = setOf("наполовину", "половину", "треть", "четверть", "чуть", "немного", "полностью")
+        val rows = RuGoldenCorpus.load()
+        val blind = rows.filter { row ->
+            val words = VoiceNormalizer.tokens(row.utterance)
+            val named = words.any { it.startsWith("процент") || it in wholeWordTriggers } || "до конца" in row.utterance
+            named && RuGoldenCorpus.spokenShare(row.utterance) == null
+        }
+        assertTrue(blind.joinToString("\n") { it.utterance }, blind.isEmpty())
     }
 }
