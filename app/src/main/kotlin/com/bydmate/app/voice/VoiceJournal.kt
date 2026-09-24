@@ -84,12 +84,18 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
     /** Queues the one read of the file ahead of every write, so a write never replaces
      *  sessions it has not seen. Sessions added meanwhile are newer and stay first. */
     private fun ensureLoaded() {
-        if (file == null || !loadRequested.compareAndSet(false, true)) return
-        io.execute {
-            val stored = load(file)
-            synchronized(lock) {
-                if (!discardFile) _entries.value = (_entries.value + stored).take(MAX)
+        val f = file ?: return
+        if (!loadRequested.compareAndSet(false, true)) return
+        runCatching {
+            io.execute {
+                val stored = load(f)
+                synchronized(lock) {
+                    if (!discardFile) _entries.value = (_entries.value + stored).take(MAX)
+                }
             }
+        }.onFailure {
+            loadRequested.set(false)
+            Log.w(TAG, "voice journal read not scheduled: ${it.message}")
         }
     }
 
@@ -97,9 +103,14 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
     private fun scheduleWrite() {
         val f = file ?: return
         if (!writeQueued.compareAndSet(false, true)) return
-        io.execute {
+        runCatching {
+            io.execute {
+                writeQueued.set(false)
+                persist(f, _entries.value)
+            }
+        }.onFailure {
             writeQueued.set(false)
-            persist(f, _entries.value)
+            Log.w(TAG, "voice journal write not scheduled: ${it.message}")
         }
     }
 
@@ -116,10 +127,20 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
         }.onFailure { Log.w(TAG, "voice journal unreadable, starting empty: ${it.message}") }
             .getOrDefault(emptyList())
 
+    /** Per-field character bounds keep the serialised size close to but not under [MAX_FILE_BYTES]
+     *  (JSON escaping, e.g. control characters as \\uXXXX, can inflate a bounded field well past
+     *  its character count). Bound by the actual serialised size instead: drop the oldest entry
+     *  and re-serialise until it fits, so a file this journal wrote is never one the loader rejects. */
     private fun persist(f: File, list: List<VoiceJournalEntry>) {
         runCatching {
+            var kept = list
+            var json = JSONArray(kept.map { toJson(it) }).toString()
+            while (json.toByteArray(Charsets.UTF_8).size.toLong() > MAX_FILE_BYTES && kept.size > 1) {
+                kept = kept.dropLast(1)
+                json = JSONArray(kept.map { toJson(it) }).toString()
+            }
             val tmp = File(f.parentFile, "${f.name}.tmp")
-            tmp.writeText(JSONArray(list.map { toJson(it) }).toString())
+            tmp.writeText(json)
             if (!tmp.renameTo(f)) {
                 f.writeText(tmp.readText())
                 tmp.delete()
@@ -139,6 +160,9 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
         const val MAX_FIELD_CHARS = 500
         /** Longest detail or answer kept per session (an agent answer lands in both). */
         const val MAX_TEXT_CHARS = 2000
+        /** Longest tool list kept per session, and longest name per tool. */
+        const val MAX_TOOLS = 20
+        const val MAX_TOOL_NAME_CHARS = 100
 
         internal fun bounded(e: VoiceJournalEntry): VoiceJournalEntry = e.copy(
             transcript = e.transcript.take(MAX_FIELD_CHARS),
@@ -146,6 +170,8 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
             reason = e.reason?.take(MAX_FIELD_CHARS),
             detail = e.detail.take(MAX_TEXT_CHARS),
             answer = e.answer?.take(MAX_TEXT_CHARS),
+            tools = e.tools.take(MAX_TOOLS).map { it.copy(name = it.name.take(MAX_TOOL_NAME_CHARS)) },
+            refusal = e.refusal?.take(MAX_FIELD_CHARS),
         )
 
         internal fun toJson(e: VoiceJournalEntry): JSONObject = JSONObject().apply {

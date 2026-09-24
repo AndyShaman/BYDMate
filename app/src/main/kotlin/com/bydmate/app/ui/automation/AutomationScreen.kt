@@ -734,6 +734,10 @@ private fun EditorDialog(
                                     cooldownText = digits
                                     onUpdate { copy(cooldownSeconds = digits.toIntOrNull() ?: 0) }
                                 },
+                                // Frozen while the draft is [EditingRule.saving]: onUpdate is a
+                                // no-op then, and without this the field's own remembered text
+                                // would still change, diverging from the frozen snapshot.
+                                enabled = !editing.saving,
                                 modifier = Modifier.width(70.dp),
                                 colors = OutlinedTextFieldDefaults.colors(
                                     focusedBorderColor = AccentGreen, unfocusedBorderColor = CardBorder,

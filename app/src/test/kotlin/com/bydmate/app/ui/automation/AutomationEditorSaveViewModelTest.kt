@@ -169,6 +169,33 @@ class AutomationEditorSaveViewModelTest {
         coVerify(exactly = 1) { ruleDao.insert(any()) }
     }
 
+    @Test fun `a non-SQLite failure unfreezes the draft too, an edit attempted while frozen is still ignored`() {
+        coEvery { ruleDao.getById(9) } returns null
+        val gate = CompletableDeferred<Long>()
+        coEvery { ruleDao.insert(any()) } coAnswers { gate.await() }
+        val vm = vm()
+        vm.openEditRule(RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]"))
+        vm.editWith(listOf(windowClose))
+        vm.saveRule()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        vm.saveDeletedRuleAsNew()
+        testDispatcher.scheduler.runCurrent()
+        // Attempted while the draft is frozen: a no-op, so the pre-freeze snapshot is what
+        // gets checked below.
+        vm.updateEditing { copy(name = "Renamed mid-save") }
+        assertEquals("Navi", vm.uiState.value.editing.name)
+
+        gate.completeExceptionally(IllegalStateException("boom"))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(vm.uiState.value.showEditor)
+        assertFalse(vm.uiState.value.editing.saving)
+        assertEquals("Navi", vm.uiState.value.editing.name)
+        assertEquals(listOf(windowClose), vm.uiState.value.editing.actions)
+        assertTrue(vm.uiState.value.editorError?.contains("boom") == true)
+    }
+
     @Test fun `a failed insert on a deleted rule keeps the draft and shows a message, and unfreezes it`() {
         coEvery { ruleDao.getById(9) } returns null
         coEvery { ruleDao.insert(any()) } throws SQLiteException("disk full")
