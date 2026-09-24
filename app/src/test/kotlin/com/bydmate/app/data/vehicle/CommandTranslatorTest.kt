@@ -66,6 +66,11 @@ class CommandTranslatorTest {
         )
     }
 
+    @Test fun `steering heat commands map to the dev 1023 pair`() {
+        assertEquals(CommandTranslator.Resolved("steering_heat_on", 2), one("方向盘加热"))
+        assertEquals(CommandTranslator.Resolved("steering_heat_off", 1), one("关闭方向盘加热"))
+    }
+
     // ── Test 4: set temperature 22 maps to ac_temp_main val 22 ───────────────
     @Test fun `set temperature 22 maps to ac_temp_main val 22`() {
         val r = one("设置温度22")

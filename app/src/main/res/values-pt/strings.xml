@@ -486,6 +486,7 @@
     <string name="toggle_target_seat_heat_passenger">Aquecimento do banco do passageiro</string>
     <string name="toggle_target_seat_vent_driver">Ventilação do banco do condutor</string>
     <string name="toggle_target_seat_vent_passenger">Ventilação do banco do passageiro</string>
+    <string name="toggle_target_steering_heat">Aquecimento do volante</string>
     <string name="toggle_state_unknown">%1$s: estado desconhecido</string>
     <string name="toggle_trunk_moving">O porta-malas está em movimento</string>
     <string name="toggle_unknown_target">Destino de alternância desconhecido: %1$s</string>
@@ -1074,6 +1075,9 @@
     <string name="auto_act_passenger_vent_off">Ventil. passageiro desl.</string>
     <string name="auto_act_mirror_heat_on">Aquec. espelhos lig.</string>
     <string name="auto_act_mirror_heat_off">Aquec. espelhos desl.</string>
+    <string name="auto_act_steering_heat_on">Aquec. volante lig.</string>
+    <string name="auto_act_steering_heat_off">Aquec. volante desl.</string>
+    <string name="steering_heat_not_equipped">Este carro não tem aquecimento do volante</string>
     <string name="auto_act_ambient_light_on">Luz ambiente lig.</string>
     <string name="auto_act_ambient_light_off">Luz ambiente desl.</string>
     <string name="auto_act_drl_on">DRL lig.</string>

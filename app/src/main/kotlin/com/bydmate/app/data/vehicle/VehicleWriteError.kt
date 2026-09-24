@@ -40,6 +40,14 @@ sealed class VehicleWriteError(
         : VehicleWriteError(action, details)
 
     /**
+     * The car reports the function as absent (state 0 / 65535 after the write). Raised today
+     * only by SteeringHeatChannel; ActionDispatcher maps it to the steering-heat text, so a
+     * new producer must extend that mapping.
+     */
+    class NotEquipped(action: String, details: String = "function absent on this car")
+        : VehicleWriteError(action, details)
+
+    /**
      * HelperClient returned false for a non-validated entry. The action is in
      * the competitor allowlist but has not been live-confirmed on Leopard 3.
      */

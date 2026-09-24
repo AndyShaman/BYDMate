@@ -494,6 +494,7 @@
     <string name="toggle_target_seat_heat_passenger">Passenger seat heating</string>
     <string name="toggle_target_seat_vent_driver">Driver seat ventilation</string>
     <string name="toggle_target_seat_vent_passenger">Passenger seat ventilation</string>
+    <string name="toggle_target_steering_heat">Steering wheel heating</string>
     <string name="toggle_state_unknown">%1$s: state unknown</string>
     <string name="toggle_trunk_moving">Trunk is moving</string>
     <string name="toggle_unknown_target">Unknown toggle target: %1$s</string>
@@ -1082,6 +1083,9 @@
     <string name="auto_act_passenger_vent_off">Passenger Vent Off</string>
     <string name="auto_act_mirror_heat_on">Mirror Heat On</string>
     <string name="auto_act_mirror_heat_off">Mirror Heat Off</string>
+    <string name="auto_act_steering_heat_on">Steering Wheel Heat On</string>
+    <string name="auto_act_steering_heat_off">Steering Wheel Heat Off</string>
+    <string name="steering_heat_not_equipped">This car has no steering wheel heating</string>
     <string name="auto_act_ambient_light_on">Ambient Light On</string>
     <string name="auto_act_ambient_light_off">Ambient Light Off</string>
     <string name="auto_act_drl_on">DRL On</string>

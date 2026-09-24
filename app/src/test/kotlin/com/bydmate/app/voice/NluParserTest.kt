@@ -151,4 +151,12 @@ class NluParserTest {
     // Regression guards: ON path and mirror heat must not change.
     @Test fun seat_heat_on_still_level1() = assertEquals("主驾座椅加热1档", cmd("включи подогрев сиденья"))
     @Test fun mirror_heat_off_still_resolves() = assertEquals("关闭后视镜加热", cmd("выключи подогрев зеркал"))
+
+    @Test fun steering_heat_resolves_ru_and_en() {
+        assertEquals("方向盘加热", cmd("включи подогрев руля"))
+        assertEquals("关闭方向盘加热", cmd("выключи подогрев руля"))
+        assertEquals("方向盘加热", cmd("включи руль"))
+        assertEquals("方向盘加热", cmd("enable steering wheel heating", VoiceLang.EN))
+        assertEquals("关闭方向盘加热", cmd("disable steering wheel heating", VoiceLang.EN))
+    }
 }

@@ -551,6 +551,7 @@
     <string name="toggle_target_seat_heat_passenger">Подогрев сиденья пассажира</string>
     <string name="toggle_target_seat_vent_driver">Обдув сиденья водителя</string>
     <string name="toggle_target_seat_vent_passenger">Обдув сиденья пассажира</string>
+    <string name="toggle_target_steering_heat">Подогрев руля</string>
     <string name="toggle_state_unknown">%1$s: состояние неизвестно</string>
     <string name="toggle_trunk_moving">Багажник движется</string>
     <string name="toggle_unknown_target">Неизвестная цель переключения: %1$s</string>
@@ -1238,6 +1239,9 @@
     <string name="auto_act_passenger_vent_off">Вентиляция пассажира выкл</string>
     <string name="auto_act_mirror_heat_on">Подогрев зеркал вкл</string>
     <string name="auto_act_mirror_heat_off">Подогрев зеркал выкл</string>
+    <string name="auto_act_steering_heat_on">Подогрев руля вкл</string>
+    <string name="auto_act_steering_heat_off">Подогрев руля выкл</string>
+    <string name="steering_heat_not_equipped">На этой машине нет подогрева руля</string>
     <string name="auto_act_ambient_light_on">Амбиент вкл</string>
     <string name="auto_act_ambient_light_off">Амбиент выкл</string>
     <string name="auto_act_drl_on">ДХО вкл</string>

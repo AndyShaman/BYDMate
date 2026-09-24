@@ -31,6 +31,11 @@ class VoiceCommandSpecTest {
         assertEquals("车门解锁", VoiceCatalog.resolve(ActionSlot.OFF, DeviceSlot.LOCK, null))
     }
 
+    @Test fun resolves_steering_heat_on_and_off() {
+        assertEquals("方向盘加热", VoiceCatalog.resolve(ActionSlot.ON, DeviceSlot.STEERING_HEAT, null))
+        assertEquals("关闭方向盘加热", VoiceCatalog.resolve(ActionSlot.OFF, DeviceSlot.STEERING_HEAT, null))
+    }
+
     @Test fun unknown_combination_returns_null() {
         assertNull(VoiceCatalog.resolve(ActionSlot.VENT, DeviceSlot.LOCK, null))
     }

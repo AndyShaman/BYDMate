@@ -551,6 +551,7 @@
     <string name="toggle_target_seat_heat_passenger">Podgrzewanie fotela pasażera</string>
     <string name="toggle_target_seat_vent_driver">Wentylacja fotela kierowcy</string>
     <string name="toggle_target_seat_vent_passenger">Wentylacja fotela pasażera</string>
+    <string name="toggle_target_steering_heat">Podgrzewanie kierownicy</string>
     <string name="toggle_state_unknown">%1$s: stan nieznany</string>
     <string name="toggle_trunk_moving">Bagażnik jest w ruchu</string>
     <string name="toggle_unknown_target">Nieznany cel przełączania: %1$s</string>
@@ -1234,6 +1235,9 @@
     <string name="auto_act_passenger_vent_off">Wentylacja pasażera wył.</string>
     <string name="auto_act_mirror_heat_on">Podgrzewanie lusterek wł.</string>
     <string name="auto_act_mirror_heat_off">Podgrzewanie lusterek wył.</string>
+    <string name="auto_act_steering_heat_on">Podgrzewanie kierownicy wł.</string>
+    <string name="auto_act_steering_heat_off">Podgrzewanie kierownicy wył.</string>
+    <string name="steering_heat_not_equipped">Ten samochód nie ma podgrzewania kierownicy</string>
     <string name="auto_act_ambient_light_on">Oświetlenie ambient wł.</string>
     <string name="auto_act_ambient_light_off">Oświetlenie ambient wył.</string>
     <string name="auto_act_drl_on">Światła dzienne wł.</string>

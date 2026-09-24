@@ -22,6 +22,8 @@ import com.bydmate.app.data.local.entity.ActionDef
 import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.HelperClient
 import com.bydmate.app.data.vehicle.VehicleApi
+import com.bydmate.app.data.vehicle.VehicleWriteError
+import com.bydmate.app.data.vehicle.WriteAllowlist
 import com.bydmate.app.media.MediaSessionListenerService
 import com.bydmate.app.navdata.NavPackages
 import com.bydmate.app.service.TrackingService
@@ -229,6 +231,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         internal const val TOGGLE_SEAT_HEAT_PASSENGER = "seat_heat_passenger"
         internal const val TOGGLE_SEAT_VENT_DRIVER = "seat_vent_driver"
         internal const val TOGGLE_SEAT_VENT_PASSENGER = "seat_vent_passenger"
+        internal const val TOGGLE_STEERING_HEAT = "steering_heat"
 
         /** Targets a "toggle" action can flip, in picker order. */
         internal val TOGGLE_TARGETS = listOf(
@@ -236,24 +239,27 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             TOGGLE_SENTRY, TOGGLE_HAZARD, TOGGLE_CLIMATE,
             TOGGLE_SEAT_HEAT_DRIVER, TOGGLE_SEAT_HEAT_PASSENGER,
             TOGGLE_SEAT_VENT_DRIVER, TOGGLE_SEAT_VENT_PASSENGER,
+            TOGGLE_STEERING_HEAT,
+        )
+
+        private val TOGGLE_TARGET_NAMES: Map<String, Int> = mapOf(
+            TOGGLE_TRUNK to R.string.toggle_target_trunk,
+            TOGGLE_FRONT_TRUNK to R.string.toggle_target_front_trunk,
+            TOGGLE_SUNROOF to R.string.toggle_target_sunroof,
+            TOGGLE_LOCKS to R.string.toggle_target_locks,
+            TOGGLE_CLUSTER to R.string.toggle_target_cluster,
+            TOGGLE_SENTRY to R.string.toggle_target_sentry,
+            TOGGLE_HAZARD to R.string.toggle_target_hazard,
+            TOGGLE_CLIMATE to R.string.toggle_target_climate,
+            TOGGLE_SEAT_HEAT_DRIVER to R.string.toggle_target_seat_heat_driver,
+            TOGGLE_SEAT_HEAT_PASSENGER to R.string.toggle_target_seat_heat_passenger,
+            TOGGLE_SEAT_VENT_DRIVER to R.string.toggle_target_seat_vent_driver,
+            TOGGLE_SEAT_VENT_PASSENGER to R.string.toggle_target_seat_vent_passenger,
+            TOGGLE_STEERING_HEAT to R.string.toggle_target_steering_heat,
         )
 
         /** Localized name of a toggle target; null when the id is not a known target. */
-        internal fun toggleTargetNameRes(target: String): Int? = when (target) {
-            TOGGLE_TRUNK -> R.string.toggle_target_trunk
-            TOGGLE_FRONT_TRUNK -> R.string.toggle_target_front_trunk
-            TOGGLE_SUNROOF -> R.string.toggle_target_sunroof
-            TOGGLE_LOCKS -> R.string.toggle_target_locks
-            TOGGLE_CLUSTER -> R.string.toggle_target_cluster
-            TOGGLE_SENTRY -> R.string.toggle_target_sentry
-            TOGGLE_HAZARD -> R.string.toggle_target_hazard
-            TOGGLE_CLIMATE -> R.string.toggle_target_climate
-            TOGGLE_SEAT_HEAT_DRIVER -> R.string.toggle_target_seat_heat_driver
-            TOGGLE_SEAT_HEAT_PASSENGER -> R.string.toggle_target_seat_heat_passenger
-            TOGGLE_SEAT_VENT_DRIVER -> R.string.toggle_target_seat_vent_driver
-            TOGGLE_SEAT_VENT_PASSENGER -> R.string.toggle_target_seat_vent_passenger
-            else -> null
-        }
+        internal fun toggleTargetNameRes(target: String): Int? = TOGGLE_TARGET_NAMES[target]
 
         /**
          * Outcome of resolving a "toggle" against the live state: either the concrete
@@ -276,6 +282,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
          *   turnSignal  6=hazard on (the mask holds while it blinks), anything else = off
          *   acStatus    0=off, 1=on
          *   seat steps  0=off, 1..5=level
+         *   steering heat  2=on, 1=off (0 = no heater, 65535 = no CAN link: not a state)
          * The cluster target has no snapshot field and is resolved by the caller.
          * [lastSeatLevel] is the step a seat is turned back on with; it only matters for the
          * seat targets, where the snapshot says «off» but not «off from which step».
@@ -292,18 +299,29 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
             SeatLevelMemory.SEAT_COMMAND_PREFIX[target]?.let { prefix ->
                 return resolveSeatToggle(value, prefix, lastSeatLevel)
             }
-            return when (target) {
-                TOGGLE_TRUNK -> resolveHatchToggle(value, "开后备箱", "关后备箱")
-                TOGGLE_FRONT_TRUNK -> resolveHatchToggle(value, "前备箱打开", "前备箱关闭")
-                TOGGLE_SUNROOF -> ToggleResolution.Command(
-                    if (value == 0) "天窗打开100" else "天窗打开0"
-                )
-                TOGGLE_HAZARD -> ToggleResolution.Command(
-                    if (value == TURN_SIGNAL_HAZARD) "双闪关闭" else "双闪打开"
-                )
-                TOGGLE_CLIMATE -> resolveClimateToggle(value)
-                else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
-            }
+            return resolveStateToggle(target, value)
+        }
+
+        /** The non-seat targets of [resolveToggleCommand], against a known [value]. */
+        private fun resolveStateToggle(target: String, value: Int): ToggleResolution = when (target) {
+            TOGGLE_TRUNK -> resolveHatchToggle(value, "开后备箱", "关后备箱")
+            TOGGLE_FRONT_TRUNK -> resolveHatchToggle(value, "前备箱打开", "前备箱关闭")
+            TOGGLE_SUNROOF -> ToggleResolution.Command(
+                if (value == 0) "天窗打开100" else "天窗打开0"
+            )
+            TOGGLE_HAZARD -> ToggleResolution.Command(
+                if (value == TURN_SIGNAL_HAZARD) "双闪关闭" else "双闪打开"
+            )
+            TOGGLE_CLIMATE -> resolveClimateToggle(value)
+            TOGGLE_STEERING_HEAT -> resolveSteeringHeatToggle(value)
+            else -> resolveLocksToggle(value)   // TOGGLE_LOCKS -- the only target left
+        }
+
+        /** Why a param dispatch failed, as the step reason. Only the steering heat channel
+         *  reports NotEquipped (see VehicleWriteError); it gets a readable, localized text. */
+        private fun paramFailureReason(err: Throwable?, strings: AppStrings): String = when (err) {
+            is VehicleWriteError.NotEquipped -> strings.get(R.string.steering_heat_not_equipped)
+            else -> err?.message ?: "dispatch failed"
         }
 
         /** Hazard blinkers: the turn-signal mask reads 6 while they run. */
@@ -313,6 +331,13 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         private fun resolveClimateToggle(value: Int): ToggleResolution = when (value) {
             1 -> ToggleResolution.Command("关闭空调")
             0 -> ToggleResolution.Command("自动空调")
+            else -> ToggleResolution.StateUnknown
+        }
+
+        /** Steering wheel heat: 2=on, 1=off; anything else is not a heater state. */
+        private fun resolveSteeringHeatToggle(value: Int): ToggleResolution = when (value) {
+            2 -> ToggleResolution.Command("关闭方向盘加热")
+            1 -> ToggleResolution.Command("方向盘加热")
             else -> ToggleResolution.StateUnknown
         }
 
@@ -590,8 +615,9 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         }
     }
 
-    /** Snapshot field each toggle target reads its current state from. */
-    private fun toggleState(target: String, live: DiParsData?): Int? = when (target) {
+    /** Snapshot field each toggle target reads its current state from. The steering heat state
+     *  is not in the snapshot: it is read through the daemon, like sentry. */
+    private suspend fun toggleState(target: String, live: DiParsData?): Int? = when (target) {
         TOGGLE_TRUNK -> live?.trunk
         TOGGLE_FRONT_TRUNK -> live?.frontTrunk
         TOGGLE_SUNROOF -> live?.sunroof
@@ -602,6 +628,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         TOGGLE_SEAT_HEAT_PASSENGER -> live?.seatHeatPassenger
         TOGGLE_SEAT_VENT_DRIVER -> live?.seatVentDriver
         TOGGLE_SEAT_VENT_PASSENGER -> live?.seatVentPassenger
+        TOGGLE_STEERING_HEAT -> helper.read(WriteAllowlist.STEERING_HEAT_STATE_DEV, WriteAllowlist.STEERING_HEAT_STATE_FID)?.toInt()
         else -> null
     }
 
@@ -778,9 +805,7 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
         val success = result.isSuccess
         // A seat step the driver asked for is the one a later «toggle» brings back.
         if (success) seatLevelMemory.remember(action.command)
-        val reason = if (!success) {
-            result.exceptionOrNull()?.message ?: "dispatch failed"
-        } else null
+        val reason = if (!success) paramFailureReason(result.exceptionOrNull(), appStrings) else null
         return DispatchResult(success, reason)
     }
 
