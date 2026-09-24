@@ -395,7 +395,10 @@ class VehicleApiImpl @Inject constructor(
      */
     private suspend fun verifyWindowBurst(checks: List<WindowVerify>): String? {
         val samples = sampleWindows(checks)
-        val failed = retryOnPercentChannel(watchPanes(samples.pending), samples.blind)
+        val stuck = watchPanes(samples.pending)
+        val left = retryOnPercentChannel(stuck, samples.blind)
+        // Only the first writes get the nudge: panes the fallback re-sent are new objects.
+        val failed = nudgeSameTarget(left.filter { it in stuck }) + left.filterNot { it in stuck }
         if (failed.isEmpty()) return null
         failed.forEach { pane ->
             logWindowVerdict(pane, "не сдвинулось")
@@ -450,6 +453,39 @@ class VehicleApiImpl @Inject constructor(
         blind.forEach { resendOnPercent(it, "readback blind", retried, stagger) }
         if (retried.isEmpty()) return stuck
         return notRetried + watchPanes(sampleWindows(retried).pending)
+    }
+
+    /**
+     * Second chance for a percent write the car ignored (Leopard 3, 2026-09-24): a percent
+     * value equal to the PREVIOUS percent write to the same window fid is accepted with
+     * status=1 and the motor never starts, wherever the pane is. Repeating the same value never
+     * helps, a different one does, so each stuck percent pane is re-sent ONCE with its value
+     * nudged by one percent (down for 100) and THAT write is judged instead. A close (0) is
+     * never nudged: 1 % open is worse than an honest failure.
+     *
+     * Needs a pane that was SEEN not to move, exactly like [retryOnPercentChannel]; the nudged
+     * write itself is never eligible for another nudge. Returns the panes that must still be
+     * reported as failures.
+     */
+    private suspend fun nudgeSameTarget(stuck: List<PendingPane>): List<PendingPane> {
+        val percent = stuck.filter {
+            it.check.actionName.lowercase().endsWith("_pos") && it.check.value in 1..100
+        }
+        if (percent.isEmpty()) return stuck
+        val nudged = mutableListOf<WindowVerify>()
+        val notNudged = mutableListOf<PendingPane>()
+        val stagger = WriteStagger()
+        for (pane in percent) {
+            val check = pane.check
+            val value = if (check.value >= 100) check.value - 1 else check.value + 1
+            val before = nudged.size
+            stagger.pace()
+            Log.i(TAG, "window nudge: ${check.actionName} ${check.value} -> $value " +
+                "reason=same target ignored (pane did not move)")
+            doWrite(check.actionName, value, verifyInto = nudged)
+            if (nudged.size == before) notNudged += pane
+        }
+        return stuck.filterNot { it in percent } + notNudged + watchPanes(sampleWindows(nudged).pending)
     }
 
     /** Re-sends one door on its percent fid; false when there is no percent twin or the

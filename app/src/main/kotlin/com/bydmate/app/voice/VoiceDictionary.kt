@@ -12,6 +12,9 @@ class VoiceDictionary internal constructor(
     val templateCount: Int,
 ) {
 
+    /** Distinct word-sequence keys the dictionary indexes phrases under. */
+    val keyCount: Int get() = byKey.size
+
     /**
      * What [words] (already normalized by [words]) runs, or null when no phrase equals them or two
      * phrases disagree. [inCompound]: the words are one part of "A и B", where a `solo` template
