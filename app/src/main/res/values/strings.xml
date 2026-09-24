@@ -113,7 +113,7 @@
     <string name="adb_dialog_no_access_title">Нет доступа к ADB</string>
     <string name="adb_dialog_no_access_body">Подтвердите запрос на экране или подключите ADB заново, затем нажмите «Проверить».</string>
     <string name="adb_dialog_helper_down_title">Помощник BYDMate не запустился</string>
-    <string name="adb_dialog_helper_down_body">ADB работает, но помощник не отвечает. Отправьте дамп диагностики из настроек.</string>
+    <string name="adb_dialog_helper_down_body">ADB работает, но помощник не отвечает. Включите запись логов (Настройки, «Сервис и данные», «Запись логов»), подождите минуту, остановите и отправьте файл разработчику.</string>
     <string name="adb_dialog_close">Закрыть</string>
     <string name="adb_dialog_check">Проверить</string>
     <string name="adb_dialog_enable_restore">Включить восстановление</string>

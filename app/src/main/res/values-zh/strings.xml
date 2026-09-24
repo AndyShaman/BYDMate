@@ -833,7 +833,7 @@
     <string name="adb_dialog_no_access_title">无 ADB 访问权限</string>
     <string name="adb_dialog_no_access_body">请在屏幕上确认请求或重新连接 ADB，然后点击“检查”。</string>
     <string name="adb_dialog_helper_down_title">BYDMate 助手未启动</string>
-    <string name="adb_dialog_helper_down_body">ADB 正常，但助手没有响应。请在设置中发送诊断转储。</string>
+    <string name="adb_dialog_helper_down_body">ADB 正常，但助手没有响应。请开启日志录制（设置，“服务与数据”，“录制日志”），等待一分钟，停止后把文件发给开发者。</string>
     <string name="adb_dialog_close">关闭</string>
     <string name="adb_dialog_check">检查</string>
     <string name="adb_dialog_enable_restore">启用恢复</string>

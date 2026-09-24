@@ -113,7 +113,7 @@
     <string name="adb_dialog_no_access_title">Няма доступу да ADB</string>
     <string name="adb_dialog_no_access_body">Пацвердзіце запыт на экране або падключыце ADB нанава, потым націсніце «Праверыць».</string>
     <string name="adb_dialog_helper_down_title">Памочнік BYDMate не запусціўся</string>
-    <string name="adb_dialog_helper_down_body">ADB працуе, але памочнік не адказвае. Адпраўце дамп дыягностыкі з налад.</string>
+    <string name="adb_dialog_helper_down_body">ADB працуе, але памочнік не адказвае. Уключыце запіс логаў (Налады, «Сэрвіс і даныя», «Запіс логаў»), пачакайце хвіліну, спыніце і адпраўце файл распрацоўшчыку.</string>
     <string name="adb_dialog_close">Закрыць</string>
     <string name="adb_dialog_check">Праверыць</string>
     <string name="adb_dialog_enable_restore">Уключыць аднаўленне</string>

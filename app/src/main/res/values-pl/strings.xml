@@ -113,7 +113,7 @@
     <string name="adb_dialog_no_access_title">Brak dostępu do ADB</string>
     <string name="adb_dialog_no_access_body">Potwierdź prośbę na ekranie lub połącz ADB ponownie, a potem naciśnij „Sprawdź”.</string>
     <string name="adb_dialog_helper_down_title">Pomocnik BYDMate się nie uruchomił</string>
-    <string name="adb_dialog_helper_down_body">ADB działa, ale pomocnik nie odpowiada. Wyślij zrzut diagnostyczny z ustawień.</string>
+    <string name="adb_dialog_helper_down_body">ADB działa, ale pomocnik nie odpowiada. Włącz zapis logów (Ustawienia, „Serwis i dane”, „Zapis logów”), poczekaj minutę, zatrzymaj i wyślij plik programiście.</string>
     <string name="adb_dialog_close">Zamknij</string>
     <string name="adb_dialog_check">Sprawdź</string>
     <string name="adb_dialog_enable_restore">Włącz przywracanie</string>

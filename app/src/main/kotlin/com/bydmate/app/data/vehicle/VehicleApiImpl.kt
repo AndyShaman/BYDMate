@@ -531,6 +531,12 @@ class VehicleApiImpl @Inject constructor(
         return "${door}_pos"
     }
 
+    /** Raw window position decoded and range-checked: a car that has no readback for a pane
+     *  (e2, #242) answers 255, which is not a sentinel [SentinelDecoder] knows but is not a
+     *  real position either — the telemetry decoder (ParamDecoder, INT_PERCENT) rejects it the
+     *  same way. Left as a raw position it reads as "did not move" and triggers an extra write. */
+    private fun windowPercent(raw: Int?): Int? = raw?.let(SentinelDecoder::decodeInt)?.takeIf { it in 0..100 }
+
     /** Panes worth watching (the "before" sample resolved, was readable, and is not already at
      *  the requested position) and panes whose position could not be read at all. Everything
      *  else is "no evidence" and stays out of both lists. */
@@ -539,7 +545,7 @@ class VehicleApiImpl @Inject constructor(
         val blind = mutableListOf<WindowVerify>()
         for (check in checks) {
             val sample = withTimeoutOrNull(WINDOW_BEFORE_READ_BUDGET_MS) { check.before.await() }
-            val before = sample?.second?.let { SentinelDecoder.decodeInt(it) }
+            val before = windowPercent(sample?.second)
             when {
                 before == null -> blind += check
                 kotlin.math.abs(before - check.target) <= WINDOW_POSITION_TOLERANCE_PCT -> Unit
@@ -554,7 +560,7 @@ class VehicleApiImpl @Inject constructor(
 
     /** One more read of a pane: true when it moved, or when the read gives no evidence. */
     private suspend fun paneSettled(pane: PendingPane): Boolean {
-        val after = readWindowRaw(pane.readFid)?.let { SentinelDecoder.decodeInt(it) }
+        val after = windowPercent(readWindowRaw(pane.readFid))
         pane.seen += after?.toString() ?: "err"
         return after == null || kotlin.math.abs(after - pane.before) > WINDOW_POSITION_TOLERANCE_PCT
     }

@@ -109,7 +109,7 @@
     <string name="adb_dialog_no_access_title">No ADB access</string>
     <string name="adb_dialog_no_access_body">Confirm the prompt on the screen or reconnect ADB, then tap “Check”.</string>
     <string name="adb_dialog_helper_down_title">BYDMate helper did not start</string>
-    <string name="adb_dialog_helper_down_body">ADB works, but the helper does not respond. Send a diagnostic dump from Settings.</string>
+    <string name="adb_dialog_helper_down_body">ADB works, but the helper does not respond. Turn on log recording (Settings, “Service &amp; Data”, “Record logs”), wait a minute, stop it and send the file to the developer.</string>
     <string name="adb_dialog_close">Close</string>
     <string name="adb_dialog_check">Check</string>
     <string name="adb_dialog_enable_restore">Enable restore</string>

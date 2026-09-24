@@ -145,6 +145,34 @@ class VehicleApiWindowFallbackTest {
         coVerify(exactly = 0) { helper.write(DEV, PASSENGER_POS_FID, any()) }
     }
 
+    /** #242 e2 (bugtri/l242_b.txt): the driver window readback answers raw 255, which is not a
+     *  sentinel [com.bydmate.app.data.autoservice.SentinelDecoder] knows but is not a real
+     *  0..100 position either. Left undecoded, 255 read as a real "before" position made the
+     *  pane look stuck (before=255, after=255, no movement) and triggered an extra +1 % write
+     *  (nudgeSameTarget, 50 -> 51). Treated as blind like a failed read (null), the write is
+     *  reported as a success with nothing to re-send. */
+    @Test fun `raw 255 readback is blind, not a real position stuck at 255`() = runTest {
+        coEvery { autoservice.getIntRaw(DEV, DRIVER_READ_FID) } returns 255
+
+        val result = api(WindowChannel.PERCENT).writeWindowDriver(50)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }
+        coVerify(exactly = 0) { helper.write(DEV, DRIVER_POS_FID, 51) }
+    }
+
+    /** Same #242 class on the verification read: a real "before" (100) followed by an
+     *  out-of-range readback (101) is no evidence, not "did not move", so no +1 % nudge. */
+    @Test fun `out of range verification read is blind, no nudge`() = runTest {
+        positions(100, 101)
+
+        val result = api(WindowChannel.PERCENT).writeWindowDriver(50)
+
+        assertTrue(result.isSuccess)
+        coVerify(exactly = 1) { helper.write(DEV, DRIVER_POS_FID, 50) }
+        coVerify(exactly = 0) { helper.write(DEV, DRIVER_POS_FID, 51) }
+    }
+
     @Test fun `a CTRL car never gets the percent retry`() = runTest {
         positions(0)
 
