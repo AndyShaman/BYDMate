@@ -22,6 +22,11 @@ object NluParser {
 
     private val dictionary: VoiceDictionary by lazy { VoiceDictionary.load() }
 
+    /** Load the dictionary ahead of the first command so it never waits on the parse. */
+    fun warmUp() {
+        dictionary
+    }
+
     fun parse(text: String): ParseResult {
         val words = VoiceDictionary.words(text)
         if (words.isEmpty()) return ParseResult.Unrecognized
