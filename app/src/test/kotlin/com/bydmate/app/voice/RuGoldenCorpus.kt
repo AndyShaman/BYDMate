@@ -35,7 +35,7 @@ object RuGoldenCorpus {
         ParseResult.Unrecognized -> UNRECOGNIZED
     }
 
-    fun actual(row: Row): String = render(NluParser.parse(row.utterance, VoiceLang.RU))
+    fun actual(row: Row): String = render(NluParser.parse(row.utterance))
 
     /**
      * Aperture share each command leaves per opening (window door or sunroof), taken from

@@ -444,22 +444,36 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
     private fun withDecodeMs(text: String, decodeMs: Long?): String =
         if (decodeMs != null) "$text decodeMs=$decodeMs" else text
 
-    /** Side-effect-free resolution of a transcript to an actionable command. Precedence: user
-     *  automations (their phrase anywhere in the utterance, longest wins) > the user's own phrases
-     *  for built-in commands > the built-in NluParser > the agent (Resolution.None); the agent
-     *  follow-up window, checked by the caller, outranks all of them. User-made phrases go first
-     *  so a user can take over a phrase the parser gets wrong. */
+    /** Side-effect-free resolution of a transcript to an actionable command. Precedence (the
+     *  agent follow-up window, checked by the caller, outranks all of them):
+     *  1. an automation phrase equal to the whole utterance after normalization;
+     *  2. the user's own phrase for a built-in command, equal to the whole utterance;
+     *  3. the built-in NluParser on the full utterance;
+     *  4. an automation phrase contained in the utterance (longest wins);
+     *  5. a user phrase contained in the utterance (longest wins);
+     *  6. the agent (Resolution.None).
+     *  An exact user-made phrase goes first so the user can take over a phrase the parser gets
+     *  wrong; a merely contained one yields to the parser, so «открой окно» never swallows
+     *  «открой окно наполовину». */
     private suspend fun resolve(text: String): Resolution {
-        automationResolver.match(text)?.let { return Resolution.Auto(it) }
-        userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
-        return when (val o = NluOutcome.of(NluParser.parse(text, VoiceLang.RU))) {
-            is NluOutcome.Refused -> Resolution.None(o.reason)
-            is NluOutcome.Understood -> when (val r = o.result) {
-                is ParseResult.Command -> Resolution.Cmd(r.commands, VoiceCommandLabels.of(r.commands))
-                is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
-                is ParseResult.Volume -> Resolution.Vol(r.payload)
-                ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
-            }
+        val auto = automationResolver.match(text)
+        val user = userPhrases.match(text)
+        if (auto != null && auto.exact) return Resolution.Auto(auto)
+        if (user != null && user.exact) return user.toCmd()
+        val parsed = parse(text)
+        if (parsed !is Resolution.None) return parsed
+        return auto?.let { Resolution.Auto(it) } ?: user?.toCmd() ?: parsed
+    }
+
+    private fun VoiceUserMatch.toCmd() = Resolution.Cmd(listOf(command.command), "phrase:${command.id}")
+
+    private fun parse(text: String): Resolution = when (val o = NluOutcome.of(NluParser.parse(text))) {
+        is NluOutcome.Refused -> Resolution.None(o.reason)
+        is NluOutcome.Understood -> when (val r = o.result) {
+            is ParseResult.Command -> Resolution.Cmd(r.commands, VoiceCommandLabels.of(r.commands))
+            is ParseResult.RelativeTemp -> Resolution.RelTemp(r.sign)
+            is ParseResult.Volume -> Resolution.Vol(r.payload)
+            ParseResult.Unrecognized -> Resolution.None(VoiceRefusal.UNRECOGNIZED)
         }
     }
 

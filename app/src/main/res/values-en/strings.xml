@@ -1202,7 +1202,7 @@
     <string name="settings_voice_user_phrases_title">Own phrases for commands</string>
     <string name="settings_voice_user_phrases_description">Your words for built-in offline commands</string>
     <string name="settings_voice_user_phrases_button">Open</string>
-    <string name="voice_user_phrases_hint">A command runs when its phrase is said on its own or inside a longer one. Your phrases are checked before the built-in ones.</string>
+    <string name="voice_user_phrases_hint">Said on its own, your phrase wins over the built-in command. Inside a longer phrase it runs only when no built-in command is recognized.</string>
     <string name="voice_user_phrases_add">Add</string>
     <string name="voice_user_phrases_field">Phrase</string>
     <string name="voice_user_phrases_too_long">At most %1$d characters</string>

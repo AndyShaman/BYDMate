@@ -78,7 +78,7 @@ class NluRegressionTest {
     @Test fun fixtures_route_as_expected() {
         val failures = StringBuilder()
         fixtures.forEach { (text, expected) ->
-            val actual = (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.command
+            val actual = (NluParser.parse(text) as? ParseResult.Command)?.command
             if (actual != expected) {
                 failures.append("\"$text\": expected=$expected actual=$actual\n")
             }
@@ -87,10 +87,10 @@ class NluRegressionTest {
     }
 
     @Test fun relative_temp_and_volume_shortcuts() {
-        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("сделай теплее", VoiceLang.RU))
-        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("похолоднее", VoiceLang.RU))
-        assertEquals(ParseResult.Volume("+1"), NluParser.parse("громче", VoiceLang.RU))
-        assertEquals(ParseResult.Volume("mute"), NluParser.parse("выключи звук", VoiceLang.RU))
+        assertEquals(ParseResult.RelativeTemp(1), NluParser.parse("сделай теплее"))
+        assertEquals(ParseResult.RelativeTemp(-1), NluParser.parse("похолоднее"))
+        assertEquals(ParseResult.Volume("+1"), NluParser.parse("громче"))
+        assertEquals(ParseResult.Volume("mute"), NluParser.parse("выключи звук"))
     }
 
     // issue #98 follow-up: plural/"всех" used to bail to the agent (LLM-only users got
@@ -107,7 +107,7 @@ class NluRegressionTest {
     @Test fun plural_seat_fixtures_fan_out_both_seats() {
         val failures = StringBuilder()
         pluralFixtures.forEach { (text, expected) ->
-            val actual = (NluParser.parse(text, VoiceLang.RU) as? ParseResult.Command)?.commands
+            val actual = (NluParser.parse(text) as? ParseResult.Command)?.commands
             if (actual != expected) {
                 failures.append("\"$text\": expected=$expected actual=$actual\n")
             }

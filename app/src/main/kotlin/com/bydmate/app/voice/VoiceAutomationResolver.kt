@@ -5,13 +5,14 @@ import com.bydmate.app.data.local.entity.TriggerDef
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/** A user automation picked by its voice-trigger phrase. */
-data class VoiceAutomationMatch(val ruleId: Long, val ruleName: String)
+/** A user automation picked by its voice-trigger phrase; [exact] when the phrase is the whole
+ *  utterance after normalization, not just a part of it. */
+data class VoiceAutomationMatch(val ruleId: Long, val ruleName: String, val exact: Boolean = true)
 
 /**
- * First command resolver (before the user's own command phrases and the built-in NluParser,
- * see VoiceController.resolve): maps a recognized transcript to a user automation whose
- * voice-trigger phrase occurs in it as a whole-word sequence after normalization.
+ * Maps a recognized transcript to a user automation whose voice-trigger phrase occurs in it as
+ * a whole-word sequence after normalization. An exact match outranks every other resolver, a
+ * contained one yields to the built-in NluParser (see VoiceController.resolve).
  */
 @Singleton
 class VoiceAutomationResolver @Inject constructor(
@@ -29,7 +30,7 @@ class VoiceAutomationResolver @Inject constructor(
                 if (t.kind != "voice") continue
                 val phrase = VoicePhrase.tokens(t.value)
                 if (phrase.size > bestLen && VoicePhrase.containsSequence(heard, phrase)) {
-                    best = VoiceAutomationMatch(rule.id, rule.name)
+                    best = VoiceAutomationMatch(rule.id, rule.name, exact = phrase.size == heard.size)
                     bestLen = phrase.size
                 }
             }
