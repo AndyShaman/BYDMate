@@ -2,6 +2,7 @@ package com.bydmate.app.ui.automation
 
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import android.content.Intent
 import android.os.Environment
 import android.util.Log
@@ -31,18 +32,23 @@ import com.bydmate.app.data.local.entity.RuleLogEntity
 import com.bydmate.app.data.local.entity.TriggerDef
 import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.automation.ActionDispatcher
+import com.bydmate.app.data.remote.DiParsData
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.service.TrackingService
 import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.io.IOException
@@ -318,13 +324,31 @@ data class EditingRule(
         fireOncePerTrip = fireOncePerTrip,
         playSound = playSound,
     )
+
+    /** [base] with what the editor edits; enabled, counters and creation time stay as in [base]. */
+    fun applyTo(base: RuleEntity) = base.copy(
+        name = name.trim(),
+        triggerLogic = triggerLogic,
+        triggers = TriggerDef.listToJson(triggers),
+        actions = ActionDef.listToJson(actions),
+        cooldownSeconds = cooldownSeconds.coerceAtLeast(1),
+        requirePark = requirePark,
+        confirmBeforeExecute = confirmBeforeExecute,
+        fireOncePerTrip = fireOncePerTrip,
+        playSound = playSound,
+    )
 }
 
-/** Step 2 of the import dialog: the parsed rule as it will be added, plus the user's choices. */
+/**
+ * Step 2 of the import dialog: the parsed rule as it will be added, plus the user's choices.
+ * [token] tells one parsed file from the next: a place or contact picked for an older draft
+ * is dropped instead of landing on the same index of a new one.
+ */
 data class RuleImportDraft(
     val rule: SharedRule,
     val enableNow: Boolean = false,
     val error: String? = null,
+    val token: Long = 0,
 )
 
 data class AutomationUiState(
@@ -346,6 +370,8 @@ data class AutomationUiState(
     /** Import step 2: non-null shows the preview. */
     val importDraft: RuleImportDraft? = null,
     val testRunning: Boolean = false,
+    /** A share file is being written: the «Поделиться» buttons wait for it. */
+    val shareInProgress: Boolean = false,
 )
 
 @HiltViewModel
@@ -361,11 +387,21 @@ class AutomationViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(AutomationUiState())
     val uiState: StateFlow<AutomationUiState> = _uiState.asStateFlow()
 
-    // Test seams: tests point these at a temp dir and a test dispatcher.
+    // Test seams: tests point these at a temp dir, a test dispatcher and a recorded share sheet
+    // (FileProvider caches its roots per process, so a real one leaks between Robolectric tests).
     internal var downloadsDir: () -> File = {
         Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
     }
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
+    internal var liveSnapshotAtMs: () -> Long = { TrackingService.lastDataAtMs }
+    internal var shareSheet: (File) -> Unit = { startShareSheet(it) }
+
+    private var testRunJob: Job? = null
+    private var importJob: Job? = null
+    private var importInsertJob: Job? = null
+    private var draftToken = 0L
+    private val shareMutex = Mutex()
 
     init {
         viewModelScope.launch { insertStarterTemplatesIfNeeded() }
@@ -442,7 +478,7 @@ class AutomationViewModel @Inject constructor(
     // --- Editor ---
 
     fun openNewRule() {
-        if (_uiState.value.rules.size >= 50) return
+        if (_uiState.value.rules.size >= MAX_RULES) return
         _uiState.update {
             it.copy(
                 showEditor = true,
@@ -476,6 +512,8 @@ class AutomationViewModel @Inject constructor(
     }
 
     fun closeEditor() {
+        // «Отмена» also stops a test run: nothing is left on screen to watch or stop it.
+        testRunJob?.cancel()
         _uiState.update { it.copy(showEditor = false, editorError = null) }
     }
 
@@ -538,22 +576,13 @@ class AutomationViewModel @Inject constructor(
         // Clear previous error on success path
         _uiState.value = _uiState.value.copy(editorError = null)
 
-        val entity = RuleEntity(
-            id = if (e.isNew) 0 else e.id,
-            name = e.name.trim(),
-            triggerLogic = e.triggerLogic,
-            triggers = TriggerDef.listToJson(e.triggers),
-            actions = ActionDef.listToJson(e.actions),
-            cooldownSeconds = e.cooldownSeconds.coerceAtLeast(1),
-            requirePark = e.requirePark,
-            confirmBeforeExecute = e.confirmBeforeExecute,
-            fireOncePerTrip = e.fireOncePerTrip,
-            playSound = e.playSound,
-        )
-
         viewModelScope.launch {
-            if (e.isNew) ruleDao.insert(entity)
-            else ruleDao.update(entity)
+            if (e.isNew) {
+                ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "")))
+            } else {
+                // The stored row keeps enabled, the counters and createdAt: the editor shows none of them.
+                ruleDao.getById(e.id)?.let { ruleDao.update(e.applyTo(it)) }
+            }
         }
         closeEditor()
     }
@@ -602,6 +631,10 @@ class AutomationViewModel @Inject constructor(
      * «Тестовый запуск»: runs every action of the rule being edited, in order, right now.
      * Each action goes through [ActionDispatcher.dispatch] against the live snapshot, so the
      * speed gates apply exactly as when the rule fires; the chime follows «Выполнять со звуком».
+     * A speed-gated action ([isSpeedGatedAction]) also needs a snapshot younger than
+     * [TEST_RUN_MAX_SNAPSHOT_AGE_MS]: the dispatcher lets a window or the sunroof open with no
+     * snapshot at all, and a stale speed 0 passes every gate. Without one the action is skipped
+     * and counted as not done. Closing the editor stops the run.
      * The trigger conditions, «Только на паркинге», cooldown, «Раз за поездку» and «Спрашивать
      * подтверждение» are skipped: the button press is the confirmation. Nothing is written:
      * no lastTriggeredAt / triggerCount update and no journal entry.
@@ -615,32 +648,46 @@ class AutomationViewModel @Inject constructor(
             return
         }
         _uiState.update { it.copy(testRunning = true, editorError = null) }
-        viewModelScope.launch {
+        testRunJob = viewModelScope.launch {
+            val lc = context.appLocalizedContext()
             try {
                 if (e.playSound) OverlayNotificationManager.playNotificationSound(context)
                 var failed = 0
                 var firstReason: String? = null
                 for (action in e.actions) {
-                    val result = actionDispatcher.dispatch(action, TrackingService.lastData.value)
-                    if (!result.success) {
+                    val reason = runTestAction(action)
+                    if (reason != null) {
                         failed++
-                        if (firstReason == null) firstReason = result.reason
+                        if (firstReason == null) firstReason = reason
                     }
                 }
-                val lc = context.appLocalizedContext()
                 val msg = if (failed == 0) {
                     lc.getString(R.string.automation_test_run_done)
                 } else {
-                    lc.getString(
-                        R.string.automation_test_run_failed, failed, e.actions.size,
-                        firstReason ?: lc.getString(R.string.auto_msg_unavailable),
-                    )
+                    lc.getString(R.string.automation_test_run_failed, failed, e.actions.size, firstReason)
                 }
                 Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            } catch (c: CancellationException) {
+                Toast.makeText(context, lc.getString(R.string.automation_test_run_stopped), Toast.LENGTH_SHORT).show()
+                throw c
             } finally {
                 _uiState.update { it.copy(testRunning = false) }
             }
         }
+    }
+
+    /** One test-run step: null when it was done, else why not. */
+    private suspend fun runTestAction(action: ActionDef): String? {
+        val lc = context.appLocalizedContext()
+        val snapshot = liveSnapshot()
+        if (isSpeedGatedAction(action) &&
+            !isSnapshotFresh(snapshot, liveSnapshotAtMs(), System.currentTimeMillis())
+        ) {
+            Log.w("AutomationViewModel", "test run: ${action.kind} ${action.command} skipped, no fresh speed")
+            return lc.getString(R.string.automation_test_run_no_speed)
+        }
+        val result = actionDispatcher.dispatch(action, snapshot)
+        return if (result.success) null else result.reason ?: lc.getString(R.string.auto_msg_unavailable)
     }
 
     // --- Share ---
@@ -655,17 +702,29 @@ class AutomationViewModel @Inject constructor(
         writeShareFile(e.toShared())
     }
 
+    /**
+     * Writes the share file, then opens the system share sheet over the «Сохранено» dialog, which
+     * stays behind it with the file name. One export at a time: the mutex serialises the writes,
+     * [AutomationUiState.shareInProgress] greys out the buttons meanwhile.
+     */
     private fun writeShareFile(rule: SharedRule) {
+        if (_uiState.value.shareInProgress) return
+        _uiState.update { it.copy(shareInProgress = true) }
         viewModelScope.launch {
             try {
-                val file = withContext(ioDispatcher) {
-                    RuleShareFiles.writeTo(downloadsDir(), rule, BuildConfig.VERSION_NAME)
+                val file = shareMutex.withLock {
+                    withContext(ioDispatcher) {
+                        RuleShareFiles.writeTo(downloadsDir(), rule, BuildConfig.VERSION_NAME)
+                    }
                 }
                 _uiState.update { it.copy(sharedRuleFile = file) }
+                shareSheet(file)
             } catch (e: IOException) {
                 showShareError(e)
             } catch (e: SecurityException) {
                 showShareError(e)
+            } finally {
+                _uiState.update { it.copy(shareInProgress = false) }
             }
         }
     }
@@ -675,10 +734,12 @@ class AutomationViewModel @Inject constructor(
         Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
     }
 
-    /** «Поделиться» in the «Сохранено» dialog: the system share sheet, as for a saved backup. */
+    /** «Поделиться» in the «Сохранено» dialog: the system share sheet again, the dialog stays. */
     fun openShareSheet() {
-        val file = _uiState.value.sharedRuleFile ?: return
-        _uiState.update { it.copy(sharedRuleFile = null) }
+        _uiState.value.sharedRuleFile?.let { shareSheet(it) }
+    }
+
+    private fun startShareSheet(file: File) {
         try {
             val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
             val shareIntent = Intent(Intent.ACTION_SEND).apply {
@@ -705,35 +766,46 @@ class AutomationViewModel @Inject constructor(
 
     /** «Импорт»: lists the share files in Download, newest first. */
     fun openImport() {
-        viewModelScope.launch {
+        importJob?.cancel()
+        importJob = viewModelScope.launch {
             val files = withContext(ioDispatcher) { RuleShareFiles.listRuleFiles(downloadsDir()) }
             _uiState.update { it.copy(importFiles = files, importError = null, importDraft = null) }
         }
     }
 
+    /** Closes both import steps; a listing or a read still running is dropped with them. */
     fun closeImport() {
+        importJob?.cancel()
         _uiState.update { it.copy(importFiles = null, importError = null, importDraft = null) }
     }
 
-    /** A file tapped in step 1: parse it and open the preview, or say why it cannot be imported. */
+    /**
+     * A file tapped in step 1: read it (at most [RuleShareFiles.MAX_FILE_BYTES]) and parse it off
+     * the main thread, then open the preview or say why it cannot be imported. A newer tap or
+     * [closeImport] cancels a read still running, so only the last pick can open a preview.
+     */
     fun pickImportFile(file: File) {
-        viewModelScope.launch {
+        importJob?.cancel()
+        importJob = viewModelScope.launch {
             val lc = context.appLocalizedContext()
-            val text = try {
-                withContext(ioDispatcher) { file.readText(Charsets.UTF_8) }
+            val callLabel = lc.getString(R.string.auto_act_call)
+            val parsed = try {
+                withContext(ioDispatcher) {
+                    RuleShareFiles.readLimited(file)?.let { RuleShare.parse(it, callLabel) } ?: RuleParseResult.Invalid
+                }
             } catch (e: IOException) {
                 Log.w("AutomationViewModel", "import: cannot read ${file.name}", e)
-                _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_invalid)) }
-                return@launch
+                RuleParseResult.Invalid
             }
-            when (val parsed = RuleShare.parse(text, lc.getString(R.string.auto_act_call))) {
+            when (parsed) {
                 is RuleParseResult.Ok -> {
                     val rule = RuleShare.resolvePlaces(
                         parsed.rule, _uiState.value.places,
                         lc.getString(R.string.automation_trigger_place_enter_prefix),
                         lc.getString(R.string.automation_trigger_place_exit_prefix),
                     )
-                    _uiState.update { it.copy(importFiles = null, importError = null, importDraft = RuleImportDraft(rule)) }
+                    val draft = RuleImportDraft(rule, token = ++draftToken)
+                    _uiState.update { it.copy(importFiles = null, importError = null, importDraft = draft) }
                 }
                 RuleParseResult.NewerVersion ->
                     _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_newer_version)) }
@@ -743,10 +815,10 @@ class AutomationViewModel @Inject constructor(
         }
     }
 
-    /** «Выбрать место» for the place trigger at [index]. */
-    fun resolveImportPlace(index: Int, place: PlaceEntity) {
+    /** «Выбрать место» for the place trigger at [index] of the draft [token]. */
+    fun resolveImportPlace(token: Long, index: Int, place: PlaceEntity) {
         val lc = context.appLocalizedContext()
-        updateImportRule { rule ->
+        updateImportRule(token) { rule ->
             val t = rule.triggers.getOrNull(index) ?: return@updateImportRule rule
             val resolved = RuleShare.withPlace(
                 t, place,
@@ -757,17 +829,26 @@ class AutomationViewModel @Inject constructor(
         }
     }
 
-    /** «Выбрать контакт» for the call action at [index]. */
-    fun resolveImportContact(index: Int, phone: String, name: String, autoDial: Boolean) {
-        updateImportRule { rule ->
+    /**
+     * «Выбрать контакт» for the action at [index] of the draft [token]: a call gets the contact,
+     * a `tel:` / `sms:` link gets the number back into its address.
+     */
+    fun resolveImportContact(token: Long, index: Int, phone: String, name: String, autoDial: Boolean) {
+        updateImportRule(token) { rule ->
             val a = rule.actions.getOrNull(index) ?: return@updateImportRule rule
-            rule.copy(actions = rule.actions.toMutableList().apply { set(index, a.withCall(phone, name, autoDial)) })
+            val resolved = if (a.kind == "url") {
+                val url = a.urlString().substringBefore(':') + ":" + phone.trim()
+                a.withUrl(url, a.urlMinimize()).copy(displayName = url)
+            } else {
+                a.withCall(phone, name, autoDial)
+            }
+            rule.copy(actions = rule.actions.toMutableList().apply { set(index, resolved) })
         }
     }
 
-    private fun updateImportRule(transform: (SharedRule) -> SharedRule) {
+    private fun updateImportRule(token: Long, transform: (SharedRule) -> SharedRule) {
         _uiState.update { s ->
-            val draft = s.importDraft ?: return@update s
+            val draft = s.importDraft?.takeIf { it.token == token } ?: return@update s
             s.copy(importDraft = draft.copy(rule = transform(draft.rule), error = null))
         }
     }
@@ -779,28 +860,53 @@ class AutomationViewModel @Inject constructor(
         }
     }
 
-    /** «Добавить»: validates like the editor, renames on a clash, inserts. */
+    /**
+     * «Добавить»: validates like the editor, renames on a clash, checks the [MAX_RULES] limit
+     * and inserts. The preview closes only once the row is in; a refusal or a database error
+     * stays in the preview with the draft intact, so «Добавить» can be pressed again.
+     */
     fun confirmImport() {
         val draft = _uiState.value.importDraft ?: return
+        if (importInsertJob?.isActive == true) return
         val rule = draft.rule
-        // An unresolved call has no phone yet by design: validate the rest of the rule around it.
+        // An unresolved number is missing by design: validate the rest of the rule around it.
         val unresolvedCalls = rule.unresolvedCallIndexes().toSet()
         val forValidation = rule.actions.mapIndexed { i, a ->
-            if (i in unresolvedCalls) a.withCall(VALIDATION_PHONE, "", false) else a
+            when {
+                i !in unresolvedCalls -> a
+                a.kind == "url" -> a.withUrl(a.urlString() + VALIDATION_PHONE, false)
+                else -> a.withCall(VALIDATION_PHONE, "", false)
+            }
         }
         val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L)
         if (error != null) {
             _uiState.update { it.copy(importDraft = draft.copy(error = error)) }
             return
         }
+        val lc = context.appLocalizedContext()
         val name = RuleShare.uniqueName(
             rule.name,
             _uiState.value.rules.map { it.name },
-            context.appLocalizedContext().getString(R.string.automation_import_name_suffix),
+            lc.getString(R.string.automation_import_name_suffix),
         )
         val entity = RuleShare.toEntity(rule, name, draft.enableNow)
-        _uiState.update { it.copy(importDraft = null) }
-        viewModelScope.launch { ruleDao.insert(entity) }
+        importInsertJob = viewModelScope.launch {
+            val failure = try {
+                if (ruleDao.getCount() >= MAX_RULES) {
+                    lc.getString(R.string.automation_rule_limit, MAX_RULES)
+                } else {
+                    ruleDao.insert(entity)
+                    null
+                }
+            } catch (e: SQLiteException) {
+                Log.w("AutomationViewModel", "import: insert failed", e)
+                lc.getString(R.string.automation_import_save_failed, e.message ?: "?")
+            }
+            _uiState.update { s ->
+                val current = s.importDraft?.takeIf { it.token == draft.token } ?: return@update s
+                if (failure == null) s.copy(importDraft = null) else s.copy(importDraft = current.copy(error = failure))
+            }
+        }
     }
 
     // --- Starter templates ---
@@ -916,6 +1022,35 @@ class AutomationViewModel @Inject constructor(
 
 /** Stand-in phone for validating an imported rule whose call contact is not picked yet. */
 private const val VALIDATION_PHONE = "00000"
+
+/** Rules the user can have: the editor, the import and the voice agent stop at this many. */
+internal const val MAX_RULES = 50
+
+/** How old the telemetry snapshot may be for a test run to send a speed-gated action. */
+internal const val TEST_RUN_MAX_SNAPSHOT_AGE_MS = 10_000L
+
+/** Toggle targets that can resolve to a speed-gated command: sunroof open, frunk open, unlock. */
+private val SPEED_GATED_TOGGLES = setOf(
+    ActionDispatcher.TOGGLE_SUNROOF, ActionDispatcher.TOGGLE_FRONT_TRUNK, ActionDispatcher.TOGGLE_LOCKS,
+)
+
+/**
+ * True when [action] can open a window, the sunroof or the frunk, or unlock the doors: the
+ * commands ActionDispatcher gates by speed, detected with its own predicates. A toggle counts
+ * by target, since which way it flips is only known against the live state.
+ */
+internal fun isSpeedGatedAction(action: ActionDef): Boolean = when (action.kind) {
+    "param" -> ActionDispatcher.isWindowOpenCommand(action.command) ||
+        ActionDispatcher.isSunroofOpenCommand(action.command) ||
+        ActionDispatcher.isFrontTrunkOpenCommand(action.command) ||
+        ActionDispatcher.isDoorUnlockCommand(action.command)
+    "toggle" -> action.payload in SPEED_GATED_TOGGLES
+    else -> false
+}
+
+/** A snapshot exists and was polled less than [TEST_RUN_MAX_SNAPSHOT_AGE_MS] before [nowMs]. */
+internal fun isSnapshotFresh(snapshot: DiParsData?, snapshotAtMs: Long, nowMs: Long): Boolean =
+    snapshot != null && snapshotAtMs > 0 && nowMs - snapshotAtMs in 0 until TEST_RUN_MAX_SNAPSHOT_AGE_MS
 
 // --- Action kind helpers (v2.3.0) ---
 

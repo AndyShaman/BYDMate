@@ -1589,12 +1589,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Import</string>
     <string name="automation_share_button">Share</string>
-    <string name="automation_share_note">The file has no contacts or keys, only the automation.</string>
+    <string name="automation_share_note">Phone numbers, contact names, links to your places and keys in web links are removed from the file. Notification and phrase texts, agent requests and route points stay, so check them before sending.</string>
     <string name="automation_share_error">Could not save the file: %1$s</string>
     <string name="automation_test_run_button">Test run</string>
     <string name="automation_test_run_hint">Runs every action now, as if the condition had been met</string>
     <string name="automation_test_run_done">Test run: all actions done</string>
     <string name="automation_test_run_failed">Test run: %1$d of %2$d actions failed. %3$s</string>
+    <string name="automation_test_run_no_speed">no fresh speed data, action skipped</string>
+    <string name="automation_test_run_stopped">Test run stopped</string>
+    <string name="automation_rule_limit">You can have at most %1$d automations</string>
+    <string name="automation_import_save_failed">Could not add the automation: %1$s</string>
     <string name="automation_import_pick_title">Automation files in Download</string>
     <string name="automation_import_pick_empty">No bydmate_rule_*.json files in the Download folder</string>
     <string name="automation_import_invalid">Could not read the file: it is not a BYDMate automation</string>

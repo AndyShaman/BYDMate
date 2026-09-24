@@ -1756,12 +1756,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Импорт</string>
     <string name="automation_share_button">Поделиться</string>
-    <string name="automation_share_note">Файл без контактов и ключей, только правило.</string>
+    <string name="automation_share_note">Из файла удалены номера телефонов, имена контактов, привязки к вашим местам и ключи в ссылках. Тексты уведомлений и фраз, запросы агенту и точки маршрутов остаются, проверьте их перед отправкой.</string>
     <string name="automation_share_error">Не удалось сохранить файл: %1$s</string>
     <string name="automation_test_run_button">Тестовый запуск</string>
     <string name="automation_test_run_hint">Выполнит все действия сразу, как будто сработало условие</string>
     <string name="automation_test_run_done">Тестовый запуск: все действия выполнены</string>
     <string name="automation_test_run_failed">Тестовый запуск: не выполнено %1$d из %2$d. %3$s</string>
+    <string name="automation_test_run_no_speed">нет свежих данных о скорости, действие пропущено</string>
+    <string name="automation_test_run_stopped">Тестовый запуск остановлен</string>
+    <string name="automation_rule_limit">Можно создать не больше %1$d автоматизаций</string>
+    <string name="automation_import_save_failed">Не удалось добавить автоматизацию: %1$s</string>
     <string name="automation_import_pick_title">Файлы автоматизаций в Download</string>
     <string name="automation_import_pick_empty">В папке Download нет файлов bydmate_rule_*.json</string>
     <string name="automation_import_invalid">Не удалось прочитать файл: это не автоматизация BYDMate</string>

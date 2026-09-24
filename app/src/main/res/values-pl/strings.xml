@@ -1741,12 +1741,16 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importuj</string>
     <string name="automation_share_button">Udostępnij</string>
-    <string name="automation_share_note">Plik bez kontaktów i kluczy, tylko reguła.</string>
+    <string name="automation_share_note">Z pliku usunięto numery telefonów, nazwy kontaktów, powiązania z Twoimi miejscami i klucze w linkach. Teksty powiadomień i fraz, zapytania do agenta i punkty tras zostają, sprawdź je przed wysłaniem.</string>
     <string name="automation_share_error">Nie udało się zapisać pliku: %1$s</string>
     <string name="automation_test_run_button">Uruchomienie testowe</string>
     <string name="automation_test_run_hint">Wykona wszystkie akcje od razu, jakby warunek został spełniony</string>
     <string name="automation_test_run_done">Uruchomienie testowe: wszystkie akcje wykonane</string>
     <string name="automation_test_run_failed">Uruchomienie testowe: nie wykonano %1$d z %2$d. %3$s</string>
+    <string name="automation_test_run_no_speed">brak aktualnych danych o prędkości, akcja pominięta</string>
+    <string name="automation_test_run_stopped">Uruchomienie testowe zatrzymane</string>
+    <string name="automation_rule_limit">Można mieć najwyżej %1$d automatyzacji</string>
+    <string name="automation_import_save_failed">Nie udało się dodać automatyzacji: %1$s</string>
     <string name="automation_import_pick_title">Pliki automatyzacji w Download</string>
     <string name="automation_import_pick_empty">Brak plików bydmate_rule_*.json w folderze Download</string>
     <string name="automation_import_invalid">Nie udało się odczytać pliku: to nie jest automatyzacja BYDMate</string>
