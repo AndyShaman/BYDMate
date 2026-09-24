@@ -28,9 +28,8 @@ import java.util.Collections
 
 /**
  * Resolver precedence on the continuous path (VoiceController.resolve): an automation or user
- * phrase equal to the whole utterance first, then the built-in parser, then (unless the parser
- * refused or the phrase holds a negation) an automation or user phrase merely contained in the
- * utterance, then the agent.
+ * phrase equal to the whole utterance first, then the built-in parser, then the agent. A phrase
+ * inside a longer utterance never fires.
  */
 class VoiceControllerPrecedenceTest {
 
@@ -170,9 +169,9 @@ class VoiceControllerPrecedenceTest {
         assertEquals(listOf("车窗关闭"), r.dispatched.toList())
     }
 
-    // --- a merely contained phrase yields to the parser ---
+    // --- a phrase inside a longer utterance never fires ---
 
-    @Test fun `contained user phrase yields to a command the parser understands`() {
+    @Test fun `a user phrase inside a longer utterance leaves it to the parser`() {
         val text = "открой окно наполовину"
         val expected = parserLabel(text)
         val r = rig(null, phrases("windows_close_all", "открой окно"))
@@ -183,7 +182,7 @@ class VoiceControllerPrecedenceTest {
         assertTrue(r.dispatched.none { it == "车窗关闭" })
     }
 
-    @Test fun `contained automation phrase yields to a command the parser understands`() {
+    @Test fun `an automation phrase inside a longer utterance leaves it to the parser`() {
         val text = "открой окно наполовину"
         val expected = parserLabel(text)
         val r = rig("окно", VoiceUserPhrases())
@@ -192,25 +191,6 @@ class VoiceControllerPrecedenceTest {
         assertEquals(VoiceJournalEntry.Route.NLU, entry.route)
         assertEquals(expected, entry.command)
         coVerify(exactly = 0) { r.engine.fireVoiceRule(any(), any()) }
-    }
-
-    @Test fun `contained user phrase runs when the parser does not understand`() {
-        val text = "ну задраить трюм быстро"
-        assertEquals(ParseResult.Unrecognized, NluParser.parse(text))
-        val r = rig(null, phrases("windows_close_all", "задраить трюм"))
-
-        assertEquals("phrase:windows_close_all", r.say(text).command)
-        assertEquals(listOf("车窗关闭"), r.dispatched.toList())
-    }
-
-    @Test fun `contained automation phrase runs when the parser does not understand and beats a contained user phrase`() {
-        val text = "ну задраить трюм быстро"
-        assertEquals(ParseResult.Unrecognized, NluParser.parse(text))
-        val r = rig("задраить трюм", phrases("windows_close_all", "трюм"))
-        val entry = r.say(text)
-
-        assertEquals(VoiceJournalEntry.Route.AUTOMATION, entry.route)
-        assertEquals(emptyList<String>(), r.dispatched.toList())
     }
 
     // --- exact means word for word, not the same stems ---
@@ -237,7 +217,7 @@ class VoiceControllerPrecedenceTest {
         coVerify(exactly = 0) { r.engine.fireVoiceRule(any(), any()) }
     }
 
-    // --- a parser refusal or a negation stops every contained phrase ---
+    // --- anything else goes to the agent and no phrase inside it acts ---
 
     /** [text] went to the agent with [reason] and nothing acted on it. */
     private fun Rig.assertRefused(text: String, reason: String) {
@@ -248,44 +228,26 @@ class VoiceControllerPrecedenceTest {
         coVerify(exactly = 0) { engine.fireVoiceRule(any(), any()) }
     }
 
-    @Test fun `negation stops a contained user phrase`() {
+    @Test fun `a user phrase inside an utterance the parser does not read goes to the agent`() {
+        rig(null, phrases("windows_close_all", "задраить трюм"))
+            .assertRefused("ну задраить трюм быстро", VoiceRefusal.UNRECOGNIZED)
+    }
+
+    @Test fun `an automation phrase inside an utterance the parser does not read goes to the agent`() {
+        rig("задраить трюм", VoiceUserPhrases()).assertRefused("ну задраить трюм быстро", VoiceRefusal.UNRECOGNIZED)
+        rig("открой окно", VoiceUserPhrases()).assertRefused("открой окно в салоне на палец", VoiceRefusal.UNRECOGNIZED)
+        rig("открой люк", VoiceUserPhrases()).assertRefused("открой люк позже", VoiceRefusal.UNRECOGNIZED)
+    }
+
+    @Test fun `negation around a user or automation phrase goes to the agent`() {
         rig(null, phrases("windows_close_all", "открой окно")).assertRefused("не открой окно", VoiceRefusal.NEGATION)
-    }
-
-    @Test fun `negation stops a contained automation phrase`() {
-        rig("открывать окно", VoiceUserPhrases()).assertRefused("не надо открывать окно", VoiceRefusal.NEGATION)
-    }
-
-    @Test fun `negation stops a contained phrase the parser knows nothing about`() {
         rig("задраить трюм", VoiceUserPhrases()).assertRefused("нельзя задраить трюм", VoiceRefusal.NEGATION)
-        rig(null, phrases("windows_close_all", "задраить трюм")).assertRefused("отмена задраить трюм", VoiceRefusal.NEGATION)
     }
 
-    @Test fun `an unreadable measure stops a contained user phrase`() {
-        rig(null, phrases("windows_close_all", "открой окно"))
-            .assertRefused("открой окно на два сантиметра", VoiceRefusal.UNKNOWN_MEASURE)
-    }
-
-    @Test fun `an unreadable measure stops a contained automation phrase`() {
-        rig("открой окно", VoiceUserPhrases()).assertRefused("открой окно на палец", VoiceRefusal.UNKNOWN_MEASURE)
-    }
-
-    @Test fun `conflicting measures stop a contained phrase`() {
+    @Test fun `parser refusals keep their reason`() {
         rig("открой окно", VoiceUserPhrases()).assertRefused("открой окно полностью наполовину", VoiceRefusal.CONFLICTING_MEASURE)
-    }
-
-    @Test fun `commands the parser cannot split stop a contained phrase`() {
         rig(null, phrases("windows_close_all", "открой окна"))
             .assertRefused("открой окна и люк наполовину", VoiceRefusal.MULTIPLE_COMMANDS)
-    }
-
-    @Test fun `an inexpressible except stops a contained phrase`() {
-        rig("включи подогрев", VoiceUserPhrases())
-            .assertRefused("включи подогрев всех сидений кроме пассажира", VoiceRefusal.EXCEPT_UNSUPPORTED)
-    }
-
-    @Test fun `a command for later stops a contained phrase`() {
-        rig("открой люк", VoiceUserPhrases()).assertRefused("открой люк позже", VoiceRefusal.DEFERRED)
     }
 
     @Test fun `an exact user phrase with a negation word is still the user's own`() {

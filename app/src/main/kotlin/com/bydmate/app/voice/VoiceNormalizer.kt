@@ -24,10 +24,9 @@ object VoiceNormalizer {
      * @param shareConflict two different shares named ("полностью наполовину")
      * @param ordinal "первый".."пятый" as a level
      * @param extreme "максимум"/"минимум"
-     * @param unexplained a measure word nobody can read (centimetres, a dangling "до"/"пол")
-     * @param looseTargets words after «на»/«по» that no measure reader explains ("" for a
-     *   trailing preposition): "на палец", "по кругу". The parser decides whether each one
-     *   names a target ("на водительской стороне") or an unreadable measure.
+     * @param unexplained a measure word nobody can read (a dangling "до"/"пол")
+     * @param words indices of the tokens the readers above explain (the number words, "процентов"
+     *   after a number, share, level and "до конца" words); the parser reads no other word as a measure
      */
     data class Measure(
         val numbers: List<Int> = emptyList(),
@@ -38,7 +37,7 @@ object VoiceNormalizer {
         val ordinal: Int? = null,
         val extreme: Extreme? = null,
         val unexplained: Boolean = false,
-        val looseTargets: List<String> = emptyList(),
+        val words: Set<Int> = emptySet(),
     ) {
         /** Some word asks for a share of an opening (numbers alone do not: they are levels elsewhere). */
         val hasShare: Boolean get() = share != null || softVent || shareConflict
@@ -82,10 +81,7 @@ object VoiceNormalizer {
         "наполовину" to HALF_SHARE, "треть" to 33, "трети" to 33, "четверть" to 25, "четверти" to 25,
     )
     private val SOFT_OPEN_PREFIXES = listOf("приоткр", "приспуст")
-    private val UNIT_PREFIXES = listOf("сантиметр", "миллиметр")
-    private val UNIT_ABBREVIATIONS = setOf("см", "мм")
     private val HALF_NOUNS = listOf("окн", "окош", "стекл", "форточ", "люк")
-    private val TARGET_PREPOSITIONS = setOf("на", "по")
 
     /** Lowercase, ё -> е, "%" -> "процентов", hyphens and punctuation split tokens,
      *  "полокна" -> "пол окна". */
@@ -129,18 +125,12 @@ object VoiceNormalizer {
 
     fun measure(tokens: List<String>): Measure {
         val spans = numberSpans(tokens).filterNot { threeQuarters(tokens, it.first) }
-        // The word at j is read by one of the measure readers: a number, a share word, a level.
-        val measureAt = { j: Int ->
-            val t = tokens.getOrNull(j)
-            t != null && (spans.any { it.first == j } || wordShare(tokens, j) != null ||
-                t in MAX_WORDS || t in MIN_WORDS || t in ORDINALS)
-        }
         val shares = LinkedHashSet<Int>()
         var unexplained = false
         tokens.forEachIndexed { i, t ->
             val share = wordShare(tokens, i)
             if (share != null) shares.add(share)
-            if (isUnreadable(tokens, i, spans)) unexplained = true
+            if (t == "до" && isUnreadable(tokens, i, spans)) unexplained = true
             if (t == "пол" && share == null) unexplained = true
         }
         val single = spans.singleOrNull()
@@ -153,10 +143,18 @@ object VoiceNormalizer {
             ordinal = tokens.firstNotNullOfOrNull { ORDINALS[it] },
             extreme = extremeOf(tokens),
             unexplained = unexplained,
-            looseTargets = tokens.indices
-                .filter { tokens[it] in TARGET_PREPOSITIONS && !measureAt(it + 1) }
-                .map { tokens.getOrNull(it + 1).orEmpty() },
+            words = tokens.indices.filterTo(HashSet()) { explained(tokens, it, spans) },
         )
+    }
+
+    /** The word at [j] is read by one of the measure readers: a number, its "процентов", a share
+     *  word, "конца" after "до", the "четверти" of "три четверти", a level. */
+    private fun explained(tokens: List<String>, j: Int, spans: List<NumberSpan>): Boolean {
+        val t = tokens[j]
+        return spans.any { j in it.first..it.last } || wordShare(tokens, j) != null ||
+            t in MAX_WORDS || t in MIN_WORDS || t in ORDINALS ||
+            t.startsWith("процент") && spans.any { it.last == j - 1 } ||
+            t in END_WORDS && tokens.getOrNull(j - 1) == "до" || j > 0 && threeQuarters(tokens, j - 1)
     }
 
     private fun extremeOf(tokens: List<String>): Extreme? = when {
@@ -172,7 +170,10 @@ object VoiceNormalizer {
             threeQuarters(tokens, i) -> THREE_QUARTERS
             t.startsWith("четверт") && tokens.getOrNull(i - 1) == "три" -> null
             t.startsWith("половин") -> HALF_SHARE
-            t == "пол" -> halfOf(tokens, i)
+            // "на пол" / "пол окна" is half; "обдув в пол" is the floor and names no share.
+            t == "пол" -> HALF_SHARE.takeIf {
+                tokens.getOrNull(i - 1) == "на" || HALF_NOUNS.any { tokens.getOrNull(i + 1)?.startsWith(it) == true }
+            }
             t == "до" -> FULL_SHARE.takeIf { tokens.getOrNull(i + 1) in END_WORDS }
             t in VENT_WORDS || t.startsWith("щел") -> VENT_SHARE
             t in FULL_WORDS -> FULL_SHARE
@@ -180,18 +181,8 @@ object VoiceNormalizer {
         }
     }
 
-    /** "на пол" / "пол окна" is half; "обдув в пол" is the floor and names no share. */
-    private fun halfOf(tokens: List<String>, i: Int): Int? {
-        val next = tokens.getOrNull(i + 1)
-        val half = tokens.getOrNull(i - 1) == "на" || next != null && HALF_NOUNS.any { next.startsWith(it) }
-        return if (half) HALF_SHARE else null
-    }
-
-    /** A measure word the phrase uses that none of the readers above explains. */
+    /** A "до" none of the readers above explains ("до середины", a trailing "до"). */
     private fun isUnreadable(tokens: List<String>, i: Int, spans: List<NumberSpan>): Boolean {
-        val t = tokens[i]
-        if (t in UNIT_ABBREVIATIONS || UNIT_PREFIXES.any { t.startsWith(it) }) return true
-        if (t != "до") return false
         val next = tokens.getOrNull(i + 1) ?: return true
         return !(next in END_WORDS || next.startsWith("половин") || spans.any { it.first == i + 1 })
     }

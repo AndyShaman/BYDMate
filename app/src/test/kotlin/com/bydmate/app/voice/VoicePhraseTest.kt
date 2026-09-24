@@ -29,12 +29,8 @@ class VoicePhraseTest {
         assertFalse(VoicePhrase.isExact("пожалуйста", "пожалуйста"))
     }
 
-    @Test fun `containsSequence matches equal and contained whole words only`() {
-        val heard = VoicePhrase.tokens("открой окно в машине")
-        assertTrue(VoicePhrase.containsSequence(heard, VoicePhrase.tokens("открой окно в машине")))
-        assertTrue(VoicePhrase.containsSequence(heard, VoicePhrase.tokens("окно в")))
-        assertFalse(VoicePhrase.containsSequence(heard, VoicePhrase.tokens("в окно")))
-        assertFalse(VoicePhrase.containsSequence(VoicePhrase.tokens("окновать"), VoicePhrase.tokens("окно")))
-        assertFalse(VoicePhrase.containsSequence(heard, emptyList()))
+    @Test fun `a phrase inside a longer utterance is not exact`() {
+        assertFalse(VoicePhrase.isExact("открой окно в машине", "окно в"))
+        assertFalse(VoicePhrase.isExact("окновать", "окно"))
     }
 }

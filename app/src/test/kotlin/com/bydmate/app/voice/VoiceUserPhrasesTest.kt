@@ -34,26 +34,24 @@ class VoiceUserPhrasesTest {
     @Test fun `equal phrase matches`() {
         val p = VoiceUserPhrases().apply { add(close, "задраить люки") }
         val cmd = VoiceUserPhrases.COMMANDS.first { it.id == close }
-        assertEquals(VoiceUserMatch(cmd, exact = true), p.match("задраить люки"))
+        assertEquals(cmd, p.match("задраить люки"))
     }
 
-    @Test fun `phrase contained in the utterance matches`() {
+    @Test fun `phrase inside a longer utterance does not match`() {
         val p = VoiceUserPhrases().apply { add(close, "задраить люки") }
-        assertEquals(close, p.match("ну давай задраить люки быстро")?.command?.id)
-        assertEquals(false, p.match("ну давай задраить люки быстро")?.exact)
+        assertNull(p.match("ну давай задраить люки быстро"))
     }
 
     @Test fun `fillers punctuation case and yo are ignored`() {
         val p = VoiceUserPhrases().apply { add(open, "Ёлки открыть") }
-        assertEquals(open, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.command?.id)
-        assertEquals(true, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.exact)
+        assertEquals(open, p.match("Эй, слушай, елки открыть мне, пожалуйста!")?.id)
     }
 
-    // Exactness is word for word: another inflection is only contained, so the parser keeps it.
-    @Test fun `another inflection of the phrase is contained, not exact`() {
+    // Matching is word for word: another inflection does not match, so the parser keeps it.
+    @Test fun `another inflection of the phrase does not match`() {
         val p = VoiceUserPhrases().apply { add(close, "открой окна") }
-        assertEquals(VoiceUserMatch(VoiceUserPhrases.COMMANDS.first { it.id == close }, exact = false), p.match("открой окно"))
-        assertEquals(true, p.match("слушай открой окна пожалуйста")?.exact)
+        assertNull(p.match("открой окно"))
+        assertEquals(close, p.match("слушай открой окна пожалуйста")?.id)
     }
 
     @Test fun `no partial-word match`() {
@@ -61,13 +59,13 @@ class VoiceUserPhrasesTest {
         assertNull(p.match("окновать"))
     }
 
-    @Test fun `longest phrase wins`() {
+    @Test fun `each phrase matches only itself`() {
         val p = VoiceUserPhrases().apply {
             add(open, "проветрить")
             add(close, "хватит проветрить")
         }
-        assertEquals(close, p.match("хватит проветрить")?.command?.id)
-        assertEquals(open, p.match("проветрить")?.command?.id)
+        assertEquals(close, p.match("хватит проветрить")?.id)
+        assertEquals(open, p.match("проветрить")?.id)
     }
 
     @Test fun `remove drops the phrase`() {
@@ -82,7 +80,7 @@ class VoiceUserPhrasesTest {
 
         val reloaded = VoiceUserPhrases(prefs)
         assertEquals(mapOf(close to listOf("задраить люки"), open to listOf("проветрить")), reloaded.phrases.value)
-        assertEquals(close, reloaded.match("задраить люки")?.command?.id)
+        assertEquals(close, reloaded.match("задраить люки")?.id)
     }
 
     @Test fun `check refuses empty, too long and too many`() {

@@ -17,11 +17,9 @@ object VoiceRefusal {
 
     // The parser understood enough to know it must not act (see ParseResult.Refused).
     const val NEGATION = "negation"
-    const val DEFERRED = "deferred"
     const val UNKNOWN_MEASURE = "unknown_measure"
     const val CONFLICTING_MEASURE = "conflicting_measure"
     const val MULTIPLE_COMMANDS = "multiple_commands"
-    const val EXCEPT_UNSUPPORTED = "except_unsupported"
 
     /** A safety gate held the command back, e.g. `gate:speed_unknown`. */
     fun gate(name: String): String = "gate:$name"

@@ -78,14 +78,22 @@ class VoiceNormalizerTest {
         assertEquals(Extreme.MIN, m("минимум").extreme)
     }
 
+    // Units ("сантиметров") are simply words no reader explains: the parser does not read them.
     @Test fun unreadable_measures_are_flagged() {
-        assertTrue(m("на пять сантиметров").unexplained)
-        assertTrue(m("на сантиметр").unexplained)
+        assertFalse(5 in m("на пять сантиметров").words)
         assertTrue(m("опусти до низа").unexplained)
         assertTrue(m("открой пол").unexplained)
         assertFalse(m("до конца").unexplained)
         assertFalse(m("до половины").unexplained)
         assertFalse(m("до пятидесяти процентов").unexplained)
         assertFalse(m("смотри").unexplained)
+    }
+
+    @Test fun measure_words_are_the_ones_the_readers_explain() {
+        assertEquals(setOf(2, 3, 4), m("открой на двадцать пять процентов").words)
+        assertEquals(setOf(1, 2), m("окно до конца").words)
+        assertEquals(setOf(1, 2), m("на три четверти").words)
+        assertEquals(emptySet<Int>(), m("на палец").words)
+        assertEquals(emptySet<Int>(), m("на процентов").words)
     }
 }

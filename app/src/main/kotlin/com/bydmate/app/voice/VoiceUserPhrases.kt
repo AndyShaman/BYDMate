@@ -17,15 +17,11 @@ import javax.inject.Singleton
  *  (voice is Russian-only) and the dispatch string. */
 data class VoiceUserCommand(val id: String, val name: String, val command: String)
 
-/** A command picked by the user's phrase; [exact] when the phrase is the whole utterance after
- *  normalization, not just a part of it. */
-data class VoiceUserMatch(val command: VoiceUserCommand, val exact: Boolean)
-
 /**
  * The user's own phrases for built-in offline commands (like the competitor's
  * `voice_cmd_overrides`): commandId → phrases, JSON in SharedPreferences("voice"). A phrase
- * matches when, after [VoicePhrase] normalization, the utterance equals it or contains it as a
- * whole-word sequence. Null [prefs] keeps everything in memory (unit tests).
+ * matches only when it is the whole utterance, word for word after [VoicePhrase.isExact]
+ * normalization. Null [prefs] keeps everything in memory (unit tests).
  */
 @Singleton
 class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
@@ -44,27 +40,11 @@ class VoiceUserPhrases(private val prefs: SharedPreferences? = null) {
         data class InUse(val owner: String) : Check
     }
 
-    /** The command whose user phrase occurs in [transcript]; the longest phrase wins, an exact
-     *  one on a tie. */
-    fun match(transcript: String): VoiceUserMatch? {
-        val heard = VoicePhrase.tokens(transcript)
-        if (heard.isEmpty()) return null
-        var best: VoiceUserMatch? = null
-        var bestLen = 0
-        for ((id, list) in _phrases.value) {
-            val cmd = byId[id] ?: continue
-            for (phrase in list) {
-                val tokens = VoicePhrase.tokens(phrase)
-                if (tokens.size < bestLen || !VoicePhrase.containsSequence(heard, tokens)) continue
-                val exact = VoicePhrase.isExact(transcript, phrase)
-                if (tokens.size > bestLen || exact && best?.exact == false) {
-                    best = VoiceUserMatch(cmd, exact)
-                    bestLen = tokens.size
-                }
-            }
+    /** The command whose user phrase is the whole of [transcript]. */
+    fun match(transcript: String): VoiceUserCommand? =
+        _phrases.value.entries.firstNotNullOfOrNull { (id, list) ->
+            byId[id]?.takeIf { list.any { VoicePhrase.isExact(transcript, it) } }
         }
-        return best
-    }
 
     /** Normalized phrase → command name, for the automation editor's collision check. */
     fun owners(): Map<String, String> = buildMap {

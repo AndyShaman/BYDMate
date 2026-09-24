@@ -187,7 +187,7 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
         val e = if (entry.asrMs != null && startedAt > 0L) entry.copy(dispatchMs = entry.timestampMs - startedAt) else entry
         journal.add(e)
         Log.i(TAG, logLine(e))
-        Log.i(TAG, logMsg)
+        Log.i(TAG, logDetail(logMsg))
     }
 
     /** Supertonic voices need a side-loaded dictionary for uppercase stress marking. This runs
@@ -450,28 +450,15 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
      *  1. an automation phrase equal to the whole utterance, word for word after normalization;
      *  2. the user's own phrase for a built-in command, equal to the whole utterance;
      *  3. the built-in NluParser on the full utterance;
-     *  4. a parser refusal (negation, a command for later, an unreadable measure, an
-     *     inexpressible «кроме», commands it cannot split) or any negation word: the agent,
-     *     with that reason, and no contained phrase may act;
-     *  5. an automation phrase contained in the utterance (longest wins);
-     *  6. a user phrase contained in the utterance (longest wins);
-     *  7. the agent (Resolution.None).
-     *  An exact user-made phrase goes first so the user can take over a phrase the parser gets
-     *  wrong; a merely contained one yields to the parser, so «открой окно» never swallows
+     *  4. the agent (Resolution.None, with the parser's reason).
+     *  A user-made phrase goes first so the user can take over a phrase the parser gets wrong;
+     *  it never fires from inside a longer utterance, so «открой окно» never swallows
      *  «открой окно наполовину», «не открывай окно» or «открой окно на палец». */
     private suspend fun resolve(text: String): Resolution {
-        val auto = automationResolver.match(text)
-        val user = userPhrases.match(text)
-        if (auto != null && auto.exact) return Resolution.Auto(auto)
-        if (user != null && user.exact) return user.toCmd()
-        val parsed = parse(text)
-        if (parsed !is Resolution.None) return parsed
-        if (parsed.reason != VoiceRefusal.UNRECOGNIZED) return parsed
-        if (NluParser.negated(text)) return Resolution.None(VoiceRefusal.NEGATION)
-        return auto?.let { Resolution.Auto(it) } ?: user?.toCmd() ?: parsed
+        automationResolver.match(text)?.let { return Resolution.Auto(it) }
+        userPhrases.match(text)?.let { return Resolution.Cmd(listOf(it.command), "phrase:${it.id}") }
+        return parse(text)
     }
-
-    private fun VoiceUserMatch.toCmd() = Resolution.Cmd(listOf(command.command), "phrase:${command.id}")
 
     private fun parse(text: String): Resolution = when (val o = NluOutcome.of(NluParser.parse(text))) {
         is NluOutcome.Refused -> Resolution.None(o.reason)
@@ -862,6 +849,13 @@ class VoiceController @Inject @Suppress("LongParameterList") constructor( // Hil
             fun v(s: String?) = s?.let { AgentTrace.clip(VoiceJournalDump.oneLine(it), LOG_FIELD_CHARS) } ?: "-"
             return "heard=\"${v(e.transcript)}\" route=${e.route.code} cmd=${v(e.command)} reason=${v(e.refusal)}"
         }
+
+        /** The free-form detail line next to [logLine]: it may quote the transcript or an
+         *  automation name, so it is flattened and capped the same way. */
+        internal fun logDetail(msg: String): String =
+            AgentTrace.clip(VoiceJournalDump.oneLine(msg), LOG_DETAIL_CHARS)
+
+        private const val LOG_DETAIL_CHARS = 500
 
         // Dwell on a terminal state before auto-returning to Idle. Short on purpose —
         // long enough to read "не распознал", short enough to feel instant.

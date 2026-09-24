@@ -1354,7 +1354,7 @@
     <string name="settings_voice_user_phrases_title">Свае фразы для каманд</string>
     <string name="settings_voice_user_phrases_description">Свае словы для ўбудаваных афлайн-каманд</string>
     <string name="settings_voice_user_phrases_button">Адкрыць</string>
-    <string name="voice_user_phrases_hint">Свая фраза, сказаная асобна, важнейшая за ўбудаваную каманду. Унутры доўгай фразы яна спрацуе, толькі калі ўбудаваная каманда не распазнана.</string>
+    <string name="voice_user_phrases_hint">Свая фраза спрацоўвае, толькі калі сказана цалкам, і тады важнейшая за ўбудаваную каманду.</string>
     <string name="voice_user_phrases_add">Дадаць</string>
     <string name="voice_user_phrases_field">Фраза</string>
     <string name="voice_user_phrases_too_long">Не даўжэй за %1$d сімвалаў</string>

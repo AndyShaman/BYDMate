@@ -103,18 +103,18 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
         }
     }
 
-    private fun load(f: File): List<VoiceJournalEntry> {
-        if (!f.isFile) return emptyList()
-        if (f.length() > MAX_FILE_BYTES) {
-            Log.w(TAG, "voice journal is ${f.length()} bytes, over $MAX_FILE_BYTES: starting empty")
-            return emptyList()
-        }
-        return runCatching {
+    private fun load(f: File): List<VoiceJournalEntry> =
+        runCatching {
+            if (!f.isFile) return@runCatching emptyList()
+            val size = f.length()
+            if (size > MAX_FILE_BYTES) {
+                Log.w(TAG, "voice journal is $size bytes, over $MAX_FILE_BYTES: starting empty")
+                return@runCatching emptyList()
+            }
             val arr = JSONArray(f.readText())
-            (0 until arr.length()).mapNotNull { fromJson(arr.getJSONObject(it)) }.take(MAX)
+            (0 until arr.length()).mapNotNull { fromJson(arr.getJSONObject(it))?.let(::bounded) }.take(MAX)
         }.onFailure { Log.w(TAG, "voice journal unreadable, starting empty: ${it.message}") }
             .getOrDefault(emptyList())
-    }
 
     private fun persist(f: File, list: List<VoiceJournalEntry>) {
         runCatching {
@@ -132,15 +132,20 @@ class VoiceJournal(private val file: File? = null, executor: Executor? = null) {
         const val FILE_NAME = "voice_journal.json"
         private const val TAG = "VoiceJournal"
 
-        /** A larger file is not this journal's (50 bounded sessions): skipped, not parsed. */
-        const val MAX_FILE_BYTES = 256L * 1024
+        /** A larger file is not this journal's (50 bounded sessions, at most ~5.5K chars of text
+         *  each, up to 3 UTF-8 bytes a char): skipped, not parsed. */
+        const val MAX_FILE_BYTES = 1024L * 1024
         /** Longest transcript, command or reason kept per session. */
         const val MAX_FIELD_CHARS = 500
+        /** Longest detail or answer kept per session (an agent answer lands in both). */
+        const val MAX_TEXT_CHARS = 2000
 
         internal fun bounded(e: VoiceJournalEntry): VoiceJournalEntry = e.copy(
             transcript = e.transcript.take(MAX_FIELD_CHARS),
             command = e.command?.take(MAX_FIELD_CHARS),
             reason = e.reason?.take(MAX_FIELD_CHARS),
+            detail = e.detail.take(MAX_TEXT_CHARS),
+            answer = e.answer?.take(MAX_TEXT_CHARS),
         )
 
         internal fun toJson(e: VoiceJournalEntry): JSONObject = JSONObject().apply {
