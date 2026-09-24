@@ -774,6 +774,7 @@ class TrackingService : Service(), LocationListener {
         // Start the network monitor BEFORE polling so the first evaluate() tick
         // already has access to the latest VALIDATED edge state.
         networkAvailableMonitor.start()
+        automationEngine.startServiceStartHeartbeat(serviceScope)
         startPolling()
         startCameraMonitor()
         // Pushed fid values are laid into the live snapshot as they arrive; the poll above is
@@ -1337,6 +1338,7 @@ class TrackingService : Service(), LocationListener {
         _youtubeForeground.value = false
         _foregroundPackage.value = null
         networkAvailableMonitor.stop()
+        automationEngine.stopServiceStartHeartbeat()
         unregisterWifiRestoreCallback()
         unregisterWakeReceivers()
         // AutomationEngine is @Singleton — its scope must outlive the service
