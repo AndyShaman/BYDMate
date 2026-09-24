@@ -1,7 +1,6 @@
 package com.bydmate.app.ui.settings
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -20,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.outlined.HelpOutline
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -307,16 +307,16 @@ fun SettingChipRow(
 @Composable
 fun SettingHelpBadge(onClick: () -> Unit) {
     val source = remember { MutableInteractionSource() }
-    Box(
+    // A vector icon sized in dp: the glyph never outgrows its circle at a larger text size.
+    Icon(
+        Icons.AutoMirrored.Outlined.HelpOutline,
+        contentDescription = null,
+        tint = TextMuted,
         modifier = Modifier
             .padding(horizontal = 6.dp)
-            .size(18.dp)
-            .border(1.5.dp, TextMuted, CircleShape)
+            .size(20.dp)
             .clickable(indication = null, interactionSource = source, onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text("?", color = TextMuted, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-    }
+    )
 }
 
 /** Row with a green/orange status dot + optional button on the right. */
