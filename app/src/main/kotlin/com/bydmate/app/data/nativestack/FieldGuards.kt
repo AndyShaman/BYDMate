@@ -46,7 +46,7 @@ object FieldGuards {
         // Cell voltages come in mV scaled to V; anything this low means the BMS is not reporting.
         "maxCellVoltage", "minCellVoltage" -> value.takeIf { it > 0.5 }
         "voltage12v" -> value.takeIf { it > 0.0 }
-        "bmsMaxChargeKw" -> value.takeIf { it in 0.0..MAX_BMS_KW }
+        "bmsMaxChargeKw", "bmsMaxDischargeAllowKw" -> value.takeIf { it in 0.0..MAX_BMS_KW }
         "motorCurrentFront", "motorCurrentRear" -> value.takeIf { kotlin.math.abs(it) <= MAX_MOTOR_CURRENT_A }
         else -> value
     }

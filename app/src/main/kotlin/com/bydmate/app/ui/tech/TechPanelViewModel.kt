@@ -44,6 +44,7 @@ data class TechPanelUiState(
     val insulationKohm: Int? = null,
     // Лимиты BMS + Ячейки
     val bmsMaxChargeKw: Double? = null,
+    val bmsMaxDischargeAllowKw: Double? = null,
     val bmsMaxDischargeKw: Int? = null,
     val cellMin: Double? = null,
     val cellMax: Double? = null,
@@ -101,7 +102,7 @@ data class TechPanelUiState(
             voltage12v, insulationKohm,
         )
     val showLimitsAndCells: Boolean
-        get() = anyOf(bmsMaxChargeKw, bmsMaxDischargeKw, cellMin, cellMax)
+        get() = anyOf(bmsMaxChargeKw, bmsMaxDischargeAllowKw, bmsMaxDischargeKw, cellMin, cellMax)
     val showMotors: Boolean
         get() = anyOf(
             motorTempFront, motorTempRear, inverterTempFront, inverterTempRear,
@@ -217,6 +218,7 @@ class TechPanelViewModel @Inject constructor(
                             voltage12v = data?.voltage12v,
                             insulationKohm = data?.insulationKohm,
                             bmsMaxChargeKw = data?.bmsMaxChargeKw,
+                            bmsMaxDischargeAllowKw = data?.bmsMaxDischargeAllowKw,
                             bmsMaxDischargeKw = data?.bmsMaxDischargeKw,
                             cellMin = data?.minCellVoltage,
                             cellMax = data?.maxCellVoltage,

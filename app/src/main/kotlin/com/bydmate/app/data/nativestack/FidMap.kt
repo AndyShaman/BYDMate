@@ -160,6 +160,7 @@ object FidMap {
         FidEntry("motorCurrentFront",  1009, 1186988040,  7, Decoder.FLOAT_AMP, symbol = "Charging.CHARGING_DRIVER_MOTOR_CURRENT"),
         FidEntry("motorCurrentRear",   1009, 1186988056,  7, Decoder.FLOAT_AMP, symbol = "Charging.CHARGING_REAR_DRIVER_MOTOR_CURRENT"),
         FidEntry("bmsMaxChargeKw",     1014, 877658136,   5, Decoder.INT_SCALED, scale = 0.1, symbol = "Statistic.STATISTIC_MAX_CHARGE_POWER_ALLOW"),
+        FidEntry("bmsMaxDischargeAllowKw", 1014, 877658120, 5, Decoder.INT_SCALED, scale = 0.1, symbol = "Statistic.STATISTIC_MAX_DISCHARGE_POWER_ALLOW"),
         FidEntry("bmsMaxDischargeKw",  1014, 1145045048,  5, Decoder.INT_RAW, symbol = "Statistic.STATISTIC_BATTERY_AVAILABLE_POWER"),
         FidEntry("motorRpmFront",      1012, 1141899272,  5, Decoder.INT_RAW, symbol = "Engine.ENGINE_FRONT_MOTOR_SPEED"),
         FidEntry("motorRpmRear",       1012, 621805576,   5, Decoder.INT_RAW, symbol = "Engine.ENGINE_REAR_MOTOR_SPEED"),
