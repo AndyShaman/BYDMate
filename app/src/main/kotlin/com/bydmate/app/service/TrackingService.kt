@@ -101,6 +101,7 @@ class TrackingService : Service(), LocationListener {
     @Inject lateinit var iternioTelemetryClient: IternioTelemetryClient
     @Inject lateinit var webhookTelemetryClient: WebhookTelemetryClient
     @Inject lateinit var lastSessionRepository: com.bydmate.app.data.repository.LastSessionRepository
+    @Inject lateinit var odometerMarks: com.bydmate.app.data.repository.OdometerMarks
     @Inject lateinit var sharedAdaptiveLoop: com.bydmate.app.data.loop.SharedAdaptiveLoop
     @Inject lateinit var tripRecorder: com.bydmate.app.data.trips.TripRecorder
     @Inject lateinit var tripCounterResets: com.bydmate.app.data.trips.TripCounterResets
@@ -1565,6 +1566,8 @@ class TrackingService : Service(), LocationListener {
                         socPercent = data.soc,
                         sessionId = sessionId,
                     )
+                    // Odometer at the finish of energydata trips (HistoryImporter matches them).
+                    odometerMarks.onReading(data.mileage, nowMs)
                     liveTripBuffer.onSample(
                         mileage = data.mileage,
                         totalElec = data.totalElecConsumption,

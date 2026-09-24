@@ -110,6 +110,7 @@ class DashboardViewModelTest {
         override suspend fun getWithEnergyInRange(from: Long, to: Long): List<com.bydmate.app.data.local.entity.TripEntity> = emptyList()
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
+        override suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int = 0
         override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
         override suspend fun getRecentSummary(maxTrips: Int): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()

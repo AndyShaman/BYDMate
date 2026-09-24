@@ -10,6 +10,8 @@ import com.bydmate.app.data.remote.DiParsData
 import android.util.Log
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlin.math.abs
+import kotlin.math.roundToLong
 
 @Singleton
 class TripRecorder @Inject constructor(
@@ -117,11 +119,26 @@ class TripRecorder @Inject constructor(
         return delta
     }
 
+    /**
+     * Odometer at both ends of a trip, rounded to 0.1 km. A reading under 1 km is the startup
+     * zero, not the odometer; a pair further apart than a plausible drive belongs to two
+     * different odometer scales, so neither end is trusted.
+     */
+    private fun odometerPair(start: Double?, end: Double?): Pair<Double?, Double?> {
+        val s = start?.takeIf { it >= MIN_VALID_ODOMETER_KM }
+        val e = end?.takeIf { it >= MIN_VALID_ODOMETER_KM }
+        if (s != null && e != null && abs(e - s) > MAX_PLAUSIBLE_TRIP_KM) return null to null
+        return s?.let(::round1) to e?.let(::round1)
+    }
+
+    private fun round1(v: Double): Double = (v * 10.0).roundToLong() / 10.0
+
     private suspend fun close(open: Open, end: DiParsData) {
         val cap = batteryCapacityKwh()
         val kwh = computeKwh(open.startTotalElec, end.totalElecConsumption, open.startSoc, end.soc, cap)
         val distance = plausibleDistance(open.startMileage, end.mileage)
         val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
+        val (odoStart, odoEnd) = odometerPair(open.startMileage, end.mileage)
         tripDao.insert(
             TripEntity(
                 startTs = open.startTs,
@@ -133,11 +150,13 @@ class TripRecorder @Inject constructor(
                 socEnd = end.soc,
                 exteriorTemp = open.startExteriorTemp,
                 exteriorTempEnd = end.exteriorTemp,
+                odometerStartKm = odoStart,
+                odometerEndKm = odoEnd,
                 source = TripSource.NATIVE_POLLING,
             )
         )
         Log.i(TAG, "trip close: km=$distance kwh=$kwh " +
-            "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp}")
+            "ext_temp=${open.startExteriorTemp}/${end.exteriorTemp} odo=$odoStart/$odoEnd")
         this.open = null
         lastStateDao.clearOpenTrip()
     }
@@ -159,6 +178,7 @@ class TripRecorder @Inject constructor(
             val kwh = computeKwh(state.tripStartTotalElec, state.totalElec, state.tripStartSoc, state.soc, batteryCapacityKwh())
             val distance = plausibleDistance(state.tripStartMileage, state.mileage)
             val per100 = if (kwh != null && distance != null && distance > 0) kwh / distance * 100.0 else null
+            val (odoStart, odoEnd) = odometerPair(state.tripStartMileage, state.mileage)
             tripDao.insert(
                 TripEntity(
                     startTs = state.tripStartTs,
@@ -168,9 +188,12 @@ class TripRecorder @Inject constructor(
                     kwhPer100km = per100,
                     socStart = state.tripStartSoc,
                     socEnd = state.soc,
+                    odometerStartKm = odoStart,
+                    odometerEndKm = odoEnd,
                     source = TripSource.NATIVE_POLLING,
                 )
             )
+            Log.i(TAG, "trip close (cold start): km=$distance odo=$odoStart/$odoEnd")
         }
         lastStateDao.clearOpenTrip()
     }
@@ -181,5 +204,8 @@ class TripRecorder @Inject constructor(
         /** Upper bound of a single trip's distance; above it the odometer delta is a
          *  scale change or a bad baseline, not a drive. */
         const val MAX_PLAUSIBLE_TRIP_KM = 1500.0
+
+        /** Startup guard: the odometer fid reads 0 before the car reports it. */
+        const val MIN_VALID_ODOMETER_KM = 1.0
     }
 }

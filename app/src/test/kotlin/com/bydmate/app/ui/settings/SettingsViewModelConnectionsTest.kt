@@ -123,6 +123,7 @@ class SettingsViewModelConnectionsTest {
         override suspend fun getWithEnergyInRange(from: Long, to: Long): List<TripEntity> = emptyList()
         override suspend fun deleteById(id: Long) {}
         override suspend fun deleteZeroKmTrips(): Int = 0
+        override suspend fun fillOdometerIfEmpty(id: Long, startKm: Double?, endKm: Double?): Int = 0
         override suspend fun getTripsForCapacityEstimate(minSocDelta: Int, limit: Int): List<TripEntity> = emptyList()
         override suspend fun getRecentSummary(maxTrips: Int): TripSummary = TripSummary(0.0, 0.0)
         override suspend fun getRecentForEma(limit: Int): List<TripEntity> = emptyList()
@@ -228,7 +229,8 @@ class SettingsViewModelConnectionsTest {
         val historyImporter = HistoryImporter(
             ctx, energyReader, tripRepo, tripDao, tripPointDao, idleDrainDao,
             settingsRepo, com.bydmate.app.data.repository.LastSessionRepository(ctx),
-            mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true)
+            mockk<TripTombstoneDao>(relaxed = true), mockk(relaxed = true),
+            com.bydmate.app.data.repository.OdometerMarks(ctx),
         )
 
         val insightsClient = OpenRouterClient(httpClient)

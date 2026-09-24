@@ -82,6 +82,8 @@ class BackupManagerPartialRestoreTest {
         live { db ->
             for (table in BackupParts.TABLES_TABLES) assertEquals(table, 1, count(db, table))
             assertEquals("archive", text(db, "SELECT source FROM trips WHERE id = 7"))
+            assertEquals(11042.4, text(db, "SELECT odometer_start_km FROM trips WHERE id = 7")!!.toDouble(), 1e-9)
+            assertEquals(11092.9, text(db, "SELECT odometer_end_km FROM trips WHERE id = 7")!!.toDouble(), 1e-9)
             assertEquals(7L, text(db, "SELECT trip_id FROM trip_points")!!.toLong())
             assertEquals("archive", text(db, "SELECT detection_source FROM charges WHERE id = 7"))
             assertEquals("archive", setting(db, "trip1_reset_ts"))

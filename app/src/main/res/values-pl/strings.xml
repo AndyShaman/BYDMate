@@ -339,7 +339,6 @@
     <!-- TripDetailDialog -->
     <string name="trip_detail_title_trip">Przejazd</string>
     <string name="trip_detail_title_stop">Postój</string>
-    <string name="trip_detail_stats_header">Statystyka</string>
     <string name="trip_detail_gps_unavailable">Dane GPS niedostępne</string>
     <string name="trip_detail_distance_label">Dystans</string>
     <string name="trip_detail_distance_value">%1$.1f km</string>
@@ -350,8 +349,23 @@
     <string name="trip_detail_consumption_label">Pobór</string>
     <string name="trip_detail_consumption_value">%1$.1f kWh</string>
     <string name="trip_detail_efficiency_label">Zużycie</string>
+    <string name="trip_detail_efficiency_value">%1$.1f kWh/100</string>
     <string name="trip_detail_cost_label">Koszt</string>
-    <string name="trip_detail_temp_label">Temp.</string>
+    <string name="trip_detail_date_pattern">EEEE, d MMMM</string>
+    <string name="trip_detail_close">Zamknij</string>
+    <string name="trip_detail_group_distance">Przebieg</string>
+    <string name="trip_detail_group_time">Czas</string>
+    <string name="trip_detail_group_energy">Energia</string>
+    <string name="trip_detail_group_money">Pieniądze</string>
+    <string name="trip_detail_group_weather">Pogoda</string>
+    <string name="trip_detail_odometer_start_label">Licznik na starcie</string>
+    <string name="trip_detail_odometer_end_label">Licznik na mecie</string>
+    <string name="trip_detail_odometer_label">Licznik</string>
+    <string name="trip_detail_odometer_value">%1$,.1f km</string>
+    <string name="trip_detail_moving_label">W ruchu</string>
+    <string name="trip_detail_cost_per_100_label">Na 100 km</string>
+    <string name="trip_detail_soc_label">Bateria</string>
+    <string name="trip_detail_ext_temp_label">Na zewnątrz</string>
 
     <!-- Charges screen -->
     <string name="charges_filter_all">Wszystkie</string>

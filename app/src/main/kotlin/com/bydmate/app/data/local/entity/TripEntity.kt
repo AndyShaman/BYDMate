@@ -28,6 +28,10 @@ data class TripEntity(
     @ColumnInfo(name = "exterior_temp") val exteriorTemp: Int? = null,
     /** Outside temperature at the finish, °C. */
     @ColumnInfo(name = "exterior_temp_end") val exteriorTempEnd: Int? = null,
+    /** Odometer at the start of the drive, km; null on trips recorded before it was collected. */
+    @ColumnInfo(name = "odometer_start_km") val odometerStartKm: Double? = null,
+    /** Odometer at the finish, km. */
+    @ColumnInfo(name = "odometer_end_km") val odometerEndKm: Double? = null,
     @ColumnInfo(name = "source", defaultValue = "live") val source: String = "live",
     @ColumnInfo(name = "byd_id") val bydId: Long? = null
 )
