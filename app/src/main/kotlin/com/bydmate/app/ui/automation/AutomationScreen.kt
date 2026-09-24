@@ -9,6 +9,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -34,14 +35,11 @@ import androidx.compose.material.icons.outlined.AddPhotoAlternate
 import androidx.compose.material.icons.outlined.Apps
 import androidx.compose.material.icons.outlined.Call
 import androidx.compose.material.icons.outlined.Close
-import androidx.compose.material.icons.outlined.ContentCopy
-import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material.icons.outlined.FileOpen
 import androidx.compose.material.icons.outlined.Gamepad
 import androidx.compose.material.icons.outlined.KeyboardArrowDown
 import androidx.compose.material.icons.outlined.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.Link
-import androidx.compose.material.icons.outlined.MoreVert
 import androidx.compose.material.icons.outlined.Navigation
 import androidx.compose.material.icons.outlined.Notifications
 import androidx.compose.material.icons.outlined.Pause
@@ -125,11 +123,13 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AutomationScreen(
     viewModel: AutomationViewModel = hiltViewModel()
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    var showPlaces by rememberSaveable { mutableStateOf(false) }
     val filtered = remember(state.rules, state.filter) {
         when (state.filter) {
             RuleFilter.ALL -> state.rules
@@ -144,31 +144,45 @@ fun AutomationScreen(
             .background(Brush.verticalGradient(listOf(NavyDark, NavyDeep)))
             .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        // Header
+        // Header: title and filters on the left; «Места» / «Журнал», a divider, then «Импорт» /
+        // «+ Создать» on the right. Both halves wrap at the largest text size.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            Spacer(Modifier.width(16.dp))
-            AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL) { viewModel.setFilter(RuleFilter.ALL) }
-            Spacer(Modifier.width(4.dp))
-            AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED) { viewModel.setFilter(RuleFilter.ENABLED) }
-            Spacer(Modifier.width(4.dp))
-            AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED) { viewModel.setFilter(RuleFilter.DISABLED) }
-            Spacer(Modifier.weight(1f))
-            Button(
-                onClick = { viewModel.showJournal() },
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                shape = RoundedCornerShape(8.dp),
-                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-            ) { Text(stringResource(R.string.automation_journal_button), fontSize = 13.sp) }
-            Spacer(Modifier.width(8.dp))
-            Button(
-                onClick = { viewModel.openNewRule() },
-                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                shape = RoundedCornerShape(8.dp)
-            ) { Text(stringResource(R.string.automation_create_button), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            FlowRow(
+                modifier = Modifier.weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(stringResource(R.string.automation_tab_title), fontSize = 22.sp, fontWeight = FontWeight.Bold, color = TextPrimary,
+                    modifier = Modifier.align(Alignment.CenterVertically).padding(end = 12.dp))
+                AutoChip(stringResource(R.string.automation_filter_all), state.filter == RuleFilter.ALL) { viewModel.setFilter(RuleFilter.ALL) }
+                AutoChip(stringResource(R.string.automation_filter_active), state.filter == RuleFilter.ENABLED) { viewModel.setFilter(RuleFilter.ENABLED) }
+                AutoChip(stringResource(R.string.automation_filter_disabled), state.filter == RuleFilter.DISABLED) { viewModel.setFilter(RuleFilter.DISABLED) }
+            }
+            Spacer(Modifier.width(12.dp))
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                HeaderOutlinedButton(stringResource(R.string.settings_section_places_title), Icons.Outlined.Place) { showPlaces = true }
+                HeaderOutlinedButton(stringResource(R.string.automation_journal_button), null) { viewModel.showJournal() }
+                Box(
+                    modifier = Modifier
+                        .padding(horizontal = 6.dp)
+                        .width(1.dp)
+                        .height(36.dp)
+                        .background(CardBorder)
+                        .align(Alignment.CenterVertically)
+                )
+                HeaderOutlinedButton(stringResource(R.string.automation_import_button), Icons.Outlined.FileOpen) { viewModel.openImport() }
+                Button(
+                    onClick = { viewModel.openNewRule() },
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                    shape = RoundedCornerShape(8.dp)
+                ) { Text(stringResource(R.string.automation_create_button), fontSize = 13.sp, fontWeight = FontWeight.SemiBold) }
+            }
         }
 
         Spacer(Modifier.height(12.dp))
@@ -185,6 +199,7 @@ fun AutomationScreen(
                     onClick = { viewModel.openEditRule(rule) },
                     onEdit = { viewModel.openEditRule(rule) },
                     onDuplicate = { viewModel.duplicateRule(rule) },
+                    onShare = { viewModel.shareRule(rule) },
                     onDelete = { viewModel.requestDelete(rule.id) }
                 )
             }
@@ -199,8 +214,45 @@ fun AutomationScreen(
             editorError = state.editorError,
             onUpdate = { viewModel.updateEditing(it) },
             onSave = { viewModel.saveRule() },
+            onShare = { viewModel.shareEditing() },
+            onTestRun = { viewModel.testRun() },
+            testRunning = state.testRunning,
             onTestAction = { viewModel.executeNow(it) },
             onDismiss = { viewModel.closeEditor() }
+        )
+    }
+
+    if (showPlaces) {
+        PlacesDialog(onDismiss = { showPlaces = false })
+    }
+
+    state.importFiles?.let { files ->
+        ImportPickDialog(
+            files = files,
+            error = state.importError,
+            onPick = { viewModel.pickImportFile(it) },
+            onDismiss = { viewModel.closeImport() },
+        )
+    }
+
+    state.importDraft?.let { draft ->
+        ImportPreviewDialog(
+            draft = draft,
+            places = state.places,
+            onPickPlace = { index, place -> viewModel.resolveImportPlace(index, place) },
+            onPickContact = { index, phone, name, autoDial -> viewModel.resolveImportContact(index, phone, name, autoDial) },
+            onEnableNowChange = { viewModel.setImportEnableNow(it) },
+            onConfirm = { viewModel.confirmImport() },
+            onDismiss = { viewModel.closeImport() },
+        )
+    }
+
+    // After «Поделиться» (card or editor): drawn last so it sits above the editor.
+    state.sharedRuleFile?.let { file ->
+        RuleSavedDialog(
+            fileName = file.name,
+            onShare = { viewModel.openShareSheet() },
+            onDismiss = { viewModel.dismissSharedRule() },
         )
     }
 
@@ -235,6 +287,7 @@ fun AutomationScreen(
 
 // --- Rule Card ---
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun RuleCard(
     rule: RuleEntity,
@@ -242,11 +295,11 @@ private fun RuleCard(
     onClick: () -> Unit,
     onEdit: () -> Unit,
     onDuplicate: () -> Unit,
+    onShare: () -> Unit,
     onDelete: () -> Unit
 ) {
     val triggers = remember(rule.triggers) { TriggerDef.listFromJson(rule.triggers) }
     val actions = remember(rule.actions) { ActionDef.listFromJson(rule.actions) }
-    var menuExpanded by remember { mutableStateOf(false) }
 
     Card(
         modifier = Modifier
@@ -262,7 +315,7 @@ private fun RuleCard(
         )
     ) {
         Column(modifier = Modifier.padding(12.dp, 10.dp)) {
-            // Header: dot + name + toggle + menu
+            // Header: dot + name + toggle
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Box(
                     modifier = Modifier
@@ -280,30 +333,6 @@ private fun RuleCard(
                     colors = bydSwitchColors(),
                     modifier = Modifier.height(24.dp)
                 )
-                Box {
-                    IconButton(onClick = { menuExpanded = true }, modifier = Modifier.size(32.dp)) {
-                        Icon(Icons.Outlined.MoreVert, "menu", tint = TextMuted, modifier = Modifier.size(18.dp))
-                    }
-                    DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                        ScaledDialogContent {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.automation_menu_edit)) },
-                                onClick = { menuExpanded = false; onEdit() },
-                                leadingIcon = { Icon(Icons.Outlined.Edit, null, modifier = Modifier.size(18.dp)) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.automation_menu_duplicate)) },
-                                onClick = { menuExpanded = false; onDuplicate() },
-                                leadingIcon = { Icon(Icons.Outlined.ContentCopy, null, modifier = Modifier.size(18.dp)) }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.automation_menu_delete), color = Color(0xFFEF4444)) },
-                                onClick = { menuExpanded = false; onDelete() },
-                                leadingIcon = { Icon(Icons.Outlined.Delete, null, tint = Color(0xFFEF4444), modifier = Modifier.size(18.dp)) }
-                            )
-                        }
-                    }
-                }
             }
 
             Spacer(Modifier.height(4.dp))
@@ -320,40 +349,7 @@ private fun RuleCard(
                                 append(if (rule.triggerLogic == "AND") logicAndLabel else logicOrLabel)
                             }
                         }
-                        when (t.kind) {
-                            "time_range" -> {
-                                // value is JSON (parsed by the engine); show the readable displayName instead.
-                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
-                            }
-                            "button_press" -> {
-                                // Localized "Кнопка N" — derived from value, not the
-                                // stored displayName, so language always matches the UI.
-                                val n = t.value.toIntOrNull() ?: 0
-                                withStyle(SpanStyle(color = AccentBlue)) {
-                                    append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
-                                }
-                            }
-                            "steering_key" -> {
-                                // Same rule as button_press: the label comes from the stored
-                                // keycode, so it follows the UI language.
-                                val code = t.value.toIntOrNull() ?: 0
-                                withStyle(SpanStyle(color = AccentBlue)) {
-                                    append(
-                                        if (code > 0) steeringKeyLabel(summaryCtx, code)
-                                        else summaryCtx.getString(R.string.automation_trigger_steering_key_unassigned)
-                                    )
-                                }
-                            }
-                            else -> {
-                                withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
-                                append(" ")
-                                withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
-                                append(" ")
-                                withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
-                                    append(t.value)
-                                }
-                            }
-                        }
+                        appendTriggerSummary(t, summaryCtx)
                     }
                     withStyle(SpanStyle(color = TextMuted)) { append(" → ") }
                     withStyle(SpanStyle(color = AccentTeal)) {
@@ -372,12 +368,89 @@ private fun RuleCard(
             } ?: ""
             val cooldownLabel = " · " + stringResource(R.string.automation_rule_cooldown, rule.cooldownSeconds)
             Text(triggeredLabel + lastLabel + cooldownLabel, fontSize = 11.sp, color = TextMuted)
+
+            // One row of text buttons instead of the overflow menu.
+            HorizontalDivider(color = CardBorder, modifier = Modifier.padding(top = 8.dp))
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+            ) {
+                CardTextButton(stringResource(R.string.automation_menu_edit), AccentGreen, onEdit)
+                CardTextButton(stringResource(R.string.automation_menu_duplicate), AccentGreen, onDuplicate)
+                CardTextButton(stringResource(R.string.automation_share_button), AccentGreen, onShare)
+                CardTextButton(stringResource(R.string.automation_menu_delete), AccentOrange, onDelete)
+            }
+        }
+    }
+}
+
+@Composable
+private fun CardTextButton(label: String, color: Color, onClick: () -> Unit) {
+    TextButton(onClick = onClick) {
+        Text(label, color = color, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun HeaderOutlinedButton(label: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+    ) {
+        Text(label, fontSize = 13.sp)
+        if (icon != null) {
+            Spacer(Modifier.width(6.dp))
+            Icon(icon, null, modifier = Modifier.size(16.dp))
+        }
+    }
+}
+
+/**
+ * One trigger of the card summary, in the card's colours. Shared with the import preview so
+ * a rule reads the same before and after it is added.
+ */
+internal fun androidx.compose.ui.text.AnnotatedString.Builder.appendTriggerSummary(t: TriggerDef, summaryCtx: Context) {
+    when (t.kind) {
+        "time_range" -> {
+            // value is JSON (parsed by the engine); show the readable displayName instead.
+            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName) }
+        }
+        "button_press" -> {
+            // Localized "Кнопка N", derived from value, not the
+            // stored displayName, so language always matches the UI.
+            val n = t.value.toIntOrNull() ?: 0
+            withStyle(SpanStyle(color = AccentBlue)) {
+                append(summaryCtx.getString(R.string.automation_trigger_button_label, n))
+            }
+        }
+        "steering_key" -> {
+            // Same rule as button_press: the label comes from the stored
+            // keycode, so it follows the UI language.
+            val code = t.value.toIntOrNull() ?: 0
+            withStyle(SpanStyle(color = AccentBlue)) {
+                append(
+                    if (code > 0) steeringKeyLabel(summaryCtx, code)
+                    else summaryCtx.getString(R.string.automation_trigger_steering_key_unassigned)
+                )
+            }
+        }
+        else -> {
+            withStyle(SpanStyle(color = AccentBlue)) { append(t.displayName.substringBefore(" ")) }
+            append(" ")
+            withStyle(SpanStyle(color = AccentOrange)) { append(t.operator) }
+            append(" ")
+            withStyle(SpanStyle(color = AccentGreen, fontFamily = FontFamily.Monospace, fontSize = 12.sp)) {
+                append(t.value)
+            }
         }
     }
 }
 
 // --- Editor Dialog ---
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 private fun EditorDialog(
     editing: EditingRule,
@@ -385,6 +458,9 @@ private fun EditorDialog(
     editorError: String?,
     onUpdate: (EditingRule.() -> EditingRule) -> Unit,
     onSave: () -> Unit,
+    onShare: () -> Unit,
+    onTestRun: () -> Unit,
+    testRunning: Boolean,
     onTestAction: (ActionDef) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -709,23 +785,54 @@ private fun EditorDialog(
                             modifier = Modifier.padding(vertical = 4.dp)
                         )
                     }
+                    val complete = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.End
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Button(
-                            onClick = onDismiss,
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
-                            shape = RoundedCornerShape(8.dp),
-                            modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
-                        ) { Text(stringResource(R.string.automation_cancel_button)) }
-                        Spacer(Modifier.width(10.dp))
-                        Button(
-                            onClick = onSave,
-                            colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
-                            shape = RoundedCornerShape(8.dp),
-                            enabled = editing.name.isNotBlank() && editing.triggers.isNotEmpty() && editing.actions.isNotEmpty()
-                        ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
+                        // «Тестовый запуск»: every action now, as if the conditions had matched.
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Button(
+                                onClick = onTestRun,
+                                enabled = editing.actions.isNotEmpty() && !testRunning,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+                            ) {
+                                Text(stringResource(R.string.automation_test_run_button))
+                                Spacer(Modifier.width(6.dp))
+                                Icon(Icons.Outlined.PlayArrow, null, tint = AccentGreen, modifier = Modifier.size(16.dp))
+                            }
+                            Text(
+                                stringResource(R.string.automation_test_run_hint),
+                                fontSize = 11.sp, color = TextMuted, lineHeight = 14.sp,
+                                modifier = Modifier.padding(top = 2.dp)
+                            )
+                        }
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Button(
+                                onClick = onDismiss,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+                            ) { Text(stringResource(R.string.automation_cancel_button)) }
+                            Button(
+                                onClick = onShare,
+                                enabled = complete,
+                                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextSecondary),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.border(1.5.dp, CardBorder, RoundedCornerShape(8.dp))
+                            ) { Text(stringResource(R.string.automation_share_button)) }
+                            Button(
+                                onClick = onSave,
+                                colors = ButtonDefaults.buttonColors(containerColor = AccentGreen, contentColor = NavyDark),
+                                shape = RoundedCornerShape(8.dp),
+                                enabled = complete
+                            ) { Text(stringResource(R.string.automation_save_button), fontWeight = FontWeight.SemiBold) }
+                        }
                     }
                 }
             }
@@ -2956,7 +3063,7 @@ private fun CallActionControls(
 }
 
 @Composable
-private fun CallEditDialog(
+internal fun CallEditDialog(
     initialPhone: String,
     initialName: String,
     initialAutoDial: Boolean,

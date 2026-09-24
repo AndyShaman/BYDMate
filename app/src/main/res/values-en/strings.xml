@@ -416,7 +416,7 @@
     <string name="automation_add_condition_button">+ Add condition</string>
     <string name="automation_trigger_type_param">Parameter</string>
     <string name="automation_trigger_type_place">Place</string>
-    <string name="automation_trigger_type_place_empty_hint">Create a place in settings first</string>
+    <string name="automation_trigger_type_place_empty_hint">Add a place first with the Places button at the top</string>
     <string name="automation_trigger_type_time_of_day">Time of day</string>
     <string name="automation_trigger_type_schedule">Time / schedule</string>
     <string name="automation_trigger_type_service_start">BYDMate startup</string>
@@ -523,7 +523,7 @@
     <string name="automation_call_auto_dial_label">Call automatically</string>
     <string name="automation_call_auto_dial_hint">Without pressing the green button</string>
     <string name="automation_navigate_dialog_title">Route in Y.Navigator</string>
-    <string name="automation_navigate_no_places_hint">Add a place in Settings -> Places first</string>
+    <string name="automation_navigate_no_places_hint">Add a place first with the Places button at the top</string>
     <string name="automation_navigate_pick_place_placeholder">Choose a place...</string>
     <string name="automation_url_dialog_title">Open URL</string>
     <string name="automation_url_field_label">URL</string>
@@ -1586,4 +1586,29 @@
     <string name="notif_channel_auto_sound_desc">Audible automation notifications</string>
     <string name="notif_channel_auto_confirm_name">Automation Confirmations</string>
     <string name="notif_channel_auto_confirm_desc">Confirmation dialogs for automation rules</string>
+    <!-- Automation wave 2: share, import, test run -->
+    <string name="automation_import_button">Import</string>
+    <string name="automation_share_button">Share</string>
+    <string name="automation_share_note">The file has no contacts or keys, only the automation.</string>
+    <string name="automation_share_error">Could not save the file: %1$s</string>
+    <string name="automation_test_run_button">Test run</string>
+    <string name="automation_test_run_hint">Runs every action now, as if the condition had been met</string>
+    <string name="automation_test_run_done">Test run: all actions done</string>
+    <string name="automation_test_run_failed">Test run: %1$d of %2$d actions failed. %3$s</string>
+    <string name="automation_import_pick_title">Automation files in Download</string>
+    <string name="automation_import_pick_empty">No bydmate_rule_*.json files in the Download folder</string>
+    <string name="automation_import_invalid">Could not read the file: it is not a BYDMate automation</string>
+    <string name="automation_import_newer_version">This automation comes from a newer version, please update the app</string>
+    <string name="automation_import_preview_title">Check the automation</string>
+    <string name="automation_import_conditions">Conditions</string>
+    <string name="automation_import_actions">Actions</string>
+    <string name="automation_import_need_attention">Needs your input</string>
+    <string name="automation_import_place_missing">Place “%1$s” not found</string>
+    <string name="automation_import_pick_place">Choose place</string>
+    <string name="automation_import_contact_missing">Contact not found</string>
+    <string name="automation_import_pick_contact">Choose contact</string>
+    <string name="automation_import_enable_now">Turn on right away</string>
+    <string name="automation_import_enable_now_hint">Otherwise it is added turned off</string>
+    <string name="automation_import_add">Add</string>
+    <string name="automation_import_name_suffix">imported</string>
 </resources>

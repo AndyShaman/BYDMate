@@ -1,16 +1,26 @@
 package com.bydmate.app.ui.automation
 
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
+import android.os.Environment
+import android.util.Log
 import android.widget.Toast
+import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.bydmate.app.data.local.LocalePreferences
 import androidx.annotation.StringRes
+import com.bydmate.app.BuildConfig
 import com.bydmate.app.R
 import com.bydmate.app.util.appLocalizedContext
 import com.bydmate.app.data.automation.ActionValidationError
 import com.bydmate.app.data.automation.AutomationEngine
 import com.bydmate.app.data.automation.RuleDraftValidator
+import com.bydmate.app.data.automation.RuleParseResult
+import com.bydmate.app.data.automation.RuleShare
+import com.bydmate.app.data.automation.RuleShareFiles
+import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.automation.TriggerValidationError
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
@@ -23,13 +33,19 @@ import com.bydmate.app.data.repository.PlaceRepository
 import com.bydmate.app.data.automation.ActionDispatcher
 import com.bydmate.app.data.vehicle.VehicleApi
 import com.bydmate.app.service.TrackingService
+import com.bydmate.app.ui.overlay.OverlayNotificationManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
 import javax.inject.Inject
 
 // --- Catalogs ---
@@ -290,6 +306,25 @@ data class EditingRule(
     val fireOncePerTrip: Boolean = false,
     val playSound: Boolean = false,
     val isNew: Boolean = true
+) {
+    fun toShared() = SharedRule(
+        name = name.trim(),
+        triggerLogic = triggerLogic,
+        triggers = triggers,
+        actions = actions,
+        cooldownSeconds = cooldownSeconds,
+        requirePark = requirePark,
+        confirmBeforeExecute = confirmBeforeExecute,
+        fireOncePerTrip = fireOncePerTrip,
+        playSound = playSound,
+    )
+}
+
+/** Step 2 of the import dialog: the parsed rule as it will be added, plus the user's choices. */
+data class RuleImportDraft(
+    val rule: SharedRule,
+    val enableNow: Boolean = false,
+    val error: String? = null,
 )
 
 data class AutomationUiState(
@@ -301,7 +336,16 @@ data class AutomationUiState(
     val editing: EditingRule = EditingRule(),
     val showDeleteConfirm: Long? = null,
     val places: List<PlaceEntity> = emptyList(),
-    val editorError: String? = null
+    val editorError: String? = null,
+    /** Written share file: non-null shows the «Сохранено» dialog. */
+    val sharedRuleFile: File? = null,
+    /** Import step 1: non-null shows the list of share files in Download. */
+    val importFiles: List<File>? = null,
+    /** Why the picked file could not be imported, shown under the step 1 list. */
+    val importError: String? = null,
+    /** Import step 2: non-null shows the preview. */
+    val importDraft: RuleImportDraft? = null,
+    val testRunning: Boolean = false,
 )
 
 @HiltViewModel
@@ -316,6 +360,12 @@ class AutomationViewModel @Inject constructor(
 
     private val _uiState = MutableStateFlow(AutomationUiState())
     val uiState: StateFlow<AutomationUiState> = _uiState.asStateFlow()
+
+    // Test seams: tests point these at a temp dir and a test dispatcher.
+    internal var downloadsDir: () -> File = {
+        Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+    }
+    internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 
     init {
         viewModelScope.launch { insertStarterTemplatesIfNeeded() }
@@ -546,6 +596,213 @@ class AutomationViewModel @Inject constructor(
     fun showJournal() { _uiState.update { it.copy(showJournal = true) } }
     fun hideJournal() { _uiState.update { it.copy(showJournal = false) } }
 
+    // --- Test run ---
+
+    /**
+     * «Тестовый запуск»: runs every action of the rule being edited, in order, right now.
+     * Each action goes through [ActionDispatcher.dispatch] against the live snapshot, so the
+     * speed gates apply exactly as when the rule fires; the chime follows «Выполнять со звуком».
+     * The trigger conditions, «Только на паркинге», cooldown, «Раз за поездку» and «Спрашивать
+     * подтверждение» are skipped: the button press is the confirmation. Nothing is written:
+     * no lastTriggeredAt / triggerCount update and no journal entry.
+     */
+    fun testRun() {
+        val e = _uiState.value.editing
+        if (_uiState.value.testRunning || e.actions.isEmpty()) return
+        val actionError = validateActions(e.actions)
+        if (actionError != null) {
+            _uiState.update { it.copy(editorError = actionError) }
+            return
+        }
+        _uiState.update { it.copy(testRunning = true, editorError = null) }
+        viewModelScope.launch {
+            try {
+                if (e.playSound) OverlayNotificationManager.playNotificationSound(context)
+                var failed = 0
+                var firstReason: String? = null
+                for (action in e.actions) {
+                    val result = actionDispatcher.dispatch(action, TrackingService.lastData.value)
+                    if (!result.success) {
+                        failed++
+                        if (firstReason == null) firstReason = result.reason
+                    }
+                }
+                val lc = context.appLocalizedContext()
+                val msg = if (failed == 0) {
+                    lc.getString(R.string.automation_test_run_done)
+                } else {
+                    lc.getString(
+                        R.string.automation_test_run_failed, failed, e.actions.size,
+                        firstReason ?: lc.getString(R.string.auto_msg_unavailable),
+                    )
+                }
+                Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+            } finally {
+                _uiState.update { it.copy(testRunning = false) }
+            }
+        }
+    }
+
+    // --- Share ---
+
+    /** «Поделиться» on a rule card. */
+    fun shareRule(rule: RuleEntity) = writeShareFile(SharedRule.fromEntity(rule))
+
+    /** «Поделиться» in the editor: shares the draft as it is on screen, saved or not. */
+    fun shareEditing() {
+        val e = _uiState.value.editing
+        if (e.name.isBlank() || e.triggers.isEmpty() || e.actions.isEmpty()) return
+        writeShareFile(e.toShared())
+    }
+
+    private fun writeShareFile(rule: SharedRule) {
+        viewModelScope.launch {
+            try {
+                val file = withContext(ioDispatcher) {
+                    RuleShareFiles.writeTo(downloadsDir(), rule, BuildConfig.VERSION_NAME)
+                }
+                _uiState.update { it.copy(sharedRuleFile = file) }
+            } catch (e: IOException) {
+                showShareError(e)
+            } catch (e: SecurityException) {
+                showShareError(e)
+            }
+        }
+    }
+
+    private fun showShareError(e: Exception) {
+        val msg = context.appLocalizedContext().getString(R.string.automation_share_error, e.message ?: "?")
+        Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+    }
+
+    /** «Поделиться» in the «Сохранено» dialog: the system share sheet, as for a saved backup. */
+    fun openShareSheet() {
+        val file = _uiState.value.sharedRuleFile ?: return
+        _uiState.update { it.copy(sharedRuleFile = null) }
+        try {
+            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
+            val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "application/json"
+                putExtra(Intent.EXTRA_STREAM, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(shareIntent, null).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(chooser)
+        } catch (e: IllegalArgumentException) {
+            showShareError(e)
+        } catch (e: ActivityNotFoundException) {
+            showShareError(e)
+        }
+    }
+
+    fun dismissSharedRule() {
+        _uiState.update { it.copy(sharedRuleFile = null) }
+    }
+
+    // --- Import ---
+
+    /** «Импорт»: lists the share files in Download, newest first. */
+    fun openImport() {
+        viewModelScope.launch {
+            val files = withContext(ioDispatcher) { RuleShareFiles.listRuleFiles(downloadsDir()) }
+            _uiState.update { it.copy(importFiles = files, importError = null, importDraft = null) }
+        }
+    }
+
+    fun closeImport() {
+        _uiState.update { it.copy(importFiles = null, importError = null, importDraft = null) }
+    }
+
+    /** A file tapped in step 1: parse it and open the preview, or say why it cannot be imported. */
+    fun pickImportFile(file: File) {
+        viewModelScope.launch {
+            val lc = context.appLocalizedContext()
+            val text = try {
+                withContext(ioDispatcher) { file.readText(Charsets.UTF_8) }
+            } catch (e: IOException) {
+                Log.w("AutomationViewModel", "import: cannot read ${file.name}", e)
+                _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_invalid)) }
+                return@launch
+            }
+            when (val parsed = RuleShare.parse(text, lc.getString(R.string.auto_act_call))) {
+                is RuleParseResult.Ok -> {
+                    val rule = RuleShare.resolvePlaces(
+                        parsed.rule, _uiState.value.places,
+                        lc.getString(R.string.automation_trigger_place_enter_prefix),
+                        lc.getString(R.string.automation_trigger_place_exit_prefix),
+                    )
+                    _uiState.update { it.copy(importFiles = null, importError = null, importDraft = RuleImportDraft(rule)) }
+                }
+                RuleParseResult.NewerVersion ->
+                    _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_newer_version)) }
+                RuleParseResult.Invalid ->
+                    _uiState.update { it.copy(importError = lc.getString(R.string.automation_import_invalid)) }
+            }
+        }
+    }
+
+    /** «Выбрать место» for the place trigger at [index]. */
+    fun resolveImportPlace(index: Int, place: PlaceEntity) {
+        val lc = context.appLocalizedContext()
+        updateImportRule { rule ->
+            val t = rule.triggers.getOrNull(index) ?: return@updateImportRule rule
+            val resolved = RuleShare.withPlace(
+                t, place,
+                lc.getString(R.string.automation_trigger_place_enter_prefix),
+                lc.getString(R.string.automation_trigger_place_exit_prefix),
+            )
+            rule.copy(triggers = rule.triggers.toMutableList().apply { set(index, resolved) })
+        }
+    }
+
+    /** «Выбрать контакт» for the call action at [index]. */
+    fun resolveImportContact(index: Int, phone: String, name: String, autoDial: Boolean) {
+        updateImportRule { rule ->
+            val a = rule.actions.getOrNull(index) ?: return@updateImportRule rule
+            rule.copy(actions = rule.actions.toMutableList().apply { set(index, a.withCall(phone, name, autoDial)) })
+        }
+    }
+
+    private fun updateImportRule(transform: (SharedRule) -> SharedRule) {
+        _uiState.update { s ->
+            val draft = s.importDraft ?: return@update s
+            s.copy(importDraft = draft.copy(rule = transform(draft.rule), error = null))
+        }
+    }
+
+    fun setImportEnableNow(enable: Boolean) {
+        _uiState.update { s ->
+            val draft = s.importDraft ?: return@update s
+            s.copy(importDraft = draft.copy(enableNow = enable && !draft.rule.hasUnresolved()))
+        }
+    }
+
+    /** «Добавить»: validates like the editor, renames on a clash, inserts. */
+    fun confirmImport() {
+        val draft = _uiState.value.importDraft ?: return
+        val rule = draft.rule
+        // An unresolved call has no phone yet by design: validate the rest of the rule around it.
+        val unresolvedCalls = rule.unresolvedCallIndexes().toSet()
+        val forValidation = rule.actions.mapIndexed { i, a ->
+            if (i in unresolvedCalls) a.withCall(VALIDATION_PHONE, "", false) else a
+        }
+        val error = validateActions(forValidation) ?: validateTriggers(rule.triggers, -1L)
+        if (error != null) {
+            _uiState.update { it.copy(importDraft = draft.copy(error = error)) }
+            return
+        }
+        val name = RuleShare.uniqueName(
+            rule.name,
+            _uiState.value.rules.map { it.name },
+            context.appLocalizedContext().getString(R.string.automation_import_name_suffix),
+        )
+        val entity = RuleShare.toEntity(rule, name, draft.enableNow)
+        _uiState.update { it.copy(importDraft = null) }
+        viewModelScope.launch { ruleDao.insert(entity) }
+    }
+
     // --- Starter templates ---
 
     private suspend fun insertStarterTemplatesIfNeeded() {
@@ -656,6 +913,9 @@ class AutomationViewModel @Inject constructor(
         prefs.edit().putBoolean("templates_inserted", true).apply()
     }
 }
+
+/** Stand-in phone for validating an imported rule whose call contact is not picked yet. */
+private const val VALIDATION_PHONE = "00000"
 
 // --- Action kind helpers (v2.3.0) ---
 

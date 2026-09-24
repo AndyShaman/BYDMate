@@ -1,0 +1,21 @@
+{
+  "name": "Дом: звонок",
+  "trigger_logic": "AND",
+  "triggers": [
+    {"param":"Place","chineseName":"位置","operator":"==","value":"enter","displayName":"Въезд в «Дача»","kind":"place_enter","placeId":7,"placeName":"Дача"},
+    {"param":"Speed","chineseName":"车速","operator":">","value":"7","displayName":"Скорость","kind":"param"}
+  ],
+  "actions": [
+    {"command":"","displayName":"Мама","kind":"call","payload":"{\"phone\":\"+375291234567\",\"name\":\"Мама\",\"autoDial\":true}"},
+    {"command":"","displayName":"Спросить агента","kind":"agent_query","payload":"{\"prompt\":\"Какая погода дома?\"}"},
+    {"command":"","displayName":"Открыть ссылку","kind":"url","payload":"{\"url\":\"https://user:secret@example.com/path?access_token=abc123&q=home&api_key=zzz#top\",\"minimize\":false}"},
+    {"command":"车窗关闭","displayName":"Закрыть все окна","kind":"param"}
+  ],
+  "cooldown_seconds": 30,
+  "require_park": true,
+  "confirm_before_execute": false,
+  "fire_once_per_trip": true,
+  "play_sound": true,
+  "last_triggered_at": 1758700000000,
+  "trigger_count": 47
+}

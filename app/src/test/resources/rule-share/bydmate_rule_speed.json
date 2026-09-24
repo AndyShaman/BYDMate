@@ -1,0 +1,20 @@
+{
+  "format": "bydmate_rule",
+  "version": 1,
+  "app_version": "3.18.0",
+  "rule": {
+    "name": "Navi",
+    "trigger_logic": "OR",
+    "triggers": [
+      {"param":"Speed","chineseName":"车速","operator":">","value":"7","displayName":"Скорость","kind":"param"}
+    ],
+    "actions": [
+      {"command":"车窗关闭","displayName":"Закрыть все окна","kind":"param"}
+    ],
+    "cooldown_seconds": 3,
+    "require_park": false,
+    "confirm_before_execute": false,
+    "fire_once_per_trip": false,
+    "play_sound": false
+  }
+}
