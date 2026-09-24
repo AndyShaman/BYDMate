@@ -1719,6 +1719,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">导入</string>
     <string name="automation_share_button">分享</string>
+    <string name="automation_view_list">列表</string>
+    <string name="automation_view_grid">网格</string>
     <string name="automation_share_note">文件中已删除电话号码、联系人姓名以及与你的地点的关联。链接中的登录名和密码以及看起来像密钥的参数会被删除；地址本身请在发送前检查。通知和语音文本、语音助手请求以及路线点会保留，也请检查。</string>
     <string name="automation_share_error">无法保存文件：%1$s</string>
     <string name="automation_test_run_button">试运行</string>

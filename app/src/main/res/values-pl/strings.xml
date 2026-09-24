@@ -1757,6 +1757,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Importuj</string>
     <string name="automation_share_button">Udostępnij</string>
+    <string name="automation_view_list">Lista</string>
+    <string name="automation_view_grid">Siatka</string>
     <string name="automation_share_note">Z pliku usunięto numery telefonów, nazwy kontaktów i powiązania z Twoimi miejscami. Z linków usuwane są login z hasłem i parametry wyglądające na klucze; sam adres sprawdź przed wysłaniem. Teksty powiadomień i fraz, zapytania do agenta i punkty tras zostają, je też warto sprawdzić.</string>
     <string name="automation_share_error">Nie udało się zapisać pliku: %1$s</string>
     <string name="automation_test_run_button">Uruchomienie testowe</string>

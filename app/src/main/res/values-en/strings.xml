@@ -1605,6 +1605,8 @@
     <!-- Automation wave 2: share, import, test run -->
     <string name="automation_import_button">Import</string>
     <string name="automation_share_button">Share</string>
+    <string name="automation_view_list">List</string>
+    <string name="automation_view_grid">Grid</string>
     <string name="automation_share_note">Phone numbers, contact names and links to your places are removed from the file. Links lose their login and password and any parameters that look like keys; check the address itself before sending. Notification and phrase texts, agent requests and route points stay, so check them too.</string>
     <string name="automation_share_error">Could not save the file: %1$s</string>
     <string name="automation_test_run_button">Test run</string>

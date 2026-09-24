@@ -2,6 +2,7 @@ package com.bydmate.app.ui.automation
 
 import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.SharedPreferences
 import android.database.sqlite.SQLiteException
 import android.content.Intent
 import android.os.Environment
@@ -305,6 +306,29 @@ val OPERATORS = listOf(">", "<", ">=", "<=", "==", "!=")
 
 enum class RuleFilter { ALL, ENABLED, DISABLED }
 
+/** How the rule list is drawn: one compact row per rule, or a grid of cards. */
+enum class RuleViewMode {
+    LIST, GRID;
+
+    companion object {
+        /** Key in the «automation» prefs; the choice survives app restarts. */
+        internal const val KEY = "rule_view_mode"
+
+        fun prefs(context: Context): SharedPreferences =
+            context.getSharedPreferences(AutomationEngine.PREFS_NAME, Context.MODE_PRIVATE)
+
+        /** A missing, unknown or wrongly typed value falls back to [LIST]. */
+        fun read(prefs: SharedPreferences): RuleViewMode {
+            val stored = try {
+                prefs.getString(KEY, null)
+            } catch (_: ClassCastException) {
+                null
+            }
+            return entries.firstOrNull { it.name == stored } ?: LIST
+        }
+    }
+}
+
 // --- ViewModel ---
 
 data class EditingRule(
@@ -368,6 +392,7 @@ data class RuleImportDraft(
 data class AutomationUiState(
     val rules: List<RuleEntity> = emptyList(),
     val filter: RuleFilter = RuleFilter.ALL,
+    val viewMode: RuleViewMode = RuleViewMode.LIST,
     val logs: List<RuleLogEntity> = emptyList(),
     val showEditor: Boolean = false,
     val showJournal: Boolean = false,
@@ -400,7 +425,7 @@ class AutomationViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(AutomationUiState())
+    private val _uiState = MutableStateFlow(AutomationUiState(viewMode = RuleViewMode.read(RuleViewMode.prefs(context))))
     val uiState: StateFlow<AutomationUiState> = _uiState.asStateFlow()
 
     // Test seams: tests point these at a temp dir, a test dispatcher, the telemetry and a
@@ -448,6 +473,11 @@ class AutomationViewModel @Inject constructor(
 
     fun setFilter(filter: RuleFilter) {
         _uiState.update { it.copy(filter = filter) }
+    }
+
+    fun setViewMode(mode: RuleViewMode) {
+        _uiState.update { it.copy(viewMode = mode) }
+        RuleViewMode.prefs(context).edit().putString(RuleViewMode.KEY, mode.name).apply()
     }
 
     fun toggleEnabled(rule: RuleEntity) {
