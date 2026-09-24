@@ -15,6 +15,14 @@ import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.every
 import io.mockk.mockk
+import java.util.Collections
+import java.util.concurrent.ConcurrentLinkedQueue
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.concurrent.thread
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
@@ -54,6 +62,7 @@ class AutomationEngineServiceStartTest {
 
     private fun setup(
         context: Context = ApplicationProvider.getApplicationContext(),
+        dispatcher: ActionDispatcher = mockk(relaxed = true),
         rulesProvider: () -> List<RuleEntity>,
     ): Pair<AutomationEngine, RuleDao> {
         val ruleDao = mockk<RuleDao>(relaxed = true) {
@@ -62,7 +71,7 @@ class AutomationEngineServiceStartTest {
         val engine = AutomationEngine(
             ruleDao = ruleDao,
             ruleLogDao = mockk<RuleLogDao>(relaxed = true),
-            actionDispatcher = mockk(relaxed = true),
+            actionDispatcher = dispatcher,
             placeRepository = mockk<PlaceRepository> { coEvery { getAllSnapshot() } returns emptyList() },
             networkAvailableMonitor = mockk<NetworkAvailableMonitor> {
                 every { lastAvailableAt } returns 0L
@@ -865,24 +874,6 @@ class AutomationEngineServiceStartTest {
         engine.stopServiceStartHeartbeat()
     }
 
-    @Test fun `service_start heartbeat beat running when its timer stops writes nothing`() = runBlocking {
-        val unit = HeadUnit(e0, t0)
-        val (engine, _) = serviceStartEngine(bootId, unit)
-        val timer = TestScope()
-        engine.startServiceStartHeartbeat(timer)
-        engine.evaluate(diParsData(soc = 50), null)
-        timer.pass(unit, 29_000L)
-        engine.elapsedMs = {                                                // stop lands inside the beat
-            engine.stopServiceStartHeartbeat()
-            engine.startServiceStartHeartbeat(TestScope())
-            unit.elapsed
-        }
-        timer.pass(unit, 1_000L)
-
-        assertEquals(e0, storedHeartbeat())
-        engine.stopServiceStartHeartbeat()
-    }
-
     @Test fun `service_start dark heartbeat beat confirms the ACC_OFF marker while evaluate is stalled`() =
         runBlocking {
             val unit = HeadUnit(e0, t0)
@@ -903,4 +894,310 @@ class AutomationEngineServiceStartTest {
             assertTrue(engineLogs().any { it.startsWith("service_start: new session reason=car_off") })
             engine.stopServiceStartHeartbeat()
         }
+
+    // Real threads below: every wait is bounded, a hang fails the test instead of blocking it.
+    private fun CountDownLatch.awaitOrFail(what: String) = assertTrue(what, await(5, TimeUnit.SECONDS))
+
+    private fun Thread.joinOrFail(what: String) {
+        join(5_000L)
+        assertFalse(what, isAlive)
+    }
+
+    private fun Thread.awaitBlocked() {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
+        while (state != Thread.State.BLOCKED) {
+            assertTrue("thread never blocked on the lock", System.nanoTime() < deadline)
+            Thread.yield()
+        }
+    }
+
+    /**
+     * Prefs that record every stored heartbeat in the order it is put, and hold the next commit or
+     * apply of an edit touching [gateKey] (with the writer's locks) until [release].
+     */
+    private class GatedPrefs(private val real: SharedPreferences) : SharedPreferences by real {
+        val heartbeats: MutableList<Long> = Collections.synchronizedList(mutableListOf())
+        @Volatile var gateKey: String? = null
+        val entered = CountDownLatch(1)
+        val release = CountDownLatch(1)
+
+        override fun edit(): SharedPreferences.Editor = Editor(real.edit())
+
+        private inner class Editor(private val e: SharedPreferences.Editor) : SharedPreferences.Editor by e {
+            private val keys = mutableSetOf<String>()
+            override fun putString(key: String, value: String?): SharedPreferences.Editor {
+                keys += key
+                e.putString(key, value)
+                return this
+            }
+            override fun putLong(key: String, value: Long): SharedPreferences.Editor {
+                keys += key
+                if (key == "service_start_last_seen_elapsed") heartbeats += value
+                e.putLong(key, value)
+                return this
+            }
+            override fun putBoolean(key: String, value: Boolean): SharedPreferences.Editor {
+                keys += key
+                e.putBoolean(key, value)
+                return this
+            }
+            override fun commit(): Boolean {
+                gate()
+                return e.commit()
+            }
+            override fun apply() {
+                gate()
+                e.apply()
+            }
+            private fun gate() {
+                val key = gateKey ?: return
+                if (key !in keys) return
+                gateKey = null
+                entered.countDown()
+                release.await(5, TimeUnit.SECONDS)
+            }
+        }
+    }
+
+    @Test fun `service_start beat and tick entering the lock together open no elapsed_back session and keep the heartbeat monotonic`() =
+        runBlocking {
+            val prefs = GatedPrefs(automationPrefs())
+            val (engine, dao) = setup(contextWith(prefs)) { listOf(rule(1, listOf(serviceStartTrigger()))) }
+            val clock = AtomicLong(e0)
+            engine.bootIdProvider = { bootId }
+            engine.nowMs = { t0 }
+            engine.interactiveProvider = { true }
+            engine.elapsedMs = { clock.incrementAndGet() }                  // every reading 1 ms after the last
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            engine.evaluate(diParsData(soc = 50), null)                     // fires, rule consumed
+
+            // Each round lets a tick and a beat go at once, 10 s after the previous round.
+            val rounds = 20
+            val barrier = CyclicBarrier(2) { clock.addAndGet(10_000L) }
+            val failures = ConcurrentLinkedQueue<Throwable>()
+            fun racer(step: () -> Unit) = thread {
+                try {
+                    repeat(rounds) {
+                        barrier.await(5, TimeUnit.SECONDS)
+                        step()
+                    }
+                } catch (e: Throwable) {
+                    failures += e
+                }
+            }
+            val ticks = racer { runBlocking { engine.evaluate(diParsData(soc = 50), null) } }
+            val beats = racer {
+                timer.testScheduler.advanceTimeBy(30_000L)
+                timer.testScheduler.runCurrent()
+            }
+            ticks.joinOrFail("ticks did not finish")
+            beats.joinOrFail("beats did not finish")
+            engine.stopServiceStartHeartbeat()
+
+            assertTrue(failures.toString(), failures.isEmpty())
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertEquals(1, engineLogs().count { it.startsWith("service_start: new session") })
+            assertFalse(engineLogs().any { it.startsWith("service_start: new session reason=elapsed_back") })
+            val heartbeats = prefs.heartbeats.toList()
+            assertTrue(heartbeats.toString(), heartbeats.size > rounds)     // every beat wrote
+            assertEquals(heartbeats.sorted(), heartbeats)
+            assertEquals(heartbeats.last(), storedHeartbeat())
+        }
+
+    @Test fun `service_start stopHeartbeat after a beat passed its generation check lets that write finish and returns at once`() =
+        runBlocking {
+            val prefs = GatedPrefs(automationPrefs())
+            val (engine, _) = setup(contextWith(prefs)) { listOf(rule(1, listOf(serviceStartTrigger()))) }
+            val unit = HeadUnit(e0, t0)
+            engine.wire(unit)
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            engine.evaluate(diParsData(soc = 50), null)
+            timer.pass(unit, 29_000L)
+            prefs.gateKey = "service_start_last_seen_elapsed"               // the beat's write hangs in the lock
+            val beat = thread { timer.pass(unit, 1_000L) }
+            prefs.entered.awaitOrFail("the beat never wrote")
+
+            val stop = thread { engine.stopServiceStartHeartbeat() }
+            stop.joinOrFail("stop waited for the beat's write")
+            assertEquals(e0, storedHeartbeat())                             // the write is still held
+            prefs.release.countDown()
+            beat.joinOrFail("the beat did not finish")
+
+            assertEquals(e0 + 30_000L, storedHeartbeat())                   // its one write went through
+            timer.pass(unit, 120_000L)
+            assertEquals(e0 + 30_000L, storedHeartbeat())                   // and no later one
+        }
+
+    @Test fun `service_start beat waiting for the lock when its timer stops writes nothing and stop skips the tick commit`() =
+        runBlocking {
+            val prefs = GatedPrefs(automationPrefs())
+            val (engine, _) = setup(contextWith(prefs)) { listOf(rule(1, listOf(serviceStartTrigger()))) }
+            val unit = HeadUnit(e0, t0)
+            engine.wire(unit)
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            prefs.gateKey = "service_start_boot_id"                         // the session commit hangs in the lock
+            val tick = thread { runBlocking { engine.evaluate(diParsData(soc = 50), null) } }
+            prefs.entered.awaitOrFail("the tick never committed its session")
+            val beat = thread { timer.pass(unit, 30_000L) }
+            beat.awaitBlocked()                                             // the due beat waits for the tick
+
+            val stop = thread { engine.stopServiceStartHeartbeat() }
+            stop.joinOrFail("stop waited for the tick's commit")
+            prefs.release.countDown()
+            tick.joinOrFail("the tick did not finish")
+            beat.joinOrFail("the beat did not finish")
+
+            assertEquals(e0, storedHeartbeat())                             // the session's heartbeat only
+            timer.pass(unit, 120_000L)
+            assertEquals(e0, storedHeartbeat())
+        }
+
+    @Test fun `service_start dark tick read before an ACC_OFF leaves its marker waiting for the dark screen`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            engine.evaluate(diParsData(soc = 50), null)                     // t=0: session, fires
+            unit.advance(10_000L)
+            val observed = CountDownLatch(1)
+            val resume = CountDownLatch(1)
+            engine.interactiveProvider = {                                  // t=10: dark, then the tick stalls
+                observed.countDown()
+                resume.await(5, TimeUnit.SECONDS)
+                false
+            }
+            val tick = thread { runBlocking { engine.evaluate(diParsData(soc = 50), null) } }
+            observed.awaitOrFail("the tick never read the screen")
+            unit.advance(1_000L)
+            engine.onCarOff()                                               // t=11: receiver, screen still lit
+            resume.countDown()
+            tick.joinOrFail("the tick did not finish")
+            engine.interactiveProvider = { unit.screenOn }
+
+            assertTrue(engine.serviceStartDumpLine().contains(" car_off=pending car_off_lit=0s "))
+            unit.advance(1_000L)
+            engine.evaluate(diParsData(soc = 50), null)                     // t=12, lit: waits for dark
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertTrue(storedCarOff())
+            assertFalse(engineLogs().any { it.startsWith("service_start: car off marker within session") })
+            unit.screenOn = false
+            unit.advance(10_000L)
+            engine.evaluate(diParsData(soc = 50), null)
+            unit.advance(60_000L)
+            unit.screenOn = true
+            engine.evaluate(diParsData(soc = 50), null)                     // next car start
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+            assertTrue(engineLogs().any { it.startsWith("service_start: new session reason=car_off") })
+        }
+
+    @Test fun `service_start tick reads the clock and the screen inside the lock a timer beat waits for`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val (engine, dao) = serviceStartEngine(bootId, unit)
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            engine.evaluate(diParsData(soc = 50), null)                     // t=0: session, fires
+            timer.pass(unit, 29_000L)
+            val reading = CountDownLatch(1)
+            val resume = CountDownLatch(1)
+            val tickThread = AtomicReference<Thread>()
+            engine.interactiveProvider = {
+                if (Thread.currentThread() == tickThread.get()) {           // the tick stalls on its reading
+                    reading.countDown()
+                    resume.await(5, TimeUnit.SECONDS)
+                }
+                unit.screenOn
+            }
+            val tick = thread(start = false) { runBlocking { engine.evaluate(diParsData(soc = 50), null) } }
+            tickThread.set(tick)
+            tick.start()
+            reading.awaitOrFail("the tick never read the screen")
+            val beat = thread { timer.pass(unit, 1_000L) }
+            beat.join(1_000L)                                               // no beat between reading and judging
+            assertTrue("a beat ran while the tick was reading", beat.isAlive)
+            assertEquals(e0, storedHeartbeat())
+            resume.countDown()
+            tick.joinOrFail("the tick did not finish")
+            beat.joinOrFail("the beat did not finish")
+            engine.stopServiceStartHeartbeat()
+
+            coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+            assertEquals(e0 + 30_000L, storedHeartbeat())
+        }
+
+    @Test fun `service_start evaluate stalled from 50 s to 160 s through ACC_OFF and a dark beat opens one car_off session`() =
+        runBlocking {
+            val unit = HeadUnit(e0, t0)
+            val stalled = CountDownLatch(1)
+            val resume = CountDownLatch(1)
+            val stall = AtomicBoolean(false)
+            val r = rule(1, listOf(serviceStartTrigger()))
+            val (engine, dao) = setup {
+                if (stall.compareAndSet(true, false)) {                    // the rule read hangs
+                    stalled.countDown()
+                    resume.await(5, TimeUnit.SECONDS)
+                }
+                listOf(r)
+            }
+            engine.wire(unit)
+            val timer = TestScope()
+            engine.startServiceStartHeartbeat(timer)
+            engine.evaluate(diParsData(soc = 50), null)                     // t=0: session, fires
+            timer.pass(unit, 50_000L)                                       // beat at 30
+            stall.set(true)
+            val evaluate = thread { runBlocking { engine.evaluate(diParsData(soc = 50), null) } }
+            stalled.awaitOrFail("evaluate never reached the rules")         // t=50: evaluate stalls
+
+            timer.pass(unit, 30_000L)                                       // lit beat at 60
+            engine.onCarOff()                                               // t=80
+            unit.screenOn = false
+            timer.pass(unit, 20_000L)                                       // dark beat at 90
+            unit.screenOn = true                                            // t=100: car on
+            timer.pass(unit, 60_000L)                                       // lit beats at 120 and 150
+            resume.countDown()                                              // t=160: evaluate resumes
+            evaluate.joinOrFail("evaluate did not finish")
+            engine.stopServiceStartHeartbeat()
+
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+            assertTrue(engineLogs().contains("service_start: screen off seen by heartbeat timer"))
+            assertFalse(engineLogs().any { it.startsWith("service_start: car off marker within session") })
+            assertEquals(1, engineLogs().count { it.startsWith("service_start: new session reason=car_off") })
+            assertFalse(storedCarOff())
+            repeat(3) {
+                unit.advance(3_000L)
+                engine.evaluate(diParsData(soc = 50), null)
+            }
+            coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        }
+
+    @Test fun `ACC_OFF while the first service_start rule marks its fire skips that rule's own action`() = runBlocking {
+        val unit = HeadUnit(e0, t0)
+        val dispatcher = mockk<ActionDispatcher>(relaxed = true)
+        val (engine, dao) = setup(dispatcher = dispatcher) { listOf(rule(1, listOf(serviceStartTrigger()))) }
+        engine.wire(unit)
+        var carOffPending = true
+        coEvery { dao.updateLastTriggered(1, any()) } answers {
+            if (carOffPending) {                                            // car off as rule 1 fires
+                carOffPending = false
+                engine.onCarOff()
+            }
+        }
+
+        engine.evaluate(diParsData(soc = 50), null)                         // reason=first
+
+        coVerify(exactly = 1) { dao.updateLastTriggered(1, any()) }
+        assertTrue(engineLogs().contains("service_start: window closed before dispatch"))
+        coVerify(exactly = 0) { dispatcher.dispatch(any(), any()) }
+        unit.screenOn = false
+        unit.advance(10_000L)
+        engine.evaluate(diParsData(soc = 50), null)
+        unit.advance(60_000L)
+        unit.screenOn = true
+        engine.evaluate(diParsData(soc = 50), null)                         // next car start
+        coVerify(exactly = 2) { dao.updateLastTriggered(1, any()) }
+        coVerify(timeout = 5_000L, exactly = 1) { dispatcher.dispatch(any(), any()) }
+        assertEquals(1, engineLogs().count { it == "service_start: window closed before dispatch" })
+    }
 }
