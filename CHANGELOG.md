@@ -8,6 +8,8 @@
 
 ## [Unreleased]
 
+## [3.18.0] - 2026-09-24
+
 ### Новое
 - Автоматизация и голос: действие «Подогрев руля» вкл/выкл и переключение (на машинах с подогревом руля; результат проверяется чтением состояния, на машине без подогрева действие честно сообщает об этом). Команда не проверена на реальной машине с подогревом, ждём отзывов
 - Техника: в «Лимитах BMS» добавлена строка «макс. мощность разряда» (та же цифра, что у диагностических сканеров), «доступная мощность батареи» осталась, подсказка объясняет, что все три числа читаются у BMS и чем они различаются (#241)
@@ -1207,7 +1209,8 @@
 ### Removed
 - `fallbackToDestructiveMigration`.
 
-[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.17.5...HEAD
+[Unreleased]: https://github.com/AndyShaman/BYDMate/compare/v3.18.0...HEAD
+[3.18.0]: https://github.com/AndyShaman/BYDMate/compare/v3.17.5...v3.18.0
 [3.17.5]: https://github.com/AndyShaman/BYDMate/compare/v3.17.4...v3.17.5
 [3.17.4]: https://github.com/AndyShaman/BYDMate/compare/v3.17.3...v3.17.4
 [3.17.3]: https://github.com/AndyShaman/BYDMate/compare/v3.17.2...v3.17.3
