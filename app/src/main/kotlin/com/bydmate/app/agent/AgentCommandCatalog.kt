@@ -96,6 +96,9 @@ object AgentCommandCatalog {
         // Mirrors
         Cmd("mirror_heat_on", "включить обогрев зеркал и заднего стекла", { "后视镜加热" }),
         Cmd("mirror_heat_off", "выключить обогрев зеркал и заднего стекла", { "关闭后视镜加热" }),
+        // Steering wheel
+        Cmd("steering_heat_on", "включить подогрев руля", { "方向盘加热" }),
+        Cmd("steering_heat_off", "выключить подогрев руля", { "关闭方向盘加热" }),
         // Lights
         Cmd("light_ambient_on", "включить атмосферную подсветку салона (амбиент)", { "氛围灯打开" }),
         Cmd("light_ambient_off", "выключить атмосферную подсветку салона (амбиент)", { "氛围灯关闭" }),

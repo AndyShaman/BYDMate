@@ -77,6 +77,9 @@ object VoiceCatalog {
         // Mirrors
         VoiceCommandSpec(ON, MIRROR_HEAT) { "后视镜加热" },
         VoiceCommandSpec(OFF, MIRROR_HEAT) { "关闭后视镜加热" },
+        // Steering wheel heat
+        VoiceCommandSpec(ON, STEERING_HEAT) { "方向盘加热" },
+        VoiceCommandSpec(OFF, STEERING_HEAT) { "关闭方向盘加热" },
         // Lights
         VoiceCommandSpec(ON, LIGHT_AMBIENT) { "氛围灯打开" },
         VoiceCommandSpec(OFF, LIGHT_AMBIENT) { "氛围灯关闭" },

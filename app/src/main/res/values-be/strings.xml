@@ -551,6 +551,7 @@
     <string name="toggle_target_seat_heat_passenger">Падагрэў сядзення пасажыра</string>
     <string name="toggle_target_seat_vent_driver">Абдзьмуў сядзення кіроўцы</string>
     <string name="toggle_target_seat_vent_passenger">Абдзьмуў сядзення пасажыра</string>
+    <string name="toggle_target_steering_heat">Падагрэў руля</string>
     <string name="toggle_state_unknown">%1$s: стан невядомы</string>
     <string name="toggle_trunk_moving">Багажнік рухаецца</string>
     <string name="toggle_unknown_target">Невядомая мэта пераключэння: %1$s</string>
@@ -1234,6 +1235,9 @@
     <string name="auto_act_passenger_vent_off">Вентыляцыя пасажыра выкл</string>
     <string name="auto_act_mirror_heat_on">Падагрэў люстэркаў укл</string>
     <string name="auto_act_mirror_heat_off">Падагрэў люстэркаў выкл</string>
+    <string name="auto_act_steering_heat_on">Падагрэў руля укл</string>
+    <string name="auto_act_steering_heat_off">Падагрэў руля выкл</string>
+    <string name="steering_heat_not_equipped">На гэтай машыне няма падагрэву руля</string>
     <string name="auto_act_ambient_light_on">Амбіент укл</string>
     <string name="auto_act_ambient_light_off">Амбіент выкл</string>
     <string name="auto_act_drl_on">ДХА ўкл</string>

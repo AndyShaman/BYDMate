@@ -76,6 +76,7 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             1004 to 871366669,   // hazard lights — live-validated on Leopard 3 2026-07-31
             1023 to 850427920,  // fridge WORKING_STATUS_SET (cool/heat/off) — com.byd.car.icebox
             1023 to 850427928,  // fridge TEMP_REGULATION_SET — com.byd.car.icebox
+            1023 to 944767029,  // SET_STEERING_WHEEL_HEAT_STATE_SET — BYDAutoSettingDevice, unvalidated
         )
 
         /** A (dev,fid) is banned unless explicitly carved out. */
@@ -210,6 +211,15 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
         )
 
         /**
+         * READ-side state of the steering wheel heater (SET_STEERING_WHEEL_HEAT_STATE, tx=5),
+         * the counterpart of the steering_heat_on/off writes: 2=on, 1=off, 0=function absent,
+         * 65535=no CAN link. BYD reads it on the Setting device (dev=1023). Not validated on a
+         * car with a heated wheel: Leopard 3 has none and reads 0.
+         */
+        const val STEERING_HEAT_STATE_DEV = 1023
+        const val STEERING_HEAT_STATE_FID = 1116733454
+
+        /**
          * Candidate (unvalidated) native channels staged for an in-vehicle snap.
          * Holds the seat heat/vent dev=1001 fallback channel (competitor-v80 fids)
          * used by AdaptiveSeatChannel when the primary dev=1000 path returns a
@@ -252,6 +262,14 @@ class WriteAllowlist(private val map: Map<String, WriteEntry>) {
             // Same value-less competitor entry problem and same per-model readback fid
             // divergence as ac_wind_level above, so no readbackFid here either (#201).
             WriteEntry("ac_wind_mode", 1000, 501219336, null, 1, 5, "climate", false, "competitor-actions ac_wind_mode; AirConditioningService decompiled; #201"),
+            // Steering wheel heat — SET_STEERING_WHEEL_HEAT_STATE_SET on the Setting device
+            // (dev=1023 carve-out), 2=on, 1=off; the set accepts nothing else (levels live on
+            // separate fids and stay out). Override the competitor's same-named dev=1000
+            // entries; its wheel_heat_on/off (dev=1000) stay as the fallback channel of
+            // [SteeringHeatChannel]. No readbackFid: the state fid lags the write on CAN, so
+            // the channel reads it back itself after a delay.
+            WriteEntry("steering_heat_on",  1023, 944767029, null, 2, 2, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice"),
+            WriteEntry("steering_heat_off", 1023, 944767029, null, 1, 1, "climate", false, "byd-sdk BYDAutoSettingDevice + autovoice"),
             WriteEntry("driver_seat_heat_fallback",    1001, 1125122068, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("driver_seat_vent_fallback",    1001, 1125122064, null, 1, 6, "seats", false, "competitor-v80"),
             WriteEntry("passenger_seat_heat_fallback", 1001, 1125122076, null, 1, 6, "seats", false, "competitor-v80"),

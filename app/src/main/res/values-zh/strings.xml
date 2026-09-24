@@ -1162,6 +1162,9 @@
     <string name="auto_act_passenger_vent_off">副驾座椅通风关</string>
     <string name="auto_act_mirror_heat_on">后视镜加热开</string>
     <string name="auto_act_mirror_heat_off">后视镜加热关</string>
+    <string name="auto_act_steering_heat_on">方向盘加热开</string>
+    <string name="auto_act_steering_heat_off">方向盘加热关</string>
+    <string name="steering_heat_not_equipped">这辆车没有方向盘加热</string>
     <string name="auto_act_ambient_light_on">氛围灯开</string>
     <string name="auto_act_ambient_light_off">氛围灯关</string>
     <string name="auto_act_drl_on">日行灯开</string>
@@ -1241,6 +1244,7 @@
     <string name="toggle_target_seat_heat_passenger">副驾座椅加热</string>
     <string name="toggle_target_seat_vent_driver">主驾座椅通风</string>
     <string name="toggle_target_seat_vent_passenger">副驾座椅通风</string>
+    <string name="toggle_target_steering_heat">方向盘加热</string>
     <string name="toggle_state_unknown">%1$s：状态未知</string>
     <string name="toggle_trunk_moving">后备箱正在动作</string>
     <string name="toggle_unknown_target">未知的切换对象：%1$s</string>

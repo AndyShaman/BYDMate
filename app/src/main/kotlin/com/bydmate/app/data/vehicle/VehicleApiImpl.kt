@@ -47,6 +47,11 @@ class VehicleApiImpl @Inject constructor(
 
     private val windowChannel = WindowChannelRouter(helper, windowStore)
 
+    private val steeringHeatChannel = SteeringHeatChannel(
+        SeatWriter { name, value -> doWriteOutcome(name, value, journaled = false) },
+        SteeringHeatReadback { readSteeringHeatState() },
+    )
+
     // Owns the window position samples taken around a write. A write that fails before the
     // verdict cancels its sample (see doWrite), so no read outlives its dispatch.
     // internal var (not a constructor param — Hilt's @Inject constructor can't carry a
@@ -105,6 +110,10 @@ class VehicleApiImpl @Inject constructor(
         }
         if (resolved.size == 1) {
             val r = resolved[0]
+            if (r.actionName in STEERING_HEAT_ACTIONS) {
+                // Write + readback (+ fallback write): one unit, like the seat sequence.
+                return withContext(NonCancellable) { steeringHeat(r.actionName) }
+            }
             // doWrite protects its own window verdict from cancellation, so no wrapper here.
             return doWrite(r.actionName, r.value)
         }
@@ -303,6 +312,16 @@ class VehicleApiImpl @Inject constructor(
         logSuccess(actionName, entry, value, readback)
         return Result.success(Unit)
     }
+
+    /** Steering wheel heat through its verification channel, as the Result dispatch returns. */
+    private suspend fun steeringHeat(action: String): Result<Unit> =
+        when (steeringHeatChannel.actuate(on = action == "steering_heat_on")) {
+            SteeringHeatChannel.Result.OK -> Result.success(Unit)
+            SteeringHeatChannel.Result.NOT_EQUIPPED -> Result.failure(VehicleWriteError.NotEquipped(action))
+            SteeringHeatChannel.Result.NO_EFFECT -> Result.failure(VehicleWriteError.Unsupported(action))
+            SteeringHeatChannel.Result.UNREACHABLE ->
+                Result.failure(VehicleWriteError.HelperUnreachable(action, "helper write not accepted"))
+        }
 
     /** Logcat line plus audit row for a write that went through. */
     private suspend fun logSuccess(actionName: String, entry: WriteEntry, value: Int, readback: Long?) {
@@ -555,8 +574,9 @@ class VehicleApiImpl @Inject constructor(
      * autoservice status instead of a Result. A config error (allowlist miss / out of
      * range) maps to TRANSIENT so the adaptive channel never switches channels because
      * of a code bug. seat entries have no readbackFid, so no read-back verification.
+     * [journaled] = false keeps non-seat writes (steering heat) out of the seat journal.
      */
-    internal suspend fun doWriteOutcome(actionName: String, value: Int): WriteOutcome {
+    internal suspend fun doWriteOutcome(actionName: String, value: Int, journaled: Boolean = true): WriteOutcome {
         val entry = allowlist.find(actionName) ?: run {
             Log.w(TAG, "doWriteOutcome: action=$actionName not in allowlist")
             logWrite(actionName, -1, -1, value, null, false, "allowlist_miss", validated = false)
@@ -581,9 +601,13 @@ class VehicleApiImpl @Inject constructor(
         val outcome = WriteOutcome.fromStatus(status)
         val ok = outcome == WriteOutcome.REAL
         logWrite(actionName, entry.dev, entry.writeFid, value, status, ok, if (ok) null else "outcome_$outcome", entry.validated)
-        seatJournal?.appendWrite(actionName, entry.dev, entry.writeFid, value, status, outcome)
+        if (journaled) seatJournal?.appendWrite(actionName, entry.dev, entry.writeFid, value, status, outcome)
         return outcome
     }
+
+    /** Raw steering wheel heat state — sentinels kept, 65535 (no CAN link) is a verdict there. */
+    private suspend fun readSteeringHeatState(): Int? =
+        helper.read(WriteAllowlist.STEERING_HEAT_STATE_DEV, WriteAllowlist.STEERING_HEAT_STATE_FID)?.toInt()
 
     /**
      * dev=1000 status fid of [group] (1=on, 2=off), or null when the read carries no verdict:
@@ -675,6 +699,7 @@ class VehicleApiImpl @Inject constructor(
         private const val TAG = "VehicleApiImpl"
         private const val VALIDATED_FAILURE_TAG = "VehicleApi.ValidatedFailure"
         private const val COMPOSITE_WRITE_STAGGER_MS = 150L
+        private val STEERING_HEAT_ACTIONS = setOf("steering_heat_on", "steering_heat_off")
 
         // ── Window readback (write verdict) ────────────────────────────────────
         /** Per attempt; a pane that was commanded starts moving well inside two of these

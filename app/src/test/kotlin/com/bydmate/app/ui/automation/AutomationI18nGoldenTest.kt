@@ -104,6 +104,8 @@ class AutomationI18nGoldenTest {
         "副驾座椅通风关闭" to Triple("Вентиляция пассажира выкл", "Passenger Vent Off", "副驾座椅通风关"),
         "后视镜加热" to Triple("Подогрев зеркал вкл", "Mirror Heat On", "后视镜加热开"),
         "关闭后视镜加热" to Triple("Подогрев зеркал выкл", "Mirror Heat Off", "后视镜加热关"),
+        "方向盘加热" to Triple("Подогрев руля вкл", "Steering Wheel Heat On", "方向盘加热开"),
+        "关闭方向盘加热" to Triple("Подогрев руля выкл", "Steering Wheel Heat Off", "方向盘加热关"),
         "氛围灯打开" to Triple("Амбиент вкл", "Ambient Light On", "氛围灯开"),
         "氛围灯关闭" to Triple("Амбиент выкл", "Ambient Light Off", "氛围灯关"),
         "打开日行灯" to Triple("ДХО вкл", "DRL On", "日行灯开"),
@@ -219,6 +221,8 @@ class AutomationI18nGoldenTest {
         "副驾座椅通风关闭" to Triple("Сиденья", "Seats", "座椅"),
         "后视镜加热" to Triple("Зеркала", "Mirrors", "后视镜"),
         "关闭后视镜加热" to Triple("Зеркала", "Mirrors", "后视镜"),
+        "方向盘加热" to Triple("Климат", "Climate", "空调"),
+        "关闭方向盘加热" to Triple("Климат", "Climate", "空调"),
         "氛围灯打开" to Triple("Свет", "Light", "灯光"),
         "氛围灯关闭" to Triple("Свет", "Light", "灯光"),
         "打开日行灯" to Triple("Свет", "Light", "灯光"),
@@ -462,6 +466,7 @@ class AutomationI18nGoldenTest {
         "seat_heat_passenger" to Triple("Подогрев сиденья пассажира", "Passenger seat heating", "副驾座椅加热"),
         "seat_vent_driver" to Triple("Обдув сиденья водителя", "Driver seat ventilation", "主驾座椅通风"),
         "seat_vent_passenger" to Triple("Обдув сиденья пассажира", "Passenger seat ventilation", "副驾座椅通风"),
+        "steering_heat" to Triple("Подогрев руля", "Steering wheel heating", "方向盘加热"),
     )
 
     private fun toggleName(target: String): String {

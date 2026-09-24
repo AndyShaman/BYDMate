@@ -46,6 +46,11 @@ class AgentCommandCatalogTest {
         assertEquals("双闪关闭", AgentCommandCatalog.resolve("hazard_off", null))
     }
 
+    @Test fun `resolve returns chinese string for steering heat commands`() {
+        assertEquals("方向盘加热", AgentCommandCatalog.resolve("steering_heat_on", null))
+        assertEquals("关闭方向盘加热", AgentCommandCatalog.resolve("steering_heat_off", null))
+    }
+
     @Test fun `resolve applies value for ranged command`() {
         assertEquals("设置温度22", AgentCommandCatalog.resolve("ac_set_temp", 22))
     }

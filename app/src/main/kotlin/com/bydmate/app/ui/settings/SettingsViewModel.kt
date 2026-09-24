@@ -1632,13 +1632,17 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
         /** Telegram bind code: six digits. */
         private const val BIND_CODE_MIN = 100_000
         private const val BIND_CODE_SPAN = 900_000
-        /** Shared budget for the two daemon-backed dump sections (liveness + seat reads).
+        /** Shared budget for the daemon-backed dump sections (liveness + seat and steering heat reads).
          *  The dump must not hang on a wedged daemon. */
         private const val HELPER_DIAG_BUDGET_MS = 3_000L
     }
 
     /** What the two daemon-backed dump sections need; nulls mean "not obtained in budget". */
-    private data class HelperDiagnostics(val alive: Boolean?, val seats: List<Pair<Int, Int>>?)
+    private data class HelperDiagnostics(
+        val alive: Boolean?,
+        val seats: List<Pair<Int, Int>>?,
+        val steeringHeat: List<Pair<Int, Int>>? = null,
+    )
 
     /**
      * Collects daemon liveness and the seat fid snapshot under ONE shared budget.
@@ -1655,6 +1659,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
                 alive = runCatching { helperClient.isAlive() }.getOrNull(),
                 // One binder round-trip for all ten seat reads.
                 seats = runCatching { helperClient.readBatch(SeatsDiagnostics.batchItems()) }.getOrNull(),
+                steeringHeat = runCatching {
+                    helperClient.readBatch(SteeringHeatDiagnostics.batchItems())
+                }.getOrNull(),
             )
         }
         return withTimeoutOrNull(HELPER_DIAG_BUDGET_MS) { probe.await() }
@@ -2256,6 +2263,9 @@ class SettingsViewModel @Inject @Suppress("LongParameterList") constructor( // H
 
             appendLine("--- seat command journal ---")
             SeatsDiagnostics.journalLines(appContext).forEach { appendLine(it) }
+
+            appendLine("--- steering heat ---")
+            SteeringHeatDiagnostics.format(helperDiag.steeringHeat).forEach { appendLine(it) }
 
             appendLine("--- fid resolve ---")
             try {

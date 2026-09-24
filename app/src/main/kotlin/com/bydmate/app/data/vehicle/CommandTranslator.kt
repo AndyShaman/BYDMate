@@ -150,6 +150,12 @@ object CommandTranslator {
         // ── Mirror heat = rear-window defrost ── LIVE_VALIDATED (dev=1000) ────
         "后视镜加热"   to Resolved("defrost_rear_on",  1),
         "关闭后视镜加热" to Resolved("defrost_rear_off", 0),
+
+        // ── Steering wheel heat ── CANDIDATE (dev=1023 carve-out, 2=on / 1=off) ──
+        // VehicleApiImpl routes both through SteeringHeatChannel (state readback +
+        // dev=1000 fallback) instead of a bare write.
+        "方向盘加热"   to Resolved("steering_heat_on",  2),
+        "关闭方向盘加热" to Resolved("steering_heat_off", 1),
     )
 
     /** Fridge temperature presets fan out to [fridge_mode, fridge_temp_*]. Cooling raw

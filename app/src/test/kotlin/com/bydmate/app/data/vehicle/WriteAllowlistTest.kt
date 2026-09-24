@@ -288,6 +288,38 @@ class WriteAllowlistTest {
         assertNotNull(heat); assertEquals(35, heat!!.valueMin); assertEquals(50, heat.valueMax)
     }
 
+    // ── Steering wheel heat: dev 1023 carve-out for the write fid only, unvalidated ──
+    @Test fun `steering heat write fid is the only new dev 1023 carve-out`() {
+        assertTrue((1023 to 944767029) in WriteAllowlist.BANNED_DEV_FID_EXCEPTIONS)
+        assertTrue(WriteAllowlist.isBanned(1023, WriteAllowlist.STEERING_HEAT_STATE_FID))
+        assertTrue(WriteAllowlist.isBanned(1023, 1116733496))
+        assertFalse(WriteAllowlist.isBanned(1023, 944767029))
+    }
+
+    @Test fun `steering heat entries are dev 1023 unvalidated and override the competitor`() {
+        val fixture = """
+            {
+              "steering_heat_on": { "featureId": 944767029, "deviceType": 1000, "value": 2 },
+              "steering_heat_off": { "featureId": 944767029, "deviceType": 1000, "value": 1 },
+              "wheel_heat_on": { "featureId": 944767029, "deviceType": 1000, "value": 2 },
+              "wheel_heat_off": { "featureId": 944767029, "deviceType": 1000, "value": 1 }
+            }
+        """.trimIndent()
+        val al = WriteAllowlist.loadProduction { fixture }
+        for ((name, value) in listOf("steering_heat_on" to 2, "steering_heat_off" to 1)) {
+            val e = al.find(name) ?: error("missing $name")
+            assertEquals("$name dev", 1023, e.dev)
+            assertEquals(944767029, e.writeFid)
+            assertNull("$name must not read back inline", e.readbackFid)
+            assertEquals(value, e.valueMin); assertEquals(value, e.valueMax)
+            assertEquals("climate", e.category)
+            assertFalse("$name must be unvalidated", e.validated)
+        }
+        // The competitor's dev=1000 pair stays as the fallback channel.
+        assertEquals(1000, al.find("wheel_heat_on")!!.dev)
+        assertEquals(1000, al.find("wheel_heat_off")!!.dev)
+    }
+
     // ── Task 4: competitor dev=1001 fallback seat entries in CANDIDATE_UNVALIDATED ──
     @Test fun `seat fallback entries are dev 1001 range 1 to 6 unvalidated`() {
         val al = WriteAllowlist(
