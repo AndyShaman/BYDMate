@@ -171,10 +171,23 @@ class RuleShareTest {
         val parsed = (RuleShare.parse(RuleShare.exportJson(rule, "x"), "Звонок") as RuleParseResult.Ok).rule
         assertEquals(listOf(0), parsed.strippedUrlIndexes())
         assertTrue(parsed.unresolvedUrlIndexes().isEmpty())
-        // A clean link carries no flag, and a re-export recomputes it.
+        // A link already marked from an earlier export keeps the flag on a re-export even though
+        // this address is already clean and nothing new is stripped from it.
         val clean = rule.copy(actions = listOf(ActionDef("", "x", "url", """{"url":"https://h/p?mapid=42","minimize":false,"paramsStripped":true}""")))
         val cleanParsed = (RuleShare.parse(RuleShare.exportJson(clean, "x"), "Звонок") as RuleParseResult.Ok).rule
-        assertTrue(cleanParsed.strippedUrlIndexes().isEmpty())
+        assertEquals(listOf(0), cleanParsed.strippedUrlIndexes())
+    }
+
+    @Test fun `an import-export round trip keeps the stripped-params marker`() {
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(
+            actions = listOf(ActionDef("", "x", "url", """{"url":"https://h/p?mapid=42&api_key=S3CR3T","minimize":false}""")),
+        )
+        val imported = (RuleShare.parse(RuleShare.exportJson(rule, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), imported.strippedUrlIndexes())
+        // Shared again before the URL is edited: the marker survives even though this run strips nothing new.
+        val reExported = (RuleShare.parse(RuleShare.exportJson(imported, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), reExported.strippedUrlIndexes())
+        assertEquals("https://h/p?mapid=42", JSONObject(reExported.actions[0].payload!!).getString("url"))
     }
 
     @Test fun `an emptied link stays url-required when shared again before it is fixed`() {
@@ -241,6 +254,21 @@ class RuleShareTest {
         listOf("\"id\"", "enabled", "last_triggered", "lastTriggered", "trigger_count", "triggerCount", "created").forEach {
             assertFalse(it, text.contains(it))
         }
+    }
+
+    @Test fun `compact key-ending names beyond apikey and accesstoken are stripped too`() {
+        listOf("authkey", "accesskey", "AccessKey", "X-Auth-Key").forEach {
+            val stripped = RuleShareUrl.strip("https://h/p?$it=S&q=1")
+            assertEquals(it, "https://h/p?q=1", stripped.url)
+            assertTrue(it, stripped.paramsStripped)
+        }
+    }
+
+    @Test fun `ordinary names ending in key survive`() {
+        listOf("monkey", "turkey", "hockey").forEach {
+            assertEquals(it, "https://h/p?$it=1", RuleShareUrl.strip("https://h/p?$it=1").url)
+        }
+        assertEquals("https://h/p?mapid=42&design=night", RuleShareUrl.strip("https://h/p?mapid=42&design=night").url)
     }
 
     @Test fun `url without credentials is unchanged`() {
