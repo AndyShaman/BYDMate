@@ -487,8 +487,7 @@
     <string name="automation_trigger_type_voice">Głos</string>
     <string name="automation_trigger_voice_phrase_label">Fraza wyzwalająca</string>
     <string name="automation_voice_phrase_empty">Fraza głosowa jest pusta</string>
-    <string name="automation_voice_phrase_builtin">Fraza jest już zajęta przez wbudowaną komendę</string>
-    <string name="automation_voice_phrase_taken">Fraza jest już zajęta przez inną automatyzację</string>
+    <string name="automation_voice_phrase_taken">Ta fraza jest już używana: %1$s</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Dokładnie</string>
@@ -1329,7 +1328,6 @@
     <string name="voice_listening">Słucham</string>
     <string name="voice_thinking">Myślę</string>
     <string name="voice_error_model_missing">Model głosowy nie jest pobrany. Pobierz go w Ustawieniach, sekcja Asystent głosowy.</string>
-    <string name="voice_error_lang_not_ru">Komendy głosowe rozumieją tylko mowę rosyjską. W Ustawieniach → Aplikacja wybierz Język: Русский.</string>
     <string name="voice_block_park_required">Wymagany parking</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1353,6 +1351,19 @@
     <!-- Voice journal: debug screen with the last voice sessions -->
     <string name="settings_voice_journal_entry_title">Dziennik głosu</string>
     <string name="settings_voice_journal_entry_description">Ostatnie 50 sesji głosowych</string>
+    <string name="settings_voice_user_phrases_title">Własne frazy komend</string>
+    <string name="settings_voice_user_phrases_description">Własne słowa dla wbudowanych komend offline</string>
+    <string name="settings_voice_user_phrases_button">Otwórz</string>
+    <string name="voice_user_phrases_hint">Komenda zadziała, gdy fraza padnie sama lub wewnątrz dłuższej wypowiedzi. Własne frazy są sprawdzane przed wbudowanymi.</string>
+    <string name="voice_user_phrases_add">Dodaj</string>
+    <string name="voice_user_phrases_field">Fraza</string>
+    <string name="voice_user_phrases_too_long">Maksymalnie %1$d znaków</string>
+    <string name="voice_user_phrases_too_many">Maksymalnie %1$d fraz na komendę</string>
+    <string name="voice_journal_route_nlu">Komenda</string>
+    <string name="voice_journal_route_automation">Automatyzacja</string>
+    <string name="voice_journal_route_agent">Agent</string>
+    <string name="voice_journal_route_refused">Odmowa</string>
+    <string name="voice_journal_timing">Rozpoznano w %1$d ms, wykonano w %2$d ms</string>
 
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">Odpowiedzi agenta</string>
@@ -1775,8 +1786,10 @@
     <string name="automation_share_continue">Kontynuuj</string>
     <string name="automation_share_saved_toast">Plik zapisany: %1$s</string>
     <string name="automation_rule_deleted">Ta reguła została już usunięta</string>
+    <string name="automation_rule_deleted_save_new">Zapisz jako nową</string>
     <string name="automation_test_run_unrecognized">nie rozpoznano polecenia, akcja pominięta</string>
     <string name="automation_import_url_required">Adres linku trzeba wpisać ponownie</string>
+    <string name="automation_import_url_params_stripped">Z linku usunięto parametry wyglądające na klucze, sprawdź adres</string>
     <string name="automation_import_logic_all">Wszystkie warunki</string>
     <string name="automation_import_logic_any">Dowolny warunek</string>
     <string name="automation_import_nav_home">do domu (adres z nawigacji)</string>

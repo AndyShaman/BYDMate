@@ -929,16 +929,6 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
     private suspend fun navigate(action: ActionDef): DispatchResult {
         val payload = parsePayload(action.payload) ?: return DispatchResult(false, "payload не задан")
         val shortcut = payload.optString("shortcut").takeIf(String::isNotBlank)
-        // Only a Yandex ROUTE ends on a «Поехали» screen: show-only drops a pin, search opens a
-        // result list, and 2GIS has no such node at all. Maps is excluded too, whether by
-        // app="maps" or as the settings default (#200, willOpenMaps): the a11y read that finds
-        // and presses «Поехали» looks at the Navigator's window, not Maps' - including for the
-        // Home/Work shortcut, which now can land on Maps as well.
-        val routeMode = !payload.optBoolean("show", false) &&
-            payload.optString("query").isBlank()
-        val autoGoSupported = routeMode && !willOpenMaps(payload) &&
-            (shortcut != null || resolveNavigator().first == RouteNavigatorUris.YANDEX)
-        val go = autoGoRequested(payload)
         val flow = NavigateSplitFlow(object : NavigateSplitFlow.Env {
             override fun activeSplitPair(): SplitPair? =
                 (splitSessionManager.state.value as? SplitSessionState.Active)?.pair
@@ -975,8 +965,23 @@ class ActionDispatcher @Inject @Suppress("LongParameterList") constructor( // Hi
                 Log.i(TAG, line)
             }
         })
-        return flow.run(go = go, autoGoSupported = autoGoSupported)
+        return flow.run(go = autoGoRequested(payload), autoGoSupported = autoGoSupported(payload))
     }
+
+    /**
+     * Whether [navigate] can find and press «Поехали» for [payload] on this head unit.
+     * Only a Yandex ROUTE ends on a «Поехали» screen: show-only drops a pin, search opens a
+     * result list, and 2GIS has no such node at all. Maps is excluded too, whether by
+     * app="maps" or as the settings default (#200, willOpenMaps): the a11y read that finds
+     * and presses «Поехали» looks at the Navigator's window, not Maps' - including for the
+     * Home/Work shortcut, which now can land on Maps as well.
+     */
+    fun autoGoSupported(payload: JSONObject): Boolean =
+        !payload.optBoolean("show", false) && payload.optString("query").isBlank() && !willOpenMaps(payload) &&
+            (payload.optString("shortcut").isNotBlank() || resolveNavigator().first == RouteNavigatorUris.YANDEX)
+
+    /** Whether [navigate] will press «Поехали» itself for [payload]: asked for, and possible here. */
+    fun autoGoWillRun(payload: JSONObject): Boolean = autoGoRequested(payload) && autoGoSupported(payload)
 
     /**
      * Runs [block] on the Navigator's a11y window — the same read the HUD uses, including the

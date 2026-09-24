@@ -487,8 +487,7 @@
     <string name="automation_trigger_type_voice">Голас</string>
     <string name="automation_trigger_voice_phrase_label">Фраза-трыгер</string>
     <string name="automation_voice_phrase_empty">Галасавая фраза пустая</string>
-    <string name="automation_voice_phrase_builtin">Фраза ўжо занятая ўбудаванай камандай</string>
-    <string name="automation_voice_phrase_taken">Фраза ўжо занятая іншай аўтаматызацыяй</string>
+    <string name="automation_voice_phrase_taken">Гэта фраза ўжо выкарыстоўваецца: %1$s</string>
 
     <!-- Schedule trigger (exact time / range + days of week) -->
     <string name="automation_schedule_mode_exact">Дакладны</string>
@@ -1329,7 +1328,6 @@
     <string name="voice_listening">Слухаю</string>
     <string name="voice_thinking">Думаю</string>
     <string name="voice_error_model_missing">Галасавая мадэль не загружана. Спампуйце яе ў Наладах, раздзел Голас-агент.</string>
-    <string name="voice_error_lang_not_ru">Галасавыя каманды разумеюць толькі рускую мову. У Наладах → Праграма выберыце Мову: Русский.</string>
     <string name="voice_block_park_required">Патрэбны паркінг</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1353,6 +1351,19 @@
     <!-- Voice journal: debug screen with the last voice sessions -->
     <string name="settings_voice_journal_entry_title">Журнал голасу</string>
     <string name="settings_voice_journal_entry_description">Апошнія 50 галасавых сесій</string>
+    <string name="settings_voice_user_phrases_title">Свае фразы для каманд</string>
+    <string name="settings_voice_user_phrases_description">Свае словы для ўбудаваных афлайн-каманд</string>
+    <string name="settings_voice_user_phrases_button">Адкрыць</string>
+    <string name="voice_user_phrases_hint">Каманда спрацуе, калі фраза сказана цалкам або ўнутры доўгай фразы. Свае фразы правяраюцца раней за ўбудаваныя.</string>
+    <string name="voice_user_phrases_add">Дадаць</string>
+    <string name="voice_user_phrases_field">Фраза</string>
+    <string name="voice_user_phrases_too_long">Не даўжэй за %1$d сімвалаў</string>
+    <string name="voice_user_phrases_too_many">Не больш за %1$d фраз на каманду</string>
+    <string name="voice_journal_route_nlu">Каманда</string>
+    <string name="voice_journal_route_automation">Аўтаматызацыя</string>
+    <string name="voice_journal_route_agent">Агент</string>
+    <string name="voice_journal_route_refused">Адмова</string>
+    <string name="voice_journal_timing">Распазнана за %1$d мс, выканана за %2$d мс</string>
 
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">Адказы агента</string>
@@ -1775,8 +1786,10 @@
     <string name="automation_share_continue">Працягнуць</string>
     <string name="automation_share_saved_toast">Файл захаваны: %1$s</string>
     <string name="automation_rule_deleted">Правіла ўжо выдалена</string>
+    <string name="automation_rule_deleted_save_new">Захаваць як новае</string>
     <string name="automation_test_run_unrecognized">каманда не распазнана, дзеянне прапушчана</string>
     <string name="automation_import_url_required">Адрас спасылкі трэба ўвесці нанова</string>
+    <string name="automation_import_url_params_stripped">З спасылкі выдалены параметры, падобныя на ключы, праверце адрас</string>
     <string name="automation_import_logic_all">Усе ўмовы</string>
     <string name="automation_import_logic_any">Любая ўмова</string>
     <string name="automation_import_nav_home">дадому (адрас з навігатара)</string>

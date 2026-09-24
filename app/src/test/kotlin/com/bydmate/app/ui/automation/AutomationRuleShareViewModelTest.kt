@@ -508,24 +508,6 @@ class AutomationRuleShareViewModelTest {
         assertTrue(vm.uiState.value.importDraft!!.token != oldToken)
     }
 
-    @Test fun `saving a rule deleted meanwhile inserts nothing and says so`() {
-        coEvery { ruleDao.getById(9) } returns null
-        val vm = vm()
-        vm.openEditRule(RuleEntity(id = 9, name = "Navi", triggers = "[]", actions = "[]"))
-        vm.editWith(listOf(windowClose))
-        vm.saveRule()
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        coVerify(exactly = 0) { ruleDao.insert(any()) }
-        coVerify(exactly = 0) { ruleDao.update(any()) }
-        assertTrue(vm.uiState.value.showEditor)
-        assertTrue(vm.uiState.value.editorRuleDeleted)
-
-        vm.closeEditor()
-        assertFalse(vm.uiState.value.showEditor)
-        assertFalse(vm.uiState.value.editorRuleDeleted)
-    }
-
     @Test fun `while the import inserts the preview is frozen and the tapped copy goes in`() {
         val gate = CompletableDeferred<Unit>()
         val inserted = slot<RuleEntity>()
@@ -601,41 +583,31 @@ class AutomationRuleShareViewModelTest {
         assertEquals(ctx.appLocalizedContext().getString(R.string.automation_import_invalid), vm.uiState.value.importError)
     }
 
-    @Test fun `import preview shows the trigger logic and what navigate, music and split really run`() {
-        val lc = ctx.appLocalizedContext()
-        val rule = SharedRuleFixture.withActions(
-            ActionDef("", "Дача", "navigate", """{"lat":54.1,"lon":27.2,"name":"Дача","shortcut":"home","go":true}"""),
-            ActionDef("", "Музыка", "yandex_music", """{"mode":"search","query":"Queen","minimize":true}"""),
-            ActionDef("", "Сплит", "split_screen", """{"narrow":"a.b","wide":"c.d","side":"right"}"""),
-            ActionDef("", "Поиск", "navigate", """{"query":"АЗС","show":true,"go":true,"app":"maps"}"""),
+    @Test fun `the import preview asks the dispatcher about «Поехали»`() {
+        val file = File(downloads, "bydmate_rule_navi.json")
+        file.writeText(
+            requireNotNull(javaClass.classLoader?.getResource("rule-share/bydmate_rule_speed.json")).readText().replace(
+                """{"command":"车窗关闭","displayName":"Закрыть все окна","kind":"param"}""",
+                """{"command":"","displayName":"Дача","kind":"navigate","payload":"{\"lat\":54.1,\"lon\":27.2,\"go\":true}"}""",
+            )
         )
-        val preview = RuleImportSummary.preview(rule.copy(triggerLogic = "OR"), ctx)
-        assertEquals(lc.getString(R.string.automation_import_logic_any), preview.logic)
-        assertEquals(lc.getString(R.string.automation_import_logic_all), RuleImportSummary.preview(rule, ctx).logic)
+        val go = ctx.appLocalizedContext().getString(R.string.automation_import_nav_go)
+        every { actionDispatcher.autoGoWillRun(any()) } returns false
+        val vm = vm()
+        vm.importFile(file)
+        assertFalse(vm.uiState.value.importDraft!!.preview.actions.single().contains(go))
 
-        val home = preview.actions[0]
-        val music = preview.actions[1]
-        val split = preview.actions[2]
-        val search = preview.actions[3]
-        assertTrue(home, home.contains(lc.getString(R.string.automation_import_nav_home)))
-        assertTrue(home, home.contains(lc.getString(R.string.automation_import_nav_go)))
-        assertFalse(home, home.contains("54.1"))
-        assertTrue(music, music.contains("search «Queen»"))
-        assertTrue(music, music.contains(lc.getString(R.string.automation_import_minimize)))
-        assertTrue(split, split.contains(lc.getString(R.string.split_action_side_right)))
-        assertTrue(search, search.contains(lc.getString(R.string.automation_import_nav_search, "АЗС")))
-        assertTrue(search, search.contains(lc.getString(R.string.automation_import_nav_maps)))
-        assertFalse(search, search.contains(lc.getString(R.string.automation_import_nav_go)))
-        assertFalse(search, search.contains(lc.getString(R.string.automation_import_nav_show)))
+        every { actionDispatcher.autoGoWillRun(any()) } returns true
+        vm.closeImport()
+        vm.importFile(file)
+        assertTrue(vm.uiState.value.importDraft!!.preview.actions.single().contains(go))
     }
 
-    private object SharedRuleFixture {
-        fun withActions(vararg actions: ActionDef) = com.bydmate.app.data.automation.SharedRule(
-            name = "Navi", triggerLogic = "AND",
-            triggers = listOf(TriggerDef("Speed", "车速", ">", "7", "Скорость")),
-            actions = actions.toList(), cooldownSeconds = 60, requirePark = false,
-            confirmBeforeExecute = false, fireOncePerTrip = false, playSound = false,
-        )
+    @Test fun `a file with a BOM-prefixed deep schedule is refused before the preview`() {
+        val vm = vm()
+        vm.importFile(copyFixture("bydmate_rule_bom_deep.json"))
+        assertNull(vm.uiState.value.importDraft)
+        assertEquals(ctx.appLocalizedContext().getString(R.string.automation_import_invalid), vm.uiState.value.importError)
     }
 
     @Test fun `two quick shares write one file`() {

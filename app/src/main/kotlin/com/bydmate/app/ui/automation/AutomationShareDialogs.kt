@@ -105,16 +105,25 @@ internal fun ShareNoteDialog(onContinue: () -> Unit, onDismiss: () -> Unit) {
     )
 }
 
-/** «Сохранить» on a rule deleted while it was open in the editor: nothing is saved. */
+/**
+ * «Сохранить» on a rule deleted while it was open in the editor: nothing was saved yet.
+ * «Сохранить как новое» adds the draft as a new rule, «Закрыть» drops it, Back or a tap
+ * outside only hides this dialog and keeps the draft in the editor.
+ */
 @Composable
-internal fun RuleDeletedDialog(onClose: () -> Unit) {
+internal fun RuleDeletedDialog(onSaveAsNew: () -> Unit, onClose: () -> Unit, onDismiss: () -> Unit) {
     AppAlertDialog(
-        onDismissRequest = onClose,
+        onDismissRequest = onDismiss,
         containerColor = CardSurfaceElevated,
         text = { Text(stringResource(R.string.automation_rule_deleted), color = TextPrimary, fontSize = 14.sp) },
         confirmButton = {
+            TextButton(onClick = onSaveAsNew) {
+                Text(stringResource(R.string.automation_rule_deleted_save_new), color = AccentGreen)
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onClose) {
-                Text(stringResource(R.string.settings_backup_close), color = AccentGreen)
+                Text(stringResource(R.string.settings_backup_close), color = TextSecondary)
             }
         },
     )
@@ -187,6 +196,7 @@ internal fun ImportPreviewDialog(
     val unresolvedPlaces = rule.unresolvedPlaceIndexes()
     val unresolvedCalls = rule.unresolvedCallIndexes()
     val unresolvedUrls = rule.unresolvedUrlIndexes()
+    val strippedUrls = rule.strippedUrlIndexes()
     val canEnable = !rule.hasUnresolved()
     val idle = !draft.saving
     var contactFor by remember { mutableStateOf<Int?>(null) }
@@ -229,7 +239,7 @@ internal fun ImportPreviewDialog(
                 Text(preview.flags, color = TextSecondary, fontSize = 12.sp,
                     modifier = Modifier.padding(top = 4.dp))
 
-                if (!canEnable) {
+                if (!canEnable || strippedUrls.isNotEmpty()) {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -258,6 +268,10 @@ internal fun ImportPreviewDialog(
                         }
                         if (unresolvedUrls.isNotEmpty()) {
                             Text(stringResource(R.string.automation_import_url_required), color = TextPrimary, fontSize = 13.sp)
+                        }
+                        // Softer than the rows above: the rule may still be enabled right away.
+                        if (strippedUrls.isNotEmpty()) {
+                            Text(stringResource(R.string.automation_import_url_params_stripped), color = TextPrimary, fontSize = 13.sp)
                         }
                     }
                 }

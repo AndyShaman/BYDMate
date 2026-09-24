@@ -401,8 +401,7 @@
     <string name="automation_trigger_type_voice">语音</string>
     <string name="automation_trigger_voice_phrase_label">触发短语</string>
     <string name="automation_voice_phrase_empty">语音短语为空</string>
-    <string name="automation_voice_phrase_builtin">该短语已被内置命令占用</string>
-    <string name="automation_voice_phrase_taken">该短语已被其他自动化占用</string>
+    <string name="automation_voice_phrase_taken">该短语已被使用：%1$s</string>
     <string name="automation_trigger_type_schedule">定时</string>
 
     <!-- Schedule trigger controls -->
@@ -1292,7 +1291,6 @@
     <string name="voice_listening">聆听中</string>
     <string name="voice_thinking">思考中</string>
     <string name="voice_error_model_missing">语音模型尚未下载。请在设置的语音助手部分下载。</string>
-    <string name="voice_error_lang_not_ru">语音命令目前仅支持俄语。请在「设置 → 应用」中将语言设为 Русский。</string>
     <string name="voice_block_park_required">需要挂入 P 挡</string>
 
     <!-- GigaAM v3: free-form Russian speech recognition (offline) -->
@@ -1316,6 +1314,19 @@
     <!-- Voice journal: debug screen with the last voice sessions -->
     <string name="settings_voice_journal_entry_title">语音日志</string>
     <string name="settings_voice_journal_entry_description">最近50次语音会话</string>
+    <string name="settings_voice_user_phrases_title">自定义命令短语</string>
+    <string name="settings_voice_user_phrases_description">为内置离线命令添加自己的说法</string>
+    <string name="settings_voice_user_phrases_button">打开</string>
+    <string name="voice_user_phrases_hint">单独说出短语或在更长的句子中说出时，命令都会执行。自定义短语优先于内置短语。</string>
+    <string name="voice_user_phrases_add">添加</string>
+    <string name="voice_user_phrases_field">短语</string>
+    <string name="voice_user_phrases_too_long">最多 %1$d 个字符</string>
+    <string name="voice_user_phrases_too_many">每个命令最多 %1$d 个短语</string>
+    <string name="voice_journal_route_nlu">命令</string>
+    <string name="voice_journal_route_automation">自动化</string>
+    <string name="voice_journal_route_agent">助手</string>
+    <string name="voice_journal_route_refused">拒绝</string>
+    <string name="voice_journal_timing">识别 %1$d 毫秒，执行 %2$d 毫秒</string>
 
     <!-- TTS: offline synthesis of agent replies (Phase 2) -->
     <string name="settings_tts_header">智能体回复</string>
@@ -1737,8 +1748,10 @@
     <string name="automation_share_continue">继续</string>
     <string name="automation_share_saved_toast">文件已保存：%1$s</string>
     <string name="automation_rule_deleted">该规则已被删除</string>
+    <string name="automation_rule_deleted_save_new">另存为新规则</string>
     <string name="automation_test_run_unrecognized">无法识别该指令，已跳过该操作</string>
     <string name="automation_import_url_required">需要重新输入链接地址</string>
+    <string name="automation_import_url_params_stripped">已从链接中删除类似密钥的参数，请检查地址</string>
     <string name="automation_import_logic_all">满足所有条件</string>
     <string name="automation_import_logic_any">满足任一条件</string>
     <string name="automation_import_nav_home">回家（导航中保存的地址）</string>

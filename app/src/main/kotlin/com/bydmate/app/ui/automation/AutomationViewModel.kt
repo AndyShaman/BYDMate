@@ -25,6 +25,7 @@ import com.bydmate.app.data.automation.RuleShareFiles
 import com.bydmate.app.data.automation.RuleShareUrl
 import com.bydmate.app.data.automation.SharedRule
 import com.bydmate.app.data.automation.TriggerValidationError
+import com.bydmate.app.voice.VoiceUserPhrases
 import com.bydmate.app.data.local.dao.RuleDao
 import com.bydmate.app.data.local.dao.RuleLogDao
 import com.bydmate.app.data.local.entity.ActionDef
@@ -317,7 +318,9 @@ data class EditingRule(
     val confirmBeforeExecute: Boolean = false,
     val fireOncePerTrip: Boolean = false,
     val playSound: Boolean = false,
-    val isNew: Boolean = true
+    val isNew: Boolean = true,
+    /** The rule's switch when the editor opened: «Сохранить как новое» keeps it. */
+    val enabled: Boolean = true,
 ) {
     fun toShared() = SharedRule(
         name = name.trim(),
@@ -407,6 +410,9 @@ class AutomationViewModel @Inject constructor(
     internal var ioDispatcher: CoroutineDispatcher = Dispatchers.IO
     internal var liveSnapshot: () -> DiParsData? = { TrackingService.lastData.value }
     internal var liveSample: () -> TimedSnapshot? = { TrackingService.lastSample }
+    // The user's own phrases for built-in commands (normalized phrase -> command name): a voice
+    // trigger may not reuse one. Read fresh from SharedPreferences on every save.
+    internal var userCommandPhrases: () -> Map<String, String> = { VoiceUserPhrases(context).owners() }
     internal var serviceRunning: () -> Boolean = { TrackingService.isRunning.value }
     internal var elapsedNow: () -> Long = { SystemClock.elapsedRealtime() }
     internal var shareSheet: (File) -> Unit = { startShareSheet(it) }
@@ -414,6 +420,9 @@ class AutomationViewModel @Inject constructor(
     private var testRunJob: Job? = null
     private var importJob: Job? = null
     private var draftToken = 0L
+
+    // Bumped on every editor open and close: a save that returns late only touches its own editor.
+    private var editorSession = 0L
     private val shareMutex = Mutex()
 
     init {
@@ -492,6 +501,7 @@ class AutomationViewModel @Inject constructor(
 
     fun openNewRule() {
         if (_uiState.value.rules.size >= MAX_RULES) return
+        editorSession++
         _uiState.update {
             it.copy(
                 showEditor = true,
@@ -504,6 +514,7 @@ class AutomationViewModel @Inject constructor(
     }
 
     fun openEditRule(rule: RuleEntity) {
+        editorSession++
         _uiState.update {
             it.copy(
                 showEditor = true,
@@ -518,7 +529,8 @@ class AutomationViewModel @Inject constructor(
                     confirmBeforeExecute = rule.confirmBeforeExecute,
                     fireOncePerTrip = rule.fireOncePerTrip,
                     playSound = rule.playSound,
-                    isNew = false
+                    isNew = false,
+                    enabled = rule.enabled,
                 )
             )
         }
@@ -527,7 +539,23 @@ class AutomationViewModel @Inject constructor(
     fun closeEditor() {
         // «Отмена» also stops a test run: nothing is left on screen to watch or stop it.
         testRunJob?.cancel()
+        editorSession++
         _uiState.update { it.copy(showEditor = false, editorError = null, editorRuleDeleted = false) }
+    }
+
+    /** «Правило уже удалено» → «Сохранить как новое»: the draft becomes a new rule, switch as it was. */
+    fun saveDeletedRuleAsNew() {
+        val e = _uiState.value.editing
+        if (!_uiState.value.editorRuleDeleted) return
+        viewModelScope.launch {
+            ruleDao.insert(e.applyTo(RuleEntity(name = "", triggers = "", actions = "", enabled = e.enabled)))
+        }
+        closeEditor()
+    }
+
+    /** «Правило уже удалено» dismissed by Back or outside: the editor stays with the draft. */
+    fun dismissRuleDeleted() {
+        _uiState.update { it.copy(editorRuleDeleted = false) }
     }
 
     fun updateEditing(transform: EditingRule.() -> EditingRule) {
@@ -560,10 +588,11 @@ class AutomationViewModel @Inject constructor(
 
     private fun validateTriggers(triggers: List<TriggerDef>, editingId: Long): String? {
         val ctx = context.appLocalizedContext()
-        return when (RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules)) {
+        val userPhrases = runCatching { userCommandPhrases() }.getOrDefault(emptyMap())
+        return when (val err = RuleDraftValidator.validateTriggers(triggers, editingId, _uiState.value.rules, userPhrases)) {
             TriggerValidationError.VoicePhraseEmpty -> ctx.getString(R.string.automation_voice_phrase_empty)
-            TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_builtin)
-            TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken)
+            is TriggerValidationError.VoicePhraseBuiltin -> ctx.getString(R.string.automation_voice_phrase_taken, err.command)
+            is TriggerValidationError.VoicePhraseTaken -> ctx.getString(R.string.automation_voice_phrase_taken, err.rule)
             null -> null
         }
     }
@@ -594,15 +623,17 @@ class AutomationViewModel @Inject constructor(
             closeEditor()
             return
         }
+        val session = editorSession
         viewModelScope.launch {
             // The stored row keeps enabled, the counters and createdAt: the editor shows none of them.
             // A rule deleted meanwhile is not brought back: the editor stays open and says so.
+            // Only this save's editor reacts: another one may be open by the time the DAO returns.
             val stored = ruleDao.getById(e.id)
             if (stored == null) {
-                _uiState.update { it.copy(editorRuleDeleted = true) }
+                if (session == editorSession) _uiState.update { it.copy(editorRuleDeleted = true) }
             } else {
                 ruleDao.update(e.applyTo(stored))
-                closeEditor()
+                if (session == editorSession) closeEditor()
             }
         }
     }
@@ -863,7 +894,7 @@ class AutomationViewModel @Inject constructor(
             lc.getString(R.string.automation_trigger_place_enter_prefix),
             lc.getString(R.string.automation_trigger_place_exit_prefix),
         )
-        return RuleImportDraft(linked, RuleImportSummary.preview(linked, context))
+        return RuleImportDraft(linked, RuleImportSummary.preview(linked, context, actionDispatcher::autoGoWillRun))
     }
 
     /** «Выбрать место» for the place trigger at [index] of the draft [token]. */
@@ -902,7 +933,7 @@ class AutomationViewModel @Inject constructor(
         _uiState.update { s ->
             val draft = s.importDraft?.takeIf { it.token == token && !it.saving } ?: return@update s
             val rule = transform(draft.rule)
-            s.copy(importDraft = draft.copy(rule = rule, preview = RuleImportSummary.preview(rule, context), error = null))
+            s.copy(importDraft = draft.copy(rule = rule, preview = RuleImportSummary.preview(rule, context, actionDispatcher::autoGoWillRun), error = null))
         }
     }
 

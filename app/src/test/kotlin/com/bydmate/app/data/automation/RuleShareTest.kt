@@ -136,7 +136,7 @@ class RuleShareTest {
         assertFalse(RuleShare.toEntity(parsed, "x", enableNow = true).enabled)
     }
 
-    @Test fun `query names are matched by credential substrings`() {
+    @Test fun `query names are matched by credential words`() {
         assertEquals("https://h/p?q=1", RuleShareUrl.strip("https://h/p?access_key=S&q=1").url)
         listOf("apikey", "x-auth", "passwd", "Signature", "client_secret", "API").forEach {
             assertEquals(it, "https://h/p?q=1", RuleShareUrl.strip("https://h/p?$it=S&q=1").url)
@@ -148,6 +148,51 @@ class RuleShareTest {
         assertFalse(text.contains("S3CR3T"))
         assertFalse(text.contains("access_key"))
         assertTrue(text.contains("https://h/p?q=1"))
+    }
+
+    @Test fun `ordinary parameters survive and credential words are stripped and flagged`() {
+        val stripped = RuleShareUrl.strip(
+            "https://h/p?mapid=42&design=night&api_key=A&X-Api-Key=B&access_token=C&sig=D&Authorization=E&pwd=F" +
+                "&accessToken=G&APIKey=H&keyword=map&session_id=I"
+        )
+        assertEquals("https://h/p?mapid=42&design=night&keyword=map", stripped.url)
+        assertTrue(stripped.paramsStripped)
+        assertFalse(stripped.urlRequired)
+        assertFalse(RuleShareUrl.strip("https://h/p?mapid=42&design=night").paramsStripped)
+        assertTrue(RuleShareUrl.strip("sms:+375291234567?body=hi&token=s9").paramsStripped)
+        assertTrue(RuleShareUrl.strip("intent://scan/#Intent;scheme=zxing;S.token=abc;end").paramsStripped)
+        assertFalse(RuleShareUrl.strip("intent://scan/#Intent;scheme=zxing;S.mode=qr;end").paramsStripped)
+    }
+
+    @Test fun `a link that lost parameters is flagged for a look but does not block enabling`() {
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(
+            actions = listOf(ActionDef("", "x", "url", """{"url":"https://h/p?mapid=42&api_key=S3CR3T","minimize":false}""")),
+        )
+        val parsed = (RuleShare.parse(RuleShare.exportJson(rule, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), parsed.strippedUrlIndexes())
+        assertTrue(parsed.unresolvedUrlIndexes().isEmpty())
+        // A clean link carries no flag, and a re-export recomputes it.
+        val clean = rule.copy(actions = listOf(ActionDef("", "x", "url", """{"url":"https://h/p?mapid=42","minimize":false,"paramsStripped":true}""")))
+        val cleanParsed = (RuleShare.parse(RuleShare.exportJson(clean, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertTrue(cleanParsed.strippedUrlIndexes().isEmpty())
+    }
+
+    @Test fun `an emptied link stays url-required when shared again before it is fixed`() {
+        assertTrue(RuleShareUrl.strip("").urlRequired)
+        assertTrue(RuleShareUrl.strip("   ").urlRequired)
+        val rule = SharedRule.fromEntity(sourceEntity()).copy(
+            actions = listOf(ActionDef("", "x", "url", """{"url":"javascript:alert(1)","minimize":false}""")),
+        )
+        val first = (RuleShare.parse(RuleShare.exportJson(rule, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), first.unresolvedUrlIndexes())
+        // The importer saved it disabled (the marker stays in the row), then shares it again.
+        val second = (RuleShare.parse(RuleShare.exportJson(first, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), second.unresolvedUrlIndexes())
+        assertFalse(RuleShare.toEntity(second, "x", enableNow = true).enabled)
+        // Even with the marker lost (edited by hand), an empty address is marked again.
+        val unmarked = first.copy(actions = listOf(ActionDef("", "", "url", """{"url":"","minimize":false}""")))
+        val third = (RuleShare.parse(RuleShare.exportJson(unmarked, "x"), "Звонок") as RuleParseResult.Ok).rule
+        assertEquals(listOf(0), third.unresolvedUrlIndexes())
     }
 
     @Test fun `sms keeps its body and loses only the number`() {
@@ -374,6 +419,28 @@ class RuleShareTest {
         assertTrue(RuleShare.parse(ok, "Звонок") is RuleParseResult.Ok)
         val over = body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": " + "[".repeat(room + 1) + "]".repeat(room + 1))
         assertEquals(RuleParseResult.Invalid, RuleShare.parse(over, "Звонок"))
+    }
+
+    @Test fun `json behind a byte order mark inside a string is scanned too`() {
+        // Android's tokenizer drops a leading BOM, so this value still parses as 3000-deep JSON.
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(fixture("bydmate_rule_bom_deep.json"), "Звонок"))
+        val body = fixture("bydmate_rule_speed.json")
+        listOf("\\ufeff", "\\ufeff \\n ").forEach { lead ->
+            val deep = body.replace("\"value\":\"7\"", "\"value\":\"$lead[" + "[".repeat(40) + "]".repeat(40) + "]\"")
+            assertEquals(lead, RuleParseResult.Invalid, RuleShare.parse(deep, "Звонок"))
+        }
+        // A BOM before the file itself does not hide its depth either.
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse("\uFEFF" + body.replace("\"play_sound\": false", "\"play_sound\": false, \"x\": " + "[".repeat(40) + "]".repeat(40)), "Звонок"))
+    }
+
+    @Test fun `an unquoted literal longer than 8 KiB is invalid`() {
+        val body = fixture("bydmate_rule_speed.json")
+        val long = body.replace("\"name\": \"Navi\"", "name: " + "a".repeat(RuleShareJsonLimits.MAX_STRING_CHARS + 1))
+        assertEquals(RuleParseResult.Invalid, RuleShare.parse(long, "Звонок"))
+        val fits = body.replace("\"name\": \"Navi\"", "name: " + "a".repeat(RuleShareJsonLimits.MAX_STRING_CHARS))
+        val ok = RuleShare.parse(fits, "Звонок")
+        assertTrue(ok is RuleParseResult.Ok)
+        assertEquals(RuleShareJsonLimits.MAX_STRING_CHARS, (ok as RuleParseResult.Ok).rule.name.length)
     }
 
     @Test fun `a string longer than 8 KiB is invalid`() {
